@@ -1035,9 +1035,9 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                         if (containsAbortMarker(currentBatch)) {
                             abortedProducerIds.remove(producerId);
                         } else if (isBatchAborted(currentBatch)) {
-                            log.trace("Skipping aborted record batch with producerId {} and base offset {}, partition: {}",
+                            log.trace("Skipping aborted record batch with producerId {} and base offset {}, partition {}",
                                     producerId, currentBatch.baseOffset(), partition);
-                            nextFetchOffset = currentBatch.lastOffset() + 1;
+                            nextFetchOffset = currentBatch.nextOffset();
                             continue;
                         }
                     }

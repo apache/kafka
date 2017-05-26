@@ -60,7 +60,7 @@ import static org.apache.kafka.common.utils.Utils.wrapNullable;
  *  ----------------
  *
  * The offset and timestamp deltas compute the difference relative to the base offset and
- * base timestamp of the log entry that this record is contained in.
+ * base timestamp of the batch that this record is contained in.
  */
 public class DefaultRecord implements Record {
 
@@ -102,7 +102,7 @@ public class DefaultRecord implements Record {
     }
 
     @Override
-    public long sequence() {
+    public int sequence() {
         return sequence;
     }
 

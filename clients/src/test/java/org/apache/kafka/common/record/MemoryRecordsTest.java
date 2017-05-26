@@ -302,6 +302,50 @@ public class MemoryRecordsTest {
     }
 
     @Test
+    public void testFilterToAlreadyCompactedLog() {
+        ByteBuffer buffer = ByteBuffer.allocate(2048);
+
+        // create a batch with some offset gaps to simulate a compacted batch
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic, compression,
+                TimestampType.CREATE_TIME, 0L);
+        builder.appendWithOffset(5L, 10L, null, "a".getBytes());
+        builder.appendWithOffset(8L, 11L, "1".getBytes(), "b".getBytes());
+        builder.appendWithOffset(10L, 12L, null, "c".getBytes());
+
+        builder.close();
+        buffer.flip();
+
+        ByteBuffer filtered = ByteBuffer.allocate(2048);
+        MemoryRecords.readableRecords(buffer).filterTo(new RetainNonNullKeysFilter(), filtered);
+        filtered.flip();
+        MemoryRecords filteredRecords = MemoryRecords.readableRecords(filtered);
+
+        List<MutableRecordBatch> batches = TestUtils.toList(filteredRecords.batches());
+        assertEquals(1, batches.size());
+
+        MutableRecordBatch batch = batches.get(0);
+        List<Record> records = TestUtils.toList(batch);
+        assertEquals(1, records.size());
+        assertEquals(8L, records.get(0).offset());
+
+
+        if (magic >= RecordBatch.MAGIC_VALUE_V1)
+            assertEquals(new SimpleRecord(11L, "1".getBytes(), "b".getBytes()), new SimpleRecord(records.get(0)));
+        else
+            assertEquals(new SimpleRecord(RecordBatch.NO_TIMESTAMP, "1".getBytes(), "b".getBytes()),
+                    new SimpleRecord(records.get(0)));
+
+        if (magic >= RecordBatch.MAGIC_VALUE_V2) {
+            // the new format preserves first and last offsets from the original batch
+            assertEquals(0L, batch.baseOffset());
+            assertEquals(10L, batch.lastOffset());
+        } else {
+            assertEquals(8L, batch.baseOffset());
+            assertEquals(8L, batch.lastOffset());
+        }
+    }
+
+    @Test
     public void testFilterToPreservesProducerInfo() {
         if (magic >= RecordBatch.MAGIC_VALUE_V2) {
             ByteBuffer buffer = ByteBuffer.allocate(2048);
@@ -332,8 +376,8 @@ public class MemoryRecordsTest {
             builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME, 3L,
                     RecordBatch.NO_TIMESTAMP, pid2, epoch2, baseSequence2, true, RecordBatch.NO_PARTITION_LEADER_EPOCH);
             builder.append(16L, "6".getBytes(), "g".getBytes());
-            builder.append(17L, null, "h".getBytes());
-            builder.append(18L, "8".getBytes(), "i".getBytes());
+            builder.append(17L, "7".getBytes(), "h".getBytes());
+            builder.append(18L, null, "i".getBytes());
             builder.close();
 
             buffer.flip();
@@ -356,6 +400,10 @@ public class MemoryRecordsTest {
             assertEquals(RecordBatch.NO_SEQUENCE, firstBatch.baseSequence());
             assertEquals(RecordBatch.NO_SEQUENCE, firstBatch.lastSequence());
             assertFalse(firstBatch.isTransactional());
+            List<Record> firstBatchRecords = TestUtils.toList(firstBatch);
+            assertEquals(1, firstBatchRecords.size());
+            assertEquals(RecordBatch.NO_SEQUENCE, firstBatchRecords.get(0).sequence());
+            assertEquals(new SimpleRecord(11L, "1".getBytes(), "b".getBytes()), new SimpleRecord(firstBatchRecords.get(0)));
 
             MutableRecordBatch secondBatch = batches.get(1);
             assertEquals(2, secondBatch.countOrNull().intValue());
@@ -366,6 +414,12 @@ public class MemoryRecordsTest {
             assertEquals(baseSequence1, secondBatch.baseSequence());
             assertEquals(baseSequence1 + 2, secondBatch.lastSequence());
             assertFalse(secondBatch.isTransactional());
+            List<Record> secondBatchRecords = TestUtils.toList(secondBatch);
+            assertEquals(2, secondBatchRecords.size());
+            assertEquals(baseSequence1 + 1, secondBatchRecords.get(0).sequence());
+            assertEquals(new SimpleRecord(14L, "4".getBytes(), "e".getBytes()), new SimpleRecord(secondBatchRecords.get(0)));
+            assertEquals(baseSequence1 + 2, secondBatchRecords.get(1).sequence());
+            assertEquals(new SimpleRecord(15L, "5".getBytes(), "f".getBytes()), new SimpleRecord(secondBatchRecords.get(1)));
 
             MutableRecordBatch thirdBatch = batches.get(2);
             assertEquals(2, thirdBatch.countOrNull().intValue());
@@ -376,6 +430,12 @@ public class MemoryRecordsTest {
             assertEquals(baseSequence2, thirdBatch.baseSequence());
             assertEquals(baseSequence2 + 2, thirdBatch.lastSequence());
             assertTrue(thirdBatch.isTransactional());
+            List<Record> thirdBatchRecords = TestUtils.toList(thirdBatch);
+            assertEquals(2, thirdBatchRecords.size());
+            assertEquals(baseSequence2, thirdBatchRecords.get(0).sequence());
+            assertEquals(new SimpleRecord(16L, "6".getBytes(), "g".getBytes()), new SimpleRecord(thirdBatchRecords.get(0)));
+            assertEquals(baseSequence2 + 1, thirdBatchRecords.get(1).sequence());
+            assertEquals(new SimpleRecord(17L, "7".getBytes(), "h".getBytes()), new SimpleRecord(thirdBatchRecords.get(1)));
         }
     }
 
