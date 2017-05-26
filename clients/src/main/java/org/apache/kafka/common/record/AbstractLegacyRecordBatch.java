@@ -269,52 +269,36 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
     }
 
     private static final class DataLogInputStream implements LogInputStream<AbstractLegacyRecordBatch> {
-
-        private static final int OFFSET_OFFSET = 0;
-        private static final int SIZE_OFFSET = 8;
-        private static final int BUFFER_SIZE = 8 // offset
-                                               + 4; // size
         private final InputStream stream;
         protected final int maxMessageSize;
-        private final ByteBuffer headerBuffer;
+        private final ByteBuffer offsetAndSizeBuffer;
 
         DataLogInputStream(InputStream stream, int maxMessageSize) {
             this.stream = stream;
             this.maxMessageSize = maxMessageSize;
-            this.headerBuffer = ByteBuffer.allocate(BUFFER_SIZE);
+            this.offsetAndSizeBuffer = ByteBuffer.allocate(Records.LOG_OVERHEAD);
         }
 
         public AbstractLegacyRecordBatch nextBatch() throws IOException {
-            try {
-                int n = 0;
-                while (n < BUFFER_SIZE) {
-                    int count = stream.read(headerBuffer.array(), n, BUFFER_SIZE - n);
-                    if (count < 0) {
-                        return null;
-                    }
-                    n += count;
-                }
-                long offset = headerBuffer.getLong(OFFSET_OFFSET);
-                int size = headerBuffer.getInt(SIZE_OFFSET);
-                if (size < LegacyRecord.RECORD_OVERHEAD_V0)
-                    throw new CorruptRecordException(String.format("Record size is less than the minimum record overhead (%d)", LegacyRecord.RECORD_OVERHEAD_V0));
-                if (size > maxMessageSize)
-                    throw new CorruptRecordException(String.format("Record size exceeds the largest allowable message size (%d).", maxMessageSize));
-
-                ByteBuffer buf = ByteBuffer.allocate(size);
-
-                n = 0;
-                while (n < size) {
-                    int count = stream.read(buf.array(), n, size - n);
-                    if (count < 0) {
-                        return null;
-                    }
-                    n += count;
-                }
-                return new BasicLegacyRecordBatch(offset, new LegacyRecord(buf));
-            } catch (EOFException e) {
+            offsetAndSizeBuffer.clear();
+            Utils.readFully(stream, offsetAndSizeBuffer);
+            if (offsetAndSizeBuffer.hasRemaining())
                 return null;
-            }
+
+            long offset = offsetAndSizeBuffer.getLong(Records.OFFSET_OFFSET);
+            int size = offsetAndSizeBuffer.getInt(Records.SIZE_OFFSET);
+            if (size < LegacyRecord.RECORD_OVERHEAD_V0)
+                throw new CorruptRecordException(String.format("Record size is less than the minimum record overhead (%d)", LegacyRecord.RECORD_OVERHEAD_V0));
+            if (size > maxMessageSize)
+                throw new CorruptRecordException(String.format("Record size exceeds the largest allowable message size (%d).", maxMessageSize));
+
+            ByteBuffer batchBuffer = ByteBuffer.allocate(size);
+            Utils.readFully(stream, batchBuffer);
+            if (batchBuffer.hasRemaining())
+                return null;
+            batchBuffer.flip();
+
+            return new BasicLegacyRecordBatch(offset, new LegacyRecord(batchBuffer));
         }
     }
 
