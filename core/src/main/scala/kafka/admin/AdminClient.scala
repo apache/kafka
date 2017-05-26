@@ -320,6 +320,18 @@ class AdminClient(val time: Time,
     ConsumerGroupSummary(metadata.state, metadata.protocol, Some(consumers), coordinator)
   }
 
+
+  def getTopicListOffset(req: ListOffsetRequest.Builder, node: Node): Map[TopicPartition, ListOffsetResponse.PartitionData] = {
+    val responseBody = send(node, ApiKeys.LIST_OFFSETS, req)
+    responseBody.asInstanceOf[ListOffsetResponse].responseData().asScala.toMap
+  }
+
+
+  def getMetadata(req: MetadataRequest.Builder, node: Node): MetadataResponse = {
+    val responseBody = send(node, ApiKeys.METADATA, req)
+    responseBody.asInstanceOf[MetadataResponse]
+  }
+
   def close() {
     running = false
     try {
