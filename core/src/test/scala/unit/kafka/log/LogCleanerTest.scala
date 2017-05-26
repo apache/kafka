@@ -39,7 +39,7 @@ import scala.collection._
  * Unit tests for the log cleaning logic
  */
 class LogCleanerTest extends JUnitSuite {
-  
+
   val tmpdir = TestUtils.tempDir()
   val dir = TestUtils.randomPartitionLogDir(tmpdir)
   val logProps = new Properties()
@@ -50,12 +50,12 @@ class LogCleanerTest extends JUnitSuite {
   val logConfig = LogConfig(logProps)
   val time = new MockTime()
   val throttler = new Throttler(desiredRatePerSec = Double.MaxValue, checkIntervalMs = Long.MaxValue, time = time)
-  
+
   @After
   def teardown(): Unit = {
     Utils.delete(tmpdir)
   }
-  
+
   /**
    * Test simple log cleaning
    */
@@ -159,8 +159,8 @@ class LogCleanerTest extends JUnitSuite {
     val pid1 = 1
     val pid2 = 2
 
-    val appendProducer1 = appendTransactionalAsLeader(log, pid1, producerEpoch) _
-    val appendProducer2 = appendTransactionalAsLeader(log, pid2, producerEpoch) _
+    val appendProducer1 = appendTransactionalAsLeader(log, pid1, producerEpoch)
+    val appendProducer2 = appendTransactionalAsLeader(log, pid2, producerEpoch)
 
     appendProducer1(Seq(1, 2))
     appendProducer2(Seq(2, 3))
@@ -193,9 +193,9 @@ class LogCleanerTest extends JUnitSuite {
     val pid2 = 2
     val pid3 = 3
 
-    val appendProducer1 = appendTransactionalAsLeader(log, pid1, producerEpoch) _
-    val appendProducer2 = appendTransactionalAsLeader(log, pid2, producerEpoch) _
-    val appendProducer3 = appendTransactionalAsLeader(log, pid3, producerEpoch) _
+    val appendProducer1 = appendTransactionalAsLeader(log, pid1, producerEpoch)
+    val appendProducer2 = appendTransactionalAsLeader(log, pid2, producerEpoch)
+    val appendProducer3 = appendTransactionalAsLeader(log, pid3, producerEpoch)
 
     appendProducer1(Seq(1, 2))
     appendProducer3(Seq(2, 3))
@@ -237,7 +237,7 @@ class LogCleanerTest extends JUnitSuite {
 
     val producerEpoch = 0.toShort
     val producerId = 1L
-    val appendProducer = appendTransactionalAsLeader(log, producerId, producerEpoch) _
+    val appendProducer = appendTransactionalAsLeader(log, producerId, producerEpoch)
 
     appendProducer(Seq(1))
     appendProducer(Seq(2, 3))
@@ -281,7 +281,7 @@ class LogCleanerTest extends JUnitSuite {
 
     val producerEpoch = 0.toShort
     val producerId = 1L
-    val appendProducer = appendTransactionalAsLeader(log, producerId, producerEpoch) _
+    val appendProducer = appendTransactionalAsLeader(log, producerId, producerEpoch)
 
     appendProducer(Seq(1))
     appendProducer(Seq(2, 3))
@@ -417,7 +417,7 @@ class LogCleanerTest extends JUnitSuite {
 
     val producerEpoch = 0.toShort
     val producerId = 1L
-    val appendProducer = appendTransactionalAsLeader(log, producerId, producerEpoch) _
+    val appendProducer = appendTransactionalAsLeader(log, producerId, producerEpoch)
 
     appendProducer(Seq(1))
     appendProducer(Seq(2, 3))
@@ -1066,24 +1066,26 @@ class LogCleanerTest extends JUnitSuite {
       partitionLeaderEpoch, new SimpleRecord(key.toString.getBytes, value.toString.getBytes))
   }
 
-  private def appendTransactionalAsLeader(log: Log, producerId: Long, producerEpoch: Short = 0)(keys: Seq[Int]): LogAppendInfo = {
-    appendIdempotentAsLeader(log, producerId, producerEpoch, isTransactional = true)(keys)
+  private def appendTransactionalAsLeader(log: Log, producerId: Long, producerEpoch: Short = 0): Seq[Int] => LogAppendInfo = {
+    appendIdempotentAsLeader(log, producerId, producerEpoch, isTransactional = true)
   }
 
   private def appendIdempotentAsLeader(log: Log, producerId: Long,
                                        producerEpoch: Short = 0,
-                                       isTransactional: Boolean = false)(keys: Seq[Int]): LogAppendInfo = {
+                                       isTransactional: Boolean = false): Seq[Int] => LogAppendInfo = {
     var sequence = 0
-    val simpleRecords = keys.map { key =>
-      val keyBytes = key.toString.getBytes
-      new SimpleRecord(time.milliseconds(), keyBytes, keyBytes) // the value doesn't matter since we validate offsets
+    keys: Seq[Int] => {
+      val simpleRecords = keys.map { key =>
+        val keyBytes = key.toString.getBytes
+        new SimpleRecord(time.milliseconds(), keyBytes, keyBytes) // the value doesn't matter since we validate offsets
+      }
+      val records = if (isTransactional)
+        MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId, producerEpoch, sequence, simpleRecords: _*)
+      else
+        MemoryRecords.withIdempotentRecords(CompressionType.NONE, producerId, producerEpoch, sequence, simpleRecords: _*)
+      sequence += simpleRecords.size
+      log.appendAsLeader(records, leaderEpoch = 0)
     }
-    val records = if (isTransactional)
-      MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId, producerEpoch, sequence, simpleRecords: _*)
-    else
-      MemoryRecords.withIdempotentRecords(CompressionType.NONE, producerId, producerEpoch, sequence, simpleRecords: _*)
-    sequence += simpleRecords.size
-    log.appendAsLeader(records, leaderEpoch = 0)
   }
 
   private def commitMarker(producerId: Long, producerEpoch: Short, timestamp: Long = time.milliseconds()): MemoryRecords =
