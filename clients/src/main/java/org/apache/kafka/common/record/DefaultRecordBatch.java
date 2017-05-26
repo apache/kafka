@@ -22,6 +22,7 @@ import org.apache.kafka.common.utils.ByteBufferInputStream;
 import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.common.utils.CloseableIterator;
 import org.apache.kafka.common.utils.Crc32C;
+import org.apache.kafka.common.utils.Utils;
 
 import java.io.DataInputStream;
 import java.io.IOException;
@@ -440,6 +441,13 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
      * Get an upper bound on the size of a batch with only a single record using a given key and value.
      */
     static int batchSizeUpperBound(byte[] key, byte[] value, Header[] headers) {
+        return batchSizeUpperBound(Utils.wrapNullable(key), Utils.wrapNullable(value), headers);
+    }
+
+    /**
+     * Get an upper bound on the size of a batch with only a single record using a given key and value.
+     */
+    static int batchSizeUpperBound(ByteBuffer key, ByteBuffer value, Header[] headers) {
         return RECORD_BATCH_OVERHEAD + DefaultRecord.recordSizeUpperBound(key, value, headers);
     }
 
@@ -485,4 +493,5 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
         }
 
     }
+
 }

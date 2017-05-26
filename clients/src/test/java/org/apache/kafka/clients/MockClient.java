@@ -318,6 +318,11 @@ public class MockClient implements KafkaClient {
     }
 
     @Override
+    public boolean hasReadyNodes() {
+        return !ready.isEmpty();
+    }
+
+    @Override
     public ClientRequest newClientRequest(String nodeId, AbstractRequest.Builder<?> requestBuilder, long createdTimeMs,
                                           boolean expectResponse) {
         return newClientRequest(nodeId, requestBuilder, createdTimeMs, expectResponse, null);

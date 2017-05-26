@@ -36,26 +36,33 @@ class AclCommandTest extends ZooKeeperTestHarness with Logging {
   private val TopicResources = Set(new Resource(Topic, "test-1"), new Resource(Topic, "test-2"))
   private val GroupResources = Set(new Resource(Group, "testGroup-1"), new Resource(Group, "testGroup-2"))
   private val BrokerResources = Set(new Resource(Broker, "0"), new Resource(Broker, "1"))
+  private val TransactionalIdResources = Set(new Resource(TransactionalId, "t0"), new Resource(TransactionalId, "t1"))
 
   private val ResourceToCommand = Map[Set[Resource], Array[String]](
     TopicResources -> Array("--topic", "test-1", "--topic", "test-2"),
     Set(Resource.ClusterResource) -> Array("--cluster"),
     GroupResources -> Array("--group", "testGroup-1", "--group", "testGroup-2"),
-    BrokerResources -> Array("--broker", "0", "--broker", "1")
+    BrokerResources -> Array("--broker", "0", "--broker", "1"),
+    TransactionalIdResources -> Array("--transactional-id", "t0", "--transactional-id", "t1")
   )
 
   private val ResourceToOperations = Map[Set[Resource], (Set[Operation], Array[String])](
     TopicResources -> (Set(Read, Write, Describe, Delete, DescribeConfigs, AlterConfigs),
       Array("--operation", "Read" , "--operation", "Write", "--operation", "Describe", "--operation", "Delete",
         "--operation", "DescribeConfigs", "--operation", "AlterConfigs")),
-    Set(Resource.ClusterResource) -> (Set(Create, ClusterAction), Array("--operation", "Create", "--operation", "ClusterAction")),
+    Set(Resource.ClusterResource) -> (Set(Create, ClusterAction, DescribeConfigs, AlterConfigs, IdempotentWrite),
+      Array("--operation", "Create", "--operation", "ClusterAction", "--operation", "DescribeConfigs",
+        "--operation", "AlterConfigs", "--operation", "IdempotentWrite")),
     GroupResources -> (Set(Read, Describe), Array("--operation", "Read", "--operation", "Describe")),
-    BrokerResources -> (Set(DescribeConfigs), Array("--operation", "DescribeConfigs"))
+    BrokerResources -> (Set(DescribeConfigs), Array("--operation", "DescribeConfigs")),
+    TransactionalIdResources -> (Set(Describe, Write), Array("--operation", "Describe", "--operation", "Write"))
   )
 
-  private val ProducerResourceToAcls = Map[Set[Resource], Set[Acl]](
+  private def ProducerResourceToAcls(enableIdempotence: Boolean = false) = Map[Set[Resource], Set[Acl]](
     TopicResources -> AclCommand.getAcls(Users, Allow, Set(Write, Describe), Hosts),
-    Set(Resource.ClusterResource) -> AclCommand.getAcls(Users, Allow, Set(Create), Hosts)
+    TransactionalIdResources -> AclCommand.getAcls(Users, Allow, Set(Write, Describe), Hosts),
+    Set(Resource.ClusterResource) -> AclCommand.getAcls(Users, Allow, Set(Some(Create),
+      if (enableIdempotence) Some(IdempotentWrite) else None).flatten, Hosts)
   )
 
   private val ConsumerResourceToAcls = Map[Set[Resource], Set[Acl]](
@@ -64,10 +71,13 @@ class AclCommandTest extends ZooKeeperTestHarness with Logging {
   )
 
   private val CmdToResourcesToAcl = Map[Array[String], Map[Set[Resource], Set[Acl]]](
-    Array[String]("--producer") -> ProducerResourceToAcls,
+    Array[String]("--producer") -> ProducerResourceToAcls(),
+    Array[String]("--producer", "--idempotent") -> ProducerResourceToAcls(enableIdempotence = true),
     Array[String]("--consumer") -> ConsumerResourceToAcls,
     Array[String]("--producer", "--consumer") -> ConsumerResourceToAcls.map { case (k, v) => k -> (v ++
-      ProducerResourceToAcls.getOrElse(k, Set.empty[Acl])) }
+      ProducerResourceToAcls().getOrElse(k, Set.empty[Acl])) },
+    Array[String]("--producer", "--idempotent", "--consumer") -> ConsumerResourceToAcls.map { case (k, v) => k -> (v ++
+      ProducerResourceToAcls(enableIdempotence = true).getOrElse(k, Set.empty[Acl])) }
   )
 
   @Test
@@ -108,11 +118,11 @@ class AclCommandTest extends ZooKeeperTestHarness with Logging {
           }
         }
       }
-      testRemove(resourcesToAcls.keys.flatten.toSet, resourceCommand, args, brokerProps)
+      testRemove(resourcesToAcls.keys.flatten.toSet, resourceCommand ++ cmd, args, brokerProps)
     }
   }
 
-  @Test (expected = classOf[IllegalArgumentException])
+  @Test(expected = classOf[IllegalArgumentException])
   def testInvalidAuthorizerProperty() {
     val args = Array("--authorizer-properties", "zookeeper.connect " + zkConnect)
     AclCommand.withAuthorizer(new AclCommandOptions(args))(null)
@@ -120,10 +130,10 @@ class AclCommandTest extends ZooKeeperTestHarness with Logging {
 
   private def testRemove(resources: Set[Resource], resourceCmd: Array[String], args: Array[String], brokerProps: Properties) {
     for (resource <- resources) {
-        AclCommand.main(args ++ resourceCmd :+ "--remove" :+ "--force")
-        withAuthorizer(brokerProps) { authorizer =>
-          TestUtils.waitAndVerifyAcls(Set.empty[Acl], authorizer, resource)
-        }
+      AclCommand.main(args ++ resourceCmd :+ "--remove" :+ "--force")
+      withAuthorizer(brokerProps) { authorizer =>
+        TestUtils.waitAndVerifyAcls(Set.empty[Acl], authorizer, resource)
+      }
     }
   }
 

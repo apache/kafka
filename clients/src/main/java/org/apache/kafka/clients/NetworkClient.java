@@ -19,6 +19,7 @@ package org.apache.kafka.clients;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.network.ChannelState;
 import org.apache.kafka.common.network.NetworkReceive;
 import org.apache.kafka.common.network.Selectable;
@@ -104,19 +105,44 @@ public class NetworkClient implements KafkaClient {
 
     private final List<ClientResponse> abortedSends = new LinkedList<>();
 
+    private final Sensor throttleTimeSensor;
+
     public NetworkClient(Selectable selector,
                          Metadata metadata,
                          String clientId,
                          int maxInFlightRequestsPerConnection,
                          long reconnectBackoffMs,
+                         long reconnectBackoffMax,
                          int socketSendBuffer,
                          int socketReceiveBuffer,
                          int requestTimeoutMs,
                          Time time,
                          boolean discoverBrokerVersions,
                          ApiVersions apiVersions) {
-        this(null, metadata, selector, clientId, maxInFlightRequestsPerConnection, reconnectBackoffMs,
-                socketSendBuffer, socketReceiveBuffer, requestTimeoutMs, time, discoverBrokerVersions, apiVersions);
+        this(null, metadata, selector, clientId, maxInFlightRequestsPerConnection,
+             reconnectBackoffMs, reconnectBackoffMax,
+             socketSendBuffer, socketReceiveBuffer, requestTimeoutMs, time,
+             discoverBrokerVersions, apiVersions, null);
+    }
+
+    public NetworkClient(Selectable selector,
+            Metadata metadata,
+            String clientId,
+            int maxInFlightRequestsPerConnection,
+            long reconnectBackoffMs,
+            long reconnectBackoffMax,
+            int socketSendBuffer,
+            int socketReceiveBuffer,
+            int requestTimeoutMs,
+            Time time,
+            boolean discoverBrokerVersions,
+            ApiVersions apiVersions,
+            Sensor throttleTimeSensor) {
+
+        this(null, metadata, selector, clientId, maxInFlightRequestsPerConnection,
+             reconnectBackoffMs, reconnectBackoffMax,
+             socketSendBuffer, socketReceiveBuffer, requestTimeoutMs, time,
+             discoverBrokerVersions, apiVersions, throttleTimeSensor);
     }
 
     public NetworkClient(Selectable selector,
@@ -124,14 +150,17 @@ public class NetworkClient implements KafkaClient {
                          String clientId,
                          int maxInFlightRequestsPerConnection,
                          long reconnectBackoffMs,
+                         long reconnectBackoffMax,
                          int socketSendBuffer,
                          int socketReceiveBuffer,
                          int requestTimeoutMs,
                          Time time,
                          boolean discoverBrokerVersions,
                          ApiVersions apiVersions) {
-        this(metadataUpdater, null, selector, clientId, maxInFlightRequestsPerConnection, reconnectBackoffMs,
-                socketSendBuffer, socketReceiveBuffer, requestTimeoutMs, time, discoverBrokerVersions, apiVersions);
+        this(metadataUpdater, null, selector, clientId, maxInFlightRequestsPerConnection,
+             reconnectBackoffMs, reconnectBackoffMax,
+             socketSendBuffer, socketReceiveBuffer, requestTimeoutMs, time,
+             discoverBrokerVersions, apiVersions, null);
     }
 
     private NetworkClient(MetadataUpdater metadataUpdater,
@@ -140,12 +169,14 @@ public class NetworkClient implements KafkaClient {
                           String clientId,
                           int maxInFlightRequestsPerConnection,
                           long reconnectBackoffMs,
+                          long reconnectBackoffMax,
                           int socketSendBuffer,
                           int socketReceiveBuffer,
                           int requestTimeoutMs,
                           Time time,
                           boolean discoverBrokerVersions,
-                          ApiVersions apiVersions) {
+                          ApiVersions apiVersions,
+                          Sensor throttleTimeSensor) {
         /* It would be better if we could pass `DefaultMetadataUpdater` from the public constructor, but it's not
          * possible because `DefaultMetadataUpdater` is an inner class and it can only be instantiated after the
          * super constructor is invoked.
@@ -160,7 +191,7 @@ public class NetworkClient implements KafkaClient {
         this.selector = selector;
         this.clientId = clientId;
         this.inFlightRequests = new InFlightRequests(maxInFlightRequestsPerConnection);
-        this.connectionStates = new ClusterConnectionStates(reconnectBackoffMs);
+        this.connectionStates = new ClusterConnectionStates(reconnectBackoffMs, reconnectBackoffMax);
         this.socketSendBuffer = socketSendBuffer;
         this.socketReceiveBuffer = socketReceiveBuffer;
         this.correlation = 0;
@@ -170,6 +201,7 @@ public class NetworkClient implements KafkaClient {
         this.time = time;
         this.discoverBrokerVersions = discoverBrokerVersions;
         this.apiVersions = apiVersions;
+        this.throttleTimeSensor = throttleTimeSensor;
     }
 
     /**
@@ -410,6 +442,11 @@ public class NetworkClient implements KafkaClient {
         return this.inFlightRequests.isEmpty(node);
     }
 
+    @Override
+    public boolean hasReadyNodes() {
+        return connectionStates.hasReadyNodes();
+    }
+
     /**
      * Interrupt the client if it is blocked waiting on I/O.
      */
@@ -468,11 +505,18 @@ public class NetworkClient implements KafkaClient {
     }
 
     public static AbstractResponse parseResponse(ByteBuffer responseBuffer, RequestHeader requestHeader) {
+        return parseResponseMaybeUpdateThrottleTimeMetrics(responseBuffer, requestHeader, null, 0);
+    }
+
+    private static AbstractResponse parseResponseMaybeUpdateThrottleTimeMetrics(ByteBuffer responseBuffer, RequestHeader requestHeader,
+            Sensor throttleTimeSensor, long now) {
         ResponseHeader responseHeader = ResponseHeader.parse(responseBuffer);
         // Always expect the response version id to be the same as the request version id
         ApiKeys apiKey = ApiKeys.forId(requestHeader.apiKey());
         Struct responseBody = apiKey.parseResponse(requestHeader.apiVersion(), responseBuffer);
         correlate(requestHeader, responseHeader);
+        if (throttleTimeSensor != null && responseBody.hasField(AbstractResponse.THROTTLE_TIME_KEY_NAME))
+            throttleTimeSensor.record(responseBody.getInt(AbstractResponse.THROTTLE_TIME_KEY_NAME), now);
         return AbstractResponse.getResponse(apiKey, responseBody);
     }
 
@@ -560,7 +604,7 @@ public class NetworkClient implements KafkaClient {
         for (NetworkReceive receive : this.selector.completedReceives()) {
             String source = receive.source();
             InFlightRequest req = inFlightRequests.completeNext(source);
-            AbstractResponse body = parseResponse(receive.payload(), req.header);
+            AbstractResponse body = parseResponseMaybeUpdateThrottleTimeMetrics(receive.payload(), req.header, throttleTimeSensor, now);
             log.trace("Completed receive from node {}, for key {}, received {}", req.destination, req.header.apiKey(), body);
             if (req.isInternalRequest && body instanceof MetadataResponse)
                 metadataUpdater.handleCompletedMetadataResponse(req.header, now, (MetadataResponse) body);

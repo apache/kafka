@@ -33,7 +33,6 @@ public class DeleteRecordsResponse extends AbstractResponse {
     public static final long INVALID_LOW_WATERMARK = -1L;
 
     // request level key names
-    private static final String THROTTLE_TIME_KEY_NAME = "throttle_time_ms";
     private static final String TOPICS_KEY_NAME = "topics";
 
     // topic level key names
