@@ -77,7 +77,6 @@ public class DefaultRecord implements Record {
     private final ByteBuffer key;
     private final ByteBuffer value;
     private final Header[] headers;
-    private Long checksum = null;
 
     private DefaultRecord(int sizeInBytes,
                           byte attributes,
@@ -122,10 +121,8 @@ public class DefaultRecord implements Record {
     }
 
     @Override
-    public long checksum() {
-        if (checksum == null)
-            checksum = computeChecksum(timestamp, key, value);
-        return checksum;
+    public Long checksumOrNull() {
+        return null;
     }
 
     @Override
@@ -174,14 +171,14 @@ public class DefaultRecord implements Record {
     }
 
     /**
-     * Write the record to `out` and return its crc.
+     * Write the record to `out` and return its size.
      */
-    public static long writeTo(DataOutputStream out,
-                               int offsetDelta,
-                               long timestampDelta,
-                               ByteBuffer key,
-                               ByteBuffer value,
-                               Header[] headers) throws IOException {
+    public static int writeTo(DataOutputStream out,
+                              int offsetDelta,
+                              long timestampDelta,
+                              ByteBuffer key,
+                              ByteBuffer value,
+                              Header[] headers) throws IOException {
         int sizeInBytes = sizeOfBodyInBytes(offsetDelta, timestampDelta, key, value, headers);
         ByteUtils.writeVarint(sizeInBytes, out);
 
@@ -230,18 +227,18 @@ public class DefaultRecord implements Record {
             }
         }
 
-        return computeChecksum(timestampDelta, key, value);
+        return ByteUtils.sizeOfVarint(sizeInBytes) + sizeInBytes;
     }
 
     /**
-     * Write the record to `out` and return its crc.
+     * Write the record to `out` and return its size.
      */
-    public static long writeTo(ByteBuffer out,
-                               int offsetDelta,
-                               long timestampDelta,
-                               ByteBuffer key,
-                               ByteBuffer value,
-                               Header[] headers) {
+    public static int writeTo(ByteBuffer out,
+                              int offsetDelta,
+                              long timestampDelta,
+                              ByteBuffer key,
+                              ByteBuffer value,
+                              Header[] headers) {
         try {
             return writeTo(new DataOutputStream(new ByteBufferOutputStream(out)), offsetDelta, timestampDelta,
                     key, value, headers);
@@ -249,24 +246,6 @@ public class DefaultRecord implements Record {
             // cannot actually be raised by ByteBufferOutputStream
             throw new IllegalStateException("Unexpected exception raised from ByteBufferOutputStream", e);
         }
-    }
-
-    /**
-     * Compute the checksum of the record from the timestamp, key and value payloads
-     */
-    private static long computeChecksum(long timestamp,
-                                        ByteBuffer key,
-                                        ByteBuffer value) {
-        Checksum crc = Crc32C.create();
-        Checksums.updateLong(crc, timestamp);
-
-        if (key != null)
-            Checksums.update(crc, key, key.remaining());
-
-        if (value != null)
-            Checksums.update(crc, value, value.remaining());
-
-        return crc.getValue();
     }
 
     @Override
@@ -493,14 +472,18 @@ public class DefaultRecord implements Record {
         return size;
     }
 
-    static int recordSizeUpperBound(byte[] key, byte[] value, Header[] headers) {
-        return recordSizeUpperBound(Utils.wrapNullable(key), Utils.wrapNullable(value), headers);
-    }
-
     static int recordSizeUpperBound(ByteBuffer key, ByteBuffer value, Header[] headers) {
         int keySize = key == null ? -1 : key.remaining();
         int valueSize = value == null ? -1 : value.remaining();
         return MAX_RECORD_OVERHEAD + sizeOf(keySize, valueSize, headers);
     }
 
+
+    public static long computePartialChecksum(long timestamp, int serializedKeySize, int serializedValueSize) {
+        Checksum checksum = Crc32C.create();
+        Checksums.updateLong(checksum, timestamp);
+        Checksums.updateInt(checksum, serializedKeySize);
+        Checksums.updateInt(checksum, serializedValueSize);
+        return checksum.getValue();
+    }
 }
