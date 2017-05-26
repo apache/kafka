@@ -1947,8 +1947,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val (authorizedResources, unauthorizedResources) = alterConfigsRequest.configs.asScala.partition { case (resource, _) =>
       resource.`type` match {
         case RResourceType.BROKER =>
-          authorize(request.session, AlterConfigs, new Resource(Broker, resource.name)) ||
-            authorize(request.session, AlterConfigs, Resource.ClusterResource)
+          authorize(request.session, AlterConfigs, Resource.ClusterResource)
         case RResourceType.TOPIC =>
           authorize(request.session, AlterConfigs, new Resource(Topic, resource.name)) ||
             authorize(request.session, AlterConfigs, Resource.ClusterResource)
@@ -1965,7 +1964,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   private def configsAuthorizationApiError(session: RequestChannel.Session, resource: RResource): ApiError = {
     val error = resource.`type` match {
-      case RResourceType.BROKER => Errors.BROKER_AUTHORIZATION_FAILED
+      case RResourceType.BROKER => Errors.CLUSTER_AUTHORIZATION_FAILED
       case RResourceType.TOPIC =>
         // Don't leak topic name unless the user has describe topic permission
         if (authorize(session, Describe, new Resource(Topic, resource.name)))
@@ -1981,9 +1980,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val describeConfigsRequest = request.body[DescribeConfigsRequest]
     val (authorizedResources, unauthorizedResources) = describeConfigsRequest.resources.asScala.partition { resource =>
       resource.`type` match {
-        case RResourceType.BROKER =>
-          authorize(request.session, DescribeConfigs, new Resource(Broker, resource.name)) ||
-            authorize(request.session, DescribeConfigs, Resource.ClusterResource)
+        case RResourceType.BROKER => authorize(request.session, DescribeConfigs, Resource.ClusterResource)
         case RResourceType.TOPIC =>
           authorize(request.session, DescribeConfigs, new Resource(Topic, resource.name)) ||
             authorize(request.session, DescribeConfigs, Resource.ClusterResource)
