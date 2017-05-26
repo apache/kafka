@@ -289,6 +289,18 @@ public class KafkaStreamsTest {
         }
     }
 
+    @Test
+    public void testToString() {
+        streams.start();
+        String streamString = streams.toString();
+        streams.close();
+        String appId = streamString.split("\\n")[1].split(":")[1].trim();
+        Assert.assertNotEquals("streamString should not be empty", "", streamString);
+        Assert.assertNotNull("streamString should not be null", streamString);
+        Assert.assertNotEquals("streamString contains non-empty appId", "", appId);
+        Assert.assertNotNull("streamString contains non-null appId", appId);
+    }
+
 
     public static class StateListenerStub implements KafkaStreams.StateListener {
         public int numChanges = 0;
