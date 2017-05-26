@@ -30,6 +30,7 @@ import kafka.message._
 import kafka.metrics.KafkaMetricsReporter
 import kafka.utils._
 import org.apache.kafka.clients.consumer.{ConsumerConfig, ConsumerRecord}
+import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.common.errors.WakeupException
 import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.serialization.Deserializer
@@ -200,6 +201,8 @@ object ConsoleConsumer extends Logging {
     props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, config.bootstrapServer)
     props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, if (config.keyDeserializer != null) config.keyDeserializer else "org.apache.kafka.common.serialization.ByteArrayDeserializer")
     props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, if (config.valueDeserializer != null) config.valueDeserializer else "org.apache.kafka.common.serialization.ByteArrayDeserializer")
+    if(props.getProperty(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG)==null)
+      props.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, config.securityProtocol)
 
     props
   }
@@ -284,6 +287,11 @@ object ConsoleConsumer extends Logging {
     val enableSystestEventsLoggingOpt = parser.accepts("enable-systest-events",
                                                        "Log lifecycle events of the consumer in addition to logging consumed " +
                                                        "messages. (This is specific for system tests.)")
+    val securityProtocolOpt = parser.accepts("security-protocol", "Protocol used to communicate with brokers. Valid values are: PLAINTEXT, SSL, SASL_PLAINTEXT, SASL_SSL")
+      .withRequiredArg
+      .describedAs("security-protocol")
+      .ofType(classOf[String])
+      .defaultsTo("PLAINTEXT")
 
     if (args.length == 0)
       CommandLineUtils.printUsageAndDie(parser, "The console consumer is a tool that reads data from Kafka and outputs it to standard output.")
@@ -316,6 +324,7 @@ object ConsoleConsumer extends Logging {
     val valueDeserializer = options.valueOf(valueDeserializerOpt)
     val formatter: MessageFormatter = messageFormatterClass.newInstance().asInstanceOf[MessageFormatter]
     formatter.init(formatterArgs)
+    val securityProtocol = options.valueOf(securityProtocolOpt)
 
     if (useOldConsumer) {
       if (options.has(bootstrapServerOpt))
