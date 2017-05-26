@@ -240,23 +240,23 @@ public class TransactionManager {
         return transactionalId != null;
     }
 
-    public boolean isCompletingTransaction() {
+    public synchronized boolean isCompletingTransaction() {
         return currentState == State.COMMITTING_TRANSACTION || currentState == State.ABORTING_TRANSACTION;
     }
 
-    public boolean isInTransaction() {
-        return currentState == State.IN_TRANSACTION || isCompletingTransaction();
-    }
-
-    public boolean isInErrorState() {
+    public synchronized boolean isInErrorState() {
         return currentState == State.ABORTABLE_ERROR || currentState == State.FATAL_ERROR;
     }
 
-    public synchronized void transitionToAbortableError(RuntimeException exception) {
+    synchronized boolean isInTransaction() {
+        return currentState == State.IN_TRANSACTION || isCompletingTransaction();
+    }
+
+    synchronized void transitionToAbortableError(RuntimeException exception) {
         transitionTo(State.ABORTABLE_ERROR, exception);
     }
 
-    public synchronized void transitionToFatalError(RuntimeException exception) {
+    synchronized void transitionToFatalError(RuntimeException exception) {
         transitionTo(State.FATAL_ERROR, exception);
     }
 
@@ -383,17 +383,17 @@ public class TransactionManager {
     }
 
     // visible for testing
-    boolean transactionContainsPartition(TopicPartition topicPartition) {
+    synchronized boolean transactionContainsPartition(TopicPartition topicPartition) {
         return isInTransaction() && partitionsInTransaction.contains(topicPartition);
     }
 
     // visible for testing
-    boolean hasPendingOffsetCommits() {
+    synchronized boolean hasPendingOffsetCommits() {
         return isInTransaction() && !pendingTxnOffsetCommits.isEmpty();
     }
 
     // visible for testing
-    boolean isReadyForTransaction() {
+    synchronized boolean isReadyForTransaction() {
         return isTransactional() && currentState == State.READY;
     }
 
@@ -443,7 +443,7 @@ public class TransactionManager {
         return false;
     }
 
-    private void lookupCoordinator(FindCoordinatorRequest.CoordinatorType type, String coordinatorKey) {
+    private synchronized void lookupCoordinator(FindCoordinatorRequest.CoordinatorType type, String coordinatorKey) {
         switch (type) {
             case GROUP:
                 consumerGroupCoordinator = null;
@@ -459,7 +459,7 @@ public class TransactionManager {
         pendingRequests.add(new FindCoordinatorHandler(builder));
     }
 
-    private void completeTransaction() {
+    private synchronized void completeTransaction() {
         transitionTo(State.READY);
         lastError = null;
         partitionsInTransaction.clear();
@@ -516,8 +516,10 @@ public class TransactionManager {
         }
 
         void reenqueue() {
-            this.isRetry = true;
-            pendingRequests.add(this);
+            synchronized (TransactionManager.this) {
+                this.isRetry = true;
+                pendingRequests.add(this);
+            }
         }
 
         @Override
@@ -534,7 +536,9 @@ public class TransactionManager {
                     fatalError(response.versionMismatch());
                 } else if (response.hasResponse()) {
                     log.trace("Got transactional response for request:" + requestBuilder());
-                    handleResponse(response.responseBody());
+                    synchronized (TransactionManager.this) {
+                        handleResponse(response.responseBody());
+                    }
                 } else {
                     fatalError(new KafkaException("Could not execute transactional request for unknown reasons"));
                 }

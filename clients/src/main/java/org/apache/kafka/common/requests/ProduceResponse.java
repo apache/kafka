@@ -39,7 +39,6 @@ public class ProduceResponse extends AbstractResponse {
     // topic level field names
     private static final String TOPIC_KEY_NAME = "topic";
     private static final String PARTITION_RESPONSES_KEY_NAME = "partition_responses";
-    private static final String THROTTLE_TIME_KEY_NAME = "throttle_time_ms";
 
     // partition level field names
     private static final String PARTITION_KEY_NAME = "partition";
