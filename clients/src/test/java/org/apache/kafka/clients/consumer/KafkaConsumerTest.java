@@ -22,6 +22,7 @@ import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.internals.ConsumerCoordinator;
 import org.apache.kafka.clients.consumer.internals.ConsumerInterceptors;
+import org.apache.kafka.clients.consumer.internals.ConsumerMetrics;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.clients.consumer.internals.Fetcher;
@@ -1540,6 +1541,8 @@ public class KafkaConsumerTest {
         ConsumerInterceptors<String, String> interceptors = null;
 
         Metrics metrics = new Metrics();
+        ConsumerMetrics metricsRegistry = new ConsumerMetrics(metricGroupPrefix);
+
         SubscriptionState subscriptions = new SubscriptionState(autoResetStrategy);
         ConsumerNetworkClient consumerClient = new ConsumerNetworkClient(client, metadata, time, retryBackoffMs, requestTimeoutMs);
         ConsumerCoordinator consumerCoordinator = new ConsumerCoordinator(
@@ -1574,7 +1577,7 @@ public class KafkaConsumerTest {
                 metadata,
                 subscriptions,
                 metrics,
-                metricGroupPrefix,
+                metricsRegistry.fetcherMetrics,
                 time,
                 retryBackoffMs,
                 IsolationLevel.READ_UNCOMMITTED);
