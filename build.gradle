@@ -37,6 +37,9 @@ allprojects {
 
   repositories {
     mavenCentral()
+    maven {
+       url "http://mvnrepository.com/artifact/"
+    }
   }
 
   apply plugin: 'com.github.ben-manes.versions'

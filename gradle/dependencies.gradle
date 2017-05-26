@@ -47,6 +47,7 @@ versions += [
   zkclient: "0.10",
   zookeeper: "3.4.9",
   jfreechart: "1.0.0",
+  hdrhistogram: "2.1.9",
 ]
 
 // Add Scala version
@@ -109,5 +110,6 @@ libs += [
   snappy: "org.xerial.snappy:snappy-java:$versions.snappy",
   zkclient: "com.101tec:zkclient:$versions.zkclient",
   zookeeper: "org.apache.zookeeper:zookeeper:$versions.zookeeper",
-  jfreechart: "jfreechart:jfreechart:$versions.jfreechart"
+  jfreechart: "jfreechart:jfreechart:$versions.jfreechart",
+  hdrhistogram: "org.hdrhistogram:HdrHistogram:$versions.hdrhistogram"
 ]
