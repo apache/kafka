@@ -60,6 +60,7 @@ class TransactionalMessageCopier(KafkaPathResolverMixin, BackgroundThreadService
         self.output_topic = output_topic
         self.max_messages = max_messages
         self.message_copy_finished = False
+        self.stop_timeout_sec = 60
 
     def _worker(self, idx, node):
         node.account.ssh("mkdir -p %s" % TransactionalMessageCopier.PERSISTENT_ROOT,
@@ -113,15 +114,28 @@ class TransactionalMessageCopier(KafkaPathResolverMixin, BackgroundThreadService
         except (RemoteCommandError, ValueError) as e:
             return []
 
-    def kill_node(self, node, clean_shutdown=True, allow_fail=True):
+    def alive(self, node):
+        len(self.pids(node)) > 0
+
+    def kill_node(self, node, clean_shutdown=True):
         pids = self.pids(node)
         sig = signal.SIGTERM if clean_shutdown else signal.SIGKILL
         for pid in pids:
             node.account.signal(pid, sig)
             wait_until(lambda: len(self.pids(node)) == 0, timeout_sec=60, err_msg="Message Copier failed to stop")
 
-	def stop_node(self, node):
-		self.kill_node(node)
+    def stop_node(self, node, clean_shutdown=True):
+        self.kill_node(node, clean_shutdown)
+        stopped = self.wait_node(node, timeout_sec=self.stop_timeout_sec)
+        assert stopped, "Node %s: did not stop within the specified timeout of %s seconds" % \
+            (str(node.account), str(self.stop_timeout_sec))
+
+    def restart(self, clean_shutdown):
+        if self.is_done:
+            return
+        node = self.nodes[0]
+        self.stop_node(node, clean_shutdown)
+        self.start_node(node)
 
     def try_parse_json(self, string):
         """Try to parse a string as json. Return None if not parseable."""

@@ -117,11 +117,8 @@ class TransactionsTest(Test):
                    (self.num_seed_messages, 60))
         return consumer.messages_consumed[1]
 
-    def bounce_brokers(self, failure_mode):
-        clean_shutdown = False
-        if failure_mode == "clean_bounce":
-            clean_shutdown = True
-        for node in self.kafka.nodes:
+    def bounce_brokers(self, clean_shutdown):
+       for node in self.kafka.nodes:
             if clean_shutdown:
                 self.kafka.restart_node(node, clean_shutdown = True)
             else:
@@ -131,7 +128,7 @@ class TransactionsTest(Test):
                            err_msg="Failed to see timely deregistration of \
                            hard-killed broker %s" % str(node.account))
 
-    def copy_messages_transactionally(self, failure_mode):
+    def copy_messages_transactionally(self, failure_mode, bounce_target):
         message_copier = TransactionalMessageCopier(
             context=self.test_context,
             num_nodes=1,
@@ -145,25 +142,32 @@ class TransactionsTest(Test):
             transaction_size=self.transaction_size
         )
         message_copier.start()
-        self.bounce_brokers(failure_mode)
+        clean_shutdown = False
+        if failure_mode == "clean_bounce":
+            clean_shutdown = True
+
+        if bounce_target == "brokers":
+            self.bounce_brokers(clean_shutdown)
+        elif bounce_target == "clients":
+            for _ in range(3):
+                message_copier.restart(clean_shutdown)
 
         wait_until(lambda: message_copier.is_done,
                    timeout_sec=20,
                    err_msg="Failed to copy %d messages in  %ds." %\
                    (self.num_seed_messages, 20))
 
-        # TODO(apurva): Implement stop for the copier
-        # message_copier.stop()
 
     @cluster(num_nodes=8)
-    @matrix(failure_mode=["clean_bounce", "hard_bounce"])
-    def test_transactions(self, failure_mode):
+    @matrix(failure_mode=["clean_bounce", "hard_bounce"],
+            bounce_target=["clients", "brokers"])
+    def test_transactions(self, failure_mode, bounce_target):
         security_protocol = 'PLAINTEXT'
         self.kafka.security_protocol = security_protocol
         self.kafka.interbroker_security_protocol = security_protocol
         self.kafka.start()
         input_messages = self.seed_messages()
-        self.copy_messages_transactionally(failure_mode)
+        self.copy_messages_transactionally(failure_mode, bounce_target)
         output_messages = self.get_messages_from_output_topic()
         output_message_set = set(output_messages)
         input_message_set = set(input_messages)
