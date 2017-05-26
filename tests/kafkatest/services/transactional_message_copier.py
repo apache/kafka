@@ -15,9 +15,12 @@
 
 import os
 import json
+import signal
 
+from ducktape.utils.util import wait_until
 from ducktape.services.background_thread import BackgroundThreadService
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
+from ducktape.cluster.remoteaccount import RemoteCommandError
 
 class TransactionalMessageCopier(KafkaPathResolverMixin, BackgroundThreadService):
     """This service wraps org.apache.kafka.tools.TransactionalMessageCopier for
@@ -102,11 +105,23 @@ class TransactionalMessageCopier(KafkaPathResolverMixin, BackgroundThreadService
         node.account.ssh("rm -rf " + self.PERSISTENT_ROOT, allow_fail=False)
         self.security_config.clean_node(node)
 
-	def stop_node(self, node, clean_shutdown=True):
-		self.kill_node(node, clean_shutdown, allow_fail=False)
-		stopped = self.wait_node(node, timeout_sec=self.stop_timeout_sec)
-		assert stopped, "Node %s: did not stop within the specified timeout of %s seconds" % \
-			(str(node.account), str(self.stop_timeout_sec))
+    def pids(self, node):
+        try:
+            cmd = "ps ax | grep -i transactional_message_copier | grep java | grep -v grep | awk '{print $1}'"
+            pid_arr = [pid for pid in node.account.ssh_capture(cmd, allow_fail=True, callback=int)]
+            return pid_arr
+        except (RemoteCommandError, ValueError) as e:
+            return []
+
+    def kill_node(self, node, clean_shutdown=True, allow_fail=True):
+        pids = self.pids(node)
+        sig = signal.SIGTERM if clean_shutdown else signal.SIGKILL
+        for pid in pids:
+            node.account.signal(pid, sig)
+            wait_until(lambda: len(self.pids(node)) == 0, timeout_sec=60, err_msg="Message Copier failed to stop")
+
+	def stop_node(self, node):
+		self.kill_node(node)
 
     def try_parse_json(self, string):
         """Try to parse a string as json. Return None if not parseable."""

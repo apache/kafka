@@ -21,7 +21,7 @@ from kafkatest.services.transactional_message_copier import TransactionalMessage
 from kafkatest.utils import is_int
 
 from ducktape.tests.test import Test
-# from ducktape.mark import parametrize
+from ducktape.mark import matrix
 from ducktape.mark.resource import cluster
 from ducktape.utils.util import wait_until
 
@@ -117,7 +117,21 @@ class TransactionsTest(Test):
                    (self.num_seed_messages, 60))
         return consumer.messages_consumed[1]
 
-    def copy_messages_transactionally(self):
+    def bounce_brokers(self, failure_mode):
+        clean_shutdown = False
+        if failure_mode == "clean_bounce":
+            clean_shutdown = True
+        for node in self.kafka.nodes:
+            if clean_shutdown:
+                self.kafka.restart_node(node, clean_shutdown = True)
+            else:
+                self.kafka.stop_node(node, clean_shutdown = False)
+                wait_until(lambda: len(self.kafka.pids(node)) == 0 and not self.kafka.is_registered(node),
+                           timeout_sec=self.kafka.zk_session_timeout + 5,
+                           err_msg="Failed to see timely deregistration of \
+                           hard-killed broker %s" % str(node.account))
+
+    def copy_messages_transactionally(self, failure_mode):
         message_copier = TransactionalMessageCopier(
             context=self.test_context,
             num_nodes=1,
@@ -131,6 +145,8 @@ class TransactionsTest(Test):
             transaction_size=self.transaction_size
         )
         message_copier.start()
+        self.bounce_brokers(failure_mode)
+
         wait_until(lambda: message_copier.is_done,
                    timeout_sec=20,
                    err_msg="Failed to copy %d messages in  %ds." %\
@@ -140,13 +156,14 @@ class TransactionsTest(Test):
         # message_copier.stop()
 
     @cluster(num_nodes=8)
-    def test_transactions(self):
+    @matrix(failure_mode=["clean_bounce", "hard_bounce"])
+    def test_transactions(self, failure_mode):
         security_protocol = 'PLAINTEXT'
         self.kafka.security_protocol = security_protocol
         self.kafka.interbroker_security_protocol = security_protocol
         self.kafka.start()
         input_messages = self.seed_messages()
-        self.copy_messages_transactionally()
+        self.copy_messages_transactionally(failure_mode)
         output_messages = self.get_messages_from_output_topic()
         output_message_set = set(output_messages)
         input_message_set = set(input_messages)
