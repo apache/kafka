@@ -14,7 +14,7 @@ package kafka.api
 
 import java.nio.ByteBuffer
 import java.util
-import java.util.concurrent.ExecutionException
+import java.util.concurrent.{CountDownLatch, ExecutionException, TimeUnit}
 import java.util.regex.Pattern
 import java.util.{ArrayList, Collections, Properties}
 
@@ -24,7 +24,7 @@ import kafka.server.{BaseRequestTest, KafkaConfig}
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer.internals.NoOpConsumerRebalanceListener
 import org.apache.kafka.clients.consumer._
-import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
+import org.apache.kafka.clients.producer._
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic.GROUP_METADATA_TOPIC_NAME
 import org.apache.kafka.common.protocol.{ApiKeys, Errors, SecurityProtocol}
@@ -1037,7 +1037,6 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     producer.initTransactions()
     producer.beginTransaction()
     producer.send(new ProducerRecord(tp.topic, tp.partition, "1".getBytes, "1".getBytes)).get
-    producer.flush()
     removeAllAcls()
     try {
       producer.commitTransaction()
@@ -1045,6 +1044,26 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     } catch {
       case _: TransactionalIdAuthorizationException => // ok
     }
+  }
+
+  @Test
+  def shouldSuccessfullyAbortTransactionAfterTopicAuthorizationException(): Unit = {
+    addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Write)), transactionalIdResource)
+    addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Write)), topicResource)
+    addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Describe)), new Resource(Topic, deleteTopic))
+    val producer = buildTransactionalProducer()
+    producer.initTransactions()
+    producer.beginTransaction()
+    producer.send(new ProducerRecord(tp.topic, tp.partition, "1".getBytes, "1".getBytes)).get
+    // try and add a partition resulting in TopicAuthorizationException
+    try {
+      producer.send(new ProducerRecord(deleteTopic, 0, "1".getBytes, "1".getBytes)).get
+    } catch {
+      case e : ExecutionException =>
+        assertTrue(e.getCause.isInstanceOf[TopicAuthorizationException])
+    }
+    // now rollback
+    producer.abortTransaction()
   }
 
   @Test

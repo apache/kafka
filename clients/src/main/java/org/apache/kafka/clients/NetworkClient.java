@@ -750,6 +750,8 @@ public class NetworkClient implements KafkaClient {
             Cluster cluster = response.cluster();
             // check if any topics metadata failed to get updated
             Map<String, Errors> errors = response.errors();
+            metadata.lastErrors(errors);
+
             if (!errors.isEmpty())
                 log.warn("Error while fetching metadata with correlation id {} : {}", requestHeader.correlationId(), errors);
 
