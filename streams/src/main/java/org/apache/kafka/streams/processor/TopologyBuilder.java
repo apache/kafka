@@ -30,7 +30,7 @@ import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.QuickUnion;
 import org.apache.kafka.streams.processor.internals.SinkNode;
 import org.apache.kafka.streams.processor.internals.SourceNode;
-import org.apache.kafka.streams.processor.internals.StreamPartitionAssignor.SubscriptionUpdates;
+import org.apache.kafka.streams.processor.internals.SubscriptionUpdates;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.internals.WindowStoreSupplier;
 import org.slf4j.Logger;
@@ -1528,6 +1528,10 @@ public class TopologyBuilder {
         }
 
         return applicationId + "-" + topic;
+    }
+
+    public SubscriptionUpdates subscriptionUpdates() {
+        return subscriptionUpdates;
     }
 
     public synchronized Pattern sourceTopicPattern() {

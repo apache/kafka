@@ -1109,7 +1109,7 @@ public class StreamThreadTest {
             }
         });
 
-        StreamPartitionAssignor.SubscriptionUpdates subscriptionUpdates = new StreamPartitionAssignor.SubscriptionUpdates();
+        SubscriptionUpdates subscriptionUpdates = new SubscriptionUpdates();
         Field updatedTopicsField  = subscriptionUpdates.getClass().getDeclaredField("updatedTopicSubscriptions");
         updatedTopicsField.setAccessible(true);
         Set<String> updatedTopics = (Set<String>) updatedTopicsField.get(subscriptionUpdates);

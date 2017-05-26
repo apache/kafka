@@ -702,35 +702,6 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         this.internalTopicManager = internalTopicManager;
     }
 
-    /**
-     * Used to capture subscribed topic via Patterns discovered during the
-     * partition assignment process.
-     */
-    public static class SubscriptionUpdates {
-
-        private final Set<String> updatedTopicSubscriptions = new HashSet<>();
-
-        private  void updateTopics(Collection<String> topicNames) {
-            updatedTopicSubscriptions.clear();
-            updatedTopicSubscriptions.addAll(topicNames);
-        }
-
-        public Collection<String> getUpdates() {
-            return Collections.unmodifiableSet(new HashSet<>(updatedTopicSubscriptions));
-        }
-
-        public boolean hasUpdates() {
-            return !updatedTopicSubscriptions.isEmpty();
-        }
-
-        @Override
-        public String toString() {
-            return "SubscriptionUpdates{" +
-                    "updatedTopicSubscriptions=" + updatedTopicSubscriptions +
-                    '}';
-        }
-    }
-
     public void close() {
         internalTopicManager.close();
     }
