@@ -1471,7 +1471,10 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     def sendResponseCallback(producerId: Long, result: TransactionResult)(responseStatus: Map[TopicPartition, PartitionResponse]): Unit = {
-      errors.put(producerId, responseStatus.mapValues(_.error).asJava)
+      if (!errors.contains(producerId))
+        errors.put(producerId, responseStatus.mapValues(_.error).asJava)
+      else
+        errors.get(producerId).putAll(responseStatus.mapValues(_.error).asJava)
 
       val successfulOffsetsPartitions = responseStatus.filter { case (topicPartition, partitionResponse) =>
         topicPartition.topic == GROUP_METADATA_TOPIC_NAME && partitionResponse.error == Errors.NONE
@@ -1500,7 +1503,13 @@ class KafkaApis(val requestChannel: RequestChannel,
     // API in ReplicaManager. For now, we've done the simpler approach
     for (marker <- markers.asScala) {
       val producerId = marker.producerId
-      val controlRecords = marker.partitions.asScala.map { partition =>
+      val (goodPartitions, partitionsWithIncorrectMessageFormat) = marker.partitions.asScala.partition { partition =>
+        replicaManager.getMagic(partition) match {
+          case Some(magic) if magic >= RecordBatch.MAGIC_VALUE_V2 => true
+          case _ => false
+        }
+      }
+      val controlRecords = goodPartitions.map { partition =>
         val controlRecordType = marker.transactionResult match {
           case TransactionResult.COMMIT => ControlRecordType.COMMIT
           case TransactionResult.ABORT => ControlRecordType.ABORT
@@ -1508,6 +1517,11 @@ class KafkaApis(val requestChannel: RequestChannel,
         val endTxnMarker = new EndTransactionMarker(controlRecordType, marker.coordinatorEpoch)
         partition -> MemoryRecords.withEndTransactionMarker(producerId, marker.producerEpoch, endTxnMarker)
       }.toMap
+
+      if (partitionsWithIncorrectMessageFormat.nonEmpty)
+        errors.put(producerId, partitionsWithIncorrectMessageFormat.map{partition =>
+          partition -> Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT
+        }.toMap.asJava)
 
       replicaManager.appendRecords(
         timeout = config.requestTimeoutMs.toLong,
