@@ -33,9 +33,9 @@ public class ApiVersionsResponseTest {
 
     @Test
     public void shouldCreateApiResponseOnlyWithKeysSupportedByMagicValue() throws Exception {
-        final ApiVersionsResponse response = ApiVersionsResponse.apiVersionsResponse((short) 1, 10, RecordBatch.MAGIC_VALUE_V1);
+        final ApiVersionsResponse response = ApiVersionsResponse.apiVersionsResponse(10, RecordBatch.MAGIC_VALUE_V1);
         verifyApiKeysForMagic(response, RecordBatch.MAGIC_VALUE_V1);
-        assertEquals(response.throttleTimeMs(), 10);
+        assertEquals(10, response.throttleTimeMs());
     }
 
     @Test
@@ -44,26 +44,12 @@ public class ApiVersionsResponseTest {
     }
 
     @Test
-    public void shouldReturnAllKeysAndDefaultThrottleMsWhenVersionIs0AndMagicIsCurrentValue() throws Exception {
-        ApiVersionsResponse response = ApiVersionsResponse.apiVersionsResponse((short) 0, 1, RecordBatch.CURRENT_MAGIC_VALUE);
-        assertEquals(apiKeysInResponse(response), Utils.mkSet(ApiKeys.values()));
-        assertEquals(response.throttleTimeMs(), AbstractResponse.DEFAULT_THROTTLE_TIME);
+    public void shouldReturnAllKeysWhenMagicIsCurrentValueAndThrottleMsIsDefaultThrottle() throws Exception {
+        ApiVersionsResponse response = ApiVersionsResponse.apiVersionsResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, RecordBatch.CURRENT_MAGIC_VALUE);
+        assertEquals(Utils.mkSet(ApiKeys.values()), apiKeysInResponse(response));
+        assertEquals(AbstractResponse.DEFAULT_THROTTLE_TIME, response.throttleTimeMs());
     }
-
-    @Test
-    public void shouldReturnAllKeysWhenMagicIsCurrentValueAnThrottleMsIsDefaultThrottle() throws Exception {
-        ApiVersionsResponse response = ApiVersionsResponse.apiVersionsResponse((short) 0, AbstractResponse.DEFAULT_THROTTLE_TIME, RecordBatch.CURRENT_MAGIC_VALUE);
-        assertEquals(apiKeysInResponse(response), Utils.mkSet(ApiKeys.values()));
-        assertEquals(response.throttleTimeMs(), AbstractResponse.DEFAULT_THROTTLE_TIME);
-    }
-
-    @Test
-    public void shouldReturnOnlyValidKeysForVersionWithDefaultThrottleMsForSupportedMagic() throws Exception {
-        final ApiVersionsResponse response = ApiVersionsResponse.apiVersionsResponse((short) 0, 10, RecordBatch.MAGIC_VALUE_V1);
-        verifyApiKeysForMagic(response, RecordBatch.MAGIC_VALUE_V1);
-        assertEquals(response.throttleTimeMs(), AbstractResponse.DEFAULT_THROTTLE_TIME);
-    }
-
+    
     private void verifyApiKeysForMagic(final ApiVersionsResponse response, final byte maxMagic) {
         for (final ApiVersionsResponse.ApiVersion version : response.apiVersions()) {
             assertTrue(ApiKeys.forId(version.apiKey).minRequiredInterBrokerMagic <= maxMagic);
