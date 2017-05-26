@@ -35,22 +35,18 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
     private int position;
     private final int end;
     private final FileChannel channel;
-    private final int maxRecordSize;
     private final ByteBuffer logHeaderBuffer = ByteBuffer.allocate(LOG_OVERHEAD);
 
     /**
      * Create a new log input stream over the FileChannel
      * @param channel Underlying FileChannel
-     * @param maxRecordSize Maximum size of records
      * @param start Position in the file channel to start from
      * @param end Position in the file channel not to read past
      */
     FileLogInputStream(FileChannel channel,
-                       int maxRecordSize,
                        int start,
                        int end) {
         this.channel = channel;
-        this.maxRecordSize = maxRecordSize;
         this.position = start;
         this.end = end;
     }
