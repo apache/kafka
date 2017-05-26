@@ -264,11 +264,7 @@ class LogSegment(val log: FileRecords,
     var lastIndexEntry = 0
     maxTimestampSoFar = RecordBatch.NO_TIMESTAMP
     try {
-      // record batches can grow during compaction (see KAFKA-5316), so we allow some extra space when reading
-      // the batches. Checking the message size is only used as a way to check corruption before checking the CRC
-      val batches = log.batches(maxMessageSize * 2).asScala
-
-      for (batch <- batches) {
+      for (batch <- log.batches.asScala) {
         batch.ensureValid()
 
         // The max timestamp is exposed at the batch level, so no need to iterate the records
@@ -300,6 +296,9 @@ class LogSegment(val log: FileRecords,
           .format(log.file.getAbsolutePath, validBytes, e.getMessage))
     }
     val truncated = log.sizeInBytes - validBytes
+    if (truncated > 0)
+      logger.debug(s"Truncated $truncated invalid bytes at the end of segment ${log.file.getAbsoluteFile} during recovery")
+
     log.truncateTo(validBytes)
     index.trimToValidSize()
     // A normally closed segment always appends the biggest timestamp ever seen into log segment, we do this as well.

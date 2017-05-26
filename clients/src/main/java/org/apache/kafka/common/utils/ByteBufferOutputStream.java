@@ -20,16 +20,18 @@ import java.io.OutputStream;
 import java.nio.ByteBuffer;
 
 /**
- * A byte buffer backed output outputStream
+ * A ByteBuffer-backed OutputStream
  */
 public class ByteBufferOutputStream extends OutputStream {
 
     private static final float REALLOCATION_FACTOR = 1.1f;
 
     private ByteBuffer buffer;
+    private int initialPosition;
 
     public ByteBufferOutputStream(ByteBuffer buffer) {
         this.buffer = buffer;
+        this.initialPosition = buffer.position();
     }
 
     public void write(int b) {
@@ -40,18 +42,49 @@ public class ByteBufferOutputStream extends OutputStream {
 
     public void write(byte[] bytes, int off, int len) {
         if (buffer.remaining() < len)
-            expandBuffer(buffer.capacity() + len);
+            expandBuffer(buffer.position() + len);
         buffer.put(bytes, off, len);
+    }
+
+    public void write(ByteBuffer buffer) {
+        if (buffer.hasArray())
+            write(buffer.array(), buffer.arrayOffset() + buffer.position(), buffer.remaining());
+        else {
+            int pos = buffer.position();
+            for (int i = pos, limit = buffer.remaining() + pos; i < limit; i++)
+                write(buffer.get(i));
+        }
     }
 
     public ByteBuffer buffer() {
         return buffer;
     }
 
+    public int position() {
+        return buffer.position();
+    }
+
+    public int capacity() {
+        return buffer.capacity();
+    }
+
+    public int limit() {
+        return buffer.limit();
+    }
+
+    public void position(int position) {
+        if (position > buffer.limit())
+            expandBuffer(position);
+        buffer.position(position);
+    }
+
     private void expandBuffer(int size) {
         int expandSize = Math.max((int) (buffer.capacity() * REALLOCATION_FACTOR), size);
         ByteBuffer temp = ByteBuffer.allocate(expandSize);
         temp.put(buffer.array(), buffer.arrayOffset(), buffer.position());
+
+        // reset the old buffer's position so that
+        buffer.position(initialPosition);
         buffer = temp;
     }
 

@@ -17,6 +17,7 @@
 package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -138,12 +139,9 @@ public class MemoryRecords extends AbstractRecords {
         int bytesRetained = 0;
         int initialOutputPosition = destinationBuffer.position();
 
-        for (MutableRecordBatch batch : batches) {
-            // If we don't have enough room to write any more batches, just return; the cleaner will
-            // reset the output buffer and continue from this point
-            if (MemoryRecordsBuilder.minBufferSize(batch.magic()) > destinationBuffer.remaining())
-                break;
+        ByteBufferOutputStream bufferOutputStream = new ByteBufferOutputStream(destinationBuffer);
 
+        for (MutableRecordBatch batch : batches) {
             bytesRead += batch.sizeInBytes();
 
             if (filter.shouldDiscard(batch))
@@ -154,20 +152,38 @@ public class MemoryRecords extends AbstractRecords {
             // with a magic value not matching the magic of the records (magic < 2). This will be fixed as we
             // recopy the messages to the destination buffer.
 
+            byte batchMagic = batch.magic();
+            boolean writeOriginalEntry = true;
             List<Record> retainedRecords = new ArrayList<>();
+
             for (Record record : batch) {
                 messagesRead += 1;
 
                 if (filter.shouldRetain(batch, record)) {
+                    // Check for log corruption due to KAFKA-4298. If we find it, make sure that we overwrite
+                    // the corrupted batch with correct data.
+                    if (!record.hasMagic(batchMagic))
+                        writeOriginalEntry = false;
+
                     if (record.offset() > maxOffset)
                         maxOffset = record.offset();
 
                     retainedRecords.add(record);
+                } else {
+                    writeOriginalEntry = false;
                 }
             }
 
-            if (!retainedRecords.isEmpty()) {
-                MemoryRecordsBuilder builder = buildFilteredRecordsInto(batch, retainedRecords, destinationBuffer);
+            if (writeOriginalEntry) {
+                batch.writeTo(bufferOutputStream);
+                messagesRetained += retainedRecords.size();
+                bytesRetained += batch.sizeInBytes();
+                if (batch.maxTimestamp() > maxTimestamp) {
+                    maxTimestamp = batch.maxTimestamp();
+                    shallowOffsetOfMaxTimestamp = batch.lastOffset();
+                }
+            } else if (!retainedRecords.isEmpty()) {
+                MemoryRecordsBuilder builder = buildRetainedRecordsInto(batch, retainedRecords, bufferOutputStream);
                 MemoryRecords records = builder.build();
                 int filteredBatchSize = records.sizeInBytes();
 
@@ -185,16 +201,16 @@ public class MemoryRecords extends AbstractRecords {
                     maxTimestamp = info.maxTimestamp;
                     shallowOffsetOfMaxTimestamp = info.shallowOffsetOfMaxTimestamp;
                 }
+            }
 
-                // If we had to allocate a new buffer to fit the filtered output, reset the initial position
-                // in the original buffer to ensure that the partial data cannot mistakenly read. We also return
-                // early to avoid the need for additional allocations.
-                ByteBuffer outputBuffer = builder.buffer();
-                if (outputBuffer != destinationBuffer) {
-                    destinationBuffer.position(initialOutputPosition);
-                    return new FilterResult(outputBuffer, messagesRead, bytesRead, messagesRetained, bytesRetained,
-                            maxOffset, maxTimestamp, shallowOffsetOfMaxTimestamp);
-                }
+            // If we had to allocate a new buffer to fit the filtered output, reset the initial position
+            // in the original buffer to ensure that the partial data cannot mistakenly read. We also return
+            // early to avoid the need for additional allocations.
+            ByteBuffer outputBuffer = bufferOutputStream.buffer();
+            if (outputBuffer != destinationBuffer) {
+                destinationBuffer.position(initialOutputPosition);
+                return new FilterResult(outputBuffer, messagesRead, bytesRead, messagesRetained, bytesRetained,
+                        maxOffset, maxTimestamp, shallowOffsetOfMaxTimestamp);
             }
         }
 
@@ -202,16 +218,20 @@ public class MemoryRecords extends AbstractRecords {
                 maxOffset, maxTimestamp, shallowOffsetOfMaxTimestamp);
     }
 
-    private static MemoryRecordsBuilder buildFilteredRecordsInto(RecordBatch batch, List<Record> retainedRecords,
-                                                                 ByteBuffer destinationBuffer) {
-        byte magic = batch.magic();
-        TimestampType timestampType = batch.timestampType();
-        long logAppendTime = timestampType == TimestampType.LOG_APPEND_TIME ? batch.maxTimestamp() : RecordBatch.NO_TIMESTAMP;
-        long baseOffset = magic >= RecordBatch.MAGIC_VALUE_V2 ? batch.baseOffset() : retainedRecords.get(0).offset();
+    private static MemoryRecordsBuilder buildRetainedRecordsInto(RecordBatch originalBatch,
+                                                                 List<Record> retainedRecords,
+                                                                 ByteBufferOutputStream bufferOutputStream) {
+        byte magic = originalBatch.magic();
+        TimestampType timestampType = originalBatch.timestampType();
+        long logAppendTime = timestampType == TimestampType.LOG_APPEND_TIME ?
+                originalBatch.maxTimestamp() : RecordBatch.NO_TIMESTAMP;
+        long baseOffset = magic >= RecordBatch.MAGIC_VALUE_V2 ?
+                originalBatch.baseOffset() : retainedRecords.get(0).offset();
 
-        MemoryRecordsBuilder builder = builder(destinationBuffer, magic, batch.compressionType(), timestampType,
-                baseOffset, logAppendTime, batch.producerId(), batch.producerEpoch(), batch.baseSequence(),
-                batch.isTransactional(), batch.isControlBatch(), batch.partitionLeaderEpoch());
+        MemoryRecordsBuilder builder = new MemoryRecordsBuilder(bufferOutputStream, magic,
+                originalBatch.compressionType(), timestampType, baseOffset, logAppendTime, originalBatch.producerId(),
+                originalBatch.producerEpoch(), originalBatch.baseSequence(), originalBatch.isTransactional(),
+                originalBatch.isControlBatch(), originalBatch.partitionLeaderEpoch(), bufferOutputStream.limit());
 
         for (Record record : retainedRecords)
             builder.append(record);
@@ -220,7 +240,7 @@ public class MemoryRecords extends AbstractRecords {
             // we must preserve the last offset from the initial batch in order to ensure that the
             // last sequence number from the batch remains even after compaction. Otherwise, the producer
             // could incorrectly see an out of sequence error.
-            builder.overrideLastOffset(batch.lastOffset());
+            builder.overrideLastOffset(originalBatch.lastOffset());
 
         return builder;
     }

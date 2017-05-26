@@ -71,9 +71,6 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
         if (size < LegacyRecord.RECORD_OVERHEAD_V0)
             throw new CorruptRecordException(String.format("Record size is smaller than minimum record overhead (%d).", LegacyRecord.RECORD_OVERHEAD_V0));
 
-        if (size > maxRecordSize)
-            throw new CorruptRecordException(String.format("Record size exceeds the largest allowable message size (%d).", maxRecordSize));
-
         if (position + LOG_OVERHEAD + size > end)
             return null;
 

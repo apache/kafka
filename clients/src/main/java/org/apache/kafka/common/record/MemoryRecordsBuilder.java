@@ -48,9 +48,8 @@ public class MemoryRecordsBuilder {
     // the written bytes. ByteBufferOutputStream allocates a new ByteBuffer if the existing one is not large enough,
     // so it's not safe to hold a direct reference to the underlying ByteBuffer.
     private final ByteBufferOutputStream bufferStream;
-    private final ByteBuffer initialBuffer;
     private final byte magic;
-    private final int initPos;
+    private final int initialPosition;
     private final long baseOffset;
     private final long logAppendTime;
     private final boolean isTransactional;
@@ -75,6 +74,62 @@ public class MemoryRecordsBuilder {
 
     private MemoryRecords builtRecords;
     private boolean aborted = false;
+
+    public MemoryRecordsBuilder(ByteBufferOutputStream bufferStream,
+                                byte magic,
+                                CompressionType compressionType,
+                                TimestampType timestampType,
+                                long baseOffset,
+                                long logAppendTime,
+                                long producerId,
+                                short producerEpoch,
+                                int baseSequence,
+                                boolean isTransactional,
+                                boolean isControlBatch,
+                                int partitionLeaderEpoch,
+                                int writeLimit) {
+        if (magic > RecordBatch.MAGIC_VALUE_V0 && timestampType == TimestampType.NO_TIMESTAMP_TYPE)
+            throw new IllegalArgumentException("TimestampType must be set for magic >= 0");
+        if (magic < RecordBatch.MAGIC_VALUE_V2) {
+            if (isTransactional)
+                throw new IllegalArgumentException("Transactional records are not supported for magic " + magic);
+            if (isControlBatch)
+                throw new IllegalArgumentException("Control records are not supported for magic " + magic);
+        }
+
+        this.magic = magic;
+        this.timestampType = timestampType;
+        this.compressionType = compressionType;
+        this.baseOffset = baseOffset;
+        this.logAppendTime = logAppendTime;
+        this.numRecords = 0;
+        this.writtenUncompressed = 0;
+        this.actualCompressionRatio = 1;
+        this.maxTimestamp = RecordBatch.NO_TIMESTAMP;
+        this.producerId = producerId;
+        this.producerEpoch = producerEpoch;
+        this.baseSequence = baseSequence;
+        this.isTransactional = isTransactional;
+        this.isControlBatch = isControlBatch;
+        this.partitionLeaderEpoch = partitionLeaderEpoch;
+        this.writeLimit = writeLimit;
+
+        this.initialPosition = bufferStream.position();
+        this.initialCapacity = bufferStream.capacity();
+
+        if (magic > RecordBatch.MAGIC_VALUE_V1) {
+            bufferStream.position(initialPosition + DefaultRecordBatch.RECORDS_OFFSET);
+        } else if (compressionType != CompressionType.NONE) {
+            // for compressed records, leave space for the header and the shallow message metadata
+            // and move the starting position to the value payload offset
+            bufferStream.position(initialPosition + Records.LOG_OVERHEAD + LegacyRecord.recordOverhead(magic));
+        }
+
+        // create the stream
+        this.bufferStream = bufferStream;
+        this.appendStream = new DataOutputStream(compressionType.wrapForOutput(this.bufferStream, magic,
+                COMPRESSION_DEFAULT_BUFFER_SIZE));
+    }
 
     /**
      * Construct a new builder.
@@ -107,47 +162,9 @@ public class MemoryRecordsBuilder {
                                 boolean isControlBatch,
                                 int partitionLeaderEpoch,
                                 int writeLimit) {
-        if (magic > RecordBatch.MAGIC_VALUE_V0 && timestampType == TimestampType.NO_TIMESTAMP_TYPE)
-            throw new IllegalArgumentException("TimestampType must be set for magic >= 0");
-        if (magic < RecordBatch.MAGIC_VALUE_V2) {
-            if (isTransactional)
-                throw new IllegalArgumentException("Transactional records are not supported for magic " + magic);
-            if (isControlBatch)
-                throw new IllegalArgumentException("Control records are not supported for magic " + magic);
-        }
-
-        this.magic = magic;
-        this.timestampType = timestampType;
-        this.compressionType = compressionType;
-        this.baseOffset = baseOffset;
-        this.logAppendTime = logAppendTime;
-        this.initPos = buffer.position();
-        this.numRecords = 0;
-        this.writtenUncompressed = 0;
-        this.actualCompressionRatio = 1;
-        this.maxTimestamp = RecordBatch.NO_TIMESTAMP;
-        this.producerId = producerId;
-        this.producerEpoch = producerEpoch;
-        this.baseSequence = baseSequence;
-        this.isTransactional = isTransactional;
-        this.isControlBatch = isControlBatch;
-        this.partitionLeaderEpoch = partitionLeaderEpoch;
-        this.writeLimit = writeLimit;
-        this.initialCapacity = buffer.capacity();
-
-        if (magic > RecordBatch.MAGIC_VALUE_V1) {
-            buffer.position(initPos + DefaultRecordBatch.RECORDS_OFFSET);
-        } else if (compressionType != CompressionType.NONE) {
-            // for compressed records, leave space for the header and the shallow message metadata
-            // and move the starting position to the value payload offset
-            buffer.position(initPos + Records.LOG_OVERHEAD + LegacyRecord.recordOverhead(magic));
-        }
-
-        // create the stream
-        this.initialBuffer = buffer;
-        this.bufferStream = new ByteBufferOutputStream(buffer);
-        this.appendStream = new DataOutputStream(compressionType.wrapForOutput(bufferStream, magic,
-                COMPRESSION_DEFAULT_BUFFER_SIZE));
+        this(new ByteBufferOutputStream(buffer), magic, compressionType, timestampType, baseOffset, logAppendTime,
+                producerId, producerEpoch, baseSequence, isTransactional, isControlBatch, partitionLeaderEpoch,
+                writeLimit);
     }
 
     public ByteBuffer buffer() {
@@ -251,7 +268,7 @@ public class MemoryRecordsBuilder {
 
     public void abort() {
         closeForRecordAppends();
-        buffer().position(initPos);
+        buffer().position(initialPosition);
         aborted = true;
     }
 
@@ -267,7 +284,7 @@ public class MemoryRecordsBuilder {
         closeForRecordAppends();
 
         if (numRecords == 0L) {
-            buffer().position(initPos);
+            buffer().position(initialPosition);
             builtRecords = MemoryRecords.EMPTY;
         } else {
             if (magic > RecordBatch.MAGIC_VALUE_V1)
@@ -275,13 +292,9 @@ public class MemoryRecordsBuilder {
             else if (compressionType != CompressionType.NONE)
                 this.actualCompressionRatio = (float) writeLegacyCompressedWrapperHeader() / this.writtenUncompressed;
 
-            ByteBuffer finalBuffer = buffer();
-            if (finalBuffer != initialBuffer)
-                initialBuffer.position(initPos);
-
-            ByteBuffer buffer = finalBuffer.duplicate();
+            ByteBuffer buffer = buffer().duplicate();
             buffer.flip();
-            buffer.position(initPos);
+            buffer.position(initialPosition);
             builtRecords = MemoryRecords.readableRecords(buffer.slice());
         }
     }
@@ -310,8 +323,8 @@ public class MemoryRecordsBuilder {
         ensureOpenForRecordBatchWrite();
         ByteBuffer buffer = bufferStream.buffer();
         int pos = buffer.position();
-        buffer.position(initPos);
-        int size = pos - initPos;
+        buffer.position(initialPosition);
+        int size = pos - initialPosition;
         int writtenCompressed = size - DefaultRecordBatch.RECORD_BATCH_OVERHEAD;
         int offsetDelta = (int) (lastOffset - baseOffset);
 
@@ -341,9 +354,9 @@ public class MemoryRecordsBuilder {
         ensureOpenForRecordBatchWrite();
         ByteBuffer buffer = bufferStream.buffer();
         int pos = buffer.position();
-        buffer.position(initPos);
+        buffer.position(initialPosition);
 
-        int wrapperSize = pos - initPos - Records.LOG_OVERHEAD;
+        int wrapperSize = pos - initialPosition - Records.LOG_OVERHEAD;
         int writtenCompressed = wrapperSize - LegacyRecord.recordOverhead(magic);
         AbstractLegacyRecordBatch.writeHeader(buffer, lastOffset, wrapperSize);
 
