@@ -621,13 +621,30 @@ public final class RecordAccumulator {
     void abortBatches(final RuntimeException reason) {
         for (ProducerBatch batch : incomplete.all()) {
             Deque<ProducerBatch> dq = getDeque(batch.topicPartition);
-            // Close the batch before aborting
             synchronized (dq) {
                 batch.abort();
                 dq.remove(batch);
             }
             batch.done(-1L, RecordBatch.NO_TIMESTAMP, reason);
             deallocate(batch);
+        }
+    }
+
+    void abortUnsentBatches(RuntimeException reason) {
+        for (ProducerBatch batch : incomplete.all()) {
+            Deque<ProducerBatch> dq = getDeque(batch.topicPartition);
+            boolean aborted = false;
+            synchronized (dq) {
+                if (!batch.inRetry()) {
+                    aborted = true;
+                    batch.abort();
+                    dq.remove(batch);
+                }
+            }
+            if (aborted) {
+                batch.done(-1L, RecordBatch.NO_TIMESTAMP, reason);
+                deallocate(batch);
+            }
         }
     }
 
