@@ -30,6 +30,7 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StateSerdes;
 
 import java.util.List;
+import java.util.Objects;
 
 class CachingKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore implements KeyValueStore<K, V>, CachedStateStore<K, V> {
 
@@ -42,12 +43,6 @@ class CachingKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore im
     private InternalProcessorContext context;
     private StateSerdes<K, V> serdes;
     private Thread streamThread;
-
-    private void validateKeyNotNull(K key) {
-        if (key == null) {
-            throw new NullPointerException("Key is null.");
-        }
-    }
 
     CachingKeyValueStore(final KeyValueStore<Bytes, byte[]> underlying,
                          final Serde<K> keySerde,
@@ -134,7 +129,7 @@ class CachingKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore im
     @Override
     public synchronized V get(final K key) {
         validateStoreOpen();
-        validateKeyNotNull(key);
+        Objects.requireNonNull(key);
 
         final byte[] rawKey = serdes.rawKey(key);
         return get(rawKey);
@@ -220,7 +215,7 @@ class CachingKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore im
     @Override
     public synchronized V delete(final K key) {
         validateStoreOpen();
-        validateKeyNotNull(key);
+        Objects.requireNonNull(key);
         final byte[] rawKey = serdes.rawKey(key);
         final Bytes bytesKey = Bytes.wrap(rawKey);
         final V v = get(rawKey);

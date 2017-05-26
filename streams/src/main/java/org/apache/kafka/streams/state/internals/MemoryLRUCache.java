@@ -29,6 +29,7 @@ import org.apache.kafka.streams.state.StateSerdes;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * An in-memory LRU cache store based on HashSet and HashMap.
@@ -122,12 +123,6 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
         });
     }
 
-    private void validateKeyNotNull(K key) {
-        if (key == null) {
-            throw new NullPointerException("Key is null.");
-        }
-    }
-
     @Override
     public boolean persistent() {
         return false;
@@ -140,19 +135,19 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
 
     @Override
     public synchronized V get(K key) {
-        validateKeyNotNull(key);
+        Objects.requireNonNull(key);
         return this.map.get(key);
     }
 
     @Override
     public synchronized void put(K key, V value) {
-        validateKeyNotNull(key);
+        Objects.requireNonNull(key);
         this.map.put(key, value);
     }
 
     @Override
     public synchronized V putIfAbsent(K key, V value) {
-        validateKeyNotNull(key);
+        Objects.requireNonNull(key);
         V originalValue = get(key);
         if (originalValue == null) {
             put(key, value);
@@ -168,7 +163,7 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
 
     @Override
     public synchronized V delete(K key) {
-        validateKeyNotNull(key);
+        Objects.requireNonNull(key);
         V value = this.map.remove(key);
         return value;
     }
