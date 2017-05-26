@@ -28,6 +28,7 @@ import kafka.utils._
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.log4j.Logger
 import org.junit.{After, Test}
+import org.junit.Assert._
 
 class ControllerFailoverTest extends KafkaServerTestHarness with Logging {
   val log = Logger.getLogger(classOf[ControllerFailoverTest])
@@ -67,17 +68,23 @@ class ControllerFailoverTest extends KafkaServerTestHarness with Logging {
 
     // Wait until we have verified that we have resigned
     val latch = new CountDownLatch(1)
+    @volatile var expectedExceptionThrown = false
+    @volatile var unexpectedExceptionThrown: Option[Throwable] = None
     val illegalStateEvent = ControllerTestUtils.createMockControllerEvent(ControllerState.BrokerChange, { () =>
-      initialController.handleIllegalState(new IllegalStateException("Thrown for test purposes"))
+      try initialController.handleIllegalState(new IllegalStateException("Thrown for test purposes"))
+      catch {
+        case _: IllegalStateException => expectedExceptionThrown = true
+        case t: Throwable => unexpectedExceptionThrown = Some(t)
+      }
       latch.await()
     })
     initialController.eventManager.put(illegalStateEvent)
     // Check that we have shutdown the scheduler (via onControllerResigned)
     TestUtils.waitUntilTrue(() => !initialController.kafkaScheduler.isStarted, "Scheduler was not shutdown")
-    TestUtils.waitUntilTrue(() => zkUtils.readDataMaybeNull(ZkUtils.ControllerPath)._1.isEmpty,
-      "Controller path was not removed")
-    TestUtils.waitUntilTrue(() => initialController.getControllerID == -1, "Controller id was not set to -1")
+    TestUtils.waitUntilTrue(() => !initialController.isActive, "Controller did not become inactive")
     latch.countDown()
+    TestUtils.waitUntilTrue(() => expectedExceptionThrown, "IllegalStateException was not thrown")
+    assertEquals("Unexpected exception thrown", None, unexpectedExceptionThrown)
 
     TestUtils.waitUntilTrue(() => {
       servers.exists { server =>
