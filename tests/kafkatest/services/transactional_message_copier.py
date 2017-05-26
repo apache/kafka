@@ -14,10 +14,9 @@
 # limitations under the License.
 
 import os
+import json
 
 from ducktape.services.background_thread import BackgroundThreadService
-# from ducktape.cluster.remoteaccount import RemoteCommandError
-
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
 
 class TransactionalMessageCopier(KafkaPathResolverMixin, BackgroundThreadService):
@@ -57,6 +56,7 @@ class TransactionalMessageCopier(KafkaPathResolverMixin, BackgroundThreadService
         self.input_partition = input_partition
         self.output_topic = output_topic
         self.max_messages = max_messages
+        self.message_copy_finished = False
 
     def _worker(self, idx, node):
         node.account.ssh("mkdir -p %s" % TransactionalMessageCopier.PERSISTENT_ROOT,
@@ -69,17 +69,23 @@ class TransactionalMessageCopier(KafkaPathResolverMixin, BackgroundThreadService
         self.security_config = self.kafka.security_config.client_config(node=node)
         self.security_config.setup_node(node)
         cmd = self.start_cmd(node, idx)
-        self.logger.debug("TransactionalMessageCopier %d command: %s" % (idx, cmd))
+        self.logger.info("TransactionalMessageCopier %d command: %s" % (idx, cmd))
         for line in node.account.ssh_capture(cmd):
             line = line.strip()
-            self.logger.info(line)
+            data = self.try_parse_json(line)
+            if data is not None:
+                with self.lock:
+                    if "shutdown_complete" in data:
+                        self.message_copy_finished = True
+                    elif "status" in data:
+                        self.logger.info(data["status"])
 
     def start_cmd(self, node, idx):
         cmd  = "export LOG_DIR=%s;" % TransactionalMessageCopier.LOG_DIR
         cmd += " export KAFKA_OPTS=%s;" % self.security_config.kafka_opts
         cmd += " export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % TransactionalMessageCopier.LOG4J_CONFIG
-        cmd += self.impl.exec_cmd(node)
-        cmd += "--broker-list %s" % (self.topic, self.kafka.bootstrap_servers(self.security_config.security_protocol))
+        cmd += self.path.script("kafka-run-class.sh", node) + " org.apache.kafka.tools." + "TransactionalMessageCopier"
+        cmd += " --broker-list %s" % self.kafka.bootstrap_servers(self.security_config.security_protocol)
         cmd += " --transactional-id %s" % self.transactional_id
         cmd += " --consumer-group %s" % self.consumer_group
         cmd += " --input-topic %s" % self.input_topic
@@ -91,14 +97,26 @@ class TransactionalMessageCopier(KafkaPathResolverMixin, BackgroundThreadService
 
         return cmd
 
-    def stop_node(self, node, clean_shutdown=True):
-        self.kill_node(node, clean_shutdown, allow_fail=False)
-
-        stopped = self.wait_node(node, timeout_sec=self.stop_timeout_sec)
-        assert stopped, "Node %s: did not stop within the specified timeout of %s seconds" % \
-                        (str(node.account), str(self.stop_timeout_sec))
-
     def clean_node(self, node, clean_shutdown=False):
         self.kill_node(node, clean_shutdown, allow_fail=False)
         node.account.ssh("rm -rf " + self.PERSISTENT_ROOT, allow_fail=False)
         self.security_config.clean_node(node)
+
+	def stop_node(self, node, clean_shutdown=True):
+		self.kill_node(node, clean_shutdown, allow_fail=False)
+		stopped = self.wait_node(node, timeout_sec=self.stop_timeout_sec)
+		assert stopped, "Node %s: did not stop within the specified timeout of %s seconds" % \
+			(str(node.account), str(self.stop_timeout_sec))
+
+    def try_parse_json(self, string):
+        """Try to parse a string as json. Return None if not parseable."""
+        try:
+            record = json.loads(string)
+            return record
+        except ValueError:
+            self.logger.debug("Could not parse as json: %s" % str(string))
+            return None
+
+    @property
+    def is_done(self):
+        return self.message_copy_finished

@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.tools;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import net.sourceforge.argparse4j.ArgumentParsers;
 import net.sourceforge.argparse4j.inf.ArgumentParser;
 import net.sourceforge.argparse4j.inf.Namespace;
@@ -186,6 +188,29 @@ public class TransactionalMessageCopier {
         return 0;
     }
 
+    private static String toJsonString(Map<String, Object> data) {
+        String json;
+        try {
+            ObjectMapper mapper = new ObjectMapper();
+            json = mapper.writeValueAsString(data);
+        } catch (JsonProcessingException e) {
+            json = "Bad data can't be written as json: " + e.getMessage();
+        }
+        return json;
+    }
+
+    private static String statusAsJson(String status) {
+        Map<String, Object> statusData = new HashMap<>();
+        statusData.put("status", status);
+        return toJsonString(statusData);
+    }
+
+    private static String shutDownString() {
+        Map<String, Object> shutdownData = new HashMap<>();
+        shutdownData.put("shutdown_complete", "");
+        return toJsonString(shutdownData);
+    }
+
     public static void main(String[] args) throws IOException {
         Namespace parsedArgs = argParser().parseArgsOrFail(args);
         Integer numMessagesPerTransaction = parsedArgs.getInt("messagesPerTransaction");
@@ -202,7 +227,7 @@ public class TransactionalMessageCopier {
         long maxMessages = parsedArgs.getInt("maxMessages") == -1 ? Long.MAX_VALUE : parsedArgs.getInt("maxMessages");
         maxMessages = Math.min(messagesRemaining(consumer, inputPartition), maxMessages);
 
-        System.out.println("Going to copy " + maxMessages + " messages from " + inputPartition + " to " + outputTopic + ".");
+        System.out.println(statusAsJson("Going to copy " + maxMessages + " messages from " + inputPartition + " to " + outputTopic + "."));
 
         producer.initTransactions();
 
@@ -219,15 +244,15 @@ public class TransactionalMessageCopier {
                 synchronized (consumer) {
                     consumer.close();
                 }
-                System.out.println("Shut down message copier.");
+                System.out.println(shutDownString());
             }
         });
 
         try {
             while (numMessagesProcessed < maxMessages) {
                 if (numMessagesProcessed % 1000 == 0) {
-                    System.out.println("Copied " + numMessagesProcessed + " messages, "
-                            + (maxMessages - numMessagesProcessed) + " messages to go.");
+                    System.out.println(statusAsJson("Copied " + numMessagesProcessed + " messages, "
+                            + (maxMessages - numMessagesProcessed) + " messages to go."));
                 }
                 if (isShuttingDown.get())
                     break;
@@ -251,7 +276,9 @@ public class TransactionalMessageCopier {
             exitCode = 1;
         } finally {
             producer.close();
-            consumer.close();
+            synchronized (consumer) {
+                consumer.close();
+            }
         }
         System.exit(exitCode);
     }

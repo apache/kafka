@@ -13,8 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
-from kafkatest.services.performance import ProducerPerformanceService
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.kafka import KafkaService
 from kafkatest.services.console_consumer import ConsoleConsumer
@@ -23,7 +21,7 @@ from kafkatest.services.transactional_message_copier import TransactionalMessage
 from kafkatest.utils import is_int
 
 from ducktape.tests.test import Test
-from ducktape.mark import parametrize
+# from ducktape.mark import parametrize
 from ducktape.mark.resource import cluster
 from ducktape.utils.util import wait_until
 
@@ -45,7 +43,7 @@ class TransactionsTest(Test):
         self.num_brokers = 3
 
         # Test parameters
-        self.num_input_partitions = 2
+        self.num_input_partitions = 1
         self.num_output_partitions = 3
         self.num_seed_messages = 5000
         self.transaction_size = 500
@@ -58,21 +56,24 @@ class TransactionsTest(Test):
                                   num_nodes=self.num_brokers,
                                   zk=self.zk,
                                   topics = {
-                                      self.input_topic : {
-                                          "partitions" : self.num_input_partitions,
+                                      self.input_topic: {
+                                          "partitions": self.num_input_partitions,
                                           "replication-factor": 3,
                                           "configs": {
-                                              "min.insync.replicas" : 2
+                                              "min.insync.replicas": 2
                                           }
                                       },
-                                      self.output_topic : {
-                                          "partitions" : self.num_output_partitions,
+                                      self.output_topic: {
+                                          "partitions": self.num_output_partitions,
                                           "replication-factor": 3,
                                           "configs": {
-                                              "min.insync.replicas" : 2
+                                              "min.insync.replicas": 2
                                           }
                                       }
                                   })
+
+    def setUp(self):
+        self.zk.start()
 
     def seed_messages(self):
         seed_timeout_sec = 10000
@@ -89,16 +90,34 @@ class TransactionsTest(Test):
                    timeout_sec=seed_timeout_sec,
                    err_msg="Producer failed to produce messages %d in  %ds." %\
                    (self.num_seed_messages, seed_timeout_sec))
+        seed_producer.stop()
+        return seed_producer.acked
 
+    def get_messages_from_output_topic(self):
+        consumer = ConsoleConsumer(context=self.test_context,
+                                   num_nodes=1,
+                                   kafka=self.kafka,
+                                   topic=self.output_topic,
+                                   new_consumer=True,
+                                   message_validator=is_int,
+                                   from_beginning=True,
+                                   consumer_timeout_ms=5000,
+                                   isolation_level="read_committed")
+        consumer.start()
+        # ensure that the consumer is up.
+        wait_until(lambda: consumer.alive(consumer.nodes[0]) == True,
+                   timeout_sec=60,
+                   err_msg="Consumer failed to start for %ds" %\
+                   60)
+        # wait until the consumer closes, which will be 5 seconds after
+        # receiving the last message.
+        wait_until(lambda: consumer.alive(consumer.nodes[0]) == False,
+                   timeout_sec=60,
+                   err_msg="Consumer failed to consume %d messages in %ds" %\
+                   (self.num_seed_messages, 60))
+        return consumer.messages_consumed[1]
 
-    @cluster(num_nodes=8)
-    def test_transactions(self):
-        security_protocol = 'PLAINTEXT'
-        self.kafka.security_protocol = security_protocol
-        self.kafka.interbroker_security_protocol = security_protocol
-        self.kafka.start()
-        self.seed_messages()
-
+    def copy_messages_transactionally(self):
         message_copier = TransactionalMessageCopier(
             context=self.test_context,
             num_nodes=1,
@@ -111,8 +130,28 @@ class TransactionsTest(Test):
             max_messages=self.num_seed_messages,
             transaction_size=self.transaction_size
         )
-
         message_copier.start()
+        wait_until(lambda: message_copier.is_done,
+                   timeout_sec=20,
+                   err_msg="Failed to copy %d messages in  %ds." %\
+                   (self.num_seed_messages, 20))
 
+        # TODO(apurva): Implement stop for the copier
+        # message_copier.stop()
 
+    @cluster(num_nodes=8)
+    def test_transactions(self):
+        security_protocol = 'PLAINTEXT'
+        self.kafka.security_protocol = security_protocol
+        self.kafka.interbroker_security_protocol = security_protocol
+        self.kafka.start()
+        input_messages = self.seed_messages()
+        self.copy_messages_transactionally()
+        output_messages = self.get_messages_from_output_topic()
+        output_message_set = set(output_messages)
+        input_message_set = set(input_messages)
+        num_dups = abs(len(output_messages) - len(output_message_set))
+        assert num_dups == 0, "Detected %d duplicates in the output stream" % num_dups
+        assert input_message_set == output_message_set, "Input and output message sets are not equal. Num input messages %d. Num output messages %d" %\
+            (len(input_message_set), len(output_message_set))
 
