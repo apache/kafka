@@ -173,10 +173,11 @@ public enum CompressionType {
             throw new IllegalArgumentException("Unknown compression name: " + name);
     }
 
-    // Dynamically load the Snappy classes so that we only have a runtime dependency on compression algorithms
-    // that are used. This is important for platforms that are not supported by the underlying libraries.
-    // Note that we are using the initialization-on-demand holder idiom, so it's important that the initialisation
-    // is done in separate classes (one per compression type).
+    // We should only have a runtime dependency on compression algorithms in case the native libraries don't support
+    // some platforms.
+    //
+    // For Snappy, we dynamically load the classes and rely on the initialization-on-demand holder idiom to ensure
+    // they're only loaded if used.
     //
     // For LZ4 we are using org.apache.kafka classes, which should always be in the classpath, and would not trigger
     // an error until KafkaLZ4BlockInputStream is initialized, which only happens if LZ4 is actually used.
