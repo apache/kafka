@@ -153,7 +153,7 @@ public class MemoryRecords extends AbstractRecords {
             // recopy the messages to the destination buffer.
 
             byte batchMagic = batch.magic();
-            boolean writeOriginalEntry = true;
+            boolean writeOriginalBatch = true;
             List<Record> retainedRecords = new ArrayList<>();
 
             for (Record record : batch) {
@@ -163,18 +163,18 @@ public class MemoryRecords extends AbstractRecords {
                     // Check for log corruption due to KAFKA-4298. If we find it, make sure that we overwrite
                     // the corrupted batch with correct data.
                     if (!record.hasMagic(batchMagic))
-                        writeOriginalEntry = false;
+                        writeOriginalBatch = false;
 
                     if (record.offset() > maxOffset)
                         maxOffset = record.offset();
 
                     retainedRecords.add(record);
                 } else {
-                    writeOriginalEntry = false;
+                    writeOriginalBatch = false;
                 }
             }
 
-            if (writeOriginalEntry) {
+            if (writeOriginalBatch) {
                 batch.writeTo(bufferOutputStream);
                 messagesRetained += retainedRecords.size();
                 bytesRetained += batch.sizeInBytes();
