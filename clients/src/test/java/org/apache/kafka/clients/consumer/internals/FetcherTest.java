@@ -1045,7 +1045,7 @@ public class FetcherTest {
     @Test
     public void testQuotaMetrics() throws Exception {
         MockSelector selector = new MockSelector(time);
-        Sensor throttleTimeSensor = Fetcher.throttleTimeSensor(metrics,  "consumer" + groupId);
+        Sensor throttleTimeSensor = Fetcher.throttleTimeSensor(metrics, metricsRegistry);
         Cluster cluster = TestUtils.singletonCluster("test", 1);
         Node node = cluster.nodes().get(0);
         NetworkClient client = new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,

@@ -931,15 +931,12 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         sensors.updatePartitionLagSensors(assignment);
     }
 
-    public static Sensor throttleTimeSensor(Metrics metrics, String metricGrpPrefix) {
-        String metricGrpName = metricGrpPrefix + FetchManagerMetrics.METRIC_GROUP_SUFFIX;
+    public static Sensor throttleTimeSensor(Metrics metrics, FetcherMetricsRegistry metricsRegistry) {
         Sensor fetchThrottleTimeSensor = metrics.sensor("fetch-throttle-time");
-        fetchThrottleTimeSensor.add(metrics.metricName("fetch-throttle-time-avg",
-                                                     metricGrpName,
-                                                     "The average throttle time in ms"), new Avg());
-        fetchThrottleTimeSensor.add(metrics.metricName("fetch-throttle-time-max",
-                                                     metricGrpName,
-                                                     "The maximum throttle time in ms"), new Max());
+        fetchThrottleTimeSensor.add(metrics.metricInstance(metricsRegistry.fetchThrottleTimeAvg), new Avg());
+
+        fetchThrottleTimeSensor.add(metrics.metricInstance(metricsRegistry.fetchThrottleTimeMax), new Max());
+
         return fetchThrottleTimeSensor;
     }
 
@@ -1225,7 +1222,6 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
     }
 
     private static class FetchManagerMetrics {
-        private static final String METRIC_GROUP_SUFFIX = "-fetch-manager-metrics";
         private final Metrics metrics;
         private FetcherMetricsRegistry metricsRegistry;
         private final Sensor bytesFetched;
