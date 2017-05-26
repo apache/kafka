@@ -77,6 +77,7 @@ object ConsoleConsumer extends Logging {
     try {
       process(conf.maxMessages, conf.formatter, consumer, System.out, conf.skipMessageOnError)
     } finally {
+      consumer.commit()
       consumer.cleanup()
       conf.formatter.close()
       reportRecordCount()
@@ -200,9 +201,7 @@ object ConsoleConsumer extends Logging {
     props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, config.bootstrapServer)
     props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, if (config.keyDeserializer != null) config.keyDeserializer else "org.apache.kafka.common.serialization.ByteArrayDeserializer")
     props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, if (config.valueDeserializer != null) config.valueDeserializer else "org.apache.kafka.common.serialization.ByteArrayDeserializer")
-    if (config.maxMessages > 0) {
-      props.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, config.maxMessages.toString)
-    }
+    props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
 
     props
   }
