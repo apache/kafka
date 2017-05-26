@@ -328,6 +328,13 @@ public class MemoryRecordsTest {
         assertEquals(1, records.size());
         assertEquals(8L, records.get(0).offset());
 
+
+        if (magic >= RecordBatch.MAGIC_VALUE_V1)
+            assertEquals(new SimpleRecord(11L, "1".getBytes(), "b".getBytes()), new SimpleRecord(records.get(0)));
+        else
+            assertEquals(new SimpleRecord(RecordBatch.NO_TIMESTAMP, "1".getBytes(), "b".getBytes()),
+                    new SimpleRecord(records.get(0)));
+
         if (magic >= RecordBatch.MAGIC_VALUE_V2) {
             // the new format preserves first and last offsets from the original batch
             assertEquals(0L, batch.baseOffset());
@@ -396,6 +403,7 @@ public class MemoryRecordsTest {
             List<Record> firstBatchRecords = TestUtils.toList(firstBatch);
             assertEquals(1, firstBatchRecords.size());
             assertEquals(RecordBatch.NO_SEQUENCE, firstBatchRecords.get(0).sequence());
+            assertEquals(new SimpleRecord(11L, "1".getBytes(), "b".getBytes()), new SimpleRecord(firstBatchRecords.get(0)));
 
             MutableRecordBatch secondBatch = batches.get(1);
             assertEquals(2, secondBatch.countOrNull().intValue());
@@ -409,7 +417,9 @@ public class MemoryRecordsTest {
             List<Record> secondBatchRecords = TestUtils.toList(secondBatch);
             assertEquals(2, secondBatchRecords.size());
             assertEquals(baseSequence1 + 1, secondBatchRecords.get(0).sequence());
+            assertEquals(new SimpleRecord(14L, "4".getBytes(), "e".getBytes()), new SimpleRecord(secondBatchRecords.get(0)));
             assertEquals(baseSequence1 + 2, secondBatchRecords.get(1).sequence());
+            assertEquals(new SimpleRecord(15L, "5".getBytes(), "f".getBytes()), new SimpleRecord(secondBatchRecords.get(1)));
 
             MutableRecordBatch thirdBatch = batches.get(2);
             assertEquals(2, thirdBatch.countOrNull().intValue());
@@ -423,7 +433,9 @@ public class MemoryRecordsTest {
             List<Record> thirdBatchRecords = TestUtils.toList(thirdBatch);
             assertEquals(2, thirdBatchRecords.size());
             assertEquals(baseSequence2, thirdBatchRecords.get(0).sequence());
+            assertEquals(new SimpleRecord(16L, "6".getBytes(), "g".getBytes()), new SimpleRecord(thirdBatchRecords.get(0)));
             assertEquals(baseSequence2 + 1, thirdBatchRecords.get(1).sequence());
+            assertEquals(new SimpleRecord(17L, "7".getBytes(), "h".getBytes()), new SimpleRecord(thirdBatchRecords.get(1)));
         }
     }
 

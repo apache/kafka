@@ -112,7 +112,8 @@ public interface RecordBatch extends Iterable<Record> {
 
     /**
      * Get the last offset in this record batch (inclusive). Just like {@link #baseOffset()}, the last offset
-     * always reflects the offset of the last record in the batch, even after compaction.
+     * always reflects the offset of the last record in the original batch, even if it is removed during log
+     * compaction.
      *
      * @return The offset of the last record in this batch
      */
@@ -152,7 +153,9 @@ public interface RecordBatch extends Iterable<Record> {
     boolean hasProducerId();
 
     /**
-     * Get the base sequence number of this record batch. Note that this value is not impacted by log cleaning.
+     * Get the base sequence number of this record batch. Like {@link #baseOffset()}, this value is not
+     * affected by compaction: it always retains the base sequence number from the original batch.
+     *
      * @return The first sequence number or -1 if there is none
      */
     int baseSequence();
