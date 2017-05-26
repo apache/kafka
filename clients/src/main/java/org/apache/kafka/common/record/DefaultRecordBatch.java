@@ -44,7 +44,7 @@ import static org.apache.kafka.common.record.Records.LOG_OVERHEAD;
  *  Magic => Int8
  *  CRC => Uint32
  *  Attributes => Int16
- *  LastOffsetDelta => Int32
+ *  LastOffsetDelta => Int32 // also serves as LastSequenceDelta
  *  BaseTimestamp => Int64
  *  MaxTimestamp => Int64
  *  ProducerId => Int64

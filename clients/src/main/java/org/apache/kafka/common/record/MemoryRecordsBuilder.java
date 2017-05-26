@@ -213,7 +213,7 @@ public class MemoryRecordsBuilder {
         }
     }
 
-    public void setProducerState(long producerId, short epoch, int baseSequence) {
+    public void setProducerState(long producerId, short producerEpoch, int baseSequence) {
         if (isClosed()) {
             // Sequence numbers are assigned when the batch is closed while the accumulator is being drained.
             // If the resulting ProduceRequest to the partition leader failed for a retriable error, the batch will
@@ -222,7 +222,7 @@ public class MemoryRecordsBuilder {
             throw new IllegalStateException("Trying to set producer state of an already closed batch. This indicates a bug on the client.");
         }
         this.producerId = producerId;
-        this.producerEpoch = epoch;
+        this.producerEpoch = producerEpoch;
         this.baseSequence = baseSequence;
     }
 
