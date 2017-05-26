@@ -517,7 +517,8 @@ private[log] class Cleaner(val id: Int,
     if(readBuffer.capacity >= maxBufferSize || writeBuffer.capacity >= maxBufferSize)
       throw new IllegalStateException("This log contains a message larger than maximum allowable size of %s.".format(maxBufferSize))
     val newSize = math.min(this.readBuffer.capacity * 2, maxBufferSize)
-    info("Growing cleaner I/O buffers from " + readBuffer.capacity + "bytes to " + newSize + " bytes.")
+    info("Growing cleaner I/O read buffer from %s bytes to %s bytes and write buffer from %s bytes to %s bytes".format(
+      readBuffer.capacity,newSize,writeBuffer.capacity,newSize))
     this.readBuffer = ByteBuffer.allocate(newSize)
     this.writeBuffer = ByteBuffer.allocate(newSize)
   }
@@ -528,10 +529,11 @@ private[log] class Cleaner(val id: Int,
   def restoreBuffers() {
     if(this.readBuffer.capacity > this.ioBufferSize) {
       this.readBuffer = ByteBuffer.allocate(this.ioBufferSize)
-      info("Restoring cleaner I/O buffers from %s bytes to %s bytes".format(readBuffer.capacity,this.ioBufferSize))
+      info("Restoring cleaner I/O read buffer from %s bytes to %s bytes".format(readBuffer.capacity,this.ioBufferSize))
     }
     if(this.writeBuffer.capacity > this.ioBufferSize)
       this.writeBuffer = ByteBuffer.allocate(this.ioBufferSize)
+      info("Restoring cleaner I/O write buffer from %s bytes to %s bytes".format(readBuffer.capacity,this.ioBufferSize))
   }
 
   /**
