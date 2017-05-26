@@ -17,8 +17,10 @@
 package org.apache.kafka.clients.producer.internals;
 
 import org.apache.kafka.clients.ApiVersions;
+import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MockClient;
+import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.Cluster;
@@ -30,6 +32,8 @@ import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.network.NetworkReceive;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.CompressionRatioEstimator;
@@ -43,12 +47,16 @@ import org.apache.kafka.common.requests.InitProducerIdRequest;
 import org.apache.kafka.common.requests.ProduceRequest;
 import org.apache.kafka.common.requests.InitProducerIdResponse;
 import org.apache.kafka.common.requests.ProduceResponse;
+import org.apache.kafka.common.requests.ResponseHeader;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.test.DelayedReceive;
+import org.apache.kafka.test.MockSelector;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -212,18 +220,41 @@ public class SenderTest {
      */
     @Test
     public void testQuotaMetrics() throws Exception {
-        final long offset = 0;
+        MockSelector selector = new MockSelector(time);
+        Sensor throttleTimeSensor = Sender.throttleTimeSensor(metrics);
+        Cluster cluster = TestUtils.singletonCluster("test", 1);
+        Node node = cluster.nodes().get(0);
+        NetworkClient client = new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
+                1000, 1000, 64 * 1024, 64 * 1024, 1000,
+                time, true, new ApiVersions(), throttleTimeSensor);
+
+        short apiVersionsResponseVersion = ApiKeys.API_VERSIONS.latestVersion();
+        ByteBuffer buffer = ApiVersionsResponse.createApiVersionsResponse(400, RecordBatch.CURRENT_MAGIC_VALUE).serialize(apiVersionsResponseVersion, new ResponseHeader(0));
+        selector.delayedReceive(new DelayedReceive(node.idString(), new NetworkReceive(node.idString(), buffer)));
+        while (!client.ready(node, time.milliseconds()))
+            client.poll(1, time.milliseconds());
+        selector.clear();
+
         for (int i = 1; i <= 3; i++) {
-            accumulator.append(tp0, 0L, "key".getBytes(), "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT);
-            sender.run(time.milliseconds()); // send produce request
-            client.respond(produceResponse(tp0, offset, Errors.NONE, 100 * i));
-            sender.run(time.milliseconds());
+            int throttleTimeMs = 100 * i;
+            ProduceRequest.Builder builder = new ProduceRequest.Builder(RecordBatch.CURRENT_MAGIC_VALUE, (short) 1, 1000,
+                            Collections.<TopicPartition, MemoryRecords>emptyMap());
+            ClientRequest request = client.newClientRequest(node.idString(), builder, time.milliseconds(), true, null);
+            client.send(request, time.milliseconds());
+            client.poll(1, time.milliseconds());
+            ProduceResponse response = produceResponse(tp0, i, Errors.NONE, throttleTimeMs);
+            buffer = response.serialize(ApiKeys.PRODUCE.latestVersion(), new ResponseHeader(request.correlationId()));
+            selector.completeReceive(new NetworkReceive(node.idString(), buffer));
+            client.poll(1, time.milliseconds());
+            selector.clear();
         }
         Map<MetricName, KafkaMetric> allMetrics = metrics.metrics();
         KafkaMetric avgMetric = allMetrics.get(metrics.metricName("produce-throttle-time-avg", METRIC_GROUP, ""));
         KafkaMetric maxMetric = allMetrics.get(metrics.metricName("produce-throttle-time-max", METRIC_GROUP, ""));
-        assertEquals(200, avgMetric.value(), EPS);
-        assertEquals(300, maxMetric.value(), EPS);
+        // Throttle times are ApiVersions=400, Produce=(100, 200, 300)
+        assertEquals(250, avgMetric.value(), EPS);
+        assertEquals(400, maxMetric.value(), EPS);
+        client.close();
     }
 
     @Test

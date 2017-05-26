@@ -81,35 +81,40 @@ public class StreamThread extends Thread {
      *
      * <pre>
      *                +-------------+
-     *                | Not Running | <-------+
-     *                +-----+-------+         |
-     *                      |                 |
-     *                      v                 |
-     *                +-----+-------+         |
-     *          +<--- | Running     | <----+  |
-     *          |     +-----+-------+      |  |
-     *          |           |              |  |
-     *          |           v              |  |
-     *          |     +-----+-------+      |  |
-     *          +<--- | Partitions  |      |  |
-     *          |     | Revoked     |      |  |
-     *          |     +-----+-------+      |  |
-     *          |           |              |  |
-     *          |           v              |  |
-     *          |     +-----+-------+      |  |
-     *          |     | Assigning   |      |  |
-     *          |     | Partitions  | ---->+  |
-     *          |     +-----+-------+         |
-     *          |           |                 |
-     *          |           v                 |
-     *          |     +-----+-------+         |
-     *          +---> | Pending     | ------->+
+     *                | Created     |
+     *                +-----+-------+
+     *                      |
+     *                      v
+     *                +-----+-------+
+     *          +<--- | Running     | <----+
+     *          |     +-----+-------+      |
+     *          |           |              |
+     *          |           v              |
+     *          |     +-----+-------+      |
+     *          +<--- | Partitions  |      |
+     *          |     | Revoked     |      |
+     *          |     +-----+-------+      |
+     *          |           |              |
+     *          |           v              |
+     *          |     +-----+-------+      |
+     *          |     | Assigning   |      |
+     *          |     | Partitions  | ---->+
+     *          |     +-----+-------+
+     *          |           |
+     *          |           v
+     *          |     +-----+-------+
+     *          +---> | Pending     |
      *                | Shutdown    |
+     *                +-----+-------+
+     *                      |
+     *                      v
+     *                +-----+-------+
+     *                | Dead        |
      *                +-------------+
      * </pre>
      */
     public enum State {
-        NOT_RUNNING(1), RUNNING(1, 2, 4), PARTITIONS_REVOKED(3, 4), ASSIGNING_PARTITIONS(1, 4), PENDING_SHUTDOWN(0);
+        CREATED(1), RUNNING(1, 2, 4), PARTITIONS_REVOKED(3, 4), ASSIGNING_PARTITIONS(1, 4), PENDING_SHUTDOWN(5), DEAD;
 
         private final Set<Integer> validTransitions = new HashSet<>();
 
@@ -118,7 +123,7 @@ public class StreamThread extends Thread {
         }
 
         public boolean isRunning() {
-            return !equals(PENDING_SHUTDOWN) && !equals(NOT_RUNNING);
+            return !equals(PENDING_SHUTDOWN) && !equals(CREATED) && !equals(DEAD);
         }
 
         public boolean isValidTransition(final State newState) {
@@ -377,7 +382,7 @@ public class StreamThread extends Thread {
     }
 
 
-    private volatile State state = State.NOT_RUNNING;
+    private volatile State state = State.CREATED;
     private StreamThread.StateListener stateListener = null;
     final PartitionGrouper partitionGrouper;
     private final StreamsMetadataState streamsMetadataState;
@@ -1062,7 +1067,7 @@ public class StreamThread extends Thread {
         // clean up global tasks
 
         log.info("{} Stream thread shutdown complete", logPrefix);
-        setState(State.NOT_RUNNING);
+        setState(State.DEAD);
         streamsMetrics.removeAllSensors();
     }
 

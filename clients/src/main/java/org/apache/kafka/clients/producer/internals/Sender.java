@@ -463,7 +463,6 @@ public class Sender implements Runnable {
                     completeBatch(batch, partResp, correlationId, now);
                 }
                 this.sensors.recordLatency(response.destination(), response.requestLatencyMs());
-                this.sensors.recordThrottleTime(produceResponse.getThrottleTime());
             } else {
                 // this is the acks = 0 case, just complete all requests
                 for (ProducerBatch batch : batches.values()) {
@@ -661,11 +660,22 @@ public class Sender implements Runnable {
         this.client.wakeup();
     }
 
+    public static Sensor throttleTimeSensor(Metrics metrics) {
+        String metricGrpName = SenderMetrics.METRIC_GROUP_NAME;
+        Sensor produceThrottleTimeSensor = metrics.sensor("produce-throttle-time");
+        produceThrottleTimeSensor.add(metrics.metricName("produce-throttle-time-avg",
+                metricGrpName, "The average throttle time in ms"), new Avg());
+        produceThrottleTimeSensor.add(metrics.metricName("produce-throttle-time-max",
+                metricGrpName, "The maximum throttle time in ms"), new Max());
+        return produceThrottleTimeSensor;
+    }
+
     /**
      * A collection of sensors for the sender
      */
     private class SenderMetrics {
 
+        private static final String METRIC_GROUP_NAME = "producer-metrics";
         private final Metrics metrics;
         public final Sensor retrySensor;
         public final Sensor errorSensor;
@@ -675,12 +685,11 @@ public class Sender implements Runnable {
         public final Sensor batchSizeSensor;
         public final Sensor compressionRateSensor;
         public final Sensor maxRecordSizeSensor;
-        public final Sensor produceThrottleTimeSensor;
         public final Sensor batchSplitSensor;
 
         public SenderMetrics(Metrics metrics) {
             this.metrics = metrics;
-            String metricGrpName = "producer-metrics";
+            String metricGrpName = METRIC_GROUP_NAME;
 
             this.batchSizeSensor = metrics.sensor("batch-size");
             MetricName m = metrics.metricName("batch-size-avg", metricGrpName, "The average number of bytes sent per partition per-request.");
@@ -703,12 +712,6 @@ public class Sender implements Runnable {
             this.requestTimeSensor.add(m, new Avg());
             m = metrics.metricName("request-latency-max", metricGrpName, "The maximum request latency in ms");
             this.requestTimeSensor.add(m, new Max());
-
-            this.produceThrottleTimeSensor = metrics.sensor("produce-throttle-time");
-            m = metrics.metricName("produce-throttle-time-avg", metricGrpName, "The average throttle time in ms");
-            this.produceThrottleTimeSensor.add(m, new Avg());
-            m = metrics.metricName("produce-throttle-time-max", metricGrpName, "The maximum throttle time in ms");
-            this.produceThrottleTimeSensor.add(m, new Max());
 
             this.recordsPerRequestSensor = metrics.sensor("records-per-request");
             m = metrics.metricName("record-send-rate", metricGrpName, "The average number of records sent per second.");
@@ -845,10 +848,6 @@ public class Sender implements Runnable {
                 if (nodeRequestTime != null)
                     nodeRequestTime.record(latency, now);
             }
-        }
-
-        public void recordThrottleTime(long throttleTimeMs) {
-            this.produceThrottleTimeSensor.record(throttleTimeMs, time.milliseconds());
         }
 
         void recordBatchSplit() {

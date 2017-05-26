@@ -363,7 +363,7 @@ public class StreamThreadTest {
 
         thread.close();
         assertTrue((thread.state() == StreamThread.State.PENDING_SHUTDOWN) ||
-            (thread.state() == StreamThread.State.NOT_RUNNING));
+            (thread.state() == StreamThread.State.CREATED));
     }
 
     private final static String TOPIC = "topic";

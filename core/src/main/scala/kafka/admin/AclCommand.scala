@@ -31,7 +31,6 @@ object AclCommand {
 
   val Newline = scala.util.Properties.lineSeparator
   val ResourceTypeToValidOperations = Map[ResourceType, Set[Operation]] (
-    Broker -> Set(DescribeConfigs),
     Topic -> Set(Read, Write, Describe, Delete, DescribeConfigs, AlterConfigs, All),
     Group -> Set(Read, Describe, All),
     Cluster -> Set(Create, ClusterAction, DescribeConfigs, AlterConfigs, IdempotentWrite, All),
@@ -243,9 +242,6 @@ object AclCommand {
     if (opts.options.has(opts.groupOpt))
       opts.options.valuesOf(opts.groupOpt).asScala.foreach(group => resources += new Resource(Group, group.trim))
 
-    if (opts.options.has(opts.brokerOpt))
-      opts.options.valuesOf(opts.brokerOpt).asScala.foreach(broker => resources += new Resource(Broker, broker.toString))
-
     if (opts.options.has(opts.transactionalIdOpt))
       opts.options.valuesOf(opts.transactionalIdOpt).asScala.foreach(transactionalId =>
         resources += new Resource(TransactionalId, transactionalId))
@@ -297,12 +293,6 @@ object AclCommand {
       .withRequiredArg
       .describedAs("group")
       .ofType(classOf[String])
-
-    val brokerOpt = parser.accepts("broker", "broker to which the ACLs should be added or removed. " +
-      "A value of * indicates the ACLs should apply to all brokers.")
-      .withRequiredArg
-      .describedAs("broker")
-      .ofType(classOf[Int])
 
     val transactionalIdOpt = parser.accepts("transactional-id", "The transactionalId to which ACLs should " +
       "be added or removed. A value of * indicates the ACLs should apply to all transactionalIds.")

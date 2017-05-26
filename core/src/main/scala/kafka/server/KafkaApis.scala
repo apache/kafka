@@ -25,7 +25,7 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 
 import kafka.admin.{AdminUtils, RackAwareMode}
-import kafka.api.{ControlledShutdownRequest, ControlledShutdownResponse}
+import kafka.api.{ApiVersion, ControlledShutdownRequest, ControlledShutdownResponse, KAFKA_0_11_0_IV0}
 import kafka.cluster.Partition
 import kafka.common.{KafkaStorageException, OffsetAndMetadata, OffsetMetadata, TopicAndPartition}
 import kafka.server.QuotaFactory.{QuotaManagers, UnboundedQuota}
@@ -1277,7 +1277,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     def sendResponseCallback(requestThrottleMs: Int) {
       val responseSend =
         if (Protocol.apiVersionSupported(ApiKeys.API_VERSIONS.id, request.header.apiVersion))
-          ApiVersionsResponse.apiVersionsResponse(request.header.apiVersion, requestThrottleMs).toSend(request.connectionId, request.header)
+          ApiVersionsResponse.apiVersionsResponse(requestThrottleMs, config.interBrokerProtocolVersion.messageFormatVersion).toSend(request.connectionId, request.header)
         else ApiVersionsResponse.unsupportedVersionSend(request.connectionId, request.header)
       requestChannel.sendResponse(RequestChannel.Response(request, responseSend))
     }
@@ -1453,6 +1453,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleEndTxnRequest(request: RequestChannel.Request): Unit = {
+    ensureInterBrokerVersion(KAFKA_0_11_0_IV0)
     val endTxnRequest = request.body[EndTxnRequest]
     val transactionalId = endTxnRequest.transactionalId
 
@@ -1477,6 +1478,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleWriteTxnMarkersRequest(request: RequestChannel.Request): Unit = {
+    ensureInterBrokerVersion(KAFKA_0_11_0_IV0)
     authorizeClusterAction(request)
     val writeTxnMarkersRequest = request.body[WriteTxnMarkersRequest]
     val errors = new ConcurrentHashMap[java.lang.Long, java.util.Map[TopicPartition, Errors]]()
@@ -1538,7 +1540,13 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
   }
 
+  def ensureInterBrokerVersion(version: ApiVersion): Unit = {
+    if (config.interBrokerProtocolVersion < version)
+      throw new UnsupportedVersionException(s"inter.broker.protocol.version: ${config.interBrokerProtocolVersion.version} is less than the required version: ${version.version}")
+  }
+
   def handleAddPartitionToTxnRequest(request: RequestChannel.Request): Unit = {
+    ensureInterBrokerVersion(KAFKA_0_11_0_IV0)
     val addPartitionsToTxnRequest = request.body[AddPartitionsToTxnRequest]
     val transactionalId = addPartitionsToTxnRequest.transactionalId
     val partitionsToAdd = addPartitionsToTxnRequest.partitions
@@ -1593,6 +1601,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleAddOffsetsToTxnRequest(request: RequestChannel.Request): Unit = {
+    ensureInterBrokerVersion(KAFKA_0_11_0_IV0)
     val addOffsetsToTxnRequest = request.body[AddOffsetsToTxnRequest]
     val transactionalId = addOffsetsToTxnRequest.transactionalId
     val groupId = addOffsetsToTxnRequest.consumerGroupId
@@ -1624,6 +1633,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleTxnOffsetCommitRequest(request: RequestChannel.Request): Unit = {
+    ensureInterBrokerVersion(KAFKA_0_11_0_IV0)
     val header = request.header
     val txnOffsetCommitRequest = request.body[TxnOffsetCommitRequest]
 
@@ -1947,8 +1957,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val (authorizedResources, unauthorizedResources) = alterConfigsRequest.configs.asScala.partition { case (resource, _) =>
       resource.`type` match {
         case RResourceType.BROKER =>
-          authorize(request.session, AlterConfigs, new Resource(Broker, resource.name)) ||
-            authorize(request.session, AlterConfigs, Resource.ClusterResource)
+          authorize(request.session, AlterConfigs, Resource.ClusterResource)
         case RResourceType.TOPIC =>
           authorize(request.session, AlterConfigs, new Resource(Topic, resource.name)) ||
             authorize(request.session, AlterConfigs, Resource.ClusterResource)
@@ -1965,7 +1974,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   private def configsAuthorizationApiError(session: RequestChannel.Session, resource: RResource): ApiError = {
     val error = resource.`type` match {
-      case RResourceType.BROKER => Errors.BROKER_AUTHORIZATION_FAILED
+      case RResourceType.BROKER => Errors.CLUSTER_AUTHORIZATION_FAILED
       case RResourceType.TOPIC =>
         // Don't leak topic name unless the user has describe topic permission
         if (authorize(session, Describe, new Resource(Topic, resource.name)))
@@ -1981,9 +1990,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val describeConfigsRequest = request.body[DescribeConfigsRequest]
     val (authorizedResources, unauthorizedResources) = describeConfigsRequest.resources.asScala.partition { resource =>
       resource.`type` match {
-        case RResourceType.BROKER =>
-          authorize(request.session, DescribeConfigs, new Resource(Broker, resource.name)) ||
-            authorize(request.session, DescribeConfigs, Resource.ClusterResource)
+        case RResourceType.BROKER => authorize(request.session, DescribeConfigs, Resource.ClusterResource)
         case RResourceType.TOPIC =>
           authorize(request.session, DescribeConfigs, new Resource(Topic, resource.name)) ||
             authorize(request.session, DescribeConfigs, Resource.ClusterResource)

@@ -27,7 +27,6 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class TxnOffsetCommitResponse extends AbstractResponse {
-    private static final String THROTTLE_TIME_KEY_NAME = "throttle_time_ms";
     private static final String TOPIC_PARTITIONS_KEY_NAME = "topics";
     private static final String PARTITIONS_KEY_NAME = "partitions";
     private static final String TOPIC_KEY_NAME = "topic";

@@ -520,14 +520,15 @@ class TransactionCoordinatorTest {
     val txnMetadata = new TransactionMetadata(transactionalId, producerId, producerEpoch, txnTimeoutMs, Ongoing,
       partitions, now, now)
 
-    EasyMock.expect(transactionManager.transactionsToExpire())
+
+    EasyMock.expect(transactionManager.timedOutTransactions())
       .andReturn(List(TransactionalIdAndProducerIdEpoch(transactionalId, producerId, producerEpoch)))
     EasyMock.expect(transactionManager.getAndMaybeAddTransactionState(EasyMock.eq(transactionalId), EasyMock.anyObject()))
       .andReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata))))
       .once()
 
     val expectedTransition = TxnTransitMetadata(producerId, producerEpoch, txnTimeoutMs, PrepareAbort,
-      partitions.toSet, now, now + TransactionStateManager.DefaultRemoveExpiredTransactionsIntervalMs)
+      partitions.toSet, now, now + TransactionStateManager.DefaultAbortTimedOutTransactionsIntervalMs)
 
     EasyMock.expect(transactionManager.appendTransactionToLog(EasyMock.eq(transactionalId),
       EasyMock.eq(coordinatorEpoch),
@@ -541,7 +542,7 @@ class TransactionCoordinatorTest {
     EasyMock.replay(transactionManager, transactionMarkerChannelManager)
 
     coordinator.startup(false)
-    time.sleep(TransactionStateManager.DefaultRemoveExpiredTransactionsIntervalMs)
+    time.sleep(TransactionStateManager.DefaultAbortTimedOutTransactionsIntervalMs)
     scheduler.tick()
     EasyMock.verify(transactionManager)
   }
@@ -552,7 +553,7 @@ class TransactionCoordinatorTest {
       partitions, time.milliseconds(), time.milliseconds())
     metadata.prepareAbortOrCommit(PrepareCommit, time.milliseconds())
 
-    EasyMock.expect(transactionManager.transactionsToExpire())
+    EasyMock.expect(transactionManager.timedOutTransactions())
       .andReturn(List(TransactionalIdAndProducerIdEpoch(transactionalId, producerId, producerEpoch)))
     EasyMock.expect(transactionManager.getAndMaybeAddTransactionState(EasyMock.eq(transactionalId), EasyMock.anyObject[Option[TransactionMetadata]]()))
       .andReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, metadata))))
@@ -560,7 +561,7 @@ class TransactionCoordinatorTest {
     EasyMock.replay(transactionManager, transactionMarkerChannelManager)
 
     coordinator.startup(false)
-    time.sleep(TransactionStateManager.DefaultRemoveExpiredTransactionsIntervalMs)
+    time.sleep(TransactionStateManager.DefaultAbortTimedOutTransactionsIntervalMs)
     scheduler.tick()
     EasyMock.verify(transactionManager)
   }
