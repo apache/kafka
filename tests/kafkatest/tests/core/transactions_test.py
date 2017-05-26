@@ -90,7 +90,6 @@ class TransactionsTest(Test):
                    timeout_sec=seed_timeout_sec,
                    err_msg="Producer failed to produce messages %d in  %ds." %\
                    (self.num_seed_messages, seed_timeout_sec))
-        seed_producer.stop()
         return seed_producer.acked
 
     def get_messages_from_output_topic(self):
@@ -127,6 +126,7 @@ class TransactionsTest(Test):
                            timeout_sec=self.kafka.zk_session_timeout + 5,
                            err_msg="Failed to see timely deregistration of \
                            hard-killed broker %s" % str(node.account))
+                self.kafka.start_node(node)
 
     def copy_messages_transactionally(self, failure_mode, bounce_target):
         message_copier = TransactionalMessageCopier(
@@ -160,7 +160,7 @@ class TransactionsTest(Test):
 
     @cluster(num_nodes=8)
     @matrix(failure_mode=["clean_bounce", "hard_bounce"],
-            bounce_target=["clients", "brokers"])
+            bounce_target=["brokers", "clients"])
     def test_transactions(self, failure_mode, bounce_target):
         security_protocol = 'PLAINTEXT'
         self.kafka.security_protocol = security_protocol

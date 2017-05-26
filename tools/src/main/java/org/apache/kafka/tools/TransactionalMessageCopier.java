@@ -142,7 +142,7 @@ public class TransactionalMessageCopier {
     }
 
     private static KafkaConsumer<String, String> createConsumer(Namespace parsedArgs, TopicPartition inputPartition) {
-       String consumerGroup = parsedArgs.getString("consumerGroup");
+        String consumerGroup = parsedArgs.getString("consumerGroup");
         String brokerList = parsedArgs.getString("brokerList");
         Integer numMessagesPerTransaction = parsedArgs.getInt("messagesPerTransaction");
 
@@ -183,7 +183,7 @@ public class TransactionalMessageCopier {
         long currentPosition = consumer.position(partition);
         Map<TopicPartition, Long> endOffsets = consumer.endOffsets(Arrays.asList(partition));
         if (endOffsets.containsKey(partition)) {
-           return endOffsets.get(partition) - currentPosition;
+            return endOffsets.get(partition) - currentPosition;
         }
         return 0;
     }
