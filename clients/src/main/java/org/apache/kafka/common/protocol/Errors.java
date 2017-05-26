@@ -57,7 +57,6 @@ import org.apache.kafka.common.errors.OffsetOutOfRangeException;
 import org.apache.kafka.common.errors.OutOfOrderSequenceException;
 import org.apache.kafka.common.errors.PolicyViolationException;
 import org.apache.kafka.common.errors.ProducerFencedException;
-import org.apache.kafka.common.errors.ProducerIdAuthorizationException;
 import org.apache.kafka.common.errors.RebalanceInProgressException;
 import org.apache.kafka.common.errors.RecordBatchTooLargeException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
@@ -483,21 +482,13 @@ public enum Errors {
             return new TransactionalIdAuthorizationException(message);
         }
     }),
-    PRODUCER_ID_AUTHORIZATION_FAILED(54, "Producer is not authorized to use producer Ids, " +
-            "which is required to write idempotent data.",
-                                             new ApiExceptionBuilder() {
-        @Override
-        public ApiException build(String message) {
-            return new ProducerIdAuthorizationException(message);
-        }
-    }),
-    SECURITY_DISABLED(55, "Security features are disabled.", new ApiExceptionBuilder() {
+    SECURITY_DISABLED(54, "Security features are disabled.", new ApiExceptionBuilder() {
         @Override
         public ApiException build(String message) {
             return new SecurityDisabledException(message);
         }
     }),
-    BROKER_AUTHORIZATION_FAILED(56, "Broker authorization failed", new ApiExceptionBuilder() {
+    BROKER_AUTHORIZATION_FAILED(55, "Broker authorization failed", new ApiExceptionBuilder() {
         @Override
         public ApiException build(String message) {
             return new BrokerAuthorizationException(message);

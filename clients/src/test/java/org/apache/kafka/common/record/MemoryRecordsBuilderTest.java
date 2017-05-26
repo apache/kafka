@@ -323,6 +323,22 @@ public class MemoryRecordsBuilderTest {
     }
 
     @Test
+    public void testAppendedChecksumConsistency() {
+        ByteBuffer buffer = ByteBuffer.allocate(512);
+        for (byte magic : Arrays.asList(RecordBatch.MAGIC_VALUE_V0, RecordBatch.MAGIC_VALUE_V1, RecordBatch.MAGIC_VALUE_V2)) {
+            MemoryRecordsBuilder builder = new MemoryRecordsBuilder(buffer, magic, compressionType,
+                    TimestampType.CREATE_TIME, 0L, LegacyRecord.NO_TIMESTAMP, RecordBatch.NO_PRODUCER_ID,
+                    RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE, false, false,
+                    RecordBatch.NO_PARTITION_LEADER_EPOCH, buffer.capacity());
+            Long checksumOrNull = builder.append(1L, "key".getBytes(), "value".getBytes());
+            MemoryRecords memoryRecords = builder.build();
+            List<Record> records = TestUtils.toList(memoryRecords.records());
+            assertEquals(1, records.size());
+            assertEquals(checksumOrNull, records.get(0).checksumOrNull());
+        }
+    }
+
+    @Test
     public void testSmallWriteLimit() {
         // with a small write limit, we always allow at least one record to be added
 
