@@ -337,7 +337,12 @@ object DumpLogSegments {
     val messageSet = FileRecords.open(file, false)
     var validBytes = 0L
     var lastOffset = -1L
-    val batches = messageSet.batches(maxMessageSize).asScala
+
+    // record batches can grow during compaction (see KAFKA-5316), so we allow some extra space when reading
+    // the batches. Checking the message size is only used as a way to check corruption before attempting to
+    // load the entry into memory.
+    val batches = messageSet.batches(maxMessageSize * 2).asScala
+
     for (batch <- batches) {
       if (isDeepIteration) {
         for (record <- batch.asScala) {

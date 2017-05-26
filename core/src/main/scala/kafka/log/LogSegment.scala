@@ -264,7 +264,11 @@ class LogSegment(val log: FileRecords,
     var lastIndexEntry = 0
     maxTimestampSoFar = RecordBatch.NO_TIMESTAMP
     try {
-      for (batch <- log.batches(maxMessageSize).asScala) {
+      // record batches can grow during compaction (see KAFKA-5316), so we allow some extra space when reading
+      // the batches. Checking the message size is only used as a way to check corruption before checking the CRC
+      val batches = log.batches(maxMessageSize * 2).asScala
+
+      for (batch <- batches) {
         batch.ensureValid()
 
         // The max timestamp is exposed at the batch level, so no need to iterate the records
