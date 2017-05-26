@@ -110,6 +110,11 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
     }
 
     @Override
+    public Long checksumOrNull() {
+        return checksum();
+    }
+
+    @Override
     public long checksum() {
         return outerRecord().checksum();
     }
@@ -181,7 +186,7 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
     }
 
     @Override
-    public long sequence() {
+    public int sequence() {
         return RecordBatch.NO_SEQUENCE;
     }
 

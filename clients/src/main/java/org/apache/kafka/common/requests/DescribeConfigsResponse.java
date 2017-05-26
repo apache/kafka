@@ -29,8 +29,6 @@ import java.util.Map;
 
 public class DescribeConfigsResponse extends AbstractResponse {
 
-    private static final String THROTTLE_TIME_KEY_NAME = "throttle_time_ms";
-
     private static final String RESOURCES_KEY_NAME = "resources";
 
     private static final String RESOURCE_TYPE_KEY_NAME = "resource_type";

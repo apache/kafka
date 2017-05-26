@@ -141,13 +141,9 @@ public class MemoryRecords extends AbstractRecords {
 
             byte batchMagic = batch.magic();
             boolean writeOriginalEntry = true;
-            long firstOffset = -1;
             List<Record> retainedRecords = new ArrayList<>();
 
             for (Record record : batch) {
-                if (firstOffset < 0)
-                    firstOffset = record.offset();
-
                 messagesRead += 1;
 
                 if (filter.shouldRetain(batch, record)) {
@@ -178,8 +174,11 @@ public class MemoryRecords extends AbstractRecords {
                 ByteBuffer slice = destinationBuffer.slice();
                 TimestampType timestampType = batch.timestampType();
                 long logAppendTime = timestampType == TimestampType.LOG_APPEND_TIME ? batch.maxTimestamp() : RecordBatch.NO_TIMESTAMP;
+                long baseOffset = batchMagic >= RecordBatch.MAGIC_VALUE_V2 ?
+                        batch.baseOffset() : retainedRecords.get(0).offset();
+
                 MemoryRecordsBuilder builder = builder(slice, batch.magic(), batch.compressionType(), timestampType,
-                        firstOffset, logAppendTime, batch.producerId(), batch.producerEpoch(), batch.baseSequence(),
+                        baseOffset, logAppendTime, batch.producerId(), batch.producerEpoch(), batch.baseSequence(),
                         batch.isTransactional(), batch.partitionLeaderEpoch());
 
                 for (Record record : retainedRecords)

@@ -227,7 +227,6 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                             }
 
                             sensors.fetchLatency.record(resp.requestLatencyMs());
-                            sensors.fetchThrottleTimeSensor.record(response.throttleTimeMs());
                         }
 
                         @Override
@@ -416,7 +415,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             }
             // we might lose the assignment while fetching the offset, so check it is still active
             if (subscriptions.isAssigned(partition)) {
-                log.debug("Resetting offset for partition {} to {} offset.", partition, offsetData.offset);
+                log.debug("Resetting offset for partition {} to offset {}.", partition, offsetData.offset);
                 this.subscriptions.seek(partition, offsetData.offset);
             }
         }
@@ -917,7 +916,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             byte[] valueByteArray = valueBytes == null ? null : Utils.toArray(valueBytes);
             V value = valueBytes == null ? null : this.valueDeserializer.deserialize(partition.topic(), headers, valueByteArray);
             return new ConsumerRecord<>(partition.topic(), partition.partition(), offset,
-                                        timestamp, timestampType, record.checksum(),
+                                        timestamp, timestampType, record.checksumOrNull(),
                                         keyByteArray == null ? ConsumerRecord.NULL_SIZE : keyByteArray.length,
                                         valueByteArray == null ? ConsumerRecord.NULL_SIZE : valueByteArray.length,
                                         key, value, headers);
@@ -930,6 +929,18 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
     @Override
     public void onAssignment(Set<TopicPartition> assignment) {
         sensors.updatePartitionLagSensors(assignment);
+    }
+
+    public static Sensor throttleTimeSensor(Metrics metrics, String metricGrpPrefix) {
+        String metricGrpName = metricGrpPrefix + FetchManagerMetrics.METRIC_GROUP_SUFFIX;
+        Sensor fetchThrottleTimeSensor = metrics.sensor("fetch-throttle-time");
+        fetchThrottleTimeSensor.add(metrics.metricName("fetch-throttle-time-avg",
+                                                     metricGrpName,
+                                                     "The average throttle time in ms"), new Avg());
+        fetchThrottleTimeSensor.add(metrics.metricName("fetch-throttle-time-max",
+                                                     metricGrpName,
+                                                     "The maximum throttle time in ms"), new Max());
+        return fetchThrottleTimeSensor;
     }
 
     private class PartitionRecords {
@@ -1024,9 +1035,9 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                         if (containsAbortMarker(currentBatch)) {
                             abortedProducerIds.remove(producerId);
                         } else if (isBatchAborted(currentBatch)) {
-                            log.trace("Skipping aborted record batch with producerId {} and base offset {}, partition: {}",
+                            log.trace("Skipping aborted record batch with producerId {} and base offset {}, partition {}",
                                     producerId, currentBatch.baseOffset(), partition);
-                            nextFetchOffset = currentBatch.lastOffset() + 1;
+                            nextFetchOffset = currentBatch.nextOffset();
                             continue;
                         }
                     }
@@ -1214,13 +1225,13 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
     }
 
     private static class FetchManagerMetrics {
+        private static final String METRIC_GROUP_SUFFIX = "-fetch-manager-metrics";
         private final Metrics metrics;
         private FetcherMetricsRegistry metricsRegistry;
         private final Sensor bytesFetched;
         private final Sensor recordsFetched;
         private final Sensor fetchLatency;
         private final Sensor recordsFetchLag;
-        private final Sensor fetchThrottleTimeSensor;
 
         private Set<TopicPartition> assignedPartitions;
         
@@ -1244,11 +1255,6 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
 
             this.recordsFetchLag = metrics.sensor("records-lag");
             this.recordsFetchLag.add(metrics.metricInstance(metricsRegistry.recordsLagMax), new Max());
-
-            this.fetchThrottleTimeSensor = metrics.sensor("fetch-throttle-time");
-            this.fetchThrottleTimeSensor.add(metrics.metricInstance(metricsRegistry.fetchThrottleTimeAvg), new Avg());
-
-            this.fetchThrottleTimeSensor.add(metrics.metricInstance(metricsRegistry.fetchThrottleTimeMax), new Max());
         }
 
         private void recordTopicFetchMetrics(String topic, int bytes, int records) {

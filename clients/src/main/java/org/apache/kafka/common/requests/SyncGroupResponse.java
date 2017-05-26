@@ -24,7 +24,6 @@ import java.nio.ByteBuffer;
 
 public class SyncGroupResponse extends AbstractResponse {
 
-    public static final String THROTTLE_TIME_KEY_NAME = "throttle_time_ms";
     public static final String ERROR_CODE_KEY_NAME = "error_code";
     public static final String MEMBER_ASSIGNMENT_KEY_NAME = "member_assignment";
 

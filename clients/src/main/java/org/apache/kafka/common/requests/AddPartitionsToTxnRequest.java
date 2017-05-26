@@ -54,6 +54,17 @@ public class AddPartitionsToTxnRequest extends AbstractRequest {
         public AddPartitionsToTxnRequest build(short version) {
             return new AddPartitionsToTxnRequest(version, transactionalId, producerId, producerEpoch, partitions);
         }
+
+        @Override
+        public String toString() {
+            StringBuilder bld = new StringBuilder();
+            bld.append("(transactionalId=").append(transactionalId).
+                    append(", producerId=").append(producerId).
+                    append(", producerEpoch=").append(producerEpoch).
+                    append(", partitions=").append(partitions).
+                    append(")");
+            return bld.toString();
+        }
     }
 
     private final String transactionalId;

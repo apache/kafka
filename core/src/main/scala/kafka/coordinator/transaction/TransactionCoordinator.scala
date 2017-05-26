@@ -45,7 +45,9 @@ object TransactionCoordinator {
       config.transactionTopicSegmentBytes,
       config.transactionsLoadBufferSize,
       config.transactionTopicMinISR,
-      config.transactionTransactionsExpiredTransactionCleanupIntervalMs)
+      config.transactionAbortTimedOutTransactionCleanupIntervalMs,
+      config.transactionRemoveExpiredTransactionalIdCleanupIntervalMs,
+      config.requestTimeoutMs)
 
     val producerIdManager = new ProducerIdManager(config.brokerId, zkUtils)
     // we do not need to turn on reaper thread since no tasks will be expired and there are no completed tasks to be purged
@@ -404,8 +406,8 @@ class TransactionCoordinator(brokerId: Int,
 
   def partitionFor(transactionalId: String): Int = txnManager.partitionFor(transactionalId)
 
-  private def expireTransactions(): Unit = {
-    txnManager.transactionsToExpire().foreach { txnIdAndPidEpoch =>
+  private def abortTimedOutTransactions(): Unit = {
+    txnManager.timedOutTransactions().foreach { txnIdAndPidEpoch =>
       handleEndTransaction(txnIdAndPidEpoch.transactionalId,
         txnIdAndPidEpoch.producerId,
         txnIdAndPidEpoch.producerEpoch,
@@ -426,16 +428,16 @@ class TransactionCoordinator(brokerId: Int,
   /**
    * Startup logic executed at the same time when the server starts up.
    */
-  def startup(enablePidExpiration: Boolean = true) {
+  def startup(enableTransactionalIdExpiration: Boolean = true) {
     info("Starting up.")
     scheduler.startup()
-    scheduler.schedule("transaction-expiration",
-      expireTransactions,
-      TransactionStateManager.DefaultRemoveExpiredTransactionsIntervalMs,
-      TransactionStateManager.DefaultRemoveExpiredTransactionsIntervalMs
+    scheduler.schedule("transaction-abort",
+      abortTimedOutTransactions,
+      TransactionStateManager.DefaultAbortTimedOutTransactionsIntervalMs,
+      TransactionStateManager.DefaultAbortTimedOutTransactionsIntervalMs
     )
-    if (enablePidExpiration)
-      txnManager.enableProducerIdExpiration()
+    if (enableTransactionalIdExpiration)
+      txnManager.enableTransactionalIdExpiration()
     txnMarkerChannelManager.start()
     isActive.set(true)
 

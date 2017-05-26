@@ -83,7 +83,12 @@ public enum AclOperation {
     /**
      * ALTER_CONFIGS operation.
      */
-    ALTER_CONFIGS((byte) 11);
+    ALTER_CONFIGS((byte) 11),
+
+    /**
+     * IDEMPOTENT_WRITE operation.
+     */
+    IDEMPOTENT_WRITE((byte) 12);
 
     private final static HashMap<Byte, AclOperation> CODE_TO_VALUE = new HashMap<>();
 
