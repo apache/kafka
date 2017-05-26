@@ -186,7 +186,7 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
     }
 
     @Override
-    public long sequence() {
+    public int sequence() {
         return RecordBatch.NO_SEQUENCE;
     }
 
