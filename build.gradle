@@ -401,7 +401,7 @@ project(':core') {
     if (versions.baseScala != '2.10') {
       compile libs.scalaParserCombinators
     }
-
+    compile libs.hdrhistogram
     testCompile project(':clients').sourceSets.test.output
     testCompile libs.bcpkix
     testCompile libs.easymock
