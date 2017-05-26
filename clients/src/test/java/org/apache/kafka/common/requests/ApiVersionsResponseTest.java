@@ -66,7 +66,7 @@ public class ApiVersionsResponseTest {
 
     private void verifyApiKeysForMagic(final ApiVersionsResponse response, final byte maxMagic) {
         for (final ApiVersionsResponse.ApiVersion version : response.apiVersions()) {
-            assertTrue(ApiKeys.forId(version.apiKey).minMagic <= maxMagic);
+            assertTrue(ApiKeys.forId(version.apiKey).minRequiredInterBrokerMagic <= maxMagic);
         }
     }
 

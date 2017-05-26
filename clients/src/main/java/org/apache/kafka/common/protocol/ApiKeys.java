@@ -31,10 +31,10 @@ public enum ApiKeys {
     FETCH(1, "Fetch"),
     LIST_OFFSETS(2, "Offsets"),
     METADATA(3, "Metadata"),
-    LEADER_AND_ISR(4, "LeaderAndIsr", true, RecordBatch.MAGIC_VALUE_V0),
-    STOP_REPLICA(5, "StopReplica", true, RecordBatch.MAGIC_VALUE_V0),
-    UPDATE_METADATA_KEY(6, "UpdateMetadata", true, RecordBatch.MAGIC_VALUE_V0),
-    CONTROLLED_SHUTDOWN_KEY(7, "ControlledShutdown", true, RecordBatch.MAGIC_VALUE_V0),
+    LEADER_AND_ISR(4, "LeaderAndIsr", true),
+    STOP_REPLICA(5, "StopReplica", true),
+    UPDATE_METADATA_KEY(6, "UpdateMetadata", true),
+    CONTROLLED_SHUTDOWN_KEY(7, "ControlledShutdown", true),
     OFFSET_COMMIT(8, "OffsetCommit"),
     OFFSET_FETCH(9, "OffsetFetch"),
     FIND_COORDINATOR(10, "FindCoordinator"),
@@ -58,7 +58,7 @@ public enum ApiKeys {
     DELETE_TOPICS(20, "DeleteTopics"),
     DELETE_RECORDS(21, "DeleteRecords"),
     INIT_PRODUCER_ID(22, "InitProducerId"),
-    OFFSET_FOR_LEADER_EPOCH(23, "OffsetForLeaderEpoch", true, RecordBatch.MAGIC_VALUE_V0),
+    OFFSET_FOR_LEADER_EPOCH(23, "OffsetForLeaderEpoch", true),
     ADD_PARTITIONS_TO_TXN(24, "AddPartitionsToTxn", false, RecordBatch.MAGIC_VALUE_V2),
     ADD_OFFSETS_TO_TXN(25, "AddOffsetsToTxn", false, RecordBatch.MAGIC_VALUE_V2),
     END_TXN(26, "EndTxn", false, RecordBatch.MAGIC_VALUE_V2),
@@ -94,19 +94,24 @@ public enum ApiKeys {
     /** indicates if this is a ClusterAction request used only by brokers */
     public final boolean clusterAction;
 
-    public final byte minMagic;
+    /** indicates the minimum required inter broker magic required to support the API */
+    public final byte minRequiredInterBrokerMagic;
 
     ApiKeys(int id, String name) {
-        this(id, name, false, RecordBatch.MAGIC_VALUE_V0);
+        this(id, name, false);
     }
 
-    ApiKeys(int id, String name, boolean clusterAction, byte minMagic) {
+    ApiKeys(int id, String name, boolean clusterAction) {
+        this(id, name, clusterAction, RecordBatch.MAGIC_VALUE_V0);
+    }
+
+    ApiKeys(int id, String name, boolean clusterAction, byte minRequiredInterBrokerMagic) {
         if (id < 0)
             throw new IllegalArgumentException("id must not be negative, id: " + id);
         this.id = (short) id;
         this.name = name;
         this.clusterAction = clusterAction;
-        this.minMagic = minMagic;
+        this.minRequiredInterBrokerMagic = minRequiredInterBrokerMagic;
     }
 
     public static ApiKeys forId(int id) {

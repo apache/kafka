@@ -1580,25 +1580,23 @@ class KafkaApis(val requestChannel: RequestChannel,
         sendResponseMaybeThrottle(request, requestThrottleMs =>
           new AddPartitionsToTxnResponse(requestThrottleMs, partitionErrors.asJava))
       } else {
-          // Send response callback
-          def sendResponseCallback(error: Errors): Unit = {
-            def createResponse(requestThrottleMs: Int): AbstractResponse = {
-              val responseBody: AddPartitionsToTxnResponse = new AddPartitionsToTxnResponse(requestThrottleMs,
-                partitionsToAdd.asScala.map { tp => (tp, error) }.toMap.asJava)
-              trace(s"Completed $transactionalId's AddPartitionsToTxnRequest with partitions $partitionsToAdd: errors: $error from client ${request.header.clientId}")
-              responseBody
-            }
-
-            sendResponseMaybeThrottle(request, createResponse)
+        def sendResponseCallback(error: Errors): Unit = {
+          def createResponse(requestThrottleMs: Int): AbstractResponse = {
+            val responseBody: AddPartitionsToTxnResponse = new AddPartitionsToTxnResponse(requestThrottleMs,
+              partitionsToAdd.asScala.map{tp => (tp, error)}.toMap.asJava)
+            trace(s"Completed $transactionalId's AddPartitionsToTxnRequest with partitions $partitionsToAdd: errors: $error from client ${request.header.clientId}")
+            responseBody
           }
 
-
-          txnCoordinator.handleAddPartitionsToTransaction(transactionalId,
-            addPartitionsToTxnRequest.producerId(),
-            addPartitionsToTxnRequest.producerEpoch(),
-            partitionsToAdd.asScala.toSet,
-            sendResponseCallback)
+          sendResponseMaybeThrottle(request, createResponse)
         }
+
+        txnCoordinator.handleAddPartitionsToTransaction(transactionalId,
+          addPartitionsToTxnRequest.producerId,
+          addPartitionsToTxnRequest.producerEpoch,
+          partitionsToAdd.asScala.toSet,
+          sendResponseCallback)
+      }
     }
   }
 
