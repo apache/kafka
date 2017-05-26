@@ -103,9 +103,11 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
    */
   def resize(newSize: Int) {
     inLock(lock) {
+      val newlyCreated = file.createNewFile()
       val raf = new RandomAccessFile(file, "rw")
       val roundedNewSize = roundDownToExactMultiple(newSize, entrySize)
       val position = mmap.position
+      val contentBuffer = mmap.flip()
 
       /* Windows won't let us modify the file length while the file is mmapped :-( */
       if (OperatingSystem.IS_WINDOWS)
@@ -114,6 +116,9 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
         raf.setLength(roundedNewSize)
         mmap = raf.getChannel().map(FileChannel.MapMode.READ_WRITE, 0, roundedNewSize)
         _maxEntries = mmap.limit / entrySize
+        if(newlyCreated){
+          mmap.put(contentBuffer.asInstanceOf[ByteBuffer])
+        }
         mmap.position(position)
       } finally {
         CoreUtils.swallow(raf.close())
