@@ -125,6 +125,11 @@ public class KafkaAdminClient extends AdminClient {
     private static final String JMX_PREFIX = "kafka.admin.client";
 
     /**
+     * An invalid shutdown time which indicates that a shutdown has not yet been performed.
+     */
+    private static final long INVALID_SHUTDOWN_TIME = -1;
+
+    /**
      * The default timeout to use for an operation.
      */
     private final int defaultTimeoutMs;
@@ -168,7 +173,7 @@ public class KafkaAdminClient extends AdminClient {
      * During a close operation, this is the time at which we will time out all pending operations
      * and force the RPC thread to exit.  If the admin client is not closing, this will be 0.
      */
-    private final AtomicLong hardShutdownTimeMs = new AtomicLong(0);
+    private final AtomicLong hardShutdownTimeMs = new AtomicLong(INVALID_SHUTDOWN_TIME);
 
     /**
      * Get or create a list value from a map.
@@ -345,14 +350,14 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     @Override
-    public void close(TimeUnit waitTimeUnit, long waitTimeDuration) {
+    public void close(long waitTimeDuration, TimeUnit waitTimeUnit) {
         long waitTimeMs = waitTimeUnit.toMillis(waitTimeDuration);
         long now = time.milliseconds();
         long newHardShutdownTimeMs = now + waitTimeMs;
-        long prev = 0;
+        long prev = INVALID_SHUTDOWN_TIME;
         while (true) {
             if (hardShutdownTimeMs.compareAndSet(prev, newHardShutdownTimeMs)) {
-                if (prev == 0) {
+                if (prev == INVALID_SHUTDOWN_TIME) {
                     log.debug("{}: initiating close operation.", clientId);
                 } else {
                     log.debug("{}: moving hard shutdown time forward.", clientId);
@@ -887,7 +892,7 @@ public class KafkaAdminClient extends AdminClient {
             while (true) {
                 // Check if the AdminClient thread should shut down.
                 long curHardShutdownTimeMs = hardShutdownTimeMs.get();
-                if ((curHardShutdownTimeMs != 0) &&
+                if ((curHardShutdownTimeMs != INVALID_SHUTDOWN_TIME) &&
                         threadShouldExit(now, curHardShutdownTimeMs, callsToSend, correlationIdToCalls))
                     break;
 
@@ -898,7 +903,7 @@ public class KafkaAdminClient extends AdminClient {
                 timeoutCallsInFlight(timeoutProcessor, callsInFlight);
 
                 long pollTimeout = Math.min(1200000, timeoutProcessor.nextTimeoutMs());
-                if (curHardShutdownTimeMs != 0) {
+                if (curHardShutdownTimeMs != INVALID_SHUTDOWN_TIME) {
                     pollTimeout = Math.min(pollTimeout, curHardShutdownTimeMs - now);
                 }
 
@@ -973,7 +978,7 @@ public class KafkaAdminClient extends AdminClient {
          * @param now       The current time in milliseconds.
          */
         void call(Call call, long now) {
-            if (hardShutdownTimeMs.get() != 0) {
+            if (hardShutdownTimeMs.get() != INVALID_SHUTDOWN_TIME) {
                 log.debug("{}: the AdminClient is not accepting new calls.  Timing out {}.", clientId, call);
                 call.fail(Long.MAX_VALUE, new TimeoutException());
             } else {

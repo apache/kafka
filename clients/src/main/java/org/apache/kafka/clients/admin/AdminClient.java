@@ -57,11 +57,11 @@ public abstract class AdminClient implements AutoCloseable {
     /**
      * Close the AdminClient and release all associated resources.
      *
-     * See {@link AdminClient#close(TimeUnit, long)}
+     * See {@link AdminClient#close(long, TimeUnit)}
      */
     @Override
     public void close() {
-        close(TimeUnit.MILLISECONDS, Long.MAX_VALUE);
+        close(Long.MAX_VALUE, TimeUnit.MILLISECONDS);
     }
 
     /**
@@ -72,10 +72,10 @@ public abstract class AdminClient implements AutoCloseable {
      * New operations will not be accepted during the grace period.  Once the grace period is over,
      * all operations that have not yet been completed will be aborted with a TimeoutException.
      *
-     * @param waitTimeUnit      The time unit to use for the wait time.
-     * @param waitTimeDuration  The duration to use for the wait time.
+     * @param duration  The duration to use for the wait time.
+     * @param unit      The time unit to use for the wait time.
      */
-    public abstract void close(TimeUnit waitTimeUnit, long waitTimeDuration);
+    public abstract void close(long duration, TimeUnit unit);
 
     /**
      * Create a batch of new topics with the default options.

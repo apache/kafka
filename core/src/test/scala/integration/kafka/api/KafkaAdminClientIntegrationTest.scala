@@ -391,13 +391,11 @@ class KafkaAdminClientIntegrationTest extends KafkaServerTestHarness with Loggin
     val topics = Seq("mytopic", "mytopic2")
     val newTopics = topics.map(new NewTopic(_, 1, 1))
     val future = client.createTopics(newTopics.asJava, new CreateTopicsOptions().validateOnly(true)).all()
-    client.close(TimeUnit.HOURS, 2)
-    client.close(TimeUnit.HOURS, 1)
+    client.close(2, TimeUnit.HOURS)
     val future2 = client.createTopics(newTopics.asJava, new CreateTopicsOptions().validateOnly(true)).all()
     assertFutureExceptionTypeEquals(future2, classOf[TimeoutException])
     future.get
-    client.close(TimeUnit.SECONDS, 1)
-    client.close(TimeUnit.DAYS, 1)
+    client.close(30, TimeUnit.MINUTES) // multiple close-with-timeout should have no effect
   }
 
   /**
@@ -409,9 +407,11 @@ class KafkaAdminClientIntegrationTest extends KafkaServerTestHarness with Loggin
     val config = createConfig()
     config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:22")
     client = AdminClient.create(config)
+    // Because the bootstrap servers are set up incorrectly, this call will not complete, but must be
+    // cancelled by the close operation.
     val future = client.createTopics(Seq("mytopic", "mytopic2").map(new NewTopic(_, 1, 1)).asJava,
       new CreateTopicsOptions().timeoutMs(900000)).all()
-    client.close(TimeUnit.MILLISECONDS, 0)
+    client.close(0, TimeUnit.MILLISECONDS)
     assertFutureExceptionTypeEquals(future, classOf[TimeoutException])
   }
 
@@ -427,7 +427,7 @@ class KafkaAdminClientIntegrationTest extends KafkaServerTestHarness with Loggin
     client = AdminClient.create(config)
     val startTimeMs = Time.SYSTEM.milliseconds()
     val future = client.createTopics(Seq("mytopic", "mytopic2").map(new NewTopic(_, 1, 1)).asJava,
-      new CreateTopicsOptions().timeoutMs(1)).all()
+      new CreateTopicsOptions().timeoutMs(2)).all()
     assertFutureExceptionTypeEquals(future, classOf[TimeoutException])
     val endTimeMs = Time.SYSTEM.milliseconds()
     assertTrue("Expected the timeout to take at least one millisecond.", endTimeMs > startTimeMs);
