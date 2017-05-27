@@ -60,6 +60,8 @@ class TransactionalMessageCopier(KafkaPathResolverMixin, BackgroundThreadService
         self.output_topic = output_topic
         self.max_messages = max_messages
         self.message_copy_finished = False
+        self.consumed = 0
+        self.remaining = 0
         self.stop_timeout_sec = 60
 
     def _worker(self, idx, node):
@@ -74,15 +76,23 @@ class TransactionalMessageCopier(KafkaPathResolverMixin, BackgroundThreadService
         self.security_config.setup_node(node)
         cmd = self.start_cmd(node, idx)
         self.logger.info("TransactionalMessageCopier %d command: %s" % (idx, cmd))
-        for line in node.account.ssh_capture(cmd):
-            line = line.strip()
-            data = self.try_parse_json(line)
-            if data is not None:
-                with self.lock:
-                    if "shutdown_complete" in data:
-                        self.message_copy_finished = True
-                    elif "status" in data:
-                        self.logger.info(data["status"])
+        try:
+            for line in node.account.ssh_capture(cmd):
+                line = line.strip()
+                data = self.try_parse_json(line)
+                if data is not None:
+                    with self.lock:
+                        if "shutdown_complete" in data:
+                            self.logger.info("Finished message copy")
+                            self.message_copy_finished = True
+                        elif "progress" in data:
+                            self.consumed = int(data["consumed"])
+                            self.remaining = int(data["remaining"])
+                            self.logger.info("consumed %d, remaining %d" %
+                                             (self.consumed, self.remaining))
+        except RemoteCommandError as e:
+            self.logger.debug("Got exception while reading output from copier, \
+                              probably because it was SIGKILL'd (exit code 137): %s" % str(e))
 
     def start_cmd(self, node, idx):
         cmd  = "export LOG_DIR=%s;" % TransactionalMessageCopier.LOG_DIR
@@ -108,14 +118,15 @@ class TransactionalMessageCopier(KafkaPathResolverMixin, BackgroundThreadService
 
     def pids(self, node):
         try:
-            cmd = "ps ax | grep -i transactional_message_copier | grep java | grep -v grep | awk '{print $1}'"
+            cmd = "ps ax | grep -i TransactionalMessageCopier | grep java | grep -v grep | awk '{print $1}'"
             pid_arr = [pid for pid in node.account.ssh_capture(cmd, allow_fail=True, callback=int)]
             return pid_arr
         except (RemoteCommandError, ValueError) as e:
+            self.logger.error("Could not list pids: %s" % str(e))
             return []
 
     def alive(self, node):
-        len(self.pids(node)) > 0
+        return len(self.pids(node)) > 0
 
     def kill_node(self, node, clean_shutdown=True):
         pids = self.pids(node)
@@ -134,6 +145,8 @@ class TransactionalMessageCopier(KafkaPathResolverMixin, BackgroundThreadService
         if self.is_done:
             return
         node = self.nodes[0]
+        self.consumed = 0
+        self.remaining = 0
         self.stop_node(node, clean_shutdown)
         self.start_node(node)
 
@@ -149,3 +162,8 @@ class TransactionalMessageCopier(KafkaPathResolverMixin, BackgroundThreadService
     @property
     def is_done(self):
         return self.message_copy_finished
+
+    def progress_percent(self):
+        if self.consumed + self.remaining == 0:
+            return 0
+        return (float(self.consumed)/float(self.consumed + self.remaining)) * 100

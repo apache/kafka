@@ -199,9 +199,11 @@ public class TransactionalMessageCopier {
         return json;
     }
 
-    private static String statusAsJson(String status) {
+    private static String statusAsJson(long consumed, long remaining) {
         Map<String, Object> statusData = new HashMap<>();
-        statusData.put("status", status);
+        statusData.put("progress", "");
+        statusData.put("consumed", consumed);
+        statusData.put("remaining", remaining);
         return toJsonString(statusData);
     }
 
@@ -227,7 +229,7 @@ public class TransactionalMessageCopier {
         long maxMessages = parsedArgs.getInt("maxMessages") == -1 ? Long.MAX_VALUE : parsedArgs.getInt("maxMessages");
         maxMessages = Math.min(messagesRemaining(consumer, inputPartition), maxMessages);
 
-        System.out.println(statusAsJson("Going to copy " + maxMessages + " messages from " + inputPartition + " to " + outputTopic + "."));
+        System.out.println(statusAsJson(0, maxMessages));
 
         producer.initTransactions();
 
@@ -250,9 +252,9 @@ public class TransactionalMessageCopier {
 
         try {
             while (numMessagesProcessed < maxMessages) {
-                if (numMessagesProcessed % 1000 == 0) {
-                    System.out.println(statusAsJson("Copied " + numMessagesProcessed + " messages, "
-                            + (maxMessages - numMessagesProcessed) + " messages to go."));
+                if (((double)(numMessagesProcessed / maxMessages) * 100) % 10 == 0) {
+                    // print status for every 10% we progress.
+                    System.out.println(statusAsJson(numMessagesProcessed , (maxMessages - numMessagesProcessed)));
                 }
                 if (isShuttingDown.get())
                     break;

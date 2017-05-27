@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import time
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.kafka import KafkaService
 from kafkatest.services.console_consumer import ConsoleConsumer
@@ -45,7 +46,7 @@ class TransactionsTest(Test):
         # Test parameters
         self.num_input_partitions = 1
         self.num_output_partitions = 3
-        self.num_seed_messages = 5000
+        self.num_seed_messages = 10000
         self.transaction_size = 500
         self.first_transactional_id = "my-first-transactional-id"
         self.second_transactional_id = "my-second-transactional-id"
@@ -142,6 +143,9 @@ class TransactionsTest(Test):
             transaction_size=self.transaction_size
         )
         message_copier.start()
+        wait_until(lambda: message_copier.alive(message_copier.nodes[0]),
+                   timeout_sec=10,
+                   err_msg="Message copier failed to start after 10 s")
         clean_shutdown = False
         if failure_mode == "clean_bounce":
             clean_shutdown = True
@@ -150,12 +154,18 @@ class TransactionsTest(Test):
             self.bounce_brokers(clean_shutdown)
         elif bounce_target == "clients":
             for _ in range(3):
+                wait_until(lambda: message_copier.progress_percent() > 20.0,
+                           timeout_sec=30,
+                           err_msg="Message copier didn't copy 20\% of \
+                           messages in 30s")
+                self.logger.info("progress: %s" % str(message_copier.progress_percent()))
                 message_copier.restart(clean_shutdown)
 
         wait_until(lambda: message_copier.is_done,
                    timeout_sec=20,
                    err_msg="Failed to copy %d messages in  %ds." %\
                    (self.num_seed_messages, 20))
+        self.logger.info("finished copying messages")
 
 
     @cluster(num_nodes=8)
