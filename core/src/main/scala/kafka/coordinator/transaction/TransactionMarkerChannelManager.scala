@@ -128,7 +128,7 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
 
   private val markersQueuePerBroker: concurrent.Map[Int, TxnMarkerQueue] = concurrent.TrieMap.empty[Int, TxnMarkerQueue]
 
-  private val markersQueueForUnknownBroker: TxnMarkerQueue = new TxnMarkerQueue(Node.noNode)
+  private val markersQueueForUnknownBroker = new TxnMarkerQueue(Node.noNode)
 
   private val interBrokerListenerName: ListenerName = config.interBrokerListenerName
 
@@ -291,11 +291,6 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
           }
 
         case None =>
-          // if the leader of the partition is unknown, skip sending the txn marker since
-          // the partition is likely to be deleted already
-          info(s"Couldn't find leader endpoint for partitions $topicPartitions while trying to send transaction markers for " +
-            s"$transactionalId, these partitions are likely deleted already and hence can be skipped")
-
           txnStateManager.getAndMaybeAddTransactionState(transactionalId) match {
             case Left(error) =>
               info(s"Encountered $error trying to fetch transaction metadata for $transactionalId with coordinator epoch $coordinatorEpoch; cancel sending markers to its partition leaders")
@@ -303,9 +298,14 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
 
             case Right(Some(epochAndMetadata)) =>
               if (epochAndMetadata.coordinatorEpoch != coordinatorEpoch) {
-                info(s"The cached metadata have been changed to $epochAndMetadata since preparing to send markers; cancel sending markers to its partition leaders")
+                info(s"The cached metadata has changed to $epochAndMetadata (old coordinator epoch is $coordinatorEpoch) since preparing to send markers; cancel sending markers to its partition leaders")
                 txnMarkerPurgatory.cancelForKey(transactionalId)
               } else {
+                // if the leader of the partition is unknown, skip sending the txn marker since
+                // the partition is likely to be deleted already
+                info(s"Couldn't find leader endpoint for partitions $topicPartitions while trying to send transaction markers for " +
+                  s"$transactionalId, these partitions are likely deleted already and hence can be skipped")
+
                 val txnMetadata = epochAndMetadata.transactionMetadata
 
                 txnMetadata synchronized {

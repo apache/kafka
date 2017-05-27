@@ -165,19 +165,15 @@ class MetadataCache(brokerId: Int) extends Logging {
   // if the leader is known but corresponding node with the listener name is not available, return Some(NO_NODE)
   def getPartitionLeaderEndpoint(topic: String, partitionId: Int, listenerName: ListenerName): Option[Node] = {
     inReadLock(partitionMetadataLock) {
-      cache.get(topic).flatMap(_.get(partitionId)) match {
-        case Some(partitionInfo) =>
-          val leaderId = partitionInfo.leaderIsrAndControllerEpoch.leaderAndIsr.leader
+      cache.get(topic).flatMap(_.get(partitionId)) map { partitionInfo =>
+        val leaderId = partitionInfo.leaderIsrAndControllerEpoch.leaderAndIsr.leader
 
-          aliveNodes.get(leaderId) match {
-            case Some(nodeMap) =>
-              Some(nodeMap.getOrElse(listenerName, Node.noNode))
-            case None =>
-              Some(Node.noNode)
-          }
-
-        case None =>
-          None
+        aliveNodes.get(leaderId) match {
+          case Some(nodeMap) =>
+            nodeMap.getOrElse(listenerName, Node.noNode)
+          case None =>
+            Node.noNode
+        }
       }
     }
   }
@@ -239,7 +235,7 @@ class MetadataCache(brokerId: Int) extends Logging {
     }
   }
 
-  def contains(topic: String, partitionId: Int): Boolean = getPartitionInfo(topic, partitionId).isDefined
+  def contains(tp: TopicPartition): Boolean = getPartitionInfo(tp.topic, tp.partition).isDefined
 
   private def removePartitionInfo(topic: String, partitionId: Int): Boolean = {
     cache.get(topic).map { infos =>

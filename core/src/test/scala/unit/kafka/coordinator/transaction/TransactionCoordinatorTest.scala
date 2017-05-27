@@ -16,7 +16,6 @@
  */
 package kafka.coordinator.transaction
 
-import kafka.server.MetadataCache
 import kafka.utils.MockScheduler
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
