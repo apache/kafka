@@ -17,7 +17,6 @@ public class FreeList {
 
     private ArrayDeque<Node> free;
     private Node head = null;
-    private int max;
 
     FreeList(ByteBuffer buffer) {
         this.free = new ArrayDeque<>();
@@ -25,7 +24,6 @@ public class FreeList {
         head = node;
         node.next = head;
         this.free.add(node);
-        max = buffer.capacity();
     }
 
     void add(ByteBuffer buffer) {
@@ -83,6 +81,14 @@ public class FreeList {
     }
 
     int max() {
+        int max = 0;
+        for (Node node: this.free) {
+            ByteBuffer freeBuffer = node.item;
+            int capacity = freeBuffer.limit() - freeBuffer.position();
+            if (capacity > max) {
+                max = capacity;
+            }
+        }
         return max;
     }
 }
