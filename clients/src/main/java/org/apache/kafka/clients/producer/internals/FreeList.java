@@ -32,9 +32,16 @@ public class FreeList {
             current = current.next;
         } while (current.item.limit() <= buffer.position() && buffer.limit() <= current.next.item.position() && current != head);
 
-        Node newNode = new Node(buffer, current.next);
-        current.next = newNode;
-        this.free.add(newNode);
+        // merge buffer into a node's buffer or create a new node for the buffer
+        if (current.item.limit() == buffer.position()) {
+            current.item.limit(buffer.limit());
+        } else if (buffer.limit() == current.next.item.position()) {
+            current.next.item.position(buffer.position());
+        } else {
+            Node newNode = new Node(buffer, current.next);
+            current.next = newNode;
+            this.free.add(newNode);
+        }
 
         head = current;
     }
