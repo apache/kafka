@@ -32,14 +32,11 @@ public class FreeList {
             current = current.next;
         } while (head.item.limit() <= buffer.position() && buffer.limit() <= head.next.item.position() && current != head);
 
-        Node newNode = new Node(buffer, head.next);
-        head.next = newNode;
+        Node newNode = new Node(buffer, current.next);
+        current.next = newNode;
         this.free.add(newNode);
 
-//        int freeSize = size();
-//        if (max < freeSize) {
-//            max = freeSize;
-//        }
+        head = current;
     }
 
     ByteBuffer find(int size) {
