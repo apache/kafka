@@ -58,7 +58,7 @@ class ControllerFailoverTest extends KafkaServerTestHarness with Logging {
     val initialController = servers.find(_.kafkaController.isActive).map(_.kafkaController).getOrElse {
       fail("Could not find controller")
     }
-    val epochMap = servers.map(server => server.config.brokerId -> server.kafkaController.epoch).toMap
+    val initialEpoch = initialController.epoch
     // Create topic with one partition
     AdminUtils.createTopic(servers.head.zkUtils, topic, 1, 1)
     val topicPartition = TopicAndPartition("topic1", 0)
@@ -83,15 +83,12 @@ class ControllerFailoverTest extends KafkaServerTestHarness with Logging {
     TestUtils.waitUntilTrue(() => !initialController.kafkaScheduler.isStarted, "Scheduler was not shutdown")
     TestUtils.waitUntilTrue(() => !initialController.isActive, "Controller did not become inactive")
     latch.countDown()
-    TestUtils.waitUntilTrue(() => expectedExceptionThrown, "IllegalStateException was not thrown")
+    assertTrue("IllegalStateException was not thrown", expectedExceptionThrown)
     assertEquals("Unexpected exception thrown", None, unexpectedExceptionThrown)
 
     TestUtils.waitUntilTrue(() => {
       servers.exists { server =>
-        val previousEpoch = epochMap.get(server.config.brokerId).getOrElse {
-          fail(s"Missing element in epoch map $epochMap")
-        }
-        server.kafkaController.isActive && previousEpoch < server.kafkaController.epoch
+        server.kafkaController.isActive && server.kafkaController.epoch > initialController.epoch
       }
     }, "Failed to find controller")
 
