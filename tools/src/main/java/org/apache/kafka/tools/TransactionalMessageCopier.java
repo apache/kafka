@@ -252,9 +252,9 @@ public class TransactionalMessageCopier {
 
         try {
             while (numMessagesProcessed < maxMessages) {
-                if (((double)(numMessagesProcessed / maxMessages) * 100) % 10 == 0) {
+                if (((double) (numMessagesProcessed / maxMessages) * 100) % 10 == 0) {
                     // print status for every 10% we progress.
-                    System.out.println(statusAsJson(numMessagesProcessed , (maxMessages - numMessagesProcessed)));
+                    System.out.println(statusAsJson(numMessagesProcessed, maxMessages - numMessagesProcessed));
                 }
                 if (isShuttingDown.get())
                     break;
