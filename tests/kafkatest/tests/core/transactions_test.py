@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import time
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.kafka import KafkaService
 from kafkatest.services.console_consumer import ConsoleConsumer
@@ -44,9 +43,9 @@ class TransactionsTest(Test):
         self.num_brokers = 3
 
         # Test parameters
-        self.num_input_partitions = 1
+        self.num_input_partitions = 2
         self.num_output_partitions = 3
-        self.num_seed_messages = 10000
+        self.num_seed_messages = 20000
         self.transaction_size = 500
         self.first_transactional_id = "my-first-transactional-id"
         self.second_transactional_id = "my-second-transactional-id"
@@ -129,23 +128,49 @@ class TransactionsTest(Test):
                            hard-killed broker %s" % str(node.account))
                 self.kafka.start_node(node)
 
-    def copy_messages_transactionally(self, failure_mode, bounce_target):
+    def create_and_start_message_copier(self, input_partition, transactional_id):
         message_copier = TransactionalMessageCopier(
             context=self.test_context,
             num_nodes=1,
             kafka=self.kafka,
-            transactional_id=self.first_transactional_id,
+            transactional_id=transactional_id,
             consumer_group=self.consumer_group,
             input_topic=self.input_topic,
-            input_partition=0,
+            input_partition=input_partition,
             output_topic=self.output_topic,
-            max_messages=self.num_seed_messages,
+            max_messages=-1,
             transaction_size=self.transaction_size
         )
         message_copier.start()
         wait_until(lambda: message_copier.alive(message_copier.nodes[0]),
                    timeout_sec=10,
                    err_msg="Message copier failed to start after 10 s")
+        return message_copier
+
+    def bounce_copiers(self, copiers, clean_shutdown):
+        for _ in range(3):
+            for copier in copiers:
+                wait_until(lambda: copier.progress_percent() >= 20.0,
+                           timeout_sec=30,
+                           err_msg="%s : Message copier didn't make enough progress in 30s" % copier.transactional_id)
+                self.logger.info("%s - progress: %s" % (copier.transactional_id,
+                                                        str(copier.progress_percent())))
+                copier.restart(clean_shutdown)
+
+    def create_and_start_copiers(self):
+        copiers = []
+        copiers.append(self.create_and_start_message_copier(
+            input_partition=0,
+            transactional_id=self.first_transactional_id
+        ))
+        copiers.append(self.create_and_start_message_copier(
+            input_partition=1,
+            transactional_id=self.second_transactional_id
+        ))
+        return copiers
+
+    def copy_messages_transactionally(self, failure_mode, bounce_target):
+        copiers = self.create_and_start_copiers()
         clean_shutdown = False
         if failure_mode == "clean_bounce":
             clean_shutdown = True
@@ -153,24 +178,17 @@ class TransactionsTest(Test):
         if bounce_target == "brokers":
             self.bounce_brokers(clean_shutdown)
         elif bounce_target == "clients":
-            for _ in range(3):
-                wait_until(lambda: message_copier.progress_percent() > 20.0,
-                           timeout_sec=30,
-                           err_msg="Message copier didn't copy 20\% of \
-                           messages in 30s")
-                self.logger.info("progress: %s" % str(message_copier.progress_percent()))
-                message_copier.restart(clean_shutdown)
+            self.bounce_copiers(copiers, clean_shutdown)
 
-        wait_until(lambda: message_copier.is_done,
-                   timeout_sec=20,
-                   err_msg="Failed to copy %d messages in  %ds." %\
-                   (self.num_seed_messages, 20))
+        for copier in copiers:
+            wait_until(lambda: copier.is_done,
+                       timeout_sec=30,
+                       err_msg="Failed to copy all messages in  %ds." % 30)
         self.logger.info("finished copying messages")
 
-
     @cluster(num_nodes=8)
-    @matrix(failure_mode=["clean_bounce", "hard_bounce"],
-            bounce_target=["brokers", "clients"])
+    @matrix(failure_mode=["hard_bounce"],
+            bounce_target=["clients"])
     def test_transactions(self, failure_mode, bounce_target):
         security_protocol = 'PLAINTEXT'
         self.kafka.security_protocol = security_protocol
@@ -185,4 +203,3 @@ class TransactionsTest(Test):
         assert num_dups == 0, "Detected %d duplicates in the output stream" % num_dups
         assert input_message_set == output_message_set, "Input and output message sets are not equal. Num input messages %d. Num output messages %d" %\
             (len(input_message_set), len(output_message_set))
-

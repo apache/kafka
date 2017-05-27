@@ -37,6 +37,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 
 import static net.sourceforge.argparse4j.impl.Arguments.store;
 
@@ -199,16 +200,17 @@ public class TransactionalMessageCopier {
         return json;
     }
 
-    private static String statusAsJson(long consumed, long remaining) {
+    private static String statusAsJson(long consumed, long remaining, String transactionalId) {
         Map<String, Object> statusData = new HashMap<>();
-        statusData.put("progress", "");
+        statusData.put("progress", transactionalId);
         statusData.put("consumed", consumed);
         statusData.put("remaining", remaining);
         return toJsonString(statusData);
     }
 
-    private static String shutDownString() {
+    private static String shutDownString(long remaining) {
         Map<String, Object> shutdownData = new HashMap<>();
+        shutdownData.put("remaining", remaining);
         shutdownData.put("shutdown_complete", "");
         return toJsonString(shutdownData);
     }
@@ -216,6 +218,7 @@ public class TransactionalMessageCopier {
     public static void main(String[] args) throws IOException {
         Namespace parsedArgs = argParser().parseArgsOrFail(args);
         Integer numMessagesPerTransaction = parsedArgs.getInt("messagesPerTransaction");
+        String transactionalId = parsedArgs.getString("transactionalId");
         final String outputTopic = parsedArgs.getString("outputTopic");
 
         String consumerGroup = parsedArgs.getString("consumerGroup");
@@ -229,13 +232,12 @@ public class TransactionalMessageCopier {
         long maxMessages = parsedArgs.getInt("maxMessages") == -1 ? Long.MAX_VALUE : parsedArgs.getInt("maxMessages");
         maxMessages = Math.min(messagesRemaining(consumer, inputPartition), maxMessages);
 
-        System.out.println(statusAsJson(0, maxMessages));
-
         producer.initTransactions();
 
         int numMessagesProcessed = 0;
 
         final AtomicBoolean isShuttingDown = new AtomicBoolean(false);
+        final AtomicLong remainingMessages = new AtomicLong(maxMessages);
         int exitCode = 0;
         Runtime.getRuntime().addShutdownHook(new Thread() {
             @Override
@@ -246,15 +248,15 @@ public class TransactionalMessageCopier {
                 synchronized (consumer) {
                     consumer.close();
                 }
-                System.out.println(shutDownString());
+                System.out.println(shutDownString(remainingMessages.get()));
             }
         });
 
         try {
-            while (numMessagesProcessed < maxMessages) {
-                if (((double) (numMessagesProcessed / maxMessages) * 100) % 10 == 0) {
+            while (0 < remainingMessages.get()) {
+                if ((((double) numMessagesProcessed / maxMessages) * 100) % 10 == 0) {
                     // print status for every 10% we progress.
-                    System.out.println(statusAsJson(numMessagesProcessed, maxMessages - numMessagesProcessed));
+                    System.out.println(statusAsJson(numMessagesProcessed, remainingMessages.get(), transactionalId));
                 }
                 if (isShuttingDown.get())
                     break;
@@ -272,6 +274,7 @@ public class TransactionalMessageCopier {
                 }
                 producer.sendOffsetsToTransaction(consumerPositions(consumer), consumerGroup);
                 producer.commitTransaction();
+                remainingMessages.set(maxMessages - numMessagesProcessed);
             }
         } catch (Exception e) {
             e.printStackTrace();

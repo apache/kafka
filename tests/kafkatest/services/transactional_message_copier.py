@@ -60,6 +60,7 @@ class TransactionalMessageCopier(KafkaPathResolverMixin, BackgroundThreadService
         self.output_topic = output_topic
         self.max_messages = max_messages
         self.message_copy_finished = False
+        self.transactional_id = ""
         self.consumed = 0
         self.remaining = 0
         self.stop_timeout_sec = 60
@@ -75,7 +76,7 @@ class TransactionalMessageCopier(KafkaPathResolverMixin, BackgroundThreadService
         self.security_config = self.kafka.security_config.client_config(node=node)
         self.security_config.setup_node(node)
         cmd = self.start_cmd(node, idx)
-        self.logger.info("TransactionalMessageCopier %d command: %s" % (idx, cmd))
+        self.logger.debug("TransactionalMessageCopier %d command: %s" % (idx, cmd))
         try:
             for line in node.account.ssh_capture(cmd):
                 line = line.strip()
@@ -83,13 +84,23 @@ class TransactionalMessageCopier(KafkaPathResolverMixin, BackgroundThreadService
                 if data is not None:
                     with self.lock:
                         if "shutdown_complete" in data:
-                            self.logger.info("Finished message copy")
-                            self.message_copy_finished = True
-                        elif "progress" in data:
-                            self.consumed = int(data["consumed"])
-                            self.remaining = int(data["remaining"])
-                            self.logger.info("consumed %d, remaining %d" %
-                                             (self.consumed, self.remaining))
+                            remaining = int(data["remaining"])
+                            if remaining == 0:
+                                # We are only finished if the remaining
+                                # messages at the time of shutdown is 0.
+                                #
+                                # Otherwise a clean shutdown would still print
+                                # a 'shutdown complete' messages even though
+                                # there are unprocessed messages, causing
+                                # tests to fail.
+                                self.logger.info("Finished message copy")
+                                self.message_copy_finished = True
+                            elif "progress" in data:
+                                self.consumed = int(data["consumed"])
+                                self.remaining = int(data["remaining"])
+                                self.transactional_id = str(data["progress"])
+                                self.logger.info("%s: consumed %d, remaining %d" %
+                                                 (self.transactional_id, self.consumed, self.remaining))
         except RemoteCommandError as e:
             self.logger.debug("Got exception while reading output from copier, \
                               probably because it was SIGKILL'd (exit code 137): %s" % str(e))
