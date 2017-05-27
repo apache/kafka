@@ -17,6 +17,7 @@
 package org.apache.kafka.test;
 
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 
@@ -34,7 +35,11 @@ public class MockProcessorNode<K, V> extends ProcessorNode<K, V> {
     public boolean initialized;
 
     public MockProcessorNode(long scheduleInterval) {
-        this(new MockProcessorSupplier<K, V>(scheduleInterval));
+        this(scheduleInterval, PunctuationType.STREAM_TIME);
+    }
+
+    public MockProcessorNode(long scheduleInterval, PunctuationType punctuationType) {
+        this(new MockProcessorSupplier<K, V>(scheduleInterval, punctuationType));
     }
 
     private MockProcessorNode(MockProcessorSupplier<K, V> supplier) {

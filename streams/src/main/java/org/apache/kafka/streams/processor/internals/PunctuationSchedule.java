@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.Punctuator;
 
 public class PunctuationSchedule extends Stamped<ProcessorNode> {
@@ -23,15 +24,23 @@ public class PunctuationSchedule extends Stamped<ProcessorNode> {
     final long interval;
     final Punctuator punctuator;
     boolean isCancelled = false;
+    // this Cancellable will be re-pointed at the successor schedule in next()
+    private final RepointableCancellable cancellable;
 
     public PunctuationSchedule(ProcessorNode node, long interval, Punctuator punctuator) {
         this(node, 0L, interval, punctuator);
     }
 
     public PunctuationSchedule(ProcessorNode node, long time, long interval, Punctuator punctuator) {
+        this(node, time, interval, punctuator, new RepointableCancellable());
+        cancellable.setSchedule(this);
+    }
+
+    private PunctuationSchedule(ProcessorNode node, long time, long interval, Punctuator punctuator, RepointableCancellable cancellable) {
         super(node, time);
         this.interval = interval;
         this.punctuator = punctuator;
+        this.cancellable = cancellable;
     }
 
     public ProcessorNode node() {
@@ -42,17 +51,38 @@ public class PunctuationSchedule extends Stamped<ProcessorNode> {
         return punctuator;
     }
 
-    public void cancel() {
+    public Cancellable cancellable() {
+        return cancellable;
+    }
+
+    public void markCancelled() {
         isCancelled = true;
     }
 
     public PunctuationSchedule next(long currTimestamp) {
+        PunctuationSchedule nextSchedule;
         // we need to special handle the case when it is firstly triggered (i.e. the timestamp
         // is equal to the interval) by reschedule based on the currTimestamp
         if (timestamp == 0L)
-            return new PunctuationSchedule(value, currTimestamp + interval, interval, punctuator);
+            nextSchedule = new PunctuationSchedule(value, currTimestamp + interval, interval, punctuator, cancellable);
         else
-            return new PunctuationSchedule(value, timestamp + interval, interval, punctuator);
+            nextSchedule = new PunctuationSchedule(value, timestamp + interval, interval, punctuator, cancellable);
+
+        cancellable.setSchedule(nextSchedule); // update previous cancellable to point to the current schedule
+
+        return nextSchedule;
     }
 
+    private static class RepointableCancellable implements Cancellable {
+        private PunctuationSchedule schedule;
+
+        synchronized void setSchedule(PunctuationSchedule schedule) {
+            this.schedule = schedule;
+        }
+
+        @Override
+        synchronized public void cancel() {
+            schedule.markCancelled();
+        }
+    }
 }

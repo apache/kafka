@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.PunctuationType;
 
 import java.util.PriorityQueue;
@@ -24,10 +25,11 @@ public class PunctuationQueue {
 
     private final PriorityQueue<PunctuationSchedule> pq = new PriorityQueue<>();
 
-    public void schedule(PunctuationSchedule sched) {
+    public Cancellable schedule(PunctuationSchedule sched) {
         synchronized (pq) {
             pq.add(sched);
         }
+        return sched.cancellable();
     }
 
     public void close() {
@@ -47,9 +49,9 @@ public class PunctuationQueue {
                 if (!sched.isCancelled) {
                     processorNodePunctuator.punctuate(sched.node(), timestamp, type, sched.punctuator());
                     pq.add(sched.next(timestamp));
+                    punctuated = true;
                 }
 
-                punctuated = true;
 
                 top = pq.peek();
             }

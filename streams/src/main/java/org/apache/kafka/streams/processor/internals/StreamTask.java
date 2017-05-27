@@ -501,21 +501,12 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
 
         switch (type) {
             case STREAM_TIME:
-                streamTimePunctuationQueue.schedule(schedule);
-                break;
+                return streamTimePunctuationQueue.schedule(schedule);
             case SYSTEM_TIME:
-                systemTimePunctuationQueue.schedule(schedule);
-                break;
+                return systemTimePunctuationQueue.schedule(schedule);
             default:
                 throw new IllegalArgumentException("Unrecognized PunctuationType: " + type);
         }
-
-        return new Cancellable() {
-            @Override
-            public void cancel() {
-                schedule.cancel();
-            }
-        };
     }
 
     /**
@@ -526,23 +517,32 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     }
 
     /**
-     * Possibly trigger registered punctuation functions if
+     * Possibly trigger registered stream-time punctuation functions if
      * current partition group timestamp has reached the defined stamp
+     * Note, this is only called in the presence of new records
      */
-    boolean maybePunctuate() {
+    boolean maybePunctuateStreamTime() {
         final long timestamp = partitionGroup.timestamp();
-
-        boolean punctuated = systemTimePunctuationQueue.mayPunctuate(System.currentTimeMillis(), PunctuationType.SYSTEM_TIME, this);
 
         // if the timestamp is not known yet, meaning there is not enough data accumulated
         // to reason stream partition time, then skip.
         if (timestamp == TimestampTracker.NOT_KNOWN) {
-            return punctuated;
+            return false;
         } else {
-            return punctuated | streamTimePunctuationQueue.mayPunctuate(timestamp, PunctuationType.STREAM_TIME, this);
+            return streamTimePunctuationQueue.mayPunctuate(timestamp, PunctuationType.STREAM_TIME, this);
         }
     }
 
+    /**
+     * Possibly trigger registered system-time punctuation functions if
+     * current system timestamp has reached the defined stamp
+     * Note, this is called irrespective of the presence of new records
+     */
+    boolean maybePunctuateSystemTime() {
+        final long timestamp = time.milliseconds();
+
+        return systemTimePunctuationQueue.mayPunctuate(timestamp, PunctuationType.SYSTEM_TIME, this);
+    }
     /**
      * Request committing the current task's state
      */
