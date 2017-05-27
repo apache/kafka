@@ -30,7 +30,7 @@ public class FreeList {
         Node current = head;
         do {
             current = current.next;
-        } while (head.item.limit() <= buffer.position() && buffer.limit() <= head.next.item.position() && current != head);
+        } while (current.item.limit() <= buffer.position() && buffer.limit() <= current.next.item.position() && current != head);
 
         Node newNode = new Node(buffer, current.next);
         current.next = newNode;
