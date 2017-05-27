@@ -120,9 +120,9 @@ public class FileRecords extends AbstractRecords implements Closeable {
     /**
      * Return a slice of records from this instance, which is a view into this set starting from the given position
      * and with the given size limit.
-     *
+     * <p>
      * If the size is beyond the end of the file, the end will be based on the size of the file at the time of the read.
-     *
+     * <p>
      * If this message set is already sliced, the position will be taken relative to that slicing.
      *
      * @param position The start position to begin the read from
@@ -202,7 +202,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
     public void renameTo(File f) throws IOException {
         try {
             Utils.atomicMoveWithFallback(file.toPath(), f.toPath());
-        }  finally {
+        } finally {
             this.file = f;
         }
     }
@@ -391,7 +391,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
      * @param mutable mutable
      * @param fileAlreadyExists File already exists or not
      * @param initFileSize The size used for pre allocate file, for example 512 * 1025 *1024
-     * @param preallocate Pre allocate file or not, gotten from configuration.
+     * @param preallocate Pre-allocate file or not, gotten from configuration.
      */
     private static FileChannel openChannel(File file,
                                            boolean mutable,

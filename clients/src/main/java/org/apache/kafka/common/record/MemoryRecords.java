@@ -506,6 +506,13 @@ public class MemoryRecords extends AbstractRecords {
                 producerId, producerEpoch, baseSequence, RecordBatch.NO_PARTITION_LEADER_EPOCH, true, records);
     }
 
+    public static MemoryRecords withTransactionalRecords(byte magic, long initialOffset, CompressionType compressionType,
+                                                         long producerId, short producerEpoch, int baseSequence,
+                                                         int partitionLeaderEpoch, SimpleRecord... records) {
+        return withRecords(magic, initialOffset, compressionType, TimestampType.CREATE_TIME, producerId, producerEpoch,
+                baseSequence, partitionLeaderEpoch, true, records);
+    }
+
     public static MemoryRecords withTransactionalRecords(long initialOffset, CompressionType compressionType, long producerId,
                                                          short producerEpoch, int baseSequence, int partitionLeaderEpoch,
                                                          SimpleRecord... records) {
