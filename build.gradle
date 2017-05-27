@@ -28,6 +28,8 @@ buildscript {
     classpath 'com.github.ben-manes:gradle-versions-plugin:0.14.0'
     classpath 'org.scoverage:gradle-scoverage:2.1.0'
     classpath 'com.github.jengelman.gradle.plugins:shadow:1.2.4'
+    // For Bnd-Gradle plugin which provides OSGi metadata
+    classpath 'biz.aQute.bnd:biz.aQute.bnd.gradle:3.3.0'
   }
 }
 
@@ -706,6 +708,8 @@ project(':examples') {
 }
 
 project(':clients') {
+  apply plugin: 'biz.aQute.bnd.builder'
+
   archivesBaseName = "kafka-clients"
 
   dependencies {
@@ -759,6 +763,9 @@ project(':clients') {
     dependsOn createVersionFile
     from("$buildDir") {
         include "kafka/$buildVersionFileName"
+    }
+    manifest {
+      attributes('-groupid': project.group.toString(), 'artifactId': archivesBaseName)
     }
   }
 
