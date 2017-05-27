@@ -173,4 +173,6 @@ class TransactionalMessageCopier(KafkaPathResolverMixin, BackgroundThreadService
     def progress_percent(self):
         if self.remaining < 0:
             return 0
+        if self.consumed + self.remaining == 0:
+            return 100
         return (float(self.consumed)/float(self.consumed + self.remaining)) * 100
