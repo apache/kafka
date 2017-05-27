@@ -147,7 +147,7 @@ public interface KGroupedStream<K, V> {
     KTable<K, Long> count(final TypedStateStoreSupplier<KeyValueStore<K, Long>> storeSupplier);
 
     /**
-     * Please use {@link KGroupedStream#count(TypedStateStoreSupplier)}
+     * @deprecated As of v0.11.1.0 please use {@link KGroupedStream#count(TypedStateStoreSupplier)}
      */
     @Deprecated
     KTable<K, Long> count(final StateStoreSupplier<KeyValueStore> storeSupplier);
@@ -275,7 +275,7 @@ public interface KGroupedStream<K, V> {
                                                        final TypedStateStoreSupplier<WindowStore<K, Long>> storeSupplier);
 
     /**
-     * Please use {@link KGroupedStream#count(Windows, TypedStateStoreSupplier)}
+     * @deprecated As of v0.11.1.0 please use {@link KGroupedStream#count(Windows, TypedStateStoreSupplier)}
      */
     @Deprecated
     <W extends Window> KTable<Windowed<K>, Long> count(final Windows<W> windows,
@@ -379,7 +379,7 @@ public interface KGroupedStream<K, V> {
                                     final TypedStateStoreSupplier<SessionStore<K, Long>> storeSupplier);
 
     /**
-     * Please use {@link KGroupedStream#count(SessionWindows, TypedStateStoreSupplier)}
+     * @deprecated As of v0.11.1.0 please use {@link KGroupedStream#count(SessionWindows, TypedStateStoreSupplier)}
      */
     @Deprecated
     KTable<Windowed<K>, Long> count(final SessionWindows sessionWindows,
@@ -517,7 +517,7 @@ public interface KGroupedStream<K, V> {
                         final TypedStateStoreSupplier<KeyValueStore<K, V>> storeSupplier);
 
     /**
-     * Please use {@link KGroupedStream#reduce(Reducer, TypedStateStoreSupplier)}
+     * @deprecated As of v0.11.1.0 please use {@link KGroupedStream#reduce(Reducer, TypedStateStoreSupplier)}
      */
     @Deprecated
     KTable<K, V> reduce(final Reducer<V> reducer,
@@ -677,7 +677,7 @@ public interface KGroupedStream<K, V> {
                                                      final TypedStateStoreSupplier<WindowStore<K, V>> storeSupplier);
 
     /**
-     * Please see {@link KGroupedStream#reduce(Reducer, Windows, TypedStateStoreSupplier)}
+     * @deprecated As of v0.11.1.0 please use {@link KGroupedStream#reduce(Reducer, Windows, TypedStateStoreSupplier)}
      */
     @Deprecated
     <W extends Window> KTable<Windowed<K>, V> reduce(final Reducer<V> reducer,
@@ -830,7 +830,7 @@ public interface KGroupedStream<K, V> {
                                   final TypedStateStoreSupplier<SessionStore<K, V>> storeSupplier);
 
     /**
-     * Please use {@link KGroupedStream#reduce(Reducer, SessionWindows, TypedStateStoreSupplier)}
+     * @deprecated As of v0.11.1.0 please use {@link KGroupedStream#reduce(Reducer, SessionWindows, TypedStateStoreSupplier)}
      */
     @Deprecated
     KTable<Windowed<K>, V> reduce(final Reducer<V> reducer,
@@ -991,7 +991,7 @@ public interface KGroupedStream<K, V> {
                                  final TypedStateStoreSupplier<KeyValueStore<K, VR>> storeSupplier);
 
     /**
-     * Please use {@link KGroupedStream#aggregate(Initializer, Aggregator, TypedStateStoreSupplier)}
+     * @deprecated As of v0.11.1.0 please use {@link KGroupedStream#aggregate(Initializer, Aggregator, TypedStateStoreSupplier)}
      */
     @Deprecated
     <VR> KTable<K, VR> aggregate(final Initializer<VR> initializer,
@@ -1174,7 +1174,7 @@ public interface KGroupedStream<K, V> {
                                                              final TypedStateStoreSupplier<WindowStore<K, VR>> storeSupplier);
 
     /**
-     * Please use {@link KGroupedStream#aggregate(Initializer, Aggregator, Windows, TypedStateStoreSupplier)}
+     * @deprecated As of v0.11.1.0 please use {@link KGroupedStream#aggregate(Initializer, Aggregator, Windows, TypedStateStoreSupplier)}
      */
     @Deprecated
     <W extends Window, VR> KTable<Windowed<K>, VR> aggregate(final Initializer<VR> initializer,
@@ -1341,7 +1341,7 @@ public interface KGroupedStream<K, V> {
                                          final TypedStateStoreSupplier<SessionStore<K, T>> storeSupplier);
 
     /**
-     * Please use {@link KGroupedStream#aggregate(Initializer, Aggregator, Merger, SessionWindows, Serde, TypedStateStoreSupplier)}
+     * @deprecated As of v0.11.1.0 please use {@link KGroupedStream#aggregate(Initializer, Aggregator, Merger, SessionWindows, Serde, TypedStateStoreSupplier)}
      */
     @Deprecated
     <T> KTable<Windowed<K>, T> aggregate(final Initializer<T> initializer,

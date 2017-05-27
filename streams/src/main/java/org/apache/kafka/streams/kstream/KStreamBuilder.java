@@ -578,6 +578,7 @@ public class KStreamBuilder extends TopologyBuilder {
      * @param queryableStoreName   the state store name; If {@code null} this is the equivalent of {@link KStreamBuilder#table(AutoOffsetReset, Serde, Serde, String)} ()} ()}.
      * @return a {@link KTable} for the specified topic
      */
+    @SuppressWarnings("unchecked")
     public <K, V> KTable<K, V> table(final AutoOffsetReset offsetReset,
                                      final Serde<K> keySerde,
                                      final Serde<V> valSerde,
@@ -794,7 +795,7 @@ public class KStreamBuilder extends TopologyBuilder {
     }
 
     /**
-     * Please use {@link KStreamBuilder#globalTable(Serde, Serde, String, TypedStateStoreSupplier)}
+     * @deprecated As of v0.11.1.0 please use {@link KStreamBuilder#globalTable(Serde, Serde, String, TypedStateStoreSupplier)}
      */
     @Deprecated
     public <K, V> GlobalKTable<K, V> globalTable(final Serde<K> keySerde,
@@ -804,6 +805,7 @@ public class KStreamBuilder extends TopologyBuilder {
         return doGlobalTable(keySerde, valSerde, topic, storeSupplier);
     }
 
+    @SuppressWarnings("unchecked")
     private <K, V> GlobalKTable<K, V> doGlobalTable(final Serde<K> keySerde,
                                                     final Serde<V> valSerde,
                                                     final String topic,
@@ -841,7 +843,6 @@ public class KStreamBuilder extends TopologyBuilder {
      * @param topic     the topic name; cannot be {@code null}
      * @return a {@link GlobalKTable} for the specified topic
      */
-    @SuppressWarnings("unchecked")
     public <K, V> GlobalKTable<K, V> globalTable(final Serde<K> keySerde,
                                                  final Serde<V> valSerde,
                                                  final String topic) {

@@ -153,7 +153,7 @@ public interface KGroupedTable<K, V> {
     KTable<K, Long> count(final TypedStateStoreSupplier<KeyValueStore<K, Long>> storeSupplier);
 
     /**
-     * Please use {@link KGroupedTable#count(TypedStateStoreSupplier)}
+     * @deprecated As of v0.11.1.0 please use {@link KGroupedTable#count(TypedStateStoreSupplier)}
      */
     @Deprecated
     KTable<K, Long> count(final StateStoreSupplier<KeyValueStore> storeSupplier);
@@ -355,7 +355,7 @@ public interface KGroupedTable<K, V> {
                         final TypedStateStoreSupplier<KeyValueStore<K, V>> storeSupplier);
 
     /**
-     * Please use {@link KGroupedTable#reduce(Reducer, Reducer, TypedStateStoreSupplier)}
+     * @deprecated As of v0.11.1.0 please use {@link KGroupedTable#reduce(Reducer, Reducer, TypedStateStoreSupplier)}
      */
     @Deprecated
     KTable<K, V> reduce(final Reducer<V> adder,
@@ -754,7 +754,7 @@ public interface KGroupedTable<K, V> {
                                  final TypedStateStoreSupplier<KeyValueStore<K, VR>> storeSupplier);
 
     /**
-     * Please use {@link KGroupedTable#aggregate(Initializer, Aggregator, Aggregator, TypedStateStoreSupplier)}
+     * @deprecated As of v0.11.1.0 please use {@link KGroupedTable#aggregate(Initializer, Aggregator, Aggregator, TypedStateStoreSupplier)}
      */
     @Deprecated
     <VR> KTable<K, VR> aggregate(final Initializer<VR> initializer,

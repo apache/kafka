@@ -164,7 +164,7 @@ public interface KTable<K, V> {
     KTable<K, V> filter(final Predicate<? super K, ? super V> predicate, final TypedStateStoreSupplier<KeyValueStore<K, V>> storeSupplier);
 
     /**
-     * Please use {@link KTable#filter(Predicate, TypedStateStoreSupplier)}
+     * @deprecated As of v0.11.1.0 please use {@link KTable#filter(Predicate, TypedStateStoreSupplier)}
      */
     @Deprecated
     KTable<K, V> filter(final Predicate<? super K, ? super V> predicate, final StateStoreSupplier<KeyValueStore> storeSupplier);
@@ -226,7 +226,7 @@ public interface KTable<K, V> {
     KTable<K, V> filterNot(final Predicate<? super K, ? super V> predicate, final TypedStateStoreSupplier<KeyValueStore<K, V>> storeSupplier);
 
     /**
-     * Please use {@link KTable#filterNot(Predicate, TypedStateStoreSupplier)}
+     * @deprecated As of v0.11.1.0 please use {@link KTable#filterNot(Predicate, TypedStateStoreSupplier)}
      */
     @Deprecated
     KTable<K, V> filterNot(final Predicate<? super K, ? super V> predicate, final StateStoreSupplier<KeyValueStore> storeSupplier);
@@ -395,7 +395,7 @@ public interface KTable<K, V> {
                                  final TypedStateStoreSupplier<KeyValueStore<K, VR>> storeSupplier);
 
     /**
-     * Please use {@link KTable#mapValues(ValueMapper, Serde, TypedStateStoreSupplier)}
+     * @deprecated As of v0.11.1.0 please use {@link KTable#mapValues(ValueMapper, Serde, TypedStateStoreSupplier)}
      */
     @Deprecated
     <VR> KTable<K, VR> mapValues(final ValueMapper<? super V, ? extends VR> mapper,
@@ -685,7 +685,7 @@ public interface KTable<K, V> {
                          final TypedStateStoreSupplier<KeyValueStore<K, V>> storeSupplier);
 
     /**
-     * Please use {@link KTable#through(String, TypedStateStoreSupplier)}
+     * @deprecated As of v0.11.1.0 please use {@link KTable#through(String, TypedStateStoreSupplier)}
      */
     @Deprecated
     KTable<K, V> through(final String topic,
@@ -777,7 +777,7 @@ public interface KTable<K, V> {
                          final TypedStateStoreSupplier<KeyValueStore<K, V>> storeSupplier);
 
     /**
-     * Please use {@link KTable#through(StreamPartitioner, String, TypedStateStoreSupplier)}
+     * @deprecated As of v0.11.1.0 please use {@link KTable#through(StreamPartitioner, String, TypedStateStoreSupplier)}
      */
     @Deprecated
     KTable<K, V> through(final StreamPartitioner<? super K, ? super V> partitioner,
@@ -838,7 +838,7 @@ public interface KTable<K, V> {
                          final TypedStateStoreSupplier<KeyValueStore<K, V>> storeSupplier);
 
     /**
-     * Please use {@link KTable#through(Serde, Serde, String, TypedStateStoreSupplier)}
+     * @deprecated As of v0.11.1.0 please use {@link KTable#through(Serde, Serde, String, TypedStateStoreSupplier)}
      */
     @Deprecated
     KTable<K, V> through(final Serde<K> keySerde, Serde<V> valSerde,
@@ -933,7 +933,7 @@ public interface KTable<K, V> {
                          final TypedStateStoreSupplier<KeyValueStore<K, V>> storeSupplier);
 
     /**
-     * Please use {@link KTable#through(Serde, Serde, StreamPartitioner, String, TypedStateStoreSupplier)}
+     * @deprecated As of v0.11.1.0 please use {@link KTable#through(Serde, Serde, StreamPartitioner, String, TypedStateStoreSupplier)}
      */
     @Deprecated
     KTable<K, V> through(final Serde<K> keySerde,
@@ -1328,7 +1328,7 @@ public interface KTable<K, V> {
                                 final TypedStateStoreSupplier<KeyValueStore<K, VR>> storeSupplier);
 
     /**
-     * Please use {@link KTable#join(KTable, ValueJoiner, TypedStateStoreSupplier)}
+     * @deprecated As of v0.11.1.0 please use {@link KTable#join(KTable, ValueJoiner, TypedStateStoreSupplier)}
      */
     @Deprecated
     <VO, VR> KTable<K, VR> join(final KTable<K, VO> other,
@@ -1591,7 +1591,7 @@ public interface KTable<K, V> {
                                     final TypedStateStoreSupplier<KeyValueStore<K, VR>> storeSupplier);
 
     /**
-     * Please use {@link KTable#leftJoin(KTable, ValueJoiner, TypedStateStoreSupplier)}
+     * @deprecated As of v0.11.1.0 please use {@link KTable#leftJoin(KTable, ValueJoiner, TypedStateStoreSupplier)}
      */
     @Deprecated
     <VO, VR> KTable<K, VR> leftJoin(final KTable<K, VO> other,
@@ -1851,7 +1851,7 @@ public interface KTable<K, V> {
                                      final TypedStateStoreSupplier<KeyValueStore<K, VR>> storeSupplier);
 
     /**
-     * Please use {@link KTable#outerJoin(KTable, ValueJoiner, TypedStateStoreSupplier)}
+     * @deprecated As of v0.11.1.0 please use {@link KTable#outerJoin(KTable, ValueJoiner, TypedStateStoreSupplier)}
      */
     @Deprecated
     <VO, VR> KTable<K, VR> outerJoin(final KTable<K, VO> other,
