@@ -99,11 +99,11 @@ public class MmapBufferPool implements BufferPool {
 
                         remainingTimeToBlockNs -= timeNs;
 
-                        this.free.find(size);
+                        // TODO write me
                     }
 
-//                    if (buffer == null)
-//                        buffer = allocateByteBuffer(size);
+                    if (buffer == null)
+                        buffer = this.free.find(size);
                     hasError = false;
                     //unlock happens in top-level, enclosing finally
                     return buffer;
