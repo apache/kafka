@@ -400,18 +400,7 @@ public class MemoryRecordsBuilder {
         LZ4_DECOMPRESSION_BUFFER_SUPPLIER = new ThreadLocal<KafkaLZ4BlockInputStream.BufferSupplier>() {
             @Override
             protected KafkaLZ4BlockInputStream.BufferSupplier initialValue() {
-                return new KafkaLZ4BlockInputStream.BufferSupplier() {
-                    ByteBuffer theBuffer;
-
-                    @Override
-                    public ByteBuffer get(int size) {
-                        if (theBuffer == null || theBuffer.capacity() < size) {
-                            theBuffer = ByteBuffer.allocate(size);
-                        }
-                        theBuffer.limit(size);
-                        return theBuffer;
-                    }
-                };
+                return new RecyclingBufferSupplier();
             }
         };
 
@@ -511,6 +500,20 @@ public class MemoryRecordsBuilder {
                            long shallowOffsetOfMaxTimestamp) {
             this.maxTimestamp = maxTimestamp;
             this.shallowOffsetOfMaxTimestamp = shallowOffsetOfMaxTimestamp;
+        }
+    }
+
+    static class RecyclingBufferSupplier implements BufferSupplier {
+
+        ByteBuffer theBuffer;
+
+        @Override
+        public ByteBuffer get(int size) {
+            if (theBuffer == null || theBuffer.capacity() < size) {
+                theBuffer = ByteBuffer.allocate(size);
+            }
+            theBuffer.limit(size);
+            return theBuffer;
         }
     }
 }

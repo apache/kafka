@@ -18,7 +18,7 @@ package org.apache.kafka.common.record;
 
 import net.jpountz.xxhash.XXHashFactory;
 
-import org.apache.kafka.common.record.KafkaLZ4BlockInputStream.BufferSupplier;
+import org.apache.kafka.common.record.MemoryRecordsBuilder.RecyclingBufferSupplier;
 import org.hamcrest.CoreMatchers;
 import org.junit.Rule;
 import org.junit.Test;
@@ -128,12 +128,7 @@ public class KafkaLZ4Test {
         throws IOException {
         return new KafkaLZ4BlockInputStream(
             buffer,
-            new BufferSupplier() {
-                @Override
-                public ByteBuffer get(int size) {
-                    return ByteBuffer.allocate(size);
-                }
-            },
+            new RecyclingBufferSupplier(),
             ignoreFlagDescriptorChecksum
         );
     }
