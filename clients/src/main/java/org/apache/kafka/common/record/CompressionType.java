@@ -91,18 +91,7 @@ public enum CompressionType {
             new ThreadLocal<KafkaLZ4BlockInputStream.BufferSupplier>() {
                 @Override
                 protected KafkaLZ4BlockInputStream.BufferSupplier initialValue() {
-                    return new KafkaLZ4BlockInputStream.BufferSupplier() {
-                        ByteBuffer theBuffer;
-
-                        @Override
-                        public ByteBuffer get(int size) {
-                            if (theBuffer == null || theBuffer.capacity() < size) {
-                                theBuffer = ByteBuffer.allocate(size);
-                            }
-                            theBuffer.limit(size);
-                            return theBuffer;
-                        }
-                    };
+                    return new RecyclingBufferSupplier();
                 }
             };
 
@@ -197,4 +186,17 @@ public enum CompressionType {
         }
     }
 
+    static class RecyclingBufferSupplier implements KafkaLZ4BlockInputStream.BufferSupplier {
+
+        ByteBuffer theBuffer;
+
+        @Override
+        public ByteBuffer get(int size) {
+            if (theBuffer == null || theBuffer.capacity() < size) {
+                theBuffer = ByteBuffer.allocate(size);
+            }
+            theBuffer.limit(size);
+            return theBuffer;
+        }
+    }
 }
