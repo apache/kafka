@@ -125,7 +125,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
     val acls = getAcls(resource) ++ getAcls(new Resource(resource.resourceType, Resource.WildCardResource))
 
     //check if there is any Deny acl match that would disallow this operation.
-    val denyMatch = aclMatch(session, operation, resource, principal, host, Deny, acls)
+    val denyMatch = aclMatch(operation, resource, principal, host, Deny, acls)
 
     //if principal is allowed to read, write or delete we allow describe by default, the reverse does not apply to Deny.
     val ops = if (Describe == operation)
@@ -134,7 +134,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
       Set[Operation](operation)
 
     //now check if there is any allow acl that will allow this operation.
-    val allowMatch = ops.exists(operation => aclMatch(session, operation, resource, principal, host, Allow, acls))
+    val allowMatch = ops.exists(operation => aclMatch(operation, resource, principal, host, Allow, acls))
 
     //we allow an operation if a user is a super user or if no acls are found and user has configured to allow all users
     //when no acls are found or if no deny acls are found and at least one allow acls matches.
@@ -160,7 +160,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
     } else false
   }
 
-  private def aclMatch(session: Session, operations: Operation, resource: Resource, principal: KafkaPrincipal, host: String, permissionType: PermissionType, acls: Set[Acl]): Boolean = {
+  private def aclMatch(operations: Operation, resource: Resource, principal: KafkaPrincipal, host: String, permissionType: PermissionType, acls: Set[Acl]): Boolean = {
     acls.find { acl =>
       acl.permissionType == permissionType &&
         (acl.principal == principal || acl.principal == Acl.WildCardPrincipal) &&
