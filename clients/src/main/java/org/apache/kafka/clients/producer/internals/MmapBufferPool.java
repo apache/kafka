@@ -81,7 +81,7 @@ public class MmapBufferPool implements BufferPool {
                     this.waiters.addLast(moreMemory);
                     // loop over and over until we have a buffer or have reserved
                     // enough memory to allocate one
-                    while (accumulated < size) {
+                    while (this.free.max() < size) {
                         long startWaitNs = time.nanoseconds();
                         long timeNs;
                         boolean waitingTimeElapsed;
@@ -99,8 +99,7 @@ public class MmapBufferPool implements BufferPool {
 
                         remainingTimeToBlockNs -= timeNs;
 
-                        // TODO write me
-
+                        this.free.find(size);
                     }
 
 //                    if (buffer == null)
