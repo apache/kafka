@@ -21,7 +21,6 @@ import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.errors.TimeoutException;
-import org.apache.kafka.common.protocol.Errors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -68,7 +67,6 @@ public final class Metadata {
     private final ClusterResourceListeners clusterResourceListeners;
     private boolean needMetadataForAllTopics;
     private final boolean topicExpiryEnabled;
-    private final Map<String, Errors> lastErrors = new HashMap<>();
 
     /**
      * Create a metadata instance with reasonable defaults
@@ -307,11 +305,6 @@ public final class Metadata {
      */
     public synchronized void removeListener(Listener listener) {
         this.listeners.remove(listener);
-    }
-
-    public synchronized void lastErrors(final Map<String, Errors> errors) {
-        lastErrors.clear();
-        lastErrors.putAll(errors);
     }
 
     /**
