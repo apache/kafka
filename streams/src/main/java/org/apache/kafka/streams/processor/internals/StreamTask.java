@@ -232,7 +232,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         updateProcessorContext(new StampedRecord(DUMMY_RECORD, timestamp), node);
 
         if (log.isTraceEnabled()) {
-            log.trace("{} Punctuating processor {} with timestamp {} {}", logPrefix, node.name(), timestamp, type);
+            log.trace("{} Punctuating processor {} with timestamp {} and type {}", logPrefix, node.name(), timestamp, type);
         }
 
         try {

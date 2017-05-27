@@ -91,16 +91,18 @@ public interface ProcessorContext {
      * {@link Processor#init(ProcessorContext) initialization} or processing
      * {@link Processor#process(Object, Object)} to
      * schedule a periodic call called a punctuation to {@link Punctuator#punctuate(long)}.
+     * The type parameter controls what notion of time is used for punctuation:
+     * <ul>
+     *   <li>{@link PunctuationType#STREAM_TIME} - uses "stream time", which is advanced by the processing of messages
+     *   in accordance with the timestamp as extracted by the {@link TimestampExtractor} in use.
+     *   <b>NOTE:</b> Only advanced if messages arrive</li>
+     *   <li>{@link PunctuationType#SYSTEM_TIME} - uses system time (the wall-clock time),
+     *   which is advanced at the polling interval ({@link org.apache.kafka.streams.StreamsConfig#POLL_MS_CONFIG})
+     *   independent of whether new messages arrive</li>
+     * </ul>
      *
      * @param interval the time interval between punctuations
-     * @param type one of:<ul>>
-     *             <li>{@link PunctuationType#STREAM_TIME} - uses "steam time", which is advanced by the processing of messages
-     *             in accordance with the timestamp as extracted by the {@link TimestampExtractor} in use.
-     *             <b>NOTE:</b> Only advanced if messages arrive</li>
-     *             <li>{@link PunctuationType#SYSTEM_TIME} - uses the system time (aka wall-clock time),
-     *             which is advanced at the polling interval ({@link org.apache.kafka.streams.StreamsConfig#POLL_MS_CONFIG})
-     *             independent of whether new messages arrive</li>
-     *             </ul>
+     * @param type one of: {@link PunctuationType#STREAM_TIME}, {@link PunctuationType#SYSTEM_TIME}
      * @param callback a function consuming timestamps representing the current stream or system time
      * @return a handle allowing cancellation of the punctuation schedule established by this method
      */

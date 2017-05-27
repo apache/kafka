@@ -31,8 +31,8 @@ public interface Processor<K, V> {
      * Initialize this processor with the given context. The framework ensures this is called once per processor when the topology
      * that contains it is initialized.
      * <p>
-     * If this processor is to be {@link #punctuate(long) called periodically} by the framework, then this method should
-     * {@link ProcessorContext#schedule(long) schedule itself} with the provided context.
+     * This Processor can {@link ProcessorContext#schedule(long, PunctuationType, Punctuator) schedule} a method to be
+     * {@link Punctuator#punctuate(long) called periodically} with the provided context.
      * 
      * @param context the context; may not be null
      */
@@ -47,7 +47,7 @@ public interface Processor<K, V> {
     void process(K key, V value);
 
     /**
-     * <b>Deprecated as of 0.11.0.0</b> - <i>Please use {@link Punctuator)} functional interface instead.</i>
+     * @deprecated As of 0.11.1.0 please use {@link Punctuator} functional interface instead.
      * Perform any periodic operations, if this processor {@link ProcessorContext#schedule(long) schedule itself} with the context
      * during {@link #init(ProcessorContext) initialization}.
      * 
