@@ -24,7 +24,7 @@ import com.yammer.metrics.Metrics
 import com.yammer.metrics.core.Timer
 import kafka.utils.TestUtils
 import org.easymock.{EasyMock, IAnswer}
-import org.junit.Test
+import org.junit.{After, Test}
 import org.junit.Assert.{assertEquals, fail}
 
 import scala.collection.JavaConverters._
@@ -33,6 +33,7 @@ class ControllerEventManagerTest {
 
   private var controllerEventManager: ControllerEventManager = _
 
+  @After
   def tearDown(): Unit = {
     if (controllerEventManager != null)
       controllerEventManager.close()
