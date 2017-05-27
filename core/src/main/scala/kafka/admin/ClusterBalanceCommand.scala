@@ -253,7 +253,7 @@ object ClusterBalanceCommand extends Logging {
     //default balance percentage is 10%
     val Percentage={
       if(opts.options.has(opts.showClusterState))
-        opts.options.valueOf(opts.rbNumPercentageOpt).toInt
+        opts.options.valueOf(opts.rbPercentageOpt).toInt
       else 10
     }
     val balanceThreshold =  Percentage * replicasAvgForBrokers/100
@@ -378,7 +378,7 @@ object ClusterBalanceCommand extends Logging {
     val  replicaRebalance= parser.accepts("replica-balance", "which make the amounts of replicas on each broker balanced")
 
 
-    val rbNumPercentageOpt = parser.accepts("replica-balance-num-percentage", "replica balance percentage,default is 10 (means 10%)")
+    val rbPercentageOpt = parser.accepts("replica-balance-threshold-percentage", "replica balance threshold percentage,default is 10 (means 10%)")
       .withRequiredArg
       .describedAs("integer")
       .ofType(classOf[String])
