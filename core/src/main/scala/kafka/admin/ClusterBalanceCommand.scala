@@ -17,9 +17,9 @@ object ClusterBalanceCommand extends Logging {
     if(args.length == 0)
       CommandLineUtils.printUsageAndDie(opts.parser, "cluster replica or leader balance")
 
-    val actions = Seq(opts.showClusterState, opts.kafkaRebalance, opts.leaderRebalance).count(opts.options.has _)
+    val actions = Seq(opts.showClusterState, opts.replicaRebalance, opts.leaderRebalance,opts.clusterRebalance).count(opts.options.has _)
     if(actions != 1)
-      CommandLineUtils.printUsageAndDie(opts.parser, "Command must include exactly one action: --show-cluster-state, --replica-rebalance or --leader-balance")
+      CommandLineUtils.printUsageAndDie(opts.parser, "Command must include exactly one action: --show-cluster-state, --replica-balance , --leader-balance or --cluster-balance")
 
     CommandLineUtils.checkRequiredArgs(opts.parser, opts.options, opts.zkConnectOpt)
 
@@ -35,8 +35,10 @@ object ClusterBalanceCommand extends Logging {
         getClusterBalanceStat(zkUtils)
       else if(opts.options.has(opts.leaderRebalance))
         leaderBalance(zkUtils, opts)
-      else if(opts.options.has(opts.kafkaRebalance))
-        executeKafkaBalance(zkUtils, opts)
+      else if(opts.options.has(opts.replicaRebalance))
+        ReplicaBalance(zkUtils, opts)
+      else if(opts.options.has(opts.clusterRebalance))
+        ClusterBalance(zkUtils, opts)
     } catch {
       case e: Throwable =>
         println("Error while executing topic command : " + e.getMessage)
@@ -74,9 +76,9 @@ object ClusterBalanceCommand extends Logging {
       BrokerMap.put(bid, mutable.Set.empty[TopicAndPartition])
     })
 
-    TPMap.map{
+    TPMap.foreach{
       tp => {
-        tp._2.map{
+        tp._2.foreach{
           bid=>{
             if (BrokerMap.contains(bid)) {
               BrokerMap(bid) += tp._1
@@ -93,7 +95,7 @@ object ClusterBalanceCommand extends Logging {
       LeaderMap.put(bid, 0)
     })
 
-    TPMap.map{
+    TPMap.foreach{
       tp => {
         if (LeaderMap.contains(tp._2.head)) {
           LeaderMap(tp._2.head) += 1
@@ -105,32 +107,47 @@ object ClusterBalanceCommand extends Logging {
 
     BrokerMap.foreach{
       brockinfo => {
-        System.out.println(" broker["+brockinfo._1+"] has " + brockinfo._2.size + " TopicAndPartitions and " +
+        System.out.println(" broker[" + brockinfo._1 + "] has " + brockinfo._2.size + " TopicAndPartitions and " +
           LeaderMap(brockinfo._1) + " leaders.")
       }
     }
   }
 
-
-  def executeKafkaBalance(zkUtils: ZkUtils, opts: kafkaBalanceCommandOptions): Unit = {
+  def ClusterBalance(zkUtils: ZkUtils, opts: kafkaBalanceCommandOptions): Unit = {
     // 0. get old TPMap
     val orgTPMap = getTopAndPartitionInfo(zkUtils)
 
-    // 1. relplica balance
+    // 1. replica balance
     val TPMap=getTopAndPartitionInfo(zkUtils)
     executeReplicaBalance(zkUtils, opts, TPMap)
 
     // 2. leader balance
-    executeLeaderBalance(zkUtils, opts, TPMap)
+    executeLeaderBalance(zkUtils, opts,TPMap)
 
     // 3. assign partition
     executeReassginPartition(zkUtils, TPMap,orgTPMap)
 
-    // 4. get balance state
+    //4. get balance state
     getBalanceState(zkUtils ,TPMap,orgTPMap)
 
-    // 5.do preferred replica leader election command
+    //5.do preferred replica leader election command
     preferredReplicaLeaderElection(zkUtils,TPMap,orgTPMap)
+  }
+
+  def ReplicaBalance(zkUtils: ZkUtils, opts: kafkaBalanceCommandOptions): Unit = {
+    // 0. get old TPMap
+    val orgTPMap = getTopAndPartitionInfo(zkUtils)
+
+    // 1. replica balance
+    val TPMap=getTopAndPartitionInfo(zkUtils)
+    executeReplicaBalance(zkUtils, opts, TPMap)
+
+    // 2. assign partition
+    executeReassginPartition(zkUtils, TPMap,orgTPMap)
+
+    //3. get balance state
+    getBalanceState(zkUtils ,TPMap,orgTPMap)
+
   }
 
   def getBalanceState(zkUtils: ZkUtils, newTPMap: mutable.Map[TopicAndPartition, mutable.ListBuffer[Int]],
@@ -151,7 +168,7 @@ object ClusterBalanceCommand extends Logging {
     var balanceFinish = false
     while(!balanceFinish) {
       var c = 0
-      needMoveTopicPartition.map {
+      needMoveTopicPartition.foreach {
         tpinfo => {
           val curAR = zkUtils.getReplicasForPartition(tpinfo._1.topic, tpinfo._1.partition)
           if (curAR.equals(newTPMap(tpinfo._1))) {
@@ -164,11 +181,11 @@ object ClusterBalanceCommand extends Logging {
         }
       }
       var processPer=100.toDouble
-      if (needMoveTopicPartition.size!=0){
+      if (needMoveTopicPartition.nonEmpty){
         processPer = c.toDouble/needMoveTopicPartition.size * 100
       }
 
-      (needMoveTopicPartition.keySet -- curFinishTP).map{
+      (needMoveTopicPartition.keySet -- curFinishTP).foreach{
         tpInfo => {
           val oldAR = needMoveTopicPartition(tpInfo)
           val newAR = newTPMap(tpInfo)
@@ -193,9 +210,6 @@ object ClusterBalanceCommand extends Logging {
   /**
     * use ReassignPartitionsCommand to make balance
     * with the new distribution of replicas we got
-    * @param zkUtils
-    * @param TPMap new tp map
-    * @param orgTPMap old tp map
     */
   def executeReassginPartition(zkUtils: ZkUtils, TPMap: mutable.Map[TopicAndPartition, mutable.ListBuffer[Int]],orgTPMap: mutable.Map[TopicAndPartition, mutable.ListBuffer[Int]]): Unit ={
     val partitionsToBeReassigned = TPMap.filterNot(tpInfo=>orgTPMap(tpInfo._1).equals(tpInfo._2)).map {
@@ -213,24 +227,16 @@ object ClusterBalanceCommand extends Logging {
 
 
   /**
-    * get the new distribution of replicas on every brokers
-    * @param zkUtils
-    * @param opts
-    * @param TPMap
+    * get the balanced assignment of replicas on every brokers
     */
   def executeReplicaBalance(zkUtils: ZkUtils, opts: kafkaBalanceCommandOptions,
                             TPMap: mutable.Map[TopicAndPartition, mutable.ListBuffer[Int]]): Unit = {
-    // 1. get replica num for per broker
-    // 2. sort brokers by replica num desc
-    // 3  need get/move : a = (per broker - avg)
-    // 4. to move...
-
-
     val BrokerMap: mutable.Map[Int, mutable.Set[TopicAndPartition]] = mutable.Map.empty
     val aliveBrokerList=zkUtils.getSortedBrokerList()
     aliveBrokerList.foreach(bid=>{
       BrokerMap.put(bid, mutable.Set.empty[TopicAndPartition])
     })
+
 
     TPMap.map{
       tp => {
@@ -238,8 +244,6 @@ object ClusterBalanceCommand extends Logging {
           bid=>{
             if (BrokerMap.contains(bid)) {
               BrokerMap(bid) += tp._1
-            } else {
-              //dead broker
             }
           }
         }
@@ -254,37 +258,33 @@ object ClusterBalanceCommand extends Logging {
     }
     val balanceThreshold =  Percentage * replicasAvgForBrokers/100
     // init List by Desc
-    val replicasList = BrokerMap.map(btp => balanceItem (btp._1, btp._2.size - replicasAvgForBrokers)).toList.sortWith(_.rn2mv > _.rn2mv)
+    val (fromBrokers,targetBrokers) = BrokerMap.map(btp => balanceItem (btp._1, btp._2.size - replicasAvgForBrokers)).toList.partition(_.rn2mv > 0)
 
-    // move replicas from an alive broker to an other alive broker
-    for(i <- 0 until replicasList.size){
-      for(j <- (0 until replicasList.size).toList.reverse){
-        if (replicasList(i).rn2mv <= 0 || replicasList(j).rn2mv >= 0
-          || finishBalanceForBroker(replicasList(i).rn2mv, replicasList(j).rn2mv, balanceThreshold)) {
-          //pass
-        } else {
-          for (tp <- BrokerMap(replicasList(i).brokerid)) {
-            if (TPMap(tp).contains(replicasList(j).brokerid) ||
-              (replicasList(i).rn2mv <= 0 || replicasList(j).rn2mv >= 0)
-              || finishBalanceForBroker(replicasList(i).rn2mv, replicasList(j).rn2mv, balanceThreshold)) {
-              //pass
-            } else {
-              TPMap(tp) = TPMap(tp).filterNot(_.equals(replicasList(i).brokerid))
-              TPMap(tp).append(replicasList(j).brokerid)
-              BrokerMap(replicasList(i).brokerid).remove(tp)
-              BrokerMap(replicasList(j).brokerid).add(tp)
-              replicasList(i).rn2mv -= 1
-              replicasList(j).rn2mv += 1
-            }
-          }
-
+    fromBrokers.foreach(
+      fromBroker=>targetBrokers.filterNot(_.rn2mv >= 0).foreach(
+        targetBroker=>{
+          if (isFinishMove(fromBroker.rn2mv, targetBroker.rn2mv, balanceThreshold))
+            BrokerMap(fromBroker.brokerid).filterNot(tp=>TPMap(tp).contains(targetBroker.brokerid))
+              .foreach(
+                tp=> if (isFinishMove(fromBroker.rn2mv, targetBroker.rn2mv, balanceThreshold))
+                {
+                  TPMap(tp) = TPMap(tp).filterNot(_.equals(fromBroker.brokerid))
+                  TPMap(tp).append(targetBroker.brokerid)
+                  BrokerMap(fromBroker.brokerid).remove(tp)
+                  BrokerMap(targetBroker.brokerid).add(tp)
+                  fromBroker.rn2mv -= 1
+                  targetBroker.rn2mv += 1
+                }
+              )
         }
-      }
-    }
+      )
+    )
   }
 
-  def finishBalanceForBroker(fromBroker: Int, ToBroker: Int, balanceThreshold: Int): Boolean = {
-    if (Math.abs(fromBroker) <= balanceThreshold && Math.abs(ToBroker) <= balanceThreshold) true
+  def isFinishMove(fromBroker: Int, TargetBroker: Int, balanceThreshold: Int): Boolean = {
+    if ((Math.abs(fromBroker) > balanceThreshold || Math.abs(TargetBroker) > balanceThreshold)
+      && (fromBroker > 0) && (TargetBroker < 0) )
+      true
     else false
   }
 
@@ -312,7 +312,7 @@ object ClusterBalanceCommand extends Logging {
   /**
     * make the leader numbers on every broker balanced
     * during doing it we should make sure the target broker
-    * which we want move leader of TP to should in AR of this TP.
+    * should in AR of the TP we want to move.
    */
   def executeLeaderBalance(zkUtils: ZkUtils, opts: kafkaBalanceCommandOptions,
                            TPMap: mutable.Map[TopicAndPartition, mutable.ListBuffer[Int]]
@@ -328,38 +328,32 @@ object ClusterBalanceCommand extends Logging {
     }
 
     val leadersAvgForBrokers = BrokerLeaderMap.map(_._2.size).sum/BrokerLeaderMap.size
-    val leadersList = BrokerLeaderMap.map(btp => balanceItem (btp._1, btp._2.size - leadersAvgForBrokers)).toList.sortWith(_.rn2mv > _.rn2mv)
+    val (fromBrokers,targetBrokers) = BrokerLeaderMap.map(btp => balanceItem (btp._1, btp._2.size - leadersAvgForBrokers)).toList.partition(_.rn2mv > 0)
 
-    for(i <- 0 until leadersList.size){
-      for(j <- (0 until leadersList.size).toList.reverse){
-        if ((leadersList(i).rn2mv <= 0 || leadersList(j).rn2mv >= 0)
-          || finishBalanceForBroker(leadersList(i).rn2mv, leadersList(j).rn2mv, 0)) {
-          // continue
-        } else {
-          for (tp <- BrokerLeaderMap(leadersList(i).brokerid)) {
-            if (!TPMap(tp).contains(leadersList(j).brokerid) ||
-              (leadersList(i).rn2mv <= 0 || leadersList(j).rn2mv >= 0)
-              || finishBalanceForBroker(leadersList(i).rn2mv, leadersList(j).rn2mv, 0)) {
-              // continue
-            } else {
-              TPMap(tp) -= leadersList(j).brokerid
-              TPMap(tp).insert(0, leadersList(j).brokerid)
-              BrokerLeaderMap(leadersList(i).brokerid).remove(tp)
-              BrokerLeaderMap(leadersList(j).brokerid).add(tp)
-              leadersList(i).rn2mv -= 1
-              leadersList(j).rn2mv += 1
-            }
-          }
+    fromBrokers.foreach(
+      fromBroker=>targetBrokers.filterNot(_.rn2mv >= 0).foreach(
+        targetBroker=>{
+          if (isFinishMove(fromBroker.rn2mv,targetBroker.rn2mv,0))
+            BrokerLeaderMap(fromBroker.brokerid).filter(tp=>TPMap(tp).contains(targetBroker.brokerid))
+              .foreach(
+                tp=> if (isFinishMove(fromBroker.rn2mv,targetBroker.rn2mv,0))
+                {
+                TPMap(tp) -= targetBroker.brokerid
+                TPMap(tp).insert(0, targetBroker.brokerid)
+                BrokerLeaderMap(fromBroker.brokerid).remove(tp)
+                BrokerLeaderMap(targetBroker.brokerid).add(tp)
+                fromBroker.rn2mv -= 1
+                targetBroker.rn2mv += 1
+                }
+            )
         }
-      }
-    }
+      )
+    )
+
   }
 
   /**
     * do PreferredReplicaLeaderElectionCommand with TP which we want leader balanced
-    * @param zkUtils
-    * @param TPMap
-    * @param orgTPMap
     */
   def preferredReplicaLeaderElection(zkUtils: ZkUtils,TPMap: mutable.Map[TopicAndPartition, mutable.ListBuffer[Int]],orgTPMap: mutable.Map[TopicAndPartition, mutable.ListBuffer[Int]]): Unit ={
     val tp=TPMap.filterNot(TP=>orgTPMap(TP._1).equals(TP._2))keySet
@@ -381,7 +375,7 @@ object ClusterBalanceCommand extends Logging {
     val showClusterState = parser.accepts("show-cluster-state", "show how many replicas and leaders on each broker")
 
 
-    val  kafkaRebalance= parser.accepts("replica-rebalance", "which make the replica num and leader num on each broker balanced")
+    val  replicaRebalance= parser.accepts("replica-balance", "which make the amounts of replicas on each broker balanced")
 
 
     val rbNumPercentageOpt = parser.accepts("replica-balance-num-percentage", "replica balance percentage,default is 10 (means 10%)")
@@ -389,8 +383,9 @@ object ClusterBalanceCommand extends Logging {
       .describedAs("integer")
       .ofType(classOf[String])
 
-    val leaderRebalance= parser.accepts("leader-balance", "which make the leader num on each broker balanced")
+    val leaderRebalance= parser.accepts("leader-balance", "which make the amounts of leaders on each broker balanced")
 
+    val clusterRebalance= parser.accepts("cluster-balance", "which execute replica balance and leader balance ")
 
     val options = parser.parse(args : _*)
   }
