@@ -125,7 +125,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
     }
 
     @Override
-    public Cancellable schedule(long interval, PunctuationType type, Punctuator callback) {
+    public Cancellable schedule(final long interval, final PunctuationType type, final Punctuator callback) {
         return task.schedule(interval, type, callback);
     }
 
@@ -134,7 +134,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
     public void schedule(final long interval) {
         schedule(interval, PunctuationType.STREAM_TIME, new Punctuator() {
             @Override
-            public void punctuate(long timestamp) {
+            public void punctuate(final long timestamp) {
                 currentNode().processor().punctuate(timestamp);
             }
         });
