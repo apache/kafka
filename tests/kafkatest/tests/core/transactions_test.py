@@ -152,7 +152,8 @@ class TransactionsTest(Test):
             for copier in copiers:
                 wait_until(lambda: copier.progress_percent() >= 20.0,
                            timeout_sec=30,
-                           err_msg="%s : Message copier didn't make enough progress in 30s" % copier.transactional_id)
+                           err_msg="%s : Message copier didn't make enough progress in 30s. Current progress: %s" \
+                           % (copier.transactional_id, str(copier.progress_percent())))
                 self.logger.info("%s - progress: %s" % (copier.transactional_id,
                                                         str(copier.progress_percent())))
                 copier.restart(clean_shutdown)
@@ -187,8 +188,8 @@ class TransactionsTest(Test):
         self.logger.info("finished copying messages")
 
     @cluster(num_nodes=8)
-    @matrix(failure_mode=["hard_bounce"],
-            bounce_target=["clients"])
+    @matrix(failure_mode=["clean_bounce", "hard_bounce"],
+            bounce_target=["brokers", "clients"])
     def test_transactions(self, failure_mode, bounce_target):
         security_protocol = 'PLAINTEXT'
         self.kafka.security_protocol = security_protocol

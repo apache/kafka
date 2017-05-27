@@ -60,9 +60,8 @@ class TransactionalMessageCopier(KafkaPathResolverMixin, BackgroundThreadService
         self.output_topic = output_topic
         self.max_messages = max_messages
         self.message_copy_finished = False
-        self.transactional_id = ""
-        self.consumed = 0
-        self.remaining = 0
+        self.consumed = -1
+        self.remaining = -1
         self.stop_timeout_sec = 60
 
     def _worker(self, idx, node):
@@ -83,9 +82,12 @@ class TransactionalMessageCopier(KafkaPathResolverMixin, BackgroundThreadService
                 data = self.try_parse_json(line)
                 if data is not None:
                     with self.lock:
+                        self.remaining = int(data["remaining"])
+                        self.consumed = int(data["consumed"])
+                        self.logger.info("%s: consumed %d, remaining %d" %
+                                         (self.transactional_id, self.consumed, self.remaining))
                         if "shutdown_complete" in data:
-                            remaining = int(data["remaining"])
-                            if remaining == 0:
+                           if self.remaining == 0:
                                 # We are only finished if the remaining
                                 # messages at the time of shutdown is 0.
                                 #
@@ -93,14 +95,8 @@ class TransactionalMessageCopier(KafkaPathResolverMixin, BackgroundThreadService
                                 # a 'shutdown complete' messages even though
                                 # there are unprocessed messages, causing
                                 # tests to fail.
-                                self.logger.info("Finished message copy")
+                                self.logger.info("%s : Finished message copy" % self.transactional_id)
                                 self.message_copy_finished = True
-                            elif "progress" in data:
-                                self.consumed = int(data["consumed"])
-                                self.remaining = int(data["remaining"])
-                                self.transactional_id = str(data["progress"])
-                                self.logger.info("%s: consumed %d, remaining %d" %
-                                                 (self.transactional_id, self.consumed, self.remaining))
         except RemoteCommandError as e:
             self.logger.debug("Got exception while reading output from copier, \
                               probably because it was SIGKILL'd (exit code 137): %s" % str(e))
@@ -156,8 +152,8 @@ class TransactionalMessageCopier(KafkaPathResolverMixin, BackgroundThreadService
         if self.is_done:
             return
         node = self.nodes[0]
-        self.consumed = 0
-        self.remaining = 0
+        self.consumed = -1
+        self.remaining = -1
         self.stop_node(node, clean_shutdown)
         self.start_node(node)
 
@@ -175,6 +171,6 @@ class TransactionalMessageCopier(KafkaPathResolverMixin, BackgroundThreadService
         return self.message_copy_finished
 
     def progress_percent(self):
-        if self.consumed + self.remaining == 0:
+        if self.remaining < 0:
             return 0
         return (float(self.consumed)/float(self.consumed + self.remaining)) * 100

@@ -208,17 +208,18 @@ public class TransactionalMessageCopier {
         return toJsonString(statusData);
     }
 
-    private static String shutDownString(long remaining) {
+    private static String shutDownString(long consumed, long remaining, String transactionalId) {
         Map<String, Object> shutdownData = new HashMap<>();
         shutdownData.put("remaining", remaining);
-        shutdownData.put("shutdown_complete", "");
+        shutdownData.put("consumed", consumed);
+        shutdownData.put("shutdown_complete", transactionalId);
         return toJsonString(shutdownData);
     }
 
     public static void main(String[] args) throws IOException {
         Namespace parsedArgs = argParser().parseArgsOrFail(args);
         Integer numMessagesPerTransaction = parsedArgs.getInt("messagesPerTransaction");
-        String transactionalId = parsedArgs.getString("transactionalId");
+        final String transactionalId = parsedArgs.getString("transactionalId");
         final String outputTopic = parsedArgs.getString("outputTopic");
 
         String consumerGroup = parsedArgs.getString("consumerGroup");
@@ -234,10 +235,10 @@ public class TransactionalMessageCopier {
 
         producer.initTransactions();
 
-        int numMessagesProcessed = 0;
 
         final AtomicBoolean isShuttingDown = new AtomicBoolean(false);
         final AtomicLong remainingMessages = new AtomicLong(maxMessages);
+        final AtomicLong numMessagesProcessed = new AtomicLong(0);
         int exitCode = 0;
         Runtime.getRuntime().addShutdownHook(new Thread() {
             @Override
@@ -248,20 +249,20 @@ public class TransactionalMessageCopier {
                 synchronized (consumer) {
                     consumer.close();
                 }
-                System.out.println(shutDownString(remainingMessages.get()));
+                System.out.println(shutDownString(numMessagesProcessed.get(), remainingMessages.get(), transactionalId));
             }
         });
 
         try {
             while (0 < remainingMessages.get()) {
-                if ((((double) numMessagesProcessed / maxMessages) * 100) % 10 == 0) {
+                if ((((double) numMessagesProcessed.get() / maxMessages) * 100) % 10 == 0) {
                     // print status for every 10% we progress.
-                    System.out.println(statusAsJson(numMessagesProcessed, remainingMessages.get(), transactionalId));
+                    System.out.println(statusAsJson(numMessagesProcessed.get(), remainingMessages.get(), transactionalId));
                 }
                 if (isShuttingDown.get())
                     break;
                 int messagesInCurrentTransaction = 0;
-                long numMessagesForNextTransaction = Math.min(numMessagesPerTransaction, maxMessages - numMessagesProcessed);
+                long numMessagesForNextTransaction = Math.min(numMessagesPerTransaction, remainingMessages.get());
                 producer.beginTransaction();
 
                 while (messagesInCurrentTransaction < numMessagesForNextTransaction) {
@@ -269,12 +270,12 @@ public class TransactionalMessageCopier {
                     for (ConsumerRecord<String, String> record : records) {
                         producer.send(producerRecordFromConsumerRecord(outputTopic, record));
                         messagesInCurrentTransaction++;
-                        numMessagesProcessed++;
+                        numMessagesProcessed.incrementAndGet();
                     }
                 }
                 producer.sendOffsetsToTransaction(consumerPositions(consumer), consumerGroup);
                 producer.commitTransaction();
-                remainingMessages.set(maxMessages - numMessagesProcessed);
+                remainingMessages.set(maxMessages - numMessagesProcessed.get());
             }
         } catch (Exception e) {
             e.printStackTrace();
