@@ -109,7 +109,7 @@ public interface ProcessorContext {
     Cancellable schedule(long interval, PunctuationType type, Punctuator callback);
 
     /**
-     * <b>Deprecated as of 0.11.0.0</b> - <i>Please use {@link #schedule(long, PunctuationType, Punctuator)} instead.</i>
+     * @deprecated As of 0.11.1.0 please use {@link #schedule(long, PunctuationType, Punctuator)} instead.
      * Schedules a periodic operation for processors. A processor may call this method during
      * {@link Processor#init(ProcessorContext) initialization} to
      * schedule a periodic call called a punctuation to {@link Processor#punctuate(long)}.
