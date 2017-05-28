@@ -195,6 +195,18 @@ public class MockClient implements KafkaClient {
         respond(response, false);
     }
 
+    public void respond(RequestMatcher matcher, AbstractResponse response) {
+        ClientRequest nextRequest = requests.peek();
+        if (nextRequest == null)
+            throw new IllegalStateException("No current requests queued");
+
+        AbstractRequest request = nextRequest.requestBuilder().build();
+        if (!matcher.matches(request))
+            throw new IllegalStateException("Next in line response did not match expected request, request: " + request);
+
+        respond(response);
+    }
+
     public void respond(AbstractResponse response, boolean disconnected) {
         ClientRequest request = requests.remove();
         short version = request.requestBuilder().desiredOrLatestVersion();

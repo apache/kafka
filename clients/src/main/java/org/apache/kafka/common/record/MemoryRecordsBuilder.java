@@ -187,6 +187,10 @@ public class MemoryRecordsBuilder {
         return isControlBatch;
     }
 
+    public boolean isTransactional() {
+        return isTransactional;
+    }
+
     /**
      * Close this builder and return the resulting buffer.
      * @return The built log buffer
