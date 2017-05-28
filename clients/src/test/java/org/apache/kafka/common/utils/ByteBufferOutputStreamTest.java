@@ -26,16 +26,16 @@ import static org.junit.Assert.assertEquals;
 public class ByteBufferOutputStreamTest {
 
     @Test
-    public void testExpandBufferOnPositionIncrease() throws Exception {
-        testExpandBufferOnPositionIncrease(ByteBuffer.allocate(16));
+    public void testExpandByteBufferOnPositionIncrease() throws Exception {
+        testExpandByteBufferOnPositionIncrease(ByteBuffer.allocate(16));
     }
 
     @Test
-    public void testExpandBufferOnPositionIncreaseDirectBuffer() throws Exception {
-        testExpandBufferOnPositionIncrease(ByteBuffer.allocateDirect(16));
+    public void testExpandDirectByteBufferOnPositionIncrease() throws Exception {
+        testExpandByteBufferOnPositionIncrease(ByteBuffer.allocateDirect(16));
     }
 
-    private void testExpandBufferOnPositionIncrease(ByteBuffer initialBuffer) throws Exception {
+    private void testExpandByteBufferOnPositionIncrease(ByteBuffer initialBuffer) throws Exception {
         ByteBufferOutputStream output = new ByteBufferOutputStream(initialBuffer);
         output.write("hello".getBytes());
         output.position(32);
@@ -52,16 +52,16 @@ public class ByteBufferOutputStreamTest {
     }
 
     @Test
-    public void testExpandBufferOnWrite() throws Exception {
-        testExpandBufferOnWrite(ByteBuffer.allocate(16));
+    public void testExpandByteBufferOnWrite() throws Exception {
+        testExpandByteBufferOnWrite(ByteBuffer.allocate(16));
     }
 
     @Test
-    public void testExpandBufferOnWriteDirectBuffer() throws Exception {
-        testExpandBufferOnWrite(ByteBuffer.allocateDirect(16));
+    public void testExpandDirectByteBufferOnWrite() throws Exception {
+        testExpandByteBufferOnWrite(ByteBuffer.allocateDirect(16));
     }
 
-    private void testExpandBufferOnWrite(ByteBuffer initialBuffer) throws Exception {
+    private void testExpandByteBufferOnWrite(ByteBuffer initialBuffer) throws Exception {
         ByteBufferOutputStream output = new ByteBufferOutputStream(initialBuffer);
         output.write("hello".getBytes());
         output.write(new byte[27]);

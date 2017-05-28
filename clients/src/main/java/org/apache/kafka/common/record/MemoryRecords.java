@@ -137,7 +137,6 @@ public class MemoryRecords extends AbstractRecords {
         int bytesRead = 0;
         int messagesRetained = 0;
         int bytesRetained = 0;
-        int initialOutputPosition = destinationBuffer.position();
 
         ByteBufferOutputStream bufferOutputStream = new ByteBufferOutputStream(destinationBuffer);
 
