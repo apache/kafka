@@ -270,12 +270,11 @@ public class TransactionalMessageCopier {
                     for (ConsumerRecord<String, String> record : records) {
                         producer.send(producerRecordFromConsumerRecord(outputTopic, record));
                         messagesInCurrentTransaction++;
-                        numMessagesProcessed.incrementAndGet();
                     }
                 }
                 producer.sendOffsetsToTransaction(consumerPositions(consumer), consumerGroup);
                 producer.commitTransaction();
-                remainingMessages.set(maxMessages - numMessagesProcessed.get());
+                remainingMessages.set(maxMessages - numMessagesProcessed.addAndGet(messagesInCurrentTransaction));
             }
         } catch (Exception e) {
             e.printStackTrace();

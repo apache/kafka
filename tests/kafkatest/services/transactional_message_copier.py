@@ -88,6 +88,9 @@ class TransactionalMessageCopier(KafkaPathResolverMixin, BackgroundThreadService
                                 # tests to fail.
                                 self.logger.info("%s : Finished message copy" % self.transactional_id)
                                 self.message_copy_finished = True
+                           else:
+                               self.logger.info("%s : Shut down without finishing message copy." %\
+                                                self.transactional_id)
         except RemoteCommandError as e:
             self.logger.debug("Got exception while reading output from copier, \
                               probably because it was SIGKILL'd (exit code 137): %s" % str(e))

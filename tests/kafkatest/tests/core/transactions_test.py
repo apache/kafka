@@ -184,7 +184,8 @@ class TransactionsTest(Test):
         for copier in copiers:
             wait_until(lambda: copier.is_done,
                        timeout_sec=30,
-                       err_msg="Failed to copy all messages in  %ds." % 30)
+                       err_msg="%s - Failed to copy all messages in  %ds." %\
+                       (copier.transactional_id, 30))
         self.logger.info("finished copying messages")
 
     @cluster(num_nodes=8)
