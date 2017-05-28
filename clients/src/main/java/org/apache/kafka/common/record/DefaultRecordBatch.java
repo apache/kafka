@@ -509,6 +509,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
             super(offset, magic, channel, position, batchSize);
         }
 
+        @Override
         protected RecordBatch toMemoryRecordBatch(ByteBuffer buffer) {
             return new DefaultRecordBatch(buffer);
         }
