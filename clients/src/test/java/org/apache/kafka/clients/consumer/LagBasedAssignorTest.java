@@ -153,7 +153,7 @@ public class LagBasedAssignorTest {
         final Map<String, List<TopicPartition>> actualAssignment =
             LagBasedAssignor.assign(partitionLagPerTopic, subscriptions);
 
-        Assert.assertThat(actualAssignment.size(), is (2));
+        Assert.assertThat(actualAssignment.size(), is(2));
         Assert.assertThat(new HashSet<>(actualAssignment.get("consumer-1")), is(new HashSet<>(expectedAssignment.get("consumer-1"))));
         Assert.assertThat(new HashSet<>(actualAssignment.get("consumer-2")), is(new HashSet<>(expectedAssignment.get("consumer-2"))));
 
