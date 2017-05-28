@@ -153,8 +153,7 @@ public class MockClient implements KafkaClient {
             short version = nodeApiVersions.usableVersion(request.apiKey(), builder.desiredVersion());
             AbstractRequest abstractRequest = request.requestBuilder().build(version);
             if (!futureResp.requestMatcher.matches(abstractRequest))
-                throw new IllegalStateException("Next in line response did not match expected request, request: "
-                        + abstractRequest);
+                throw new IllegalStateException("Request matcher did not match next-in-line request " + abstractRequest);
             ClientResponse resp = new ClientResponse(request.makeHeader(version), request.callback(), request.destination(),
                     request.createdTimeMs(), time.milliseconds(), futureResp.disconnected, null, futureResp.responseBody);
             responses.add(resp);
@@ -202,7 +201,7 @@ public class MockClient implements KafkaClient {
 
         AbstractRequest request = nextRequest.requestBuilder().build();
         if (!matcher.matches(request))
-            throw new IllegalStateException("Next in line response did not match expected request, request: " + request);
+            throw new IllegalStateException("Request matcher did not match next-in-line request " + request);
 
         respond(response);
     }
