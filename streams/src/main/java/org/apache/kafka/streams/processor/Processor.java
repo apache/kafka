@@ -31,8 +31,9 @@ public interface Processor<K, V> {
      * Initialize this processor with the given context. The framework ensures this is called once per processor when the topology
      * that contains it is initialized.
      * <p>
-     * This Processor can {@link ProcessorContext#schedule(long, PunctuationType, Punctuator) schedule} a method to be
-     * {@link Punctuator#punctuate(long) called periodically} with the provided context.
+     * The provided {@link ProcessorContext context} can be used to access topology and record meta data, to
+     * {@link ProcessorContext#schedule(long, PunctuationType, Punctuator) schedule} a method to be
+     * {@link Punctuator#punctuate(long) called periodically} and to access attached {@link StateStore}s.
      * 
      * @param context the context; may not be null
      */

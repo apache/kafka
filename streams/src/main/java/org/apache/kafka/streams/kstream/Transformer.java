@@ -53,8 +53,8 @@ public interface Transformer<K, V, R> {
      * This is called once per instance when the topology gets initialized.
      * <p>
      * The provided {@link ProcessorContext context} can be used to access topology and record meta data, to
-     * {@link ProcessorContext#schedule(long) schedule itself} for periodical calls (cf. {@link #punctuate(long)}), and
-     * to access attached {@link StateStore}s.
+     * {@link ProcessorContext#schedule(long, PunctuationType, Punctuator) schedule} a method to be
+     * {@link Punctuator#punctuate(long) called periodically} and to access attached {@link StateStore}s.
      * <p>
      * Note, that {@link ProcessorContext} is updated in the background with the current record's meta data.
      * Thus, it only contains valid record meta data when accessed within {@link #transform(Object, Object)}.
