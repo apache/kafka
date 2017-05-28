@@ -145,6 +145,8 @@ public class MemoryRecordsBuilder {
      * @param producerEpoch The epoch of the producer
      * @param baseSequence The sequence number of the first record in this set
      * @param isTransactional Whether or not the records are part of a transaction
+     * @param isControlBatch Whether or not this is a control batch (e.g. for transaction markers)
+     * @param partitionLeaderEpoch The epoch of the partition leader appending the record set to the log
      * @param writeLimit The desired limit on the total bytes for this record set (note that this can be exceeded
      *                   when compression is used since size estimates are rough, and in the case that the first
      *                   record added exceeds the size).
@@ -762,13 +764,6 @@ public class MemoryRecordsBuilder {
 
     public short producerEpoch() {
         return this.producerEpoch;
-    }
-
-    public static int minBufferSize(byte magic) {
-        if (magic > RecordBatch.MAGIC_VALUE_V1)
-            return DefaultRecordBatch.RECORDS_OFFSET;
-        else
-            return Records.LOG_OVERHEAD + LegacyRecord.recordOverhead(magic);
     }
 
 }

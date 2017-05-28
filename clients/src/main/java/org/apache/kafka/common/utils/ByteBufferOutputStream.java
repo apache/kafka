@@ -81,9 +81,15 @@ public class ByteBufferOutputStream extends OutputStream {
     private void expandBuffer(int size) {
         int expandSize = Math.max((int) (buffer.capacity() * REALLOCATION_FACTOR), size);
         ByteBuffer temp = ByteBuffer.allocate(expandSize);
-        temp.put(buffer.array(), buffer.arrayOffset(), buffer.position());
+        if (buffer.hasArray()) {
+            temp.put(buffer.array(), buffer.arrayOffset(), buffer.position());
+        } else {
+            int limit = buffer.position();
+            for (int i = 0; i < limit; i++)
+                temp.put(buffer.get(i));
+        }
 
-        // reset the old buffer's position so that
+        // reset the old buffer's position so that the partial data in the new buffer cannot be mistakenly consumed
         buffer.position(initialPosition);
         buffer = temp;
     }

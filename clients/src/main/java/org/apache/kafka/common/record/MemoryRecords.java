@@ -192,7 +192,7 @@ public class MemoryRecords extends AbstractRecords {
 
                 if (filteredBatchSize > batch.sizeInBytes() && filteredBatchSize > maxRecordBatchSize)
                     log.warn("Record batch from {} with last offset {} exceeded max record batch size {} after cleaning " +
-                                    "(new size is {}). Consumers from version 0.10.1 and earlier will need to " +
+                                    "(new size is {}). Consumers from version 0.10.1 and earlier may need to " +
                                     "increase their fetch sizes.",
                             partition, batch.lastOffset(), maxRecordBatchSize, filteredBatchSize);
 
@@ -203,15 +203,12 @@ public class MemoryRecords extends AbstractRecords {
                 }
             }
 
-            // If we had to allocate a new buffer to fit the filtered output, reset the initial position
-            // in the original buffer to ensure that the partial data cannot mistakenly read. We also return
-            // early to avoid the need for additional allocations.
+            // If we had to allocate a new buffer to fit the filtered output (see KAFKA-5316), return early to
+            // avoid the need for additional allocations.
             ByteBuffer outputBuffer = bufferOutputStream.buffer();
-            if (outputBuffer != destinationBuffer) {
-                destinationBuffer.position(initialOutputPosition);
+            if (outputBuffer != destinationBuffer)
                 return new FilterResult(outputBuffer, messagesRead, bytesRead, messagesRetained, bytesRetained,
                         maxOffset, maxTimestamp, shallowOffsetOfMaxTimestamp);
-            }
         }
 
         return new FilterResult(destinationBuffer, messagesRead, bytesRead, messagesRetained, bytesRetained,

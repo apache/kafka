@@ -26,8 +26,16 @@ import static org.junit.Assert.assertEquals;
 public class ByteBufferOutputStreamTest {
 
     @Test
-    public void expandBufferOnPositionIncrease() throws Exception {
-        ByteBuffer initialBuffer = ByteBuffer.allocate(16);
+    public void testExpandBufferOnPositionIncrease() throws Exception {
+        testExpandBufferOnPositionIncrease(ByteBuffer.allocate(16));
+    }
+
+    @Test
+    public void testExpandBufferOnPositionIncreaseDirectBuffer() throws Exception {
+        testExpandBufferOnPositionIncrease(ByteBuffer.allocateDirect(16));
+    }
+
+    private void testExpandBufferOnPositionIncrease(ByteBuffer initialBuffer) throws Exception {
         ByteBufferOutputStream output = new ByteBufferOutputStream(initialBuffer);
         output.write("hello".getBytes());
         output.position(32);
@@ -44,8 +52,16 @@ public class ByteBufferOutputStreamTest {
     }
 
     @Test
-    public void expandBufferOnWrite() throws Exception {
-        ByteBuffer initialBuffer = ByteBuffer.allocate(16);
+    public void testExpandBufferOnWrite() throws Exception {
+        testExpandBufferOnWrite(ByteBuffer.allocate(16));
+    }
+
+    @Test
+    public void testExpandBufferOnWriteDirectBuffer() throws Exception {
+        testExpandBufferOnWrite(ByteBuffer.allocateDirect(16));
+    }
+
+    private void testExpandBufferOnWrite(ByteBuffer initialBuffer) throws Exception {
         ByteBufferOutputStream output = new ByteBufferOutputStream(initialBuffer);
         output.write("hello".getBytes());
         output.write(new byte[27]);
@@ -59,6 +75,27 @@ public class ByteBufferOutputStreamTest {
         byte[] bytes = new byte[5];
         buffer.get(bytes);
         assertArrayEquals("hello".getBytes(), bytes);
+    }
+
+    @Test
+    public void testWriteByteBuffer() {
+        testWriteByteBuffer(ByteBuffer.allocate(16));
+    }
+
+    @Test
+    public void testWriteDirectByteBuffer() {
+        testWriteByteBuffer(ByteBuffer.allocateDirect(16));
+    }
+
+    private void testWriteByteBuffer(ByteBuffer input) {
+        long value = 234239230L;
+        input.putLong(value);
+        input.flip();
+
+        ByteBufferOutputStream output = new ByteBufferOutputStream(ByteBuffer.allocate(32));
+        output.write(input);
+        assertEquals(8, output.position());
+        assertEquals(value, output.buffer().getLong(0));
     }
 
 }
