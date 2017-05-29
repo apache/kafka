@@ -209,8 +209,7 @@ public final class KafkaLZ4BlockInputStream extends InputStream {
             if (hash != in.getInt()) {
                 throw new IOException(BLOCK_HASH_MISMATCH);
             }
-        }
-        else {
+        } else {
             in.position(in.position() + blockSize);
         }
     }
