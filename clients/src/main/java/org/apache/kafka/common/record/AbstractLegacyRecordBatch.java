@@ -223,8 +223,12 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
      */
     @Override
     public CloseableIterator<Record> iterator() {
+        return iterator(BufferSupplier.create());
+    }
+
+    private CloseableIterator<Record> iterator(BufferSupplier bufferSupplier) {
         if (isCompressed())
-            return new DeepRecordsIterator(this, false, Integer.MAX_VALUE);
+            return new DeepRecordsIterator(this, false, Integer.MAX_VALUE, bufferSupplier);
 
         return new CloseableIterator<Record>() {
             private boolean hasNext = true;
@@ -253,9 +257,9 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
     }
 
     @Override
-    public CloseableIterator<Record> streamingIterator() {
+    public CloseableIterator<Record> streamingIterator(BufferSupplier bufferSupplier) {
         // the older message format versions do not support streaming, so we return the normal iterator
-        return iterator();
+        return iterator(bufferSupplier);
     }
 
     static void writeHeader(ByteBuffer buffer, long offset, int size) {
@@ -307,7 +311,7 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
         private final long absoluteBaseOffset;
         private final byte wrapperMagic;
 
-        private DeepRecordsIterator(AbstractLegacyRecordBatch wrapperEntry, boolean ensureMatchingMagic, int maxMessageSize) {
+        private DeepRecordsIterator(AbstractLegacyRecordBatch wrapperEntry, boolean ensureMatchingMagic, int maxMessageSize, BufferSupplier bufferSupplier) {
             LegacyRecord wrapperRecord = wrapperEntry.outerRecord();
             this.wrapperMagic = wrapperRecord.magic();
 
@@ -317,7 +321,7 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
                 throw new InvalidRecordException("Found invalid compressed record set with null value (magic = " +
                         wrapperMagic + ")");
 
-            InputStream stream = compressionType.wrapForInput(wrapperValue, wrapperRecord.magic());
+            InputStream stream = compressionType.wrapForInput(wrapperValue, wrapperRecord.magic(), bufferSupplier);
             LogInputStream<AbstractLegacyRecordBatch> logStream = new DataLogInputStream(stream, maxMessageSize);
 
             long wrapperRecordOffset = wrapperEntry.lastOffset();

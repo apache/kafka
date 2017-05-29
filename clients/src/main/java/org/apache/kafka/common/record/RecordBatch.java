@@ -219,9 +219,14 @@ public interface RecordBatch extends Iterable<Record> {
      * are actually asked for using {@link Iterator#next()}. If the message format does not support streaming
      * iteration, then the normal iterator is returned. Either way, callers should ensure that the iterator is closed.
      *
+     * @param decompressionBufferSupplier The supplier of ByteBuffer(s) used for decompression if supported.
+     *                                    For small record batches, allocating a potentially large buffer (64 KB for LZ4)
+     *                                    will dominate the cost of decompressing and iterating over the records in the
+     *                                    batch. As such, a supplier that reuses buffers will have a significant
+     *                                    performance impact.
      * @return The closeable iterator
      */
-    CloseableIterator<Record> streamingIterator();
+    CloseableIterator<Record> streamingIterator(BufferSupplier decompressionBufferSupplier);
 
     /**
      * Check whether this is a control batch (i.e. whether the control bit is set in the batch attributes).

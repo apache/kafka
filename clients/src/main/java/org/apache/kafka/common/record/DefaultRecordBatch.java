@@ -23,8 +23,10 @@ import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.common.utils.CloseableIterator;
 import org.apache.kafka.common.utils.Crc32C;
 
+import java.io.DataInput;
 import java.io.DataInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -225,16 +227,17 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
         return buffer.getInt(PARTITION_LEADER_EPOCH_OFFSET);
     }
 
-    private CloseableIterator<Record> compressedIterator() {
+    private CloseableIterator<Record> compressedIterator(BufferSupplier bufferSupplier) {
         ByteBuffer buffer = this.buffer.duplicate();
         buffer.position(RECORDS_OFFSET);
-        final DataInputStream stream = new DataInputStream(compressionType().wrapForInput(buffer, magic()));
+        final DataInputStream inputStream = new DataInputStream(compressionType().wrapForInput(buffer, magic(),
+                bufferSupplier));
 
         return new RecordIterator() {
             @Override
             protected Record readNext(long baseOffset, long baseTimestamp, int baseSequence, Long logAppendTime) {
                 try {
-                    return DefaultRecord.readFrom(stream, baseOffset, baseTimestamp, baseSequence, logAppendTime);
+                    return DefaultRecord.readFrom(inputStream, baseOffset, baseTimestamp, baseSequence, logAppendTime);
                 } catch (IOException e) {
                     throw new KafkaException("Failed to decompress record stream", e);
                 }
@@ -243,7 +246,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
             @Override
             public void close() {
                 try {
-                    stream.close();
+                    inputStream.close();
                 } catch (IOException e) {
                     throw new KafkaException("Failed to close record stream", e);
                 }
@@ -272,7 +275,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
         // for a normal iterator, we cannot ensure that the underlying compression stream is closed,
         // so we decompress the full record set here. Use cases which call for a lower memory footprint
         // can use `streamingIterator` at the cost of additional complexity
-        try (CloseableIterator<Record> iterator = compressedIterator()) {
+        try (CloseableIterator<Record> iterator = compressedIterator(BufferSupplier.create())) {
             List<Record> records = new ArrayList<>(count());
             while (iterator.hasNext())
                 records.add(iterator.next());
@@ -282,9 +285,9 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
 
 
     @Override
-    public CloseableIterator<Record> streamingIterator() {
+    public CloseableIterator<Record> streamingIterator(BufferSupplier bufferSupplier) {
         if (isCompressed())
-            return compressedIterator();
+            return compressedIterator(bufferSupplier);
         else
             return uncompressedIterator();
     }

@@ -40,7 +40,7 @@ public enum CompressionType {
         }
 
         @Override
-        public InputStream wrapForInput(ByteBuffer buffer, byte messageVersion) {
+        public InputStream wrapForInput(ByteBuffer buffer, byte messageVersion, BufferSupplier decompressionBufferSupplier) {
             return new ByteBufferInputStream(buffer);
         }
     },
@@ -56,7 +56,7 @@ public enum CompressionType {
         }
 
         @Override
-        public InputStream wrapForInput(ByteBuffer buffer, byte messageVersion) {
+        public InputStream wrapForInput(ByteBuffer buffer, byte messageVersion, BufferSupplier decompressionBufferSupplier) {
             try {
                 return new GZIPInputStream(new ByteBufferInputStream(buffer));
             } catch (Exception e) {
@@ -76,7 +76,7 @@ public enum CompressionType {
         }
 
         @Override
-        public InputStream wrapForInput(ByteBuffer buffer, byte messageVersion) {
+        public InputStream wrapForInput(ByteBuffer buffer, byte messageVersion, BufferSupplier decompressionBufferSupplier) {
             try {
                 return (InputStream) SnappyConstructors.INPUT.invoke(new ByteBufferInputStream(buffer));
             } catch (Throwable e) {
@@ -86,25 +86,6 @@ public enum CompressionType {
     },
 
     LZ4(3, "lz4", 1.0f) {
-        transient private final ThreadLocal<KafkaLZ4BlockInputStream.BufferSupplier> bufferSupplier =
-            new ThreadLocal<KafkaLZ4BlockInputStream.BufferSupplier>() {
-                @Override
-                protected KafkaLZ4BlockInputStream.BufferSupplier initialValue() {
-                    return new KafkaLZ4BlockInputStream.BufferSupplier() {
-                        ByteBuffer theBuffer;
-
-                        @Override
-                        public ByteBuffer get(int size) {
-                            if (theBuffer == null || theBuffer.capacity() < size) {
-                                theBuffer = ByteBuffer.allocate(size);
-                            }
-                            theBuffer.limit(size);
-                            return theBuffer;
-                        }
-                    };
-                }
-            };
-
         @Override
         public OutputStream wrapForOutput(ByteBufferOutputStream buffer, byte messageVersion, int bufferSize) {
             try {
@@ -115,9 +96,9 @@ public enum CompressionType {
         }
 
         @Override
-        public InputStream wrapForInput(ByteBuffer buffer, byte messageVersion) {
+        public InputStream wrapForInput(ByteBuffer inputBuffer, byte messageVersion, BufferSupplier decompressionBufferSupplier) {
             try {
-                return new KafkaLZ4BlockInputStream(buffer, bufferSupplier.get(),
+                return new KafkaLZ4BlockInputStream(inputBuffer, decompressionBufferSupplier,
                                                     messageVersion == RecordBatch.MAGIC_VALUE_V0);
             } catch (Throwable e) {
                 throw new KafkaException(e);
@@ -136,14 +117,25 @@ public enum CompressionType {
     }
 
     /**
+     * Wrap bufferStream with an OutputStream that will compress data with this CompressionType.
+     *
      * Note: Unlike {@link #wrapForInput}, {@link #wrapForOutput} cannot take {@#link ByteBuffer}s directly.
      * Currently, {@link MemoryRecordsBuilder#writeDefaultBatchHeader()} and {@link MemoryRecordsBuilder#writeLegacyCompressedWrapperHeader()}
      * write to the underlying buffer in the given {@link ByteBufferOutputStream} after the compressed data has been written.
      * In the event that the buffer needs to be expanded while writing the data, access to the underlying buffer needs to be preserved.
      */
-    public abstract OutputStream wrapForOutput(ByteBufferOutputStream buffer, byte messageVersion, int bufferSize);
+    public abstract OutputStream wrapForOutput(ByteBufferOutputStream bufferStream, byte messageVersion, int bufferSize);
 
-    public abstract InputStream wrapForInput(ByteBuffer buffer, byte messageVersion);
+    /**
+     * Wrap buffer with an InputStream that will decompress data with this CompressionType.
+     *
+     * @param decompressionBufferSupplier The supplier of ByteBuffer(s) used for decompression if supported.
+     *                                    For small record batches, allocating a potentially large buffer (64 KB for LZ4)
+     *                                    will dominate the cost of decompressing and iterating over the records in the
+     *                                    batch. As such, a supplier that reuses buffers will have a significant
+     *                                    performance impact.
+     */
+    public abstract InputStream wrapForInput(ByteBuffer buffer, byte messageVersion, BufferSupplier decompressionBufferSupplier);
 
     public static CompressionType forId(int id) {
         switch (id) {

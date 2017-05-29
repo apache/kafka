@@ -40,16 +40,6 @@ import static org.apache.kafka.common.record.KafkaLZ4BlockOutputStream.MAGIC;
  */
 public final class KafkaLZ4BlockInputStream extends InputStream {
 
-    public interface BufferSupplier {
-        /**
-         * Supplies the buffer to decompress data into for this stream
-         *
-         * @param size
-         * @return a decompression ByteBuffer of capacity >= size
-         */
-        ByteBuffer get(int size);
-    }
-
     public static final String PREMATURE_EOS = "Stream ended prematurely";
     public static final String NOT_SUPPORTED = "Stream unsupported (invalid magic bytes)";
     public static final String BLOCK_HASH_MISMATCH = "Block checksum mismatch";
@@ -66,6 +56,7 @@ public final class KafkaLZ4BlockInputStream extends InputStream {
     private final ByteBuffer decompressionBuffer;
     private final int maxBlockSize;
     private final boolean ignoreFlagDescriptorChecksum;
+    private final BufferSupplier bufferSupplier;
     private FLG flg;
     private BD bd;
     private boolean finished;
@@ -278,6 +269,7 @@ public final class KafkaLZ4BlockInputStream extends InputStream {
 
     @Override
     public void close() throws IOException {
+        bufferSupplier.release(decompressionBuffer);
     }
 
     @Override
