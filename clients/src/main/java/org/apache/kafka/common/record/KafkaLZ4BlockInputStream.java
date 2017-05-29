@@ -42,16 +42,6 @@ import static org.apache.kafka.common.record.KafkaLZ4BlockOutputStream.MAGIC;
  */
 public final class KafkaLZ4BlockInputStream extends InputStream {
 
-    public interface BufferSupplier {
-        /**
-         * Supplies the buffer to decompress data into for this stream
-         *
-         * @param size
-         * @return a decompression ByteBuffer of capacity >= size
-         */
-        ByteBuffer get(int size);
-    }
-
     public static final String PREMATURE_EOS = "Stream ended prematurely";
     public static final String NOT_SUPPORTED = "Stream unsupported (invalid magic bytes)";
     public static final String BLOCK_HASH_MISMATCH = "Block checksum mismatch";
@@ -62,6 +52,7 @@ public final class KafkaLZ4BlockInputStream extends InputStream {
 
     private final ByteBuffer in;
     private final boolean ignoreFlagDescriptorChecksum;
+    private final BufferSupplier bufferSupplier;
     private final ByteBuffer decompressionBuffer;
     // `flg` and `maxBlockSize` are effectively final, they are initialised in the `readHeader` method that is only
     // invoked from the constructor
@@ -83,6 +74,7 @@ public final class KafkaLZ4BlockInputStream extends InputStream {
     public KafkaLZ4BlockInputStream(ByteBuffer in, BufferSupplier bufferSupplier, boolean ignoreFlagDescriptorChecksum) throws IOException {
         this.ignoreFlagDescriptorChecksum = ignoreFlagDescriptorChecksum;
         this.in = in.duplicate().order(ByteOrder.LITTLE_ENDIAN);
+        this.bufferSupplier = bufferSupplier;
         readHeader();
         decompressionBuffer = bufferSupplier.get(maxBlockSize);
         if (!decompressionBuffer.hasArray() || decompressionBuffer.arrayOffset() != 0) {
@@ -278,6 +270,7 @@ public final class KafkaLZ4BlockInputStream extends InputStream {
 
     @Override
     public void close() throws IOException {
+        bufferSupplier.release(decompressionBuffer);
     }
 
     @Override

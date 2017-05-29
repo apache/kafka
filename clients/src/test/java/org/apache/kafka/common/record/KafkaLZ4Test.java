@@ -18,7 +18,6 @@ package org.apache.kafka.common.record;
 
 import net.jpountz.xxhash.XXHashFactory;
 
-import org.apache.kafka.common.record.CompressionType.RecyclingBufferSupplier;
 import org.hamcrest.CoreMatchers;
 import org.junit.Rule;
 import org.junit.Test;
@@ -120,15 +119,8 @@ public class KafkaLZ4Test {
         makeInputStream(buffer);
     }
 
-    private KafkaLZ4BlockInputStream makeInputStream(
-        ByteBuffer buffer
-    )
-        throws IOException {
-        return new KafkaLZ4BlockInputStream(
-            buffer,
-            new RecyclingBufferSupplier(),
-            ignoreFlagDescriptorChecksum
-        );
+    private KafkaLZ4BlockInputStream makeInputStream(ByteBuffer buffer) throws IOException {
+        return new KafkaLZ4BlockInputStream(buffer, BufferSupplier.create(), ignoreFlagDescriptorChecksum);
     }
 
     @Test
