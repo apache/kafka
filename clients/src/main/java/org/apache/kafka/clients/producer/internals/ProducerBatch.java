@@ -182,31 +182,32 @@ public final class ProducerBatch {
         Iterator<MutableRecordBatch> recordBatchIter = memoryRecords.batches().iterator();
         if (!recordBatchIter.hasNext())
             throw new IllegalStateException("Cannot split an empty producer batch.");
-        RecordBatch recordBatch = recordBatchIter.next();
-        if (recordBatchIter.hasNext())
-            throw new IllegalStateException("A producer batch should only have one record batch.");
-
         Iterator<Thunk> thunkIter = thunks.iterator();
         // We always allocate batch size because we are already splitting a big batch.
         // And we also Retain the create time of the original batch.
-        ProducerBatch batch = null;
-        for (Record record : recordBatch) {
-            assert thunkIter.hasNext();
-            Thunk thunk = thunkIter.next();
-            if (batch == null) {
-                batch = createBatchOffAccumulatorForRecord(record, splitBatchSize);
+        while (recordBatchIter.hasNext()) {
+            RecordBatch recordBatch = recordBatchIter.next();
+            ProducerBatch batch = null;
+
+            for (Record record : recordBatch) {
+                assert thunkIter.hasNext();
+                Thunk thunk = thunkIter.next();
+                if (batch == null) {
+                    batch = createBatchOffAccumulatorForRecord(record, splitBatchSize);
+                }
+
+                // A newly created batch can always host the first message.
+                if (!batch.tryAppendForSplit(record.timestamp(), record.key(), record.value(), record.headers(), thunk)) {
+                    batches.add(batch);
+                    batch = createBatchOffAccumulatorForRecord(record, splitBatchSize);
+                    batch.tryAppendForSplit(record.timestamp(), record.key(), record.value(), record.headers(), thunk);
+                }
             }
 
-            // A newly created batch can always host the first message.
-            if (!batch.tryAppendForSplit(record.timestamp(), record.key(), record.value(), record.headers(), thunk)) {
+            // Close the last batch and add it to the batch list after split.
+            if (batch != null)
                 batches.add(batch);
-                batch = createBatchOffAccumulatorForRecord(record, splitBatchSize);
-                batch.tryAppendForSplit(record.timestamp(), record.key(), record.value(), record.headers(), thunk);
-            }
         }
-        // Close the last batch and add it to the batch list after split.
-        if (batch != null)
-            batches.add(batch);
 
         produceFuture.set(ProduceResponse.INVALID_OFFSET, NO_TIMESTAMP, new RecordBatchTooLargeException());
         produceFuture.done();
@@ -218,7 +219,7 @@ public final class ProducerBatch {
                 record.key(), record.value(), record.headers()), batchSize);
         ByteBuffer buffer = ByteBuffer.allocate(initialSize);
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic(), recordsBuilder.compressionType(),
-                TimestampType.CREATE_TIME, 0L, recordsBuilder.isTransactional());
+                TimestampType.CREATE_TIME, 0L);
         return new ProducerBatch(topicPartition, builder, this.createdMs, true);
     }
 
@@ -329,8 +330,9 @@ public final class ProducerBatch {
         return recordsBuilder.isFull();
     }
 
-    public void setProducerState(ProducerIdAndEpoch producerIdAndEpoch, int baseSequence) {
-        recordsBuilder.setProducerState(producerIdAndEpoch.producerId, producerIdAndEpoch.epoch, baseSequence);
+    public void setProducerState(ProducerIdAndEpoch producerIdAndEpoch, int baseSequence, boolean isTransactional) {
+        recordsBuilder.setProducerState(producerIdAndEpoch.producerId, producerIdAndEpoch.epoch,
+                baseSequence, isTransactional);
     }
 
     /**
