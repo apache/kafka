@@ -1008,6 +1008,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                     if (hasExceptionInLastFetch) {
                         currentBatch.ensureValid();
                     } else {
+                        lastRecord = null;
                         currentBatch = batches.next();
                         maybeEnsureValid(currentBatch);
                     }
@@ -1033,8 +1034,6 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                 }
 
                 // If an exception was thrown from the last record. We should throw the same exception here again.
-                // We do not cache the exception thrown last time because the stack trace could be different
-                // from last time.
                 if (hasExceptionInLastFetch) {
                     maybeEnsureValid(lastRecord);
                     return lastRecord;
