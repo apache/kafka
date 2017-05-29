@@ -18,14 +18,17 @@ package org.apache.kafka.jmh.record;
 
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.record.AbstractRecords;
+import org.apache.kafka.common.record.BufferSupplier;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.utils.CloseableIterator;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.Fork;
+import org.openjdk.jmh.annotations.Measurement;
 import org.openjdk.jmh.annotations.OperationsPerInvocation;
 import org.openjdk.jmh.annotations.Param;
 import org.openjdk.jmh.annotations.Scope;
@@ -42,11 +45,14 @@ import java.util.Random;
 import static org.apache.kafka.common.record.RecordBatch.CURRENT_MAGIC_VALUE;
 
 @State(Scope.Benchmark)
+@Fork(value = 1)
+@Warmup(iterations = 5)
+@Measurement(iterations = 15)
 public class RecordBatchIterationBenchmark {
 
-    final Random random = new Random(0);
-    final int batchCount = 5000;
-    final int maxBatchSize = 10;
+    private final Random random = new Random(0);
+    private final int batchCount = 5000;
+    private final int maxBatchSize = 10;
 
     public enum Bytes {
         RANDOM, ONES
@@ -65,30 +71,34 @@ public class RecordBatchIterationBenchmark {
     private Bytes bytes = Bytes.RANDOM;
 
     // zero starting offset is much faster for v1 batches, but that will almost never happen
-    int startingOffset = 42;
+    private final int startingOffset = 42;
 
-    ByteBuffer theBuffer;
+    // Used by measureSingleMessage
+    private ByteBuffer singleBatchBuffer;
 
-    ByteBuffer[] batches;
-    int[] batchSize;
+    // Used by measureVariableBatchSize
+    private ByteBuffer[] batchBuffers;
+    private int[] batchSizes;
+    private BufferSupplier bufferSupplier;
 
     @Setup
     public void init() {
-        theBuffer = createBatch(1);
+        bufferSupplier = BufferSupplier.create();
+        singleBatchBuffer = createBatch(1);
 
-        batches = new ByteBuffer[batchCount];
-        batchSize = new int[batchCount];
+        batchBuffers = new ByteBuffer[batchCount];
+        batchSizes = new int[batchCount];
         for (int i = 0; i < batchCount; ++i) {
             int size = random.nextInt(maxBatchSize) + 1;
-            batches[i] = createBatch(size);
-            this.batchSize[i] = size;
+            batchBuffers[i] = createBatch(size);
+            batchSizes[i] = size;
         }
     }
 
     private ByteBuffer createBatch(int batchSize) {
         byte[] value = new byte[messageSize];
         final ByteBuffer buf = ByteBuffer.allocate(
-            AbstractRecords.sizeInBytesUpperBound(messageVersion, new byte[]{}, value, new Header[]{}) * batchSize
+            AbstractRecords.sizeInBytesUpperBound(messageVersion, new byte[0], value, new Header[0]) * batchSize
         );
 
         final MemoryRecordsBuilder builder =
@@ -109,26 +119,24 @@ public class RecordBatchIterationBenchmark {
         return builder.build().buffer();
     }
 
-    @Fork(value = 1)
-    @Warmup(iterations = 5)
     @Benchmark
-    public void measureSingleMessage(Blackhole bh) throws IOException {
-        for (RecordBatch batch : MemoryRecords.readableRecords(theBuffer.duplicate()).batches()) {
-            for (Record record : batch) {
-                bh.consume(record);
+    public void measureIteratorForBatchWithSingleMessage(Blackhole bh) throws IOException {
+        for (RecordBatch batch : MemoryRecords.readableRecords(singleBatchBuffer.duplicate()).batches()) {
+            try (CloseableIterator<Record> iterator = batch.streamingIterator(bufferSupplier)) {
+                while (iterator.hasNext())
+                    bh.consume(iterator.next());
             }
         }
     }
 
-    @Fork(value = 1)
-    @Warmup(iterations = 5)
     @OperationsPerInvocation(value = batchCount)
     @Benchmark
-    public void measureVariableBatchSize(Blackhole bh) throws IOException {
+    public void measureStreamingIteratorForVariableBatchSize(Blackhole bh) throws IOException {
         for (int i = 0; i < batchCount; ++i) {
-            for (RecordBatch batch : MemoryRecords.readableRecords(batches[i].duplicate()).batches()) {
-                for (Record record : batch) {
-                    bh.consume(record);
+            for (RecordBatch batch : MemoryRecords.readableRecords(batchBuffers[i].duplicate()).batches()) {
+                try (CloseableIterator<Record> iterator = batch.streamingIterator(bufferSupplier)) {
+                    while (iterator.hasNext())
+                        bh.consume(iterator.next());
                 }
             }
         }
