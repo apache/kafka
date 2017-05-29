@@ -158,7 +158,7 @@ public class ResetIntegrationTest {
         TestUtils.waitForCondition(consumerGroupInactive, TIMEOUT_MULTIPLIER * STREAMS_CONSUMER_TIMEOUT,
             "Streams Application consumer group did not time out after " + (TIMEOUT_MULTIPLIER * STREAMS_CONSUMER_TIMEOUT) + " ms.");
 
-        // insert bad record to maks sure intermediate user topic gets seekToEnd()
+        // insert bad record to make sure intermediate user topic gets seekToEnd()
         mockTime.sleep(1);
         IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
                 INTERMEDIATE_USER_TOPIC,
