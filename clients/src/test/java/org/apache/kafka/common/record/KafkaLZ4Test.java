@@ -46,12 +46,13 @@ import static org.junit.Assert.assertTrue;
 @RunWith(value = Parameterized.class)
 public class KafkaLZ4Test {
 
+    private final static Random RANDOM = new Random(0);
+
     private final boolean useBrokenFlagDescriptorChecksum;
     private final boolean ignoreFlagDescriptorChecksum;
     private final byte[] payload;
     private final boolean close;
     private final boolean blockChecksum;
-    private final static Random RANDOM = new Random(0);
 
     static class Payload {
         String name;
@@ -101,11 +102,8 @@ public class KafkaLZ4Test {
         return values;
     }
 
-    public KafkaLZ4Test(
-        boolean useBrokenFlagDescriptorChecksum,
-        boolean ignoreFlagDescriptorChecksum,
-        boolean blockChecksum, boolean close, Payload payload
-    ) {
+    public KafkaLZ4Test(boolean useBrokenFlagDescriptorChecksum, boolean ignoreFlagDescriptorChecksum,
+                        boolean blockChecksum, boolean close, Payload payload) {
         this.useBrokenFlagDescriptorChecksum = useBrokenFlagDescriptorChecksum;
         this.ignoreFlagDescriptorChecksum = ignoreFlagDescriptorChecksum;
         this.payload = payload.payload;
@@ -257,15 +255,13 @@ public class KafkaLZ4Test {
         byte[] compressed = compressedBytes();
 
         int sliceOffset = 12;
-        ByteBuffer buffer;
-        ByteBuffer slice;
 
-        buffer = ByteBuffer.allocate(compressed.length + sliceOffset + 123);
+        ByteBuffer buffer = ByteBuffer.allocate(compressed.length + sliceOffset + 123);
         buffer.position(sliceOffset);
         buffer.put(compressed).flip();
         buffer.position(sliceOffset);
 
-        slice = buffer.slice();
+        ByteBuffer slice = buffer.slice();
         testDecompression(slice);
 
         int offset = 42;
@@ -300,8 +296,7 @@ public class KafkaLZ4Test {
     public void testSkip() throws Exception {
         if (!close || (useBrokenFlagDescriptorChecksum && !ignoreFlagDescriptorChecksum)) return;
 
-        final KafkaLZ4BlockInputStream in =
-            makeInputStream(ByteBuffer.wrap(compressedBytes()));
+        final KafkaLZ4BlockInputStream in = makeInputStream(ByteBuffer.wrap(compressedBytes()));
 
         int n = 100;
         int remaining = payload.length;
