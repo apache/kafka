@@ -37,6 +37,8 @@ import static org.apache.kafka.common.record.KafkaLZ4BlockOutputStream.MAGIC;
  * A partial implementation of the v1.5.1 LZ4 Frame format.
  *
  * @see <a href="https://github.com/lz4/lz4/wiki/lz4_Frame_format.md">LZ4 Frame Format</a>
+ *
+ * This class is not thread-safe.
  */
 public final class KafkaLZ4BlockInputStream extends InputStream {
 
@@ -59,21 +61,22 @@ public final class KafkaLZ4BlockInputStream extends InputStream {
     private static final XXHash32 CHECKSUM = XXHashFactory.fastestInstance().hash32();
 
     private final ByteBuffer in;
-
-    // maintain a separate ByteBuffer reference to read from, so we can point
-    // it directly to the input buffer whe reading uncompressed blocks
-    private ByteBuffer theBuffer;
-    private final ByteBuffer decompressionBuffer;
-    private final int maxBlockSize;
     private final boolean ignoreFlagDescriptorChecksum;
+    private final ByteBuffer decompressionBuffer;
+    // `flg` and `maxBlockSize` are effectively final, they are initialised in the `readHeader` method that is only
+    // invoked from the constructor
     private FLG flg;
-    private BD bd;
+    private int maxBlockSize;
+
+    // If a block is compressed, this is the same as `decompressionBuffer`. If a block is not compressed, this is
+    // a slice of `in` to avoid unnecessary copies.
+    private ByteBuffer decompressedBuffer;
     private boolean finished;
 
     /**
      * Create a new {@link InputStream} that will decompress data using the LZ4 algorithm.
      *
-     * @param in The stream to decompress
+     * @param in The byte buffer to decompress
      * @param ignoreFlagDescriptorChecksum for compatibility with old kafka clients, ignore incorrect HC byte
      * @throws IOException
      */
@@ -81,7 +84,6 @@ public final class KafkaLZ4BlockInputStream extends InputStream {
         this.ignoreFlagDescriptorChecksum = ignoreFlagDescriptorChecksum;
         this.in = in.duplicate().order(ByteOrder.LITTLE_ENDIAN);
         readHeader();
-        maxBlockSize = bd.getBlockMaximumSize();
         decompressionBuffer = bufferSupplier.get(maxBlockSize);
         if (!decompressionBuffer.hasArray() || decompressionBuffer.arrayOffset() != 0) {
             // require array backed decompression buffer with zero offset
@@ -101,7 +103,7 @@ public final class KafkaLZ4BlockInputStream extends InputStream {
     }
 
     /**
-     * Reads the magic number and frame descriptor from the underlying {@link InputStream}.
+     * Reads the magic number and frame descriptor from input buffer.
      *
      * @throws IOException
      */
@@ -118,7 +120,7 @@ public final class KafkaLZ4BlockInputStream extends InputStream {
         in.mark();
 
         flg = FLG.fromByte(in.get());
-        bd = BD.fromByte(in.get());
+        maxBlockSize = BD.fromByte(in.get()).getBlockMaximumSize();
 
         if (flg.isContentSizeSet()) {
             if (in.remaining() < 8) {
@@ -196,16 +198,14 @@ public final class KafkaLZ4BlockInputStream extends InputStream {
                 }
                 decompressionBuffer.position(0);
                 decompressionBuffer.limit(bufferSize);
-                theBuffer = decompressionBuffer;
+                decompressedBuffer = decompressionBuffer;
             } catch (LZ4Exception e) {
                 throw new IOException(e);
             }
         } else {
-            theBuffer = in.slice();
-            theBuffer.limit(blockSize);
+            decompressedBuffer = in.slice();
+            decompressedBuffer.limit(blockSize);
         }
-
-        int offset = in.position() + blockSize;
 
         // verify checksum
         if (flg.isBlockChecksumSet()) {
@@ -213,13 +213,14 @@ public final class KafkaLZ4BlockInputStream extends InputStream {
             int hash = in.hasArray() ?
                        CHECKSUM.hash(in.array(), in.arrayOffset() + in.position(), blockSize, 0) :
                        CHECKSUM.hash(in, in.position(), blockSize, 0);
-            if (hash != in.getInt(offset)) {
+            in.position(in.position() + blockSize);
+            if (hash != in.getInt()) {
                 throw new IOException(BLOCK_HASH_MISMATCH);
             }
-            offset += 4;
         }
-
-        in.position(offset);
+        else {
+            in.position(in.position() + blockSize);
+        }
     }
 
     @Override
@@ -234,7 +235,7 @@ public final class KafkaLZ4BlockInputStream extends InputStream {
             return -1;
         }
 
-        return theBuffer.get() & 0xFF;
+        return decompressedBuffer.get() & 0xFF;
     }
 
     @Override
@@ -251,7 +252,7 @@ public final class KafkaLZ4BlockInputStream extends InputStream {
         }
         len = Math.min(len, available());
 
-        theBuffer.get(b, off, len);
+        decompressedBuffer.get(b, off, len);
         return len;
     }
 
@@ -267,13 +268,13 @@ public final class KafkaLZ4BlockInputStream extends InputStream {
             return 0;
         }
         int skipped = (int) Math.min(n, available());
-        theBuffer.position(theBuffer.position() + skipped);
+        decompressedBuffer.position(decompressedBuffer.position() + skipped);
         return skipped;
     }
 
     @Override
     public int available() throws IOException {
-        return theBuffer == null ? 0 : theBuffer.remaining();
+        return decompressedBuffer == null ? 0 : decompressedBuffer.remaining();
     }
 
     @Override
