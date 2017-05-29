@@ -79,8 +79,13 @@ class MeteredSegmentedBytesStore extends WrappedStateStore.AbstractStateStore im
     }
 
     @Override
-    public KeyValueIterator<Bytes, byte[]> fetch(final Bytes key, long timeFrom, long timeTo) {
+    public KeyValueIterator<Bytes, byte[]> fetch(final Bytes key, final long timeFrom, final long timeTo) {
         return new MeteredSegmentedBytesStoreIterator(inner.fetch(key, timeFrom, timeTo), this.fetchTime);
+    }
+
+    @Override
+    public KeyValueIterator<Bytes, byte[]> fetch(final Bytes keyFrom, final Bytes keyTo, final long from, final long to) {
+        return new MeteredSegmentedBytesStoreIterator(inner.fetch(keyFrom, keyTo, from, to), this.fetchTime);
     }
 
     @Override

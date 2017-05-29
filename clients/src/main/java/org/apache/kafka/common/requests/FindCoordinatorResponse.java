@@ -25,7 +25,6 @@ import java.nio.ByteBuffer;
 
 public class FindCoordinatorResponse extends AbstractResponse {
 
-    private static final String THROTTLE_TIME_KEY_NAME = "throttle_time_ms";
     private static final String ERROR_CODE_KEY_NAME = "error_code";
     private static final String ERROR_MESSAGE_KEY_NAME = "error_message";
     private static final String COORDINATOR_KEY_NAME = "coordinator";

@@ -73,6 +73,8 @@ import java.util.concurrent.TimeUnit;
 
 import static org.apache.kafka.common.utils.Utils.getHost;
 import static org.apache.kafka.common.utils.Utils.getPort;
+import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE;
+import static org.apache.kafka.streams.StreamsConfig.PROCESSING_GUARANTEE_CONFIG;
 
 /**
  * A Kafka client that allows for performing continuous computation on input coming from one or more input topics and
@@ -263,7 +265,11 @@ public class KafkaStreams {
         public synchronized void onChange(final StreamThread thread,
                                           final StreamThread.State newState,
                                           final StreamThread.State oldState) {
-            threadState.put(thread.getId(), newState);
+            if (newState != StreamThread.State.DEAD) {
+                threadState.put(thread.getId(), newState);
+            } else {
+                threadState.remove(thread.getId());
+            }
             if (newState == StreamThread.State.PARTITIONS_REVOKED ||
                 newState == StreamThread.State.ASSIGNING_PARTITIONS) {
                 setState(State.REBALANCING);
@@ -409,7 +415,7 @@ public class KafkaStreams {
     private void checkBrokerVersionCompatibility() throws StreamsException {
         final StreamsKafkaClient client = new StreamsKafkaClient(config);
 
-        client.checkBrokerCompatibility();
+        client.checkBrokerCompatibility(EXACTLY_ONCE.equals(config.getString(PROCESSING_GUARANTEE_CONFIG)));
 
         try {
             client.close();

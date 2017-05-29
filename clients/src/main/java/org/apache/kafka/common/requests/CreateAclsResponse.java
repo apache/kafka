@@ -25,7 +25,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class CreateAclsResponse extends AbstractResponse {
-    private final static String THROTTLE_TIME_MS = "throttle_time_ms";
     private final static String CREATION_RESPONSES = "creation_responses";
     private final static String ERROR_CODE = "error_code";
     private final static String ERROR_MESSAGE = "error_message";
@@ -57,7 +56,7 @@ public class CreateAclsResponse extends AbstractResponse {
     }
 
     public CreateAclsResponse(Struct struct) {
-        this.throttleTimeMs = struct.getInt(THROTTLE_TIME_MS);
+        this.throttleTimeMs = struct.getInt(THROTTLE_TIME_KEY_NAME);
         this.aclCreationResponses = new ArrayList<>();
         for (Object responseStructObj : struct.getArray(CREATION_RESPONSES)) {
             Struct responseStruct = (Struct) responseStructObj;
@@ -75,7 +74,7 @@ public class CreateAclsResponse extends AbstractResponse {
     @Override
     protected Struct toStruct(short version) {
         Struct struct = new Struct(ApiKeys.CREATE_ACLS.responseSchema(version));
-        struct.set(THROTTLE_TIME_MS, throttleTimeMs);
+        struct.set(THROTTLE_TIME_KEY_NAME, throttleTimeMs);
         List<Struct> responseStructs = new ArrayList<>();
         for (AclCreationResponse response : aclCreationResponses) {
             Struct responseStruct = struct.instance(CREATION_RESPONSES);

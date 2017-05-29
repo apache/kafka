@@ -97,18 +97,18 @@ public class RegexSourceIntegrationTest {
 
     @BeforeClass
     public static void startKafkaCluster() throws Exception {
-        CLUSTER.createTopic(TOPIC_1);
-        CLUSTER.createTopic(TOPIC_2);
-        CLUSTER.createTopic(TOPIC_A);
-        CLUSTER.createTopic(TOPIC_C);
-        CLUSTER.createTopic(TOPIC_Y);
-        CLUSTER.createTopic(TOPIC_Z);
-        CLUSTER.createTopic(FA_TOPIC);
-        CLUSTER.createTopic(FOO_TOPIC);
+        CLUSTER.createTopics(
+            TOPIC_1,
+            TOPIC_2,
+            TOPIC_A,
+            TOPIC_C,
+            TOPIC_Y,
+            TOPIC_Z,
+            FA_TOPIC,
+            FOO_TOPIC,
+            DEFAULT_OUTPUT_TOPIC);
         CLUSTER.createTopic(PARTITIONED_TOPIC_1, 2, 1);
         CLUSTER.createTopic(PARTITIONED_TOPIC_2, 2, 1);
-        CLUSTER.createTopic(DEFAULT_OUTPUT_TOPIC);
-
     }
 
     @Before
@@ -191,8 +191,7 @@ public class RegexSourceIntegrationTest {
 
         final StreamsConfig streamsConfig = new StreamsConfig(streamsConfiguration);
 
-        CLUSTER.createTopic("TEST-TOPIC-A");
-        CLUSTER.createTopic("TEST-TOPIC-B");
+        CLUSTER.createTopics("TEST-TOPIC-A", "TEST-TOPIC-B");
 
         final KStreamBuilder builder = new KStreamBuilder();
 

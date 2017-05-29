@@ -30,6 +30,7 @@ import org.junit.{After, Before, Test}
 import kafka.utils._
 import kafka.server.{BrokerTopicStats, KafkaConfig}
 import kafka.server.epoch.{EpochEntry, LeaderEpochFileCache}
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
@@ -169,6 +170,33 @@ class LogTest {
   }
 
   @Test
+  def testInitializationOfProducerSnapshotsUpgradePath(): Unit = {
+    // simulate the upgrade path by creating a new log with several segments, deleting the
+    // snapshot files, and then reloading the log
+
+    val log = createLog(64, messagesPerSegment = 10)
+    assertEquals(None, log.oldestProducerSnapshotOffset)
+
+    for (i <- 0 to 100) {
+      val record = new SimpleRecord(time.milliseconds, i.toString.getBytes)
+      log.appendAsLeader(TestUtils.records(List(record)), leaderEpoch = 0)
+    }
+
+    assertTrue(log.logSegments.size >= 2)
+    log.close()
+
+    logDir.listFiles.filter(f => f.isFile && f.getName.endsWith(Log.PidSnapshotFileSuffix)).foreach { file =>
+      Files.delete(file.toPath)
+    }
+
+    val reloadedLog = createLog(64, messagesPerSegment = 10)
+    val expectedSnapshotsOffsets = log.logSegments.toSeq.reverse.take(2).map(_.baseOffset) ++ Seq(reloadedLog.logEndOffset)
+    expectedSnapshotsOffsets.foreach { offset =>
+      assertTrue(Log.producerSnapshotFile(logDir, offset).exists)
+    }
+  }
+
+  @Test
   def testPidMapOffsetUpdatedForNonIdempotentData() {
     val log = createLog(2048)
     val records = TestUtils.records(List(new SimpleRecord(time.milliseconds, "key".getBytes, "value".getBytes)))
@@ -194,9 +222,9 @@ class LogTest {
     records.batches.asScala.foreach(_.setPartitionLeaderEpoch(0))
 
     val filtered = ByteBuffer.allocate(2048)
-    records.filterTo(new RecordFilter {
+    records.filterTo(new TopicPartition("foo", 0), new RecordFilter {
       override def shouldRetain(recordBatch: RecordBatch, record: Record): Boolean = !record.hasKey
-    }, filtered)
+    }, filtered, Int.MaxValue)
     filtered.flip()
     val filteredRecords = MemoryRecords.readableRecords(filtered)
 
@@ -238,9 +266,9 @@ class LogTest {
     records.batches.asScala.foreach(_.setPartitionLeaderEpoch(0))
 
     val filtered = ByteBuffer.allocate(2048)
-    records.filterTo(new RecordFilter {
+    records.filterTo(new TopicPartition("foo", 0), new RecordFilter {
       override def shouldRetain(recordBatch: RecordBatch, record: Record): Boolean = !record.hasKey
-    }, filtered)
+    }, filtered, Int.MaxValue)
     filtered.flip()
     val filteredRecords = MemoryRecords.readableRecords(filtered)
 

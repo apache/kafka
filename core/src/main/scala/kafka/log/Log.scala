@@ -56,7 +56,8 @@ object LogAppendInfo {
 /**
  * Struct to hold various quantities we compute about each message set before appending to the log
  *
- * @param firstOffset The first offset in the message set
+ * @param firstOffset The first offset in the message set unless the message format is less than V2 and we are appending
+ *                    to the follower. In that case, this will be the last offset for performance reasons.
  * @param lastOffset The last offset in the message set
  * @param maxTimestamp The maximum timestamp of the message set.
  * @param offsetOfMaxTimestamp The offset of the message with the maximum timestamp.
@@ -317,7 +318,7 @@ class Log(@volatile var dir: File,
         loadProducersFromLog(stateManager, fetchDataInfo.records)
     }
     stateManager.updateMapEndOffset(segment.baseOffset)
-    val bytesTruncated = segment.recover(config.maxMessageSize, stateManager, leaderEpochCache)
+    val bytesTruncated = segment.recover(stateManager, leaderEpochCache)
 
     // once we have recovered the segment's data, take a snapshot to ensure that we won't
     // need to reload the same segment again while recovering another segment.
@@ -421,25 +422,41 @@ class Log(@volatile var dir: File,
 
   private def loadProducerState(lastOffset: Long): Unit = lock synchronized {
     info(s"Loading producer state from offset $lastOffset for partition $topicPartition")
-    val currentTimeMs = time.milliseconds
-    producerStateManager.truncateAndReload(logStartOffset, lastOffset, currentTimeMs)
 
-    // only do the potentially expensive reloading of the last snapshot offset is lower than the
-    // log end offset (which would be the case on first startup) and there are active producers.
-    // if there are no active producers, then truncating shouldn't change that fact (although it
-    // could cause a producerId to expire earlier than expected), so we can skip the loading.
-    // This is an optimization for users which are not yet using idempotent/transactional features yet.
-    if (lastOffset > producerStateManager.mapEndOffset || !producerStateManager.isEmpty) {
-      logSegments(producerStateManager.mapEndOffset, lastOffset).foreach { segment =>
-        val startOffset = math.max(segment.baseOffset, producerStateManager.mapEndOffset)
-        val fetchDataInfo = segment.read(startOffset, Some(lastOffset), Int.MaxValue)
-        if (fetchDataInfo != null)
-          loadProducersFromLog(producerStateManager, fetchDataInfo.records)
+    if (producerStateManager.latestSnapshotOffset.isEmpty) {
+      // if there are no snapshots to load producer state from, we assume that the brokers are
+      // being upgraded, which means there would be no previous idempotent/transactional producers
+      // to load state for. To avoid an expensive scan through all of the segments, we take
+      // empty snapshots from the start of the last two segments and the last offset. The purpose
+      // of taking the segment snapshots is to avoid the full scan in the case that the log needs
+      // truncation.
+      val nextLatestSegmentBaseOffset = Option(segments.lowerEntry(activeSegment.baseOffset)).map(_.getValue.baseOffset)
+      val offsetsToSnapshot = Seq(nextLatestSegmentBaseOffset, Some(activeSegment.baseOffset), Some(lastOffset))
+      offsetsToSnapshot.flatten.foreach { offset =>
+        producerStateManager.updateMapEndOffset(offset)
+        producerStateManager.takeSnapshot()
       }
-    }
+    } else {
+      val currentTimeMs = time.milliseconds
+      producerStateManager.truncateAndReload(logStartOffset, lastOffset, currentTimeMs)
 
-    producerStateManager.updateMapEndOffset(lastOffset)
-    updateFirstUnstableOffset()
+      // only do the potentially expensive reloading of the last snapshot offset is lower than the
+      // log end offset (which would be the case on first startup) and there are active producers.
+      // if there are no active producers, then truncating shouldn't change that fact (although it
+      // could cause a producerId to expire earlier than expected), so we can skip the loading.
+      // This is an optimization for users which are not yet using idempotent/transactional features yet.
+      if (lastOffset > producerStateManager.mapEndOffset || !producerStateManager.isEmpty) {
+        logSegments(producerStateManager.mapEndOffset, lastOffset).foreach { segment =>
+          val startOffset = math.max(segment.baseOffset, producerStateManager.mapEndOffset)
+          val fetchDataInfo = segment.read(startOffset, Some(lastOffset), Int.MaxValue)
+          if (fetchDataInfo != null)
+            loadProducersFromLog(producerStateManager, fetchDataInfo.records)
+        }
+      }
+
+      producerStateManager.updateMapEndOffset(lastOffset)
+      updateFirstUnstableOffset()
+    }
   }
 
   private def loadProducersFromLog(producerStateManager: ProducerStateManager, records: Records): Unit = {
@@ -734,6 +751,8 @@ class Log(@volatile var dir: File,
       // update the first offset if on the first message. For magic versions older than 2, we use the last offset
       // to avoid the need to decompress the data (the last offset can be obtained directly from the wrapper message).
       // For magic version 2, we can get the first offset directly from the batch header.
+      // When appending to the leader, we will update LogAppendInfo.baseOffset with the correct value. In the follower
+      // case, validation will be more lenient.
       if (firstOffset < 0)
         firstOffset = if (batch.magic >= RecordBatch.MAGIC_VALUE_V2) batch.baseOffset else batch.lastOffset
 

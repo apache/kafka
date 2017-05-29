@@ -38,8 +38,11 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 class Segments {
     private static final Logger log = LoggerFactory.getLogger(Segments.class);
-
     static final long MIN_SEGMENT_INTERVAL = 60 * 1000L;
+
+    static long segmentInterval(long retentionPeriod, int numSegments) {
+        return Math.max(retentionPeriod / (numSegments - 1), MIN_SEGMENT_INTERVAL);
+    }
 
     private final ConcurrentHashMap<Long, Segment> segments = new ConcurrentHashMap<>();
     private final String name;
@@ -52,7 +55,7 @@ class Segments {
     Segments(final String name, final long retentionPeriod, final int numSegments) {
         this.name = name;
         this.numSegments = numSegments;
-        this.segmentInterval = Math.max(retentionPeriod / (numSegments - 1), MIN_SEGMENT_INTERVAL);
+        this.segmentInterval = segmentInterval(retentionPeriod, numSegments);
         // Create a date formatter. Formatted timestamps are used as segment name suffixes
         this.formatter = new SimpleDateFormat("yyyyMMddHHmm");
         this.formatter.setTimeZone(new SimpleTimeZone(0, "UTC"));

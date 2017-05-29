@@ -55,7 +55,7 @@ public class Requirements {
     }
 
     private static String nullSafeClassName(Object x) {
-        return x == null ? "null" : x.getClass().getCanonicalName();
+        return x == null ? "null" : x.getClass().getName();
     }
 
 }

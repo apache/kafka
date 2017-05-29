@@ -88,19 +88,49 @@ public class DistributedConfig extends WorkerConfig {
      * <code>offset.storage.topic</code>
      */
     public static final String OFFSET_STORAGE_TOPIC_CONFIG = "offset.storage.topic";
-    private static final String OFFSET_STORAGE_TOPIC_CONFIG_DOC = "kafka topic to store connector offsets in";
+    private static final String OFFSET_STORAGE_TOPIC_CONFIG_DOC = "The name of the Kafka topic where connector offsets are stored";
+
+    /**
+     * <code>offset.storage.partitions</code>
+     */
+    public static final String OFFSET_STORAGE_PARTITIONS_CONFIG = "offset.storage.partitions";
+    private static final String OFFSET_STORAGE_PARTITIONS_CONFIG_DOC = "The number of partitions used when creating the offset storage topic";
+
+    /**
+     * <code>offset.storage.replication.factor</code>
+     */
+    public static final String OFFSET_STORAGE_REPLICATION_FACTOR_CONFIG = "offset.storage.replication.factor";
+    private static final String OFFSET_STORAGE_REPLICATION_FACTOR_CONFIG_DOC = "Replication factor used when creating the offset storage topic";
 
     /**
      * <code>config.storage.topic</code>
      */
     public static final String CONFIG_TOPIC_CONFIG = "config.storage.topic";
-    private static final String CONFIG_TOPIC_CONFIG_DOC = "kafka topic to store configs";
+    private static final String CONFIG_TOPIC_CONFIG_DOC = "The name of the Kafka topic where connector configurations are stored";
+
+    /**
+     * <code>config.storage.replication.factor</code>
+     */
+    public static final String CONFIG_STORAGE_REPLICATION_FACTOR_CONFIG = "config.storage.replication.factor";
+    private static final String CONFIG_STORAGE_REPLICATION_FACTOR_CONFIG_DOC = "Replication factor used when creating the configuration storage topic";
 
     /**
      * <code>status.storage.topic</code>
      */
     public static final String STATUS_STORAGE_TOPIC_CONFIG = "status.storage.topic";
-    public static final String STATUS_STORAGE_TOPIC_CONFIG_DOC = "kafka topic to track connector and task status";
+    public static final String STATUS_STORAGE_TOPIC_CONFIG_DOC = "The name of the Kafka topic where connector and task status are stored";
+
+    /**
+     * <code>status.storage.partitions</code>
+     */
+    public static final String STATUS_STORAGE_PARTITIONS_CONFIG = "status.storage.partitions";
+    private static final String STATUS_STORAGE_PARTITIONS_CONFIG_DOC = "The number of partitions used when creating the status storage topic";
+
+    /**
+     * <code>status.storage.replication.factor</code>
+     */
+    public static final String STATUS_STORAGE_REPLICATION_FACTOR_CONFIG = "status.storage.replication.factor";
+    private static final String STATUS_STORAGE_REPLICATION_FACTOR_CONFIG_DOC = "Replication factor used when creating the status storage topic";
 
     static {
         CONFIG = baseConfigDef()
@@ -152,6 +182,12 @@ public class DistributedConfig extends WorkerConfig {
                         atLeast(0L),
                         ConfigDef.Importance.LOW,
                         CommonClientConfigs.RECONNECT_BACKOFF_MS_DOC)
+                .define(CommonClientConfigs.RECONNECT_BACKOFF_MAX_MS_CONFIG,
+                        ConfigDef.Type.LONG,
+                        50L,
+                        atLeast(0L),
+                        ConfigDef.Importance.LOW,
+                        CommonClientConfigs.RECONNECT_BACKOFF_MAX_MS_DOC)
                 .define(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG,
                         ConfigDef.Type.LONG,
                         100L,
@@ -209,14 +245,44 @@ public class DistributedConfig extends WorkerConfig {
                         ConfigDef.Type.STRING,
                         ConfigDef.Importance.HIGH,
                         OFFSET_STORAGE_TOPIC_CONFIG_DOC)
+                .define(OFFSET_STORAGE_PARTITIONS_CONFIG,
+                        ConfigDef.Type.INT,
+                        25,
+                        atLeast(1),
+                        ConfigDef.Importance.LOW,
+                        OFFSET_STORAGE_PARTITIONS_CONFIG_DOC)
+                .define(OFFSET_STORAGE_REPLICATION_FACTOR_CONFIG,
+                        ConfigDef.Type.SHORT,
+                        (short) 3,
+                        atLeast(1),
+                        ConfigDef.Importance.LOW,
+                        OFFSET_STORAGE_REPLICATION_FACTOR_CONFIG_DOC)
                 .define(CONFIG_TOPIC_CONFIG,
                         ConfigDef.Type.STRING,
                         ConfigDef.Importance.HIGH,
                         CONFIG_TOPIC_CONFIG_DOC)
+                .define(CONFIG_STORAGE_REPLICATION_FACTOR_CONFIG,
+                        ConfigDef.Type.SHORT,
+                        (short) 3,
+                        atLeast(1),
+                        ConfigDef.Importance.LOW,
+                        CONFIG_STORAGE_REPLICATION_FACTOR_CONFIG_DOC)
                 .define(STATUS_STORAGE_TOPIC_CONFIG,
                         ConfigDef.Type.STRING,
                         ConfigDef.Importance.HIGH,
-                        STATUS_STORAGE_TOPIC_CONFIG_DOC);
+                        STATUS_STORAGE_TOPIC_CONFIG_DOC)
+                .define(STATUS_STORAGE_PARTITIONS_CONFIG,
+                        ConfigDef.Type.INT,
+                        5,
+                        atLeast(1),
+                        ConfigDef.Importance.LOW,
+                        STATUS_STORAGE_PARTITIONS_CONFIG_DOC)
+                .define(STATUS_STORAGE_REPLICATION_FACTOR_CONFIG,
+                        ConfigDef.Type.SHORT,
+                        (short) 3,
+                        atLeast(1),
+                        ConfigDef.Importance.LOW,
+                        STATUS_STORAGE_REPLICATION_FACTOR_CONFIG_DOC);
     }
 
     public DistributedConfig(Map<String, String> props) {

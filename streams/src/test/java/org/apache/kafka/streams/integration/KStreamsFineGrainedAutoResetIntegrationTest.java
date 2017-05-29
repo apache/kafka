@@ -104,29 +104,30 @@ public class KStreamsFineGrainedAutoResetIntegrationTest {
 
     @BeforeClass
     public static void startKafkaCluster() throws Exception {
-        CLUSTER.createTopic(TOPIC_1_0);
-        CLUSTER.createTopic(TOPIC_2_0);
-        CLUSTER.createTopic(TOPIC_A_0);
-        CLUSTER.createTopic(TOPIC_C_0);
-        CLUSTER.createTopic(TOPIC_Y_0);
-        CLUSTER.createTopic(TOPIC_Z_0);
-        CLUSTER.createTopic(TOPIC_1_1);
-        CLUSTER.createTopic(TOPIC_2_1);
-        CLUSTER.createTopic(TOPIC_A_1);
-        CLUSTER.createTopic(TOPIC_C_1);
-        CLUSTER.createTopic(TOPIC_Y_1);
-        CLUSTER.createTopic(TOPIC_Z_1);
-        CLUSTER.createTopic(TOPIC_1_2);
-        CLUSTER.createTopic(TOPIC_2_2);
-        CLUSTER.createTopic(TOPIC_A_2);
-        CLUSTER.createTopic(TOPIC_C_2);
-        CLUSTER.createTopic(TOPIC_Y_2);
-        CLUSTER.createTopic(TOPIC_Z_2);
-        CLUSTER.createTopic(NOOP);
-        CLUSTER.createTopic(DEFAULT_OUTPUT_TOPIC);
-        CLUSTER.createTopic(OUTPUT_TOPIC_0);
-        CLUSTER.createTopic(OUTPUT_TOPIC_1);
-        CLUSTER.createTopic(OUTPUT_TOPIC_2);
+        CLUSTER.createTopics(
+            TOPIC_1_0,
+            TOPIC_2_0,
+            TOPIC_A_0,
+            TOPIC_C_0,
+            TOPIC_Y_0,
+            TOPIC_Z_0,
+            TOPIC_1_1,
+            TOPIC_2_1,
+            TOPIC_A_1,
+            TOPIC_C_1,
+            TOPIC_Y_1,
+            TOPIC_Z_1,
+            TOPIC_1_2,
+            TOPIC_2_2,
+            TOPIC_A_2,
+            TOPIC_C_2,
+            TOPIC_Y_2,
+            TOPIC_Z_2,
+            NOOP,
+            DEFAULT_OUTPUT_TOPIC,
+            OUTPUT_TOPIC_0,
+            OUTPUT_TOPIC_1,
+            OUTPUT_TOPIC_2);
     }
 
     @Before

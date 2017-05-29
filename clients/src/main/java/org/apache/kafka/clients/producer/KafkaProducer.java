@@ -290,6 +290,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(config.getList(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG));
             this.metadata.update(Cluster.bootstrap(addresses), Collections.<String>emptySet(), time.milliseconds());
             ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(config);
+            Sensor throttleTimeSensor = Sender.throttleTimeSensor(metrics);
             NetworkClient client = new NetworkClient(
                     new Selector(config.getLong(ProducerConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG),
                             this.metrics, time, "producer", channelBuilder),
@@ -297,12 +298,14 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                     clientId,
                     maxInflightRequests,
                     config.getLong(ProducerConfig.RECONNECT_BACKOFF_MS_CONFIG),
+                    config.getLong(ProducerConfig.RECONNECT_BACKOFF_MAX_MS_CONFIG),
                     config.getInt(ProducerConfig.SEND_BUFFER_CONFIG),
                     config.getInt(ProducerConfig.RECEIVE_BUFFER_CONFIG),
                     this.requestTimeoutMs,
                     time,
                     true,
-                    apiVersions);
+                    apiVersions,
+                    throttleTimeSensor);
             this.sender = new Sender(client,
                     this.metadata,
                     this.accumulator,
@@ -374,8 +377,11 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             userConfiguredRetries = true;
         }
         if (idempotenceEnabled && !userConfiguredRetries) {
-            log.info("Overriding the default retries config to " + 3 + " since the idempotent producer is enabled.");
-            return 3;
+            // We recommend setting infinite retries when the idempotent producer is enabled, so it makes sense to make
+            // this the default.
+            log.info("Overriding the default retries config to the recommended value of {} since the idempotent " +
+                    "producer is enabled.", Integer.MAX_VALUE);
+            return Integer.MAX_VALUE;
         }
         if (idempotenceEnabled && config.getInt(ProducerConfig.RETRIES_CONFIG) == 0) {
             throw new ConfigException("Must set " + ProducerConfig.RETRIES_CONFIG + " to non-zero when using the idempotent producer.");
@@ -389,7 +395,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             userConfiguredInflights = true;
         }
         if (idempotenceEnabled && !userConfiguredInflights) {
-            log.info("Overriding the default " + ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION + " to 1 since idempontence is enabled.");
+            log.info("Overriding the default {} to 1 since idempontence is enabled.", ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION);
             return 1;
         }
         if (idempotenceEnabled && config.getInt(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION) != 1) {
@@ -407,13 +413,13 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         }
 
         if (idempotenceEnabled && !userConfiguredAcks) {
-            log.info("Overriding the default " + ProducerConfig.ACKS_CONFIG + " to all since idempotence is enabled");
+            log.info("Overriding the default {} to all since idempotence is enabled.", ProducerConfig.ACKS_CONFIG);
             return -1;
         }
 
         if (idempotenceEnabled && acks != -1) {
             throw new ConfigException("Must set " + ProducerConfig.ACKS_CONFIG + " to all in order to use the idempotent " +
-                    "producer. Otherwise we cannot guarantee idempotence");
+                    "producer. Otherwise we cannot guarantee idempotence.");
         }
         return acks;
     }
@@ -602,7 +608,9 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * Implementation of asynchronously send a record to a topic.
      */
     private Future<RecordMetadata> doSend(ProducerRecord<K, V> record, Callback callback) {
-        ensureProperTransactionalState();
+        if (transactionManager != null)
+            ensureProperTransactionalState();
+
         TopicPartition tp = null;
         try {
             // first make sure the metadata for the topic is available
@@ -637,9 +645,9 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             long timestamp = record.timestamp() == null ? time.milliseconds() : record.timestamp();
             log.trace("Sending record {} with callback {} to topic {} partition {}", record, callback, record.topic(), partition);
             // producer callback will make sure to call both 'callback' and interceptor callback
-            Callback interceptCallback = new InterceptorCallback<>(callback, this.interceptors, tp, transactionManager);
+            Callback interceptCallback = this.interceptors == null ? callback : new InterceptorCallback<>(callback, this.interceptors, tp);
 
-            if (transactionManager != null)
+            if (transactionManager != null && transactionManager.isTransactional())
                 transactionManager.maybeAddPartitionToTransaction(tp);
 
             RecordAccumulator.RecordAppendResult result = accumulator.append(tp, timestamp, serializedKey,
@@ -685,27 +693,17 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     }
 
     private void ensureProperTransactionalState() {
-        if (transactionManager == null)
-            return;
-
         if (transactionManager.isTransactional() && !transactionManager.hasProducerId())
-            throw new IllegalStateException("Cannot perform a 'send' before completing a call to initTransactions when transactions are enabled.");
-
-        if (transactionManager.isFenced())
-            throw new ProducerFencedException("The current producer has been fenced off by a another producer using the same transactional id.");
+            throw new IllegalStateException("Cannot perform a 'send' before completing a call to initTransactions " +
+                    "when transactions are enabled.");
 
         if (transactionManager.isInErrorState()) {
-            String errorMessage =
-                    "Cannot perform send because at least one previous transactional or idempotent request has failed with errors.";
             Exception lastError = transactionManager.lastError();
-            if (lastError != null)
-                throw new KafkaException(errorMessage, lastError);
-            else
-                throw new KafkaException(errorMessage);
+            throw new KafkaException("Cannot perform send because at least one previous transactional or " +
+                    "idempotent request has failed with errors.", lastError);
         }
         if (transactionManager.isCompletingTransaction())
             throw new IllegalStateException("Cannot call send while a commit or abort is in progress.");
-
     }
 
     private void setReadOnly(Headers headers) {
@@ -1008,30 +1006,24 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         private final Callback userCallback;
         private final ProducerInterceptors<K, V> interceptors;
         private final TopicPartition tp;
-        private final TransactionManager transactionManager;
 
-        public InterceptorCallback(Callback userCallback, ProducerInterceptors<K, V> interceptors,
-                                   TopicPartition tp, TransactionManager transactionManager) {
+        private InterceptorCallback(Callback userCallback, ProducerInterceptors<K, V> interceptors, TopicPartition tp) {
             this.userCallback = userCallback;
             this.interceptors = interceptors;
             this.tp = tp;
-            this.transactionManager = transactionManager;
         }
 
         public void onCompletion(RecordMetadata metadata, Exception exception) {
             if (this.interceptors != null) {
                 if (metadata == null) {
-                    this.interceptors.onAcknowledgement(new RecordMetadata(tp, -1, -1, RecordBatch.NO_TIMESTAMP, -1, -1, -1),
-                                                        exception);
+                    this.interceptors.onAcknowledgement(new RecordMetadata(tp, -1, -1, RecordBatch.NO_TIMESTAMP,
+                                    Long.valueOf(-1L), -1, -1), exception);
                 } else {
                     this.interceptors.onAcknowledgement(metadata, exception);
                 }
             }
             if (this.userCallback != null)
                 this.userCallback.onCompletion(metadata, exception);
-
-            if (exception != null && transactionManager != null)
-                transactionManager.setError(exception);
         }
     }
 }

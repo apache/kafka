@@ -245,8 +245,6 @@ class GroupCoordinator(val brokerId: Int,
                           memberId: String,
                           groupAssignment: Map[String, Array[Byte]],
                           responseCallback: SyncCallback) {
-    var delayedGroupStore: Option[DelayedStore] = None
-
     group synchronized {
       if (!group.has(memberId)) {
         responseCallback(Array.empty, Errors.UNKNOWN_MEMBER_ID)
@@ -271,7 +269,7 @@ class GroupCoordinator(val brokerId: Int,
               val missing = group.allMembers -- groupAssignment.keySet
               val assignment = groupAssignment ++ missing.map(_ -> Array.empty[Byte]).toMap
 
-              delayedGroupStore = groupManager.prepareStoreGroup(group, assignment, (error: Errors) => {
+              groupManager.storeGroup(group, assignment, (error: Errors) => {
                 group synchronized {
                   // another member may have joined the group while we were awaiting this callback,
                   // so we must ensure we are still in the AwaitingSync state and the same generation
@@ -297,11 +295,6 @@ class GroupCoordinator(val brokerId: Int,
         }
       }
     }
-
-    // store the group metadata without holding the group lock to avoid the potential
-    // for deadlock if the callback is invoked holding other locks (e.g. the replica
-    // state change lock)
-    delayedGroupStore.foreach(groupManager.store)
   }
 
   def handleLeaveGroup(groupId: String, memberId: String, responseCallback: Errors => Unit) {
@@ -452,15 +445,13 @@ class GroupCoordinator(val brokerId: Int,
                               producerEpoch: Short,
                               offsetMetadata: immutable.Map[TopicPartition, OffsetAndMetadata],
                               responseCallback: immutable.Map[TopicPartition, Errors] => Unit) {
-    var delayedOffsetStore: Option[DelayedStore] = None
     group synchronized {
       if (group.is(Dead)) {
         responseCallback(offsetMetadata.mapValues(_ => Errors.UNKNOWN_MEMBER_ID))
       } else if ((generationId < 0 && group.is(Empty)) || (producerId != NO_PRODUCER_ID)) {
         // the group is only using Kafka to store offsets
         // Also, for transactional offset commits we don't need to validate group membership and the generation.
-        delayedOffsetStore = groupManager.prepareStoreOffsets(group, memberId, generationId,
-          offsetMetadata, responseCallback, producerId, producerEpoch)
+        groupManager.storeOffsets(group, memberId, offsetMetadata, responseCallback, producerId, producerEpoch)
       } else if (group.is(AwaitingSync)) {
         responseCallback(offsetMetadata.mapValues(_ => Errors.REBALANCE_IN_PROGRESS))
       } else if (!group.has(memberId)) {
@@ -470,13 +461,9 @@ class GroupCoordinator(val brokerId: Int,
       } else {
         val member = group.get(memberId)
         completeAndScheduleNextHeartbeatExpiration(group, member)
-        delayedOffsetStore = groupManager.prepareStoreOffsets(group, memberId, generationId,
-          offsetMetadata, responseCallback)
+        groupManager.storeOffsets(group, memberId, offsetMetadata, responseCallback)
       }
     }
-
-    // store the offsets without holding the group lock
-    delayedOffsetStore.foreach(groupManager.store)
   }
 
   def handleFetchOffsets(groupId: String,
@@ -727,7 +714,6 @@ class GroupCoordinator(val brokerId: Int,
   }
 
   def onCompleteJoin(group: GroupMetadata) {
-    var delayedStore: Option[DelayedStore] = None
     group synchronized {
       // remove any members who haven't joined the group yet
       group.notYetRejoinedMembers.foreach { failedMember =>
@@ -740,7 +726,7 @@ class GroupCoordinator(val brokerId: Int,
         if (group.is(Empty)) {
           info(s"Group ${group.groupId} with generation ${group.generationId} is now empty")
 
-          delayedStore = groupManager.prepareStoreGroup(group, Map.empty, error => {
+          groupManager.storeGroup(group, Map.empty, error => {
             if (error != Errors.NONE) {
               // we failed to write the empty group metadata. If the broker fails before another rebalance,
               // the previous generation written to the log will become active again (and most likely timeout).
@@ -773,9 +759,6 @@ class GroupCoordinator(val brokerId: Int,
         }
       }
     }
-
-    // call without holding the group lock
-    delayedStore.foreach(groupManager.store)
   }
 
   def tryCompleteHeartbeat(group: GroupMetadata, member: MemberMetadata, heartbeatDeadline: Long, forceComplete: () => Boolean) = {

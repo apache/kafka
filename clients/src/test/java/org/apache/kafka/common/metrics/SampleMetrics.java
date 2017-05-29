@@ -14,10 +14,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.errors;
+package org.apache.kafka.common.metrics;
 
-public class ProducerIdAuthorizationException extends ApiException {
-    public ProducerIdAuthorizationException(final String message) {
-        super(message);
-    }
+import org.apache.kafka.common.MetricNameTemplate;
+
+/**
+ * A registry of predefined Metrics for the MetricsTest.java class.
+ */
+public class SampleMetrics {
+
+    public static final MetricNameTemplate METRIC1 = new MetricNameTemplate("name", "group", "The first metric used in testMetricName()", "key1", "key2");
+    public static final MetricNameTemplate METRIC2 = new MetricNameTemplate("name", "group", "The second metric used in testMetricName()", "key1", "key2");
+
+    public static final MetricNameTemplate METRIC_WITH_INHERITED_TAGS = new MetricNameTemplate("inherited.tags", "group", "inherited.tags in testMetricName", "parent-tag", "child-tag");
 }
+

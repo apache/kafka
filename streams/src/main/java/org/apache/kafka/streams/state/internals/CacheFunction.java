@@ -14,10 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.errors;
 
-public class BrokerAuthorizationException extends ApiException {
-    public BrokerAuthorizationException(final String message) {
-        super(message);
-    }
+package org.apache.kafka.streams.state.internals;
+
+import org.apache.kafka.common.utils.Bytes;
+
+interface CacheFunction {
+    Bytes key(Bytes cacheKey);
+    Bytes cacheKey(Bytes cacheKey);
 }

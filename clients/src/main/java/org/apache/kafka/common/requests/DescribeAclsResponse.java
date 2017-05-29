@@ -33,7 +33,6 @@ import java.util.List;
 import java.util.Map;
 
 public class DescribeAclsResponse extends AbstractResponse {
-    private final static String THROTTLE_TIME_MS = "throttle_time_ms";
     private final static String ERROR_CODE = "error_code";
     private final static String ERROR_MESSAGE = "error_message";
     private final static String RESOURCES = "resources";
@@ -50,7 +49,7 @@ public class DescribeAclsResponse extends AbstractResponse {
     }
 
     public DescribeAclsResponse(Struct struct) {
-        this.throttleTimeMs = struct.getInt(THROTTLE_TIME_MS);
+        this.throttleTimeMs = struct.getInt(THROTTLE_TIME_KEY_NAME);
         Errors error = Errors.forCode(struct.getShort(ERROR_CODE));
         if (error != Errors.NONE) {
             this.throwable = error.exception(struct.getString(ERROR_MESSAGE));
@@ -73,7 +72,7 @@ public class DescribeAclsResponse extends AbstractResponse {
     @Override
     protected Struct toStruct(short version) {
         Struct struct = new Struct(ApiKeys.DESCRIBE_ACLS.responseSchema(version));
-        struct.set(THROTTLE_TIME_MS, throttleTimeMs);
+        struct.set(THROTTLE_TIME_KEY_NAME, throttleTimeMs);
         if (throwable != null) {
             Errors errors = Errors.forException(throwable);
             struct.set(ERROR_CODE, errors.code());

@@ -349,6 +349,7 @@ object ReplicaFetcherThread {
     def isEmpty: Boolean = underlying.fetchData().isEmpty
     def offset(topicPartition: TopicPartition): Long =
       underlying.fetchData().asScala(topicPartition).fetchOffset
+    override def toString = underlying.toString
   }
 
   private[server] class PartitionData(val underlying: FetchResponse.PartitionData) extends AbstractFetcherThread.PartitionData {
@@ -367,5 +368,7 @@ object ReplicaFetcherThread {
       case Errors.NONE => None
       case e => Some(e.exception)
     }
+
+    override def toString = underlying.toString
   }
 }

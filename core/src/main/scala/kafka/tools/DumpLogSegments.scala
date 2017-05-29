@@ -337,8 +337,8 @@ object DumpLogSegments {
     val messageSet = FileRecords.open(file, false)
     var validBytes = 0L
     var lastOffset = -1L
-    val batches = messageSet.batches(maxMessageSize).asScala
-    for (batch <- batches) {
+
+    for (batch <- messageSet.batches.asScala) {
       if (isDeepIteration) {
         for (record <- batch.asScala) {
           if (lastOffset == -1)
@@ -353,11 +353,13 @@ object DumpLogSegments {
           print("offset: " + record.offset + " position: " + validBytes +
             " " + batch.timestampType + ": " + record.timestamp + " isvalid: " + record.isValid +
             " keysize: " + record.keySize + " valuesize: " + record.valueSize + " magic: " + batch.magic +
-            " compresscodec: " + batch.compressionType + " crc: " + record.checksum)
+            " compresscodec: " + batch.compressionType)
 
           if (batch.magic >= RecordBatch.MAGIC_VALUE_V2) {
-            print(" sequence: " + record.sequence +
+            print(" crc: " + batch.checksum + " sequence: " + record.sequence +
               " headerKeys: " + record.headers.map(_.key).mkString("[", ",", "]"))
+          } else {
+            print(" crc: " + record.checksumOrNull)
           }
 
           if (batch.isControlBatch) {

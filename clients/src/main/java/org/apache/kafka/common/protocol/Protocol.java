@@ -1516,6 +1516,9 @@ public class Protocol {
     );
 
     public static final Schema TXN_OFFSET_COMMIT_REQUEST_V0 = new Schema(
+            new Field("transactional_id",
+                    STRING,
+                    "The transactional id corresponding to the transaction."),
             new Field("consumer_group_id",
                     STRING,
                     "Id of the associated consumer group to commit offsets for."),

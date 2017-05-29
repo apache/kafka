@@ -19,20 +19,32 @@ package org.apache.kafka.clients.producer.internals;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.RecordBatchTooLargeException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.record.AbstractRecords;
-import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.record.CompressionRatioEstimator;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MemoryRecordsBuilder;
+import org.apache.kafka.common.record.MutableRecordBatch;
+import org.apache.kafka.common.record.Record;
+import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.requests.ProduceResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
+import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+
+import static org.apache.kafka.common.record.RecordBatch.NO_TIMESTAMP;
+
 
 /**
  * A batch of records that is or will be sent.
@@ -51,6 +63,7 @@ public final class ProducerBatch {
     private final MemoryRecordsBuilder recordsBuilder;
 
     private final AtomicInteger attempts = new AtomicInteger(0);
+    private final boolean isSplitBatch;
     int recordCount;
     int maxRecordSize;
     private long lastAttemptMs;
@@ -61,6 +74,10 @@ public final class ProducerBatch {
     private boolean retry;
 
     public ProducerBatch(TopicPartition tp, MemoryRecordsBuilder recordsBuilder, long now) {
+        this(tp, recordsBuilder, now, false);
+    }
+
+    public ProducerBatch(TopicPartition tp, MemoryRecordsBuilder recordsBuilder, long now, boolean isSplitBatch) {
         this.createdMs = now;
         this.lastAttemptMs = now;
         this.recordsBuilder = recordsBuilder;
@@ -69,6 +86,10 @@ public final class ProducerBatch {
         this.produceFuture = new ProduceRequestResult(topicPartition);
         this.completed = new AtomicBoolean();
         this.retry = false;
+        this.isSplitBatch = isSplitBatch;
+        float compressionRatioEstimation = CompressionRatioEstimator.estimation(topicPartition.topic(),
+                                                                                recordsBuilder.compressionType());
+        recordsBuilder.setEstimatedCompressionRatio(compressionRatioEstimation);
     }
 
     /**
@@ -80,17 +101,42 @@ public final class ProducerBatch {
         if (!recordsBuilder.hasRoomFor(timestamp, key, value)) {
             return null;
         } else {
-            long checksum = this.recordsBuilder.append(timestamp, key, value, headers);
+            Long checksum = this.recordsBuilder.append(timestamp, key, value, headers);
             this.maxRecordSize = Math.max(this.maxRecordSize, AbstractRecords.sizeInBytesUpperBound(magic(), key, value, headers));
             this.lastAppendTime = now;
             FutureRecordMetadata future = new FutureRecordMetadata(this.produceFuture, this.recordCount,
                                                                    timestamp, checksum,
                                                                    key == null ? -1 : key.length,
                                                                    value == null ? -1 : value.length);
-            if (callback != null)
-                thunks.add(new Thunk(callback, future));
+            // we have to keep every future returned to the users in case the batch needs to be
+            // split to several new batches and resent.
+            thunks.add(new Thunk(callback, future));
             this.recordCount++;
             return future;
+        }
+    }
+
+    /**
+     * This method is only used by {@link #split(int)} when splitting a large batch to smaller ones.
+     * @return true if the record has been successfully appended, false otherwise.
+     */
+    private boolean tryAppendForSplit(long timestamp, ByteBuffer key, ByteBuffer value, Header[] headers, Thunk thunk) {
+        if (!recordsBuilder.hasRoomFor(timestamp, key, value)) {
+            return false;
+        } else {
+            // No need to get the CRC.
+            this.recordsBuilder.append(timestamp, key, value);
+            this.maxRecordSize = Math.max(this.maxRecordSize,
+                                          AbstractRecords.sizeInBytesUpperBound(magic(), key, value, headers));
+            FutureRecordMetadata future = new FutureRecordMetadata(this.produceFuture, this.recordCount,
+                                                                   timestamp, thunk.future.checksumOrNull(),
+                                                                   key == null ? -1 : key.remaining(),
+                                                                   value == null ? -1 : value.remaining());
+            // Chain the future to the original thunk.
+            thunk.future.chain(future);
+            this.thunks.add(thunk);
+            this.recordCount++;
+            return true;
         }
     }
 
@@ -116,9 +162,11 @@ public final class ProducerBatch {
             try {
                 if (exception == null) {
                     RecordMetadata metadata = thunk.future.value();
-                    thunk.callback.onCompletion(metadata, null);
+                    if (thunk.callback != null)
+                        thunk.callback.onCompletion(metadata, null);
                 } else {
-                    thunk.callback.onCompletion(null, exception);
+                    if (thunk.callback != null)
+                        thunk.callback.onCompletion(null, exception);
                 }
             } catch (Exception e) {
                 log.error("Error executing user-provided callback on message for topic-partition '{}'", topicPartition, e);
@@ -128,6 +176,52 @@ public final class ProducerBatch {
         produceFuture.done();
     }
 
+    public Deque<ProducerBatch> split(int splitBatchSize) {
+        Deque<ProducerBatch> batches = new ArrayDeque<>();
+        MemoryRecords memoryRecords = recordsBuilder.build();
+        Iterator<MutableRecordBatch> recordBatchIter = memoryRecords.batches().iterator();
+        if (!recordBatchIter.hasNext())
+            throw new IllegalStateException("Cannot split an empty producer batch.");
+        RecordBatch recordBatch = recordBatchIter.next();
+        if (recordBatchIter.hasNext())
+            throw new IllegalStateException("A producer batch should only have one record batch.");
+
+        Iterator<Thunk> thunkIter = thunks.iterator();
+        // We always allocate batch size because we are already splitting a big batch.
+        // And we also Retain the create time of the original batch.
+        ProducerBatch batch = null;
+        for (Record record : recordBatch) {
+            assert thunkIter.hasNext();
+            Thunk thunk = thunkIter.next();
+            if (batch == null) {
+                batch = createBatchOffAccumulatorForRecord(record, splitBatchSize);
+            }
+
+            // A newly created batch can always host the first message.
+            if (!batch.tryAppendForSplit(record.timestamp(), record.key(), record.value(), record.headers(), thunk)) {
+                batches.add(batch);
+                batch = createBatchOffAccumulatorForRecord(record, splitBatchSize);
+                batch.tryAppendForSplit(record.timestamp(), record.key(), record.value(), record.headers(), thunk);
+            }
+        }
+        // Close the last batch and add it to the batch list after split.
+        if (batch != null)
+            batches.add(batch);
+
+        produceFuture.set(ProduceResponse.INVALID_OFFSET, NO_TIMESTAMP, new RecordBatchTooLargeException());
+        produceFuture.done();
+        return batches;
+    }
+
+    private ProducerBatch createBatchOffAccumulatorForRecord(Record record, int batchSize) {
+        int initialSize = Math.max(AbstractRecords.sizeInBytesUpperBound(magic(),
+                record.key(), record.value(), record.headers()), batchSize);
+        ByteBuffer buffer = ByteBuffer.allocate(initialSize);
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic(), recordsBuilder.compressionType(),
+                TimestampType.CREATE_TIME, 0L, recordsBuilder.isTransactional());
+        return new ProducerBatch(topicPartition, builder, this.createdMs, true);
+    }
+
     /**
      * A callback and the associated FutureRecordMetadata argument to pass to it.
      */
@@ -135,7 +229,7 @@ public final class ProducerBatch {
         final Callback callback;
         final FutureRecordMetadata future;
 
-        public Thunk(Callback callback, FutureRecordMetadata future) {
+        Thunk(Callback callback, FutureRecordMetadata future) {
             this.callback = callback;
             this.future = future;
         }
@@ -155,7 +249,7 @@ public final class ProducerBatch {
      * This methods closes this batch and sets {@code expiryErrorMessage} if the batch has timed out.
      * {@link #expirationDone()} must be invoked to complete the produce future and invoke callbacks.
      */
-    public boolean maybeExpire(int requestTimeoutMs, long retryBackoffMs, long now, long lingerMs, boolean isFull) {
+    boolean maybeExpire(int requestTimeoutMs, long retryBackoffMs, long now, long lingerMs, boolean isFull) {
         if (!this.inRetry() && isFull && requestTimeoutMs < (now - this.lastAppendTime))
             expiryErrorMessage = (now - this.lastAppendTime) + " ms has passed since last append";
         else if (!this.inRetry() && requestTimeoutMs < (createdTimeMs(now) - lingerMs))
@@ -177,7 +271,7 @@ public final class ProducerBatch {
     void expirationDone() {
         if (expiryErrorMessage == null)
             throw new IllegalStateException("Batch has not expired");
-        this.done(-1L, RecordBatch.NO_TIMESTAMP,
+        this.done(-1L, NO_TIMESTAMP,
                   new TimeoutException("Expiring " + recordCount + " record(s) for " + topicPartition + ": " + expiryErrorMessage));
     }
 
@@ -208,6 +302,10 @@ public final class ProducerBatch {
         this.drainedMs = Math.max(drainedMs, nowMs);
     }
 
+    boolean isSplitBatch() {
+        return isSplitBatch;
+    }
+
     /**
      * Returns if the batch is been retried for sending to kafka
      */
@@ -223,8 +321,8 @@ public final class ProducerBatch {
         return recordsBuilder.sizeInBytes();
     }
 
-    public double compressionRate() {
-        return recordsBuilder.compressionRate();
+    public double compressionRatio() {
+        return recordsBuilder.compressionRatio();
     }
 
     public boolean isFull() {
@@ -245,6 +343,11 @@ public final class ProducerBatch {
 
     public void close() {
         recordsBuilder.close();
+        if (!recordsBuilder.isControlBatch()) {
+            CompressionRatioEstimator.updateEstimation(topicPartition.topic(),
+                                                       recordsBuilder.compressionType(),
+                                                       (float) recordsBuilder.compressionRatio());
+        }
     }
 
     public void abort() {

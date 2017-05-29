@@ -22,6 +22,7 @@ import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.internals.ConsumerCoordinator;
 import org.apache.kafka.clients.consumer.internals.ConsumerInterceptors;
+import org.apache.kafka.clients.consumer.internals.ConsumerMetrics;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.clients.consumer.internals.Fetcher;
@@ -510,10 +511,12 @@ public class KafkaConsumerTest {
         // fetch offset for two topics
         Map<TopicPartition, Long> offsets = new HashMap<>();
         offsets.put(tp0, offset1);
+        client.prepareResponseFrom(offsetResponse(offsets, Errors.NONE), coordinator);
+        assertEquals(offset1, consumer.committed(tp0).offset());
+
+        offsets.remove(tp0);
         offsets.put(tp1, offset2);
         client.prepareResponseFrom(offsetResponse(offsets, Errors.NONE), coordinator);
-
-        assertEquals(offset1, consumer.committed(tp0).offset());
         assertEquals(offset2, consumer.committed(tp1).offset());
     }
 
@@ -1149,6 +1152,10 @@ public class KafkaConsumerTest {
 
         client.prepareResponseFrom(offsetResponse(offsets, Errors.NONE), coordinator);
         assertEquals(0, consumer.committed(tp0).offset());
+
+        offsets.remove(tp0);
+        offsets.put(tp1, 0L);
+        client.prepareResponseFrom(offsetResponse(offsets, Errors.NONE), coordinator);
         assertEquals(0, consumer.committed(tp1).offset());
 
         // fetch and verify consumer's position in the two partitions
@@ -1534,6 +1541,8 @@ public class KafkaConsumerTest {
         ConsumerInterceptors<String, String> interceptors = null;
 
         Metrics metrics = new Metrics();
+        ConsumerMetrics metricsRegistry = new ConsumerMetrics(metricGroupPrefix);
+
         SubscriptionState subscriptions = new SubscriptionState(autoResetStrategy);
         ConsumerNetworkClient consumerClient = new ConsumerNetworkClient(client, metadata, time, retryBackoffMs, requestTimeoutMs);
         ConsumerCoordinator consumerCoordinator = new ConsumerCoordinator(
@@ -1568,7 +1577,7 @@ public class KafkaConsumerTest {
                 metadata,
                 subscriptions,
                 metrics,
-                metricGroupPrefix,
+                metricsRegistry.fetcherMetrics,
                 time,
                 retryBackoffMs,
                 IsolationLevel.READ_UNCOMMITTED);

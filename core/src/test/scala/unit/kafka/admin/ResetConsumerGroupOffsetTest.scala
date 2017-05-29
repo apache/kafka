@@ -25,7 +25,8 @@ import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.common.errors.WakeupException
 import org.apache.kafka.common.serialization.StringDeserializer
-import org.junit.{Before, Test}
+import org.junit.{Before, After, Test}
+import scala.collection.mutable.ArrayBuffer
 
 /**
   * Test cases by:
@@ -44,6 +45,8 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
   val topic2 = "foo2"
   val group = "test.group"
   val props = new Properties
+  val consumerGroupServices = new ArrayBuffer[KafkaConsumerGroupService]
+  val executors = new ArrayBuffer[ConsumerGroupExecutor]
 
   /**
     * Implementations must override this method to return a set of KafkaConfigs. This method will be invoked for every
@@ -58,20 +61,29 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
     props.setProperty("group.id", group)
   }
 
+  @After
+  override def tearDown() {
+    try {
+      executors.foreach(_.shutdown())
+      consumerGroupServices.foreach(_.close())
+    } finally {
+      super.tearDown()
+    }
+  }
+
   @Test
   def testResetOffsetsNotExistingGroup() {
-    new ConsumerGroupExecutor(brokerList, 1, group, topic1)
+    createConsumerGroupExecutor(brokerList, 1, group, topic1)
 
     val cgcArgs = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", "missing.group", "--all-topics", "--to-current")
     val opts = new ConsumerGroupCommandOptions(cgcArgs)
-    val consumerGroupCommand = new KafkaConsumerGroupService(opts)
+    val consumerGroupCommand = createConsumerGroupService(opts)
 
     TestUtils.waitUntilTrue(() => {
       val assignmentsToReset = consumerGroupCommand.resetOffsets()
       assignmentsToReset == Map.empty
     }, "Expected to have an empty assignations map.")
 
-    consumerGroupCommand.close()
   }
 
   @Test
@@ -106,9 +118,9 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
 
     val cgcArgs = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--all-topics")
     val opts = new ConsumerGroupCommandOptions(cgcArgs)
-    val consumerGroupCommand = new KafkaConsumerGroupService(opts)
+    val consumerGroupCommand = createConsumerGroupService(opts)
 
-    val executor = new ConsumerGroupExecutor(brokerList, 1, group, topic1)
+    val executor = createConsumerGroupExecutor(brokerList, 1, group, topic1)
 
     TestUtils.waitUntilTrue(() => {
       val (_, assignmentsOption) = consumerGroupCommand.describeGroup()
@@ -127,7 +139,7 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
 
     val cgcArgs1 = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--all-topics", "--to-datetime", format.format(calendar.getTime), "--execute")
     val opts1 = new ConsumerGroupCommandOptions(cgcArgs1)
-    val consumerGroupCommand1 = new KafkaConsumerGroupService(opts1)
+    val consumerGroupCommand1 = createConsumerGroupService(opts1)
 
     TestUtils.waitUntilTrue(() => {
       val assignmentsToReset = consumerGroupCommand1.resetOffsets()
@@ -137,7 +149,6 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
     printConsumerGroup()
 
     AdminUtils.deleteTopic(zkUtils, topic1)
-    consumerGroupCommand.close()
   }
 
   @Test
@@ -152,9 +163,9 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
 
     val cgcArgs = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--all-topics")
     val opts = new ConsumerGroupCommandOptions(cgcArgs)
-    val consumerGroupCommand = new KafkaConsumerGroupService(opts)
+    val consumerGroupCommand = createConsumerGroupService(opts)
 
-    val executor = new ConsumerGroupExecutor(brokerList, 1, group, topic1)
+    val executor = createConsumerGroupExecutor(brokerList, 1, group, topic1)
 
     TestUtils.waitUntilTrue(() => {
       val (_, assignmentsOption) = consumerGroupCommand.describeGroup()
@@ -172,7 +183,7 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
 
     val cgcArgs1 = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--all-topics", "--to-datetime", format.format(checkpoint), "--execute")
     val opts1 = new ConsumerGroupCommandOptions(cgcArgs1)
-    val consumerGroupCommand1 = new KafkaConsumerGroupService(opts1)
+    val consumerGroupCommand1 = createConsumerGroupService(opts1)
 
     TestUtils.waitUntilTrue(() => {
       val assignmentsToReset = consumerGroupCommand1.resetOffsets()
@@ -182,14 +193,13 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
     printConsumerGroup()
 
     AdminUtils.deleteTopic(zkUtils, topic1)
-    consumerGroupCommand.close()
   }
 
   @Test
   def testResetOffsetsByDuration() {
     val cgcArgs = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--all-topics", "--by-duration", "PT1M", "--execute")
     val opts = new ConsumerGroupCommandOptions(cgcArgs)
-    val consumerGroupCommand = new KafkaConsumerGroupService(opts)
+    val consumerGroupCommand = createConsumerGroupService(opts)
 
     AdminUtils.createTopic(zkUtils, topic1, 1, 1)
 
@@ -203,14 +213,13 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
     printConsumerGroup()
 
     AdminUtils.deleteTopic(zkUtils, topic1)
-    consumerGroupCommand.close()
   }
 
   @Test
   def testResetOffsetsByDurationToEarliest() {
     val cgcArgs = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--all-topics", "--by-duration", "PT0.1S", "--execute")
     val opts = new ConsumerGroupCommandOptions(cgcArgs)
-    val consumerGroupCommand = new KafkaConsumerGroupService(opts)
+    val consumerGroupCommand = createConsumerGroupService(opts)
 
     AdminUtils.createTopic(zkUtils, topic1, 1, 1)
 
@@ -223,14 +232,13 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
 
     printConsumerGroup()
     AdminUtils.deleteTopic(zkUtils, topic1)
-    consumerGroupCommand.close()
   }
 
   @Test
   def testResetOffsetsToEarliest() {
     val cgcArgs = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--all-topics", "--to-earliest", "--execute")
     val opts = new ConsumerGroupCommandOptions(cgcArgs)
-    val consumerGroupCommand = new KafkaConsumerGroupService(opts)
+    val consumerGroupCommand = createConsumerGroupService(opts)
 
     AdminUtils.createTopic(zkUtils, topic1, 1, 1)
 
@@ -243,14 +251,13 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
 
     printConsumerGroup()
     AdminUtils.deleteTopic(zkUtils, topic1)
-    consumerGroupCommand.close()
   }
 
   @Test
   def testResetOffsetsToLatest() {
     val cgcArgs = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--all-topics", "--to-latest", "--execute")
     val opts = new ConsumerGroupCommandOptions(cgcArgs)
-    val consumerGroupCommand = new KafkaConsumerGroupService(opts)
+    val consumerGroupCommand = createConsumerGroupService(opts)
 
     AdminUtils.createTopic(zkUtils, topic1, 1, 1)
 
@@ -266,14 +273,13 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
 
     printConsumerGroup()
     AdminUtils.deleteTopic(zkUtils, topic1)
-    consumerGroupCommand.close()
   }
 
   @Test
   def testResetOffsetsToCurrentOffset() {
     val cgcArgs = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--all-topics", "--to-current", "--execute")
     val opts = new ConsumerGroupCommandOptions(cgcArgs)
-    val consumerGroupCommand = new KafkaConsumerGroupService(opts)
+    val consumerGroupCommand = createConsumerGroupService(opts)
 
     AdminUtils.createTopic(zkUtils, topic1, 1, 1)
 
@@ -288,12 +294,11 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
 
     printConsumerGroup()
     AdminUtils.deleteTopic(zkUtils, topic1)
-    consumerGroupCommand.close()
   }
 
   private def produceConsumeAndShutdown(consumerGroupCommand: KafkaConsumerGroupService, numConsumers: Int = 1, topic: String, totalMessages: Int) {
     TestUtils.produceMessages(servers, topic, totalMessages, acks = 1, 100 * 1000)
-    val executor = new ConsumerGroupExecutor(brokerList, numConsumers, group, topic)
+    val executor = createConsumerGroupExecutor(brokerList, numConsumers, group, topic)
 
     TestUtils.waitUntilTrue(() => {
       val (_, assignmentsOption) = consumerGroupCommand.describeGroup()
@@ -315,7 +320,7 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
   def testResetOffsetsToSpecificOffset() {
     val cgcArgs = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--all-topics", "--to-offset", "1", "--execute")
     val opts = new ConsumerGroupCommandOptions(cgcArgs)
-    val consumerGroupCommand = new KafkaConsumerGroupService(opts)
+    val consumerGroupCommand = createConsumerGroupService(opts)
 
     AdminUtils.createTopic(zkUtils, topic1, 1, 1)
 
@@ -329,14 +334,13 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
 
     printConsumerGroup()
     AdminUtils.deleteTopic(zkUtils, topic1)
-    consumerGroupCommand.close()
   }
 
   @Test
   def testResetOffsetsShiftPlus() {
     val cgcArgs = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--all-topics", "--shift-by", "50", "--execute")
     val opts = new ConsumerGroupCommandOptions(cgcArgs)
-    val consumerGroupCommand = new KafkaConsumerGroupService(opts)
+    val consumerGroupCommand = createConsumerGroupService(opts)
 
     AdminUtils.createTopic(zkUtils, topic1, 1, 1)
 
@@ -351,14 +355,13 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
 
     printConsumerGroup()
     AdminUtils.deleteTopic(zkUtils, topic1)
-    consumerGroupCommand.close()
   }
 
   @Test
   def testResetOffsetsShiftMinus() {
     val cgcArgs = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--all-topics", "--shift-by", "-50", "--execute")
     val opts = new ConsumerGroupCommandOptions(cgcArgs)
-    val consumerGroupCommand = new KafkaConsumerGroupService(opts)
+    val consumerGroupCommand = createConsumerGroupService(opts)
 
     AdminUtils.createTopic(zkUtils, topic1, 1, 1)
 
@@ -374,14 +377,13 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
 
     printConsumerGroup()
     AdminUtils.deleteTopic(zkUtils, topic1)
-    consumerGroupCommand.close()
   }
 
   @Test
   def testResetOffsetsShiftByLowerThanEarliest() {
     val cgcArgs = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--all-topics", "--shift-by", "-150", "--execute")
     val opts = new ConsumerGroupCommandOptions(cgcArgs)
-    val consumerGroupCommand = new KafkaConsumerGroupService(opts)
+    val consumerGroupCommand = createConsumerGroupService(opts)
 
     AdminUtils.createTopic(zkUtils, topic1, 1, 1)
 
@@ -396,14 +398,13 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
 
     printConsumerGroup()
     AdminUtils.deleteTopic(zkUtils, topic1)
-    consumerGroupCommand.close()
   }
 
   @Test
   def testResetOffsetsShiftByHigherThanLatest() {
     val cgcArgs = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--all-topics", "--shift-by", "150", "--execute")
     val opts = new ConsumerGroupCommandOptions(cgcArgs)
-    val consumerGroupCommand = new KafkaConsumerGroupService(opts)
+    val consumerGroupCommand = createConsumerGroupService(opts)
 
     AdminUtils.createTopic(zkUtils, topic1, 1, 1)
 
@@ -418,14 +419,13 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
 
     printConsumerGroup()
     AdminUtils.deleteTopic(zkUtils, topic1)
-    consumerGroupCommand.close()
   }
 
   @Test
   def testResetOffsetsToEarliestOnOneTopic() {
     val cgcArgs = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--topic", topic1, "--to-earliest", "--execute")
     val opts = new ConsumerGroupCommandOptions(cgcArgs)
-    val consumerGroupCommand = new KafkaConsumerGroupService(opts)
+    val consumerGroupCommand = createConsumerGroupService(opts)
 
     AdminUtils.createTopic(zkUtils, topic1, 1, 1)
 
@@ -438,14 +438,13 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
 
     printConsumerGroup()
     AdminUtils.deleteTopic(zkUtils, topic1)
-    consumerGroupCommand.close()
   }
 
   @Test
   def testResetOffsetsToEarliestOnOneTopicAndPartition() {
     val cgcArgs = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--topic", String.format("%s:1", topic1), "--to-earliest", "--execute")
     val opts = new ConsumerGroupCommandOptions(cgcArgs)
-    val consumerGroupCommand = new KafkaConsumerGroupService(opts)
+    val consumerGroupCommand = createConsumerGroupService(opts)
 
     AdminUtils.createTopic(zkUtils, topic1, 2, 1)
 
@@ -458,7 +457,6 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
 
     printConsumerGroup()
     AdminUtils.deleteTopic(zkUtils, topic1)
-    consumerGroupCommand.close()
   }
 
   @Test
@@ -469,7 +467,7 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
       "--topic", topic2,
       "--to-earliest", "--execute")
     val opts = new ConsumerGroupCommandOptions(cgcArgs)
-    val consumerGroupCommand = new KafkaConsumerGroupService(opts)
+    val consumerGroupCommand = createConsumerGroupService(opts)
 
     AdminUtils.createTopic(zkUtils, topic1, 1, 1)
     AdminUtils.createTopic(zkUtils, topic2, 1, 1)
@@ -486,7 +484,6 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
     printConsumerGroup()
     AdminUtils.deleteTopic(zkUtils, topic1)
     AdminUtils.deleteTopic(zkUtils, topic2)
-    consumerGroupCommand.close()
   }
 
   @Test
@@ -497,7 +494,7 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
       "--topic", String.format("%s:1", topic2),
       "--to-earliest", "--execute")
     val opts = new ConsumerGroupCommandOptions(cgcArgs)
-    val consumerGroupCommand = new KafkaConsumerGroupService(opts)
+    val consumerGroupCommand = createConsumerGroupService(opts)
 
     AdminUtils.createTopic(zkUtils, topic1, 2, 1)
     AdminUtils.createTopic(zkUtils, topic2, 2, 1)
@@ -514,14 +511,13 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
     printConsumerGroup()
     AdminUtils.deleteTopic(zkUtils, topic1)
     AdminUtils.deleteTopic(zkUtils, topic2)
-    consumerGroupCommand.close()
   }
 
   @Test
   def testResetOffsetsExportImportPlan() {
     val cgcArgs = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--all-topics", "--to-earliest", "--export")
     val opts = new ConsumerGroupCommandOptions(cgcArgs)
-    val consumerGroupCommand = new KafkaConsumerGroupService(opts)
+    val consumerGroupCommand = createConsumerGroupService(opts)
 
     AdminUtils.createTopic(zkUtils, topic1, 2, 1)
 
@@ -540,8 +536,7 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
 
     val cgcArgsExec = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--all-topics", "--to-earliest", "--from-file", file.getCanonicalPath)
     val optsExec = new ConsumerGroupCommandOptions(cgcArgsExec)
-    val consumerGroupCommandExec = new KafkaConsumerGroupService(optsExec)
-
+    val consumerGroupCommandExec = createConsumerGroupService(optsExec)
 
     TestUtils.waitUntilTrue(() => {
         val assignmentsToReset = consumerGroupCommandExec.resetOffsets()
@@ -552,7 +547,6 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
 
     printConsumerGroup()
     AdminUtils.deleteTopic(zkUtils, topic1)
-    consumerGroupCommand.close()
   }
 
   private def printConsumerGroup() {
@@ -565,6 +559,17 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
     ConsumerGroupCommand.main(cgcArgs)
   }
 
+  private def createConsumerGroupExecutor(brokerList: String, numConsumers: Int, groupId: String, topic: String): ConsumerGroupExecutor = {
+    val executor = new ConsumerGroupExecutor(brokerList, numConsumers, groupId, topic)
+    executors += executor
+    executor
+  }
+
+  private def createConsumerGroupService(opts: ConsumerGroupCommandOptions): KafkaConsumerGroupService = {
+    val service = new KafkaConsumerGroupService(opts)
+    consumerGroupServices += service
+    service
+  }
 }
 
 

@@ -31,6 +31,8 @@ buildscript {
   }
 }
 
+apply from: "$rootDir/gradle/dependencies.gradle"
+
 allprojects {
   apply plugin: 'idea'
   apply plugin: "jacoco"
@@ -52,6 +54,13 @@ allprojects {
           if (rejected) {
             selection.reject('Release candidate')
           }
+        }
+      }
+    }
+    configurations {
+      runtime {
+        resolutionStrategy {
+          force "com.fasterxml.jackson.core:jackson-annotations:$versions.jackson"
         }
       }
     }
@@ -91,7 +100,6 @@ ext {
   generatedDocsDir = new File("${project.rootDir}/docs/generated")
 }
 
-apply from: "$rootDir/gradle/dependencies.gradle"
 apply from: file('wrapper.gradle')
 
 if (new File('.git').exists()) {
@@ -609,10 +617,17 @@ project(':core') {
     standardOutput = new File(generatedDocsDir, "topic_config.html").newOutputStream()
   }
 
+  task genConsumerMetricsDocs(type: JavaExec) {
+    classpath = sourceSets.test.runtimeClasspath
+    main = 'org.apache.kafka.clients.consumer.internals.ConsumerMetrics'
+    if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
+    standardOutput = new File(generatedDocsDir, "consumer_metrics.html").newOutputStream()
+  }
+
   task siteDocsTar(dependsOn: ['genProtocolErrorDocs', 'genProtocolApiKeyDocs', 'genProtocolMessageDocs',
                                'genProducerConfigDocs', 'genConsumerConfigDocs', 'genKafkaConfigDocs',
                                'genTopicConfigDocs', ':connect:runtime:genConnectConfigDocs', ':connect:runtime:genConnectTransformationDocs',
-                               ':streams:genStreamsConfigDocs'], type: Tar) {
+                               ':streams:genStreamsConfigDocs', 'genConsumerMetricsDocs'], type: Tar) {
     classifier = 'site-docs'
     compression = Compression.GZIP
     from project.file("$rootDir/docs")

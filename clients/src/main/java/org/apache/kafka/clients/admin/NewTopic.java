@@ -56,6 +56,14 @@ public class NewTopic {
         return name;
     }
 
+    public int partitions() {
+        return numPartitions;
+    }
+
+    public short replicationFactor() {
+        return replicationFactor;
+    }
+
     /**
      * Set the configuration to use on the new topic.
      *
@@ -81,5 +89,17 @@ public class NewTopic {
                 return new TopicDetails(numPartitions, replicationFactor);
             }
         }
+    }
+
+    @Override
+    public String toString() {
+        StringBuilder bld = new StringBuilder();
+        bld.append("(name=").append(name).
+                append(", numPartitions=").append(numPartitions).
+                append(", replicationFactor=").append(replicationFactor).
+                append(", replicasAssignments=").append(replicasAssignments).
+                append(", configs=").append(configs).
+                append(")");
+        return bld.toString();
     }
 }
