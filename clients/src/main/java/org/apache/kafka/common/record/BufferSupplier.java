@@ -14,6 +14,19 @@ import java.util.Map;
  */
 public abstract class BufferSupplier implements AutoCloseable {
 
+    public static final BufferSupplier NO_CACHING = new BufferSupplier() {
+        @Override
+        public ByteBuffer get(int capacity) {
+            return ByteBuffer.allocate(capacity);
+        }
+
+        @Override
+        public void release(ByteBuffer buffer) {}
+
+        @Override
+        public void close() {}
+    };
+
     public static BufferSupplier create() {
         return new DefaultSupplier();
     }

@@ -223,7 +223,7 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
      */
     @Override
     public CloseableIterator<Record> iterator() {
-        return iterator(BufferSupplier.create());
+        return iterator(BufferSupplier.NO_CACHING);
     }
 
     private CloseableIterator<Record> iterator(BufferSupplier bufferSupplier) {
@@ -311,7 +311,8 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
         private final long absoluteBaseOffset;
         private final byte wrapperMagic;
 
-        private DeepRecordsIterator(AbstractLegacyRecordBatch wrapperEntry, boolean ensureMatchingMagic, int maxMessageSize, BufferSupplier bufferSupplier) {
+        private DeepRecordsIterator(AbstractLegacyRecordBatch wrapperEntry, boolean ensureMatchingMagic,
+                                    int maxMessageSize, BufferSupplier bufferSupplier) {
             LegacyRecord wrapperRecord = wrapperEntry.outerRecord();
             this.wrapperMagic = wrapperRecord.magic();
 
