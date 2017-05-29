@@ -209,7 +209,7 @@ public class MemoryRecordsTest {
         }
     }
 
-    @Parameterized.Parameters
+    @Parameterized.Parameters(name = "{index} magic={0}, firstOffset={1}, compressionType={2}")
     public static Collection<Object[]> data() {
         List<Object[]> values = new ArrayList<>();
         for (long firstOffset : asList(0L, 57L))
