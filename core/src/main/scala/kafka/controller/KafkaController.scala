@@ -146,18 +146,20 @@ object KafkaController extends Logging {
   }
 }
 
-class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState: BrokerState, time: Time, metrics: Metrics, threadNamePrefix: Option[String] = None) extends Logging with KafkaMetricsGroup {
+class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, time: Time, metrics: Metrics, threadNamePrefix: Option[String] = None) extends Logging with KafkaMetricsGroup {
   this.logIdent = "[Controller " + config.brokerId + "]: "
   private val stateChangeLogger = KafkaController.stateChangeLogger
   val controllerContext = new ControllerContext(zkUtils)
   val partitionStateMachine = new PartitionStateMachine(this)
   val replicaStateMachine = new ReplicaStateMachine(this)
 
-  // have a separate scheduler for the controller to be able to start and stop independently of the
-  // kafka server
-  private val kafkaScheduler = new KafkaScheduler(1)
+  // have a separate scheduler for the controller to be able to start and stop independently of the kafka server
+  // visible for testing
+  private[controller] val kafkaScheduler = new KafkaScheduler(1)
 
-  private val eventManager = new ControllerEventManager(controllerContext.stats.rateAndTimeMetrics, _ => updateMetrics())
+  // visible for testing
+  private[controller] val eventManager = new ControllerEventManager(controllerContext.stats.rateAndTimeMetrics,
+    _ => updateMetrics())
 
   val topicDeletionManager = new TopicDeletionManager(this, eventManager)
   val offlinePartitionSelector = new OfflinePartitionLeaderSelector(controllerContext, config)
@@ -290,7 +292,6 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
   /**
    * This callback is invoked by the zookeeper leader elector when the current broker resigns as the controller. This is
    * required to clean up internal controller data structures
-   * Note:We need to resign as a controller out of the controller lock to avoid potential deadlock issue
    */
   def onControllerResignation() {
     debug("Controller resigning, broker id %d".format(config.brokerId))
@@ -318,9 +319,7 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
     replicaStateMachine.shutdown()
     deregisterBrokerChangeListener()
 
-    // reset controller context
     resetControllerContext()
-    brokerState.newState(RunningAsBroker)
 
     info("Broker %d resigned as the controller".format(config.brokerId))
   }
@@ -746,18 +745,15 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
   }
 
   def updateLeaderAndIsrCache(topicAndPartitions: Set[TopicAndPartition] = controllerContext.partitionReplicaAssignment.keySet) {
-    val leaderAndIsrInfo = zkUtils.getPartitionLeaderAndIsrForTopics(zkUtils.zkClient, topicAndPartitions)
-    for((topicPartition, leaderIsrAndControllerEpoch) <- leaderAndIsrInfo)
+    val leaderAndIsrInfo = zkUtils.getPartitionLeaderAndIsrForTopics(topicAndPartitions)
+    for ((topicPartition, leaderIsrAndControllerEpoch) <- leaderAndIsrInfo)
       controllerContext.partitionLeadershipInfo.put(topicPartition, leaderIsrAndControllerEpoch)
   }
 
   private def areReplicasInIsr(topic: String, partition: Int, replicas: Seq[Int]): Boolean = {
-    zkUtils.getLeaderAndIsrForPartition(topic, partition) match {
-      case Some(leaderAndIsr) =>
-        val replicasNotInIsr = replicas.filterNot(r => leaderAndIsr.isr.contains(r))
-        replicasNotInIsr.isEmpty
-      case None => false
-    }
+    zkUtils.getLeaderAndIsrForPartition(topic, partition).map { leaderAndIsr =>
+      replicas.forall(leaderAndIsr.isr.contains)
+    }.getOrElse(false)
   }
 
   private def moveReassignedPartitionLeaderIfRequired(topicAndPartition: TopicAndPartition,
@@ -824,22 +820,16 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
   }
 
   private def updateLeaderEpochAndSendRequest(topicAndPartition: TopicAndPartition, replicasToReceiveRequest: Seq[Int], newAssignedReplicas: Seq[Int]) {
-    brokerRequestBatch.newBatch()
     updateLeaderEpoch(topicAndPartition.topic, topicAndPartition.partition) match {
       case Some(updatedLeaderIsrAndControllerEpoch) =>
         try {
+          brokerRequestBatch.newBatch()
           brokerRequestBatch.addLeaderAndIsrRequestForBrokers(replicasToReceiveRequest, topicAndPartition.topic,
             topicAndPartition.partition, updatedLeaderIsrAndControllerEpoch, newAssignedReplicas)
           brokerRequestBatch.sendRequestsToBrokers(controllerContext.epoch)
         } catch {
-          case e : IllegalStateException => {
-            // Resign if the controller is in an illegal state
-            error("Forcing the controller to resign")
-            brokerRequestBatch.clear()
-            triggerControllerMove()
-
-            throw e
-          }
+          case e: IllegalStateException =>
+            handleIllegalState(e)
         }
         stateChangeLogger.trace(("Controller %d epoch %d sent LeaderAndIsr request %s with new assigned replica list %s " +
           "to leader %d for partition being reassigned %s").format(config.brokerId, controllerContext.epoch, updatedLeaderIsrAndControllerEpoch,
@@ -986,14 +976,8 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
       brokerRequestBatch.addUpdateMetadataRequestForBrokers(brokers, partitions)
       brokerRequestBatch.sendRequestsToBrokers(epoch)
     } catch {
-      case e : IllegalStateException => {
-        // Resign if the controller is in an illegal state
-        error("Forcing the controller to resign")
-        brokerRequestBatch.clear()
-        triggerControllerMove()
-
-        throw e
-      }
+      case e: IllegalStateException =>
+        handleIllegalState(e)
     }
   }
 
@@ -1425,39 +1409,32 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
           controllerContext.partitionsOnBroker(id)
             .map(topicAndPartition => (topicAndPartition, controllerContext.partitionReplicaAssignment(topicAndPartition).size))
 
-      allPartitionsAndReplicationFactorOnBroker.foreach {
-        case(topicAndPartition, replicationFactor) =>
-          controllerContext.partitionLeadershipInfo.get(topicAndPartition).foreach { currLeaderIsrAndControllerEpoch =>
-            if (replicationFactor > 1) {
-              if (currLeaderIsrAndControllerEpoch.leaderAndIsr.leader == id) {
-                // If the broker leads the topic partition, transition the leader and update isr. Updates zk and
-                // notifies all affected brokers
-                partitionStateMachine.handleStateChanges(Set(topicAndPartition), OnlinePartition,
-                  controlledShutdownPartitionLeaderSelector)
-              } else {
-                // Stop the replica first. The state change below initiates ZK changes which should take some time
-                // before which the stop replica request should be completed (in most cases)
-                try {
-                  brokerRequestBatch.newBatch()
-                  brokerRequestBatch.addStopReplicaRequestForBrokers(Seq(id), topicAndPartition.topic,
-                    topicAndPartition.partition, deletePartition = false)
-                  brokerRequestBatch.sendRequestsToBrokers(epoch)
-                } catch {
-                  case e : IllegalStateException => {
-                    // Resign if the controller is in an illegal state
-                    error("Forcing the controller to resign")
-                    brokerRequestBatch.clear()
-                    triggerControllerMove()
-
-                    throw e
-                  }
-                }
-                // If the broker is a follower, updates the isr in ZK and notifies the current leader
-                replicaStateMachine.handleStateChanges(Set(PartitionAndReplica(topicAndPartition.topic,
-                  topicAndPartition.partition, id)), OfflineReplica)
+      allPartitionsAndReplicationFactorOnBroker.foreach { case (topicAndPartition, replicationFactor) =>
+        controllerContext.partitionLeadershipInfo.get(topicAndPartition).foreach { currLeaderIsrAndControllerEpoch =>
+          if (replicationFactor > 1) {
+            if (currLeaderIsrAndControllerEpoch.leaderAndIsr.leader == id) {
+              // If the broker leads the topic partition, transition the leader and update isr. Updates zk and
+              // notifies all affected brokers
+              partitionStateMachine.handleStateChanges(Set(topicAndPartition), OnlinePartition,
+                controlledShutdownPartitionLeaderSelector)
+            } else {
+              // Stop the replica first. The state change below initiates ZK changes which should take some time
+              // before which the stop replica request should be completed (in most cases)
+              try {
+                brokerRequestBatch.newBatch()
+                brokerRequestBatch.addStopReplicaRequestForBrokers(Seq(id), topicAndPartition.topic,
+                  topicAndPartition.partition, deletePartition = false)
+                brokerRequestBatch.sendRequestsToBrokers(epoch)
+              } catch {
+                case e: IllegalStateException =>
+                  handleIllegalState(e)
               }
+              // If the broker is a follower, updates the isr in ZK and notifies the current leader
+              replicaStateMachine.handleStateChanges(Set(PartitionAndReplica(topicAndPartition.topic,
+                topicAndPartition.partition, id)), OfflineReplica)
             }
           }
+        }
       }
       def replicatedPartitionsBrokerLeads() = {
         trace("All leaders = " + controllerContext.partitionLeadershipInfo.mkString(","))
@@ -1557,7 +1534,17 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
       }
   }
 
+  // visible for testing
+  private[controller] def handleIllegalState(e: IllegalStateException): Nothing = {
+    // Resign if the controller is in an illegal state
+    error("Forcing the controller to resign")
+    brokerRequestBatch.clear()
+    triggerControllerMove()
+    throw e
+  }
+
   private def triggerControllerMove(): Unit = {
+    onControllerResignation()
     activeControllerId = -1
     controllerContext.zkUtils.deletePath(ZkUtils.ControllerPath)
   }
