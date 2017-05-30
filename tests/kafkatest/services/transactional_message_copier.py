@@ -27,12 +27,20 @@ class TransactionalMessageCopier(KafkaPathResolverMixin, BackgroundThreadService
     use in system testing.
     """
     PERSISTENT_ROOT = "/mnt/transactional_message_copier"
+    STDOUT_CAPTURE = os.path.join(PERSISTENT_ROOT, "transactional_message_copier.stdout")
+    STDERR_CAPTURE = os.path.join(PERSISTENT_ROOT, "transactional_message_copier.stderr")
     LOG_DIR = os.path.join(PERSISTENT_ROOT, "logs")
     LOG_FILE = os.path.join(LOG_DIR, "transactional_message_copier.log")
     LOG4J_CONFIG = os.path.join(PERSISTENT_ROOT, "tools-log4j.properties")
 
     logs = {
-       "transactional_message_copier_log": {
+        "transactional_message_copier_stdout": {
+            "path": STDOUT_CAPTURE,
+            "collect_default": False},
+        "transactional_message_copier_stderr": {
+            "path": STDERR_CAPTURE,
+            "collect_default": False},
+        "transactional_message_copier_log": {
             "path": LOG_FILE,
             "collect_default": True}
     }
@@ -109,6 +117,7 @@ class TransactionalMessageCopier(KafkaPathResolverMixin, BackgroundThreadService
         cmd += " --transaction-size %s" % str(self.transaction_size)
         if self.max_messages > 0:
             cmd += " --max-messages %s" % str(self.max_messages)
+        cmd += " 2>> %s | tee -a %s &" % (TransactionalMessageCopier.STDERR_CAPTURE, TransactionalMessageCopier.STDOUT_CAPTURE)
 
         return cmd
 

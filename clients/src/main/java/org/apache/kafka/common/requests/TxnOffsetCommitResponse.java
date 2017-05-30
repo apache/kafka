@@ -42,6 +42,7 @@ public class TxnOffsetCommitResponse extends AbstractResponse {
     //   GroupAuthorizationFailed
     //   InvalidCommitOffsetSize
     //   TransactionalIdAuthorizationFailed
+    //   RequestTimedOut
 
     private final Map<TopicPartition, Errors> errors;
     private final int throttleTimeMs;
