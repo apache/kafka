@@ -79,6 +79,7 @@ public class TransactionManager {
     private volatile State currentState = State.UNINITIALIZED;
     private volatile RuntimeException lastError = null;
     private volatile ProducerIdAndEpoch producerIdAndEpoch;
+    private volatile boolean transactionStarted = false;
 
     private enum State {
         UNINITIALIZED,
@@ -343,7 +344,16 @@ public class TransactionManager {
             return null;
         }
 
+        if (nextRequestHandler != null && nextRequestHandler.isEndTxn() && !transactionStarted) {
+            ((EndTxnHandler) nextRequestHandler).result.done();
+            if (currentState != State.FATAL_ERROR) {
+                completeTransaction();
+            }
+            return pendingRequests.poll();
+        }
+
         return nextRequestHandler;
+
     }
 
     synchronized void retry(TxnRequestHandler request) {
@@ -462,6 +472,7 @@ public class TransactionManager {
     private synchronized void completeTransaction() {
         transitionTo(State.READY);
         lastError = null;
+        transactionStarted = false;
         partitionsInTransaction.clear();
     }
 
@@ -686,6 +697,7 @@ public class TransactionManager {
             } else {
                 partitionsInTransaction.addAll(pendingPartitionsToBeAddedToTransaction);
                 pendingPartitionsToBeAddedToTransaction.clear();
+                transactionStarted = true;
                 result.done();
             }
         }
@@ -831,6 +843,7 @@ public class TransactionManager {
             if (error == Errors.NONE) {
                 // note the result is not completed until the TxnOffsetCommit returns
                 pendingRequests.add(txnOffsetCommitHandler(result, offsets, builder.consumerGroupId()));
+                transactionStarted = true;
             } else if (error == Errors.COORDINATOR_NOT_AVAILABLE || error == Errors.NOT_COORDINATOR) {
                 lookupCoordinator(FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
                 reenqueue();
