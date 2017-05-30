@@ -28,16 +28,14 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.state.RocksDBConfigSetter;
 import org.apache.kafka.test.MockProcessorContext;
+import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
 import org.rocksdb.Options;
 
 public class RocksDBStoreTest {
-    @Rule
-    public final TemporaryFolder tempDir = new TemporaryFolder();
+    private final File tempDir = TestUtils.tempDirectory();
 
     private RocksDBStore<String, String> subject;
 
@@ -52,31 +50,30 @@ public class RocksDBStoreTest {
     }
 
     @Test
-    public void testClass() throws Exception {
-        Map<String, Object> configs = new HashMap<>();
+    public void canSpecifyConfigSetterAsClass() throws Exception {
+        final Map<String, Object> configs = new HashMap<>();
         configs.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, MockRocksDbConfigSetter.class);
-        subject.openDB(new ConfigurableProcessorContext(tempDir.newFolder(), Serdes.String(), Serdes.String(),
+        MockRocksDbConfigSetter.called = false;
+        subject.openDB(new ConfigurableProcessorContext(tempDir, Serdes.String(), Serdes.String(),
                 null, null, configs));
 
         assertTrue(MockRocksDbConfigSetter.called);
     }
 
     @Test
-    public void testString() throws Exception {
-        Map<String, Object> configs = new HashMap<>();
+    public void canSpecifyConfigSetterAsString() throws Exception {
+        final Map<String, Object> configs = new HashMap<>();
         configs.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, MockRocksDbConfigSetter.class.getName());
-        subject.openDB(new ConfigurableProcessorContext(tempDir.newFolder(), Serdes.String(), Serdes.String(),
+        MockRocksDbConfigSetter.called = false;
+        subject.openDB(new ConfigurableProcessorContext(tempDir, Serdes.String(), Serdes.String(),
                 null, null, configs));
 
         assertTrue(MockRocksDbConfigSetter.called);
     }
 
+
     public static class MockRocksDbConfigSetter implements RocksDBConfigSetter {
         static boolean called;
-
-        public MockRocksDbConfigSetter() {
-            called = false;
-        }
 
         @Override
         public void setConfig(final String storeName, final Options options, final Map<String, Object> configs) {
@@ -86,10 +83,14 @@ public class RocksDBStoreTest {
 
 
     private static class ConfigurableProcessorContext extends MockProcessorContext {
-        Map<String, Object> configs;
+        final Map<String, Object> configs;
 
-        ConfigurableProcessorContext(File stateDir, Serde<?> keySerde, Serde<?> valSerde, RecordCollector collector,
-                                     ThreadCache cache, Map<String, Object> configs) {
+        ConfigurableProcessorContext(final File stateDir,
+                                     final Serde<?> keySerde,
+                                     final Serde<?> valSerde,
+                                     final RecordCollector collector,
+                                     final ThreadCache cache,
+                                     final Map<String, Object> configs) {
             super(stateDir, keySerde, valSerde, collector, cache);
             this.configs = configs;
         }
