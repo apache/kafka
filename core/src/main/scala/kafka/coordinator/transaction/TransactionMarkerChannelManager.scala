@@ -122,15 +122,11 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
                                       networkClient: NetworkClient,
                                       txnStateManager: TransactionStateManager,
                                       txnMarkerPurgatory: DelayedOperationPurgatory[DelayedTxnMarker],
-                                      time: Time) extends Logging with KafkaMetricsGroup {
+                                      time: Time) extends InterBrokerSendThread("TxnMarkerSenderThread-" + config.brokerId, networkClient, time) with Logging with KafkaMetricsGroup {
 
   this.logIdent = "[Transaction Marker Channel Manager " + config.brokerId + "]: "
 
   private val interBrokerListenerName: ListenerName = config.interBrokerListenerName
-
-  private val txnMarkerSendThread: InterBrokerSendThread = {
-    new InterBrokerSendThread("TxnMarkerSenderThread-" + config.brokerId, networkClient, drainQueuedTransactionMarkers, time)
-  }
 
   private val markersQueuePerBroker: concurrent.Map[Int, TxnMarkerQueue] = new ConcurrentHashMap[Int, TxnMarkerQueue]().asScala
 
@@ -152,15 +148,10 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
     }
   )
 
-  def start(): Unit = {
-    txnMarkerSendThread.start()
-  }
+  override def generateRequests() = drainQueuedTransactionMarkers()
 
-  def shutdown(): Unit = {
-    txnMarkerSendThread.initiateShutdown()
-    // wake up the thread in case it is blocked inside poll
-    networkClient.wakeup()
-    txnMarkerSendThread.awaitShutdown()
+  override def shutdown(): Unit = {
+    super.shutdown()
     txnMarkerPurgatory.shutdown()
     markersQueuePerBroker.clear()
   }
@@ -172,9 +163,6 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
 
   // visible for testing
   private[transaction] def queueForUnknownBroker = markersQueueForUnknownBroker
-
-  // visible for testing
-  private[transaction] def senderThread = txnMarkerSendThread
 
   private[transaction] def addMarkersForBroker(broker: Node, txnTopicPartition: Int, txnIdAndMarker: TxnIdAndMarkerEntry) {
     val brokerId = broker.id
@@ -369,7 +357,7 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
       }
     }
 
-    networkClient.wakeup()
+    wakeup()
   }
 
   def removeMarkersForTxnTopicPartition(txnTopicPartitionId: Int): Unit = {

@@ -49,6 +49,10 @@ public class DeleteAclsResponse extends AbstractResponse {
             this.acl = acl;
         }
 
+        public AclDeletionResult(AclBinding acl) {
+            this(null, acl);
+        }
+
         public ApiException exception() {
             return exception;
         }
@@ -70,6 +74,10 @@ public class DeleteAclsResponse extends AbstractResponse {
         public AclFilterResponse(Throwable throwable, Collection<AclDeletionResult> deletions) {
             this.throwable = throwable;
             this.deletions = deletions;
+        }
+
+        public AclFilterResponse(Collection<AclDeletionResult> deletions) {
+            this(null, deletions);
         }
 
         public Throwable throwable() {

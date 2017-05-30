@@ -73,8 +73,6 @@ class TransactionMarkerChannelManagerTest {
     txnMarkerPurgatory,
     time)
 
-  private val senderThread = channelManager.senderThread
-
   private def mockCache(): Unit = {
     EasyMock.expect(txnStateManager.partitionFor(transactionalId1))
       .andReturn(txnTopicPartition1)
@@ -93,7 +91,7 @@ class TransactionMarkerChannelManagerTest {
 
   @Test
   def shouldGenerateEmptyMapWhenNoRequestsOutstanding(): Unit = {
-    assertTrue(senderThread.generateRequests().isEmpty)
+    assertTrue(channelManager.generateRequests().isEmpty)
   }
 
   @Test
@@ -131,12 +129,12 @@ class TransactionMarkerChannelManagerTest {
     val expectedBroker2Request = new WriteTxnMarkersRequest.Builder(
       Utils.mkList(new WriteTxnMarkersRequest.TxnMarkerEntry(producerId1, producerEpoch, coordinatorEpoch, txnResult, Utils.mkList(partition2)))).build()
 
-    val requests: Map[Node, WriteTxnMarkersRequest] = senderThread.generateRequests().map { handler =>
+    val requests: Map[Node, WriteTxnMarkersRequest] = channelManager.generateRequests().map { handler =>
       (handler.destination, handler.request.asInstanceOf[WriteTxnMarkersRequest.Builder].build())
     }.toMap
 
     assertEquals(Map(broker1 -> expectedBroker1Request, broker2 -> expectedBroker2Request), requests)
-    assertTrue(senderThread.generateRequests().isEmpty)
+    assertTrue(channelManager.generateRequests().isEmpty)
   }
 
   @Test
@@ -208,13 +206,13 @@ class TransactionMarkerChannelManagerTest {
     val expectedBroker2Request = new WriteTxnMarkersRequest.Builder(
       Utils.mkList(new WriteTxnMarkersRequest.TxnMarkerEntry(producerId1, producerEpoch, coordinatorEpoch, txnResult, Utils.mkList(partition2)))).build()
 
-    val firstDrainedRequests: Map[Node, WriteTxnMarkersRequest] = senderThread.generateRequests().map { handler =>
+    val firstDrainedRequests: Map[Node, WriteTxnMarkersRequest] = channelManager.generateRequests().map { handler =>
       (handler.destination, handler.request.asInstanceOf[WriteTxnMarkersRequest.Builder].build())
     }.toMap
 
     assertEquals(Map(broker2 -> expectedBroker2Request), firstDrainedRequests)
 
-    val secondDrainedRequests: Map[Node, WriteTxnMarkersRequest] = senderThread.generateRequests().map { handler =>
+    val secondDrainedRequests: Map[Node, WriteTxnMarkersRequest] = channelManager.generateRequests().map { handler =>
       (handler.destination, handler.request.asInstanceOf[WriteTxnMarkersRequest.Builder].build())
     }.toMap
 
