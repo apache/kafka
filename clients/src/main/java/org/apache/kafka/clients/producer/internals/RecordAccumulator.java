@@ -531,7 +531,7 @@ public final class RecordAccumulator {
      */
     public void deallocate(ProducerBatch batch) {
         incomplete.remove(batch);
-        // Only deallocate the batch if it is not a split batch because split batch are allocated aside the
+        // Only deallocate the batch if it is not a split batch because split batch are allocated outside the
         // buffer pool.
         if (!batch.isSplitBatch())
             free.deallocate(batch.buffer(), batch.initialCapacity());

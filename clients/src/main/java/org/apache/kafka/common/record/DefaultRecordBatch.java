@@ -19,10 +19,10 @@ package org.apache.kafka.common.record;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.utils.ByteBufferInputStream;
+import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.common.utils.CloseableIterator;
 import org.apache.kafka.common.utils.Crc32C;
-import org.apache.kafka.common.utils.Utils;
 
 import java.io.DataInputStream;
 import java.io.IOException;
@@ -204,6 +204,11 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
     @Override
     public void writeTo(ByteBuffer buffer) {
         buffer.put(this.buffer.duplicate());
+    }
+
+    @Override
+    public void writeTo(ByteBufferOutputStream outputStream) {
+        outputStream.write(this.buffer.duplicate());
     }
 
     @Override
@@ -442,13 +447,6 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
                     record.headers());
         }
         return size;
-    }
-
-    /**
-     * Get an upper bound on the size of a batch with only a single record using a given key and value.
-     */
-    static int batchSizeUpperBound(byte[] key, byte[] value, Header[] headers) {
-        return batchSizeUpperBound(Utils.wrapNullable(key), Utils.wrapNullable(value), headers);
     }
 
     /**

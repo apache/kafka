@@ -38,7 +38,7 @@ import scala.math._
 object TestLinearWriteSpeed {
 
   def main(args: Array[String]): Unit = {
-    val parser = new OptionParser
+    val parser = new OptionParser(false)
     val dirOpt = parser.accepts("dir", "The directory to write to.")
                            .withRequiredArg
                            .describedAs("path")
