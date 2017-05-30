@@ -1540,7 +1540,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       }.toMap
 
       if (partitionsWithIncorrectMessageFormat.nonEmpty)
-        errors.put(producerId, partitionsWithIncorrectMessageFormat.map{partition =>
+        errors.put(producerId, partitionsWithIncorrectMessageFormat.map { partition =>
           partition -> Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT
         }.toMap.asJava)
 

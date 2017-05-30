@@ -155,11 +155,12 @@ class TransactionMarkerRequestCompletionHandler(brokerId: Int,
                       txnMarkerChannelManager.removeMarkersForTxnId(transactionalId)
                       abortSending = true
 
-                    case Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT =>
+                    case Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT |
+                         Errors.UNSUPPORTED_VERSION =>
                       // The producer would have failed to send data to the failed topic so we can safely remove the partition
                       // from the set waiting for markers
-                      warn(s"Sending $transactionalId's transaction marker from partition $topicPartition has failed with " +
-                        s" ${Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT.name}. This partition will be removed from the set of partitions" +
+                      info(s"Sending $transactionalId's transaction marker from partition $topicPartition has failed with " +
+                        s" ${error.name}. This partition will be removed from the set of partitions" +
                         s" waiting for completion")
                       txnMetadata.removePartition(topicPartition)
 
