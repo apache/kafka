@@ -79,7 +79,7 @@ public final class KafkaLZ4BlockInputStream extends InputStream {
      */
     public KafkaLZ4BlockInputStream(ByteBuffer in, BufferSupplier bufferSupplier, boolean ignoreFlagDescriptorChecksum) throws IOException {
         this.ignoreFlagDescriptorChecksum = ignoreFlagDescriptorChecksum;
-        this.in = in.order(ByteOrder.LITTLE_ENDIAN);
+        this.in = in.duplicate().order(ByteOrder.LITTLE_ENDIAN);
         readHeader();
         maxBlockSize = bd.getBlockMaximumSize();
         decompressionBuffer = bufferSupplier.get(maxBlockSize);
