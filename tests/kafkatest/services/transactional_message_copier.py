@@ -36,10 +36,10 @@ class TransactionalMessageCopier(KafkaPathResolverMixin, BackgroundThreadService
     logs = {
         "transactional_message_copier_stdout": {
             "path": STDOUT_CAPTURE,
-            "collect_default": False},
+            "collect_default": True},
         "transactional_message_copier_stderr": {
             "path": STDERR_CAPTURE,
-            "collect_default": False},
+            "collect_default": True},
         "transactional_message_copier_log": {
             "path": LOG_FILE,
             "collect_default": True}

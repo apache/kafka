@@ -139,7 +139,8 @@ class TransactionMarkerRequestCompletionHandler(brokerId: Int,
                     case Errors.UNKNOWN_TOPIC_OR_PARTITION |
                          Errors.NOT_LEADER_FOR_PARTITION |
                          Errors.NOT_ENOUGH_REPLICAS |
-                         Errors.NOT_ENOUGH_REPLICAS_AFTER_APPEND => // these are retriable errors
+                         Errors.NOT_ENOUGH_REPLICAS_AFTER_APPEND |
+                         Errors.REQUEST_TIMED_OUT => // these are retriable errors
 
                       info(s"Sending $transactionalId's transaction marker for partition $topicPartition has failed with error ${error.exceptionName}, retrying " +
                         s"with current coordinator epoch ${epochAndMetadata.coordinatorEpoch}")
