@@ -314,7 +314,6 @@ object TestUtils extends Logging {
     props.put("consumer.id", consumerId)
     props.put("consumer.timeout.ms", consumerTimeout.toString)
     props.put("zookeeper.session.timeout.ms", "6000")
-    props.put("zookeeper.sync.time.ms", "200")
     props.put("auto.commit.interval.ms", "1000")
     props.put("rebalance.max.retries", "4")
     props.put("auto.offset.reset", "smallest")

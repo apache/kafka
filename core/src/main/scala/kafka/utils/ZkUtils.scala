@@ -975,7 +975,6 @@ object ZKConfig {
   val ZkConnectProp = "zookeeper.connect"
   val ZkSessionTimeoutMsProp = "zookeeper.session.timeout.ms"
   val ZkConnectionTimeoutMsProp = "zookeeper.connection.timeout.ms"
-  val ZkSyncTimeMsProp = "zookeeper.sync.time.ms"
 }
 
 class ZKConfig(props: VerifiableProperties) {
@@ -989,9 +988,6 @@ class ZKConfig(props: VerifiableProperties) {
 
   /** the max time that the client waits to establish a connection to zookeeper */
   val zkConnectionTimeoutMs = props.getInt(ZkConnectionTimeoutMsProp, zkSessionTimeoutMs)
-
-  /** how far a ZK follower can be behind a ZK leader */
-  val zkSyncTimeMs = props.getInt(ZkSyncTimeMsProp, 2000)
 }
 
 class ZkPath(client: ZkClient) {

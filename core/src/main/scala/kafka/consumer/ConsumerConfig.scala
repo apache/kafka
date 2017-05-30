@@ -40,6 +40,7 @@ object ConsumerConfig extends Config {
   val MinFetchBytes = 1
   val MaxFetchBytes = 50 * 1024 * 1024
   val MaxFetchWaitMs = 100
+  val RebalanceBackoffMs = 2000
   val MirrorTopicsWhitelist = ""
   val MirrorTopicsBlacklist = ""
   val MirrorConsumerNumThreads = 1
@@ -150,7 +151,7 @@ class ConsumerConfig private (val props: VerifiableProperties) extends ZKConfig(
     " to prevent unnecessary socket timeouts")
   
   /** backoff time between retries during rebalance */
-  val rebalanceBackoffMs = props.getInt("rebalance.backoff.ms", zkSyncTimeMs)
+  val rebalanceBackoffMs = props.getInt("rebalance.backoff.ms", RebalanceBackoffMs)
 
   /** backoff time to refresh the leader of a partition after it loses the current leader */
   val refreshLeaderBackoffMs = props.getInt("refresh.leader.backoff.ms", RefreshMetadataBackoffMs)
