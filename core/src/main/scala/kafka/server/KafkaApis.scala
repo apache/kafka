@@ -1530,27 +1530,33 @@ class KafkaApis(val requestChannel: RequestChannel,
           case _ => false
         }
       }
-      val controlRecords = goodPartitions.map { partition =>
-        val controlRecordType = marker.transactionResult match {
-          case TransactionResult.COMMIT => ControlRecordType.COMMIT
-          case TransactionResult.ABORT => ControlRecordType.ABORT
-        }
-        val endTxnMarker = new EndTransactionMarker(controlRecordType, marker.coordinatorEpoch)
-        partition -> MemoryRecords.withEndTransactionMarker(producerId, marker.producerEpoch, endTxnMarker)
-      }.toMap
 
       if (partitionsWithIncorrectMessageFormat.nonEmpty)
         errors.put(producerId, partitionsWithIncorrectMessageFormat.map { partition =>
           partition -> Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT
         }.toMap.asJava)
 
-      replicaManager.appendRecords(
-        timeout = config.requestTimeoutMs.toLong,
-        requiredAcks = -1,
-        internalTopicsAllowed = true,
-        isFromClient = false,
-        entriesPerPartition = controlRecords,
-        responseCallback = sendResponseCallback(producerId, marker.transactionResult))
+      if (goodPartitions.isEmpty)
+        sendResponseExemptThrottle(request, () => sendResponse(request, new WriteTxnMarkersResponse(errors)))
+      else {
+        val controlRecords = goodPartitions.map { partition =>
+          val controlRecordType = marker.transactionResult match {
+            case TransactionResult.COMMIT => ControlRecordType.COMMIT
+            case TransactionResult.ABORT => ControlRecordType.ABORT
+          }
+          val endTxnMarker = new EndTransactionMarker(controlRecordType, marker.coordinatorEpoch)
+          partition -> MemoryRecords.withEndTransactionMarker(producerId, marker.producerEpoch, endTxnMarker)
+        }.toMap
+
+
+        replicaManager.appendRecords(
+          timeout = config.requestTimeoutMs.toLong,
+          requiredAcks = -1,
+          internalTopicsAllowed = true,
+          isFromClient = false,
+          entriesPerPartition = controlRecords,
+          responseCallback = sendResponseCallback(producerId, marker.transactionResult))
+      }
     }
   }
 
