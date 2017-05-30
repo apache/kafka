@@ -196,6 +196,7 @@ class ConsoleConsumerTest {
   def shouldOverwriteConfigFromConfigFileOrPropertiesWithConfigFromArguments() {
     val propsFile = TestUtils.tempFile()
     val propsStream = new FileOutputStream(propsFile)
+    propsStream.write("bootstrap.servers=localhost:9093\n".getBytes())
     propsStream.write("auto.offset.reset=earliest\n".getBytes())
     propsStream.write("key.deserializer=org.apache.kafka.common.serialization.LongDeserializer\n".getBytes())
     propsStream.write("value.deserializer=org.apache.kafka.common.serialization.LongDeserializer".getBytes())
@@ -214,8 +215,12 @@ class ConsoleConsumerTest {
     val config = new ConsoleConsumer.ConsumerConfig(args)
     val props = ConsoleConsumer.getNewConsumerProps(config)
 
+    assertEquals("localhost:9092", props.getProperty("bootstrap.servers"))
     assertEquals("latest", props.getProperty("auto.offset.reset"))
-    assertEquals("org.apache.kafka.common.serialization.DoubleDeserializer", props.getProperty("key.deserializer"))
-    assertEquals("org.apache.kafka.common.serialization.DoubleDeserializer", props.getProperty("value.deserializer"))
+    assertEquals("org.apache.kafka.common.serialization.DoubleDeserializer", config.formatterArgs.getProperty("key.deserializer"))
+    assertEquals("org.apache.kafka.common.serialization.DoubleDeserializer", config.formatterArgs.getProperty("value.deserializer"))
+    // serde settings applies to message formatter only, not the consumer itself
+    assertEquals("org.apache.kafka.common.serialization.ByteArrayDeserializer", props.getProperty("key.deserializer"))
+    assertEquals("org.apache.kafka.common.serialization.ByteArrayDeserializer", props.getProperty("value.deserializer"))
   }
 }
