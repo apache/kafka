@@ -1558,7 +1558,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
       val (existingAndAuthorizedForDescribeTopics, nonExistingOrUnauthorizedForDescribeTopics) =
         partitionsToAdd.asScala.partition { tp =>
-          authorize(request.session, Describe, new Resource(Topic, tp.topic)) && metadataCache.contains(tp.topic)
+          authorize(request.session, Describe, new Resource(Topic, tp.topic)) && metadataCache.contains(tp)
         }
 
       val unauthorizedForWriteRequestInfo = existingAndAuthorizedForDescribeTopics.filterNot { tp =>
