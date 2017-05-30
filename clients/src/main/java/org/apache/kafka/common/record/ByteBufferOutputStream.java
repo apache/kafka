@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -16,54 +16,82 @@
  */
 package org.apache.kafka.common.record;
 
-import java.io.DataOutputStream;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
 
 /**
- * A byte buffer backed output outputStream
+ * A ByteBuffer-backed OutputStream
  */
-public class ByteBufferOutputStream extends DataOutputStream {
+public class ByteBufferOutputStream extends OutputStream {
 
     private static final float REALLOCATION_FACTOR = 1.1f;
 
+    private ByteBuffer buffer;
+    private int initialPosition;
+
     public ByteBufferOutputStream(ByteBuffer buffer) {
-        super(new UnderlyingOutputStream(buffer));
+        this.buffer = buffer;
+        this.initialPosition = buffer.position();
+    }
+
+    public void write(int b) {
+        if (buffer.remaining() < 1)
+            expandBuffer(buffer.capacity() + 1);
+        buffer.put((byte) b);
+    }
+
+    public void write(byte[] bytes, int off, int len) {
+        if (buffer.remaining() < len)
+            expandBuffer(buffer.position() + len);
+        buffer.put(bytes, off, len);
+    }
+
+    public void write(ByteBuffer buffer) {
+        if (buffer.hasArray())
+            write(buffer.array(), buffer.arrayOffset() + buffer.position(), buffer.remaining());
+        else {
+            int pos = buffer.position();
+            for (int i = pos, limit = buffer.remaining() + pos; i < limit; i++)
+                write(buffer.get(i));
+        }
     }
 
     public ByteBuffer buffer() {
-        return ((UnderlyingOutputStream) out).buffer;
+        return buffer;
     }
 
-    public static class UnderlyingOutputStream extends OutputStream {
-        private ByteBuffer buffer;
+    public int position() {
+        return buffer.position();
+    }
 
-        public UnderlyingOutputStream(ByteBuffer buffer) {
-            this.buffer = buffer;
-        }
+    public int capacity() {
+        return buffer.capacity();
+    }
 
-        public void write(int b) {
-            if (buffer.remaining() < 1)
-                expandBuffer(buffer.capacity() + 1);
-            buffer.put((byte) b);
-        }
+    public int limit() {
+        return buffer.limit();
+    }
 
-        public void write(byte[] bytes, int off, int len) {
-            if (buffer.remaining() < len)
-                expandBuffer(buffer.capacity() + len);
-            buffer.put(bytes, off, len);
-        }
+    public void position(int position) {
+        if (position > buffer.limit())
+            expandBuffer(position);
+        buffer.position(position);
+    }
 
-        public ByteBuffer buffer() {
-            return buffer;
-        }
-
-        private void expandBuffer(int size) {
-            int expandSize = Math.max((int) (buffer.capacity() * REALLOCATION_FACTOR), size);
-            ByteBuffer temp = ByteBuffer.allocate(expandSize);
+    private void expandBuffer(int size) {
+        int expandSize = Math.max((int) (buffer.capacity() * REALLOCATION_FACTOR), size);
+        ByteBuffer temp = ByteBuffer.allocate(expandSize);
+        if (buffer.hasArray()) {
             temp.put(buffer.array(), buffer.arrayOffset(), buffer.position());
-            buffer = temp;
+        } else {
+            int limit = buffer.position();
+            for (int i = 0; i < limit; i++)
+                temp.put(buffer.get(i));
         }
+
+        // reset the old buffer's position so that the partial data in the new buffer cannot be mistakenly consumed
+        buffer.position(initialPosition);
+        buffer = temp;
     }
 
 }
