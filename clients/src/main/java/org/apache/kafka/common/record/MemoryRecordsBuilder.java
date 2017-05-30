@@ -17,7 +17,6 @@
 package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.record.KafkaLZ4BlockInputStream.BufferSupplier;
 
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -396,14 +395,6 @@ public class MemoryRecordsBuilder {
         return builtRecords != null ? builtRecords.sizeInBytes() : estimatedBytesWritten();
     }
 
-    protected static final ThreadLocal<KafkaLZ4BlockInputStream.BufferSupplier>
-        LZ4_DECOMPRESSION_BUFFER_SUPPLIER = new ThreadLocal<KafkaLZ4BlockInputStream.BufferSupplier>() {
-            @Override
-            protected KafkaLZ4BlockInputStream.BufferSupplier initialValue() {
-                return new RecyclingBufferSupplier();
-            }
-        };
-
     protected static DataOutputStream wrapForOutput(ByteBufferOutputStream buffer, CompressionType type, byte messageVersion, int bufferSize) {
         try {
             switch (type) {
@@ -434,7 +425,7 @@ public class MemoryRecordsBuilder {
         }
     }
 
-    public static InputStream wrapForInput(ByteBuffer buffer, CompressionType type, byte messageVersion) {
+    public static InputStream wrapForInput(ByteBuffer buffer, CompressionType type, byte messageVersion, BufferSupplier bufferSupplier) {
         try {
             switch (type) {
                 case NONE:
@@ -451,7 +442,7 @@ public class MemoryRecordsBuilder {
                     try {
                         return (InputStream) lz4InputStreamSupplier.get().newInstance(
                             buffer,
-                            LZ4_DECOMPRESSION_BUFFER_SUPPLIER.get(),
+                            bufferSupplier,
                             messageVersion == Record.MAGIC_VALUE_V0
                         );
                     } catch (Exception e) {
@@ -500,20 +491,6 @@ public class MemoryRecordsBuilder {
                            long shallowOffsetOfMaxTimestamp) {
             this.maxTimestamp = maxTimestamp;
             this.shallowOffsetOfMaxTimestamp = shallowOffsetOfMaxTimestamp;
-        }
-    }
-
-    static class RecyclingBufferSupplier implements BufferSupplier {
-
-        ByteBuffer theBuffer;
-
-        @Override
-        public ByteBuffer get(int size) {
-            if (theBuffer == null || theBuffer.capacity() < size) {
-                theBuffer = ByteBuffer.allocate(size);
-            }
-            theBuffer.limit(size);
-            return theBuffer;
         }
     }
 }

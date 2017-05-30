@@ -26,7 +26,7 @@ public abstract class AbstractRecords implements Records {
         @Override
         public Iterator<Record> iterator() {
             return new Iterator<Record>() {
-                private final Iterator<? extends LogEntry> deepEntries = deepEntries().iterator();
+                private final Iterator<? extends LogEntry> deepEntries = deepEntries(BufferSupplier.NO_CACHING).iterator();
                 @Override
                 public boolean hasNext() {
                     return deepEntries.hasNext();
@@ -57,7 +57,7 @@ public abstract class AbstractRecords implements Records {
     @Override
     public Records toMessageFormat(byte toMagic) {
         List<LogEntry> converted = new ArrayList<>();
-        for (LogEntry entry : deepEntries())
+        for (LogEntry entry : deepEntries(BufferSupplier.NO_CACHING))
             converted.add(LogEntry.create(entry.offset(), entry.record().convert(toMagic)));
 
         if (converted.isEmpty()) {

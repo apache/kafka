@@ -41,6 +41,7 @@ import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.metrics.stats.Value;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.record.BufferSupplier;
 import org.apache.kafka.common.record.InvalidRecordException;
 import org.apache.kafka.common.record.LogEntry;
 import org.apache.kafka.common.record.Record;
@@ -93,6 +94,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener {
     private final ConcurrentLinkedQueue<CompletedFetch> completedFetches;
     private final Deserializer<K> keyDeserializer;
     private final Deserializer<V> valueDeserializer;
+    private final BufferSupplier decompressionBufferSupplier = BufferSupplier.create();
 
     private PartitionRecords<K, V> nextInLineRecords = null;
     private ExceptionMetadata nextInLineExceptionMetadata = null;
@@ -782,7 +784,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener {
 
                 List<ConsumerRecord<K, V>> parsed = new ArrayList<>();
                 boolean skippedRecords = false;
-                for (LogEntry logEntry : partition.records.deepEntries()) {
+                for (LogEntry logEntry : partition.records.deepEntries(decompressionBufferSupplier)) {
                     // Skip the messages earlier than current position.
                     if (logEntry.offset() >= position) {
                         parsed.add(parseRecord(tp, logEntry));

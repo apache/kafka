@@ -17,14 +17,11 @@
 
 package kafka.message
 
-import java.io.OutputStream
-import java.util.zip.GZIPOutputStream
-import java.util.zip.GZIPInputStream
-import java.io.InputStream
+import java.io.{InputStream, OutputStream}
 import java.nio.ByteBuffer
+import java.util.zip.{GZIPInputStream, GZIPOutputStream}
 
-import org.apache.kafka.common.record.KafkaLZ4BlockInputStream.BufferSupplier
-import org.apache.kafka.common.record.{KafkaLZ4BlockInputStream, KafkaLZ4BlockOutputStream}
+import org.apache.kafka.common.record.{BufferSupplier, KafkaLZ4BlockInputStream, KafkaLZ4BlockOutputStream}
 
 object CompressionFactory {
   
@@ -50,15 +47,7 @@ object CompressionFactory {
         import org.xerial.snappy.SnappyInputStream
         new SnappyInputStream(new ByteBufferBackedInputStream(buffer))
       case LZ4CompressionCodec =>
-        new KafkaLZ4BlockInputStream(buffer, new BufferSupplier {
-          /**
-            * Supplies the buffer to decompress data into for this stream
-            *
-            * @param size
-            * @return a decompression ByteBuffer of capacity >= size
-            */
-          override def get(size: Int): ByteBuffer = ByteBuffer.allocate(size);
-        }, messageVersion == Message.MagicValue_V0)
+        new KafkaLZ4BlockInputStream(buffer, BufferSupplier.NO_CACHING, messageVersion == Message.MagicValue_V0)
       case _ =>
         throw new kafka.common.UnknownCodecException("Unknown Codec: " + compressionCodec)
     }
