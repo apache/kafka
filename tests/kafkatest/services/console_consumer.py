@@ -21,7 +21,7 @@ from ducktape.cluster.remoteaccount import RemoteCommandError
 
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
 from kafkatest.services.monitor.jmx import JmxMixin
-from kafkatest.version import DEV_BRANCH, LATEST_0_8_2, LATEST_0_9, LATEST_0_10_0, V_0_10_0_0
+from kafkatest.version import DEV_BRANCH, LATEST_0_8_2, LATEST_0_9, LATEST_0_10_0, V_0_10_0_0, V_0_11_0_0
 
 """
 0.8.2.1 ConsoleConsumer options
@@ -193,7 +193,8 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
             if node.version <= LATEST_0_10_0:
                 cmd += " --new-consumer"
             cmd += " --bootstrap-server %(broker_list)s" % args
-            cmd += " --isolation-level %s" % self.isolation_level
+            if node.version >= V_0_11_0_0:
+                cmd += " --isolation-level %s" % self.isolation_level
         else:
             cmd += " --zookeeper %(zk_connect)s" % args
         if self.from_beginning:
