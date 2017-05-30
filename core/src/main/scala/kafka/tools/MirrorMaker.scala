@@ -87,7 +87,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
 
     info("Starting mirror maker")
     try {
-      val parser = new OptionParser
+      val parser = new OptionParser(false)
 
       val consumerConfigOpt = parser.accepts("consumer.config",
         "Embedded consumer config for consuming from the source cluster.")
