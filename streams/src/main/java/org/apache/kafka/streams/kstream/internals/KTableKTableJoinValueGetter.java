@@ -17,23 +17,23 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.kstream.KeyValueMapper;
-import org.apache.kafka.streams.kstream.ValueJoiner;
+import org.apache.kafka.streams.kstream.RichValueJoiner;
 import org.apache.kafka.streams.processor.ProcessorContext;
 
 class KTableKTableJoinValueGetter<K1, V1, K2, V2, R> implements KTableValueGetter<K1, R> {
 
     private final KTableValueGetter<K1, V1> valueGetter1;
     private final KTableValueGetter<K2, V2> valueGetter2;
-    private final ValueJoiner<? super V1, ? super V2, ? extends R>  joiner;
+    private final RichValueJoiner<? super K1, ? super V1, ? super V2, ? extends R>  richValueJoiner;
     private final KeyValueMapper<K1, V1, K2> keyValueMapper;
 
     public KTableKTableJoinValueGetter(final KTableValueGetter<K1, V1> valueGetter1,
                                        final KTableValueGetter<K2, V2> valueGetter2,
-                                       final ValueJoiner<? super V1, ? super V2, ? extends R>  joiner,
+                                       final RichValueJoiner<? super K1, ? super V1, ? super V2, ? extends R> richValueJoiner,
                                        final KeyValueMapper<K1, V1, K2> keyValueMapper) {
         this.valueGetter1 = valueGetter1;
         this.valueGetter2 = valueGetter2;
-        this.joiner = joiner;
+        this.richValueJoiner = richValueJoiner;
         this.keyValueMapper = keyValueMapper;
     }
 
@@ -41,6 +41,7 @@ class KTableKTableJoinValueGetter<K1, V1, K2, V2, R> implements KTableValueGette
     public void init(ProcessorContext context) {
         valueGetter1.init(context);
         valueGetter2.init(context);
+        richValueJoiner.init();
     }
 
     @Override
@@ -52,7 +53,7 @@ class KTableKTableJoinValueGetter<K1, V1, K2, V2, R> implements KTableValueGette
             V2 value2 = valueGetter2.get(keyValueMapper.apply(key, value1));
 
             if (value2 != null) {
-                newValue = joiner.apply(value1, value2);
+                newValue = richValueJoiner.apply(key, value1, value2);
             }
         }
 

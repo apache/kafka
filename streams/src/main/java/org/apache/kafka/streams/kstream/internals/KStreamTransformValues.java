@@ -19,8 +19,8 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.kstream.ValueTransformer;
-import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
+import org.apache.kafka.streams.kstream.ValueTransformerWithKey;
+import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
@@ -33,29 +33,29 @@ import java.util.Map;
 
 public class KStreamTransformValues<K, V, R> implements ProcessorSupplier<K, V> {
 
-    private final ValueTransformerSupplier<V, R> valueTransformerSupplier;
+    private final ValueTransformerWithKeySupplier<K, V, R> valueTransformerWithKeySupplier;
 
-    public KStreamTransformValues(ValueTransformerSupplier<V, R> valueTransformerSupplier) {
-        this.valueTransformerSupplier = valueTransformerSupplier;
+    public KStreamTransformValues(ValueTransformerWithKeySupplier<K, V, R> valueTransformerWithKeySupplier) {
+        this.valueTransformerWithKeySupplier = valueTransformerWithKeySupplier;
     }
 
     @Override
     public Processor<K, V> get() {
-        return new KStreamTransformValuesProcessor<>(valueTransformerSupplier.get());
+        return new KStreamTransformValuesProcessor<>(valueTransformerWithKeySupplier.get());
     }
 
     public static class KStreamTransformValuesProcessor<K, V, R> implements Processor<K, V> {
 
-        private final ValueTransformer<V, R> valueTransformer;
+        private final ValueTransformerWithKey<K, V, R> valueTransformerWithKey;
         private ProcessorContext context;
 
-        public KStreamTransformValuesProcessor(ValueTransformer<V, R> valueTransformer) {
-            this.valueTransformer = valueTransformer;
+        public KStreamTransformValuesProcessor(ValueTransformerWithKey<K, V, R> valueTransformerWithKey) {
+            this.valueTransformerWithKey = valueTransformerWithKey;
         }
 
         @Override
         public void init(final ProcessorContext context) {
-            valueTransformer.init(
+            valueTransformerWithKey.init(
                 new ProcessorContext() {
                     @Override
                     public String applicationId() {
@@ -157,19 +157,19 @@ public class KStreamTransformValues<K, V, R> implements ProcessorSupplier<K, V> 
 
         @Override
         public void process(K key, V value) {
-            context.forward(key, valueTransformer.transform(value));
+            context.forward(key, valueTransformerWithKey.transform(key, value));
         }
 
         @Override
         public void punctuate(long timestamp) {
-            if (valueTransformer.punctuate(timestamp) != null) {
+            if (valueTransformerWithKey.punctuate(timestamp) != null) {
                 throw new StreamsException("ValueTransformer#punctuate must return null.");
             }
         }
 
         @Override
         public void close() {
-            valueTransformer.close();
+            valueTransformerWithKey.close();
         }
     }
 }

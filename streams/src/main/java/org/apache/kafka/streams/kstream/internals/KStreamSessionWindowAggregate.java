@@ -18,8 +18,8 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.ProcessorStateException;
-import org.apache.kafka.streams.kstream.Aggregator;
-import org.apache.kafka.streams.kstream.Initializer;
+import org.apache.kafka.streams.kstream.RichInitializer;
+import org.apache.kafka.streams.kstream.RichAggregator;
 import org.apache.kafka.streams.kstream.Merger;
 import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.Windowed;
@@ -36,21 +36,21 @@ class KStreamSessionWindowAggregate<K, V, T> implements KStreamAggProcessorSuppl
 
     private final String storeName;
     private final SessionWindows windows;
-    private final Initializer<T> initializer;
-    private final Aggregator<? super K, ? super V, T> aggregator;
+    private final RichInitializer<T> richInitializer;
+    private final RichAggregator<? super K, ? super V, T> richAggregator;
     private final Merger<? super K, T> sessionMerger;
 
     private boolean sendOldValues = false;
 
     KStreamSessionWindowAggregate(final SessionWindows windows,
                                   final String storeName,
-                                  final Initializer<T> initializer,
-                                  final Aggregator<? super K, ? super V, T> aggregator,
+                                  final RichInitializer<T> richInitializer,
+                                  final RichAggregator<? super K, ? super V, T> richAggregator,
                                   final Merger<? super K, T> sessionMerger) {
         this.windows = windows;
         this.storeName = storeName;
-        this.initializer = initializer;
-        this.aggregator = aggregator;
+        this.richInitializer = richInitializer;
+        this.richAggregator = richAggregator;
         this.sessionMerger = sessionMerger;
     }
 
@@ -75,6 +75,8 @@ class KStreamSessionWindowAggregate<K, V, T> implements KStreamAggProcessorSuppl
             super.init(context);
             store = (SessionStore<K,  T>) context.getStateStore(storeName);
             tupleForwarder = new TupleForwarder<>(store, context, new ForwardingCacheFlushListener<K, V>(context, sendOldValues), sendOldValues);
+            richInitializer.init();
+            richAggregator.init();
         }
 
         @Override
@@ -89,7 +91,7 @@ class KStreamSessionWindowAggregate<K, V, T> implements KStreamAggProcessorSuppl
             final List<KeyValue<Windowed<K>, T>> merged = new ArrayList<>();
             final SessionWindow newSessionWindow = new SessionWindow(timestamp, timestamp);
             SessionWindow mergedWindow = newSessionWindow;
-            T agg = initializer.apply();
+            T agg = richInitializer.apply();
 
             try (final KeyValueIterator<Windowed<K>, T> iterator = store.findSessions(key, timestamp - windows.inactivityGap(),
                                                                                       timestamp + windows.inactivityGap())) {
@@ -101,7 +103,7 @@ class KStreamSessionWindowAggregate<K, V, T> implements KStreamAggProcessorSuppl
                 }
             }
 
-            agg = aggregator.apply(key, value, agg);
+            agg = richAggregator.apply(key, value, agg);
             final Windowed<K> sessionKey = new Windowed<>(key, mergedWindow);
             if (!mergedWindow.equals(newSessionWindow)) {
                 for (final KeyValue<Windowed<K>, T> session : merged) {
@@ -111,6 +113,13 @@ class KStreamSessionWindowAggregate<K, V, T> implements KStreamAggProcessorSuppl
             }
             store.put(sessionKey, agg);
             tupleForwarder.maybeForward(sessionKey, agg, null);
+        }
+
+        @Override
+        public void close() {
+            super.close();
+            richInitializer.close();
+            richAggregator.close();
         }
 
     }

@@ -182,10 +182,14 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
         Objects.requireNonNull(aggregator, "aggregator can't be null");
         Objects.requireNonNull(windows, "windows can't be null");
         Objects.requireNonNull(storeSupplier, "storeSupplier can't be null");
+
         return (KTable<Windowed<K>, T>) doAggregate(
-                new KStreamWindowAggregate<>(windows, storeSupplier.name(), initializer, aggregator),
-                AGGREGATE_NAME,
-                storeSupplier
+                    new KStreamWindowAggregate<>(windows,
+                            storeSupplier.name(),
+                            checkAndMaybeConvertToRichInitializer(initializer),
+                            checkAndMaybeConvertToRichAggregator(aggregator)),
+                    AGGREGATE_NAME,
+                    storeSupplier
         );
     }
 
@@ -291,9 +295,14 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
         Objects.requireNonNull(storeSupplier, "storeSupplier can't be null");
 
         return (KTable<Windowed<K>, T>) doAggregate(
-                new KStreamSessionWindowAggregate<>(sessionWindows, storeSupplier.name(), initializer, aggregator, sessionMerger),
-                AGGREGATE_NAME,
-                storeSupplier);
+                    new KStreamSessionWindowAggregate<>(sessionWindows,
+                            storeSupplier.name(),
+                            checkAndMaybeConvertToRichInitializer(initializer),
+                            checkAndMaybeConvertToRichAggregator(aggregator),
+                            sessionMerger),
+                    AGGREGATE_NAME,
+                    storeSupplier);
+
 
     }
 

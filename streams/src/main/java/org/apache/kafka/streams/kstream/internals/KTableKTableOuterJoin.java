@@ -16,15 +16,15 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.streams.kstream.ValueJoiner;
+import org.apache.kafka.streams.kstream.RichValueJoiner;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 
 class KTableKTableOuterJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R, V1, V2> {
 
-    KTableKTableOuterJoin(KTableImpl<K, ?, V1> table1, KTableImpl<K, ?, V2> table2, ValueJoiner<? super V1, ? super V2, ? extends R> joiner) {
-        super(table1, table2, joiner);
+    KTableKTableOuterJoin(KTableImpl<K, ?, V1> table1, KTableImpl<K, ?, V2> table2, RichValueJoiner<? super K, ? super V1, ? super V2, ? extends R> richValueJoiner) {
+        super(table1, table2, richValueJoiner);
     }
 
     @Override
@@ -61,6 +61,7 @@ class KTableKTableOuterJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R,
         public void init(ProcessorContext context) {
             super.init(context);
             valueGetter.init(context);
+            richValueJoiner.init();
         }
 
         @Override
@@ -79,14 +80,20 @@ class KTableKTableOuterJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R,
             }
 
             if (value2 != null || change.newValue != null) {
-                newValue = joiner.apply(change.newValue, value2);
+                newValue = richValueJoiner.apply(key, change.newValue, value2);
             }
 
             if (sendOldValues && (value2 != null || change.oldValue != null)) {
-                oldValue = joiner.apply(change.oldValue, value2);
+                oldValue = richValueJoiner.apply(key, change.oldValue, value2);
             }
 
             context().forward(key, new Change<>(newValue, oldValue));
+        }
+
+        @Override
+        public void close() {
+            super.close();
+            richValueJoiner.close();
         }
     }
 
@@ -104,6 +111,7 @@ class KTableKTableOuterJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R,
         public void init(ProcessorContext context) {
             valueGetter1.init(context);
             valueGetter2.init(context);
+            richValueJoiner.init();
         }
 
         @Override
@@ -113,7 +121,7 @@ class KTableKTableOuterJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R,
             V2 value2 = valueGetter2.get(key);
 
             if (value1 != null || value2 != null)
-                newValue = joiner.apply(value1, value2);
+                newValue = richValueJoiner.apply(key, value1, value2);
 
             return newValue;
         }
