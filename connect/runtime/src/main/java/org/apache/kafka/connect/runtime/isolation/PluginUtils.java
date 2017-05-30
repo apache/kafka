@@ -24,8 +24,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 
 public class PluginUtils {
     private static final String BLACKLIST = "^(?:"
@@ -36,6 +40,7 @@ public class PluginUtils {
             + "|org\\.apache\\.kafka\\.common"
             + "|org\\.apache\\.kafka\\.connect"
             + "|org\\.apache\\.log4j"
+            + "|org\\.slf4j"
             + ")\\..*$";
 
     private static final String WHITELIST = "^org\\.apache\\.kafka\\.connect\\.(?:"
@@ -50,7 +55,15 @@ public class PluginUtils {
             .Filter<Path>() {
         @Override
         public boolean accept(Path path) throws IOException {
-            return Files.isDirectory(path) || PluginUtils.isJar(path);
+            return Files.isDirectory(path) || isArchive(path) || isClassFile(path);
+        }
+    };
+
+    private static final DirectoryStream.Filter<Path> PLUGIN_FILTER = new DirectoryStream
+            .Filter<Path>() {
+        @Override
+        public boolean accept(Path path) throws IOException {
+            return Files.isDirectory(path) || isArchive(path) || isClassFile(path);
         }
     };
 
@@ -63,32 +76,16 @@ public class PluginUtils {
         return !Modifier.isAbstract(mod) && !Modifier.isInterface(mod);
     }
 
-    public static boolean isJar(Path path) {
+    public static boolean isArchive(Path path) {
         return path.toString().toLowerCase(Locale.ROOT).endsWith(".jar");
     }
 
-    public static List<URL> pluginUrls(Path pluginPath) throws IOException {
-        List<URL> urls = new ArrayList<>();
-        if (PluginUtils.isJar(pluginPath)) {
-            urls.add(pluginPath.toUri().toURL());
-        } else if (Files.isDirectory(pluginPath)) {
-            try (
-                    DirectoryStream<Path> listing = Files.newDirectoryStream(
-                            pluginPath,
-                            PLUGIN_PATH_FILTER
-                    )
-            ) {
-                for (Path jar : listing) {
-                    urls.add(jar.toUri().toURL());
-                }
-            }
-        }
-        return urls;
+    public static boolean isClassFile(Path path) {
+        return path.toString().toLowerCase(Locale.ROOT).endsWith(".class");
     }
 
     public static List<Path> pluginLocations(Path topPath) throws IOException {
         List<Path> locations = new ArrayList<>();
-        // Non-recursive for now. Plugin directories or jars need to be exactly under the topPath.
         try (
                 DirectoryStream<Path> listing = Files.newDirectoryStream(
                         topPath,
@@ -100,6 +97,76 @@ public class PluginUtils {
             }
         }
         return locations;
+    }
+
+    public static URL[] pluginUrls(Path topPath) throws IOException {
+        Set<URL> archives = new HashSet<>();
+        Set<Path> packageDirs = new HashSet<>();
+        LinkedList<DirectoryEntry> dfs = new LinkedList<>();
+        Set<Path> visited = new HashSet<>();
+
+        if (isArchive(topPath)) {
+            URL[] archive = {topPath.toUri().toURL()};
+            return archive;
+        }
+
+        DirectoryStream<Path> topListing = Files.newDirectoryStream(
+                topPath,
+                PLUGIN_FILTER
+        );
+        dfs.push(new DirectoryEntry(topListing));
+        visited.add(topPath);
+        try {
+            while (!dfs.isEmpty()) {
+                Iterator<Path> neighbors = dfs.peek().iterator;
+                if (neighbors.hasNext()) {
+                    Path adjacent = neighbors.next();
+                    if (Files.isSymbolicLink(adjacent)) {
+                        Path absolute = Files.readSymbolicLink(adjacent);
+                        if (Files.exists(absolute)) {
+                            adjacent = absolute;
+                        } else {
+                            adjacent = null;
+                        }
+                    }
+
+                    if (adjacent != null && !visited.contains(adjacent)) {
+                        visited.add(adjacent);
+                        if (isArchive(adjacent)) {
+                            archives.add(adjacent.toUri().toURL());
+                        } else if(isClassFile(adjacent)) {
+                            packageDirs.add(adjacent);
+                        } else {
+                            DirectoryStream<Path> listing = Files.newDirectoryStream(
+                                    topPath,
+                                    PLUGIN_FILTER
+                            );
+                            dfs.push(new DirectoryEntry(listing));
+                        }
+                    }
+                } else {
+                    dfs.pop().stream.close();
+                }
+            }
+        } finally {
+            while(!dfs.isEmpty()) {
+                dfs.pop().stream.close();
+            }
+        }
+
+        // TODO: attempt to add directories that contain plugin classes in directory structure by
+        // extracting the longest common subdirectories.
+        return archives.toArray(new URL[0]);
+    }
+
+    private static class DirectoryEntry {
+        DirectoryStream<Path> stream;
+        Iterator<Path> iterator;
+
+        DirectoryEntry(DirectoryStream<Path> stream) {
+            this.stream = stream;
+            this.iterator = stream.iterator();
+        }
     }
 
     public static String simpleName(PluginDesc<?> plugin) {

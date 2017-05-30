@@ -141,19 +141,10 @@ public class DelegatingClassLoader extends URLClassLoader {
                 // containing plugins
                 if (Files.isDirectory(pluginPath)) {
                     for (Path pluginLocation : PluginUtils.pluginLocations(pluginPath)) {
-                        log.info("Loading plugin from: {}", pluginLocation);
-                        URL[] urls = PluginUtils.pluginUrls(pluginLocation).toArray(new URL[0]);
-                        if (log.isDebugEnabled()) {
-                            log.debug("Loading plugin urls: {}", Arrays.toString(urls));
-                        }
-                        PluginClassLoader loader = newPluginClassLoader(
-                                pluginLocation.toUri().toURL(),
-                                urls,
-                                this
-                        );
-
-                        scanUrlsAndAddPlugins(loader, urls, pluginLocation);
+                        registerPlugin(pluginLocation);
                     }
+                } else if (PluginUtils.isArchive(pluginPath)) {
+                    registerPlugin(pluginPath);
                 }
             }
 
@@ -172,6 +163,21 @@ public class DelegatingClassLoader extends URLClassLoader {
             log.error("Could not instantiate plugins in: {}. Ignoring: {}", path, e);
         }
         addAllAliases();
+    }
+
+    private void registerPlugin(Path pluginLocation)
+            throws InstantiationException, IllegalAccessException, IOException {
+        log.info("Loading plugin from: {}", pluginLocation);
+        URL[] urls = PluginUtils.pluginUrls(pluginLocation);
+        if (log.isDebugEnabled()) {
+            log.debug("Loading plugin urls: {}", Arrays.toString(urls));
+        }
+        PluginClassLoader loader = newPluginClassLoader(
+                pluginLocation.toUri().toURL(),
+                urls,
+                this
+        );
+        scanUrlsAndAddPlugins(loader, urls, pluginLocation);
     }
 
     private void scanUrlsAndAddPlugins(
@@ -257,6 +263,11 @@ public class DelegatingClassLoader extends URLClassLoader {
         Class<?> klass = null;
         for (PluginClassLoader loader : activePaths.values()) {
             try {
+                log.debug(
+                        "Searching among Plugin Classloaders for class: {} with loader: {}",
+                        name,
+                        loader
+                );
                 klass = loader.loadClass(name, resolve);
                 break;
             } catch (ClassNotFoundException e) {

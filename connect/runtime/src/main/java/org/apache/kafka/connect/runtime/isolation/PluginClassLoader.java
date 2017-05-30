@@ -23,7 +23,7 @@ import java.net.URL;
 import java.net.URLClassLoader;
 
 public class PluginClassLoader extends URLClassLoader {
-    private static final Logger log = LoggerFactory.getLogger(DelegatingClassLoader.class);
+    private static final Logger log = LoggerFactory.getLogger(PluginClassLoader.class);
     private final URL pluginLocation;
 
     public PluginClassLoader(URL pluginLocation, URL[] urls, ClassLoader parent) {
@@ -50,13 +50,8 @@ public class PluginClassLoader extends URLClassLoader {
         Class<?> klass = findLoadedClass(name);
         if (klass == null) {
             if (PluginUtils.shouldLoadInIsolation(name)) {
-                try {
-                    klass = findClass(name);
-                } catch (ClassNotFoundException e) {
-                    // Not found in loader's path. Search in parents.
-                }
-            }
-            if (klass == null) {
+                klass = findClass(name);
+            } else {
                 klass = super.loadClass(name, false);
             }
         }
