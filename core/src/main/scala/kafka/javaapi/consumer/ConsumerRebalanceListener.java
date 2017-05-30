@@ -25,6 +25,10 @@ import java.util.Set;
  * This listener is used for execution of tasks defined by user when a consumer rebalance
  * occurs in {@link kafka.consumer.ZookeeperConsumerConnector}
  */
+/**
+ * @deprecated This interface will be removed in a future release.
+ */
+@Deprecated
 public interface ConsumerRebalanceListener {
 
     /**

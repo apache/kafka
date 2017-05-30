@@ -23,6 +23,7 @@ import kafka.common.{ClientIdAllBrokers, ClientIdBroker, ClientIdAndBroker}
 import kafka.metrics.{KafkaMetricsGroup, KafkaTimer}
 import kafka.utils.Pool
 
+@deprecated("This class has been deprecated and will be removed in a future release.", "0.11.0.0")
 class FetchRequestAndResponseMetrics(metricId: ClientIdBroker) extends KafkaMetricsGroup {
   val tags = metricId match {
     case ClientIdAndBroker(clientId, brokerHost, brokerPort) =>
@@ -41,6 +42,7 @@ class FetchRequestAndResponseMetrics(metricId: ClientIdBroker) extends KafkaMetr
  * Tracks metrics of the requests made by a given consumer client to all brokers, and the responses obtained from the brokers.
  * @param clientId ClientId of the given consumer
  */
+@deprecated("This class has been deprecated and will be removed in a future release.", "0.11.0.0")
 class FetchRequestAndResponseStats(clientId: String) {
   private val valueFactory = (k: ClientIdBroker) => new FetchRequestAndResponseMetrics(k)
   private val stats = new Pool[ClientIdBroker, FetchRequestAndResponseMetrics](Some(valueFactory))
@@ -56,6 +58,7 @@ class FetchRequestAndResponseStats(clientId: String) {
 /**
  * Stores the fetch request and response stats information of each consumer client in a (clientId -> FetchRequestAndResponseStats) map.
  */
+@deprecated("This object has been deprecated and will be removed in a future release.", "0.11.0.0")
 object FetchRequestAndResponseStatsRegistry {
   private val valueFactory = (k: String) => new FetchRequestAndResponseStats(k)
   private val globalStats = new Pool[String, FetchRequestAndResponseStats](Some(valueFactory))
