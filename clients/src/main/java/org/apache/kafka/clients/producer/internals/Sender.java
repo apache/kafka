@@ -299,15 +299,24 @@ public class Sender implements Runnable {
     private boolean maybeSendTransactionalRequest(long now) {
         String transactionalId = transactionManager.transactionalId();
         if (transactionManager.isCompletingTransaction() && !transactionManager.hasPartitionsToAdd() && accumulator.hasUnflushedBatches()) {
+
+            // If the transaction is being aborted, then we can clear any unsent produce requests
             if (transactionManager.isAborting())
                 accumulator.abortUnsentBatches(new KafkaException("Failing batch since transaction was aborted"));
 
+            // There may still be requests left which are being retried. Since we do not know whether they had
+            // been successfully appended to the broker log, we must resend them until their final status is clear.
+            // If they had been appended and we did not receive the error, then our sequence number would no longer
+            // be correct which would lead to an OutOfSequenceException.
             if (!accumulator.flushInProgress())
                 accumulator.beginFlush();
 
-            log.trace("TransactionalId: {} -- Waiting for pending batches to be sent before completing", transactionalId);
-            if (accumulator.hasUnflushedBatches())
+            // Do not send the EndTxn until all pending batches have been completed
+            if (accumulator.hasUnflushedBatches()) {
+                log.trace("TransactionalId: {} -- Waiting for pending batches to be flushed before completing transaction",
+                        transactionalId);
                 return false;
+            }
         }
 
         TransactionManager.TxnRequestHandler nextRequestHandler = transactionManager.nextRequestHandler();
