@@ -282,7 +282,7 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
           val marker = new TxnMarkerEntry(producerId, producerEpoch, coordinatorEpoch, result, topicPartitions.toList.asJava)
           val txnIdAndMarker = TxnIdAndMarkerEntry(transactionalId, marker)
 
-          if (brokerNode.eq(Node.noNode)) {
+          if (brokerNode == Node.noNode) {
             // if the leader of the partition is known but node not available, put it into an unknown broker queue
             // and let the sender thread to look for its broker and migrate them later
             markersQueueForUnknownBroker.addMarkers(txnTopicPartition, txnIdAndMarker)
