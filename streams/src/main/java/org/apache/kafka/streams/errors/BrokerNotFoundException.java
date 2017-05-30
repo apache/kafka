@@ -24,7 +24,6 @@ import org.apache.kafka.common.annotation.InterfaceStability;
  *
  * @see org.apache.kafka.streams.StreamsConfig
  */
-@InterfaceStability.Unstable
 public class BrokerNotFoundException extends StreamsException {
 
     private final static long serialVersionUID = 1L;

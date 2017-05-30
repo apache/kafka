@@ -41,7 +41,6 @@ import org.apache.kafka.common.annotation.InterfaceStability;
  * @see KTable#leftJoin(KTable, ValueJoiner)
  * @see KTable#outerJoin(KTable, ValueJoiner)
  */
-@InterfaceStability.Unstable
 public interface ValueJoiner<V1, V2, VR> {
 
     /**

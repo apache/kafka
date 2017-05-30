@@ -27,7 +27,6 @@ import org.apache.kafka.common.annotation.InterfaceStability;
  * being (re)-initialized. Once the rebalance has completed the stores will be available again. Hence, it is valid
  * to backoff and retry when handling this exception.
  */
-@InterfaceStability.Unstable
 public class InvalidStateStoreException extends StreamsException {
 
     private final static long serialVersionUID = 1L;

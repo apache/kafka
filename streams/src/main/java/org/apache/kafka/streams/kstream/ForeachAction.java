@@ -31,7 +31,6 @@ import org.apache.kafka.common.annotation.InterfaceStability;
  * @see KStream#foreach(ForeachAction)
  * @see KTable#foreach(ForeachAction)
  */
-@InterfaceStability.Unstable
 public interface ForeachAction<K, V> {
 
     /**

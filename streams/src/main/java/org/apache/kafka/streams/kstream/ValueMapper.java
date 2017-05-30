@@ -34,7 +34,6 @@ import org.apache.kafka.common.annotation.InterfaceStability;
  * @see KStream#flatMapValues(ValueMapper)
  * @see KTable#mapValues(ValueMapper)
  */
-@InterfaceStability.Unstable
 public interface ValueMapper<V, VR> {
 
     /**

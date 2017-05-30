@@ -67,7 +67,6 @@ import org.apache.kafka.streams.processor.TimestampExtractor;
  * @see KGroupedStream#aggregate(Initializer, Aggregator, Merger, SessionWindows, org.apache.kafka.common.serialization.Serde, org.apache.kafka.streams.processor.StateStoreSupplier)
  * @see TimestampExtractor
  */
-@InterfaceStability.Unstable
 public final class SessionWindows {
 
     private final long gapMs;

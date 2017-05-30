@@ -45,7 +45,6 @@ import org.apache.kafka.streams.KeyValue;
  * @see KTable#groupBy(KeyValueMapper, org.apache.kafka.common.serialization.Serde, org.apache.kafka.common.serialization.Serde)
  * @see KTable#toStream(KeyValueMapper)
  */
-@InterfaceStability.Unstable
 public interface KeyValueMapper<K, V, VR> {
 
     /**

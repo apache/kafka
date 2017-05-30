@@ -54,7 +54,6 @@ import java.util.Map;
  * @see KGroupedStream#aggregate(Initializer, Aggregator, Windows, org.apache.kafka.streams.processor.StateStoreSupplier)
  * @see TimestampExtractor
  */
-@InterfaceStability.Unstable
 public final class TimeWindows extends Windows<TimeWindow> {
 
     /** The size of the windows in milliseconds. */

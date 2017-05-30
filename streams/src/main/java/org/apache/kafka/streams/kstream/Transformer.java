@@ -45,7 +45,6 @@ import org.apache.kafka.streams.processor.TimestampExtractor;
  * @see KStream#map(KeyValueMapper)
  * @see KStream#flatMap(KeyValueMapper)
  */
-@InterfaceStability.Unstable
 public interface Transformer<K, V, R> {
 
     /**

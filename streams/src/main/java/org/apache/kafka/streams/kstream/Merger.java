@@ -24,7 +24,6 @@ import org.apache.kafka.common.annotation.InterfaceStability;
  * @param <K>   key type
  * @param <V>   aggregate value type
  */
-@InterfaceStability.Unstable
 public interface Merger<K, V> {
 
     /**

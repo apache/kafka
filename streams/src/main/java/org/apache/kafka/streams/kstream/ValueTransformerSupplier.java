@@ -29,7 +29,6 @@ import org.apache.kafka.common.annotation.InterfaceStability;
  * @see TransformerSupplier
  * @see KStream#transform(TransformerSupplier, String...)
  */
-@InterfaceStability.Unstable
 public interface ValueTransformerSupplier<V, VR> {
 
     /**

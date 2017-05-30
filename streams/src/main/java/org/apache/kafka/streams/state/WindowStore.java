@@ -25,7 +25,6 @@ import org.apache.kafka.streams.processor.StateStore;
  * @param <K> Type of keys
  * @param <V> Type of values
  */
-@InterfaceStability.Unstable
 public interface WindowStore<K, V> extends StateStore, ReadOnlyWindowStore<K, V> {
 
     /**

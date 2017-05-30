@@ -28,7 +28,6 @@ import org.apache.kafka.streams.state.internals.StateStoreProvider;
  *
  * @param <T>   The store type
  */
-@InterfaceStability.Unstable
 public interface QueryableStoreType<T> {
 
     /**

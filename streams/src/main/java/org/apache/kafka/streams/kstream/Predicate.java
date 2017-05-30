@@ -32,7 +32,6 @@ import org.apache.kafka.streams.KeyValue;
  * @see KTable#filter(Predicate)
  * @see KTable#filterNot(Predicate)
  */
-@InterfaceStability.Unstable
 public interface Predicate<K, V> {
 
     /**

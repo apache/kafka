@@ -27,7 +27,6 @@ import org.apache.kafka.streams.kstream.Windowed;
  * @param <K> Type of keys
  * @param <V> Type of values
  */
-@InterfaceStability.Unstable
 public interface ReadOnlyWindowStore<K, V> {
 
     /**

@@ -35,7 +35,6 @@ import java.util.Map;
  * @see SessionWindows
  * @see TimestampExtractor
  */
-@InterfaceStability.Unstable
 public abstract class Windows<W extends Window> {
 
     private static final int DEFAULT_NUM_SEGMENTS = 3;

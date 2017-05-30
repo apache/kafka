@@ -23,7 +23,6 @@ import org.apache.kafka.common.annotation.InterfaceStability;
  *
  * @see org.apache.kafka.streams.processor.StateStore
  */
-@InterfaceStability.Unstable
 public class ProcessorStateException extends StreamsException {
 
     private final static long serialVersionUID = 1L;

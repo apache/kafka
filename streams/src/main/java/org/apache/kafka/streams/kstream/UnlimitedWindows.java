@@ -43,7 +43,6 @@ import java.util.Map;
  * @see KGroupedStream#aggregate(Initializer, Aggregator, Windows, org.apache.kafka.streams.processor.StateStoreSupplier)
  * @see TimestampExtractor
  */
-@InterfaceStability.Unstable
 public final class UnlimitedWindows extends Windows<UnlimitedWindow> {
 
     private static final long DEFAULT_START_TIMESTAMP_MS = 0L;

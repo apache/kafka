@@ -42,7 +42,6 @@ import org.apache.kafka.streams.processor.TimestampExtractor;
  * @see KStream#transformValues(ValueTransformerSupplier, String...)
  * @see Transformer
  */
-@InterfaceStability.Unstable
 public interface ValueTransformer<V, VR> {
 
     /**

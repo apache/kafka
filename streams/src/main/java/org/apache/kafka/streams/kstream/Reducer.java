@@ -36,7 +36,6 @@ import org.apache.kafka.streams.KeyValue;
  * @see KGroupedStream#reduce(Reducer, SessionWindows, org.apache.kafka.streams.processor.StateStoreSupplier)
  * @see Aggregator
  */
-@InterfaceStability.Unstable
 public interface Reducer<V> {
 
     /**

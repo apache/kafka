@@ -28,7 +28,6 @@ import org.apache.kafka.streams.kstream.Windowed;
  * @param <K> the key type
  * @param <AGG> the aggregated value type
  */
-@InterfaceStability.Unstable
 public interface ReadOnlySessionStore<K, AGG> {
 
     /**

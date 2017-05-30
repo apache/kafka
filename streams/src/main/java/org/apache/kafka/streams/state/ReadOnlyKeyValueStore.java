@@ -27,7 +27,6 @@ import org.apache.kafka.streams.errors.InvalidStateStoreException;
  * @param <K> the key type
  * @param <V> the value type
  */
-@InterfaceStability.Unstable
 public interface ReadOnlyKeyValueStore<K, V> {
 
     /**
