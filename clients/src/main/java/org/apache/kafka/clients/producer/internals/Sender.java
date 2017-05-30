@@ -298,25 +298,22 @@ public class Sender implements Runnable {
 
     private boolean maybeSendTransactionalRequest(long now) {
         String transactionalId = transactionManager.transactionalId();
-        TransactionManager.TxnRequestHandler nextRequestHandler = transactionManager.nextRequestHandler();
-        if (nextRequestHandler == null) {
-            log.trace("TransactionalId: {} -- There are no pending transactional requests to send",
-                    transactionalId);
-            return false;
-        }
-
-        if (nextRequestHandler.isEndTxn() && accumulator.hasUnflushedBatches()) {
+        if (transactionManager.isCompletingTransaction() && !transactionManager.hasPartitionsToAdd() && accumulator.hasUnflushedBatches()) {
             if (transactionManager.isAborting())
                 accumulator.abortUnsentBatches(new KafkaException("Failing batch since transaction was aborted"));
 
             if (!accumulator.flushInProgress())
                 accumulator.beginFlush();
-            transactionManager.reenqueue(nextRequestHandler);
-            log.trace("TransactionalId: {} -- Going to wait for pending ProducerBatches to flush before sending an " +
-                    "EndTxn request", transactionalId);
 
+            log.trace("TransactionalId: {} -- Waiting for pending batches to be sent before completing", transactionalId);
             if (accumulator.hasUnflushedBatches())
                 return false;
+        }
+
+        TransactionManager.TxnRequestHandler nextRequestHandler = transactionManager.nextRequestHandler();
+        if (nextRequestHandler == null) {
+            log.trace("TransactionalId: {} -- There are no pending transactional requests to send", transactionalId);
+            return false;
         }
 
         AbstractRequest.Builder<?> requestBuilder = nextRequestHandler.requestBuilder();
@@ -357,7 +354,7 @@ public class Sender implements Runnable {
                 log.debug("TransactionalId: {} -- Disconnect from {} while trying to send request {}. Going " +
                                 "to back off and retry", transactionalId, targetNode, requestBuilder);
             }
-            log.trace("TransactionalId: {}. About to wait for {}ms before trying to send another request.",
+            log.trace("TransactionalId: {} -- About to wait for {}ms before trying to send another request.",
                     transactionalId, retryBackoffMs);
             time.sleep(retryBackoffMs);
             metadata.requestUpdate();

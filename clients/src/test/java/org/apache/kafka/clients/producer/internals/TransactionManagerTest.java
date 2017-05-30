@@ -670,7 +670,7 @@ public class TransactionManagerTest {
         assertFalse(responseFuture.isDone());
 
         TransactionalRequestResult abortResult = transactionManager.beginAbortingTransaction();
-        prepareEndTxnResponse(Errors.NONE, TransactionResult.ABORT, pid, epoch);
+        // note since no partitions were added to the transaction, no EndTxn will be sent
 
         sender.run(time.milliseconds());  // try to abort
         assertTrue(abortResult.isCompleted());
@@ -840,27 +840,18 @@ public class TransactionManagerTest {
 
     @Test
     public void shouldNotSendAbortTxnRequestWhenOnlyAddPartitionsRequestFailed() throws Exception {
-        client.setNode(brokerNode);
-        // This is called from the initTransactions method in the producer as the first order of business.
-        // It finds the coordinator and then gets a PID.
         final long pid = 13131L;
         final short epoch = 1;
-        transactionManager.initializeTransactions();
-        prepareFindCoordinatorResponse(Errors.NONE, false, FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
 
-        sender.run(time.milliseconds());  // find coordinator
-        sender.run(time.milliseconds());
-
-        prepareInitPidResponse(Errors.NONE, false, pid, epoch);
-        sender.run(time.milliseconds());  // get pid.
+        doInitTransactions(pid, epoch);
 
         transactionManager.beginTransaction();
         transactionManager.maybeAddPartitionToTransaction(tp0);
 
-        TransactionalRequestResult abortResult = transactionManager.beginAbortingTransaction();
-
         prepareAddPartitionsToTxnResponse(Errors.TOPIC_AUTHORIZATION_FAILED, tp0, epoch, pid);
         sender.run(time.milliseconds());  // Send AddPartitionsRequest
+
+        TransactionalRequestResult abortResult = transactionManager.beginAbortingTransaction();
         assertFalse(abortResult.isCompleted());
 
         sender.run(time.milliseconds());
@@ -870,19 +861,10 @@ public class TransactionManagerTest {
 
     @Test
     public void shouldNotSendAbortTxnRequestWhenOnlyAddOffsetsRequestFailed() throws Exception {
-        client.setNode(brokerNode);
-        // This is called from the initTransactions method in the producer as the first order of business.
-        // It finds the coordinator and then gets a PID.
         final long pid = 13131L;
         final short epoch = 1;
-        transactionManager.initializeTransactions();
-        prepareFindCoordinatorResponse(Errors.NONE, false, FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
 
-        sender.run(time.milliseconds());  // find coordinator
-        sender.run(time.milliseconds());
-
-        prepareInitPidResponse(Errors.NONE, false, pid, epoch);
-        sender.run(time.milliseconds());  // get pid.
+        doInitTransactions(pid, epoch);
 
         transactionManager.beginTransaction();
         Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();

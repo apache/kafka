@@ -244,6 +244,10 @@ public class TransactionManager {
         return transactionalId != null;
     }
 
+    public synchronized boolean hasPartitionsToAdd() {
+        return !newPartitionsInTransaction.isEmpty() || !pendingPartitionsInTransaction.isEmpty();
+    }
+
     public synchronized boolean isCompletingTransaction() {
         return currentState == State.COMMITTING_TRANSACTION || currentState == State.ABORTING_TRANSACTION;
     }
@@ -352,15 +356,16 @@ public class TransactionManager {
         }
 
         if (nextRequestHandler != null && nextRequestHandler.isEndTxn() && !transactionStarted) {
-            ((EndTxnHandler) nextRequestHandler).result.done();
+            nextRequestHandler.result.done();
             if (currentState != State.FATAL_ERROR) {
+                log.debug("TransactionId: {} -- Not sending EndTxn for completed transaction since no partitions " +
+                        "or offsets were successfully added", transactionalId);
                 completeTransaction();
             }
             return pendingRequests.poll();
         }
 
         return nextRequestHandler;
-
     }
 
     synchronized void retry(TxnRequestHandler request) {
@@ -504,7 +509,7 @@ public class TransactionManager {
         return new TxnOffsetCommitHandler(result, builder);
     }
 
-    abstract class TxnRequestHandler implements  RequestCompletionHandler {
+    abstract class TxnRequestHandler implements RequestCompletionHandler {
         protected final TransactionalRequestResult result;
         private boolean isRetry = false;
 
