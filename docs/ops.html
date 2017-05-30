@@ -1103,6 +1103,16 @@
         <td>The age in seconds of the current producer metadata being used.</td>
         <td>kafka.producer:type=producer-metrics,client-id=([-.\w]+)</td>
       </tr>
+      <tr>
+        <td>produce-throttle-time-max</td>
+        <td>The maximum time in ms a request was throttled by a broker.</td>
+        <td>kafka.producer:type=producer-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>produce-throttle-time-avg</td>
+        <td>The average time in ms a request was throttled by a broker.</td>
+        <td>kafka.producer:type=producer-metrics,client-id=([-.\w]+)</td>
+      </tr>
 
       <tr>
         <td>record-send-rate</td>
@@ -1128,16 +1138,6 @@
         <td>record-error-rate</td>
         <td>The average per-second number of record sends that resulted in errors for a topic.</td>
         <td>kafka.producer:type=producer-topic-metrics,client-id=([-.\w]+),topic=([-.\w]+)</td>
-      </tr>
-      <tr>
-        <td>produce-throttle-time-max</td>
-        <td>The maximum time in ms a request was throttled by a broker.</td>
-        <td>kafka.producer:type=producer-topic-metrics,client-id=([-.\w]+)</td>
-      </tr>
-      <tr>
-        <td>produce-throttle-time-avg</td>
-        <td>The average time in ms a request was throttled by a broker.</td>
-        <td>kafka.producer:type=producer-topic-metrics,client-id=([-.\w]+)</td>
       </tr>
   </tbody></table>
 
