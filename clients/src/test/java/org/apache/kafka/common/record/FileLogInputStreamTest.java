@@ -37,7 +37,7 @@ public class FileLogInputStreamTest {
                     new SimpleRecord("bar".getBytes())));
             fileRecords.flush();
 
-            FileLogInputStream logInputStream = new FileLogInputStream(fileRecords.channel(), Integer.MAX_VALUE, 0,
+            FileLogInputStream logInputStream = new FileLogInputStream(fileRecords.channel(), 0,
                     fileRecords.sizeInBytes());
 
             FileLogInputStream.FileChannelRecordBatch batch = logInputStream.nextBatch();
