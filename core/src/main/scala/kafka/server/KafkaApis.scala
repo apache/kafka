@@ -1492,7 +1492,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     def sendResponseCallback(producerId: Long, result: TransactionResult)(responseStatus: Map[TopicPartition, PartitionResponse]): Unit = {
       trace(s"End transaction marker append for producer id $producerId completed with status: $responseStatus")
-      if (!errors.contains(producerId))
+      if (!errors.containsKey(producerId))
         errors.put(producerId, responseStatus.mapValues(_.error).asJava)
       else
         errors.get(producerId).putAll(responseStatus.mapValues(_.error).asJava)
@@ -1522,6 +1522,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     // be nice to have only one append to the log. This requires pushing the building of the control records
     // into Log so that we only append those having a valid producer epoch, and exposing a new appendControlRecord
     // API in ReplicaManager. For now, we've done the simpler approach
+    var skippedMarkers = 0
     for (marker <- markers.asScala) {
       val producerId = marker.producerId
       val (goodPartitions, partitionsWithIncorrectMessageFormat) = marker.partitions.asScala.partition { partition =>
@@ -1531,14 +1532,16 @@ class KafkaApis(val requestChannel: RequestChannel,
         }
       }
 
-      if (partitionsWithIncorrectMessageFormat.nonEmpty)
-        errors.put(producerId, partitionsWithIncorrectMessageFormat.map { partition =>
-          partition -> Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT
-        }.toMap.asJava)
+      if (partitionsWithIncorrectMessageFormat.nonEmpty) {
+        val partitionErrors = new util.HashMap[TopicPartition, Errors]()
+        partitionsWithIncorrectMessageFormat.foreach { partition => partitionErrors.put(partition, Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT) }
+        errors.put(producerId, partitionErrors)
+      }
 
-      if (goodPartitions.isEmpty)
-        sendResponseExemptThrottle(request, () => sendResponse(request, new WriteTxnMarkersResponse(errors)))
-      else {
+      if (goodPartitions.isEmpty) {
+        numAppends.decrementAndGet()
+        skippedMarkers += 1
+      } else {
         val controlRecords = goodPartitions.map { partition =>
           val controlRecordType = marker.transactionResult match {
             case TransactionResult.COMMIT => ControlRecordType.COMMIT
@@ -1547,7 +1550,6 @@ class KafkaApis(val requestChannel: RequestChannel,
           val endTxnMarker = new EndTransactionMarker(controlRecordType, marker.coordinatorEpoch)
           partition -> MemoryRecords.withEndTransactionMarker(producerId, marker.producerEpoch, endTxnMarker)
         }.toMap
-
 
         replicaManager.appendRecords(
           timeout = config.requestTimeoutMs.toLong,
@@ -1558,6 +1560,11 @@ class KafkaApis(val requestChannel: RequestChannel,
           responseCallback = sendResponseCallback(producerId, marker.transactionResult))
       }
     }
+
+    // No log appends were written as all partitions had incorrect log format
+    // so we need to send the error response
+    if (skippedMarkers == markers.size())
+      sendResponseExemptThrottle(request, () => sendResponse(request, new WriteTxnMarkersResponse(errors)))
   }
 
   def ensureInterBrokerVersion(version: ApiVersion): Unit = {

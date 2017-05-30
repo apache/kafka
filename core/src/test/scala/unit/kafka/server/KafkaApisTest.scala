@@ -37,14 +37,16 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors, SecurityProtocol}
 import org.apache.kafka.common.record.RecordBatch
+import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests.WriteTxnMarkersRequest.TxnMarkerEntry
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.Utils
-import org.easymock.{Capture, EasyMock}
+import org.easymock.{Capture, EasyMock, IAnswer}
 import org.junit.{Assert, Before, Test}
 
 import scala.collection.JavaConverters._
+import scala.collection.Map
 
 
 class KafkaApisTest {
@@ -119,26 +121,15 @@ class KafkaApisTest {
   }
 
   @Test
-  def shouldRespondWithUnsupportedForMessageFormatWhenMagicLowerThanRequired(): Unit = {
+  def shouldRespondWithUnsupportedForMessageFormatOnHandleWriteTxnMarkersWhenMagicLowerThanRequired(): Unit = {
     val topicPartition = new TopicPartition("t", 0)
-    val partitions = Utils.mkList(topicPartition)
-    val writeTxnMarkersRequest = new WriteTxnMarkersRequest.Builder(Utils.mkList(
-      new TxnMarkerEntry(1, 1.toShort, 0, TransactionResult.COMMIT, partitions))).build()
-    val header = new RequestHeader(ApiKeys.WRITE_TXN_MARKERS.id, writeTxnMarkersRequest.version(), "", 0)
-    val byteBuffer = writeTxnMarkersRequest.serialize(header)
-    val request = RequestChannel.Request(1, "1",
-      Session(KafkaPrincipal.ANONYMOUS,
-        InetAddress.getLocalHost),
-      byteBuffer, 0,
-      new ListenerName(""),
-      SecurityProtocol.PLAINTEXT)
+    val (writeTxnMarkersRequest: WriteTxnMarkersRequest, request: RequestChannel.Request) = createWriteTxnMarkersRequest(Utils.mkList(topicPartition))
     val expectedErrors = Map(topicPartition -> Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT).asJava
     val capturedResponse: Capture[RequestChannel.Response] = EasyMock.newCapture()
 
     EasyMock.expect(replicaManager.getMagic(topicPartition))
       .andReturn(Some(RecordBatch.MAGIC_VALUE_V1))
     EasyMock.expect(requestChannel.sendResponse(EasyMock.capture(capturedResponse)))
-
     EasyMock.replay(replicaManager, replicaQuotaManager, requestChannel)
 
     createKafkaApis(KAFKA_0_11_0_IV0).handleWriteTxnMarkersRequest(request)
@@ -157,5 +148,92 @@ class KafkaApisTest {
     val markersResponse = new WriteTxnMarkersResponse(struct)
     Assert.assertEquals(expectedErrors, markersResponse.errors(1))
   }
-  
+
+  @Test
+  def shouldRespondWithUnsupportedMessageFormatForBadPartitionAndNoErrorsForGoodPartition(): Unit = {
+    val tp1 = new TopicPartition("t", 0)
+    val tp2 = new TopicPartition("t1", 0)
+    val (writeTxnMarkersRequest: WriteTxnMarkersRequest, request: RequestChannel.Request) = createWriteTxnMarkersRequest(Utils.mkList(tp1, tp2))
+    val expectedErrors = Map(tp1 -> Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT, tp2 -> Errors.NONE).asJava
+
+    val capturedResponse: Capture[RequestChannel.Response] = EasyMock.newCapture()
+    val responseCallback: Capture[Map[TopicPartition, PartitionResponse] => Unit]  = EasyMock.newCapture()
+
+    EasyMock.expect(replicaManager.getMagic(tp1))
+      .andReturn(Some(RecordBatch.MAGIC_VALUE_V1))
+    EasyMock.expect(replicaManager.getMagic(tp2))
+      .andReturn(Some(RecordBatch.MAGIC_VALUE_V2))
+
+
+    EasyMock.expect(replicaManager.appendRecords(EasyMock.anyLong(),
+      EasyMock.anyShort(),
+      EasyMock.eq(true),
+      EasyMock.eq(false),
+      EasyMock.anyObject(),
+      EasyMock.capture(responseCallback),
+      EasyMock.anyObject())).andAnswer(new IAnswer[Unit] {
+      override def answer(): Unit = {
+        responseCallback.getValue.apply(Map(tp2 -> new PartitionResponse(Errors.NONE)))
+      }
+    })
+
+    EasyMock.expect(requestChannel.sendResponse(EasyMock.capture(capturedResponse)))
+    EasyMock.replay(replicaManager, replicaQuotaManager, requestChannel)
+
+
+    createKafkaApis(KAFKA_0_11_0_IV0).handleWriteTxnMarkersRequest(request)
+
+    val send = capturedResponse.getValue.responseSend.get
+    val channel = new ByteBufferChannel(send.size())
+    send.writeTo(channel)
+    channel.close()
+
+    // read the size
+    channel.buffer.getInt()
+
+    val responseHeader = ResponseHeader.parse(channel.buffer)
+    val struct = ApiKeys.WRITE_TXN_MARKERS.responseSchema(writeTxnMarkersRequest.version()).read(channel.buffer)
+
+    val markersResponse = new WriteTxnMarkersResponse(struct)
+    Assert.assertEquals(expectedErrors, markersResponse.errors(1))
+    EasyMock.verify(replicaManager)
+  }
+
+  @Test
+  def shouldAppendToLogOnWriteTxnMarkersWhenCorrectMagicVersion(): Unit = {
+    val topicPartition = new TopicPartition("t", 0)
+    val (writeTxnMarkersRequest: WriteTxnMarkersRequest, request: RequestChannel.Request) = createWriteTxnMarkersRequest(Utils.mkList(topicPartition))
+    EasyMock.expect(replicaManager.getMagic(topicPartition))
+      .andReturn(Some(RecordBatch.MAGIC_VALUE_V2))
+
+    EasyMock.expect(replicaManager.appendRecords(EasyMock.anyLong(),
+      EasyMock.anyShort(),
+      EasyMock.eq(true),
+      EasyMock.eq(false),
+      EasyMock.anyObject(),
+      EasyMock.anyObject(),
+      EasyMock.anyObject()))
+
+    EasyMock.replay(replicaManager)
+
+    createKafkaApis(KAFKA_0_11_0_IV0).handleWriteTxnMarkersRequest(request)
+    EasyMock.verify(replicaManager)
+  }
+
+  private def createWriteTxnMarkersRequest(partitions: util.List[TopicPartition]) = {
+    val writeTxnMarkersRequest = new WriteTxnMarkersRequest.Builder(Utils.mkList(
+    new TxnMarkerEntry(1, 1.toShort, 0, TransactionResult.COMMIT, partitions))).build()
+    val header = new RequestHeader(ApiKeys.WRITE_TXN_MARKERS.id, writeTxnMarkersRequest.version(), "", 0)
+    val byteBuffer = writeTxnMarkersRequest.serialize(header)
+
+    val request = RequestChannel.Request(1, "1",
+    Session(KafkaPrincipal.ANONYMOUS,
+    InetAddress.getLocalHost),
+    byteBuffer, 0,
+    new ListenerName(""),
+    SecurityProtocol.PLAINTEXT)
+    (writeTxnMarkersRequest, request)
+  }
+
+
 }
