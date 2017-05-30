@@ -191,4 +191,31 @@ class ConsoleConsumerTest {
 
     assertEquals("1000", config.consumerProps.getProperty("request.timeout.ms"))
   }
+
+  @Test
+  def shouldOverwriteConfigFromConfigFileOrPropertiesWithConfigFromArguments() {
+    val propsFile = TestUtils.tempFile()
+    val propsStream = new FileOutputStream(propsFile)
+    propsStream.write("auto.offset.reset=earliest\n".getBytes())
+    propsStream.write("key.deserializer=org.apache.kafka.common.serialization.LongDeserializer\n".getBytes())
+    propsStream.write("value.deserializer=org.apache.kafka.common.serialization.LongDeserializer".getBytes())
+    propsStream.close()
+    val args: Array[String] = Array(
+      "--bootstrap-server", "localhost:9092",
+      "--topic", "test",
+      "--key-deserializer", "org.apache.kafka.common.serialization.DoubleDeserializer",
+      "--value-deserializer", "org.apache.kafka.common.serialization.DoubleDeserializer",
+      "--consumer-property", "auto.offset.reset=latest",
+      "--consumer-property", "key.deserializer=org.apache.kafka.common.serialization.FloatDeserializer",
+      "--consumer-property", "value.deserializer=org.apache.kafka.common.serialization.FloatDeserializer",
+      "--consumer.config", propsFile.getAbsolutePath
+    )
+
+    val config = new ConsoleConsumer.ConsumerConfig(args)
+    val props = ConsoleConsumer.getNewConsumerProps(config)
+
+    assertEquals("latest", props.getProperty("auto.offset.reset"))
+    assertEquals("org.apache.kafka.common.serialization.DoubleDeserializer", props.getProperty("key.deserializer"))
+    assertEquals("org.apache.kafka.common.serialization.DoubleDeserializer", props.getProperty("value.deserializer"))
+  }
 }

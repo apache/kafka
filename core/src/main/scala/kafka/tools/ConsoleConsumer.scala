@@ -173,7 +173,8 @@ object ConsoleConsumer extends Logging {
 
     props.putAll(config.consumerProps)
     props.putAll(config.extraConsumerProps)
-    props.put("auto.offset.reset", if (config.fromBeginning) "smallest" else "largest")
+    if (!props.containsKey("auto.offset.reset"))
+      props.put("auto.offset.reset", if (config.fromBeginning) "smallest" else "largest")
     props.put("zookeeper.connect", config.zkConnectionStr)
 
     if (!config.options.has(config.deleteConsumerOffsetsOpt) && config.options.has(config.resetBeginningOpt) &&
@@ -196,10 +197,23 @@ object ConsoleConsumer extends Logging {
 
     props.putAll(config.consumerProps)
     props.putAll(config.extraConsumerProps)
-    props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, if (config.options.has(config.resetBeginningOpt)) "earliest" else "latest")
+    if (!props.containsKey(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG))
+      props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, if (config.options.has(config.resetBeginningOpt)) "earliest" else "latest")
     props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, config.bootstrapServer)
-    props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer")
-    props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer")
+
+    if (config.keyDeserializer != null)
+      // the argument that is provided directly takes precedence
+      props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, config.keyDeserializer)
+    else if (!props.containsKey(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG))
+      // the default is used if the argument is not provided directly or indirectly
+      props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer")
+
+    if (config.valueDeserializer != null)
+      // the argument that is provided directly takes precedence
+      props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, config.valueDeserializer)
+    else if (!props.containsKey(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG))
+      // the default is used if the argument is not provided directly or indirectly
+      props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer")
 
     props
   }
@@ -316,12 +330,6 @@ object ConsoleConsumer extends Logging {
     val valueDeserializer = options.valueOf(valueDeserializerOpt)
     val formatter: MessageFormatter = messageFormatterClass.newInstance().asInstanceOf[MessageFormatter]
 
-    if (keyDeserializer != null && !keyDeserializer.isEmpty) {
-      formatterArgs.setProperty(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializer)
-    }
-    if (valueDeserializer != null && !valueDeserializer.isEmpty) {
-      formatterArgs.setProperty(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializer)
-    }
     formatter.init(formatterArgs)
 
     if (useOldConsumer) {
