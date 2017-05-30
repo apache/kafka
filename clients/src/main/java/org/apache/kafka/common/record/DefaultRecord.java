@@ -18,7 +18,6 @@ package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.internals.RecordHeader;
-import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.common.utils.Checksums;
 import org.apache.kafka.common.utils.Crc32C;
@@ -228,24 +227,6 @@ public class DefaultRecord implements Record {
         }
 
         return ByteUtils.sizeOfVarint(sizeInBytes) + sizeInBytes;
-    }
-
-    /**
-     * Write the record to `out` and return its size.
-     */
-    public static int writeTo(ByteBuffer out,
-                              int offsetDelta,
-                              long timestampDelta,
-                              ByteBuffer key,
-                              ByteBuffer value,
-                              Header[] headers) {
-        try {
-            return writeTo(new DataOutputStream(new ByteBufferOutputStream(out)), offsetDelta, timestampDelta,
-                    key, value, headers);
-        } catch (IOException e) {
-            // cannot actually be raised by ByteBufferOutputStream
-            throw new IllegalStateException("Unexpected exception raised from ByteBufferOutputStream", e);
-        }
     }
 
     @Override

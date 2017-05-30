@@ -94,6 +94,7 @@ public class ByteBufferOutputStreamTest {
 
         ByteBufferOutputStream output = new ByteBufferOutputStream(ByteBuffer.allocate(32));
         output.write(input);
+        assertEquals(8, input.position());
         assertEquals(8, output.position());
         assertEquals(value, output.buffer().getLong(0));
     }
