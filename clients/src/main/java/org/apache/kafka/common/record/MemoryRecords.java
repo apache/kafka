@@ -191,7 +191,7 @@ public class MemoryRecords extends AbstractRecords {
 
                 if (filteredBatchSize > batch.sizeInBytes() && filteredBatchSize > maxRecordBatchSize)
                     log.warn("Record batch from {} with last offset {} exceeded max record batch size {} after cleaning " +
-                                    "(new size is {}). Consumers from version 0.10.1 and earlier may need to " +
+                                    "(new size is {}). Consumers with version earlier than 0.10.1.0 may need to " +
                                     "increase their fetch sizes.",
                             partition, batch.lastOffset(), maxRecordBatchSize, filteredBatchSize);
 
@@ -527,13 +527,13 @@ public class MemoryRecords extends AbstractRecords {
         if (records.length == 0)
             return MemoryRecords.EMPTY;
         int sizeEstimate = AbstractRecords.estimateSizeInBytes(magic, compressionType, Arrays.asList(records));
-        ByteBuffer buffer = ByteBuffer.allocate(sizeEstimate);
+        ByteBufferOutputStream bufferStream = new ByteBufferOutputStream(sizeEstimate);
         long logAppendTime = RecordBatch.NO_TIMESTAMP;
         if (timestampType == TimestampType.LOG_APPEND_TIME)
             logAppendTime = System.currentTimeMillis();
-        MemoryRecordsBuilder builder = new MemoryRecordsBuilder(buffer, magic, compressionType, timestampType,
+        MemoryRecordsBuilder builder = new MemoryRecordsBuilder(bufferStream, magic, compressionType, timestampType,
                 initialOffset, logAppendTime, producerId, producerEpoch, baseSequence, isTransactional, false,
-                partitionLeaderEpoch, buffer.capacity());
+                partitionLeaderEpoch, sizeEstimate);
         for (SimpleRecord record : records)
             builder.append(record);
         return builder.build();
