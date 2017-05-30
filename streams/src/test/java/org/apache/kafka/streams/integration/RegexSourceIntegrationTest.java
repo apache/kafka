@@ -61,7 +61,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
-import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -320,61 +319,6 @@ public class RegexSourceIntegrationTest {
         Collections.sort(actualValues);
         Collections.sort(expectedReceivedValues);
         assertThat(actualValues, equalTo(expectedReceivedValues));
-    }
-
-    @Test
-    public void shouldAlwaysGetNewlyCreatedTopics() throws Exception {
-        final KStreamBuilder builderLeader = new KStreamBuilder();
-        final KStreamBuilder builderFollowerI = new KStreamBuilder();
-        final KStreamBuilder builderFollowerII = new KStreamBuilder();
-
-        final Pattern pattern = Pattern.compile("updating-\\d");
-
-        builderLeader.stream(pattern);
-        builderFollowerI.stream(pattern);
-        builderFollowerII.stream(pattern);
-
-        final KafkaStreams streamsLeader = new KafkaStreams(builderLeader, streamsConfiguration);
-        final KafkaStreams streamsFollowerI = new KafkaStreams(builderFollowerI,
-                                                               streamsConfiguration);
-        final KafkaStreams streamsFollowerII = new KafkaStreams(builderFollowerII,
-                                                                streamsConfiguration);
-
-        final int numberTopicsToAdd = 5;
-
-        try {
-            streamsLeader.start();
-            Thread.sleep(1000);
-            streamsFollowerI.start();
-            Thread.sleep(1000);
-            streamsFollowerII.start();
-
-            for (int i = 0; i < numberTopicsToAdd; i++) {
-                CLUSTER.createTopic("updating-" + i, 3, 1);
-                Thread.sleep(2000);
-            }
-
-            TestCondition noErrorsCondition = new TestCondition() {
-                @Override
-                public boolean conditionMet() {
-                    return builderFollowerII.subscriptionUpdates().getUpdates().size()
-                           == numberTopicsToAdd &&
-
-                           builderFollowerI.subscriptionUpdates().getUpdates().size()
-                           == numberTopicsToAdd &&
-
-                           builderLeader.subscriptionUpdates().getUpdates().size()
-                           == numberTopicsToAdd;
-                }
-            };
-
-            TestUtils.waitForCondition(noErrorsCondition, "All builders did not contain same number"
-                                                          + "of topics");
-        } finally {
-            streamsFollowerI.close(5, TimeUnit.MILLISECONDS);
-            streamsFollowerII.close(5, TimeUnit.MILLISECONDS);
-            streamsLeader.close(5, TimeUnit.MILLISECONDS);
-        }
     }
 
     @Test

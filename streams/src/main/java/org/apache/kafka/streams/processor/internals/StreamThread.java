@@ -179,7 +179,6 @@ public class StreamThread extends Thread {
                 // will become active or vice versa
                 closeNonAssignedSuspendedStandbyTasks();
                 closeNonAssignedSuspendedTasks();
-                maybeAddTopicsFromRebalance(assignment);
                 addStreamTasks(assignment, start);
                 storeChangelogReader.restore();
                 addStandbyTasks(start);
@@ -1456,31 +1455,5 @@ public class StreamThread extends Thread {
         }
 
         return firstException;
-    }
-
-
-    private void maybeAddTopicsFromRebalance(Collection<TopicPartition> assignment) {
-        if (builder.sourceTopicPattern() != null) {
-            Set<String> topicsFromRebalance = new HashSet<>();
-            for (TopicPartition topicPartition : assignment) {
-                topicsFromRebalance.add(topicPartition.topic());
-            }
-
-            log.debug(
-                "stream-thread [{}] validating topics after subscription topics from rebalance "
-                + "assignment {}", getName(), topicsFromRebalance);
-
-            if (!builder.subscriptionUpdates().getUpdates().containsAll(topicsFromRebalance)) {
-                log.debug("stream-thread [{}] rebalance added some new new topics from {}",
-                          getName(), topicsFromRebalance);
-
-                Set<String> allTopicUpdates = new HashSet<>();
-                allTopicUpdates.addAll(builder.subscriptionUpdates().getUpdates());
-                allTopicUpdates.addAll(topicsFromRebalance);
-                SubscriptionUpdates subscriptionUpdatesFromRebalance = new SubscriptionUpdates();
-                subscriptionUpdatesFromRebalance.updateTopics(allTopicUpdates);
-                builder.updateSubscriptions(subscriptionUpdatesFromRebalance, getName());
-            }
-        }
     }
 }

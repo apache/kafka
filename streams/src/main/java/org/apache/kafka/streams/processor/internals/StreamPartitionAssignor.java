@@ -606,6 +606,25 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
             }
         }
         metadataWithInternalTopics = Cluster.empty().withPartitions(topicToPartitionInfo);
+        updateSubscribedTopics(assignment);
+    }
+
+
+    private void updateSubscribedTopics(Assignment assignment) {
+        if (streamThread != null && streamThread.builder.sourceTopicPattern() != null) {
+            final Set<String> assignedTopics = new HashSet<>();
+            for (TopicPartition topicPartition : assignment.partitions()) {
+                assignedTopics.add(topicPartition.topic());
+            }
+            if (!assignedTopics.isEmpty() && !streamThread.builder.subscriptionUpdates().getUpdates().containsAll(assignedTopics)) {
+                final SubscriptionUpdates subscriptionUpdates = new SubscriptionUpdates();
+                assignedTopics.addAll(streamThread.builder.subscriptionUpdates().getUpdates());
+                log.debug("stream-thread [{}] assigned new {} topics possibly matching regex", streamThread.getName(), assignedTopics);
+                // update the topic groups with the returned subscription set for regex pattern subscriptions
+                subscriptionUpdates.updateTopics(assignedTopics);
+                streamThread.builder.updateSubscriptions(subscriptionUpdates, streamThread.getName());
+            }
+        }
     }
 
     /**
@@ -700,6 +719,35 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
 
     void setInternalTopicManager(InternalTopicManager internalTopicManager) {
         this.internalTopicManager = internalTopicManager;
+    }
+
+    /**
+     * Used to capture subscribed topic via Patterns discovered during the
+     * partition assignment process.
+     */
+    public static class SubscriptionUpdates {
+
+        private final Set<String> updatedTopicSubscriptions = new HashSet<>();
+
+        private  void updateTopics(Collection<String> topicNames) {
+            updatedTopicSubscriptions.clear();
+            updatedTopicSubscriptions.addAll(topicNames);
+        }
+
+        public Collection<String> getUpdates() {
+            return Collections.unmodifiableSet(new HashSet<>(updatedTopicSubscriptions));
+        }
+
+        public boolean hasUpdates() {
+            return !updatedTopicSubscriptions.isEmpty();
+        }
+
+        @Override
+        public String toString() {
+            return "SubscriptionUpdates{" +
+                    "updatedTopicSubscriptions=" + updatedTopicSubscriptions +
+                    '}';
+        }
     }
 
     public void close() {
