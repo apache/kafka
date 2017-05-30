@@ -56,7 +56,6 @@ public class MemoryRecordsBuilder {
     private final boolean isControlBatch;
     private final int partitionLeaderEpoch;
     private final int writeLimit;
-    private final int initialCapacity;
 
     private volatile float estimatedCompressionRatio;
 
@@ -115,7 +114,6 @@ public class MemoryRecordsBuilder {
         this.writeLimit = writeLimit;
 
         this.initialPosition = bufferStream.position();
-        this.initialCapacity = bufferStream.capacity();
 
         if (magic > RecordBatch.MAGIC_VALUE_V1) {
             bufferStream.position(initialPosition + DefaultRecordBatch.RECORDS_OFFSET);
@@ -125,7 +123,6 @@ public class MemoryRecordsBuilder {
             bufferStream.position(initialPosition + Records.LOG_OVERHEAD + LegacyRecord.recordOverhead(magic));
         }
 
-        // create the stream
         this.bufferStream = bufferStream;
         this.appendStream = new DataOutputStream(compressionType.wrapForOutput(this.bufferStream, magic,
                 COMPRESSION_DEFAULT_BUFFER_SIZE));
@@ -174,7 +171,7 @@ public class MemoryRecordsBuilder {
     }
 
     public int initialCapacity() {
-        return initialCapacity;
+        return bufferStream.initialCapacity();
     }
 
     public double compressionRatio() {
@@ -718,7 +715,7 @@ public class MemoryRecordsBuilder {
 
         // Be conservative and not take compression of the new record into consideration.
         return numRecords == 0 ?
-                this.initialCapacity >= recordSize :
+                bufferStream.remaining() >= recordSize :
                 this.writeLimit >= estimatedBytesWritten() + recordSize;
     }
 
