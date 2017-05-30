@@ -188,15 +188,15 @@ public enum CompressionType {
 
     static class RecyclingBufferSupplier implements KafkaLZ4BlockInputStream.BufferSupplier {
 
-        ByteBuffer theBuffer;
+        ByteBuffer buffer;
 
         @Override
         public ByteBuffer get(int size) {
-            if (theBuffer == null || theBuffer.capacity() < size) {
-                theBuffer = ByteBuffer.allocate(size);
+            if (buffer == null || buffer.capacity() < size) {
+                buffer = ByteBuffer.allocate(size);
             }
-            theBuffer.limit(size);
-            return theBuffer;
+            buffer.limit(size);
+            return buffer;
         }
     }
 }
