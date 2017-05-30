@@ -191,7 +191,7 @@ public class MemoryRecords extends AbstractRecords {
 
                 if (filteredBatchSize > batch.sizeInBytes() && filteredBatchSize > maxRecordBatchSize)
                     log.warn("Record batch from {} with last offset {} exceeded max record batch size {} after cleaning " +
-                                    "(new size is {}). Consumers from version 0.10.1 and earlier may need to " +
+                                    "(new size is {}). Consumers with version earlier than 0.10.1.0 may need to " +
                                     "increase their fetch sizes.",
                             partition, batch.lastOffset(), maxRecordBatchSize, filteredBatchSize);
 
