@@ -59,7 +59,7 @@ public class ChangeLoggingKeyValueBytesStore extends WrappedStateStore.AbstractS
     }
 
     @Override
-    public byte[] putIfAbsent(final Bytes key, final byte[] value) {
+    public synchronized byte[] putIfAbsent(final Bytes key, final byte[] value) {
         final byte[] previous = get(key);
         if (previous == null) {
             put(key, value);
@@ -76,7 +76,7 @@ public class ChangeLoggingKeyValueBytesStore extends WrappedStateStore.AbstractS
     }
 
     @Override
-    public byte[] delete(final Bytes key) {
+    public synchronized byte[] delete(final Bytes key) {
         final byte[] oldValue = inner.get(key);
         put(key, null);
         return oldValue;
