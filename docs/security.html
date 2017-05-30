@@ -908,11 +908,11 @@
     </ol>
     Here is an example of how to run the migration tool:
     <pre>
-    ./bin/zookeeper-security-migration --zookeeper.acl=secure --zookeeper.connect=localhost:2181
+    ./bin/zookeeper-security-migration.sh --zookeeper.acl=secure --zookeeper.connect=localhost:2181
     </pre>
     <p>Run this to see the full list of parameters:</p>
     <pre>
-    ./bin/zookeeper-security-migration --help
+    ./bin/zookeeper-security-migration.sh --help
     </pre>
     <h4><a id="zk_authz_ensemble" href="#zk_authz_ensemble">7.6.3 Migrating the ZooKeeper ensemble</a></h4>
     It is also necessary to enable authentication on the ZooKeeper ensemble. To do it, we need to perform a rolling restart of the server and set a few properties. Please refer to the ZooKeeper documentation for more detail:

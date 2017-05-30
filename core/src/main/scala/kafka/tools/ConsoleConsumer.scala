@@ -205,7 +205,7 @@ object ConsoleConsumer extends Logging {
   }
 
   class ConsumerConfig(args: Array[String]) {
-    val parser = new OptionParser
+    val parser = new OptionParser(false)
     val topicIdOpt = parser.accepts("topic", "The topic id to consume on.")
       .withRequiredArg
       .describedAs("topic")
