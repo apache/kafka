@@ -444,14 +444,7 @@ public class Utils {
      * @return The unstarted thread
      */
     public static Thread newThread(String name, Runnable runnable, boolean daemon) {
-        Thread thread = new Thread(runnable, name);
-        thread.setDaemon(daemon);
-        thread.setUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
-            public void uncaughtException(Thread t, Throwable e) {
-                log.error("Uncaught exception in thread '{}':", t.getName(), e);
-            }
-        });
-        return thread;
+        return new KafkaThread(name, runnable, daemon);
     }
 
     /**
@@ -493,7 +486,7 @@ public class Utils {
      * Read the given byte buffer into a Byte array
      */
     public static byte[] readBytes(ByteBuffer buffer) {
-        return Utils.readBytes(buffer, 0, buffer.limit());
+        return readBytes(buffer, 0, buffer.limit());
     }
 
     /**
@@ -512,7 +505,7 @@ public class Utils {
     }
 
     public static String readFileAsString(String path) throws IOException {
-        return Utils.readFileAsString(path, Charset.defaultCharset());
+        return readFileAsString(path, Charset.defaultCharset());
     }
 
     /**

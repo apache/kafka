@@ -148,7 +148,7 @@ public final class ProducerBatch {
      * @param exception The exception that occurred (or null if the request was successful)
      */
     public void done(long baseOffset, long logAppendTime, RuntimeException exception) {
-        log.trace("Produced messages to topic-partition {} with base offset offset {} and error: {}.",
+        log.trace("Produced messages to topic-partition {} with base offset offset {} and error: ",
                   topicPartition, baseOffset, exception);
 
         if (completed.getAndSet(true))

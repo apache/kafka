@@ -22,7 +22,6 @@ import org.apache.kafka.common.network.Authenticator;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Configurable;
 
-import java.util.Map;
 import java.security.Principal;
 
 /*
@@ -30,11 +29,6 @@ import java.security.Principal;
  */
 @InterfaceStability.Unstable
 public interface PrincipalBuilder extends Configurable {
-
-    /**
-     * Configures this class with given key-value pairs.
-     */
-    void configure(Map<String, ?> configs);
 
     /**
      * Returns Principal.
