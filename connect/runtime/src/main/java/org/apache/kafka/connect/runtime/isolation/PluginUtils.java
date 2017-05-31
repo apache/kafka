@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.connect.runtime.isolation;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.IOException;
 import java.lang.reflect.Modifier;
 import java.nio.file.DirectoryStream;
@@ -33,6 +36,8 @@ import java.util.Locale;
 import java.util.Set;
 
 public class PluginUtils {
+    private static final Logger log = LoggerFactory.getLogger(PluginUtils.class);
+
     private static final String BLACKLIST = "^(?:"
             + "java"
             + "|javax"
@@ -57,14 +62,6 @@ public class PluginUtils {
         @Override
         public boolean accept(Path path) throws IOException {
             return Files.isDirectory(path) || isArchive(path) || isClassFile(path);
-        }
-    };
-
-    private static final DirectoryStream.Filter<Path> PLUGIN_FILTER = new DirectoryStream
-            .Filter<Path>() {
-        @Override
-        public boolean accept(Path path) throws IOException {
-            return Files.isDirectory(path) || isArchive(path);
         }
     };
 
@@ -101,6 +98,7 @@ public class PluginUtils {
     }
 
     public static List<Path> pluginUrls(Path topPath) throws IOException {
+        boolean containsClassFiles = false;
         Set<Path> archives = new HashSet<>();
         LinkedList<DirectoryEntry> dfs = new LinkedList<>();
         Set<Path> visited = new HashSet<>();
@@ -111,7 +109,7 @@ public class PluginUtils {
 
         DirectoryStream<Path> topListing = Files.newDirectoryStream(
                 topPath,
-                PLUGIN_FILTER
+                PLUGIN_PATH_FILTER
         );
         dfs.push(new DirectoryEntry(topListing));
         visited.add(topPath);
@@ -137,10 +135,12 @@ public class PluginUtils {
                     visited.add(adjacent);
                     if (isArchive(adjacent)) {
                         archives.add(adjacent);
+                    } else if (isClassFile(adjacent)) {
+                        containsClassFiles = true;
                     } else {
                         DirectoryStream<Path> listing = Files.newDirectoryStream(
                                 adjacent,
-                                PLUGIN_FILTER
+                                PLUGIN_PATH_FILTER
                         );
                         dfs.push(new DirectoryEntry(listing));
                     }
@@ -152,8 +152,13 @@ public class PluginUtils {
             }
         }
 
-        // TODO: attempt to add directories that contain plugin classes in directory structure by
-        // extracting the longest common subdirectories.
+        if (containsClassFiles) {
+            if (archives.isEmpty()) {
+                return Collections.singletonList(topPath);
+            }
+            log.warn("Plugin path contains both java archives and class files. Returning only the"
+                    + " archives");
+        }
         return Arrays.asList(archives.toArray(new Path[0]));
     }
 

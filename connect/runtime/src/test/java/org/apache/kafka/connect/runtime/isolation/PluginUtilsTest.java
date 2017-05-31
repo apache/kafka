@@ -43,6 +43,8 @@ public class PluginUtilsTest {
         assertFalse(PluginUtils.shouldLoadInIsolation(
                 "javax.management.loading.ClassLoaderRepository")
         );
+        assertFalse(PluginUtils.shouldLoadInIsolation("sun."));
+        assertFalse(PluginUtils.shouldLoadInIsolation("sun.reflect.DelegatingClassLoader"));
         assertFalse(PluginUtils.shouldLoadInIsolation("org.omg."));
         assertFalse(PluginUtils.shouldLoadInIsolation("org.omg.CORBA.Object"));
         assertFalse(PluginUtils.shouldLoadInIsolation("org.w3c.dom."));
@@ -51,8 +53,8 @@ public class PluginUtilsTest {
 
     @Test
     public void testThirdPartyClasses() throws Exception {
-        assertFalse(PluginUtils.shouldLoadInIsolation("org.apache.log4j."));
-        assertFalse(PluginUtils.shouldLoadInIsolation("org.apache.log4j.Level"));
+        assertFalse(PluginUtils.shouldLoadInIsolation("org.slf4j."));
+        assertFalse(PluginUtils.shouldLoadInIsolation("org.slf4j.LoggerFactory"));
     }
 
     @Test
