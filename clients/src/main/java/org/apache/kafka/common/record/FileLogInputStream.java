@@ -29,7 +29,7 @@ import java.nio.channels.FileChannel;
 import java.util.Iterator;
 
 import static org.apache.kafka.common.record.Records.LOG_OVERHEAD;
-import static org.apache.kafka.common.record.Records.LOG_OVERHEAD_UPTO_MAGIC;
+import static org.apache.kafka.common.record.Records.HEADER_SIZE_UP_TO_MAGIC;
 import static org.apache.kafka.common.record.Records.MAGIC_OFFSET;
 import static org.apache.kafka.common.record.Records.OFFSET_OFFSET;
 import static org.apache.kafka.common.record.Records.SIZE_OFFSET;
@@ -41,7 +41,7 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
     private int position;
     private final int end;
     private final FileChannel channel;
-    private final ByteBuffer logHeaderBuffer = ByteBuffer.allocate(LOG_OVERHEAD_UPTO_MAGIC);
+    private final ByteBuffer logHeaderBuffer = ByteBuffer.allocate(HEADER_SIZE_UP_TO_MAGIC);
 
     /**
      * Create a new log input stream over the FileChannel
@@ -59,7 +59,7 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
 
     @Override
     public FileChannelRecordBatch nextBatch() throws IOException {
-        if (position + LOG_OVERHEAD_UPTO_MAGIC >= end)
+        if (position + HEADER_SIZE_UP_TO_MAGIC >= end)
             return null;
 
         logHeaderBuffer.rewind();
@@ -101,7 +101,7 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
         protected final int batchSize;
 
         private RecordBatch fullBatch;
-        private RecordBatch headerOnlyBatch;
+        private RecordBatch batchHeader;
 
         FileChannelRecordBatch(long offset,
                                byte magic,
@@ -188,7 +188,7 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
 
         protected RecordBatch loadFullBatch() {
             if (fullBatch == null) {
-                headerOnlyBatch = null;
+                batchHeader = null;
                 fullBatch = loadBatchWithSize(sizeInBytes(), "full record batch");
             }
             return fullBatch;
@@ -198,10 +198,10 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
             if (fullBatch != null)
                 return fullBatch;
 
-            if (headerOnlyBatch == null)
-                headerOnlyBatch = loadBatchWithSize(headerSize(), "record batch header");
+            if (batchHeader == null)
+                batchHeader = loadBatchWithSize(headerSize(), "record batch header");
 
-            return headerOnlyBatch;
+            return batchHeader;
         }
 
         private RecordBatch loadBatchWithSize(int size, String description) {

@@ -484,19 +484,11 @@ public final class LegacyRecord {
         }
     }
 
-    public static int recordSize(byte[] key, byte[] value) {
-        return recordSize(RecordBatch.CURRENT_MAGIC_VALUE, key, value);
-    }
-
-    public static int recordSize(byte magic, byte[] key, byte[] value) {
-        return recordSize(magic, key == null ? 0 : key.length, value == null ? 0 : value.length);
-    }
-
-    public static int recordSize(byte magic, ByteBuffer key, ByteBuffer value) {
+    static int recordSize(byte magic, ByteBuffer key, ByteBuffer value) {
         return recordSize(magic, key == null ? 0 : key.limit(), value == null ? 0 : value.limit());
     }
 
-    private static int recordSize(byte magic, int keySize, int valueSize) {
+    public static int recordSize(byte magic, int keySize, int valueSize) {
         return recordOverhead(magic) + keySize + valueSize;
     }
 
@@ -548,22 +540,28 @@ public final class LegacyRecord {
         return crc.getValue();
     }
 
-    public static int recordOverhead(byte magic) {
+    static int recordOverhead(byte magic) {
         if (magic == 0)
             return RECORD_OVERHEAD_V0;
-        return RECORD_OVERHEAD_V1;
+        else if (magic == 1)
+            return RECORD_OVERHEAD_V1;
+        throw new IllegalArgumentException("Invalid magic used in LegacyRecord: " + magic);
     }
 
-    public static int headerSize(byte magic) {
+    static int headerSize(byte magic) {
         if (magic == 0)
             return HEADER_SIZE_V0;
-        return HEADER_SIZE_V1;
+        else if (magic == 1)
+            return HEADER_SIZE_V1;
+        throw new IllegalArgumentException("Invalid magic used in LegacyRecord: " + magic);
     }
 
     private static int keyOffset(byte magic) {
         if (magic == 0)
             return KEY_OFFSET_V0;
-        return KEY_OFFSET_V1;
+        else if (magic == 1)
+            return KEY_OFFSET_V1;
+        throw new IllegalArgumentException("Invalid magic used in LegacyRecord: " + magic);
     }
 
     public static TimestampType timestampType(byte magic, TimestampType wrapperRecordTimestampType, byte attributes) {

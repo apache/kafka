@@ -23,8 +23,7 @@ object MessageAndOffset {
   def fromRecordBatch(batch: RecordBatch): MessageAndOffset = {
     batch match {
       case legacyBatch: AbstractLegacyRecordBatch =>
-        val legacyRecordBatch = batch.asInstanceOf[AbstractLegacyRecordBatch]
-        MessageAndOffset(Message.fromRecord(legacyRecordBatch.outerRecord), legacyRecordBatch.lastOffset)
+        MessageAndOffset(Message.fromRecord(legacyBatch.outerRecord), legacyBatch.lastOffset)
 
       case _ =>
         throw new IllegalArgumentException(s"Illegal batch type ${batch.getClass}. The older message format classes " +
@@ -35,8 +34,7 @@ object MessageAndOffset {
   def fromRecord(record: Record): MessageAndOffset = {
     record match {
       case legacyBatch: AbstractLegacyRecordBatch =>
-        val legacyRecordBatch = record.asInstanceOf[AbstractLegacyRecordBatch]
-        MessageAndOffset(Message.fromRecord(legacyRecordBatch.outerRecord), legacyRecordBatch.lastOffset)
+        MessageAndOffset(Message.fromRecord(legacyBatch.outerRecord), legacyBatch.lastOffset)
 
       case _ =>
         throw new IllegalArgumentException(s"Illegal record type ${record.getClass}. The older message format classes " +

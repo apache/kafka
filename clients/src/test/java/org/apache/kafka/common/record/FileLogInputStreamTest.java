@@ -94,11 +94,11 @@ public class FileLogInputStreamTest {
                     fileRecords.sizeInBytes());
 
             FileChannelRecordBatch firstBatch = logInputStream.nextBatch();
-            assertGenericRecordBatchData(firstBatch, 0L, firstBatchRecord);
+            assertGenericRecordBatchData(firstBatch, 0L, 3241324L, firstBatchRecord);
             assertNoProducerData(firstBatch);
 
             FileChannelRecordBatch secondBatch = logInputStream.nextBatch();
-            assertGenericRecordBatchData(secondBatch, 1L, secondBatchRecord);
+            assertGenericRecordBatchData(secondBatch, 1L, 234280L, secondBatchRecord);
             assertNoProducerData(secondBatch);
 
             assertNull(logInputStream.nextBatch());
@@ -131,11 +131,11 @@ public class FileLogInputStreamTest {
 
             FileChannelRecordBatch firstBatch = logInputStream.nextBatch();
             assertNoProducerData(firstBatch);
-            assertGenericRecordBatchData(firstBatch, 0L, firstBatchRecords);
+            assertGenericRecordBatchData(firstBatch, 0L, 3241324L, firstBatchRecords);
 
             FileChannelRecordBatch secondBatch = logInputStream.nextBatch();
             assertNoProducerData(secondBatch);
-            assertGenericRecordBatchData(secondBatch, 1L, secondBatchRecords);
+            assertGenericRecordBatchData(secondBatch, 1L, 238423489L, secondBatchRecords);
 
             assertNull(logInputStream.nextBatch());
         }
@@ -174,13 +174,13 @@ public class FileLogInputStreamTest {
 
             FileChannelRecordBatch firstBatch = logInputStream.nextBatch();
             assertProducerData(firstBatch, producerId, producerEpoch, baseSequence, false, firstBatchRecords);
-            assertGenericRecordBatchData(firstBatch, 15L, firstBatchRecords);
+            assertGenericRecordBatchData(firstBatch, 15L, 3241324L, firstBatchRecords);
             assertEquals(partitionLeaderEpoch, firstBatch.partitionLeaderEpoch());
 
             FileChannelRecordBatch secondBatch = logInputStream.nextBatch();
             assertProducerData(secondBatch, producerId, producerEpoch, baseSequence + firstBatchRecords.length,
                     true, secondBatchRecords);
-            assertGenericRecordBatchData(secondBatch, 27L, secondBatchRecords);
+            assertGenericRecordBatchData(secondBatch, 27L, 238423489L, secondBatchRecords);
             assertEquals(partitionLeaderEpoch, secondBatch.partitionLeaderEpoch());
 
             assertNull(logInputStream.nextBatch());
@@ -190,8 +190,8 @@ public class FileLogInputStreamTest {
     @Test
     public void testBatchIterationIncompleteBatch() throws IOException {
         try (FileRecords fileRecords = FileRecords.open(tempFile())) {
-            SimpleRecord firstBatchRecord = new SimpleRecord("foo".getBytes());
-            SimpleRecord secondBatchRecord = new SimpleRecord("bar".getBytes());
+            SimpleRecord firstBatchRecord = new SimpleRecord(100L, "foo".getBytes());
+            SimpleRecord secondBatchRecord = new SimpleRecord(200L, "bar".getBytes());
 
             fileRecords.append(MemoryRecords.withRecords(magic, 0L, compression, CREATE_TIME, firstBatchRecord));
             fileRecords.append(MemoryRecords.withRecords(magic, 1L, compression, CREATE_TIME, secondBatchRecord));
@@ -203,7 +203,7 @@ public class FileLogInputStreamTest {
 
             FileChannelRecordBatch firstBatch = logInputStream.nextBatch();
             assertNoProducerData(firstBatch);
-            assertGenericRecordBatchData(firstBatch, 0L, firstBatchRecord);
+            assertGenericRecordBatchData(firstBatch, 0L, 100L, firstBatchRecord);
 
             assertNull(logInputStream.nextBatch());
         }
@@ -226,14 +226,17 @@ public class FileLogInputStreamTest {
         assertFalse(batch.isTransactional());
     }
 
-    private void assertGenericRecordBatchData(RecordBatch batch, long baseOffset, SimpleRecord ... records) {
+    private void assertGenericRecordBatchData(RecordBatch batch, long baseOffset, long maxTimestamp, SimpleRecord ... records) {
         assertEquals(magic, batch.magic());
         assertEquals(compression, batch.compressionType());
 
-        if (magic == MAGIC_VALUE_V0)
+        if (magic == MAGIC_VALUE_V0) {
             assertEquals(NO_TIMESTAMP_TYPE, batch.timestampType());
-        else
+        } else {
             assertEquals(CREATE_TIME, batch.timestampType());
+            assertEquals(maxTimestamp, batch.maxTimestamp());
+        }
+
         assertEquals(baseOffset + records.length - 1, batch.lastOffset());
         if (magic >= MAGIC_VALUE_V2)
             assertEquals(Integer.valueOf(records.length), batch.countOrNull());
