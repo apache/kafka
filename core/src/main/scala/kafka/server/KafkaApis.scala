@@ -51,7 +51,8 @@ import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{Node, TopicPartition}
 import org.apache.kafka.common.requests.SaslHandshakeResponse
 import org.apache.kafka.common.security.auth.KafkaPrincipal
-import org.apache.kafka.clients.admin.{AccessControlEntry, AclBinding, AclBindingFilter, AclOperation, AclPermissionType, Resource => AdminResource, ResourceType => AdminResourceType}
+import org.apache.kafka.common.resource.{Resource => AdminResource, ResourceType => AdminResourceType}
+import org.apache.kafka.common.acl.{AccessControlEntry, AclBinding, AclBindingFilter, AclOperation, AclPermissionType}
 
 import scala.collection._
 import scala.collection.JavaConverters._

@@ -19,32 +19,25 @@ package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.config.ConfigResource;
 
 import java.util.Map;
 
-/**
- * The result of the deleteTopics call.
- */
 @InterfaceStability.Unstable
-public class DeleteTopicResults {
-    final Map<String, KafkaFuture<Void>> futures;
+public class AlterConfigsResult {
 
-    DeleteTopicResults(Map<String, KafkaFuture<Void>> futures) {
+    private final Map<ConfigResource, KafkaFuture<Void>> futures;
+
+    AlterConfigsResult(Map<ConfigResource, KafkaFuture<Void>> futures) {
         this.futures = futures;
     }
 
-    /**
-     * Return a map from topic names to futures which can be used to check the status of
-     * individual deletions.
-     */
-    public Map<String, KafkaFuture<Void>> results() {
+    public Map<ConfigResource, KafkaFuture<Void>> results() {
         return futures;
     }
 
-    /**
-     * Return a future which succeeds only if all the topic deletions succeed.
-     */
     public KafkaFuture<Void> all() {
         return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0]));
     }
+
 }

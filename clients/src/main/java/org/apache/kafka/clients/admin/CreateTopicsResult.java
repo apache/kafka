@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.KafkaFuture;
@@ -22,21 +21,29 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Map;
 
+/**
+ * The result of newTopics.
+ */
 @InterfaceStability.Unstable
-public class AlterConfigsResults {
+public class CreateTopicsResult {
+    private final Map<String, KafkaFuture<Void>> futures;
 
-    private final Map<ConfigResource, KafkaFuture<Void>> futures;
-
-    AlterConfigsResults(Map<ConfigResource, KafkaFuture<Void>> futures) {
+    CreateTopicsResult(Map<String, KafkaFuture<Void>> futures) {
         this.futures = futures;
     }
 
-    public Map<ConfigResource, KafkaFuture<Void>> results() {
+    /**
+     * Return a map from topic names to futures, which can be used to check the status of individual
+     * topic creations.
+     */
+    public Map<String, KafkaFuture<Void>> results() {
         return futures;
     }
 
+    /**
+     * Return a future which succeeds if all the topic creations succeed.
+     */
     public KafkaFuture<Void> all() {
         return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0]));
     }
-
 }
