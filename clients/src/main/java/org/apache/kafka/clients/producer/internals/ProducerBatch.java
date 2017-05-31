@@ -180,6 +180,7 @@ public final class ProducerBatch {
     public Deque<ProducerBatch> split(int splitBatchSize) {
         Deque<ProducerBatch> batches = new ArrayDeque<>();
         MemoryRecords memoryRecords = recordsBuilder.build();
+
         Iterator<MutableRecordBatch> recordBatchIter = memoryRecords.batches().iterator();
         if (!recordBatchIter.hasNext())
             throw new IllegalStateException("Cannot split an empty producer batch.");
@@ -200,9 +201,8 @@ public final class ProducerBatch {
         for (Record record : recordBatch) {
             assert thunkIter.hasNext();
             Thunk thunk = thunkIter.next();
-            if (batch == null) {
+            if (batch == null)
                 batch = createBatchOffAccumulatorForRecord(record, splitBatchSize);
-            }
 
             // A newly created batch can always host the first message.
             if (!batch.tryAppendForSplit(record.timestamp(), record.key(), record.value(), record.headers(), thunk)) {
@@ -225,6 +225,10 @@ public final class ProducerBatch {
         int initialSize = Math.max(AbstractRecords.sizeInBytesUpperBound(magic(),
                 record.key(), record.value(), record.headers()), batchSize);
         ByteBuffer buffer = ByteBuffer.allocate(initialSize);
+
+        // Note that we intentionally do not set producer state (producerId, epoch, sequence, and isTransactional)
+        // for the newly created batch. This will be set when the batch is dequeued for sending (which is consistent
+        // with how normal batches are handled).
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic(), recordsBuilder.compressionType(),
                 TimestampType.CREATE_TIME, 0L);
         return new ProducerBatch(topicPartition, builder, this.createdMs, true);

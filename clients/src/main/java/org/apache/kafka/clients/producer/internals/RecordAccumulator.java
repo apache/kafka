@@ -476,6 +476,7 @@ public final class RecordAccumulator {
                                             if (!producerIdAndEpoch.isValid())
                                                 // we cannot send the batch until we have refreshed the producer id
                                                 break;
+
                                             isTransactional = transactionManager.isInTransaction();
                                         }
 
