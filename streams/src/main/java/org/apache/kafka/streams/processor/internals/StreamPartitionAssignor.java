@@ -253,15 +253,20 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         standbyTasks.removeAll(previousActiveTasks);
         SubscriptionInfo data = new SubscriptionInfo(streamThread.processId, previousActiveTasks, standbyTasks, this.userEndPoint);
 
+        maybeUpdateSubscribedTopics(topics);
+
+        return new Subscription(new ArrayList<>(topics), data.encode());
+    }
+
+    private void maybeUpdateSubscribedTopics(Set<String> topics) {
         if (streamThread.builder.sourceTopicPattern() != null) {
             SubscriptionUpdates subscriptionUpdates = new SubscriptionUpdates();
-            log.debug("stream-thread [{}] found {} topics possibly matching regex", streamThread.getName(), topics);
+            log.debug("stream-thread [{}] found {} topics possibly matching regex",
+                      streamThread.getName(), topics);
             // update the topic groups with the returned subscription set for regex pattern subscriptions
             subscriptionUpdates.updateTopics(topics);
             streamThread.builder.updateSubscriptions(subscriptionUpdates, streamThread.getName());
         }
-
-        return new Subscription(new ArrayList<>(topics), data.encode());
     }
 
     /*
@@ -606,25 +611,13 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
             }
         }
         metadataWithInternalTopics = Cluster.empty().withPartitions(topicToPartitionInfo);
-        updateSubscribedTopics(assignment);
-    }
 
-
-    private void updateSubscribedTopics(final Assignment assignment) {
-        if (streamThread.builder.sourceTopicPattern() != null) {
-            final Set<String> assignedTopics = new HashSet<>();
-            for (final TopicPartition topicPartition : assignment.partitions()) {
-                assignedTopics.add(topicPartition.topic());
-            }
-            if (!streamThread.builder.subscriptionUpdates().getUpdates().containsAll(assignedTopics)) {
-                final SubscriptionUpdates subscriptionUpdates = new SubscriptionUpdates();
-                assignedTopics.addAll(streamThread.builder.subscriptionUpdates().getUpdates());
-                log.debug("stream-thread [{}] assigned new {} topics possibly matching regex", streamThread.getName(), assignedTopics);
-                // update the topic groups with the returned subscription set for regex pattern subscriptions
-                subscriptionUpdates.updateTopics(assignedTopics);
-                streamThread.builder.updateSubscriptions(subscriptionUpdates, streamThread.getName());
-            }
+        final Set<String> assignedTopics = new HashSet<>();
+        for (final TopicPartition topicPartition : assignment.partitions()) {
+            assignedTopics.add(topicPartition.topic());
         }
+
+        maybeUpdateSubscribedTopics(assignedTopics);
     }
 
     /**
