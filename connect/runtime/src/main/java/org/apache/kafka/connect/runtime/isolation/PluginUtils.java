@@ -119,31 +119,32 @@ public class PluginUtils {
         try {
             while (!dfs.isEmpty()) {
                 Iterator<Path> neighbors = dfs.peek().iterator;
-                if (neighbors.hasNext()) {
-                    Path adjacent = neighbors.next();
-                    if (Files.isSymbolicLink(adjacent)) {
-                        Path absolute = Files.readSymbolicLink(adjacent).toRealPath();
-                        if (Files.exists(absolute)) {
-                            adjacent = absolute;
-                        } else {
-                            adjacent = null;
-                        }
-                    }
-
-                    if (adjacent != null && !visited.contains(adjacent)) {
-                        visited.add(adjacent);
-                        if (isArchive(adjacent)) {
-                            archives.add(adjacent);
-                        } else {
-                            DirectoryStream<Path> listing = Files.newDirectoryStream(
-                                    adjacent,
-                                    PLUGIN_FILTER
-                            );
-                            dfs.push(new DirectoryEntry(listing));
-                        }
-                    }
-                } else {
+                if (!neighbors.hasNext()) {
                     dfs.pop().stream.close();
+                    continue;
+                }
+
+                Path adjacent = neighbors.next();
+                if (Files.isSymbolicLink(adjacent)) {
+                    Path absolute = Files.readSymbolicLink(adjacent).toRealPath();
+                    if (Files.exists(absolute)) {
+                        adjacent = absolute;
+                    } else {
+                        continue;
+                    }
+                }
+
+                if (!visited.contains(adjacent)) {
+                    visited.add(adjacent);
+                    if (isArchive(adjacent)) {
+                        archives.add(adjacent);
+                    } else {
+                        DirectoryStream<Path> listing = Files.newDirectoryStream(
+                                adjacent,
+                                PLUGIN_FILTER
+                        );
+                        dfs.push(new DirectoryEntry(listing));
+                    }
                 }
             }
         } finally {
