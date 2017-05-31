@@ -41,7 +41,6 @@ public class PluginUtils {
             + "|org\\.w3c\\.dom"
             + "|org\\.apache\\.kafka\\.common"
             + "|org\\.apache\\.kafka\\.connect"
-            + "|org\\.apache\\.log4j"
             + "|org\\.slf4j"
             + ")\\..*$";
 
