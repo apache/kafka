@@ -232,6 +232,10 @@ public class TransactionManager {
         return lastError;
     }
 
+    public synchronized boolean isPartitionAdded(TopicPartition tp) {
+        return partitionsInTransaction.contains(tp);
+    }
+
     public String transactionalId() {
         return transactionalId;
     }
