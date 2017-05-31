@@ -27,10 +27,10 @@ import java.util.Map;
  * The result of the listTopics call.
  */
 @InterfaceStability.Unstable
-public class ListTopicsResults {
+public class ListTopicsResult {
     final KafkaFuture<Map<String, TopicListing>> future;
 
-    ListTopicsResults(KafkaFuture<Map<String, TopicListing>> future) {
+    ListTopicsResult(KafkaFuture<Map<String, TopicListing>> future) {
         this.future = future;
     }
 
