@@ -68,13 +68,11 @@ class ControllerFailoverTest extends KafkaServerTestHarness with Logging {
 
     // Wait until we have verified that we have resigned
     val latch = new CountDownLatch(1)
-    @volatile var expectedExceptionThrown = false
-    @volatile var unexpectedExceptionThrown: Option[Throwable] = None
+    @volatile var exceptionThrown: Option[Throwable] = None
     val illegalStateEvent = ControllerTestUtils.createMockControllerEvent(ControllerState.BrokerChange, { () =>
       try initialController.handleIllegalState(new IllegalStateException("Thrown for test purposes"))
       catch {
-        case _: IllegalStateException => expectedExceptionThrown = true
-        case t: Throwable => unexpectedExceptionThrown = Some(t)
+        case t: Throwable => exceptionThrown = Some(t)
       }
       latch.await()
     })
@@ -83,12 +81,13 @@ class ControllerFailoverTest extends KafkaServerTestHarness with Logging {
     TestUtils.waitUntilTrue(() => !initialController.kafkaScheduler.isStarted, "Scheduler was not shutdown")
     TestUtils.waitUntilTrue(() => !initialController.isActive, "Controller did not become inactive")
     latch.countDown()
-    assertTrue("IllegalStateException was not thrown", expectedExceptionThrown)
-    assertEquals("Unexpected exception thrown", None, unexpectedExceptionThrown)
+    assertTrue("handleIllegalState did not throw an exception", exceptionThrown.isDefined)
+    assertTrue(s"handleIllegalState should throw an IllegalStateException, but $exceptionThrown was thrown",
+      exceptionThrown.get.isInstanceOf[IllegalStateException])
 
     TestUtils.waitUntilTrue(() => {
       servers.exists { server =>
-        server.kafkaController.isActive && server.kafkaController.epoch > initialController.epoch
+        server.kafkaController.isActive && server.kafkaController.epoch > initialEpoch
       }
     }, "Failed to find controller")
 
