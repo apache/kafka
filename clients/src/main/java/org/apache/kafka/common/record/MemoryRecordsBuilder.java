@@ -331,15 +331,11 @@ public class MemoryRecordsBuilder {
         int writtenCompressed = size - DefaultRecordBatch.RECORD_BATCH_OVERHEAD;
         int offsetDelta = (int) (lastOffset - baseOffset);
 
-        final long baseTimestamp;
         final long maxTimestamp;
-        if (timestampType == TimestampType.LOG_APPEND_TIME) {
-            baseTimestamp = logAppendTime;
+        if (timestampType == TimestampType.LOG_APPEND_TIME)
             maxTimestamp = logAppendTime;
-        } else {
-            baseTimestamp = this.baseTimestamp;
+        else
             maxTimestamp = this.maxTimestamp;
-        }
 
         DefaultRecordBatch.writeHeader(buffer, baseOffset, offsetDelta, size, magic, compressionType, timestampType,
                 baseTimestamp, maxTimestamp, producerId, producerEpoch, baseSequence, isTransactional, isControlBatch,
