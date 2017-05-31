@@ -1256,6 +1256,65 @@ public class KafkaConsumerTest {
         }
     }
 
+    @Test
+    public void shouldNotFetchRecordsForTopicAfterPartitionsRevokedAndSyncGroupFailed() throws Exception {
+        int rebalanceTimeoutMs = 60000;
+        int sessionTimeoutMs = 30000;
+        int heartbeatIntervalMs = 500;
+
+        Time time = new MockTime();
+        Cluster cluster = TestUtils.singletonCluster(topic, 1);
+        Node node = cluster.nodes().get(0);
+
+        Metadata metadata = new Metadata(0, Long.MAX_VALUE);
+        metadata.update(cluster, Collections.<String>emptySet(), time.milliseconds());
+
+        MockClient client = new MockClient(time, metadata);
+        client.setNode(node);
+        PartitionAssignor assignor = new RoundRobinAssignor();
+
+        final KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor,
+                                                                   rebalanceTimeoutMs, sessionTimeoutMs, heartbeatIntervalMs, false, 1000);
+
+        consumer.subscribe(Collections.singleton(topic), getConsumerRebalanceListener(consumer));
+        client.prepareResponseFrom(new FindCoordinatorResponse(Errors.NONE, node), node);
+        Node coordinator = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
+
+
+        client.prepareResponseFrom(joinGroupFollowerResponse(assignor, 1, "memberId", "leaderId", Errors.NONE), coordinator);
+        client.prepareResponseFrom(syncGroupResponse(Collections.singletonList(tp0), Errors.NONE), coordinator);
+
+        client.prepareResponseFrom(fetchResponse(tp0, 0, 1), node);
+        client.prepareResponseFrom(fetchResponse(tp0, 1, 0), node);
+
+        consumer.poll(0);
+
+        // heartbeat fails due to rebalance in progress
+        client.prepareResponseFrom(new MockClient.RequestMatcher() {
+            @Override
+            public boolean matches(AbstractRequest body) {
+                return true;
+            }
+        }, new HeartbeatResponse(Errors.REBALANCE_IN_PROGRESS), coordinator);
+
+        // join group
+        final ByteBuffer byteBuffer = ConsumerProtocol.serializeSubscription(new PartitionAssignor.Subscription(Collections.singletonList(topic)));
+
+        // This member becomes the leader
+        final JoinGroupResponse leaderResponse = new JoinGroupResponse(Errors.NONE, 1, assignor.name(), "memberId", "memberId",
+                                                                 Collections.<String, ByteBuffer>singletonMap("memberId", byteBuffer));
+        client.prepareResponseFrom(leaderResponse, coordinator);
+
+        // sync group fails due to disconnect
+        client.prepareResponseFrom(syncGroupResponse(Collections.singletonList(tp0), Errors.NONE), coordinator, true);
+
+        client.prepareResponseFrom(fetchResponse(tp0, 1, 1), node);
+        time.sleep(heartbeatIntervalMs);
+        Thread.sleep(heartbeatIntervalMs);
+        final ConsumerRecords<String, String> records = consumer.poll(0);
+        assertTrue(records.isEmpty());
+    }
+
     private void consumerCloseTest(final long closeTimeoutMs,
             List<? extends AbstractResponse> responses,
             long waitMs,
@@ -1360,7 +1419,6 @@ public class KafkaConsumerTest {
         return new ConsumerRebalanceListener() {
             @Override
             public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
-
             }
 
             @Override
