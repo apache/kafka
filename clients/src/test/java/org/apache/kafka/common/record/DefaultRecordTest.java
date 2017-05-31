@@ -18,8 +18,11 @@ package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.internals.RecordHeader;
+import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.junit.Test;
 
+import java.io.DataOutputStream;
+import java.io.IOException;
 import java.nio.ByteBuffer;
 
 import static org.junit.Assert.assertArrayEquals;
@@ -29,7 +32,7 @@ import static org.junit.Assert.assertNotNull;
 public class DefaultRecordTest {
 
     @Test
-    public void testBasicSerde() {
+    public void testBasicSerde() throws IOException {
         Header[] headers = new Header[] {
             new RecordHeader("foo", "value".getBytes()),
             new RecordHeader("bar", (byte[]) null),
@@ -51,8 +54,10 @@ public class DefaultRecordTest {
             long baseTimestamp = System.currentTimeMillis();
             long timestampDelta = 323;
 
-            ByteBuffer buffer = ByteBuffer.allocate(1024);
-            DefaultRecord.writeTo(buffer, offsetDelta, timestampDelta, record.key(), record.value(), record.headers());
+            ByteBufferOutputStream out = new ByteBufferOutputStream(1024);
+            DefaultRecord.writeTo(new DataOutputStream(out), offsetDelta, timestampDelta, record.key(), record.value(),
+                    record.headers());
+            ByteBuffer buffer = out.buffer();
             buffer.flip();
 
             DefaultRecord logRecord = DefaultRecord.readFrom(buffer, baseOffset, baseTimestamp, baseSequence, null);
@@ -69,7 +74,7 @@ public class DefaultRecordTest {
     }
 
     @Test
-    public void testSerdeNoSequence() {
+    public void testSerdeNoSequence() throws IOException {
         ByteBuffer key = ByteBuffer.wrap("hi".getBytes());
         ByteBuffer value = ByteBuffer.wrap("there".getBytes());
         long baseOffset = 37;
@@ -77,8 +82,9 @@ public class DefaultRecordTest {
         long baseTimestamp = System.currentTimeMillis();
         long timestampDelta = 323;
 
-        ByteBuffer buffer = ByteBuffer.allocate(1024);
-        DefaultRecord.writeTo(buffer, offsetDelta, timestampDelta, key, value, new Header[0]);
+        ByteBufferOutputStream out = new ByteBufferOutputStream(1024);
+        DefaultRecord.writeTo(new DataOutputStream(out), offsetDelta, timestampDelta, key, value, new Header[0]);
+        ByteBuffer buffer = out.buffer();
         buffer.flip();
 
         DefaultRecord record = DefaultRecord.readFrom(buffer, baseOffset, baseTimestamp, RecordBatch.NO_SEQUENCE, null);

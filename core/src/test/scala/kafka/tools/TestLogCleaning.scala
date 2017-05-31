@@ -49,7 +49,7 @@ import scala.collection.JavaConverters._
 object TestLogCleaning {
 
   def main(args: Array[String]) {
-    val parser = new OptionParser
+    val parser = new OptionParser(false)
     val numMessagesOpt = parser.accepts("messages", "The number of messages to send or consume.")
                                .withRequiredArg
                                .describedAs("count")
