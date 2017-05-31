@@ -113,7 +113,6 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
     private final IsolationLevel isolationLevel;
 
     private PartitionRecords nextInLineRecords = null;
-    private ExceptionMetadata nextInLineExceptionMetadata = null;
 
     public Fetcher(ConsumerNetworkClient client,
                    int minBytes,
@@ -154,7 +153,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
     private <T> ExtendedDeserializer<T> ensureExtended(Deserializer<T> deserializer) {
         return deserializer instanceof ExtendedDeserializer ? (ExtendedDeserializer<T>) deserializer : new ExtendedDeserializer.Wrapper<>(deserializer);
     }
-    
+
     /**
      * Represents data about an offset returned by a broker.
      */
@@ -513,31 +512,18 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
      *         the defaultResetPolicy is NONE
      */
     public Map<TopicPartition, List<ConsumerRecord<K, V>>> fetchedRecords() {
-        if (nextInLineExceptionMetadata != null) {
-            ExceptionMetadata exceptionMetadata = nextInLineExceptionMetadata;
-            nextInLineExceptionMetadata = null;
-            TopicPartition tp = exceptionMetadata.partition;
-            if (subscriptions.isFetchable(tp) && subscriptions.position(tp) == exceptionMetadata.fetchedOffset)
-                throw exceptionMetadata.exception;
-        }
         Map<TopicPartition, List<ConsumerRecord<K, V>>> fetched = new HashMap<>();
         int recordsRemaining = maxPollRecords;
-        // Needed to construct ExceptionMetadata if any exception is found when processing completedFetch
-        TopicPartition fetchedPartition = null;
-        long fetchedOffset = -1;
 
         try {
             while (recordsRemaining > 0) {
                 if (nextInLineRecords == null || nextInLineRecords.isFetched) {
-                    CompletedFetch completedFetch = completedFetches.poll();
+                    CompletedFetch completedFetch = completedFetches.peek();
                     if (completedFetch == null) break;
 
-                    fetchedPartition = completedFetch.partition;
-                    fetchedOffset = completedFetch.fetchedOffset;
                     nextInLineRecords = parseCompletedFetch(completedFetch);
+                    completedFetches.poll();
                 } else {
-                    fetchedPartition = nextInLineRecords.partition;
-                    fetchedOffset = nextInLineRecords.nextFetchOffset;
                     List<ConsumerRecord<K, V>> records = fetchRecords(nextInLineRecords, recordsRemaining);
                     TopicPartition partition = nextInLineRecords.partition;
                     if (!records.isEmpty()) {
@@ -560,8 +546,6 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         } catch (KafkaException e) {
             if (fetched.isEmpty())
                 throw e;
-            // To be thrown in the next call of this method
-            nextInLineExceptionMetadata = new ExceptionMetadata(fetchedPartition, fetchedOffset, e);
         }
         return fetched;
     }
@@ -952,10 +936,11 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         private int recordsRead;
         private int bytesRead;
         private RecordBatch currentBatch;
+        private Record lastRecord;
         private CloseableIterator<Record> records;
         private long nextFetchOffset;
         private boolean isFetched = false;
-        private KafkaException nextInlineException;
+        private boolean hasExceptionInLastFetch;
 
         private PartitionRecords(TopicPartition partition,
                                  CompletedFetch completedFetch,
@@ -966,13 +951,13 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             this.nextFetchOffset = completedFetch.fetchedOffset;
             this.abortedProducerIds = new HashSet<>();
             this.abortedTransactions = abortedTransactions(completedFetch.partitionData);
-            this.nextInlineException = null;
+            this.hasExceptionInLastFetch = false;
         }
 
         private void drain() {
             if (!isFetched) {
                 maybeCloseRecordStream();
-                nextInlineException = null;
+                hasExceptionInLastFetch = false;
                 this.isFetched = true;
                 this.completedFetch.metricAggregator.record(partition, bytesRead, recordsRead);
 
@@ -1015,12 +1000,18 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         private Record nextFetchedRecord() {
             while (true) {
                 if (records == null || !records.hasNext()) {
+                    // If last time there is an exception thrown, we always validate the current batch again.
+                    if (hasExceptionInLastFetch) {
+                        currentBatch.ensureValid();
+                    }
                     maybeCloseRecordStream();
 
                     if (!batches.hasNext()) {
                         drain();
                         return null;
                     }
+
+                    lastRecord = null;
                     currentBatch = batches.next();
                     maybeEnsureValid(currentBatch);
 
@@ -1044,16 +1035,26 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                     records = currentBatch.streamingIterator(decompressionBufferSupplier);
                 }
 
-                Record record = records.next();
-                maybeEnsureValid(record);
+                // If an exception was thrown from the last record. We should throw the same exception here again.
+                if (hasExceptionInLastFetch) {
+                    maybeEnsureValid(lastRecord);
+                    return lastRecord;
+                } else {
+                    Record record = records.next();
+                    lastRecord = record;
+                    // skip any records out of range
+                    if (record.offset() >= nextFetchOffset) {
+                        // we only do validation when the message should not be skipped.
+                        maybeEnsureValid(record);
 
-                // skip any records out of range
-                if (record.offset() >= nextFetchOffset) {
-                    nextFetchOffset = record.offset() + 1;
-
-                    // control records are not returned to the user
-                    if (!currentBatch.isControlBatch())
-                         return record;
+                        // control records are not returned to the user
+                        if (!currentBatch.isControlBatch()) {
+                            return record;
+                        } else {
+                            // Increment the next fetch offset when we skip a control batch.
+                            nextFetchOffset = record.offset() + 1;
+                        }
+                    }
                 }
             }
         }
@@ -1061,11 +1062,6 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         private List<ConsumerRecord<K, V>> fetchRecords(int maxRecords) {
             if (isFetched)
                 return Collections.emptyList();
-            if (nextInlineException != null) {
-                KafkaException e = nextInlineException;
-                nextInlineException = null;
-                throw e;
-            }
 
             List<ConsumerRecord<K, V>> records = new ArrayList<>();
             try {
@@ -1077,12 +1073,12 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                     recordsRead++;
                     bytesRead += record.sizeInBytes();
                     records.add(parseRecord(partition, currentBatch, record));
+                    nextFetchOffset = record.offset() + 1;
                 }
             } catch (KafkaException e) {
+                hasExceptionInLastFetch = true;
                 if (records.isEmpty())
                     throw e;
-                // To be thrown in the next call of this method
-                nextInlineException = e;
             }
             return records;
         }
@@ -1129,18 +1125,6 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
 
             Record firstRecord = batchIterator.next();
             return ControlRecordType.ABORT == ControlRecordType.parse(firstRecord.key());
-        }
-    }
-
-    private static class ExceptionMetadata {
-        private final TopicPartition partition;
-        private final long fetchedOffset;
-        private final KafkaException exception;
-
-        private ExceptionMetadata(TopicPartition partition, long fetchedOffset, KafkaException exception) {
-            this.partition = partition;
-            this.fetchedOffset = fetchedOffset;
-            this.exception = exception;
         }
     }
 
@@ -1232,7 +1216,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         private final Sensor recordsFetchLag;
 
         private Set<TopicPartition> assignedPartitions;
-        
+
         private FetchManagerMetrics(Metrics metrics, FetcherMetricsRegistry metricsRegistry) {
             this.metrics = metrics;
             this.metricsRegistry = metricsRegistry;
@@ -1305,8 +1289,8 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             Sensor recordsLag = this.metrics.getSensor(name);
             if (recordsLag == null) {
                 recordsLag = this.metrics.sensor(name);
-                recordsLag.add(this.metrics.metricName(name, 
-                        metricsRegistry.partitionRecordsLag.group(), 
+                recordsLag.add(this.metrics.metricName(name,
+                        metricsRegistry.partitionRecordsLag.group(),
                         metricsRegistry.partitionRecordsLag.description()), new Value());
                 recordsLag.add(this.metrics.metricName(name + "-max",
                         metricsRegistry.partitionRecordsLagMax.group(),
@@ -1327,7 +1311,6 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
     public void close() {
         if (nextInLineRecords != null)
             nextInLineRecords.drain();
-        nextInLineExceptionMetadata = null;
         decompressionBufferSupplier.close();
     }
 
