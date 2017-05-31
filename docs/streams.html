@@ -17,7 +17,7 @@
 
 <script><!--#include virtual="js/templateData.js" --></script>
 
-<script id="streams-template" type="text/x-handlebars-template">
+<!--<script id="streams-template" type="text/x-handlebars-template">-->
     <h1>Streams</h1>
 
         <ol class="toc">
@@ -658,7 +658,7 @@ KStream&lt;String, String&gt; materialized = joined.through("topic4");
 </pre>
         <br>
 
-        <h3><a id="streams_execute" href="#streams_execute">Application Configuration and Execution</a></h3>
+        <h3><a id="streams_configure_execute" href="#streams_configure_execute">Application Configuration and Execution</a></h3>
 
         <p>
         Besides defining the topology, developers will also need to configure their applications
@@ -687,6 +687,7 @@ settings.put(... , ...);
 StreamsConfig config = new StreamsConfig(settings);
 </pre>
 
+        <h4><a id="streams_client_config" href="#streams_clients_config">Producer and Consumer Configuration</a></h4>
         <p>
         Apart from Kafka Streams' own configuration parameters you can also specify parameters for the Kafka consumers and producers that are used internally,
         depending on the needs of your application. Similar to the Streams settings you define any such consumer and/or producer settings via <code>StreamsConfig</code>.
@@ -714,6 +715,24 @@ settings.put(StreamsConfig.consumerPrefix(ConsumerConfig.RECEIVE_BUFFER_CONFIG),
 settings.put(StremasConfig.producerConfig(ProducerConfig.RECEIVE_BUFFER_CONFIG), 64 * 1024);
 </pre>
 
+        <h4><a id="streams_broker_config" href="#streams_broker_config">Broker Configuration</a></h4>
+        <p>
+            Introduced in 0.11.0 is a new broker config that is particularly relevant to Kafka Streams applications, <code>group.initial.rebalance.delay.ms</code>.
+            This config specifies the time, in milliseconds, that the <code>GroupCoordinator</code> will delay the initial consumer rebalance.
+            The rebalance will be further delayed by the value of <code>group.initial.rebalance.delay.ms<</code> as each new member joins the consumer group, up to a maximum of the value set by <code>max.poll.interval.ms</code>.
+            The net benefit is that this should reduce the overall startup time for Kafka Streams applications with more than one thread.
+            The default value for <code>group.initial.rebalance.delay.ms</code> is 3 seconds.
+        </p>
+        <p>
+            In practice this means that if you are starting up your Kafka Streams app from a cold start, then when the first member joins the group there will be at least a 3 second delay before it is assigned any tasks.
+            If any other members join the group within the initial 3 seconds, then there will be a further 3 second delay.
+            Once no new members have joined the group within the 3 second delay, or <code>max.poll.interval.ms</code> is reached, then the group rebalance can complete and all current members will be assigned tasks.
+            The benefit of this approach, particularly for Kafka Streams applications, is that we can now delay the assignment and re-assignment of potentially expensive tasks as new members join.
+            So we can avoid the situation where one instance is assigned all tasks, begins restoring/processing, only to shortly after be rebalanced, and then have to start again with half of the tasks and so on.
+        </p>
+
+
+        <h4><a id="streams_execute" href="streams_execute">Executing Your Kafka Streams Application</a></h4>
         <p>
         You can call Kafka Streams from anywhere in your application code.
         Very commonly though you would do so within the <code>main()</code> method of your application, or some variant thereof.
@@ -926,7 +945,7 @@ $ java -cp path-to-app-fatjar.jar com.example.MyStreamsApp
             <li> JoinWindows has no default size anymore: JoinWindows.of("name").within(1000) changes to JoinWindows.of(1000) </li>
         </ul>
 
-</script>
+<!--</script>-->
 
 <!--#include virtual="../includes/_header.htm" -->
 <!--#include virtual="../includes/_top.htm" -->
