@@ -137,6 +137,8 @@ public class DelegatingClassLoader extends URLClassLoader {
             for (String configPath : pluginPaths) {
                 path = configPath;
                 Path pluginPath = Paths.get(path).toAbsolutePath();
+                // Update for exception handling
+                path = pluginPath.toString();
                 // Currently 'plugin.paths' property is a list of top-level directories
                 // containing plugins
                 if (Files.isDirectory(pluginPath)) {
@@ -156,9 +158,9 @@ public class DelegatingClassLoader extends URLClassLoader {
                     null
             );
         } catch (InvalidPathException | MalformedURLException e) {
-            log.error("Invalid path in plugin path: {}. Ignoring.", path);
+            log.error("Invalid path in plugin path: {}. Ignoring.", path, e);
         } catch (IOException e) {
-            log.error("Could not get listing for plugin path: {}. Ignoring.", path);
+            log.error("Could not get listing for plugin path: {}. Ignoring.", path, e);
         } catch (InstantiationException | IllegalAccessException e) {
             log.error("Could not instantiate plugins in: {}. Ignoring: {}", path, e);
         }
@@ -168,7 +170,11 @@ public class DelegatingClassLoader extends URLClassLoader {
     private void registerPlugin(Path pluginLocation)
             throws InstantiationException, IllegalAccessException, IOException {
         log.info("Loading plugin from: {}", pluginLocation);
-        URL[] urls = PluginUtils.pluginUrls(pluginLocation);
+        List<URL> pluginUrls = new ArrayList<>();
+        for (Path path : PluginUtils.pluginUrls(pluginLocation)) {
+            pluginUrls.add(path.toUri().toURL());
+        }
+        URL[] urls = pluginUrls.toArray(new URL[0]);
         if (log.isDebugEnabled()) {
             log.debug("Loading plugin urls: {}", Arrays.toString(urls));
         }
@@ -260,24 +266,7 @@ public class DelegatingClassLoader extends URLClassLoader {
                    : super.loadClass(name, resolve);
         }
 
-        Class<?> klass = null;
-        for (PluginClassLoader loader : activePaths.values()) {
-            try {
-                log.debug(
-                        "Searching among Plugin Classloaders for class: {} with loader: {}",
-                        name,
-                        loader
-                );
-                klass = loader.loadClass(name, resolve);
-                break;
-            } catch (ClassNotFoundException e) {
-                // Not found in this loader.
-            }
-        }
-        if (klass == null) {
-            return super.loadClass(name, resolve);
-        }
-        return klass;
+        return super.loadClass(name, resolve);
     }
 
     private void addAllAliases() {

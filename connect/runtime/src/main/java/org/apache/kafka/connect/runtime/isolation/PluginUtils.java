@@ -18,12 +18,13 @@ package org.apache.kafka.connect.runtime.isolation;
 
 import java.io.IOException;
 import java.lang.reflect.Modifier;
-import java.net.URL;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedList;
@@ -35,6 +36,7 @@ public class PluginUtils {
     private static final String BLACKLIST = "^(?:"
             + "java"
             + "|javax"
+            + "|sun"
             + "|org\\.omg"
             + "|org\\.w3c\\.dom"
             + "|org\\.apache\\.kafka\\.common"
@@ -63,7 +65,7 @@ public class PluginUtils {
             .Filter<Path>() {
         @Override
         public boolean accept(Path path) throws IOException {
-            return Files.isDirectory(path) || isArchive(path) || isClassFile(path);
+            return Files.isDirectory(path) || isArchive(path);
         }
     };
 
@@ -99,15 +101,13 @@ public class PluginUtils {
         return locations;
     }
 
-    public static URL[] pluginUrls(Path topPath) throws IOException {
-        Set<URL> archives = new HashSet<>();
-        Set<Path> packageDirs = new HashSet<>();
+    public static List<Path> pluginUrls(Path topPath) throws IOException {
+        Set<Path> archives = new HashSet<>();
         LinkedList<DirectoryEntry> dfs = new LinkedList<>();
         Set<Path> visited = new HashSet<>();
 
         if (isArchive(topPath)) {
-            URL[] archive = {topPath.toUri().toURL()};
-            return archive;
+            return Collections.singletonList(topPath);
         }
 
         DirectoryStream<Path> topListing = Files.newDirectoryStream(
@@ -122,7 +122,7 @@ public class PluginUtils {
                 if (neighbors.hasNext()) {
                     Path adjacent = neighbors.next();
                     if (Files.isSymbolicLink(adjacent)) {
-                        Path absolute = Files.readSymbolicLink(adjacent);
+                        Path absolute = Files.readSymbolicLink(adjacent).toRealPath();
                         if (Files.exists(absolute)) {
                             adjacent = absolute;
                         } else {
@@ -133,12 +133,10 @@ public class PluginUtils {
                     if (adjacent != null && !visited.contains(adjacent)) {
                         visited.add(adjacent);
                         if (isArchive(adjacent)) {
-                            archives.add(adjacent.toUri().toURL());
-                        } else if(isClassFile(adjacent)) {
-                            packageDirs.add(adjacent);
+                            archives.add(adjacent);
                         } else {
                             DirectoryStream<Path> listing = Files.newDirectoryStream(
-                                    topPath,
+                                    adjacent,
                                     PLUGIN_FILTER
                             );
                             dfs.push(new DirectoryEntry(listing));
@@ -149,24 +147,14 @@ public class PluginUtils {
                 }
             }
         } finally {
-            while(!dfs.isEmpty()) {
+            while (!dfs.isEmpty()) {
                 dfs.pop().stream.close();
             }
         }
 
         // TODO: attempt to add directories that contain plugin classes in directory structure by
         // extracting the longest common subdirectories.
-        return archives.toArray(new URL[0]);
-    }
-
-    private static class DirectoryEntry {
-        DirectoryStream<Path> stream;
-        Iterator<Path> iterator;
-
-        DirectoryEntry(DirectoryStream<Path> stream) {
-            this.stream = stream;
-            this.iterator = stream.iterator();
-        }
+        return Arrays.asList(archives.toArray(new Path[0]));
     }
 
     public static String simpleName(PluginDesc<?> plugin) {
@@ -209,6 +197,16 @@ public class PluginUtils {
             return simple.substring(0, pos);
         }
         return simple;
+    }
+
+    private static class DirectoryEntry {
+        DirectoryStream<Path> stream;
+        Iterator<Path> iterator;
+
+        DirectoryEntry(DirectoryStream<Path> stream) {
+            this.stream = stream;
+            this.iterator = stream.iterator();
+        }
     }
 
 }
