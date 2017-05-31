@@ -81,7 +81,7 @@ class ControllerFailoverTest extends KafkaServerTestHarness with Logging {
     TestUtils.waitUntilTrue(() => !initialController.kafkaScheduler.isStarted, "Scheduler was not shutdown")
     TestUtils.waitUntilTrue(() => !initialController.isActive, "Controller did not become inactive")
     latch.countDown()
-    assertTrue("handleIllegalState did not throw an exception", exceptionThrown.isDefined)
+    TestUtils.waitUntilTrue(() => exceptionThrown.isDefined, "handleIllegalState did not throw an exception")
     assertTrue(s"handleIllegalState should throw an IllegalStateException, but $exceptionThrown was thrown",
       exceptionThrown.get.isInstanceOf[IllegalStateException])
 
