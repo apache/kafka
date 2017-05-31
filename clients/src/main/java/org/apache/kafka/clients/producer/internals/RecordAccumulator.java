@@ -469,15 +469,8 @@ public final class RecordAccumulator {
                                         ProducerIdAndEpoch producerIdAndEpoch = null;
                                         boolean isTransactional = false;
                                         if (transactionManager != null) {
-                                            if (transactionManager.isInTransaction() &&
-                                                    !transactionManager.isPartitionAdded(tp)) {
-                                                transactionManager.transitionToFatalError(
-                                                        new IllegalStateException("Attempted to dequeue a record " +
-                                                                "batch to send for partition " + tp + ", which hasn't " +
-                                                                "been added to the transaction yet"));
+                                            if (!transactionManager.ensurePartitionAdded(tp))
                                                 break;
-                                            }
-
 
                                             producerIdAndEpoch = transactionManager.producerIdAndEpoch();
                                             if (!producerIdAndEpoch.isValid())
