@@ -168,13 +168,30 @@ public class RocksDBSessionStoreTest {
         sessionStore.put(new Windowed<>("aa", new SessionWindow(10, 20)), 4L);
         sessionStore.put(new Windowed<>("a", new SessionWindow(0x7a00000000000000L - 2, 0x7a00000000000000L - 1)), 5L);
 
-        final KeyValueIterator<Windowed<String>, Long> iterator = sessionStore.findSessions("a", 0, Long.MAX_VALUE);
-        final List<Long> results = new ArrayList<>();
+        KeyValueIterator<Windowed<String>, Long> iterator = sessionStore.findSessions("a", 0, Long.MAX_VALUE);
+        List<Long> results = new ArrayList<>();
         while (iterator.hasNext()) {
             results.add(iterator.next().value);
         }
 
         assertThat(results, equalTo(Arrays.asList(1L, 3L, 5L)));
+
+
+        iterator = sessionStore.findSessions("aa", 0, Long.MAX_VALUE);
+        results = new ArrayList<>();
+        while (iterator.hasNext()) {
+            results.add(iterator.next().value);
+        }
+
+        assertThat(results, equalTo(Arrays.asList(2L, 4L)));
+
+
+        final KeyValueIterator<Windowed<String>, Long> rangeIterator = sessionStore.findSessions("a", "aa", 0, Long.MAX_VALUE);
+        final List<Long> rangeResults = new ArrayList<>();
+        while (rangeIterator.hasNext()) {
+            rangeResults.add(rangeIterator.next().value);
+        }
+        assertThat(rangeResults, equalTo(Arrays.asList(1L, 3L, 2L, 4L, 5L)));
     }
 
     static List<KeyValue<Windowed<String>, Long>> toList(final KeyValueIterator<Windowed<String>, Long> iterator) {

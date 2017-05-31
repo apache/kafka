@@ -145,13 +145,13 @@ public class FetchRequest extends AbstractRequest {
                 maxBytes = DEFAULT_RESPONSE_MAX_BYTES;
             }
 
-            return new FetchRequest(version, replicaId, maxWait, minBytes, maxBytes, fetchData, IsolationLevel.READ_UNCOMMITTED);
+            return new FetchRequest(version, replicaId, maxWait, minBytes, maxBytes, fetchData, isolationLevel);
         }
 
         @Override
         public String toString() {
             StringBuilder bld = new StringBuilder();
-            bld.append("(type:FetchRequest").
+            bld.append("(type=FetchRequest").
                     append(", replicaId=").append(replicaId).
                     append(", maxWait=").append(maxWait).
                     append(", minBytes=").append(minBytes).
@@ -160,11 +160,6 @@ public class FetchRequest extends AbstractRequest {
                     append(")");
             return bld.toString();
         }
-    }
-
-    private FetchRequest(short version, int replicaId, int maxWait, int minBytes, int maxBytes,
-                         LinkedHashMap<TopicPartition, PartitionData> fetchData) {
-        this(version, replicaId, maxWait, minBytes, maxBytes, fetchData, IsolationLevel.READ_UNCOMMITTED);
     }
 
     private FetchRequest(short version, int replicaId, int maxWait, int minBytes, int maxBytes,
@@ -211,7 +206,7 @@ public class FetchRequest extends AbstractRequest {
     }
 
     @Override
-    public AbstractResponse getErrorResponse(Throwable e) {
+    public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         LinkedHashMap<TopicPartition, FetchResponse.PartitionData> responseData = new LinkedHashMap<>();
 
         for (Map.Entry<TopicPartition, PartitionData> entry: fetchData.entrySet()) {
@@ -220,7 +215,7 @@ public class FetchRequest extends AbstractRequest {
                 null, MemoryRecords.EMPTY);
             responseData.put(entry.getKey(), partitionResponse);
         }
-        return new FetchResponse(responseData, 0);
+        return new FetchResponse(responseData, throttleTimeMs);
     }
 
     public int replicaId() {
@@ -266,7 +261,7 @@ public class FetchRequest extends AbstractRequest {
         if (struct.hasField(MAX_BYTES_KEY_NAME))
             struct.set(MAX_BYTES_KEY_NAME, maxBytes);
         if (struct.hasField(ISOLATION_LEVEL_KEY_NAME))
-            struct.set(ISOLATION_LEVEL_KEY_NAME, IsolationLevel.READ_UNCOMMITTED.id());
+            struct.set(ISOLATION_LEVEL_KEY_NAME, isolationLevel.id());
 
         List<Struct> topicArray = new ArrayList<>();
         for (TopicAndPartitionData<PartitionData> topicEntry : topicsData) {

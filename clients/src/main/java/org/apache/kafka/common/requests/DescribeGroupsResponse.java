@@ -58,12 +58,19 @@ public class DescribeGroupsResponse extends AbstractResponse {
      */
 
     private final Map<String, GroupMetadata> groups;
+    private final int throttleTimeMs;
 
     public DescribeGroupsResponse(Map<String, GroupMetadata> groups) {
+        this(DEFAULT_THROTTLE_TIME, groups);
+    }
+
+    public DescribeGroupsResponse(int throttleTimeMs, Map<String, GroupMetadata> groups) {
+        this.throttleTimeMs = throttleTimeMs;
         this.groups = groups;
     }
 
     public DescribeGroupsResponse(Struct struct) {
+        this.throttleTimeMs = struct.hasField(THROTTLE_TIME_KEY_NAME) ? struct.getInt(THROTTLE_TIME_KEY_NAME) : DEFAULT_THROTTLE_TIME;
         this.groups = new HashMap<>();
         for (Object groupObj : struct.getArray(GROUPS_KEY_NAME)) {
             Struct groupStruct = (Struct) groupObj;
@@ -87,6 +94,10 @@ public class DescribeGroupsResponse extends AbstractResponse {
             }
             this.groups.put(groupId, new GroupMetadata(error, state, protocolType, protocol, members));
         }
+    }
+
+    public int throttleTimeMs() {
+        return throttleTimeMs;
     }
 
     public Map<String, GroupMetadata> groups() {
@@ -184,16 +195,22 @@ public class DescribeGroupsResponse extends AbstractResponse {
     }
 
     public static DescribeGroupsResponse fromError(Errors error, List<String> groupIds) {
+        return fromError(DEFAULT_THROTTLE_TIME, error, groupIds);
+    }
+
+    public static DescribeGroupsResponse fromError(int throttleTimeMs, Errors error, List<String> groupIds) {
         GroupMetadata errorMetadata = GroupMetadata.forError(error);
         Map<String, GroupMetadata> groups = new HashMap<>();
         for (String groupId : groupIds)
             groups.put(groupId, errorMetadata);
-        return new DescribeGroupsResponse(groups);
+        return new DescribeGroupsResponse(throttleTimeMs, groups);
     }
 
     @Override
     protected Struct toStruct(short version) {
         Struct struct = new Struct(ApiKeys.DESCRIBE_GROUPS.responseSchema(version));
+        if (struct.hasField(THROTTLE_TIME_KEY_NAME))
+            struct.set(THROTTLE_TIME_KEY_NAME, throttleTimeMs);
 
         List<Struct> groupStructs = new ArrayList<>();
         for (Map.Entry<String, GroupMetadata> groupEntry : groups.entrySet()) {

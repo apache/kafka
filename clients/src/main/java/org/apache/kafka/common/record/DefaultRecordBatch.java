@@ -17,7 +17,8 @@
 package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.utils.ByteBufferInputStream;
+import org.apache.kafka.common.header.Header;
+import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.common.utils.CloseableIterator;
 import org.apache.kafka.common.utils.Crc32C;
@@ -42,7 +43,7 @@ import static org.apache.kafka.common.record.Records.LOG_OVERHEAD;
  *  Magic => Int8
  *  CRC => Uint32
  *  Attributes => Int16
- *  LastOffsetDelta => Int32
+ *  LastOffsetDelta => Int32 // also serves as LastSequenceDelta
  *  BaseTimestamp => Int64
  *  MaxTimestamp => Int64
  *  ProducerId => Int64
@@ -59,11 +60,18 @@ import static org.apache.kafka.common.record.Records.LOG_OVERHEAD;
  * computation to avoid the need to recompute the CRC when this field is assigned for every batch that is received by
  * the broker. The CRC-32C (Castagnoli) polynomial is used for the computation.
  *
+ * On compaction: unlike the older message formats, magic v2 and above preserves the first and last offset/sequence
+ * numbers from the original batch when the log is cleaned. This is required in order to be able to restore the
+ * producer's state when the log is reloaded. If we did not retain the last sequence number, for example, then
+ * after a partition leader failure, the producer might see an OutOfSequence error. The base sequence number must
+ * be preserved for duplicate checking (the broker checks incoming Produce requests for duplicates by verifying
+ * that the first and last sequence numbers of the incoming batch match the last from that producer).
+ *
  * The current attributes are given below:
  *
- *  -----------------------------------------------------------------------------------
- *  | Unused (5-15) | Transactional (4) | Timestamp Type (3) | Compression Type (0-2) |
- *  -----------------------------------------------------------------------------------
+ *  -------------------------------------------------------------------------------------------------
+ *  | Unused (6-15) | Control (5) | Transactional (4) | Timestamp Type (3) | Compression Type (0-2) |
+ *  -------------------------------------------------------------------------------------------------
  */
 public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRecordBatch {
     static final int BASE_OFFSET_OFFSET = 0;
@@ -97,6 +105,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
 
     private static final byte COMPRESSION_CODEC_MASK = 0x07;
     private static final byte TRANSACTIONAL_FLAG_MASK = 0x10;
+    private static final int CONTROL_FLAG_MASK = 0x20;
     private static final byte TIMESTAMP_TYPE_MASK = 0x08;
 
     private final ByteBuffer buffer;
@@ -197,8 +206,18 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
     }
 
     @Override
+    public void writeTo(ByteBufferOutputStream outputStream) {
+        outputStream.write(this.buffer.duplicate());
+    }
+
+    @Override
     public boolean isTransactional() {
         return (attributes() & TRANSACTIONAL_FLAG_MASK) > 0;
+    }
+
+    @Override
+    public boolean isControlBatch() {
+        return (attributes() & CONTROL_FLAG_MASK) > 0;
     }
 
     @Override
@@ -206,17 +225,17 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
         return buffer.getInt(PARTITION_LEADER_EPOCH_OFFSET);
     }
 
-    private CloseableIterator<Record> compressedIterator() {
+    private CloseableIterator<Record> compressedIterator(BufferSupplier bufferSupplier) {
         ByteBuffer buffer = this.buffer.duplicate();
         buffer.position(RECORDS_OFFSET);
-        final DataInputStream stream = new DataInputStream(compressionType().wrapForInput(
-                new ByteBufferInputStream(buffer), magic()));
+        final DataInputStream inputStream = new DataInputStream(compressionType().wrapForInput(buffer, magic(),
+                bufferSupplier));
 
         return new RecordIterator() {
             @Override
             protected Record readNext(long baseOffset, long baseTimestamp, int baseSequence, Long logAppendTime) {
                 try {
-                    return DefaultRecord.readFrom(stream, baseOffset, baseTimestamp, baseSequence, logAppendTime);
+                    return DefaultRecord.readFrom(inputStream, baseOffset, baseTimestamp, baseSequence, logAppendTime);
                 } catch (IOException e) {
                     throw new KafkaException("Failed to decompress record stream", e);
                 }
@@ -225,7 +244,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
             @Override
             public void close() {
                 try {
-                    stream.close();
+                    inputStream.close();
                 } catch (IOException e) {
                     throw new KafkaException("Failed to close record stream", e);
                 }
@@ -254,7 +273,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
         // for a normal iterator, we cannot ensure that the underlying compression stream is closed,
         // so we decompress the full record set here. Use cases which call for a lower memory footprint
         // can use `streamingIterator` at the cost of additional complexity
-        try (CloseableIterator<Record> iterator = compressedIterator()) {
+        try (CloseableIterator<Record> iterator = compressedIterator(BufferSupplier.NO_CACHING)) {
             List<Record> records = new ArrayList<>(count());
             while (iterator.hasNext())
                 records.add(iterator.next());
@@ -264,9 +283,9 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
 
 
     @Override
-    public CloseableIterator<Record> streamingIterator() {
+    public CloseableIterator<Record> streamingIterator(BufferSupplier bufferSupplier) {
         if (isCompressed())
-            return compressedIterator();
+            return compressedIterator(bufferSupplier);
         else
             return uncompressedIterator();
     }
@@ -283,7 +302,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
         if (timestampType() == timestampType && currentMaxTimestamp == maxTimestamp)
             return;
 
-        byte attributes = computeAttributes(compressionType(), timestampType, isTransactional());
+        byte attributes = computeAttributes(compressionType(), timestampType, isTransactional(), isControlBatch());
         buffer.putShort(ATTRIBUTES_OFFSET, attributes);
         buffer.putLong(MAX_TIMESTAMP_OFFSET, maxTimestamp);
         long crc = computeChecksum();
@@ -329,12 +348,15 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
         return buffer != null ? buffer.hashCode() : 0;
     }
 
-    private static byte computeAttributes(CompressionType type, TimestampType timestampType, boolean isTransactional) {
+    private static byte computeAttributes(CompressionType type, TimestampType timestampType,
+                                          boolean isTransactional, boolean isControl) {
         if (timestampType == TimestampType.NO_TIMESTAMP_TYPE)
             throw new IllegalArgumentException("Timestamp type must be provided to compute attributes for message " +
                     "format v2 and above");
 
         byte attributes = isTransactional ? TRANSACTIONAL_FLAG_MASK : 0;
+        if (isControl)
+            attributes |= CONTROL_FLAG_MASK;
         if (type.id > 0)
             attributes |= COMPRESSION_CODEC_MASK & type.id;
         if (timestampType == TimestampType.LOG_APPEND_TIME)
@@ -351,10 +373,11 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
                             TimestampType timestampType,
                             long baseTimestamp,
                             long maxTimestamp,
-                            long pid,
+                            long producerId,
                             short epoch,
                             int sequence,
                             boolean isTransactional,
+                            boolean isControlBatch,
                             int partitionLeaderEpoch,
                             int numRecords) {
         if (magic < RecordBatch.CURRENT_MAGIC_VALUE)
@@ -362,7 +385,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
         if (baseTimestamp < 0 && baseTimestamp != NO_TIMESTAMP)
             throw new IllegalArgumentException("Invalid message timestamp " + baseTimestamp);
 
-        short attributes = computeAttributes(compressionType, timestampType, isTransactional);
+        short attributes = computeAttributes(compressionType, timestampType, isTransactional, isControlBatch);
 
         int position = buffer.position();
         buffer.putLong(position + BASE_OFFSET_OFFSET, baseOffset);
@@ -373,7 +396,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
         buffer.putLong(position + BASE_TIMESTAMP_OFFSET, baseTimestamp);
         buffer.putLong(position + MAX_TIMESTAMP_OFFSET, maxTimestamp);
         buffer.putInt(position + LAST_OFFSET_DELTA_OFFSET, lastOffsetDelta);
-        buffer.putLong(position + PRODUCER_ID_OFFSET, pid);
+        buffer.putLong(position + PRODUCER_ID_OFFSET, producerId);
         buffer.putShort(position + PRODUCER_EPOCH_OFFSET, epoch);
         buffer.putInt(position + BASE_SEQUENCE_OFFSET, sequence);
         buffer.putInt(position + RECORDS_COUNT_OFFSET, numRecords);
@@ -428,7 +451,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
     /**
      * Get an upper bound on the size of a batch with only a single record using a given key and value.
      */
-    static int batchSizeUpperBound(byte[] key, byte[] value, Header[] headers) {
+    static int batchSizeUpperBound(ByteBuffer key, ByteBuffer value, Header[] headers) {
         return RECORD_BATCH_OVERHEAD + DefaultRecord.recordSizeUpperBound(key, value, headers);
     }
 
@@ -474,4 +497,5 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
         }
 
     }
+
 }

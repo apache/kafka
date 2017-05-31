@@ -24,8 +24,8 @@ import java.nio.ByteBuffer;
 
 public class EndTxnRequest extends AbstractRequest {
     private static final String TRANSACTIONAL_ID_KEY_NAME = "transactional_id";
-    private static final String PID_KEY_NAME = "producer_id";
-    private static final String EPOCH_KEY_NAME = "producer_epoch";
+    private static final String PRODUCER_ID_KEY_NAME = "producer_id";
+    private static final String PRODUCER_EPOCH_KEY_NAME = "producer_epoch";
     private static final String TRANSACTION_RESULT_KEY_NAME = "transaction_result";
 
     public static class Builder extends AbstractRequest.Builder<EndTxnRequest> {
@@ -42,9 +42,25 @@ public class EndTxnRequest extends AbstractRequest {
             this.result = result;
         }
 
+        public TransactionResult result() {
+            return result;
+        }
+
         @Override
         public EndTxnRequest build(short version) {
             return new EndTxnRequest(version, transactionalId, producerId, producerEpoch, result);
+        }
+
+        @Override
+        public String toString() {
+            StringBuilder bld = new StringBuilder();
+            bld.append("(type=EndTxnRequest").
+                    append(", transactionalId=").append(transactionalId).
+                    append(", producerId=").append(producerId).
+                    append(", producerEpoch=").append(producerEpoch).
+                    append(", result=").append(result).
+                    append(")");
+            return bld.toString();
         }
     }
 
@@ -64,8 +80,8 @@ public class EndTxnRequest extends AbstractRequest {
     public EndTxnRequest(Struct struct, short version) {
         super(version);
         this.transactionalId = struct.getString(TRANSACTIONAL_ID_KEY_NAME);
-        this.producerId = struct.getLong(PID_KEY_NAME);
-        this.producerEpoch = struct.getShort(EPOCH_KEY_NAME);
+        this.producerId = struct.getLong(PRODUCER_ID_KEY_NAME);
+        this.producerEpoch = struct.getShort(PRODUCER_EPOCH_KEY_NAME);
         this.result = TransactionResult.forId(struct.getBoolean(TRANSACTION_RESULT_KEY_NAME));
     }
 
@@ -89,15 +105,15 @@ public class EndTxnRequest extends AbstractRequest {
     protected Struct toStruct() {
         Struct struct = new Struct(ApiKeys.END_TXN.requestSchema(version()));
         struct.set(TRANSACTIONAL_ID_KEY_NAME, transactionalId);
-        struct.set(PID_KEY_NAME, producerId);
-        struct.set(EPOCH_KEY_NAME, producerEpoch);
+        struct.set(PRODUCER_ID_KEY_NAME, producerId);
+        struct.set(PRODUCER_EPOCH_KEY_NAME, producerEpoch);
         struct.set(TRANSACTION_RESULT_KEY_NAME, result.id);
         return struct;
     }
 
     @Override
-    public EndTxnResponse getErrorResponse(Throwable e) {
-        return new EndTxnResponse(Errors.forException(e));
+    public EndTxnResponse getErrorResponse(int throttleTimeMs, Throwable e) {
+        return new EndTxnResponse(throttleTimeMs, Errors.forException(e));
     }
 
     public static EndTxnRequest parse(ByteBuffer buffer, short version) {

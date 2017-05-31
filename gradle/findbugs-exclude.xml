@@ -160,9 +160,12 @@ For a detailed description of findbugs bug categories, see http://findbugs.sourc
     </Match>
 
     <Match>
-        <!-- Suppress some minor warnings about machine-generated code for LRU cache
+        <!-- Suppress some minor warnings about machine-generated code for
              benchmarking. -->
-        <Package name="org.apache.kafka.jmh.cache.generated"/>
+        <Or>
+            <Package name="org.apache.kafka.jmh.cache.generated"/>
+            <Package name="org.apache.kafka.jmh.record.generated"/>
+        </Or>
     </Match>
 
     <Match>
@@ -262,13 +265,6 @@ For a detailed description of findbugs bug categories, see http://findbugs.sourc
         <!-- Suppress warnings about implementing compareTo but not equals. -->
         <Class name="org.apache.kafka.streams.processor.internals.Stamped"/>
         <Bug pattern="EQ_COMPARETO_USE_OBJECT_EQUALS"/>
-    </Match>
-
-    <Match>
-        <!-- TODO: fix this (see KAFKA-4996) -->
-        <Class name="org.apache.kafka.streams.state.internals.Segments"/>
-        <Method name="getOrCreateSegment"/>
-        <Bug pattern="AT_OPERATION_SEQUENCE_ON_CONCURRENT_ABSTRACTION"/>
     </Match>
 
     <Match>

@@ -22,6 +22,7 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.LongDeserializer;
+import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -36,6 +37,9 @@ import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.KGroupedStream;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
+import org.apache.kafka.streams.kstream.KTable;
+import org.apache.kafka.streams.kstream.Predicate;
+import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -67,17 +71,18 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsEqual.equalTo;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 @Category({IntegrationTest.class})
 public class QueryableStateIntegrationTest {
     private static final int NUM_BROKERS = 1;
-    private static final long COMMIT_INTERVAL_MS = 300L;
 
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER =
@@ -111,13 +116,10 @@ public class QueryableStateIntegrationTest {
         outputTopicConcurrent = outputTopicConcurrent + "-" + testNo;
         outputTopicThree = outputTopicThree + "-" + testNo;
         streamTwo = streamTwo + "-" + testNo;
-        CLUSTER.createTopic(streamOne);
-        CLUSTER.createTopic(streamConcurrent);
+        CLUSTER.createTopics(streamOne, streamConcurrent);
         CLUSTER.createTopic(streamTwo, STREAM_TWO_PARTITIONS, NUM_REPLICAS);
         CLUSTER.createTopic(streamThree, STREAM_THREE_PARTITIONS, 1);
-        CLUSTER.createTopic(outputTopic);
-        CLUSTER.createTopic(outputTopicConcurrent);
-        CLUSTER.createTopic(outputTopicThree);
+        CLUSTER.createTopics(outputTopic, outputTopicConcurrent, outputTopicThree);
     }
 
     @Before
@@ -128,13 +130,11 @@ public class QueryableStateIntegrationTest {
         final String applicationId = "queryable-state-" + testNo;
 
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
-        streamsConfiguration
-            .put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
+        streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, COMMIT_INTERVAL_MS);
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory("qs-test").getPath());
-        streamsConfiguration.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
-        streamsConfiguration.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+        streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+        streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
         // override this to make the rebalances happen quickly
         streamsConfiguration.put(IntegrationTestUtils.INTERNAL_LEAVE_GROUP_ON_CLOSE, true);
@@ -190,11 +190,6 @@ public class QueryableStateIntegrationTest {
 
     /**
      * Creates a typical word count topology
-     *
-     * @param inputTopic
-     * @param outputTopic
-     * @param streamsConfiguration config
-     * @return
      */
     private KafkaStreams createCountStream(final String inputTopic, final String outputTopic, final Properties streamsConfiguration) {
         final KStreamBuilder builder = new KStreamBuilder();
@@ -222,7 +217,7 @@ public class QueryableStateIntegrationTest {
     private class StreamRunnable implements Runnable {
         private final KafkaStreams myStream;
         private boolean closed = false;
-        private KafkaStreamsTest.StateListenerStub stateListener = new KafkaStreamsTest.StateListenerStub();
+        private final KafkaStreamsTest.StateListenerStub stateListener = new KafkaStreamsTest.StateListenerStub();
 
         StreamRunnable(final String inputTopic, final String outputTopic, final int queryPort) {
             final Properties props = (Properties) streamsConfiguration.clone();
@@ -252,7 +247,7 @@ public class QueryableStateIntegrationTest {
             return myStream;
         }
 
-        public final KafkaStreamsTest.StateListenerStub getStateListener() {
+        final KafkaStreamsTest.StateListenerStub getStateListener() {
             return stateListener;
         }
     }
@@ -283,7 +278,7 @@ public class QueryableStateIntegrationTest {
                     }
 
                 }
-            }, 30000, "waiting for metadata, store and value to be non null");
+            }, 120000, "waiting for metadata, store and value to be non null");
         }
     }
 
@@ -308,14 +303,14 @@ public class QueryableStateIntegrationTest {
                     } catch (final IllegalStateException e) {
                         // Kafka Streams instance may have closed but rebalance hasn't happened
                         return false;
-                    } catch (InvalidStateStoreException e) {
+                    } catch (final InvalidStateStoreException e) {
                         // there must have been at least one rebalance state
                         assertTrue(stateListenerStub.mapStates.get(KafkaStreams.State.REBALANCING) >= 1);
                         return false;
                     }
 
                 }
-            }, 30000, "waiting for metadata, store and value to be non null");
+            }, 120000, "waiting for metadata, store and value to be non null");
         }
     }
 
@@ -325,19 +320,17 @@ public class QueryableStateIntegrationTest {
         final int numThreads = STREAM_TWO_PARTITIONS;
         final StreamRunnable[] streamRunnables = new StreamRunnable[numThreads];
         final Thread[] streamThreads = new Thread[numThreads];
-        final int numIterations = 500000;
 
-        // create concurrent producer
-        final ProducerRunnable producerRunnable = new ProducerRunnable(streamThree, inputValues, numIterations);
-        final Thread producerThread = new Thread(producerRunnable);
+        final ProducerRunnable producerRunnable = new ProducerRunnable(streamThree, inputValues, 1);
+        producerRunnable.run();
 
-        // create three stream threads
+
+        // create stream threads
         for (int i = 0; i < numThreads; i++) {
             streamRunnables[i] = new StreamRunnable(streamThree, outputTopicThree, i);
             streamThreads[i] = new Thread(streamRunnables[i]);
             streamThreads[i].start();
         }
-        producerThread.start();
 
         try {
             waitUntilAtLeastNumRecordProcessed(outputTopicThree, 1);
@@ -371,9 +364,6 @@ public class QueryableStateIntegrationTest {
                     streamThreads[i].join();
                 }
             }
-            producerRunnable.shutdown();
-            producerThread.interrupt();
-            producerThread.join();
         }
     }
 
@@ -425,7 +415,181 @@ public class QueryableStateIntegrationTest {
         verifyCanQueryState(10 * 1024 * 1024);
     }
 
-    private void verifyCanQueryState(int cacheSizeBytes) throws java.util.concurrent.ExecutionException, InterruptedException {
+    @Test
+    public void shouldBeAbleToQueryFilterState() throws Exception {
+        streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+        streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Long().getClass());
+        final KStreamBuilder builder = new KStreamBuilder();
+        final String[] keys = {"hello", "goodbye", "welcome", "go", "kafka"};
+        final Set<KeyValue<String, Long>> batch1 = new HashSet<>();
+        batch1.addAll(Arrays.asList(
+            new KeyValue<>(keys[0], 1L),
+            new KeyValue<>(keys[1], 1L),
+            new KeyValue<>(keys[2], 3L),
+            new KeyValue<>(keys[3], 5L),
+            new KeyValue<>(keys[4], 2L)));
+        final Set<KeyValue<String, Long>> expectedBatch1 = new HashSet<>();
+        expectedBatch1.addAll(Arrays.asList(
+            new KeyValue<>(keys[4], 2L)));
+
+        IntegrationTestUtils.produceKeyValuesSynchronously(
+            streamOne,
+            batch1,
+            TestUtils.producerConfig(
+                CLUSTER.bootstrapServers(),
+                StringSerializer.class,
+                LongSerializer.class,
+                new Properties()),
+            mockTime);
+        final Predicate<String, Long> filterPredicate = new Predicate<String, Long>() {
+            @Override
+            public boolean test(final String key, final Long value) {
+                return key.contains("kafka");
+            }
+        };
+        final KTable<String, Long> t1 = builder.table(streamOne);
+        final KTable<String, Long> t2 = t1.filter(filterPredicate, "queryFilter");
+        t1.filterNot(filterPredicate, "queryFilterNot");
+        t2.to(outputTopic);
+
+        kafkaStreams = new KafkaStreams(builder, streamsConfiguration);
+        kafkaStreams.start();
+
+        waitUntilAtLeastNumRecordProcessed(outputTopic, 2);
+
+        final ReadOnlyKeyValueStore<String, Long>
+            myFilterStore = kafkaStreams.store("queryFilter", QueryableStoreTypes.<String, Long>keyValueStore());
+        final ReadOnlyKeyValueStore<String, Long>
+            myFilterNotStore = kafkaStreams.store("queryFilterNot", QueryableStoreTypes.<String, Long>keyValueStore());
+
+        for (final KeyValue<String, Long> expectedEntry : expectedBatch1) {
+            assertEquals(myFilterStore.get(expectedEntry.key), expectedEntry.value);
+        }
+        for (final KeyValue<String, Long> batchEntry : batch1) {
+            if (!expectedBatch1.contains(batchEntry)) {
+                assertNull(myFilterStore.get(batchEntry.key));
+            }
+        }
+
+        for (final KeyValue<String, Long> expectedEntry : expectedBatch1) {
+            assertNull(myFilterNotStore.get(expectedEntry.key));
+        }
+        for (final KeyValue<String, Long> batchEntry : batch1) {
+            if (!expectedBatch1.contains(batchEntry)) {
+                assertEquals(myFilterNotStore.get(batchEntry.key), batchEntry.value);
+            }
+        }
+    }
+
+    @Test
+    public void shouldBeAbleToQueryMapValuesState() throws Exception {
+        streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+        streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+        final KStreamBuilder builder = new KStreamBuilder();
+        final String[] keys = {"hello", "goodbye", "welcome", "go", "kafka"};
+        final Set<KeyValue<String, String>> batch1 = new HashSet<>();
+        batch1.addAll(Arrays.asList(
+            new KeyValue<>(keys[0], "1"),
+            new KeyValue<>(keys[1], "1"),
+            new KeyValue<>(keys[2], "3"),
+            new KeyValue<>(keys[3], "5"),
+            new KeyValue<>(keys[4], "2")));
+
+        IntegrationTestUtils.produceKeyValuesSynchronously(
+            streamOne,
+            batch1,
+            TestUtils.producerConfig(
+                CLUSTER.bootstrapServers(),
+                StringSerializer.class,
+                StringSerializer.class,
+                new Properties()),
+            mockTime);
+
+        final KTable<String, String> t1 = builder.table(streamOne);
+        final KTable<String, Long> t2 = t1.mapValues(new ValueMapper<String, Long>() {
+            @Override
+            public Long apply(final String value) {
+                return Long.valueOf(value);
+            }
+        }, Serdes.Long(), "queryMapValues");
+        t2.to(Serdes.String(), Serdes.Long(), outputTopic);
+
+        kafkaStreams = new KafkaStreams(builder, streamsConfiguration);
+        kafkaStreams.start();
+
+        waitUntilAtLeastNumRecordProcessed(outputTopic, 1);
+
+        final ReadOnlyKeyValueStore<String, Long>
+            myMapStore = kafkaStreams.store("queryMapValues",
+            QueryableStoreTypes.<String, Long>keyValueStore());
+        for (final KeyValue<String, String> batchEntry : batch1) {
+            assertEquals(myMapStore.get(batchEntry.key), Long.valueOf(batchEntry.value));
+        }
+    }
+
+    @Test
+    public void shouldBeAbleToQueryMapValuesAfterFilterState() throws Exception {
+        streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+        streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+        final KStreamBuilder builder = new KStreamBuilder();
+        final String[] keys = {"hello", "goodbye", "welcome", "go", "kafka"};
+        final Set<KeyValue<String, String>> batch1 = new HashSet<>();
+        batch1.addAll(Arrays.asList(
+            new KeyValue<>(keys[0], "1"),
+            new KeyValue<>(keys[1], "1"),
+            new KeyValue<>(keys[2], "3"),
+            new KeyValue<>(keys[3], "5"),
+            new KeyValue<>(keys[4], "2")));
+        final Set<KeyValue<String, Long>> expectedBatch1 = new HashSet<>();
+        expectedBatch1.addAll(Arrays.asList(
+            new KeyValue<>(keys[4], 2L)));
+
+        IntegrationTestUtils.produceKeyValuesSynchronously(
+            streamOne,
+            batch1,
+            TestUtils.producerConfig(
+                CLUSTER.bootstrapServers(),
+                StringSerializer.class,
+                StringSerializer.class,
+                new Properties()),
+            mockTime);
+
+        final Predicate<String, String> filterPredicate = new Predicate<String, String>() {
+            @Override
+            public boolean test(final String key, final String value) {
+                return key.contains("kafka");
+            }
+        };
+        final KTable<String, String> t1 = builder.table(streamOne);
+        final KTable<String, String> t2 = t1.filter(filterPredicate, "queryFilter");
+        final KTable<String, Long> t3 = t2.mapValues(new ValueMapper<String, Long>() {
+            @Override
+            public Long apply(final String value) {
+                return Long.valueOf(value);
+            }
+        }, Serdes.Long(), "queryMapValues");
+        t3.to(Serdes.String(), Serdes.Long(), outputTopic);
+
+        kafkaStreams = new KafkaStreams(builder, streamsConfiguration);
+        kafkaStreams.start();
+
+        waitUntilAtLeastNumRecordProcessed(outputTopic, 1);
+
+        final ReadOnlyKeyValueStore<String, Long>
+            myMapStore = kafkaStreams.store("queryMapValues",
+            QueryableStoreTypes.<String, Long>keyValueStore());
+        for (final KeyValue<String, Long> expectedEntry : expectedBatch1) {
+            assertEquals(myMapStore.get(expectedEntry.key), expectedEntry.value);
+        }
+        for (final KeyValue<String, String> batchEntry : batch1) {
+            final KeyValue<String, Long> batchEntryMapValue = new KeyValue<>(batchEntry.key, Long.valueOf(batchEntry.value));
+            if (!expectedBatch1.contains(batchEntryMapValue)) {
+                assertNull(myMapStore.get(batchEntry.key));
+            }
+        }
+    }
+
+    private void verifyCanQueryState(final int cacheSizeBytes) throws java.util.concurrent.ExecutionException, InterruptedException {
         streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, cacheSizeBytes);
         final KStreamBuilder builder = new KStreamBuilder();
         final String[] keys = {"hello", "goodbye", "welcome", "go", "kafka"};
@@ -501,17 +665,7 @@ public class QueryableStateIntegrationTest {
                 mockTime);
 
         final int maxWaitMs = 30000;
-        TestUtils.waitForCondition(new TestCondition() {
-            @Override
-            public boolean conditionMet() {
-                try {
-                    kafkaStreams.store(storeName, QueryableStoreTypes.<String, Long>keyValueStore());
-                    return true;
-                } catch (InvalidStateStoreException ise) {
-                    return false;
-                }
-            }
-        }, maxWaitMs, "waiting for store " + storeName);
+        TestUtils.waitForCondition(new WaitForStore(storeName), maxWaitMs, "waiting for store " + storeName);
 
         final ReadOnlyKeyValueStore<String, Long> store = kafkaStreams.store(storeName, QueryableStoreTypes.<String, Long>keyValueStore());
 
@@ -536,11 +690,112 @@ public class QueryableStateIntegrationTest {
                 try {
                     assertEquals(Long.valueOf(8L), kafkaStreams.store(storeName, QueryableStoreTypes.<String, Long>keyValueStore()).get("hello"));
                     return true;
-                } catch (InvalidStateStoreException ise) {
+                } catch (final InvalidStateStoreException ise) {
                     return false;
                 }
             }
         }, maxWaitMs, "waiting for store " + storeName);
+
+    }
+
+    private class WaitForStore implements TestCondition {
+        private final String storeName;
+
+        WaitForStore(final String storeName) {
+            this.storeName = storeName;
+        }
+        @Override
+        public boolean conditionMet() {
+            try {
+                kafkaStreams.store(storeName, QueryableStoreTypes.<String, Long>keyValueStore());
+                return true;
+            } catch (final InvalidStateStoreException ise) {
+                return false;
+            }
+        }
+    }
+
+    @Test
+    public void shouldAllowToQueryAfterThreadDied() throws Exception {
+        final AtomicBoolean beforeFailure = new AtomicBoolean(true);
+        final AtomicBoolean failed = new AtomicBoolean(false);
+        final String storeName = "store";
+
+        final KStreamBuilder builder = new KStreamBuilder();
+        final KStream<String, String> input = builder.stream(streamOne);
+        input
+            .groupByKey()
+            .reduce(new Reducer<String>() {
+                @Override
+                public String apply(final String value1, final String value2) {
+                    if (beforeFailure.get() && value1.length() > 1) {
+                        beforeFailure.set(false);
+                        throw new RuntimeException("Injected test exception");
+                    }
+                    return value1 + value2;
+                }
+            }, storeName)
+            .to(outputTopic);
+
+        streamsConfiguration.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 2);
+        kafkaStreams = new KafkaStreams(builder, streamsConfiguration);
+        kafkaStreams.setUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
+            @Override
+            public void uncaughtException(final Thread t, final Throwable e) {
+                failed.set(true);
+            }
+        });
+        kafkaStreams.start();
+
+        IntegrationTestUtils.produceKeyValuesSynchronously(
+            streamOne,
+            Arrays.asList(KeyValue.pair("a", "1"), KeyValue.pair("a", "2"), KeyValue.pair("b", "3"), KeyValue.pair("b", "4")),
+            TestUtils.producerConfig(
+                CLUSTER.bootstrapServers(),
+                StringSerializer.class,
+                StringSerializer.class,
+                new Properties()),
+            mockTime);
+
+        final int maxWaitMs = 30000;
+        TestUtils.waitForCondition(new WaitForStore(storeName), maxWaitMs, "waiting for store " + storeName);
+
+        final ReadOnlyKeyValueStore<String, String> store = kafkaStreams.store(storeName, QueryableStoreTypes.<String, String>keyValueStore());
+
+        TestUtils.waitForCondition(new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                return "12".equals(store.get("a")) && "34".equals(store.get("b"));
+            }
+        }, maxWaitMs, "wait for agg to be '123'");
+
+        IntegrationTestUtils.produceKeyValuesSynchronously(
+            streamOne,
+            Arrays.asList(KeyValue.pair("a", "5")),
+            TestUtils.producerConfig(
+                CLUSTER.bootstrapServers(),
+                StringSerializer.class,
+                StringSerializer.class,
+                new Properties()),
+            mockTime);
+
+        TestUtils.waitForCondition(new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                return failed.get();
+            }
+        }, 30000, "wait for thread to fail");
+
+        TestUtils.waitForCondition(new WaitForStore(storeName), maxWaitMs, "waiting for store " + storeName);
+
+        final ReadOnlyKeyValueStore<String, String> store2 = kafkaStreams.store(storeName, QueryableStoreTypes.<String, String>keyValueStore());
+
+        TestUtils.waitForCondition(new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                return "125".equals(store2.get("a")) && "34".equals(store2.get("b"));
+            }
+        }, maxWaitMs, "wait for agg to be '123'");
 
     }
 
@@ -613,7 +868,6 @@ public class QueryableStateIntegrationTest {
      * @param failIfKeyNotFound     if true, tests fails if an expected key is not found in store. If false,
      *                              the method merely inserts the new found key into the list of
      *                              expected keys.
-     * @throws InterruptedException
      */
     private void verifyGreaterOrEqual(final String[] keys,
                                       final Map<String, Long> expectedWindowedCount,
@@ -672,7 +926,7 @@ public class QueryableStateIntegrationTest {
             config,
             topic,
             numRecs,
-            60 * 1000);
+            120 * 1000);
     }
 
     private Set<KeyValue<String, Long>> fetch(final ReadOnlyWindowStore<String, Long> store,
@@ -718,11 +972,11 @@ public class QueryableStateIntegrationTest {
             currIteration++;
         }
 
-        public synchronized int getCurrIteration() {
+        synchronized int getCurrIteration() {
             return currIteration;
         }
 
-        public synchronized void shutdown() {
+        synchronized void shutdown() {
             shutdown = true;
         }
 
@@ -731,19 +985,19 @@ public class QueryableStateIntegrationTest {
             final Properties producerConfig = new Properties();
             producerConfig.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
             producerConfig.put(ProducerConfig.ACKS_CONFIG, "all");
-            producerConfig.put(ProducerConfig.RETRIES_CONFIG, 0);
+            producerConfig.put(ProducerConfig.RETRIES_CONFIG, 10);
             producerConfig.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
             producerConfig.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
 
-            final KafkaProducer<String, String>
-                producer =
-                new KafkaProducer<>(producerConfig, new StringSerializer(), new StringSerializer());
+            try (final KafkaProducer<String, String> producer =
+                         new KafkaProducer<>(producerConfig, new StringSerializer(), new StringSerializer())) {
 
-            while (getCurrIteration() < numIterations && !shutdown) {
-                for (int i = 0; i < inputValues.size(); i++) {
-                    producer.send(new ProducerRecord<String, String>(topic, inputValues.get(i)));
+                while (getCurrIteration() < numIterations && !shutdown) {
+                    for (final String value : inputValues) {
+                        producer.send(new ProducerRecord<String, String>(topic, value));
+                    }
+                    incrementInteration();
                 }
-                incrementInteration();
             }
         }
     }

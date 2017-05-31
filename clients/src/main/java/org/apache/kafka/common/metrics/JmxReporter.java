@@ -97,7 +97,7 @@ public class JmxReporter implements MetricsReporter {
 
     private KafkaMbean removeAttribute(KafkaMetric metric) {
         MetricName metricName = metric.metricName();
-        String mBeanName = getMBeanName(metricName);
+        String mBeanName = getMBeanName(prefix, metricName);
         KafkaMbean mbean = this.mbeans.get(mBeanName);
         if (mbean != null)
             mbean.removeAttribute(metricName.name());
@@ -107,7 +107,7 @@ public class JmxReporter implements MetricsReporter {
     private KafkaMbean addAttribute(KafkaMetric metric) {
         try {
             MetricName metricName = metric.metricName();
-            String mBeanName = getMBeanName(metricName);
+            String mBeanName = getMBeanName(prefix, metricName);
             if (!this.mbeans.containsKey(mBeanName))
                 mbeans.put(mBeanName, new KafkaMbean(mBeanName));
             KafkaMbean mbean = this.mbeans.get(mBeanName);
@@ -122,7 +122,7 @@ public class JmxReporter implements MetricsReporter {
      * @param metricName
      * @return standard JMX MBean name in the following format domainName:type=metricType,key1=val1,key2=val2
      */
-    private String getMBeanName(MetricName metricName) {
+    static String getMBeanName(String prefix, MetricName metricName) {
         StringBuilder mBeanName = new StringBuilder();
         mBeanName.append(prefix);
         mBeanName.append(":type=");

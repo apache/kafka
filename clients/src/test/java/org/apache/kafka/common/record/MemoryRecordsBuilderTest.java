@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.record;
 
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Test;
@@ -31,6 +32,7 @@ import java.util.List;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 @RunWith(value = Parameterized.class)
 public class MemoryRecordsBuilderTest {
@@ -50,7 +52,7 @@ public class MemoryRecordsBuilderTest {
 
         MemoryRecordsBuilder builder = new MemoryRecordsBuilder(buffer, RecordBatch.MAGIC_VALUE_V0, compressionType,
                 TimestampType.CREATE_TIME, 0L, 0L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE,
-                false, RecordBatch.NO_PARTITION_LEADER_EPOCH, buffer.capacity());
+                false, false, RecordBatch.NO_PARTITION_LEADER_EPOCH, buffer.capacity());
         MemoryRecords records = builder.build();
         assertEquals(0, records.sizeInBytes());
         assertEquals(bufferOffset, buffer.position());
@@ -66,8 +68,8 @@ public class MemoryRecordsBuilderTest {
         int sequence = 2342;
 
         MemoryRecordsBuilder builder = new MemoryRecordsBuilder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, compressionType,
-                TimestampType.CREATE_TIME, 0L, 0L, pid, epoch, sequence, true, RecordBatch.NO_PARTITION_LEADER_EPOCH,
-                buffer.capacity());
+                TimestampType.CREATE_TIME, 0L, 0L, pid, epoch, sequence, true, false,
+                RecordBatch.NO_PARTITION_LEADER_EPOCH, buffer.capacity());
         builder.append(System.currentTimeMillis(), "foo".getBytes(), "bar".getBytes());
         MemoryRecords records = builder.build();
 
@@ -86,7 +88,7 @@ public class MemoryRecordsBuilderTest {
         int sequence = 2342;
 
         new MemoryRecordsBuilder(buffer, RecordBatch.MAGIC_VALUE_V0, compressionType, TimestampType.CREATE_TIME,
-                0L, 0L, pid, epoch, sequence, true, RecordBatch.NO_PARTITION_LEADER_EPOCH, buffer.capacity());
+                0L, 0L, pid, epoch, sequence, true, false, RecordBatch.NO_PARTITION_LEADER_EPOCH, buffer.capacity());
     }
 
     @Test(expected = IllegalArgumentException.class)
@@ -99,7 +101,33 @@ public class MemoryRecordsBuilderTest {
         int sequence = 2342;
 
         new MemoryRecordsBuilder(buffer, RecordBatch.MAGIC_VALUE_V1, compressionType, TimestampType.CREATE_TIME,
-                0L, 0L, pid, epoch, sequence, true, RecordBatch.NO_PARTITION_LEADER_EPOCH, buffer.capacity());
+                0L, 0L, pid, epoch, sequence, true, false, RecordBatch.NO_PARTITION_LEADER_EPOCH, buffer.capacity());
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testWriteControlBatchNotAllowedMagicV0() {
+        ByteBuffer buffer = ByteBuffer.allocate(128);
+        buffer.position(bufferOffset);
+
+        long pid = 9809;
+        short epoch = 15;
+        int sequence = 2342;
+
+        new MemoryRecordsBuilder(buffer, RecordBatch.MAGIC_VALUE_V0, compressionType, TimestampType.CREATE_TIME,
+                0L, 0L, pid, epoch, sequence, false, true, RecordBatch.NO_PARTITION_LEADER_EPOCH, buffer.capacity());
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testWriteControlBatchNotAllowedMagicV1() {
+        ByteBuffer buffer = ByteBuffer.allocate(128);
+        buffer.position(bufferOffset);
+
+        long pid = 9809;
+        short epoch = 15;
+        int sequence = 2342;
+
+        new MemoryRecordsBuilder(buffer, RecordBatch.MAGIC_VALUE_V1, compressionType, TimestampType.CREATE_TIME,
+                0L, 0L, pid, epoch, sequence, false, true, RecordBatch.NO_PARTITION_LEADER_EPOCH, buffer.capacity());
     }
 
     @Test(expected = IllegalArgumentException.class)
@@ -112,7 +140,7 @@ public class MemoryRecordsBuilderTest {
         int sequence = 2342;
 
         MemoryRecordsBuilder builder = new MemoryRecordsBuilder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, compressionType, TimestampType.CREATE_TIME,
-                0L, 0L, pid, epoch, sequence, true, RecordBatch.NO_PARTITION_LEADER_EPOCH, buffer.capacity());
+                0L, 0L, pid, epoch, sequence, true, false, RecordBatch.NO_PARTITION_LEADER_EPOCH, buffer.capacity());
         builder.close();
     }
 
@@ -126,7 +154,7 @@ public class MemoryRecordsBuilderTest {
         int sequence = 2342;
 
         MemoryRecordsBuilder builder = new MemoryRecordsBuilder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, compressionType, TimestampType.CREATE_TIME,
-                0L, 0L, pid, epoch, sequence, true, RecordBatch.NO_PARTITION_LEADER_EPOCH, buffer.capacity());
+                0L, 0L, pid, epoch, sequence, true, false, RecordBatch.NO_PARTITION_LEADER_EPOCH, buffer.capacity());
         builder.close();
     }
 
@@ -140,8 +168,36 @@ public class MemoryRecordsBuilderTest {
         int sequence = RecordBatch.NO_SEQUENCE;
 
         MemoryRecordsBuilder builder = new MemoryRecordsBuilder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, compressionType, TimestampType.CREATE_TIME,
-                0L, 0L, pid, epoch, sequence, true, RecordBatch.NO_PARTITION_LEADER_EPOCH, buffer.capacity());
+                0L, 0L, pid, epoch, sequence, true, false, RecordBatch.NO_PARTITION_LEADER_EPOCH, buffer.capacity());
         builder.close();
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testWriteEndTxnMarkerNonTransactionalBatch() {
+        ByteBuffer buffer = ByteBuffer.allocate(128);
+        buffer.position(bufferOffset);
+
+        long pid = 9809;
+        short epoch = 15;
+        int sequence = RecordBatch.NO_SEQUENCE;
+
+        MemoryRecordsBuilder builder = new MemoryRecordsBuilder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, compressionType, TimestampType.CREATE_TIME,
+                0L, 0L, pid, epoch, sequence, false, true, RecordBatch.NO_PARTITION_LEADER_EPOCH, buffer.capacity());
+        builder.appendEndTxnMarker(RecordBatch.NO_TIMESTAMP, new EndTransactionMarker(ControlRecordType.ABORT, 0));
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testWriteEndTxnMarkerNonControlBatch() {
+        ByteBuffer buffer = ByteBuffer.allocate(128);
+        buffer.position(bufferOffset);
+
+        long pid = 9809;
+        short epoch = 15;
+        int sequence = RecordBatch.NO_SEQUENCE;
+
+        MemoryRecordsBuilder builder = new MemoryRecordsBuilder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, compressionType, TimestampType.CREATE_TIME,
+                0L, 0L, pid, epoch, sequence, true, false, RecordBatch.NO_PARTITION_LEADER_EPOCH, buffer.capacity());
+        builder.appendEndTxnMarker(RecordBatch.NO_TIMESTAMP, new EndTransactionMarker(ControlRecordType.ABORT, 0));
     }
 
     @Test
@@ -157,7 +213,7 @@ public class MemoryRecordsBuilderTest {
 
         MemoryRecordsBuilder builder = new MemoryRecordsBuilder(buffer, RecordBatch.MAGIC_VALUE_V0, compressionType,
                 TimestampType.CREATE_TIME, 0L, 0L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE,
-                false, RecordBatch.NO_PARTITION_LEADER_EPOCH, buffer.capacity());
+                false, false, RecordBatch.NO_PARTITION_LEADER_EPOCH, buffer.capacity());
 
         int uncompressedSize = 0;
         for (LegacyRecord record : records) {
@@ -167,11 +223,11 @@ public class MemoryRecordsBuilderTest {
 
         MemoryRecords built = builder.build();
         if (compressionType == CompressionType.NONE) {
-            assertEquals(1.0, builder.compressionRate(), 0.00001);
+            assertEquals(1.0, builder.compressionRatio(), 0.00001);
         } else {
             int compressedSize = built.sizeInBytes() - Records.LOG_OVERHEAD - LegacyRecord.RECORD_OVERHEAD_V0;
             double computedCompressionRate = (double) compressedSize / uncompressedSize;
-            assertEquals(computedCompressionRate, builder.compressionRate(), 0.00001);
+            assertEquals(computedCompressionRate, builder.compressionRatio(), 0.00001);
         }
     }
 
@@ -188,7 +244,7 @@ public class MemoryRecordsBuilderTest {
 
         MemoryRecordsBuilder builder = new MemoryRecordsBuilder(buffer, RecordBatch.MAGIC_VALUE_V1, compressionType,
                 TimestampType.CREATE_TIME, 0L, 0L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE,
-                false, RecordBatch.NO_PARTITION_LEADER_EPOCH, buffer.capacity());
+                false, false, RecordBatch.NO_PARTITION_LEADER_EPOCH, buffer.capacity());
 
         int uncompressedSize = 0;
         for (LegacyRecord record : records) {
@@ -198,11 +254,11 @@ public class MemoryRecordsBuilderTest {
 
         MemoryRecords built = builder.build();
         if (compressionType == CompressionType.NONE) {
-            assertEquals(1.0, builder.compressionRate(), 0.00001);
+            assertEquals(1.0, builder.compressionRatio(), 0.00001);
         } else {
             int compressedSize = built.sizeInBytes() - Records.LOG_OVERHEAD - LegacyRecord.RECORD_OVERHEAD_V1;
             double computedCompressionRate = (double) compressedSize / uncompressedSize;
-            assertEquals(computedCompressionRate, builder.compressionRate(), 0.00001);
+            assertEquals(computedCompressionRate, builder.compressionRatio(), 0.00001);
         }
     }
 
@@ -214,7 +270,7 @@ public class MemoryRecordsBuilderTest {
         long logAppendTime = System.currentTimeMillis();
         MemoryRecordsBuilder builder = new MemoryRecordsBuilder(buffer, RecordBatch.MAGIC_VALUE_V1, compressionType,
                 TimestampType.LOG_APPEND_TIME, 0L, logAppendTime, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH,
-                RecordBatch.NO_SEQUENCE, false, RecordBatch.NO_PARTITION_LEADER_EPOCH, buffer.capacity());
+                RecordBatch.NO_SEQUENCE, false, false, RecordBatch.NO_PARTITION_LEADER_EPOCH, buffer.capacity());
         builder.append(0L, "a".getBytes(), "1".getBytes());
         builder.append(0L, "b".getBytes(), "2".getBytes());
         builder.append(0L, "c".getBytes(), "3".getBytes());
@@ -243,7 +299,7 @@ public class MemoryRecordsBuilderTest {
         long logAppendTime = System.currentTimeMillis();
         MemoryRecordsBuilder builder = new MemoryRecordsBuilder(buffer, RecordBatch.MAGIC_VALUE_V1, compressionType,
                 TimestampType.CREATE_TIME, 0L, logAppendTime, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE,
-                false, RecordBatch.NO_PARTITION_LEADER_EPOCH, buffer.capacity());
+                false, false, RecordBatch.NO_PARTITION_LEADER_EPOCH, buffer.capacity());
         builder.append(0L, "a".getBytes(), "1".getBytes());
         builder.append(2L, "b".getBytes(), "2".getBytes());
         builder.append(1L, "c".getBytes(), "3".getBytes());
@@ -267,6 +323,22 @@ public class MemoryRecordsBuilderTest {
     }
 
     @Test
+    public void testAppendedChecksumConsistency() {
+        ByteBuffer buffer = ByteBuffer.allocate(512);
+        for (byte magic : Arrays.asList(RecordBatch.MAGIC_VALUE_V0, RecordBatch.MAGIC_VALUE_V1, RecordBatch.MAGIC_VALUE_V2)) {
+            MemoryRecordsBuilder builder = new MemoryRecordsBuilder(buffer, magic, compressionType,
+                    TimestampType.CREATE_TIME, 0L, LegacyRecord.NO_TIMESTAMP, RecordBatch.NO_PRODUCER_ID,
+                    RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE, false, false,
+                    RecordBatch.NO_PARTITION_LEADER_EPOCH, buffer.capacity());
+            Long checksumOrNull = builder.append(1L, "key".getBytes(), "value".getBytes());
+            MemoryRecords memoryRecords = builder.build();
+            List<Record> records = TestUtils.toList(memoryRecords.records());
+            assertEquals(1, records.size());
+            assertEquals(checksumOrNull, records.get(0).checksumOrNull());
+        }
+    }
+
+    @Test
     public void testSmallWriteLimit() {
         // with a small write limit, we always allow at least one record to be added
 
@@ -276,7 +348,7 @@ public class MemoryRecordsBuilderTest {
         ByteBuffer buffer = ByteBuffer.allocate(512);
         MemoryRecordsBuilder builder = new MemoryRecordsBuilder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, compressionType,
                 TimestampType.CREATE_TIME, 0L, LegacyRecord.NO_TIMESTAMP, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH,
-                RecordBatch.NO_SEQUENCE, false, RecordBatch.NO_PARTITION_LEADER_EPOCH, writeLimit);
+                RecordBatch.NO_SEQUENCE, false, false, RecordBatch.NO_PARTITION_LEADER_EPOCH, writeLimit);
 
         assertFalse(builder.isFull());
         assertTrue(builder.hasRoomFor(0L, key, value));
@@ -302,7 +374,8 @@ public class MemoryRecordsBuilderTest {
         long logAppendTime = System.currentTimeMillis();
         MemoryRecordsBuilder builder = new MemoryRecordsBuilder(buffer, RecordBatch.MAGIC_VALUE_V1, compressionType,
                 TimestampType.CREATE_TIME, 0L, logAppendTime, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE,
-                false, RecordBatch.NO_PARTITION_LEADER_EPOCH, buffer.capacity());
+                false, false, RecordBatch.NO_PARTITION_LEADER_EPOCH, buffer.capacity());
+        builder.setEstimatedCompressionRatio(0.5f);
         builder.append(0L, "a".getBytes(), "1".getBytes());
         builder.append(1L, "b".getBytes(), "2".getBytes());
 
@@ -330,7 +403,7 @@ public class MemoryRecordsBuilderTest {
         long logAppendTime = System.currentTimeMillis();
         MemoryRecordsBuilder builder = new MemoryRecordsBuilder(buffer, RecordBatch.MAGIC_VALUE_V1, compressionType,
                 TimestampType.CREATE_TIME, 0L, logAppendTime, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE,
-                false, RecordBatch.NO_PARTITION_LEADER_EPOCH, buffer.capacity());
+                false, false, RecordBatch.NO_PARTITION_LEADER_EPOCH, buffer.capacity());
 
         builder.appendWithOffset(0L, System.currentTimeMillis(), "a".getBytes(), null);
 
@@ -346,12 +419,17 @@ public class MemoryRecordsBuilderTest {
         builder.append(10L, "1".getBytes(), "a".getBytes());
         builder.close();
 
+        MemoryRecords.writeEndTransactionalMarker(buffer, 1L, System.currentTimeMillis(), 0, 15L, (short) 0,
+                new EndTransactionMarker(ControlRecordType.ABORT, 0));
+
         builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, compressionType,
                 TimestampType.CREATE_TIME, 1L);
-        builder.append(11L, "2".getBytes(), "b".getBytes());
-        builder.appendControlRecord(12L, ControlRecordType.COMMIT, null);
+        builder.append(12L, "2".getBytes(), "b".getBytes());
         builder.append(13L, "3".getBytes(), "c".getBytes());
         builder.close();
+
+        MemoryRecords.writeEndTransactionalMarker(buffer, 14L, System.currentTimeMillis(), 0, 1L, (short) 0,
+                new EndTransactionMarker(ControlRecordType.COMMIT, 0));
 
         buffer.flip();
 
@@ -410,6 +488,70 @@ public class MemoryRecordsBuilderTest {
         assertEquals(ByteBuffer.wrap("1".getBytes()), logRecords.get(0).key());
         assertEquals(ByteBuffer.wrap("2".getBytes()), logRecords.get(1).key());
         assertEquals(ByteBuffer.wrap("3".getBytes()), logRecords.get(2).key());
+    }
+
+    @Test
+    public void shouldThrowKafkaExceptionOnBuildWhenAborted() throws Exception {
+        ByteBuffer buffer = ByteBuffer.allocate(128);
+        buffer.position(bufferOffset);
+
+        MemoryRecordsBuilder builder = new MemoryRecordsBuilder(buffer, RecordBatch.MAGIC_VALUE_V0, compressionType,
+                                                                TimestampType.CREATE_TIME, 0L, 0L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE,
+                                                                false, false, RecordBatch.NO_PARTITION_LEADER_EPOCH, buffer.capacity());
+        builder.abort();
+        try {
+            builder.build();
+            fail("Should have thrown KafkaException");
+        } catch (KafkaException e) {
+            // ok
+        }
+    }
+
+    @Test
+    public void shouldResetBufferToInitialPositionOnAbort() throws Exception {
+        ByteBuffer buffer = ByteBuffer.allocate(128);
+        buffer.position(bufferOffset);
+
+        MemoryRecordsBuilder builder = new MemoryRecordsBuilder(buffer, RecordBatch.MAGIC_VALUE_V0, compressionType,
+                                                                TimestampType.CREATE_TIME, 0L, 0L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE,
+                                                                false, false, RecordBatch.NO_PARTITION_LEADER_EPOCH, buffer.capacity());
+        builder.append(0L, "a".getBytes(), "1".getBytes());
+        builder.abort();
+        assertEquals(bufferOffset, builder.buffer().position());
+    }
+
+    @Test
+    public void shouldThrowIllegalStateExceptionOnCloseWhenAborted() throws Exception {
+        ByteBuffer buffer = ByteBuffer.allocate(128);
+        buffer.position(bufferOffset);
+
+        MemoryRecordsBuilder builder = new MemoryRecordsBuilder(buffer, RecordBatch.MAGIC_VALUE_V0, compressionType,
+                                                                TimestampType.CREATE_TIME, 0L, 0L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE,
+                                                                false, false, RecordBatch.NO_PARTITION_LEADER_EPOCH, buffer.capacity());
+        builder.abort();
+        try {
+            builder.close();
+            fail("Should have thrown IllegalStateException");
+        } catch (IllegalStateException e) {
+            // ok
+        }
+    }
+
+    @Test
+    public void shouldThrowIllegalStateExceptionOnAppendWhenAborted() throws Exception {
+        ByteBuffer buffer = ByteBuffer.allocate(128);
+        buffer.position(bufferOffset);
+
+        MemoryRecordsBuilder builder = new MemoryRecordsBuilder(buffer, RecordBatch.MAGIC_VALUE_V0, compressionType,
+                                                                TimestampType.CREATE_TIME, 0L, 0L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE,
+                                                                false, false, RecordBatch.NO_PARTITION_LEADER_EPOCH, buffer.capacity());
+        builder.abort();
+        try {
+            builder.append(0L, "a".getBytes(), "1".getBytes());
+            fail("Should have thrown IllegalStateException");
+        } catch (IllegalStateException e) {
+            // ok
+        }
     }
 
     @Parameterized.Parameters

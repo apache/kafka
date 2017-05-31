@@ -140,25 +140,25 @@ public class FileRecordsTest {
 
         int message1Size = batches.get(0).sizeInBytes();
         assertEquals("Should be able to find the first message by its offset",
-                new FileRecords.LogEntryPosition(0L, position, message1Size),
+                new FileRecords.LogOffsetPosition(0L, position, message1Size),
                 fileRecords.searchForOffsetWithSize(0, 0));
         position += message1Size;
 
         int message2Size = batches.get(1).sizeInBytes();
         assertEquals("Should be able to find second message when starting from 0",
-                new FileRecords.LogEntryPosition(1L, position, message2Size),
+                new FileRecords.LogOffsetPosition(1L, position, message2Size),
                 fileRecords.searchForOffsetWithSize(1, 0));
         assertEquals("Should be able to find second message starting from its offset",
-                new FileRecords.LogEntryPosition(1L, position, message2Size),
+                new FileRecords.LogOffsetPosition(1L, position, message2Size),
                 fileRecords.searchForOffsetWithSize(1, position));
         position += message2Size + batches.get(2).sizeInBytes();
 
         int message4Size = batches.get(3).sizeInBytes();
         assertEquals("Should be able to find fourth message from a non-existant offset",
-                new FileRecords.LogEntryPosition(50L, position, message4Size),
+                new FileRecords.LogOffsetPosition(50L, position, message4Size),
                 fileRecords.searchForOffsetWithSize(3, position));
         assertEquals("Should be able to find fourth message by correct offset",
-                new FileRecords.LogEntryPosition(50L, position, message4Size),
+                new FileRecords.LogOffsetPosition(50L, position, message4Size),
                 fileRecords.searchForOffsetWithSize(50,  position));
     }
 
@@ -241,7 +241,6 @@ public class FileRecordsTest {
         EasyMock.expect(channelMock.size()).andReturn(42L).atLeastOnce();
         EasyMock.expect(channelMock.position(42L)).andReturn(null).once();
         EasyMock.expect(channelMock.truncate(23L)).andReturn(null).once();
-        EasyMock.expect(channelMock.position(23L)).andReturn(null).once();
         EasyMock.replay(channelMock);
 
         FileRecords fileRecords = new FileRecords(tempFile(), channelMock, 0, Integer.MAX_VALUE, false);

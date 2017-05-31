@@ -186,6 +186,9 @@ object ReassignPartitionsCommand extends Logging {
 
     if (partitionsToBeReassigned.isEmpty)
       throw new AdminCommandFailedException("Partition reassignment data file is empty")
+    if (partitionsToBeReassigned.exists(_._2.isEmpty)) {
+      throw new AdminCommandFailedException("Partition replica list cannot be empty")
+    }
     val duplicateReassignedPartitions = CoreUtils.duplicates(partitionsToBeReassigned.map { case (tp, _) => tp })
     if (duplicateReassignedPartitions.nonEmpty)
       throw new AdminCommandFailedException("Partition reassignment contains duplicate topic partitions: %s".format(duplicateReassignedPartitions.mkString(",")))
@@ -198,13 +201,19 @@ object ReassignPartitionsCommand extends Logging {
         .mkString(". ")
       throw new AdminCommandFailedException("Partition replica lists may not contain duplicate entries: %s".format(duplicatesMsg))
     }
-    //Check that all partitions in the proposed assignment exist in the cluster
+    // check that all partitions in the proposed assignment exist in the cluster
     val proposedTopics = partitionsToBeReassigned.map { case (tp, _) => tp.topic }.distinct
     val existingAssignment = zkUtils.getReplicaAssignmentForTopics(proposedTopics)
     val nonExistentPartitions = partitionsToBeReassigned.map { case (tp, _) => tp }.filterNot(existingAssignment.contains)
     if (nonExistentPartitions.nonEmpty)
       throw new AdminCommandFailedException("The proposed assignment contains non-existent partitions: " +
         nonExistentPartitions)
+
+    // check that all brokers in the proposed assignment exist in the cluster
+    val existingBrokerIDs = zkUtils.getSortedBrokerList()
+    val nonExistingBrokerIDs = partitionsToBeReassigned.toMap.values.flatten.filterNot(existingBrokerIDs.contains).toSet
+    if (nonExistingBrokerIDs.nonEmpty)
+      throw new AdminCommandFailedException("The proposed assignment contains non-existent brokerIDs: " + nonExistingBrokerIDs.mkString(","))
 
     partitionsToBeReassigned
   }
@@ -270,7 +279,7 @@ object ReassignPartitionsCommand extends Logging {
   }
 
   class ReassignPartitionsCommandOptions(args: Array[String]) {
-    val parser = new OptionParser
+    val parser = new OptionParser(false)
 
     val zkConnectOpt = parser.accepts("zookeeper", "REQUIRED: The connection string for the zookeeper connection in the " +
                       "form host:port. Multiple URLS can be given to allow fail-over.")

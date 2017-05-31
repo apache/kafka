@@ -18,16 +18,16 @@ package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.errors.CorruptRecordException;
+import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.utils.AbstractIterator;
-import org.apache.kafka.common.utils.ByteBufferInputStream;
+import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.common.utils.CloseableIterator;
 import org.apache.kafka.common.utils.Utils;
 
-import java.io.DataInputStream;
 import java.io.DataOutputStream;
-import java.io.EOFException;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.util.ArrayDeque;
 import java.util.NoSuchElementException;
@@ -109,6 +109,11 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
     }
 
     @Override
+    public Long checksumOrNull() {
+        return checksum();
+    }
+
+    @Override
     public long checksum() {
         return outerRecord().checksum();
     }
@@ -180,7 +185,7 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
     }
 
     @Override
-    public long sequence() {
+    public int sequence() {
         return RecordBatch.NO_SEQUENCE;
     }
 
@@ -205,7 +210,7 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
     }
 
     @Override
-    public boolean isControlRecord() {
+    public boolean isControlBatch() {
         return false;
     }
 
@@ -217,8 +222,12 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
      */
     @Override
     public CloseableIterator<Record> iterator() {
+        return iterator(BufferSupplier.NO_CACHING);
+    }
+
+    private CloseableIterator<Record> iterator(BufferSupplier bufferSupplier) {
         if (isCompressed())
-            return new DeepRecordsIterator(this, false, Integer.MAX_VALUE);
+            return new DeepRecordsIterator(this, false, Integer.MAX_VALUE, bufferSupplier);
 
         return new CloseableIterator<Record>() {
             private boolean hasNext = true;
@@ -247,9 +256,9 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
     }
 
     @Override
-    public CloseableIterator<Record> streamingIterator() {
+    public CloseableIterator<Record> streamingIterator(BufferSupplier bufferSupplier) {
         // the older message format versions do not support streaming, so we return the normal iterator
-        return iterator();
+        return iterator(bufferSupplier);
     }
 
     static void writeHeader(ByteBuffer buffer, long offset, int size) {
@@ -263,30 +272,36 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
     }
 
     private static final class DataLogInputStream implements LogInputStream<AbstractLegacyRecordBatch> {
-        private final DataInputStream stream;
+        private final InputStream stream;
         protected final int maxMessageSize;
+        private final ByteBuffer offsetAndSizeBuffer;
 
-        DataLogInputStream(DataInputStream stream, int maxMessageSize) {
+        DataLogInputStream(InputStream stream, int maxMessageSize) {
             this.stream = stream;
             this.maxMessageSize = maxMessageSize;
+            this.offsetAndSizeBuffer = ByteBuffer.allocate(Records.LOG_OVERHEAD);
         }
 
         public AbstractLegacyRecordBatch nextBatch() throws IOException {
-            try {
-                long offset = stream.readLong();
-                int size = stream.readInt();
-                if (size < LegacyRecord.RECORD_OVERHEAD_V0)
-                    throw new CorruptRecordException(String.format("Record size is less than the minimum record overhead (%d)", LegacyRecord.RECORD_OVERHEAD_V0));
-                if (size > maxMessageSize)
-                    throw new CorruptRecordException(String.format("Record size exceeds the largest allowable message size (%d).", maxMessageSize));
-
-                byte[] recordBuffer = new byte[size];
-                stream.readFully(recordBuffer, 0, size);
-                ByteBuffer buf = ByteBuffer.wrap(recordBuffer);
-                return new BasicLegacyRecordBatch(offset, new LegacyRecord(buf));
-            } catch (EOFException e) {
+            offsetAndSizeBuffer.clear();
+            Utils.readFully(stream, offsetAndSizeBuffer);
+            if (offsetAndSizeBuffer.hasRemaining())
                 return null;
-            }
+
+            long offset = offsetAndSizeBuffer.getLong(Records.OFFSET_OFFSET);
+            int size = offsetAndSizeBuffer.getInt(Records.SIZE_OFFSET);
+            if (size < LegacyRecord.RECORD_OVERHEAD_V0)
+                throw new CorruptRecordException(String.format("Record size is less than the minimum record overhead (%d)", LegacyRecord.RECORD_OVERHEAD_V0));
+            if (size > maxMessageSize)
+                throw new CorruptRecordException(String.format("Record size exceeds the largest allowable message size (%d).", maxMessageSize));
+
+            ByteBuffer batchBuffer = ByteBuffer.allocate(size);
+            Utils.readFully(stream, batchBuffer);
+            if (batchBuffer.hasRemaining())
+                return null;
+            batchBuffer.flip();
+
+            return new BasicLegacyRecordBatch(offset, new LegacyRecord(batchBuffer));
         }
     }
 
@@ -295,7 +310,8 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
         private final long absoluteBaseOffset;
         private final byte wrapperMagic;
 
-        private DeepRecordsIterator(AbstractLegacyRecordBatch wrapperEntry, boolean ensureMatchingMagic, int maxMessageSize) {
+        private DeepRecordsIterator(AbstractLegacyRecordBatch wrapperEntry, boolean ensureMatchingMagic,
+                                    int maxMessageSize, BufferSupplier bufferSupplier) {
             LegacyRecord wrapperRecord = wrapperEntry.outerRecord();
             this.wrapperMagic = wrapperRecord.magic();
 
@@ -305,8 +321,7 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
                 throw new InvalidRecordException("Found invalid compressed record set with null value (magic = " +
                         wrapperMagic + ")");
 
-            DataInputStream stream = new DataInputStream(compressionType.wrapForInput(
-                    new ByteBufferInputStream(wrapperValue), wrapperRecord.magic()));
+            InputStream stream = compressionType.wrapForInput(wrapperValue, wrapperRecord.magic(), bufferSupplier);
             LogInputStream<AbstractLegacyRecordBatch> logStream = new DataLogInputStream(stream, maxMessageSize);
 
             long wrapperRecordOffset = wrapperEntry.lastOffset();
@@ -470,6 +485,11 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
             buffer.putLong(LOG_OVERHEAD + LegacyRecord.TIMESTAMP_OFFSET, timestamp);
             long crc = record.computeChecksum();
             ByteUtils.writeUnsignedInt(buffer, LOG_OVERHEAD + LegacyRecord.CRC_OFFSET, crc);
+        }
+
+        @Override
+        public void writeTo(ByteBufferOutputStream outputStream) {
+            outputStream.write(buffer.duplicate());
         }
 
         @Override

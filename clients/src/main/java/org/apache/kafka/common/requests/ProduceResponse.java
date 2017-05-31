@@ -39,14 +39,12 @@ public class ProduceResponse extends AbstractResponse {
     // topic level field names
     private static final String TOPIC_KEY_NAME = "topic";
     private static final String PARTITION_RESPONSES_KEY_NAME = "partition_responses";
-    private static final String THROTTLE_TIME_KEY_NAME = "throttle_time_ms";
 
     // partition level field names
     private static final String PARTITION_KEY_NAME = "partition";
     private static final String ERROR_CODE_KEY_NAME = "error_code";
 
     public static final long INVALID_OFFSET = -1L;
-    public static final int DEFAULT_THROTTLE_TIME = 0;
 
     /**
      * Possible error code:
@@ -61,6 +59,10 @@ public class ProduceResponse extends AbstractResponse {
      * NOT_ENOUGH_REPLICAS_AFTER_APPEND (20)
      * INVALID_REQUIRED_ACKS (21)
      * TOPIC_AUTHORIZATION_FAILED (29)
+     * UNSUPPORTED_FOR_MESSAGE_FORMAT (43)
+     * INVALID_PRODUCER_EPOCH (47)
+     * CLUSTER_AUTHORIZATION_FAILED (31)
+     * TRANSACTIONAL_ID_AUTHORIZATION_FAILED (53)
      */
 
     private static final String BASE_OFFSET_KEY_NAME = "base_offset";

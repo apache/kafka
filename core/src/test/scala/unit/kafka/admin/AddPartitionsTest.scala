@@ -22,7 +22,7 @@ import org.junit.Assert._
 import org.apache.kafka.common.protocol.SecurityProtocol
 import kafka.zk.ZooKeeperTestHarness
 import kafka.utils.TestUtils._
-import kafka.utils.{CoreUtils, TestUtils}
+import kafka.utils.TestUtils
 import kafka.cluster.Broker
 import kafka.client.ClientUtils
 import kafka.server.{KafkaConfig, KafkaServer}
@@ -59,8 +59,7 @@ class AddPartitionsTest extends ZooKeeperTestHarness {
 
   @After
   override def tearDown() {
-    servers.foreach(_.shutdown())
-    servers.foreach(server => CoreUtils.delete(server.config.logDirs))
+    TestUtils.shutdownServers(servers)
     super.tearDown()
   }
 
@@ -88,12 +87,12 @@ class AddPartitionsTest extends ZooKeeperTestHarness {
   def testIncrementPartitions {
     AdminUtils.addPartitions(zkUtils, topic1, 3)
     // wait until leader is elected
-    var leader1 = waitUntilLeaderIsElectedOrChanged(zkUtils, topic1, 1)
-    var leader2 = waitUntilLeaderIsElectedOrChanged(zkUtils, topic1, 2)
+    val leader1 = waitUntilLeaderIsElectedOrChanged(zkUtils, topic1, 1)
+    val leader2 = waitUntilLeaderIsElectedOrChanged(zkUtils, topic1, 2)
     val leader1FromZk = zkUtils.getLeaderForPartition(topic1, 1).get
     val leader2FromZk = zkUtils.getLeaderForPartition(topic1, 2).get
-    assertEquals(leader1.get, leader1FromZk)
-    assertEquals(leader2.get, leader2FromZk)
+    assertEquals(leader1, leader1FromZk)
+    assertEquals(leader2, leader2FromZk)
 
     // read metadata from a broker and verify the new topic partitions exist
     TestUtils.waitUntilMetadataIsPropagated(servers, topic1, 1)
@@ -115,12 +114,12 @@ class AddPartitionsTest extends ZooKeeperTestHarness {
   def testManualAssignmentOfReplicas {
     AdminUtils.addPartitions(zkUtils, topic2, 3, "1:2,0:1,2:3")
     // wait until leader is elected
-    var leader1 = waitUntilLeaderIsElectedOrChanged(zkUtils, topic2, 1)
-    var leader2 = waitUntilLeaderIsElectedOrChanged(zkUtils, topic2, 2)
+    val leader1 = waitUntilLeaderIsElectedOrChanged(zkUtils, topic2, 1)
+    val leader2 = waitUntilLeaderIsElectedOrChanged(zkUtils, topic2, 2)
     val leader1FromZk = zkUtils.getLeaderForPartition(topic2, 1).get
     val leader2FromZk = zkUtils.getLeaderForPartition(topic2, 2).get
-    assertEquals(leader1.get, leader1FromZk)
-    assertEquals(leader2.get, leader2FromZk)
+    assertEquals(leader1, leader1FromZk)
+    assertEquals(leader2, leader2FromZk)
 
     // read metadata from a broker and verify the new topic partitions exist
     TestUtils.waitUntilMetadataIsPropagated(servers, topic2, 1)

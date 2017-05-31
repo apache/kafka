@@ -16,11 +16,14 @@
  */
 package org.apache.kafka.common.record;
 
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.header.Header;
+import org.apache.kafka.common.header.internals.RecordHeader;
+import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.junit.Test;
 
+import java.io.DataOutputStream;
+import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.Arrays;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -29,11 +32,11 @@ import static org.junit.Assert.assertNotNull;
 public class DefaultRecordTest {
 
     @Test
-    public void testBasicSerde() {
+    public void testBasicSerde() throws IOException {
         Header[] headers = new Header[] {
-            new Header("foo", "value".getBytes()),
-            new Header("bar", Utils.wrapNullable(null)),
-            new Header("\"A\\u00ea\\u00f1\\u00fcC\"", "value".getBytes())
+            new RecordHeader("foo", "value".getBytes()),
+            new RecordHeader("bar", (byte[]) null),
+            new RecordHeader("\"A\\u00ea\\u00f1\\u00fcC\"", "value".getBytes())
         };
 
         SimpleRecord[] records = new SimpleRecord[] {
@@ -44,36 +47,34 @@ public class DefaultRecordTest {
             new SimpleRecord(15L, "hi".getBytes(), "there".getBytes(), headers)
         };
 
-        for (boolean isControlRecord : Arrays.asList(true, false)) {
-            for (SimpleRecord record : records) {
-                int baseSequence = 723;
-                long baseOffset = 37;
-                int offsetDelta = 10;
-                long baseTimestamp = System.currentTimeMillis();
-                long timestampDelta = 323;
+        for (SimpleRecord record : records) {
+            int baseSequence = 723;
+            long baseOffset = 37;
+            int offsetDelta = 10;
+            long baseTimestamp = System.currentTimeMillis();
+            long timestampDelta = 323;
 
-                ByteBuffer buffer = ByteBuffer.allocate(1024);
-                DefaultRecord.writeTo(buffer, isControlRecord, offsetDelta, timestampDelta, record.key(),
-                        record.value(), record.headers());
-                buffer.flip();
+            ByteBufferOutputStream out = new ByteBufferOutputStream(1024);
+            DefaultRecord.writeTo(new DataOutputStream(out), offsetDelta, timestampDelta, record.key(), record.value(),
+                    record.headers());
+            ByteBuffer buffer = out.buffer();
+            buffer.flip();
 
-                DefaultRecord logRecord = DefaultRecord.readFrom(buffer, baseOffset, baseTimestamp, baseSequence, null);
-                assertNotNull(logRecord);
-                assertEquals(baseOffset + offsetDelta, logRecord.offset());
-                assertEquals(baseSequence + offsetDelta, logRecord.sequence());
-                assertEquals(baseTimestamp + timestampDelta, logRecord.timestamp());
-                assertEquals(record.key(), logRecord.key());
-                assertEquals(record.value(), logRecord.value());
-                assertEquals(isControlRecord, logRecord.isControlRecord());
-                assertArrayEquals(record.headers(), logRecord.headers());
-                assertEquals(DefaultRecord.sizeInBytes(offsetDelta, timestampDelta, record.key(), record.value(),
-                        record.headers()), logRecord.sizeInBytes());
-            }
+            DefaultRecord logRecord = DefaultRecord.readFrom(buffer, baseOffset, baseTimestamp, baseSequence, null);
+            assertNotNull(logRecord);
+            assertEquals(baseOffset + offsetDelta, logRecord.offset());
+            assertEquals(baseSequence + offsetDelta, logRecord.sequence());
+            assertEquals(baseTimestamp + timestampDelta, logRecord.timestamp());
+            assertEquals(record.key(), logRecord.key());
+            assertEquals(record.value(), logRecord.value());
+            assertArrayEquals(record.headers(), logRecord.headers());
+            assertEquals(DefaultRecord.sizeInBytes(offsetDelta, timestampDelta, record.key(), record.value(),
+                    record.headers()), logRecord.sizeInBytes());
         }
     }
 
     @Test
-    public void testSerdeNoSequence() {
+    public void testSerdeNoSequence() throws IOException {
         ByteBuffer key = ByteBuffer.wrap("hi".getBytes());
         ByteBuffer value = ByteBuffer.wrap("there".getBytes());
         long baseOffset = 37;
@@ -81,8 +82,9 @@ public class DefaultRecordTest {
         long baseTimestamp = System.currentTimeMillis();
         long timestampDelta = 323;
 
-        ByteBuffer buffer = ByteBuffer.allocate(1024);
-        DefaultRecord.writeTo(buffer, false, offsetDelta, timestampDelta, key, value, new Header[0]);
+        ByteBufferOutputStream out = new ByteBufferOutputStream(1024);
+        DefaultRecord.writeTo(new DataOutputStream(out), offsetDelta, timestampDelta, key, value, new Header[0]);
+        ByteBuffer buffer = out.buffer();
         buffer.flip();
 
         DefaultRecord record = DefaultRecord.readFrom(buffer, baseOffset, baseTimestamp, RecordBatch.NO_SEQUENCE, null);

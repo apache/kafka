@@ -105,16 +105,23 @@ public class ListOffsetResponse extends AbstractResponse {
         }
     }
 
+    private final int throttleTimeMs;
     private final Map<TopicPartition, PartitionData> responseData;
 
     /**
-     * Constructor for all versions.
+     * Constructor for all versions without throttle time
      */
     public ListOffsetResponse(Map<TopicPartition, PartitionData> responseData) {
+        this(DEFAULT_THROTTLE_TIME, responseData);
+    }
+
+    public ListOffsetResponse(int throttleTimeMs, Map<TopicPartition, PartitionData> responseData) {
+        this.throttleTimeMs = throttleTimeMs;
         this.responseData = responseData;
     }
 
     public ListOffsetResponse(Struct struct) {
+        this.throttleTimeMs = struct.hasField(THROTTLE_TIME_KEY_NAME) ? struct.getInt(THROTTLE_TIME_KEY_NAME) : DEFAULT_THROTTLE_TIME;
         responseData = new HashMap<>();
         for (Object topicResponseObj : struct.getArray(RESPONSES_KEY_NAME)) {
             Struct topicResponse = (Struct) topicResponseObj;
@@ -140,6 +147,10 @@ public class ListOffsetResponse extends AbstractResponse {
         }
     }
 
+    public int throttleTimeMs() {
+        return throttleTimeMs;
+    }
+
     public Map<TopicPartition, PartitionData> responseData() {
         return responseData;
     }
@@ -151,6 +162,8 @@ public class ListOffsetResponse extends AbstractResponse {
     @Override
     protected Struct toStruct(short version) {
         Struct struct = new Struct(ApiKeys.LIST_OFFSETS.responseSchema(version));
+        if (struct.hasField(THROTTLE_TIME_KEY_NAME))
+            struct.set(THROTTLE_TIME_KEY_NAME, throttleTimeMs);
         Map<String, Map<Integer, PartitionData>> topicsData = CollectionUtils.groupDataByTopic(responseData);
 
         List<Struct> topicArray = new ArrayList<>();

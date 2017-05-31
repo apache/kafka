@@ -17,12 +17,17 @@
 
 package kafka.controller
 
+import com.yammer.metrics.Metrics
+import com.yammer.metrics.core.Timer
 import kafka.api.LeaderAndIsr
 import kafka.common.TopicAndPartition
 import kafka.server.{KafkaConfig, KafkaServer}
-import kafka.utils.{CoreUtils, TestUtils, ZkUtils}
+import kafka.utils.{TestUtils, ZkUtils}
 import kafka.zk.ZooKeeperTestHarness
 import org.junit.{After, Before, Test}
+import org.junit.Assert.assertTrue
+
+import scala.collection.JavaConverters._
 
 class ControllerIntegrationTest extends ZooKeeperTestHarness {
   var servers = Seq.empty[KafkaServer]
@@ -35,8 +40,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
 
   @After
   override def tearDown() {
-    servers.foreach(_.shutdown())
-    servers.foreach(server => CoreUtils.delete(server.config.logDirs))
+    TestUtils.shutdownServers(servers)
     super.tearDown
   }
 
@@ -44,35 +48,30 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
   def testEmptyCluster(): Unit = {
     servers = makeServers(1)
     TestUtils.waitUntilTrue(() => zkUtils.pathExists(ZkUtils.ControllerPath), "failed to elect a controller")
-    TestUtils.waitUntilTrue(() => zkUtils.readData(ZkUtils.ControllerEpochPath)._1.toInt == KafkaController.InitialControllerEpoch,
-      "broker failed to set controller epoch")
+    waitUntilControllerEpoch(KafkaController.InitialControllerEpoch, "broker failed to set controller epoch")
   }
 
   @Test
   def testControllerEpochPersistsWhenAllBrokersDown(): Unit = {
     servers = makeServers(1)
     TestUtils.waitUntilTrue(() => zkUtils.pathExists(ZkUtils.ControllerPath), "failed to elect a controller")
-    TestUtils.waitUntilTrue(() => zkUtils.readData(ZkUtils.ControllerEpochPath)._1.toInt == KafkaController.InitialControllerEpoch,
-      "broker failed to set controller epoch")
+    waitUntilControllerEpoch(KafkaController.InitialControllerEpoch, "broker failed to set controller epoch")
     servers.head.shutdown()
     servers.head.awaitShutdown()
     TestUtils.waitUntilTrue(() => !zkUtils.pathExists(ZkUtils.ControllerPath), "failed to kill controller")
-    TestUtils.waitUntilTrue(() => zkUtils.readData(ZkUtils.ControllerEpochPath)._1.toInt == KafkaController.InitialControllerEpoch,
-      "controller epoch was not persisted after broker failure")
+    waitUntilControllerEpoch(KafkaController.InitialControllerEpoch, "controller epoch was not persisted after broker failure")
   }
 
   @Test
   def testControllerMoveIncrementsControllerEpoch(): Unit = {
     servers = makeServers(1)
     TestUtils.waitUntilTrue(() => zkUtils.pathExists(ZkUtils.ControllerPath), "failed to elect a controller")
-    TestUtils.waitUntilTrue(() => zkUtils.readData(ZkUtils.ControllerEpochPath)._1.toInt == KafkaController.InitialControllerEpoch,
-      "broker failed to set controller epoch")
+    waitUntilControllerEpoch(KafkaController.InitialControllerEpoch, "broker failed to set controller epoch")
     servers.head.shutdown()
     servers.head.awaitShutdown()
     servers.head.startup()
     TestUtils.waitUntilTrue(() => zkUtils.pathExists(ZkUtils.ControllerPath), "failed to elect a controller")
-    TestUtils.waitUntilTrue(() => zkUtils.readData(ZkUtils.ControllerEpochPath)._1.toInt == KafkaController.InitialControllerEpoch + 1,
-      "controller epoch was not persisted after broker failure")
+    waitUntilControllerEpoch(KafkaController.InitialControllerEpoch + 1, "controller epoch was not incremented after controller move")
   }
 
   @Test
@@ -135,6 +134,10 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
   def testPartitionReassignment(): Unit = {
     servers = makeServers(2)
     val controllerId = TestUtils.waitUntilControllerElected(zkUtils)
+
+    val metricName = s"kafka.controller:type=ControllerStats,name=${ControllerState.PartitionReassignment.rateAndTimeMetricName.get}"
+    val timerCount = timer(metricName).count
+
     val otherBrokerId = servers.map(_.config.brokerId).filter(_ != controllerId).head
     val tp = TopicAndPartition("t", 0)
     val assignment = Map(tp.partition -> Seq(controllerId))
@@ -147,6 +150,9 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
       "failed to get updated partition assignment on topic znode after partition reassignment")
     TestUtils.waitUntilTrue(() => !zkUtils.pathExists(ZkUtils.ReassignPartitionsPath),
       "failed to remove reassign partitions path after completion")
+
+    val updatedTimerCount = timer(metricName).count
+    assertTrue(s"Timer count $updatedTimerCount should be greater than $timerCount", updatedTimerCount > timerCount)
   }
 
   @Test
@@ -203,7 +209,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     waitForPartitionState(tp, KafkaController.InitialControllerEpoch, controllerId, LeaderAndIsr.initialLeaderEpoch + 1,
       "failed to get expected partition state upon broker shutdown")
     servers(otherBrokerId).startup()
-    TestUtils.waitUntilTrue(() => servers.forall(_.metadataCache.isBrokerAlive(otherBrokerId)), "broker join was not broadcasted to the cluster")
+    TestUtils.waitUntilTrue(() => zkUtils.getInSyncReplicasForPartition(tp.topic, tp.partition).toSet == assignment(tp.partition).toSet, "restarted broker failed to join in-sync replicas")
     zkUtils.createPersistentPath(ZkUtils.PreferredReplicaLeaderElectionPath, ZkUtils.preferredReplicaLeaderElectionZkData(Set(tp)))
     TestUtils.waitUntilTrue(() => !zkUtils.pathExists(ZkUtils.PreferredReplicaLeaderElectionPath),
       "failed to remove preferred replica leader election path after completion")
@@ -258,7 +264,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     servers(otherBrokerId).shutdown()
     servers(otherBrokerId).awaitShutdown()
     TestUtils.waitUntilTrue(() => {
-      val leaderIsrAndControllerEpochMap = zkUtils.getPartitionLeaderAndIsrForTopics(null, Set(tp))
+      val leaderIsrAndControllerEpochMap = zkUtils.getPartitionLeaderAndIsrForTopics(Set(tp))
       leaderIsrAndControllerEpochMap.contains(tp) &&
         isExpectedPartitionState(leaderIsrAndControllerEpochMap(tp), KafkaController.InitialControllerEpoch, LeaderAndIsr.NoLeader, LeaderAndIsr.initialLeaderEpoch + 1) &&
         leaderIsrAndControllerEpochMap(tp).leaderAndIsr.isr == List(otherBrokerId)
@@ -278,11 +284,15 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     servers(1).shutdown()
     servers(1).awaitShutdown()
     TestUtils.waitUntilTrue(() => {
-      val leaderIsrAndControllerEpochMap = zkUtils.getPartitionLeaderAndIsrForTopics(null, Set(tp))
+      val leaderIsrAndControllerEpochMap = zkUtils.getPartitionLeaderAndIsrForTopics(Set(tp))
       leaderIsrAndControllerEpochMap.contains(tp) &&
         isExpectedPartitionState(leaderIsrAndControllerEpochMap(tp), KafkaController.InitialControllerEpoch, LeaderAndIsr.NoLeader, LeaderAndIsr.initialLeaderEpoch + 1) &&
         leaderIsrAndControllerEpochMap(tp).leaderAndIsr.isr == List.empty
     }, "failed to get expected partition state after entire isr went offline")
+  }
+
+  private def waitUntilControllerEpoch(epoch: Int, message: String): Unit = {
+    TestUtils.waitUntilTrue(() => zkUtils.readDataMaybeNull(ZkUtils.ControllerEpochPath)._1.map(_.toInt) == Some(epoch), message)
   }
 
   private def waitForPartitionState(tp: TopicAndPartition,
@@ -291,7 +301,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
                                     leaderEpoch: Int,
                                     message: String): Unit = {
     TestUtils.waitUntilTrue(() => {
-      val leaderIsrAndControllerEpochMap = zkUtils.getPartitionLeaderAndIsrForTopics(null, Set(tp))
+      val leaderIsrAndControllerEpochMap = zkUtils.getPartitionLeaderAndIsrForTopics(Set(tp))
       leaderIsrAndControllerEpochMap.contains(tp) &&
         isExpectedPartitionState(leaderIsrAndControllerEpochMap(tp), controllerEpoch, leader, leaderEpoch)
     }, message)
@@ -314,4 +324,10 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     }
     configs.map(config => TestUtils.createServer(KafkaConfig.fromProps(config)))
   }
+
+  private def timer(metricName: String): Timer = {
+    Metrics.defaultRegistry.allMetrics.asScala.filterKeys(_.getMBeanName == metricName).values.headOption
+      .getOrElse(fail(s"Unable to find metric $metricName")).asInstanceOf[Timer]
+  }
+
 }

@@ -57,12 +57,19 @@ public class OffsetCommitResponse extends AbstractResponse {
      */
 
     private final Map<TopicPartition, Errors> responseData;
+    private final int throttleTimeMs;
 
     public OffsetCommitResponse(Map<TopicPartition, Errors> responseData) {
+        this(DEFAULT_THROTTLE_TIME, responseData);
+    }
+
+    public OffsetCommitResponse(int throttleTimeMs, Map<TopicPartition, Errors> responseData) {
+        this.throttleTimeMs = throttleTimeMs;
         this.responseData = responseData;
     }
 
     public OffsetCommitResponse(Struct struct) {
+        this.throttleTimeMs = struct.hasField(THROTTLE_TIME_KEY_NAME) ? struct.getInt(THROTTLE_TIME_KEY_NAME) : DEFAULT_THROTTLE_TIME;
         responseData = new HashMap<>();
         for (Object topicResponseObj : struct.getArray(RESPONSES_KEY_NAME)) {
             Struct topicResponse = (Struct) topicResponseObj;
@@ -79,6 +86,8 @@ public class OffsetCommitResponse extends AbstractResponse {
     @Override
     public Struct toStruct(short version) {
         Struct struct = new Struct(ApiKeys.OFFSET_COMMIT.responseSchema(version));
+        if (struct.hasField(THROTTLE_TIME_KEY_NAME))
+            struct.set(THROTTLE_TIME_KEY_NAME, throttleTimeMs);
 
         Map<String, Map<Integer, Errors>> topicsData = CollectionUtils.groupDataByTopic(responseData);
         List<Struct> topicArray = new ArrayList<>();
@@ -98,6 +107,10 @@ public class OffsetCommitResponse extends AbstractResponse {
         struct.set(RESPONSES_KEY_NAME, topicArray.toArray());
 
         return struct;
+    }
+
+    public int throttleTimeMs() {
+        return throttleTimeMs;
     }
 
     public Map<TopicPartition, Errors> responseData() {

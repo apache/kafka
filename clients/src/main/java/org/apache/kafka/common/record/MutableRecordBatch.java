@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.record;
 
+import org.apache.kafka.common.utils.ByteBufferOutputStream;
+
 /**
  * A mutable record batch is one that can be modified in place (without copying). This is used by the broker
  * to override certain fields in the batch before appending it to the log.
@@ -42,4 +44,11 @@ public interface MutableRecordBatch extends RecordBatch {
      * @param epoch The partition leader epoch to use
      */
     void setPartitionLeaderEpoch(int epoch);
+
+    /**
+     * Write this record batch into an output stream.
+     * @param outputStream The buffer to write the batch to
+     */
+    void writeTo(ByteBufferOutputStream outputStream);
+
 }

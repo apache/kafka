@@ -332,6 +332,7 @@ public final class Metadata {
         Collection<PartitionInfo> partitionInfos = new ArrayList<>();
         List<Node> nodes = Collections.emptyList();
         Set<String> internalTopics = Collections.emptySet();
+        Node controller = null;
         String clusterId = null;
         if (cluster != null) {
             clusterId = cluster.clusterResource().clusterId();
@@ -346,7 +347,8 @@ public final class Metadata {
                 }
             }
             nodes = cluster.nodes();
+            controller  = cluster.controller();
         }
-        return new Cluster(clusterId, nodes, partitionInfos, unauthorizedTopics, internalTopics);
+        return new Cluster(clusterId, nodes, partitionInfos, unauthorizedTopics, internalTopics, controller);
     }
 }

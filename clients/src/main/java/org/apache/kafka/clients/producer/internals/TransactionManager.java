@@ -22,7 +22,8 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.ProducerFencedException;
+import org.apache.kafka.common.errors.GroupAuthorizationException;
+import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
@@ -34,11 +35,11 @@ import org.apache.kafka.common.requests.EndTxnRequest;
 import org.apache.kafka.common.requests.EndTxnResponse;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
-import org.apache.kafka.common.requests.InitPidRequest;
-import org.apache.kafka.common.requests.InitPidResponse;
-import org.apache.kafka.common.requests.OffsetCommitRequest;
+import org.apache.kafka.common.requests.InitProducerIdRequest;
+import org.apache.kafka.common.requests.InitProducerIdResponse;
 import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.requests.TxnOffsetCommitRequest;
+import org.apache.kafka.common.requests.TxnOffsetCommitRequest.CommittedOffset;
 import org.apache.kafka.common.requests.TxnOffsetCommitResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -59,24 +60,26 @@ import static org.apache.kafka.common.record.RecordBatch.NO_PRODUCER_ID;
  */
 public class TransactionManager {
     private static final Logger log = LoggerFactory.getLogger(TransactionManager.class);
-
     private static final int NO_INFLIGHT_REQUEST_CORRELATION_ID = -1;
 
-    private volatile PidAndEpoch pidAndEpoch;
-    private final Map<TopicPartition, Integer> sequenceNumbers;
     private final String transactionalId;
     private final int transactionTimeoutMs;
-    private final PriorityQueue<TransactionalRequest> pendingTransactionalRequests;
-    private final Set<TopicPartition> newPartitionsToBeAddedToTransaction;
-    private final Set<TopicPartition> pendingPartitionsToBeAddedToTransaction;
-    private final Set<TopicPartition> partitionsInTransaction;
-    private final Map<TopicPartition, TxnOffsetCommitRequest.CommittedOffset> pendingTxnOffsetCommits;
-    private int inFlightRequestCorrelationId = NO_INFLIGHT_REQUEST_CORRELATION_ID;
 
+    private final Map<TopicPartition, Integer> sequenceNumbers;
+    private final PriorityQueue<TxnRequestHandler> pendingRequests;
+    private final Set<TopicPartition> newPartitionsInTransaction;
+    private final Set<TopicPartition> pendingPartitionsInTransaction;
+    private final Set<TopicPartition> partitionsInTransaction;
+    private final Map<TopicPartition, CommittedOffset> pendingTxnOffsetCommits;
+
+    private int inFlightRequestCorrelationId = NO_INFLIGHT_REQUEST_CORRELATION_ID;
     private Node transactionCoordinator;
     private Node consumerGroupCoordinator;
+
     private volatile State currentState = State.UNINITIALIZED;
-    private Exception lastError = null;
+    private volatile RuntimeException lastError = null;
+    private volatile ProducerIdAndEpoch producerIdAndEpoch;
+    private volatile boolean transactionStarted = false;
 
     private enum State {
         UNINITIALIZED,
@@ -85,167 +88,82 @@ public class TransactionManager {
         IN_TRANSACTION,
         COMMITTING_TRANSACTION,
         ABORTING_TRANSACTION,
-        FENCED,
-        ERROR;
+        ABORTABLE_ERROR,
+        FATAL_ERROR;
 
         private boolean isTransitionValid(State source, State target) {
             switch (target) {
                 case INITIALIZING:
-                    return source == UNINITIALIZED || source == ERROR;
+                    return source == UNINITIALIZED;
                 case READY:
-                    return source == INITIALIZING || source == COMMITTING_TRANSACTION || source == ABORTING_TRANSACTION;
+                    return source == INITIALIZING || source == COMMITTING_TRANSACTION
+                            || source == ABORTING_TRANSACTION || source == ABORTABLE_ERROR;
                 case IN_TRANSACTION:
                     return source == READY;
                 case COMMITTING_TRANSACTION:
                     return source == IN_TRANSACTION;
                 case ABORTING_TRANSACTION:
-                    return source == IN_TRANSACTION || source == ERROR;
+                    return source == IN_TRANSACTION || source == ABORTABLE_ERROR;
+                case ABORTABLE_ERROR:
+                    return source == IN_TRANSACTION || source == COMMITTING_TRANSACTION || source == ABORTING_TRANSACTION;
+                case FATAL_ERROR:
                 default:
-                    // We can transition to FENCED or ERROR unconditionally.
-                    // FENCED is never a valid starting state for any transition. So the only option is to close the
+                    // We can transition to FATAL_ERROR unconditionally.
+                    // FATAL_ERROR is never a valid starting state for any transition. So the only option is to close the
                     // producer or do purely non transactional requests.
                     return true;
             }
         }
     }
 
+    // We use the priority to determine the order in which requests need to be sent out. For instance, if we have
+    // a pending FindCoordinator request, that must always go first. Next, If we need a producer id, that must go second.
+    // The endTxn request must always go last.
+    private enum Priority {
+        FIND_COORDINATOR(0),
+        INIT_PRODUCER_ID(1),
+        ADD_PARTITIONS_OR_OFFSETS(2),
+        END_TXN(3);
+
+        final int priority;
+
+        Priority(int priority) {
+            this.priority = priority;
+        }
+    }
+
     public TransactionManager(String transactionalId, int transactionTimeoutMs) {
-        pidAndEpoch = new PidAndEpoch(NO_PRODUCER_ID, NO_PRODUCER_EPOCH);
-        sequenceNumbers = new HashMap<>();
+        this.producerIdAndEpoch = new ProducerIdAndEpoch(NO_PRODUCER_ID, NO_PRODUCER_EPOCH);
+        this.sequenceNumbers = new HashMap<>();
         this.transactionalId = transactionalId;
         this.transactionTimeoutMs = transactionTimeoutMs;
-        this.pendingTransactionalRequests = new PriorityQueue<>(10, new Comparator<TransactionalRequest>() {
-            @Override
-            public int compare(TransactionalRequest o1, TransactionalRequest o2) {
-                return Integer.compare(o1.priority().priority(), o2.priority.priority());
-            }
-        });
         this.transactionCoordinator = null;
         this.consumerGroupCoordinator = null;
-        this.newPartitionsToBeAddedToTransaction = new HashSet<>();
-        this.pendingPartitionsToBeAddedToTransaction = new HashSet<>();
+        this.newPartitionsInTransaction = new HashSet<>();
+        this.pendingPartitionsInTransaction = new HashSet<>();
         this.partitionsInTransaction = new HashSet<>();
         this.pendingTxnOffsetCommits = new HashMap<>();
-    }
-
-    public TransactionManager() {
-        this("", 0);
-    }
-
-    static class TransactionalRequest {
-        private enum Priority {
-            FIND_COORDINATOR(0),
-            INIT_PRODUCER_ID(1),
-            ADD_PARTITIONS_OR_OFFSETS(2),
-            END_TXN(4);
-
-            private final int priority;
-
-            Priority(int priority) {
-                this.priority = priority;
+        this.pendingRequests = new PriorityQueue<>(10, new Comparator<TxnRequestHandler>() {
+            @Override
+            public int compare(TxnRequestHandler o1, TxnRequestHandler o2) {
+                return Integer.compare(o1.priority().priority, o2.priority().priority);
             }
-
-            public int priority() {
-                return this.priority;
-            }
-        }
-
-        private final AbstractRequest.Builder<?> requestBuilder;
-
-        private final FindCoordinatorRequest.CoordinatorType coordinatorType;
-        private final String coordinatorKey;
-        private final RequestCompletionHandler handler;
-        // We use the priority to determine the order in which requests need to be sent out. For instance, if we have
-        // a pending FindCoordinator request, that must always go first. Next, If we need a Pid, that must go second.
-        // The endTxn request must always go last.
-        private final Priority priority;
-        private final TransactionalRequestResult result;
-        private boolean isRetry;
-
-        private TransactionalRequest(AbstractRequest.Builder<?> requestBuilder, RequestCompletionHandler handler,
-                                     FindCoordinatorRequest.CoordinatorType coordinatorType, Priority priority,
-                                     boolean isRetry, String coordinatorKey, TransactionalRequestResult result) {
-            this.requestBuilder = requestBuilder;
-            this.handler = handler;
-            this.coordinatorType = coordinatorType;
-            this.priority = priority;
-            this.isRetry = isRetry;
-            this.coordinatorKey = coordinatorKey;
-            this.result = result;
-        }
-
-        AbstractRequest.Builder<?> requestBuilder() {
-            return requestBuilder;
-        }
-
-        boolean needsCoordinator() {
-            return coordinatorType != null;
-        }
-
-        FindCoordinatorRequest.CoordinatorType coordinatorType() {
-            return coordinatorType;
-        }
-
-        RequestCompletionHandler responseHandler() {
-            return handler;
-        }
-
-        boolean isRetry() {
-            return isRetry;
-        }
-
-        boolean isEndTxnRequest() {
-            return priority == Priority.END_TXN;
-        }
-
-        boolean maybeTerminateWithError(RuntimeException error) {
-            if (result != null) {
-                result.setError(error);
-                result.done();
-                return true;
-            }
-            return false;
-        }
-
-        private void setRetry() {
-            isRetry = true;
-        }
-
-        private Priority priority() {
-            return priority;
-        }
+        });
     }
 
-    static class PidAndEpoch {
-        public final long producerId;
-        public final short epoch;
-
-        PidAndEpoch(long producerId, short epoch) {
-            this.producerId = producerId;
-            this.epoch = epoch;
-        }
-
-        public boolean isValid() {
-            return NO_PRODUCER_ID < producerId;
-        }
+    TransactionManager() {
+        this(null, 0);
     }
 
-    public synchronized FutureTransactionalResult initializeTransactions() {
+    public synchronized TransactionalRequestResult initializeTransactions() {
         ensureTransactional();
         transitionTo(State.INITIALIZING);
-        setPidAndEpoch(NO_PRODUCER_ID, NO_PRODUCER_EPOCH);
+        setProducerIdAndEpoch(ProducerIdAndEpoch.NONE);
         this.sequenceNumbers.clear();
-        if (transactionCoordinator == null)
-            pendingTransactionalRequests.add(findCoordinatorRequest(FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId, false));
-
-        TransactionalRequestResult result = new TransactionalRequestResult();
-        FutureTransactionalResult resultFuture = new FutureTransactionalResult(result);
-        if (!hasPid())
-            pendingTransactionalRequests.add(initPidRequest(false, result));
-        else
-            result.done();
-
-        return resultFuture;
+        InitProducerIdRequest.Builder builder = new InitProducerIdRequest.Builder(transactionalId, transactionTimeoutMs);
+        InitProducerIdHandler handler = new InitProducerIdHandler(builder);
+        pendingRequests.add(handler);
+        return handler.result;
     }
 
     public synchronized void beginTransaction() {
@@ -254,33 +172,38 @@ public class TransactionManager {
         transitionTo(State.IN_TRANSACTION);
     }
 
-    public synchronized FutureTransactionalResult beginCommittingTransaction() {
+    public synchronized TransactionalRequestResult beginCommittingTransaction() {
         ensureTransactional();
         maybeFailWithError();
         transitionTo(State.COMMITTING_TRANSACTION);
         return beginCompletingTransaction(true);
     }
 
-    public synchronized FutureTransactionalResult beginAbortingTransaction() {
+    public synchronized TransactionalRequestResult beginAbortingTransaction() {
         ensureTransactional();
-        if (isFenced())
-            throw new ProducerFencedException("There is a newer producer using the same transactional.id.");
+        if (currentState != State.ABORTABLE_ERROR)
+            maybeFailWithError();
         transitionTo(State.ABORTING_TRANSACTION);
+
+        // We're aborting the transaction, so there should be no need to add new partitions
+        newPartitionsInTransaction.clear();
         return beginCompletingTransaction(false);
     }
 
-    private FutureTransactionalResult beginCompletingTransaction(boolean isCommit) {
-        TransactionalRequestResult result = new TransactionalRequestResult();
-        FutureTransactionalResult resultFuture = new FutureTransactionalResult(result);
-
-        if (!newPartitionsToBeAddedToTransaction.isEmpty()) {
-            pendingTransactionalRequests.add(addPartitionsToTransactionRequest(false));
+    private TransactionalRequestResult beginCompletingTransaction(boolean isCommit) {
+        if (!newPartitionsInTransaction.isEmpty()) {
+            pendingRequests.add(addPartitionsToTransactionHandler());
         }
-        pendingTransactionalRequests.add(endTxnRequest(isCommit, false, result));
-        return resultFuture;
+
+        TransactionResult transactionResult = isCommit ? TransactionResult.COMMIT : TransactionResult.ABORT;
+        EndTxnRequest.Builder builder = new EndTxnRequest.Builder(transactionalId, producerIdAndEpoch.producerId,
+                producerIdAndEpoch.epoch, transactionResult);
+        EndTxnHandler handler = new EndTxnHandler(builder);
+        pendingRequests.add(handler);
+        return handler.result;
     }
 
-    public synchronized FutureTransactionalResult sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets,
+    public synchronized TransactionalRequestResult sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets,
                                                                            String consumerGroupId) {
         ensureTransactional();
         maybeFailWithError();
@@ -288,19 +211,24 @@ public class TransactionManager {
             throw new KafkaException("Cannot send offsets to transaction either because the producer is not in an " +
                     "active transaction");
 
-        TransactionalRequestResult result = new TransactionalRequestResult();
-        FutureTransactionalResult resultFuture = new FutureTransactionalResult(result);
-        pendingTransactionalRequests.add(addOffsetsToTxnRequest(offsets, consumerGroupId, false, result));
-        return resultFuture;
+        AddOffsetsToTxnRequest.Builder builder = new AddOffsetsToTxnRequest.Builder(transactionalId,
+                producerIdAndEpoch.producerId, producerIdAndEpoch.epoch, consumerGroupId);
+        AddOffsetsToTxnHandler handler = new AddOffsetsToTxnHandler(builder, offsets);
+        pendingRequests.add(handler);
+        return handler.result;
     }
 
     public synchronized void maybeAddPartitionToTransaction(TopicPartition topicPartition) {
-        if (!isInTransaction() || partitionsInTransaction.contains(topicPartition))
+        if (!isInTransaction())
+            throw new IllegalArgumentException("Cannot add partitions to a transaction in state " + currentState);
+
+        if (partitionsInTransaction.contains(topicPartition))
             return;
-        newPartitionsToBeAddedToTransaction.add(topicPartition);
+
+        newPartitionsInTransaction.add(topicPartition);
     }
 
-    public Exception lastError() {
+    public RuntimeException lastError() {
         return lastError;
     }
 
@@ -308,57 +236,66 @@ public class TransactionManager {
         return transactionalId;
     }
 
-    public boolean hasPid() {
-        return pidAndEpoch.isValid();
+    public boolean hasProducerId() {
+        return producerIdAndEpoch.isValid();
     }
 
     public boolean isTransactional() {
-        return transactionalId != null && !transactionalId.isEmpty();
+        return transactionalId != null;
     }
 
-    public boolean isFenced() {
-        return currentState == State.FENCED;
+    public synchronized boolean hasPartitionsToAdd() {
+        return !newPartitionsInTransaction.isEmpty() || !pendingPartitionsInTransaction.isEmpty();
     }
 
-    public boolean isCompletingTransaction() {
+    public synchronized boolean isCompletingTransaction() {
         return currentState == State.COMMITTING_TRANSACTION || currentState == State.ABORTING_TRANSACTION;
     }
 
-    public boolean isInTransaction() {
+    public synchronized boolean hasError() {
+        return currentState == State.ABORTABLE_ERROR || currentState == State.FATAL_ERROR;
+    }
+
+    public synchronized boolean isAborting() {
+        return currentState == State.ABORTING_TRANSACTION;
+    }
+
+    synchronized boolean isInTransaction() {
         return currentState == State.IN_TRANSACTION || isCompletingTransaction();
     }
 
-    public boolean isInErrorState() {
-        return currentState == State.ERROR;
+    synchronized void transitionToAbortableError(RuntimeException exception) {
+        transitionTo(State.ABORTABLE_ERROR, exception);
     }
 
-    public synchronized boolean maybeSetError(Exception exception) {
-        if (isTransactional() && isInTransaction()) {
-            if (exception instanceof ProducerFencedException)
-                transitionTo(State.FENCED, exception);
-            else
-                transitionTo(State.ERROR, exception);
-            return true;
-        }
-        return false;
+    synchronized void transitionToFatalError(RuntimeException exception) {
+        transitionTo(State.FATAL_ERROR, exception);
     }
 
     /**
-     * Get the current pid and epoch without blocking. Callers must use {@link PidAndEpoch#isValid()} to
+     * Get the current producer id and epoch without blocking. Callers must use {@link ProducerIdAndEpoch#isValid()} to
      * verify that the result is valid.
      *
-     * @return the current PidAndEpoch.
+     * @return the current ProducerIdAndEpoch.
      */
-    PidAndEpoch pidAndEpoch() {
-        return pidAndEpoch;
+    ProducerIdAndEpoch producerIdAndEpoch() {
+        return producerIdAndEpoch;
+    }
+
+    boolean hasProducerId(long producerId) {
+        return producerIdAndEpoch.producerId == producerId;
+    }
+
+    boolean hasProducerIdAndEpoch(long producerId, short producerEpoch) {
+        ProducerIdAndEpoch idAndEpoch = this.producerIdAndEpoch;
+        return idAndEpoch.producerId == producerId && idAndEpoch.epoch == producerEpoch;
     }
 
     /**
-     * Set the pid and epoch atomically. This method will signal any callers blocked on the `pidAndEpoch` method
-     * once the pid is set. This method will be called on the background thread when the broker responds with the pid.
+     * Set the producer id and epoch atomically.
      */
-    synchronized void setPidAndEpoch(long pid, short epoch) {
-        this.pidAndEpoch = new PidAndEpoch(pid, epoch);
+    void setProducerIdAndEpoch(ProducerIdAndEpoch producerIdAndEpoch) {
+        this.producerIdAndEpoch = producerIdAndEpoch;
     }
 
     /**
@@ -374,7 +311,7 @@ public class TransactionManager {
      * messages will return an OutOfOrderSequenceException.
      *
      * Note that we can't reset the producer state for the transactional producer as this would mean bumping the epoch
-     * for the same pid. This might involve aborting the ongoing transaction during the initPidRequest, and the user
+     * for the same producer id. This might involve aborting the ongoing transaction during the initPidRequest, and the user
      * would not have any way of knowing this happened. So for the transactional producer, it's best to return the
      * produce error to the user and let them abort the transaction and close the producer explicitly.
      */
@@ -382,7 +319,7 @@ public class TransactionManager {
         if (isTransactional())
             throw new IllegalStateException("Cannot reset producer state for a transactional producer. " +
                     "You must either abort the ongoing transaction or reinitialize the transactional producer instead");
-        setPidAndEpoch(NO_PRODUCER_ID, NO_PRODUCER_EPOCH);
+        setProducerIdAndEpoch(ProducerIdAndEpoch.NONE);
         this.sequenceNumbers.clear();
     }
 
@@ -407,28 +344,37 @@ public class TransactionManager {
         sequenceNumbers.put(topicPartition, currentSequenceNumber);
     }
 
-    boolean hasPendingTransactionalRequests() {
-        return !(pendingTransactionalRequests.isEmpty()
-                && newPartitionsToBeAddedToTransaction.isEmpty());
-    }
+    synchronized TxnRequestHandler nextRequestHandler() {
+        if (!newPartitionsInTransaction.isEmpty())
+            pendingRequests.add(addPartitionsToTransactionHandler());
 
-    TransactionalRequest nextTransactionalRequest() {
-        if (!hasPendingTransactionalRequests())
+        TxnRequestHandler nextRequestHandler = pendingRequests.poll();
+        if (nextRequestHandler != null && maybeTerminateRequestWithError(nextRequestHandler)) {
+            log.trace("TransactionalId: {} -- Not sending transactional request {} because we are in an error state",
+                    transactionalId, nextRequestHandler.requestBuilder());
             return null;
+        }
 
-        if (!newPartitionsToBeAddedToTransaction.isEmpty())
-            pendingTransactionalRequests.add(addPartitionsToTransactionRequest(false));
+        if (nextRequestHandler != null && nextRequestHandler.isEndTxn() && !transactionStarted) {
+            nextRequestHandler.result.done();
+            if (currentState != State.FATAL_ERROR) {
+                log.debug("TransactionId: {} -- Not sending EndTxn for completed transaction since no partitions " +
+                        "or offsets were successfully added", transactionalId);
+                completeTransaction();
+            }
+            return pendingRequests.poll();
+        }
 
-        return pendingTransactionalRequests.poll();
+        return nextRequestHandler;
     }
 
-    void needsRetry(TransactionalRequest request) {
+    synchronized void retry(TxnRequestHandler request) {
         request.setRetry();
-        pendingTransactionalRequests.add(request);
+        pendingRequests.add(request);
     }
 
-    void reenqueue(TransactionalRequest request) {
-        pendingTransactionalRequests.add(request);
+    synchronized void reenqueue(TxnRequestHandler request) {
+        pendingRequests.add(request);
     }
 
     Node coordinator(FindCoordinatorRequest.CoordinatorType type) {
@@ -442,34 +388,34 @@ public class TransactionManager {
         }
     }
 
-    void needsCoordinator(TransactionalRequest request) {
-        needsCoordinator(request.coordinatorType, request.coordinatorKey);
+    void lookupCoordinator(TxnRequestHandler request) {
+        lookupCoordinator(request.coordinatorType(), request.coordinatorKey());
     }
 
     void setInFlightRequestCorrelationId(int correlationId) {
         inFlightRequestCorrelationId = correlationId;
     }
 
-    void resetInFlightRequestCorrelationId() {
+    void clearInFlightRequestCorrelationId() {
         inFlightRequestCorrelationId = NO_INFLIGHT_REQUEST_CORRELATION_ID;
     }
 
-    boolean hasInflightTransactionalRequest() {
+    boolean hasInflightRequest() {
         return inFlightRequestCorrelationId != NO_INFLIGHT_REQUEST_CORRELATION_ID;
     }
 
     // visible for testing
-    boolean transactionContainsPartition(TopicPartition topicPartition) {
+    synchronized boolean transactionContainsPartition(TopicPartition topicPartition) {
         return isInTransaction() && partitionsInTransaction.contains(topicPartition);
     }
 
     // visible for testing
-    boolean hasPendingOffsetCommits() {
+    synchronized boolean hasPendingOffsetCommits() {
         return isInTransaction() && !pendingTxnOffsetCommits.isEmpty();
     }
 
     // visible for testing
-    boolean isReadyForTransaction() {
+    synchronized boolean isReady() {
         return isTransactional() && currentState == State.READY;
     }
 
@@ -477,14 +423,21 @@ public class TransactionManager {
         transitionTo(target, null);
     }
 
-    private void transitionTo(State target, Exception error) {
-        if (target == State.ERROR && error != null)
+    private synchronized void transitionTo(State target, RuntimeException error) {
+        if (!currentState.isTransitionValid(currentState, target))
+            throw new KafkaException("Invalid transition attempted from state " + currentState.name() +
+                    " to state " + target.name());
+
+        if (target == State.FATAL_ERROR || target == State.ABORTABLE_ERROR) {
+            if (error == null)
+                throw new IllegalArgumentException("Cannot transition to " + target + " with an null exception");
             lastError = error;
-        if (currentState.isTransitionValid(currentState, target)) {
-            currentState = target;
         } else {
-            throw new KafkaException("Invalid transition attempted from state " + currentState.name() + " to state " + target.name());
+            lastError = null;
         }
+
+        log.debug("TransactionalId {} -- Transition from state {} to {}", transactionalId, currentState, target);
+        currentState = target;
     }
 
     private void ensureTransactional() {
@@ -493,18 +446,26 @@ public class TransactionManager {
     }
 
     private void maybeFailWithError() {
-        if (isFenced())
-            throw new ProducerFencedException("There is a newer producer instance using the same transactional id.");
-        if (isInErrorState()) {
-            String errorMessage = "Cannot execute transactional method because we are in an error state.";
-            if (lastError != null)
-                throw new KafkaException(errorMessage, lastError);
-            else
-                throw new KafkaException(errorMessage);
-        }
+        if (hasError())
+            throw new KafkaException("Cannot execute transactional method because we are in an error state", lastError);
     }
 
-    private void needsCoordinator(FindCoordinatorRequest.CoordinatorType type, String coordinatorKey) {
+    private boolean maybeTerminateRequestWithError(TxnRequestHandler requestHandler) {
+        if (hasError()) {
+            if (requestHandler instanceof EndTxnHandler) {
+                // we allow abort requests to break out of the error state. The state and the last error
+                // will be cleared when the request returns
+                EndTxnHandler endTxnHandler = (EndTxnHandler) requestHandler;
+                if (endTxnHandler.builder.result() == TransactionResult.ABORT)
+                    return false;
+            }
+            requestHandler.fail(lastError);
+            return true;
+        }
+        return false;
+    }
+
+    private synchronized void lookupCoordinator(FindCoordinatorRequest.CoordinatorType type, String coordinatorKey) {
         switch (type) {
             case GROUP:
                 consumerGroupCoordinator = null;
@@ -513,317 +474,447 @@ public class TransactionManager {
                 transactionCoordinator = null;
                 break;
             default:
-                throw new IllegalStateException("Got an invalid coordinator type: " + type);
+                throw new IllegalStateException("Invalid coordinator type: " + type);
         }
-        pendingTransactionalRequests.add(findCoordinatorRequest(type, coordinatorKey, false));
+
+        FindCoordinatorRequest.Builder builder = new FindCoordinatorRequest.Builder(type, coordinatorKey);
+        pendingRequests.add(new FindCoordinatorHandler(builder));
     }
 
-
-    private void completeTransaction() {
+    private synchronized void completeTransaction() {
         transitionTo(State.READY);
         lastError = null;
+        transactionStarted = false;
         partitionsInTransaction.clear();
     }
 
-    private TransactionalRequest initPidRequest(boolean isRetry, TransactionalRequestResult result) {
-        InitPidRequest.Builder builder = new InitPidRequest.Builder(transactionalId, transactionTimeoutMs);
-        return new TransactionalRequest(builder, new InitPidCallback(result),
-                FindCoordinatorRequest.CoordinatorType.TRANSACTION, TransactionalRequest.Priority.INIT_PRODUCER_ID, isRetry, transactionalId, result);
-    }
-
-    private synchronized TransactionalRequest addPartitionsToTransactionRequest(boolean isRetry) {
-        pendingPartitionsToBeAddedToTransaction.addAll(newPartitionsToBeAddedToTransaction);
-        newPartitionsToBeAddedToTransaction.clear();
+    private synchronized TxnRequestHandler addPartitionsToTransactionHandler() {
+        pendingPartitionsInTransaction.addAll(newPartitionsInTransaction);
+        newPartitionsInTransaction.clear();
         AddPartitionsToTxnRequest.Builder builder = new AddPartitionsToTxnRequest.Builder(transactionalId,
-                pidAndEpoch.producerId, pidAndEpoch.epoch, new ArrayList<>(pendingPartitionsToBeAddedToTransaction));
-        return new TransactionalRequest(builder, new AddPartitionsToTransactionCallback(),
-                FindCoordinatorRequest.CoordinatorType.TRANSACTION, TransactionalRequest.Priority.ADD_PARTITIONS_OR_OFFSETS, isRetry, transactionalId, null);
+                producerIdAndEpoch.producerId, producerIdAndEpoch.epoch, new ArrayList<>(pendingPartitionsInTransaction));
+        return new AddPartitionsToTxnHandler(builder);
     }
 
-    private TransactionalRequest findCoordinatorRequest(FindCoordinatorRequest.CoordinatorType type, String coordinatorKey, boolean isRetry) {
-        FindCoordinatorRequest.Builder builder = new FindCoordinatorRequest.Builder(type, coordinatorKey);
-        return new TransactionalRequest(builder, new FindCoordinatorCallback(type, coordinatorKey),
-                null, TransactionalRequest.Priority.FIND_COORDINATOR, isRetry, null, null);
-    }
-
-    private TransactionalRequest endTxnRequest(boolean isCommit, boolean isRetry, TransactionalRequestResult result) {
-        EndTxnRequest.Builder builder = new EndTxnRequest.Builder(transactionalId,
-                pidAndEpoch.producerId, pidAndEpoch.epoch, isCommit ? TransactionResult.COMMIT : TransactionResult.ABORT);
-        return new TransactionalRequest(builder, new EndTxnCallback(isCommit, result),
-                FindCoordinatorRequest.CoordinatorType.TRANSACTION, TransactionalRequest.Priority.END_TXN, isRetry, transactionalId, result);
-    }
-
-    private TransactionalRequest addOffsetsToTxnRequest(Map<TopicPartition, OffsetAndMetadata> offsets,
-                                                        String consumerGroupId, boolean isRetry, TransactionalRequestResult result) {
-        AddOffsetsToTxnRequest.Builder builder = new AddOffsetsToTxnRequest.Builder(transactionalId,
-                pidAndEpoch.producerId, pidAndEpoch.epoch, consumerGroupId);
-        return new TransactionalRequest(builder, new AddOffsetsToTxnCallback(offsets, consumerGroupId, result),
-                FindCoordinatorRequest.CoordinatorType.TRANSACTION, TransactionalRequest.Priority.ADD_PARTITIONS_OR_OFFSETS, isRetry, transactionalId, result);
-    }
-
-    private TransactionalRequest txnOffsetCommitRequest(Map<TopicPartition, OffsetAndMetadata> offsets,
-                                                        String consumerGroupId, boolean isRetry, TransactionalRequestResult result) {
+    private TxnOffsetCommitHandler txnOffsetCommitHandler(TransactionalRequestResult result,
+                                                          Map<TopicPartition, OffsetAndMetadata> offsets,
+                                                          String consumerGroupId) {
         for (Map.Entry<TopicPartition, OffsetAndMetadata> entry : offsets.entrySet()) {
             OffsetAndMetadata offsetAndMetadata = entry.getValue();
-            pendingTxnOffsetCommits.put(entry.getKey(),
-                    new TxnOffsetCommitRequest.CommittedOffset(offsetAndMetadata.offset(), offsetAndMetadata.metadata()));
+            CommittedOffset committedOffset = new CommittedOffset(offsetAndMetadata.offset(), offsetAndMetadata.metadata());
+            pendingTxnOffsetCommits.put(entry.getKey(), committedOffset);
         }
-        return txnOffsetCommitRequest(consumerGroupId, isRetry, result);
+        TxnOffsetCommitRequest.Builder builder = new TxnOffsetCommitRequest.Builder(transactionalId, consumerGroupId,
+                producerIdAndEpoch.producerId, producerIdAndEpoch.epoch, pendingTxnOffsetCommits);
+        return new TxnOffsetCommitHandler(result, builder);
     }
 
-    private TransactionalRequest txnOffsetCommitRequest(String consumerGroupId, boolean isRetry, TransactionalRequestResult result) {
-        TxnOffsetCommitRequest.Builder builder = new TxnOffsetCommitRequest.Builder(consumerGroupId,
-                pidAndEpoch.producerId, pidAndEpoch.epoch, OffsetCommitRequest.DEFAULT_RETENTION_TIME, pendingTxnOffsetCommits);
-        return new TransactionalRequest(builder, new TxnOffsetCommitCallback(consumerGroupId, result),
-                FindCoordinatorRequest.CoordinatorType.GROUP, TransactionalRequest.Priority.ADD_PARTITIONS_OR_OFFSETS, isRetry, consumerGroupId, result);
-    }
-
-    private abstract class TransactionalRequestCallBack implements RequestCompletionHandler {
+    abstract class TxnRequestHandler implements RequestCompletionHandler {
         protected final TransactionalRequestResult result;
+        private boolean isRetry = false;
 
-        TransactionalRequestCallBack(TransactionalRequestResult result) {
+        TxnRequestHandler(TransactionalRequestResult result) {
             this.result = result;
         }
 
+        TxnRequestHandler() {
+            this(new TransactionalRequestResult());
+        }
+
+        void fatalError(RuntimeException e) {
+            result.setError(e);
+            transitionToFatalError(e);
+            result.done();
+        }
+
+        void abortableError(RuntimeException e) {
+            result.setError(e);
+            transitionToAbortableError(e);
+            result.done();
+        }
+
+        void fail(RuntimeException e) {
+            result.setError(e);
+            result.done();
+        }
+
+        void reenqueue() {
+            synchronized (TransactionManager.this) {
+                this.isRetry = true;
+                pendingRequests.add(this);
+            }
+        }
+
         @Override
+        @SuppressWarnings("unchecked")
         public void onComplete(ClientResponse response) {
             if (response.requestHeader().correlationId() != inFlightRequestCorrelationId) {
-                log.error("Detected more than one inflight transactional request. This should never happen.");
-                transitionTo(State.ERROR, new RuntimeException("Detected more than one inflight transactional request. This should never happen."));
-                return;
-            }
-
-            resetInFlightRequestCorrelationId();
-            if (response.wasDisconnected()) {
-                reenqueue();
-            } else if (response.versionMismatch() != null) {
-                if (result != null) {
-                    result.setError(Errors.UNSUPPORTED_VERSION.exception());
-                    result.done();
-                }
-                log.error("Could not execute transactional request because the broker isn't on the right version.");
-                transitionTo(State.ERROR, Errors.UNSUPPORTED_VERSION.exception());
-            } else if (response.hasResponse()) {
-                handleResponse(response.responseBody());
+                fatalError(new RuntimeException("Detected more than one in-flight transactional request."));
             } else {
-                if (result != null) {
-                    result.setError(Errors.UNKNOWN.exception());
-                    result.done();
+                clearInFlightRequestCorrelationId();
+                if (response.wasDisconnected()) {
+                    log.trace("disconnected from " + response.destination() + ". Will retry.");
+                    reenqueue();
+                } else if (response.versionMismatch() != null) {
+                    fatalError(response.versionMismatch());
+                } else if (response.hasResponse()) {
+                    log.trace("Got transactional response for request:" + requestBuilder());
+                    synchronized (TransactionManager.this) {
+                        handleResponse(response.responseBody());
+                    }
+                } else {
+                    fatalError(new KafkaException("Could not execute transactional request for unknown reasons"));
                 }
-                log.error("Could not execute transactional request for unknown reasons");
-                transitionTo(State.ERROR, Errors.UNKNOWN.exception());
             }
         }
 
-        public abstract void handleResponse(AbstractResponse responseBody);
+        boolean needsCoordinator() {
+            return coordinatorType() != null;
+        }
 
-        public abstract void reenqueue();
+        FindCoordinatorRequest.CoordinatorType coordinatorType() {
+            return FindCoordinatorRequest.CoordinatorType.TRANSACTION;
+        }
+
+        String coordinatorKey() {
+            return transactionalId;
+        }
+
+        void setRetry() {
+            this.isRetry = true;
+        }
+
+        boolean isRetry() {
+            return isRetry;
+        }
+
+        boolean isEndTxn() {
+            return false;
+        }
+
+        abstract AbstractRequest.Builder<?> requestBuilder();
+
+        abstract void handleResponse(AbstractResponse responseBody);
+
+        abstract Priority priority();
     }
 
-    private class InitPidCallback extends TransactionalRequestCallBack {
+    private class InitProducerIdHandler extends TxnRequestHandler {
+        private final InitProducerIdRequest.Builder builder;
 
-        InitPidCallback(TransactionalRequestResult result) {
-           super(result);
+        private InitProducerIdHandler(InitProducerIdRequest.Builder builder) {
+            this.builder = builder;
         }
 
         @Override
-        public void handleResponse(AbstractResponse responseBody) {
-            InitPidResponse initPidResponse = (InitPidResponse) responseBody;
-            Errors error = initPidResponse.error();
+        InitProducerIdRequest.Builder requestBuilder() {
+            return builder;
+        }
+
+        @Override
+        Priority priority() {
+            return Priority.INIT_PRODUCER_ID;
+        }
+
+        @Override
+        public void handleResponse(AbstractResponse response) {
+            InitProducerIdResponse initProducerIdResponse = (InitProducerIdResponse) response;
+            Errors error = initProducerIdResponse.error();
+
+            log.debug("TransactionalId {} -- Received InitProducerId response with error {}",
+                    transactionalId, error);
+
             if (error == Errors.NONE) {
-                setPidAndEpoch(initPidResponse.producerId(), initPidResponse.epoch());
+                ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(initProducerIdResponse.producerId(), initProducerIdResponse.epoch());
+                setProducerIdAndEpoch(producerIdAndEpoch);
                 transitionTo(State.READY);
                 lastError = null;
+                result.done();
             } else if (error == Errors.NOT_COORDINATOR || error == Errors.COORDINATOR_NOT_AVAILABLE) {
-                needsCoordinator(FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
+                lookupCoordinator(FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
                 reenqueue();
             } else if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS || error == Errors.CONCURRENT_TRANSACTIONS) {
                 reenqueue();
+            } else if (error == Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED) {
+                fatalError(error.exception());
             } else {
-                result.setError(error.exception());
-                transitionTo(State.ERROR, error.exception());
+                fatalError(new KafkaException("Unexpected error in InitProducerIdResponse; " + error.message()));
             }
-
-            if (error == Errors.NONE || !result.isSuccessful())
-                result.done();
-        }
-
-        @Override
-        public void reenqueue() {
-            pendingTransactionalRequests.add(initPidRequest(true, result));
         }
     }
 
-    private class AddPartitionsToTransactionCallback extends TransactionalRequestCallBack {
+    private class AddPartitionsToTxnHandler extends TxnRequestHandler {
+        private final AddPartitionsToTxnRequest.Builder builder;
 
-        AddPartitionsToTransactionCallback() {
-            super(null);
+        private AddPartitionsToTxnHandler(AddPartitionsToTxnRequest.Builder builder) {
+            this.builder = builder;
+        }
+
+        @Override
+        AddPartitionsToTxnRequest.Builder requestBuilder() {
+            return builder;
+        }
+
+        @Override
+        Priority priority() {
+            return Priority.ADD_PARTITIONS_OR_OFFSETS;
         }
 
         @Override
         public void handleResponse(AbstractResponse response) {
             AddPartitionsToTxnResponse addPartitionsToTxnResponse = (AddPartitionsToTxnResponse) response;
-            Errors error = addPartitionsToTxnResponse.error();
-            if (error == Errors.NONE) {
-                partitionsInTransaction.addAll(pendingPartitionsToBeAddedToTransaction);
-                pendingPartitionsToBeAddedToTransaction.clear();
-            } else if (error == Errors.COORDINATOR_NOT_AVAILABLE || error == Errors.NOT_COORDINATOR) {
-                needsCoordinator(FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
-                reenqueue();
-            } else if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS || error == Errors.CONCURRENT_TRANSACTIONS) {
-                reenqueue();
-            } else if (error == Errors.INVALID_PID_MAPPING || error == Errors.INVALID_TXN_STATE) {
-                log.error("Seems like the broker has bad transaction state. producerId: {}, error: {}. message: {}",
-                        pidAndEpoch.producerId, error, error.message());
-                transitionTo(State.ERROR, error.exception());
-            } else if (error == Errors.INVALID_PRODUCER_EPOCH) {
-                transitionTo(State.FENCED, error.exception());
-                log.error("Epoch has become invalid: producerId: {}. epoch: {}. Message: {}", pidAndEpoch.producerId, pidAndEpoch.epoch, error.message());
-            } else if (error == Errors.TOPIC_AUTHORIZATION_FAILED) {
-                transitionTo(State.ERROR, error.exception());
-                log.error("No permissions add some partitions to the transaction: {}", error.message());
-            } else {
-                transitionTo(State.ERROR, error.exception());
-                log.error("Could not add partitions to transaction due to unknown error: {}", error.message());
-            }
-        }
+            Map<TopicPartition, Errors> errors = addPartitionsToTxnResponse.errors();
+            boolean hasPartitionErrors = false;
+            Set<String> unauthorizedTopics = new HashSet<>();
 
-        @Override
-        public void reenqueue() {
-            pendingTransactionalRequests.add(addPartitionsToTransactionRequest(true));
+            log.debug("TransactionalId {} -- Received AddPartitionsToTxn response with errors {}",
+                    transactionalId, errors);
+
+            for (Map.Entry<TopicPartition, Errors> topicPartitionErrorEntry : errors.entrySet()) {
+                TopicPartition topicPartition = topicPartitionErrorEntry.getKey();
+                Errors error = topicPartitionErrorEntry.getValue();
+
+                if (error == Errors.NONE) {
+                    continue;
+                } else if (error == Errors.COORDINATOR_NOT_AVAILABLE || error == Errors.NOT_COORDINATOR) {
+                    lookupCoordinator(FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
+                    reenqueue();
+                    return;
+                } else if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS || error == Errors.CONCURRENT_TRANSACTIONS
+                        || error == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
+                    reenqueue();
+                    return;
+                } else if (error == Errors.INVALID_PRODUCER_EPOCH) {
+                    fatalError(error.exception());
+                    return;
+                } else if (error == Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED) {
+                    fatalError(error.exception());
+                    return;
+                } else if (error == Errors.INVALID_PRODUCER_ID_MAPPING
+                        || error == Errors.INVALID_TXN_STATE) {
+                    fatalError(new KafkaException(error.exception()));
+                    return;
+                } else if (error == Errors.TOPIC_AUTHORIZATION_FAILED) {
+                    unauthorizedTopics.add(topicPartition.topic());
+                } else {
+                    log.error("TransactionalId: {} -- Could not add partition {} due to unexpected error {}",
+                            transactionalId, topicPartition, error);
+                    hasPartitionErrors = true;
+                }
+            }
+
+            if (!unauthorizedTopics.isEmpty()) {
+                abortableError(new TopicAuthorizationException(unauthorizedTopics));
+            } else if (hasPartitionErrors) {
+                abortableError(new KafkaException("Could not add partitions to transaction due to partition level errors"));
+            } else {
+                Set<TopicPartition> addedPartitions = errors.keySet();
+                partitionsInTransaction.addAll(addedPartitions);
+                pendingPartitionsInTransaction.removeAll(addedPartitions);
+                transactionStarted = true;
+                result.done();
+            }
         }
     }
 
-    private class FindCoordinatorCallback extends TransactionalRequestCallBack {
-        private final FindCoordinatorRequest.CoordinatorType type;
-        private final String coordinatorKey;
+    private class FindCoordinatorHandler extends TxnRequestHandler {
+        private final FindCoordinatorRequest.Builder builder;
 
-        FindCoordinatorCallback(FindCoordinatorRequest.CoordinatorType type, String coordinatorKey) {
-            super(null);
-            this.type = type;
-            this.coordinatorKey = coordinatorKey;
+        private FindCoordinatorHandler(FindCoordinatorRequest.Builder builder) {
+            this.builder = builder;
         }
+
         @Override
-        public void handleResponse(AbstractResponse responseBody) {
-            FindCoordinatorResponse findCoordinatorResponse = (FindCoordinatorResponse) responseBody;
-            if (findCoordinatorResponse.error() == Errors.NONE) {
+        FindCoordinatorRequest.Builder requestBuilder() {
+            return builder;
+        }
+
+        @Override
+        Priority priority() {
+            return Priority.FIND_COORDINATOR;
+        }
+
+        @Override
+        FindCoordinatorRequest.CoordinatorType coordinatorType() {
+            return null;
+        }
+
+        @Override
+        String coordinatorKey() {
+            return null;
+        }
+
+        @Override
+        public void handleResponse(AbstractResponse response) {
+            FindCoordinatorResponse findCoordinatorResponse = (FindCoordinatorResponse) response;
+            Errors error = findCoordinatorResponse.error();
+
+            log.debug("TransactionalId {} -- Received FindCoordinator response with error {}",
+                    transactionalId, error);
+
+            if (error == Errors.NONE) {
                 Node node = findCoordinatorResponse.node();
-                switch (type) {
+                switch (builder.coordinatorType()) {
                     case GROUP:
                         consumerGroupCoordinator = node;
                         break;
                     case TRANSACTION:
                         transactionCoordinator = node;
                 }
-            } else if (findCoordinatorResponse.error() == Errors.COORDINATOR_NOT_AVAILABLE) {
+                result.done();
+            } else if (error == Errors.COORDINATOR_NOT_AVAILABLE) {
                 reenqueue();
+            } else if (error == Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED) {
+                fatalError(error.exception());
             } else if (findCoordinatorResponse.error() == Errors.GROUP_AUTHORIZATION_FAILED) {
-                transitionTo(State.ERROR, findCoordinatorResponse.error().exception());
-                log.error("Not authorized to access the group with type {} and key {}. Message: {} ", type,
-                        coordinatorKey, findCoordinatorResponse.error().message());
+                abortableError(new GroupAuthorizationException(builder.coordinatorKey()));
             } else {
-                transitionTo(State.ERROR, findCoordinatorResponse.error().exception());
-                log.error("Could not find a coordinator with type {} for unknown reasons. coordinatorKey: {}", type,
-                        coordinatorKey, findCoordinatorResponse.error().message());
+                fatalError(new KafkaException(String.format("Could not find a coordinator with type %s with key %s due to" +
+                        "unexpected error: %s", builder.coordinatorType(), builder.coordinatorKey(),
+                        findCoordinatorResponse.error().message())));
             }
-        }
-
-        @Override
-        public void reenqueue() {
-            pendingTransactionalRequests.add(findCoordinatorRequest(type, coordinatorKey, true));
         }
     }
 
-    private class EndTxnCallback extends TransactionalRequestCallBack {
-        private final boolean isCommit;
+    private class EndTxnHandler extends TxnRequestHandler {
+        private final EndTxnRequest.Builder builder;
 
-        EndTxnCallback(boolean isCommit, TransactionalRequestResult result) {
-            super(result);
-            this.isCommit = isCommit;
+        private EndTxnHandler(EndTxnRequest.Builder builder) {
+            this.builder = builder;
         }
 
         @Override
-        public void handleResponse(AbstractResponse responseBody) {
-            EndTxnResponse endTxnResponse = (EndTxnResponse) responseBody;
+        EndTxnRequest.Builder requestBuilder() {
+            return builder;
+        }
+
+        @Override
+        Priority priority() {
+            return Priority.END_TXN;
+        }
+
+        @Override
+        boolean isEndTxn() {
+            return true;
+        }
+
+        @Override
+        public void handleResponse(AbstractResponse response) {
+            EndTxnResponse endTxnResponse = (EndTxnResponse) response;
             Errors error = endTxnResponse.error();
+
+            log.debug("TransactionalId {} -- Received EndTxn response with error {}",
+                    transactionalId, error);
+
             if (error == Errors.NONE) {
                 completeTransaction();
+                result.done();
             } else if (error == Errors.COORDINATOR_NOT_AVAILABLE || error == Errors.NOT_COORDINATOR) {
-                needsCoordinator(FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
+                lookupCoordinator(FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
                 reenqueue();
             } else if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS || error == Errors.CONCURRENT_TRANSACTIONS) {
                 reenqueue();
             } else if (error == Errors.INVALID_PRODUCER_EPOCH) {
-                transitionTo(State.FENCED, error.exception());
-                result.setError(error.exception());
+                fatalError(error.exception());
+            } else if (error == Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED) {
+                fatalError(error.exception());
+            } else if (error == Errors.INVALID_TXN_STATE) {
+                fatalError(error.exception());
             } else {
-                result.setError(error.exception());
-                transitionTo(State.ERROR, error.exception());
+                fatalError(new KafkaException("Unhandled error in EndTxnResponse: " + error.message()));
             }
-
-            if (error == Errors.NONE || !result.isSuccessful())
-                result.done();
-        }
-
-        @Override
-        public void reenqueue() {
-            pendingTransactionalRequests.add(endTxnRequest(isCommit, true, result));
         }
     }
 
-    private class AddOffsetsToTxnCallback extends TransactionalRequestCallBack {
-        String consumerGroupId;
-        Map<TopicPartition, OffsetAndMetadata> offsets;
+    private class AddOffsetsToTxnHandler extends TxnRequestHandler {
+        private final AddOffsetsToTxnRequest.Builder builder;
+        private final Map<TopicPartition, OffsetAndMetadata> offsets;
 
-        AddOffsetsToTxnCallback(Map<TopicPartition, OffsetAndMetadata> offsets, String consumerGroupId, TransactionalRequestResult result) {
-            super(result);
+        private AddOffsetsToTxnHandler(AddOffsetsToTxnRequest.Builder builder,
+                                       Map<TopicPartition, OffsetAndMetadata> offsets) {
+            this.builder = builder;
             this.offsets = offsets;
-            this.consumerGroupId = consumerGroupId;
         }
 
         @Override
-        public void handleResponse(AbstractResponse responseBody) {
-            AddOffsetsToTxnResponse addOffsetsToTxnResponse = (AddOffsetsToTxnResponse) responseBody;
+        AddOffsetsToTxnRequest.Builder requestBuilder() {
+            return builder;
+        }
+
+        @Override
+        Priority priority() {
+            return Priority.ADD_PARTITIONS_OR_OFFSETS;
+        }
+
+        @Override
+        public void handleResponse(AbstractResponse response) {
+            AddOffsetsToTxnResponse addOffsetsToTxnResponse = (AddOffsetsToTxnResponse) response;
             Errors error = addOffsetsToTxnResponse.error();
+
+            log.debug("TransactionalId {} -- Received AddOffsetsToTxn response with error {}",
+                    transactionalId, error);
+
             if (error == Errors.NONE) {
-                pendingTransactionalRequests.add(txnOffsetCommitRequest(offsets, consumerGroupId, false, result));
+                // note the result is not completed until the TxnOffsetCommit returns
+                pendingRequests.add(txnOffsetCommitHandler(result, offsets, builder.consumerGroupId()));
+                transactionStarted = true;
             } else if (error == Errors.COORDINATOR_NOT_AVAILABLE || error == Errors.NOT_COORDINATOR) {
-                needsCoordinator(FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
+                lookupCoordinator(FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
                 reenqueue();
             } else if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS || error == Errors.CONCURRENT_TRANSACTIONS) {
                 reenqueue();
             } else if (error == Errors.INVALID_PRODUCER_EPOCH) {
-                transitionTo(State.FENCED, error.exception());
-                result.setError(error.exception());
+                fatalError(error.exception());
+            } else if (error == Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED) {
+                fatalError(error.exception());
+            } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
+                abortableError(new GroupAuthorizationException(builder.consumerGroupId()));
             } else {
-                transitionTo(State.ERROR, error.exception());
-                result.setError(error.exception());
+                fatalError(new KafkaException("Unexpected error in AddOffsetsToTxnResponse: " + error.message()));
             }
-
-            if (!result.isSuccessful())
-                result.done();
-        }
-
-        @Override
-        public void reenqueue() {
-            pendingTransactionalRequests.add(addOffsetsToTxnRequest(offsets, consumerGroupId, true, result));
         }
     }
 
-    private class TxnOffsetCommitCallback extends TransactionalRequestCallBack {
-        private final String consumerGroupId;
+    private class TxnOffsetCommitHandler extends TxnRequestHandler {
+        private final TxnOffsetCommitRequest.Builder builder;
 
-        TxnOffsetCommitCallback(String consumerGroupId, TransactionalRequestResult result) {
+        private TxnOffsetCommitHandler(TransactionalRequestResult result,
+                                       TxnOffsetCommitRequest.Builder builder) {
             super(result);
-            this.consumerGroupId = consumerGroupId;
+            this.builder = builder;
         }
 
         @Override
-        public void handleResponse(AbstractResponse responseBody) {
-            TxnOffsetCommitResponse txnOffsetCommitResponse = (TxnOffsetCommitResponse) responseBody;
+        TxnOffsetCommitRequest.Builder requestBuilder() {
+            return builder;
+        }
+
+        @Override
+        Priority priority() {
+            return Priority.ADD_PARTITIONS_OR_OFFSETS;
+        }
+
+        @Override
+        FindCoordinatorRequest.CoordinatorType coordinatorType() {
+            return FindCoordinatorRequest.CoordinatorType.GROUP;
+        }
+
+        @Override
+        String coordinatorKey() {
+            return builder.consumerGroupId();
+        }
+
+        @Override
+        public void handleResponse(AbstractResponse response) {
+            TxnOffsetCommitResponse txnOffsetCommitResponse = (TxnOffsetCommitResponse) response;
             boolean coordinatorReloaded = false;
             boolean hadFailure = false;
-            for (Map.Entry<TopicPartition, Errors> entry : txnOffsetCommitResponse.errors().entrySet()) {
+            Map<TopicPartition, Errors> errors = txnOffsetCommitResponse.errors();
+
+            log.debug("TransactionalId {} -- Received TxnOffsetCommit response with errors {}",
+                    transactionalId, errors);
+
+            for (Map.Entry<TopicPartition, Errors> entry : errors.entrySet()) {
                 TopicPartition topicPartition = entry.getKey();
                 Errors error = entry.getValue();
                 if (error == Errors.NONE) {
@@ -832,16 +923,22 @@ public class TransactionManager {
                     hadFailure = true;
                     if (!coordinatorReloaded) {
                         coordinatorReloaded = true;
-                        needsCoordinator(FindCoordinatorRequest.CoordinatorType.GROUP, consumerGroupId);
+                        lookupCoordinator(FindCoordinatorRequest.CoordinatorType.GROUP, builder.consumerGroupId());
                     }
+                } else if (error == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
+                    hadFailure = true;
+                } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
+                    abortableError(new GroupAuthorizationException(builder.consumerGroupId()));
+                    return;
+                } else if (error == Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED) {
+                    fatalError(error.exception());
+                    return;
                 } else if (error == Errors.INVALID_PRODUCER_EPOCH) {
-                    transitionTo(State.FENCED, error.exception());
-                    result.setError(error.exception());
-                    break;
+                    fatalError(error.exception());
+                    return;
                 } else {
-                    result.setError(error.exception());
-                    transitionTo(State.ERROR, error.exception());
-                    break;
+                    fatalError(new KafkaException("Unexpected error in TxnOffsetCommitResponse: " + error.message()));
+                    return;
                 }
             }
 
@@ -854,13 +951,8 @@ public class TransactionManager {
 
             // retry the commits which failed with a retriable error.
             if (!pendingTxnOffsetCommits.isEmpty())
-                pendingTransactionalRequests.add(txnOffsetCommitRequest(consumerGroupId, true, result));
-
-        }
-
-        @Override
-        public void reenqueue() {
-            pendingTransactionalRequests.add(txnOffsetCommitRequest(consumerGroupId, true, result));
+                reenqueue();
         }
     }
+
 }

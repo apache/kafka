@@ -109,6 +109,8 @@ public class ProduceRequest extends AbstractRequest {
     // put in the purgatory (due to client throttling, it can take a while before the response is sent).
     // Care should be taken in methods that use this field.
     private volatile Map<TopicPartition, MemoryRecords> partitionRecords;
+    private boolean transactional = false;
+    private boolean idempotent = false;
 
     private ProduceRequest(short version, short acks, int timeout, Map<TopicPartition, MemoryRecords> partitionRecords, String transactionalId) {
         super(version);
@@ -165,6 +167,8 @@ public class ProduceRequest extends AbstractRequest {
             if (iterator.hasNext())
                 throw new InvalidRecordException("Produce requests with version " + version + " are only allowed to " +
                         "contain exactly one record batch");
+            idempotent = entry.hasProducerId();
+            transactional = entry.isTransactional();
         }
 
         // Note that we do not do similar validation for older versions to ensure compatibility with
@@ -224,13 +228,14 @@ public class ProduceRequest extends AbstractRequest {
     }
 
     @Override
-    public AbstractResponse getErrorResponse(Throwable e) {
+    public ProduceResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         /* In case the producer doesn't actually want any response */
         if (acks == 0)
             return null;
 
+        Errors error = Errors.forException(e);
         Map<TopicPartition, ProduceResponse.PartitionResponse> responseMap = new HashMap<>();
-        ProduceResponse.PartitionResponse partitionResponse = new ProduceResponse.PartitionResponse(Errors.forException(e));
+        ProduceResponse.PartitionResponse partitionResponse = new ProduceResponse.PartitionResponse(error);
 
         for (TopicPartition tp : partitions())
             responseMap.put(tp, partitionResponse);
@@ -241,7 +246,7 @@ public class ProduceRequest extends AbstractRequest {
             case 1:
             case 2:
             case 3:
-                return new ProduceResponse(responseMap);
+                return new ProduceResponse(responseMap, throttleTimeMs);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
                         versionId, this.getClass().getSimpleName(), ApiKeys.PRODUCE.latestVersion()));
@@ -262,6 +267,14 @@ public class ProduceRequest extends AbstractRequest {
 
     public String transactionalId() {
         return transactionalId;
+    }
+
+    public boolean isTransactional() {
+        return transactional;
+    }
+
+    public boolean isIdempotent() {
+        return idempotent;
     }
 
     /**

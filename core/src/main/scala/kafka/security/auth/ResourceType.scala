@@ -19,11 +19,6 @@ package kafka.security.auth
 import kafka.common.{BaseEnum, KafkaException}
 import org.apache.kafka.common.protocol.Errors
 
-/**
- * ResourceTypes.
- */
-
-
 sealed trait ResourceType extends BaseEnum { def error: Errors }
 
 case object Cluster extends ResourceType {
@@ -41,6 +36,10 @@ case object Group extends ResourceType {
   val error = Errors.GROUP_AUTHORIZATION_FAILED
 }
 
+case object TransactionalId extends ResourceType {
+  val name = "TransactionalId"
+  val error = Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED
+}
 
 object ResourceType {
 
@@ -49,5 +48,5 @@ object ResourceType {
     rType.getOrElse(throw new KafkaException(resourceType + " not a valid resourceType name. The valid names are " + values.mkString(",")))
   }
 
-  def values: Seq[ResourceType] = List(Cluster, Topic, Group)
+  def values: Seq[ResourceType] = List(Cluster, Topic, Group, TransactionalId)
 }

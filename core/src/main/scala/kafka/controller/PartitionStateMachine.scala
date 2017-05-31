@@ -79,9 +79,9 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
       brokerRequestBatch.newBatch()
       // try to move all partitions in NewPartition or OfflinePartition state to OnlinePartition state except partitions
       // that belong to topics to be deleted
-      for((topicAndPartition, partitionState) <- partitionState
+      for ((topicAndPartition, partitionState) <- partitionState
           if !controller.topicDeletionManager.isTopicQueuedUpForDeletion(topicAndPartition.topic)) {
-        if(partitionState.equals(OfflinePartition) || partitionState.equals(NewPartition))
+        if (partitionState.equals(OfflinePartition) || partitionState.equals(NewPartition))
           handleStateChange(topicAndPartition.topic, topicAndPartition.partition, OnlinePartition, controller.offlinePartitionSelector,
                             (new CallbackBuilder).build)
       }
@@ -111,7 +111,7 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
         handleStateChange(topicAndPartition.topic, topicAndPartition.partition, targetState, leaderSelector, callbacks)
       }
       brokerRequestBatch.sendRequestsToBrokers(controller.epoch)
-    }catch {
+    } catch {
       case e: Throwable => error("Error while moving some partitions to %s state".format(targetState), e)
       // TODO: It is not enough to bail out and log an error, it is important to trigger state changes for those partitions
     }
@@ -146,10 +146,9 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
     val topicAndPartition = TopicAndPartition(topic, partition)
     val currState = partitionState.getOrElseUpdate(topicAndPartition, NonExistentPartition)
     try {
+      assertValidTransition(topicAndPartition, targetState)
       targetState match {
         case NewPartition =>
-          // pre: partition did not exist before this
-          assertValidPreviousStates(topicAndPartition, List(NonExistentPartition), NewPartition)
           partitionState.put(topicAndPartition, NewPartition)
           val assignedReplicas = controllerContext.partitionReplicaAssignment(topicAndPartition).mkString(",")
           stateChangeLogger.trace("Controller %d epoch %d changed partition %s state from %s to %s with assigned replicas %s"
@@ -157,7 +156,6 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
                                             assignedReplicas))
           // post: partition has been assigned replicas
         case OnlinePartition =>
-          assertValidPreviousStates(topicAndPartition, List(NewPartition, OnlinePartition, OfflinePartition), OnlinePartition)
           partitionState(topicAndPartition) match {
             case NewPartition =>
               // initialize leader and isr path for new partition
@@ -174,16 +172,12 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
                                     .format(controllerId, controller.epoch, topicAndPartition, currState, targetState, leader))
            // post: partition has a leader
         case OfflinePartition =>
-          // pre: partition should be in New or Online state
-          assertValidPreviousStates(topicAndPartition, List(NewPartition, OnlinePartition, OfflinePartition), OfflinePartition)
           // should be called when the leader for a partition is no longer alive
           stateChangeLogger.trace("Controller %d epoch %d changed partition %s state from %s to %s"
                                     .format(controllerId, controller.epoch, topicAndPartition, currState, targetState))
           partitionState.put(topicAndPartition, OfflinePartition)
           // post: partition has no alive leader
         case NonExistentPartition =>
-          // pre: partition should be in Offline state
-          assertValidPreviousStates(topicAndPartition, List(OfflinePartition), NonExistentPartition)
           stateChangeLogger.trace("Controller %d epoch %d changed partition %s state from %s to %s"
                                     .format(controllerId, controller.epoch, topicAndPartition, currState, targetState))
           partitionState.put(topicAndPartition, NonExistentPartition)
@@ -217,11 +211,10 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
     }
   }
 
-  private def assertValidPreviousStates(topicAndPartition: TopicAndPartition, fromStates: Seq[PartitionState],
-                                        targetState: PartitionState) {
-    if(!fromStates.contains(partitionState(topicAndPartition)))
+  private def assertValidTransition(topicAndPartition: TopicAndPartition, targetState: PartitionState): Unit = {
+    if (!targetState.validPreviousStates.contains(partitionState(topicAndPartition)))
       throw new IllegalStateException("Partition %s should be in the %s states before moving to %s state"
-        .format(topicAndPartition, fromStates.mkString(","), targetState) + ". Instead it is in %s state"
+        .format(topicAndPartition, targetState.validPreviousStates.mkString(","), targetState) + ". Instead it is in %s state"
         .format(partitionState(topicAndPartition)))
   }
 
@@ -351,8 +344,27 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
   }
 }
 
-sealed trait PartitionState { def state: Byte }
-case object NewPartition extends PartitionState { val state: Byte = 0 }
-case object OnlinePartition extends PartitionState { val state: Byte = 1 }
-case object OfflinePartition extends PartitionState { val state: Byte = 2 }
-case object NonExistentPartition extends PartitionState { val state: Byte = 3 }
+sealed trait PartitionState {
+  def state: Byte
+  def validPreviousStates: Set[PartitionState]
+}
+
+case object NewPartition extends PartitionState {
+  val state: Byte = 0
+  val validPreviousStates: Set[PartitionState] = Set(NonExistentPartition)
+}
+
+case object OnlinePartition extends PartitionState {
+  val state: Byte = 1
+  val validPreviousStates: Set[PartitionState] = Set(NewPartition, OnlinePartition, OfflinePartition)
+}
+
+case object OfflinePartition extends PartitionState {
+  val state: Byte = 2
+  val validPreviousStates: Set[PartitionState] = Set(NewPartition, OnlinePartition, OfflinePartition)
+}
+
+case object NonExistentPartition extends PartitionState {
+  val state: Byte = 3
+  val validPreviousStates: Set[PartitionState] = Set(OfflinePartition)
+}

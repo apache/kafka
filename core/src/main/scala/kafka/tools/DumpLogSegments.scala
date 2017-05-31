@@ -37,7 +37,7 @@ import scala.collection.JavaConverters._
 object DumpLogSegments {
 
   def main(args: Array[String]) {
-    val parser = new OptionParser
+    val parser = new OptionParser(false)
     val printOpt = parser.accepts("print-data-log", "if set, printing the messages content when dumping data logs. Automatically set if any decoder option is specified.")
     val verifyOpt = parser.accepts("verify-index-only", "if set, just verify the index log without printing its content.")
     val indexSanityOpt = parser.accepts("index-sanity-check", "if set, just checks the index sanity without printing its content. " +
@@ -105,6 +105,8 @@ object DumpLogSegments {
           dumpTimeIndex(file, indexSanityOnly, verifyOnly, timeIndexDumpErrors, maxMessageSize)
         case Log.PidSnapshotFileSuffix =>
           dumpPidSnapshot(file)
+        case Log.TxnIndexFileSuffix =>
+          dumpTxnIndex(file)
         case _ =>
           System.err.println(s"Ignoring unknown file $file")
       }
@@ -131,11 +133,20 @@ object DumpLogSegments {
     }
   }
 
+  private def dumpTxnIndex(file: File): Unit = {
+    val index = new TransactionIndex(Log.offsetFromFilename(file.getName), file)
+    for (abortedTxn <- index.allAbortedTxns) {
+      println(s"version: ${abortedTxn.version} producerId: ${abortedTxn.producerId} firstOffset: ${abortedTxn.firstOffset} " +
+        s"lastOffset: ${abortedTxn.lastOffset} lastStableOffset: ${abortedTxn.lastStableOffset}")
+    }
+  }
+
   private def dumpPidSnapshot(file: File): Unit = {
     try {
-      ProducerIdMapping.readSnapshot(file).foreach { case (pid, entry) =>
-        println(s"pid: $pid epoch: ${entry.epoch} lastSequence: ${entry.lastSeq} lastOffset: ${entry.lastOffset} " +
-          s"offsetDelta: ${entry.offsetDelta} lastTimestamp: ${entry.timestamp}")
+      ProducerStateManager.readSnapshot(file).foreach { entry=>
+        println(s"producerId: ${entry.producerId} producerEpoch: ${entry.producerEpoch} lastSequence: ${entry.lastSeq} " +
+          s"lastOffset: ${entry.lastOffset} offsetDelta: ${entry.offsetDelta} lastTimestamp: ${entry.timestamp} " +
+          s"coordinatorEpoch: ${entry.coordinatorEpoch} currentTxnFirstOffset: ${entry.currentTxnFirstOffset}")
       }
     } catch {
       case e: CorruptSnapshotException =>
@@ -152,7 +163,7 @@ object DumpLogSegments {
     val startOffset = file.getName.split("\\.")(0).toLong
     val logFile = new File(file.getAbsoluteFile.getParent, file.getName.split("\\.")(0) + Log.LogFileSuffix)
     val fileRecords = FileRecords.open(logFile, false)
-    val index = new OffsetIndex(file, baseOffset = startOffset)
+    val index = new OffsetIndex(file, baseOffset = startOffset, writable = false)
 
     //Check that index passes sanityCheck, this is the check that determines if indexes will be rebuilt on startup or not.
     if (indexSanityOnly) {
@@ -187,8 +198,8 @@ object DumpLogSegments {
     val logFile = new File(file.getAbsoluteFile.getParent, file.getName.split("\\.")(0) + Log.LogFileSuffix)
     val fileRecords = FileRecords.open(logFile, false)
     val indexFile = new File(file.getAbsoluteFile.getParent, file.getName.split("\\.")(0) + Log.IndexFileSuffix)
-    val index = new OffsetIndex(indexFile, baseOffset = startOffset)
-    val timeIndex = new TimeIndex(file, baseOffset = startOffset)
+    val index = new OffsetIndex(indexFile, baseOffset = startOffset, writable = false)
+    val timeIndex = new TimeIndex(file, baseOffset = startOffset, writable = false)
 
     //Check that index passes sanityCheck, this is the check that determines if indexes will be rebuilt on startup or not.
     if (indexSanityOnly) {
@@ -326,8 +337,8 @@ object DumpLogSegments {
     val messageSet = FileRecords.open(file, false)
     var validBytes = 0L
     var lastOffset = -1L
-    val batches = messageSet.batches(maxMessageSize).asScala
-    for (batch <- batches) {
+
+    for (batch <- messageSet.batches.asScala) {
       if (isDeepIteration) {
         for (record <- batch.asScala) {
           if (lastOffset == -1)
@@ -342,16 +353,24 @@ object DumpLogSegments {
           print("offset: " + record.offset + " position: " + validBytes +
             " " + batch.timestampType + ": " + record.timestamp + " isvalid: " + record.isValid +
             " keysize: " + record.keySize + " valuesize: " + record.valueSize + " magic: " + batch.magic +
-            " compresscodec: " + batch.compressionType + " crc: " + record.checksum)
+            " compresscodec: " + batch.compressionType)
 
           if (batch.magic >= RecordBatch.MAGIC_VALUE_V2) {
-            print(" sequence: " + record.sequence +
+            print(" crc: " + batch.checksum + " sequence: " + record.sequence +
               " headerKeys: " + record.headers.map(_.key).mkString("[", ",", "]"))
+          } else {
+            print(" crc: " + record.checksumOrNull)
           }
 
-          if (record.isControlRecord) {
-            val controlType = ControlRecordType.parse(record.key)
-            print(s" controlType: $controlType")
+          if (batch.isControlBatch) {
+            val controlTypeId = ControlRecordType.parseTypeId(record.key)
+            ControlRecordType.fromTypeId(controlTypeId) match {
+              case ControlRecordType.ABORT | ControlRecordType.COMMIT =>
+                val endTxnMarker = EndTransactionMarker.deserialize(record)
+                print(s" endTxnMarker: ${endTxnMarker.controlType} coordinatorEpoch: ${endTxnMarker.coordinatorEpoch}")
+              case controlType =>
+                print(s" controlType: $controlType($controlTypeId)")
+            }
           } else if (printContents) {
             val (key, payload) = parser.parse(record)
             key.foreach(key => print(s" key: $key"))

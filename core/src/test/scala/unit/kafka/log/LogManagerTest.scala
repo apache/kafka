@@ -151,8 +151,9 @@ class LogManagerTest {
     assertEquals("Now there should be exactly 6 segments", 6, log.numberOfSegments)
     time.sleep(log.config.fileDeleteDelayMs + 1)
 
-    //There should be a log file, two indexes, the leader epoch checkpoint and the pid snapshot dir
-    assertEquals("Files should have been deleted", log.numberOfSegments * 3 + 2, log.dir.list.length)
+    // there should be a log file, two indexes (the txn index is created lazily),
+    // the leader epoch checkpoint and two pid mapping files (one for the active and previous segments)
+    assertEquals("Files should have been deleted", log.numberOfSegments * 3 + 3, log.dir.list.length)
     assertEquals("Should get empty fetch off new log.", 0, log.read(offset + 1, 1024).records.sizeInBytes)
     try {
       log.read(0, 1024)

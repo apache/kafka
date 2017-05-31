@@ -29,8 +29,12 @@ import org.apache.kafka.common.utils.Time
 class InterBrokerSendThread(name: String,
                             networkClient: NetworkClient,
                             requestGenerator: () => Iterable[RequestAndCompletionHandler],
-                            time: Time)
-  extends ShutdownableThread(name, isInterruptible = false) {
+                            time: Time,
+                            isInterruptible: Boolean = true)
+  extends ShutdownableThread(name, isInterruptible) {
+
+  // visible for testing
+  def generateRequests(): Iterable[RequestAndCompletionHandler] = requestGenerator()
 
   override def doWork() {
     val now = time.milliseconds()

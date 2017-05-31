@@ -23,10 +23,11 @@ import scala.collection.{Seq, Set, mutable}
 import scala.collection.JavaConverters._
 import kafka.cluster.{Broker, EndPoint}
 import kafka.api._
-import kafka.common.{BrokerEndPointNotAvailableException, Topic, TopicAndPartition}
+import kafka.common.{BrokerEndPointNotAvailableException, TopicAndPartition}
 import kafka.controller.{KafkaController, LeaderIsrAndControllerEpoch}
 import kafka.utils.CoreUtils._
 import kafka.utils.Logging
+import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.{Node, TopicPartition}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
@@ -159,6 +160,24 @@ class MetadataCache(brokerId: Int) extends Logging {
     }
   }
 
+  // if the leader is not known, return None;
+  // if the leader is known and corresponding node is available, return Some(node)
+  // if the leader is known but corresponding node with the listener name is not available, return Some(NO_NODE)
+  def getPartitionLeaderEndpoint(topic: String, partitionId: Int, listenerName: ListenerName): Option[Node] = {
+    inReadLock(partitionMetadataLock) {
+      cache.get(topic).flatMap(_.get(partitionId)) map { partitionInfo =>
+        val leaderId = partitionInfo.leaderIsrAndControllerEpoch.leaderAndIsr.leader
+
+        aliveNodes.get(leaderId) match {
+          case Some(nodeMap) =>
+            nodeMap.getOrElse(listenerName, Node.noNode)
+          case None =>
+            Node.noNode
+        }
+      }
+    }
+  }
+
   def getControllerId: Option[Int] = controllerId
 
   // This method returns the deleted TopicPartitions received from UpdateMetadataRequest
@@ -215,6 +234,8 @@ class MetadataCache(brokerId: Int) extends Logging {
       cache.contains(topic)
     }
   }
+
+  def contains(tp: TopicPartition): Boolean = getPartitionInfo(tp.topic, tp.partition).isDefined
 
   private def removePartitionInfo(topic: String, partitionId: Int): Boolean = {
     cache.get(topic).map { infos =>

@@ -30,17 +30,25 @@ public class EndTxnResponse extends AbstractResponse {
     //   CoordinatorNotAvailable
     //   CoordinatorLoadInProgress
     //   InvalidTxnState
-    //   InvalidPidMapping
+    //   InvalidProducerIdMapping
     //   InvalidProducerEpoch
+    //   TransactionalIdAuthorizationFailed
 
     private final Errors error;
+    private final int throttleTimeMs;
 
-    public EndTxnResponse(Errors error) {
+    public EndTxnResponse(int throttleTimeMs, Errors error) {
+        this.throttleTimeMs = throttleTimeMs;
         this.error = error;
     }
 
     public EndTxnResponse(Struct struct) {
+        this.throttleTimeMs = struct.getInt(THROTTLE_TIME_KEY_NAME);
         this.error = Errors.forCode(struct.getShort(ERROR_CODE_KEY_NAME));
+    }
+
+    public int throttleTimeMs() {
+        return throttleTimeMs;
     }
 
     public Errors error() {
@@ -50,6 +58,7 @@ public class EndTxnResponse extends AbstractResponse {
     @Override
     protected Struct toStruct(short version) {
         Struct struct = new Struct(ApiKeys.END_TXN.responseSchema(version));
+        struct.set(THROTTLE_TIME_KEY_NAME, throttleTimeMs);
         struct.set(ERROR_CODE_KEY_NAME, error.code());
         return struct;
     }

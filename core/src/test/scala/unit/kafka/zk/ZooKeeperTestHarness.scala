@@ -53,5 +53,4 @@ abstract class ZooKeeperTestHarness extends JUnitSuite with Logging {
       CoreUtils.swallow(zookeeper.shutdown())
     Configuration.setConfiguration(null)
   }
-
 }

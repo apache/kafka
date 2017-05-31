@@ -21,17 +21,22 @@ import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.Metadata;
+import org.apache.kafka.clients.NetworkClientUtils;
 import org.apache.kafka.clients.RequestCompletionHandler;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.InvalidMetadataException;
 import org.apache.kafka.common.errors.OutOfOrderSequenceException;
+import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
+import org.apache.kafka.common.errors.TransactionalIdAuthorizationException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
@@ -39,13 +44,15 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Rate;
-import org.apache.kafka.clients.NetworkClientUtils;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.requests.InitPidRequest;
-import org.apache.kafka.common.requests.InitPidResponse;
+import org.apache.kafka.common.requests.AbstractRequest;
+import org.apache.kafka.common.requests.InitProducerIdRequest;
+import org.apache.kafka.common.requests.InitProducerIdResponse;
 import org.apache.kafka.common.requests.ProduceRequest;
 import org.apache.kafka.common.requests.ProduceResponse;
+import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
@@ -108,7 +115,7 @@ public class Sender implements Runnable {
     /* current request API versions supported by the known brokers */
     private final ApiVersions apiVersions;
 
-    /* all the state related to transactions, in particular the PID, epoch, and sequence numbers */
+    /* all the state related to transactions, in particular the producer id, producer epoch, and sequence numbers */
     private final TransactionManager transactionManager;
 
     public Sender(KafkaClient client,
@@ -183,22 +190,38 @@ public class Sender implements Runnable {
 
     /**
      * Run a single iteration of sending
-     * 
+     *
      * @param now The current POSIX time in milliseconds
      */
     void run(long now) {
-        long pollTimeout = 0;
-        if (!maybeSendTransactionalRequest(now))
-            pollTimeout = sendProducerData(now);
+        if (transactionManager != null) {
+            if (!transactionManager.isTransactional()) {
+                // this is an idempotent producer, so make sure we have a producer id
+                maybeWaitForProducerId();
+            } else if (transactionManager.hasInflightRequest() || maybeSendTransactionalRequest(now)) {
+                // as long as there are outstanding transactional requests, we simply wait for them to return
+                client.poll(retryBackoffMs, now);
+                return;
+            }
 
-        this.client.poll(pollTimeout, now);
+            // do not continue sending if the transaction manager is in a failed state or if there
+            // is no producer id (for the idempotent case).
+            if (transactionManager.hasError() || !transactionManager.hasProducerId()) {
+                RuntimeException lastError = transactionManager.lastError();
+                if (lastError != null)
+                    maybeAbortBatches(lastError);
+                client.poll(retryBackoffMs, now);
+                return;
+            }
+        }
+
+        long pollTimeout = sendProducerData(now);
+        log.trace("waiting {}ms in poll", pollTimeout);
+        client.poll(pollTimeout, now);
     }
-
 
     private long sendProducerData(long now) {
         Cluster cluster = metadata.fetch();
-        maybeWaitForPid();
-
         // get the list of partitions with data ready to send
         RecordAccumulator.ReadyCheckResult result = this.accumulator.ready(cluster, now);
 
@@ -237,7 +260,7 @@ public class Sender implements Runnable {
         List<ProducerBatch> expiredBatches = this.accumulator.abortExpiredBatches(this.requestTimeout, now);
 
         boolean needsTransactionStateReset = false;
-        // Reset the PID if an expired batch has previously been sent to the broker. Also update the metrics
+        // Reset the producer id if an expired batch has previously been sent to the broker. Also update the metrics
         // for expired batches. see the documentation of @TransactionState.resetProducerId to understand why
         // we need to reset the producer id here.
         for (ProducerBatch expiredBatch : expiredBatches) {
@@ -274,66 +297,90 @@ public class Sender implements Runnable {
     }
 
     private boolean maybeSendTransactionalRequest(long now) {
-        if (transactionManager != null && transactionManager.hasInflightTransactionalRequest())
-            return true;
+        String transactionalId = transactionManager.transactionalId();
+        if (transactionManager.isCompletingTransaction() &&
+                !transactionManager.hasPartitionsToAdd() &&
+                accumulator.hasUnflushedBatches()) {
 
-        if (transactionManager == null || !transactionManager.hasPendingTransactionalRequests())
-            return false;
+            // If the transaction is being aborted, then we can clear any unsent produce requests
+            if (transactionManager.isAborting())
+                accumulator.abortUnclosedBatches(new KafkaException("Failing batch since transaction was aborted"));
 
-        TransactionManager.TransactionalRequest nextRequest = transactionManager.nextTransactionalRequest();
-
-        if (nextRequest.isEndTxnRequest() && transactionManager.isCompletingTransaction() && accumulator.hasUnflushedBatches()) {
+            // There may still be requests left which are being retried. Since we do not know whether they had
+            // been successfully appended to the broker log, we must resend them until their final status is clear.
+            // If they had been appended and we did not receive the error, then our sequence number would no longer
+            // be correct which would lead to an OutOfSequenceException.
             if (!accumulator.flushInProgress())
                 accumulator.beginFlush();
-            transactionManager.reenqueue(nextRequest);
+
+            // Do not send the EndTxn until all pending batches have been completed
+            if (accumulator.hasUnflushedBatches()) {
+                log.trace("TransactionalId: {} -- Waiting for pending batches to be flushed before completing transaction",
+                        transactionalId);
+                return false;
+            }
+        }
+
+        TransactionManager.TxnRequestHandler nextRequestHandler = transactionManager.nextRequestHandler();
+        if (nextRequestHandler == null) {
+            log.trace("TransactionalId: {} -- There are no pending transactional requests to send", transactionalId);
             return false;
         }
 
-        if (nextRequest.isEndTxnRequest() && transactionManager.isInErrorState()) {
-            nextRequest.maybeTerminateWithError(new KafkaException("Cannot commit transaction when there are " +
-                    "request errors. Please check your logs for the details of the errors encountered."));
-            return false;
-        }
+        AbstractRequest.Builder<?> requestBuilder = nextRequestHandler.requestBuilder();
+        log.trace("TransactionalId: {} -- Preparing to send request {}", transactionalId, requestBuilder);
 
-        Node targetNode = null;
-
-        while (targetNode == null) {
+        while (true) {
+            Node targetNode = null;
             try {
-                if (nextRequest.needsCoordinator()) {
-                    targetNode = transactionManager.coordinator(nextRequest.coordinatorType());
+                if (nextRequestHandler.needsCoordinator()) {
+                    targetNode = transactionManager.coordinator(nextRequestHandler.coordinatorType());
                     if (targetNode == null) {
-                        transactionManager.needsCoordinator(nextRequest);
+                        transactionManager.lookupCoordinator(nextRequestHandler);
                         break;
                     }
                     if (!NetworkClientUtils.awaitReady(client, targetNode, time, requestTimeout)) {
-                        transactionManager.needsCoordinator(nextRequest);
-                        targetNode = null;
+                        transactionManager.lookupCoordinator(nextRequestHandler);
                         break;
                     }
                 } else {
                     targetNode = awaitLeastLoadedNodeReady(requestTimeout);
                 }
                 if (targetNode != null) {
-                    if (nextRequest.isRetry()) {
+                    if (nextRequestHandler.isRetry()) {
+                        log.trace("TransactionalId: {} -- Waiting {}ms before resending request {}",
+                                transactionalId,
+                                retryBackoffMs, requestBuilder);
                         time.sleep(retryBackoffMs);
                     }
-                    ClientRequest clientRequest = client.newClientRequest(targetNode.idString(), nextRequest.requestBuilder(),
-                            now, true, nextRequest.responseHandler());
+                    ClientRequest clientRequest = client.newClientRequest(targetNode.idString(),
+                            requestBuilder, now, true, nextRequestHandler);
                     transactionManager.setInFlightRequestCorrelationId(clientRequest.correlationId());
+                    log.debug("TransactionalId: {} -- Sending transactional request {} to node {}",
+                            transactionalId, requestBuilder, clientRequest.destination());
                     client.send(clientRequest, now);
                     return true;
                 }
             } catch (IOException e) {
-                log.warn("Got an exception when trying to find a node to send a transactional request to. Going to back off and retry", e);
+                log.debug("TransactionalId: {} -- Disconnect from {} while trying to send request {}. Going " +
+                                "to back off and retry", transactionalId, targetNode, requestBuilder);
             }
+            log.trace("TransactionalId: {} -- About to wait for {}ms before trying to send another request.",
+                    transactionalId, retryBackoffMs);
             time.sleep(retryBackoffMs);
             metadata.requestUpdate();
         }
 
-        if (targetNode == null)
-            transactionManager.needsRetry(nextRequest);
+        transactionManager.retry(nextRequestHandler);
 
         return true;
+    }
+
+    private void maybeAbortBatches(RuntimeException exception) {
+        if (accumulator.hasUnflushedBatches()) {
+            log.error("Aborting producer batches due to fatal error", exception);
+            accumulator.abortBatches(exception);
+        }
     }
 
     /**
@@ -355,9 +402,9 @@ public class Sender implements Runnable {
         initiateClose();
     }
 
-    private ClientResponse sendAndAwaitInitPidRequest(Node node) throws IOException {
+    private ClientResponse sendAndAwaitInitProducerIdRequest(Node node) throws IOException {
         String nodeId = node.idString();
-        InitPidRequest.Builder builder = new InitPidRequest.Builder(null);
+        InitProducerIdRequest.Builder builder = new InitProducerIdRequest.Builder(null);
         ClientRequest request = client.newClientRequest(nodeId, builder, time.milliseconds(), true, null);
         return NetworkClientUtils.sendAndReceive(client, request, time);
     }
@@ -370,32 +417,35 @@ public class Sender implements Runnable {
         return null;
     }
 
-    private void maybeWaitForPid() {
-        // If this is a transactional producer, the PID will be received when recovering transactions in the
-        // initTransactions() method of the producer.
-        if (transactionManager == null || transactionManager.isTransactional())
-            return;
-
-        while (!transactionManager.hasPid()) {
+    private void maybeWaitForProducerId() {
+        while (!transactionManager.hasProducerId() && !transactionManager.hasError()) {
             try {
                 Node node = awaitLeastLoadedNodeReady(requestTimeout);
                 if (node != null) {
-                    ClientResponse response = sendAndAwaitInitPidRequest(node);
-                    if (response.hasResponse() && (response.responseBody() instanceof InitPidResponse)) {
-                        InitPidResponse initPidResponse = (InitPidResponse) response.responseBody();
-                        transactionManager.setPidAndEpoch(initPidResponse.producerId(), initPidResponse.epoch());
+                    ClientResponse response = sendAndAwaitInitProducerIdRequest(node);
+                    InitProducerIdResponse initProducerIdResponse = (InitProducerIdResponse) response.responseBody();
+                    Errors error = initProducerIdResponse.error();
+                    if (error == Errors.NONE) {
+                        ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(
+                                initProducerIdResponse.producerId(), initProducerIdResponse.epoch());
+                        transactionManager.setProducerIdAndEpoch(producerIdAndEpoch);
+                    } else if (error.exception() instanceof RetriableException) {
+                        log.debug("Retriable error from InitProducerId response", error.message());
                     } else {
-                        log.error("Received an unexpected response type for an InitPidRequest from {}. " +
-                                "We will back off and try again.", node);
+                        transactionManager.transitionToFatalError(error.exception());
+                        break;
                     }
                 } else {
-                    log.debug("Could not find an available broker to send InitPidRequest to. " +
+                    log.debug("Could not find an available broker to send InitProducerIdRequest to. " +
                             "We will back off and try again.");
                 }
-            } catch (Exception e) {
-                log.warn("Received an exception while trying to get a pid. Will back off and retry.", e);
+            } catch (UnsupportedVersionException e) {
+                transactionManager.transitionToFatalError(e);
+                break;
+            } catch (IOException e) {
+                log.debug("Broker {} disconnected while awaiting InitProducerId response", e);
             }
-            log.trace("Retry InitPidRequest in {}ms.", retryBackoffMs);
+            log.trace("Retry InitProducerIdRequest in {}ms.", retryBackoffMs);
             time.sleep(retryBackoffMs);
             metadata.requestUpdate();
         }
@@ -405,9 +455,11 @@ public class Sender implements Runnable {
      * Handle a produce response
      */
     private void handleProduceResponse(ClientResponse response, Map<TopicPartition, ProducerBatch> batches, long now) {
-        int correlationId = response.requestHeader().correlationId();
+        RequestHeader requestHeader = response.requestHeader();
+        int correlationId = requestHeader.correlationId();
         if (response.wasDisconnected()) {
-            log.trace("Cancelled request {} due to node {} being disconnected", response, response.destination());
+            ApiKeys api = ApiKeys.forId(requestHeader.apiKey());
+            log.trace("Cancelled {} request {} with correlation id {}  due to node {} being disconnected", api, requestHeader, correlationId, response.destination());
             for (ProducerBatch batch : batches.values())
                 completeBatch(batch, new ProduceResponse.PartitionResponse(Errors.NETWORK_EXCEPTION), correlationId, now);
         } else if (response.versionMismatch() != null) {
@@ -427,7 +479,6 @@ public class Sender implements Runnable {
                     completeBatch(batch, partResp, correlationId, now);
                 }
                 this.sensors.recordLatency(response.destination(), response.requestLatencyMs());
-                this.sensors.recordThrottleTime(produceResponse.getThrottleTime());
             } else {
                 // this is the acks = 0 case, just complete all requests
                 for (ProducerBatch batch : batches.values()) {
@@ -439,7 +490,7 @@ public class Sender implements Runnable {
 
     /**
      * Complete or retry the given batch of records.
-     * 
+     *
      * @param batch The record batch
      * @param response The produce response
      * @param correlationId The correlation id for the request
@@ -448,7 +499,18 @@ public class Sender implements Runnable {
     private void completeBatch(ProducerBatch batch, ProduceResponse.PartitionResponse response, long correlationId,
                                long now) {
         Errors error = response.error;
-        if (error != Errors.NONE) {
+        if (error == Errors.MESSAGE_TOO_LARGE && batch.recordCount > 1) {
+            // If the batch is too large, we split the batch and send the split batches again. We do not decrement
+            // the retry attempts in this case.
+            log.warn("Got error produce response in correlation id {} on topic-partition {}, spitting and retrying ({} attempts left). Error: {}",
+                     correlationId,
+                     batch.topicPartition,
+                     this.retries - batch.attempts(),
+                     error);
+            this.accumulator.splitAndReenqueue(batch);
+            this.accumulator.deallocate(batch);
+            this.sensors.recordBatchSplit();
+        } else if (error != Errors.NONE) {
             if (canRetry(batch, error)) {
                 log.warn("Got error produce response with correlation id {} on topic-partition {}, retrying ({} attempts left). Error: {}",
                         correlationId,
@@ -457,27 +519,26 @@ public class Sender implements Runnable {
                         error);
                 if (transactionManager == null) {
                     reenqueueBatch(batch, now);
-                } else if (transactionManager.pidAndEpoch().producerId == batch.producerId() && transactionManager.pidAndEpoch().epoch == batch.producerEpoch()) {
-                    // If idempotence is enabled only retry the request if the current PID is the same as the pid of the batch.
+                } else if (transactionManager.hasProducerIdAndEpoch(batch.producerId(), batch.producerEpoch())) {
+                    // If idempotence is enabled only retry the request if the current producer id is the same as
+                    // the producer id of the batch.
                     log.debug("Retrying batch to topic-partition {}. Sequence number : {}", batch.topicPartition,
                             transactionManager.sequenceNumber(batch.topicPartition));
                     reenqueueBatch(batch, now);
                 } else {
                     failBatch(batch, response, new OutOfOrderSequenceException("Attempted to retry sending a " +
                             "batch but the producer id changed from " + batch.producerId() + " to " +
-                            transactionManager.pidAndEpoch().producerId + " in the mean time. This batch will be dropped."));
+                            transactionManager.producerIdAndEpoch().producerId + " in the mean time. This batch will be dropped."));
                     this.sensors.recordErrors(batch.topicPartition.topic(), batch.recordCount);
                 }
             } else {
                 final RuntimeException exception;
                 if (error == Errors.TOPIC_AUTHORIZATION_FAILED)
                     exception = new TopicAuthorizationException(batch.topicPartition.topic());
+                else if (error == Errors.CLUSTER_AUTHORIZATION_FAILED)
+                    exception = new ClusterAuthorizationException("The producer is not authorized to do idempotent sends");
                 else
                     exception = error.exception();
-                if (error == Errors.OUT_OF_ORDER_SEQUENCE_NUMBER && batch.producerId() == transactionManager.pidAndEpoch().producerId)
-                    log.error("The broker received an out of order sequence number for correlation id {}, topic-partition " +
-                                    "{} at offset {}. This indicates data loss on the broker, and should be investigated.",
-                            correlationId, batch.topicPartition, response.baseOffset);
                 // tell the user the result of their request
                 failBatch(batch, response, exception);
                 this.sensors.recordErrors(batch.topicPartition.topic(), batch.recordCount);
@@ -492,12 +553,6 @@ public class Sender implements Runnable {
         } else {
             completeBatch(batch, response);
 
-            if (transactionManager != null && transactionManager.pidAndEpoch().producerId == batch.producerId()
-                    && transactionManager.pidAndEpoch().epoch == batch.producerEpoch()) {
-                transactionManager.incrementSequenceNumber(batch.topicPartition, batch.recordCount);
-                log.debug("Incremented sequence number for topic-partition {} to {}", batch.topicPartition,
-                        transactionManager.sequenceNumber(batch.topicPartition));
-            }
         }
 
         // Unmute the completed partition.
@@ -511,18 +566,38 @@ public class Sender implements Runnable {
     }
 
     private void completeBatch(ProducerBatch batch, ProduceResponse.PartitionResponse response) {
+        if (transactionManager != null && transactionManager.hasProducerIdAndEpoch(batch.producerId(), batch.producerEpoch())) {
+            transactionManager.incrementSequenceNumber(batch.topicPartition, batch.recordCount);
+            log.debug("Incremented sequence number for topic-partition {} to {}", batch.topicPartition,
+                    transactionManager.sequenceNumber(batch.topicPartition));
+        }
+
         batch.done(response.baseOffset, response.logAppendTime, null);
         this.accumulator.deallocate(batch);
     }
 
     private void failBatch(ProducerBatch batch, ProduceResponse.PartitionResponse response, RuntimeException exception) {
-        if (transactionManager != null && !transactionManager.isTransactional()
-                && batch.producerId() == transactionManager.pidAndEpoch().producerId) {
-            // Reset the transaction state since we have hit an irrecoverable exception and cannot make any guarantees
-            // about the previously committed message. Note that this will discard the producer id and sequence
-            // numbers for all existing partitions.
-            transactionManager.resetProducerId();
+        if (transactionManager != null) {
+            if (exception instanceof OutOfOrderSequenceException
+                    && !transactionManager.isTransactional()
+                    && transactionManager.hasProducerId(batch.producerId())) {
+                log.error("The broker received an out of order sequence number for topic-partition " +
+                                "{} at offset {}. This indicates data loss on the broker, and should be investigated.",
+                        batch.topicPartition, response.baseOffset);
+
+                // Reset the transaction state since we have hit an irrecoverable exception and cannot make any guarantees
+                // about the previously committed message. Note that this will discard the producer id and sequence
+                // numbers for all existing partitions.
+                transactionManager.resetProducerId();
+            } else if (exception instanceof ClusterAuthorizationException
+                    || exception instanceof TransactionalIdAuthorizationException
+                    || exception instanceof ProducerFencedException) {
+                transactionManager.transitionToFatalError(exception);
+            } else if (transactionManager.isTransactional()) {
+                transactionManager.transitionToAbortableError(exception);
+            }
         }
+
         batch.done(response.baseOffset, response.logAppendTime, exception);
         this.accumulator.deallocate(batch);
     }
@@ -601,11 +676,22 @@ public class Sender implements Runnable {
         this.client.wakeup();
     }
 
+    public static Sensor throttleTimeSensor(Metrics metrics) {
+        String metricGrpName = SenderMetrics.METRIC_GROUP_NAME;
+        Sensor produceThrottleTimeSensor = metrics.sensor("produce-throttle-time");
+        produceThrottleTimeSensor.add(metrics.metricName("produce-throttle-time-avg",
+                metricGrpName, "The average throttle time in ms"), new Avg());
+        produceThrottleTimeSensor.add(metrics.metricName("produce-throttle-time-max",
+                metricGrpName, "The maximum throttle time in ms"), new Max());
+        return produceThrottleTimeSensor;
+    }
+
     /**
      * A collection of sensors for the sender
      */
     private class SenderMetrics {
 
+        private static final String METRIC_GROUP_NAME = "producer-metrics";
         private final Metrics metrics;
         public final Sensor retrySensor;
         public final Sensor errorSensor;
@@ -615,11 +701,11 @@ public class Sender implements Runnable {
         public final Sensor batchSizeSensor;
         public final Sensor compressionRateSensor;
         public final Sensor maxRecordSizeSensor;
-        public final Sensor produceThrottleTimeSensor;
+        public final Sensor batchSplitSensor;
 
         public SenderMetrics(Metrics metrics) {
             this.metrics = metrics;
-            String metricGrpName = "producer-metrics";
+            String metricGrpName = METRIC_GROUP_NAME;
 
             this.batchSizeSensor = metrics.sensor("batch-size");
             MetricName m = metrics.metricName("batch-size-avg", metricGrpName, "The average number of bytes sent per partition per-request.");
@@ -642,12 +728,6 @@ public class Sender implements Runnable {
             this.requestTimeSensor.add(m, new Avg());
             m = metrics.metricName("request-latency-max", metricGrpName, "The maximum request latency in ms");
             this.requestTimeSensor.add(m, new Max());
-
-            this.produceThrottleTimeSensor = metrics.sensor("produce-throttle-time");
-            m = metrics.metricName("produce-throttle-time-avg", metricGrpName, "The average throttle time in ms");
-            this.produceThrottleTimeSensor.add(m, new Avg());
-            m = metrics.metricName("produce-throttle-time-max", metricGrpName, "The maximum throttle time in ms");
-            this.produceThrottleTimeSensor.add(m, new Max());
 
             this.recordsPerRequestSensor = metrics.sensor("records-per-request");
             m = metrics.metricName("record-send-rate", metricGrpName, "The average number of records sent per second.");
@@ -681,6 +761,10 @@ public class Sender implements Runnable {
                     return (now - metadata.lastSuccessfulUpdate()) / 1000.0;
                 }
             });
+
+            this.batchSplitSensor = metrics.sensor("batch-split-rate");
+            m = metrics.metricName("batch-split-rate", metricGrpName, "The rate of record batch split");
+            this.batchSplitSensor.add(m, new Rate());
         }
 
         private void maybeRegisterTopicMetrics(String topic) {
@@ -740,12 +824,12 @@ public class Sender implements Runnable {
                     // per-topic compression rate
                     String topicCompressionRateName = "topic." + topic + ".compression-rate";
                     Sensor topicCompressionRate = Utils.notNull(this.metrics.getSensor(topicCompressionRateName));
-                    topicCompressionRate.record(batch.compressionRate());
+                    topicCompressionRate.record(batch.compressionRatio());
 
                     // global metrics
                     this.batchSizeSensor.record(batch.sizeInBytes(), now);
                     this.queueTimeSensor.record(batch.queueTimeMs(), now);
-                    this.compressionRateSensor.record(batch.compressionRate());
+                    this.compressionRateSensor.record(batch.compressionRatio());
                     this.maxRecordSizeSensor.record(batch.maxRecordSize, now);
                     records += batch.recordCount;
                 }
@@ -782,10 +866,9 @@ public class Sender implements Runnable {
             }
         }
 
-        public void recordThrottleTime(long throttleTimeMs) {
-            this.produceThrottleTimeSensor.record(throttleTimeMs, time.milliseconds());
+        void recordBatchSplit() {
+            this.batchSplitSensor.record();
         }
-
     }
 
 }
