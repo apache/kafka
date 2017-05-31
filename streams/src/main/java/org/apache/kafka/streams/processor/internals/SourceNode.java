@@ -40,8 +40,8 @@ public class SourceNode<K, V> extends ProcessorNode<K, V> {
         super(name);
         this.topics = topics;
         this.timestampExtractor = timestampExtractor;
-        this.keyDeserializer = keyDeserializer != null ? ensureExtended(keyDeserializer) : null;
-        this.valDeserializer = valDeserializer != null ? ensureExtended(valDeserializer) : null;
+        this.keyDeserializer = ensureExtended(keyDeserializer);
+        this.valDeserializer = ensureExtended(valDeserializer);
     }
 
     public SourceNode(String name, List<String> topics, Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer) {
