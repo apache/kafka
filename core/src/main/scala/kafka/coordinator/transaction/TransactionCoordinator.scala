@@ -187,7 +187,7 @@ class TransactionCoordinator(brokerId: Int,
     } else {
       // caller should have synchronized on txnMetadata already
       txnMetadata.state match {
-        case PrepareAbort | PrepareCommit =>
+        case PrepareAbort | PrepareCommit | Dead =>
           // reply to client and let client backoff and retry
           Left(initTransactionError(Errors.CONCURRENT_TRANSACTIONS))
 
@@ -324,6 +324,8 @@ class TransactionCoordinator(brokerId: Int,
                   Left(Errors.CONCURRENT_TRANSACTIONS)
                 else
                   logInvalidStateTransitionAndReturnError(transactionalId, txnMetadata.state, txnMarkerResult)
+              case Dead =>
+                  logInvalidStateTransitionAndReturnError(transactionalId, txnMetadata.state, txnMarkerResult)
               case Empty =>
                 logInvalidStateTransitionAndReturnError(transactionalId, txnMetadata.state, txnMarkerResult)
             }
@@ -352,7 +354,7 @@ class TransactionCoordinator(brokerId: Int,
                       else if (txnMetadata.pendingTransitionInProgress)
                         Left(Errors.CONCURRENT_TRANSACTIONS)
                       else txnMetadata.state match {
-                        case Empty| Ongoing | CompleteCommit | CompleteAbort =>
+                        case Empty| Ongoing | CompleteCommit | CompleteAbort | Dead =>
                           logInvalidStateTransitionAndReturnError(transactionalId, txnMetadata.state, txnMarkerResult)
                         case PrepareCommit =>
                           if (txnMarkerResult != TransactionResult.COMMIT)

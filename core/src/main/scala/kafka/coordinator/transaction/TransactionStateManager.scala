@@ -547,13 +547,21 @@ class TransactionStateManager(brokerId: Int,
             val metadata = epochAndTxnMetadata.transactionMetadata
             metadata synchronized {
               if (epochAndTxnMetadata.coordinatorEpoch == coordinatorEpoch) {
-                debug(s"Transactional id ${metadata.transactionalId}, resetting pending state since we are returing error $responseError")
+                debug(s"TransactionalId ${metadata.transactionalId}, resetting pending state since we are returning error $responseError")
                 metadata.pendingState = None
+              } else {
+                info(s"TransactionalId ${metadata.transactionalId} coordinator epoch changed from " +
+                  s"${epochAndTxnMetadata.coordinatorEpoch} to $coordinatorEpoch after append to log returned $responseError")
               }
             }
-          case Left(_) =>
+          case Right(None) =>
             // Do nothing here, since we want to return the original append error to the user.
+            warn(s"Found no metadata TransactionalId $transactionalId after append to log returned error $responseError")
+          case Left(error) =>
+            // Do nothing here, since we want to return the original append error to the user.
+            warn(s"Retrieving metadata for transactionalId $transactionalId returned $error after append to the log returned error $responseError")
         }
+
       }
 
       responseCallback(responseError)
