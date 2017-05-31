@@ -59,7 +59,7 @@ class ProducerTest extends ZooKeeperTestHarness with Logging{
 
   def getConsumer2() = {
     if (consumer2 == null)
-      consumer2 = new SimpleConsumer("localhost", TestUtils.boundPort(server2), 100, 64*1024, "")
+      consumer2 = new SimpleConsumer("localhost", TestUtils.boundPort(server2), 1000000, 64*1024, "")
     consumer2
   }
 
