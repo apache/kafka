@@ -130,6 +130,33 @@ class TransactionCoordinatorTest {
   }
 
   @Test
+  def shouldWrapAroundProducerEpochInInitProducerId(): Unit = {
+    initPidGenericMocks(transactionalId)
+
+    val txnMetadata = new TransactionMetadata(transactionalId, producerId, Short.MaxValue, txnTimeoutMs, Empty,
+      mutable.Set.empty, time.milliseconds(), time.milliseconds())
+
+    EasyMock.expect(transactionManager.getAndMaybeAddTransactionState(EasyMock.eq(transactionalId), EasyMock.anyObject[Option[TransactionMetadata]]()))
+      .andReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata))))
+
+    EasyMock.expect(transactionManager.appendTransactionToLog(
+      EasyMock.eq(transactionalId),
+      EasyMock.eq(coordinatorEpoch),
+      EasyMock.anyObject().asInstanceOf[TxnTransitMetadata],
+      EasyMock.capture(capturedErrorsCallback)
+    )).andAnswer(new IAnswer[Unit] {
+      override def answer(): Unit = {
+        capturedErrorsCallback.getValue.apply(Errors.NONE)
+      }
+    })
+
+    EasyMock.replay(pidManager, transactionManager)
+
+    coordinator.handleInitProducerId(transactionalId, txnTimeoutMs, initProducerIdMockCallback)
+    assertEquals(InitProducerIdResult(producerId, 0, Errors.NONE), result)
+  }
+
+  @Test
   def shouldRespondWithNotCoordinatorOnInitPidWhenNotCoordinator(): Unit = {
     EasyMock.expect(transactionManager.validateTransactionTimeoutMs(EasyMock.anyInt()))
       .andReturn(true)

@@ -181,10 +181,9 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
     TxnTransitMetadata(producerId, producerEpoch, txnTimeoutMs, state, topicPartitions.toSet, txnStartTimestamp, txnLastUpdateTimestamp)
   }
 
-  def prepareIncrementProducerEpoch(newTxnTimeoutMs: Int,
-                                    updateTimestamp: Long): TxnTransitMetadata = {
-
-    prepareTransitionTo(Empty, (producerEpoch + 1).toShort, newTxnTimeoutMs, immutable.Set.empty[TopicPartition],
+  def prepareIncrementProducerEpoch(newTxnTimeoutMs: Int, updateTimestamp: Long): TxnTransitMetadata = {
+    val nextEpoch = if (producerEpoch == Short.MaxValue) 0 else producerEpoch + 1
+    prepareTransitionTo(Empty, nextEpoch.toShort, newTxnTimeoutMs, immutable.Set.empty[TopicPartition],
       -1, updateTimestamp)
   }
 

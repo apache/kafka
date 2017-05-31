@@ -79,6 +79,43 @@ class ProducerStateManagerTest extends JUnitSuite {
   }
 
   @Test
+  def testProducerEpochWrapAround(): Unit = {
+    val epoch = (Short.MaxValue - 100).toShort
+    val sequence = 16
+    val offset = 735L
+    append(stateManager, producerId, epoch, sequence, offset, isLoadingFromLog = true)
+
+    val wrappedAroundEpoch = 15.toShort
+    append(stateManager, producerId, wrappedAroundEpoch, 0, offset + 500)
+
+    val maybeLastEntry = stateManager.lastEntry(producerId)
+    assertTrue(maybeLastEntry.isDefined)
+
+    val lastEntry = maybeLastEntry.get
+    assertEquals(wrappedAroundEpoch, lastEntry.producerEpoch)
+    assertEquals(0, lastEntry.firstSeq)
+    assertEquals(0, lastEntry.lastSeq)
+  }
+
+  @Test
+  def testProducerSequenceWrapAround(): Unit = {
+    val epoch = 15.toShort
+    val sequence = Short.MaxValue
+    val offset = 735L
+    append(stateManager, producerId, epoch, sequence, offset, isLoadingFromLog = true)
+
+    append(stateManager, producerId, epoch, 0, offset + 500)
+
+    val maybeLastEntry = stateManager.lastEntry(producerId)
+    assertTrue(maybeLastEntry.isDefined)
+
+    val lastEntry = maybeLastEntry.get
+    assertEquals(epoch, lastEntry.producerEpoch)
+    assertEquals(0, lastEntry.firstSeq)
+    assertEquals(0, lastEntry.lastSeq)
+  }
+
+  @Test
   def testNoValidationOnFirstEntryWhenLoadingLog(): Unit = {
     val epoch = 5.toShort
     val sequence = 16

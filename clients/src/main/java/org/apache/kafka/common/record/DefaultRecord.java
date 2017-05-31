@@ -323,7 +323,9 @@ public class DefaultRecord implements Record {
 
         int offsetDelta = ByteUtils.readVarint(buffer);
         long offset = baseOffset + offsetDelta;
-        int sequence = baseSequence >= 0 ? baseSequence + offsetDelta : RecordBatch.NO_SEQUENCE;
+        int sequence = baseSequence >= 0 ?
+                DefaultRecordBatch.incrementSequence(baseSequence, offsetDelta) :
+                RecordBatch.NO_SEQUENCE;
 
         ByteBuffer key = null;
         int keySize = ByteUtils.readVarint(buffer);
