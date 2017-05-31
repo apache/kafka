@@ -1759,6 +1759,7 @@ public class FetcherTest {
                                                  long offsetForTp1,
                                                  Long expectedOffsetForTp0,
                                                  Long expectedOffsetForTp1) {
+        client.reset();
         TopicPartition tp0 = tp1;
         TopicPartition tp1 = new TopicPartition(topicName, 1);
         // Ensure metadata has both partition.
