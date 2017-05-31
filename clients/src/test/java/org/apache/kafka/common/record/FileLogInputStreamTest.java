@@ -253,7 +253,7 @@ public class FileLogInputStreamTest {
         }
     }
 
-    @Parameterized.Parameters
+    @Parameterized.Parameters(name = "magic={0}, compression={1}")
     public static Collection<Object[]> data() {
         List<Object[]> values = new ArrayList<>();
         for (byte magic : asList(MAGIC_VALUE_V0, MAGIC_VALUE_V1, MAGIC_VALUE_V2))

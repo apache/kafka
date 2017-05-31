@@ -21,19 +21,27 @@ import org.apache.kafka.common.record.{AbstractLegacyRecordBatch, Record, Record
 
 object MessageAndOffset {
   def fromRecordBatch(batch: RecordBatch): MessageAndOffset = {
-    if (!batch.isInstanceOf[AbstractLegacyRecordBatch])
-      throw new IllegalArgumentException(s"Illegal batch type ${batch.getClass}. The older message format classes " +
-        s"only support conversion from ${classOf[AbstractLegacyRecordBatch]}, which is used for magic v0 and v1")
-    val legacyRecordBatch = batch.asInstanceOf[AbstractLegacyRecordBatch]
-    MessageAndOffset(Message.fromRecord(legacyRecordBatch.outerRecord), legacyRecordBatch.lastOffset)
+    batch match {
+      case legacyBatch: AbstractLegacyRecordBatch =>
+        val legacyRecordBatch = batch.asInstanceOf[AbstractLegacyRecordBatch]
+        MessageAndOffset(Message.fromRecord(legacyRecordBatch.outerRecord), legacyRecordBatch.lastOffset)
+
+      case _ =>
+        throw new IllegalArgumentException(s"Illegal batch type ${batch.getClass}. The older message format classes " +
+          s"only support conversion from ${classOf[AbstractLegacyRecordBatch]}, which is used for magic v0 and v1")
+    }
   }
 
   def fromRecord(record: Record): MessageAndOffset = {
-    if (!record.isInstanceOf[AbstractLegacyRecordBatch])
-      throw new IllegalArgumentException(s"Illegal record type ${record.getClass}. The older message format classes " +
-        s"only support conversion from ${classOf[AbstractLegacyRecordBatch]}, which is used for magic v0 and v1")
-    val legacyRecordBatch = record.asInstanceOf[AbstractLegacyRecordBatch]
-    MessageAndOffset(Message.fromRecord(legacyRecordBatch.outerRecord), legacyRecordBatch.lastOffset)
+    record match {
+      case legacyBatch: AbstractLegacyRecordBatch =>
+        val legacyRecordBatch = record.asInstanceOf[AbstractLegacyRecordBatch]
+        MessageAndOffset(Message.fromRecord(legacyRecordBatch.outerRecord), legacyRecordBatch.lastOffset)
+
+      case _ =>
+        throw new IllegalArgumentException(s"Illegal record type ${record.getClass}. The older message format classes " +
+          s"only support conversion from ${classOf[AbstractLegacyRecordBatch]}, which is used for magic v0 and v1")
+    }
   }
 }
 
