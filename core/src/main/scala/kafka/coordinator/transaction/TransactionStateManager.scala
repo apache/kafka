@@ -520,12 +520,6 @@ class TransactionStateManager(brokerId: Int,
                 // in this case directly return NOT_COORDINATOR to client and let it to re-discover the transaction coordinator
                 info(s"Updating $transactionalId's transaction state to $newMetadata with coordinator epoch $coordinatorEpoch for $transactionalId failed after the transaction message " +
                   s"has been appended to the log. The cached coordinator epoch has changed to ${epochAndMetadata.coordinatorEpoch}")
-                if (metadata.pendingState.isDefined)
-                  throw new IllegalStateException(s"TransactionalId ${metadata.transactionalId} has a pending state " +
-                    s"of ${metadata.pendingState.get} even though the coordinator epoch doesn't match. This should not " +
-                    s"happen since the pending state should be cleared on emmigration and immigration, which is the only " +
-                    s"event that can change the coordinatorEpoch.")
-
                 responseError = Errors.NOT_COORDINATOR
               } else {
                 metadata.completeTransitionTo(newMetadata)
@@ -556,10 +550,10 @@ class TransactionStateManager(brokerId: Int,
             }
           case Right(None) =>
             // Do nothing here, since we want to return the original append error to the user.
-            warn(s"Found no metadata TransactionalId $transactionalId after append to log returned error $responseError")
+            info(s"Found no metadata TransactionalId $transactionalId after append to log returned error $responseError")
           case Left(error) =>
             // Do nothing here, since we want to return the original append error to the user.
-            warn(s"Retrieving metadata for transactionalId $transactionalId returned $error after append to the log returned error $responseError")
+            info(s"Retrieving metadata for transactionalId $transactionalId returned $error after append to the log returned error $responseError")
         }
 
       }

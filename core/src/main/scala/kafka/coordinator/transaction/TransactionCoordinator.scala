@@ -187,7 +187,7 @@ class TransactionCoordinator(brokerId: Int,
     } else {
       // caller should have synchronized on txnMetadata already
       txnMetadata.state match {
-        case PrepareAbort | PrepareCommit | Dead =>
+        case PrepareAbort | PrepareCommit  =>
           // reply to client and let client backoff and retry
           Left(initTransactionError(Errors.CONCURRENT_TRANSACTIONS))
 
@@ -198,6 +198,9 @@ class TransactionCoordinator(brokerId: Int,
         case Ongoing =>
           // indicate to abort the current ongoing txn first
           Right(coordinatorEpoch, txnMetadata.prepareFenceProducerEpoch())
+        case Dead =>
+          throw new IllegalStateException(s"Found transactionalId $transactionalId with state ${txnMetadata.state}. " +
+            s"This is illegal as we should never have transitioned to this state.")
       }
     }
   }
@@ -324,10 +327,12 @@ class TransactionCoordinator(brokerId: Int,
                   Left(Errors.CONCURRENT_TRANSACTIONS)
                 else
                   logInvalidStateTransitionAndReturnError(transactionalId, txnMetadata.state, txnMarkerResult)
-              case Dead =>
-                  logInvalidStateTransitionAndReturnError(transactionalId, txnMetadata.state, txnMarkerResult)
               case Empty =>
                 logInvalidStateTransitionAndReturnError(transactionalId, txnMetadata.state, txnMarkerResult)
+              case Dead =>
+                throw new IllegalStateException(s"Found transactionalId $transactionalId with state ${txnMetadata.state}. " +
+                  s"This is illegal as we should never have transitioned to this state.")
+
             }
           }
       }
@@ -354,7 +359,7 @@ class TransactionCoordinator(brokerId: Int,
                       else if (txnMetadata.pendingTransitionInProgress)
                         Left(Errors.CONCURRENT_TRANSACTIONS)
                       else txnMetadata.state match {
-                        case Empty| Ongoing | CompleteCommit | CompleteAbort | Dead =>
+                        case Empty| Ongoing | CompleteCommit | CompleteAbort =>
                           logInvalidStateTransitionAndReturnError(transactionalId, txnMetadata.state, txnMarkerResult)
                         case PrepareCommit =>
                           if (txnMarkerResult != TransactionResult.COMMIT)
@@ -366,6 +371,10 @@ class TransactionCoordinator(brokerId: Int,
                             logInvalidStateTransitionAndReturnError(transactionalId, txnMetadata.state, txnMarkerResult)
                           else
                             Right(txnMetadata, txnMetadata.prepareComplete(time.milliseconds()))
+                        case Dead =>
+                          throw new IllegalStateException(s"Found transactionalId $transactionalId with state ${txnMetadata.state}. " +
+                            s"This is illegal as we should never have transitioned to this state.")
+
                       }
                     }
                   } else {
