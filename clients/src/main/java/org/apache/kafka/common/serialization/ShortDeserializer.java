@@ -20,20 +20,20 @@ import org.apache.kafka.common.errors.SerializationException;
 
 import java.util.Map;
 
-public class IntegerDeserializer implements Deserializer<Integer> {
+public class ShortDeserializer implements Deserializer<Short> {
 
     public void configure(Map<String, ?> configs, boolean isKey) {
         // nothing to do
     }
 
-    public Integer deserialize(String topic, byte[] data) {
+    public Short deserialize(String topic, byte[] data) {
         if (data == null)
             return null;
-        if (data.length != 4) {
-            throw new SerializationException("Size of data received by IntegerDeserializer is not 4");
+        if (data.length != 2) {
+            throw new SerializationException("Size of data received by ShortDeserializer is not 2");
         }
 
-        int value = 0;
+        short value = 0;
         for (byte b : data) {
             value <<= 8;
             value |= b & 0xFF;
