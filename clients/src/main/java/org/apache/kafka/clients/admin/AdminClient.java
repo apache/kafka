@@ -110,9 +110,9 @@ public abstract class AdminClient implements AutoCloseable {
      * but uses the default options.
      *
      * @param topics            The topic names to delete.
-     * @return                  The DeleteTopicsResults.
+     * @return                  The DeleteTopicsResult.
      */
-    public DeleteTopicsResults deleteTopics(Collection<String> topics) {
+    public DeleteTopicsResult deleteTopics(Collection<String> topics) {
         return deleteTopics(topics, new DeleteTopicsOptions());
     }
 
@@ -130,9 +130,9 @@ public abstract class AdminClient implements AutoCloseable {
      *
      * @param topics            The topic names to delete.
      * @param options           The options to use when deleting the topics.
-     * @return                  The DeleteTopicsResults.
+     * @return                  The DeleteTopicsResult.
      */
-    public abstract DeleteTopicsResults deleteTopics(Collection<String> topics, DeleteTopicsOptions options);
+    public abstract DeleteTopicsResult deleteTopics(Collection<String> topics, DeleteTopicsOptions options);
 
     /**
      * List the topics available in the cluster with the default options.
