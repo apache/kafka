@@ -30,36 +30,32 @@ public class SourceNode<K, V> extends ProcessorNode<K, V> {
     private final List<String> topics;
 
     private ProcessorContext context;
-    private Deserializer<K> keyDeserializer;
-    private Deserializer<V> valDeserializer;
+    private ExtendedDeserializer<K> keyDeserializer;
+    private ExtendedDeserializer<V> valDeserializer;
     private final TimestampExtractor timestampExtractor;
 
     public SourceNode(String name, List<String> topics, TimestampExtractor timestampExtractor, Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer) {
         super(name);
         this.topics = topics;
         this.timestampExtractor = timestampExtractor;
-        this.keyDeserializer = keyDeserializer;
-        this.valDeserializer = valDeserializer;
+        this.keyDeserializer = keyDeserializer != null ? ensureExtended(keyDeserializer) : null;
+        this.valDeserializer = valDeserializer != null ? ensureExtended(valDeserializer) : null;
     }
 
     public SourceNode(String name, List<String> topics, Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer) {
         this(name, topics, null, keyDeserializer, valDeserializer);
     }
 
+    private <T> ExtendedDeserializer<T> ensureExtended(Deserializer<T> deserializer) {
+        return deserializer instanceof ExtendedDeserializer ? (ExtendedDeserializer<T>) deserializer : new ExtendedDeserializer.Wrapper<>(deserializer);
+    }
+
     K deserializeKey(String topic, Headers headers, byte[] data) {
-        if (keyDeserializer instanceof ExtendedDeserializer) {
-            return ((ExtendedDeserializer<K>) keyDeserializer).deserialize(topic, headers, data);
-        } else {
-            return keyDeserializer.deserialize(topic, data);
-        }
+        return keyDeserializer.deserialize(topic, headers, data);
     }
 
     V deserializeValue(String topic, Headers headers, byte[] data) {
-        if (valDeserializer instanceof ExtendedDeserializer) {
-            return ((ExtendedDeserializer<V>) valDeserializer).deserialize(topic, headers, data);
-        } else {
-            return valDeserializer.deserialize(topic, data);
-        }
+        return valDeserializer.deserialize(topic, headers, data);
     }
 
     @SuppressWarnings("unchecked")
@@ -70,9 +66,9 @@ public class SourceNode<K, V> extends ProcessorNode<K, V> {
 
         // if deserializers are null, get the default ones from the context
         if (this.keyDeserializer == null)
-            this.keyDeserializer = (Deserializer<K>) context.keySerde().deserializer();
+            this.keyDeserializer = ensureExtended((Deserializer<K>) context.keySerde().deserializer());
         if (this.valDeserializer == null)
-            this.valDeserializer = (Deserializer<V>) context.valueSerde().deserializer();
+            this.valDeserializer = ensureExtended((Deserializer<V>) context.valueSerde().deserializer());
 
         // if value deserializers are for {@code Change} values, set the inner deserializer when necessary
         if (this.valDeserializer instanceof ChangedDeserializer &&

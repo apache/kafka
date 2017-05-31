@@ -16,27 +16,33 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.ExtendedDeserializer;
 
 import java.nio.ByteBuffer;
 import java.util.Map;
 
-public class ChangedDeserializer<T> implements Deserializer<Change<T>> {
+public class ChangedDeserializer<T> implements ExtendedDeserializer<Change<T>> {
 
     private static final int NEWFLAG_SIZE = 1;
 
-    private Deserializer<T> inner;
+    private ExtendedDeserializer<T> inner;
 
     public ChangedDeserializer(Deserializer<T> inner) {
-        this.inner = inner;
+        this.inner = ensureExtended(inner);
     }
 
-    public Deserializer<T> inner() {
+    public ExtendedDeserializer<T> inner() {
         return inner;
     }
 
     public void setInner(Deserializer<T> inner) {
-        this.inner = inner;
+        this.inner = ensureExtended(inner);
+    }
+
+    private <T> ExtendedDeserializer<T> ensureExtended(Deserializer<T> deserializer) {
+        return deserializer instanceof ExtendedDeserializer ? (ExtendedDeserializer<T>) deserializer : new ExtendedDeserializer.Wrapper<>(deserializer);
     }
 
     @Override
@@ -45,19 +51,23 @@ public class ChangedDeserializer<T> implements Deserializer<Change<T>> {
     }
 
     @Override
-    public Change<T> deserialize(String topic, byte[] data) {
+    public Change<T> deserialize(String topic, Headers headers, byte[] data) {
 
         byte[] bytes = new byte[data.length - NEWFLAG_SIZE];
 
         System.arraycopy(data, 0, bytes, 0, bytes.length);
 
         if (ByteBuffer.wrap(data).get(data.length - NEWFLAG_SIZE) != 0) {
-            return new Change<>(inner.deserialize(topic, bytes), null);
+            return new Change<>(inner.deserialize(topic, headers, bytes), null);
         } else {
-            return new Change<>(null, inner.deserialize(topic, bytes));
+            return new Change<>(null, inner.deserialize(topic, headers, bytes));
         }
     }
 
+    @Override
+    public Change<T> deserialize(String topic, byte[] data) {
+        return deserialize(topic, null, data);
+    }
 
     @Override
     public void close() {
