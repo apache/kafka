@@ -23,6 +23,8 @@ import org.apache.kafka.common.serialization.ExtendedDeserializer;
 import java.nio.ByteBuffer;
 import java.util.Map;
 
+import static org.apache.kafka.common.serialization.ExtendedDeserializer.Wrapper.ensureExtended;
+
 public class ChangedDeserializer<T> implements ExtendedDeserializer<Change<T>> {
 
     private static final int NEWFLAG_SIZE = 1;
@@ -39,10 +41,6 @@ public class ChangedDeserializer<T> implements ExtendedDeserializer<Change<T>> {
 
     public void setInner(Deserializer<T> inner) {
         this.inner = ensureExtended(inner);
-    }
-
-    private <T> ExtendedDeserializer<T> ensureExtended(Deserializer<T> deserializer) {
-        return deserializer instanceof ExtendedDeserializer ? (ExtendedDeserializer<T>) deserializer : new ExtendedDeserializer.Wrapper<>(deserializer);
     }
 
     @Override

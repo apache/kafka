@@ -25,6 +25,8 @@ import org.apache.kafka.streams.processor.TimestampExtractor;
 
 import java.util.List;
 
+import static org.apache.kafka.common.serialization.ExtendedDeserializer.Wrapper.ensureExtended;
+
 public class SourceNode<K, V> extends ProcessorNode<K, V> {
 
     private final List<String> topics;
@@ -44,10 +46,6 @@ public class SourceNode<K, V> extends ProcessorNode<K, V> {
 
     public SourceNode(String name, List<String> topics, Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer) {
         this(name, topics, null, keyDeserializer, valDeserializer);
-    }
-
-    private <T> ExtendedDeserializer<T> ensureExtended(Deserializer<T> deserializer) {
-        return deserializer instanceof ExtendedDeserializer ? (ExtendedDeserializer<T>) deserializer : new ExtendedDeserializer.Wrapper<>(deserializer);
     }
 
     K deserializeKey(String topic, Headers headers, byte[] data) {
