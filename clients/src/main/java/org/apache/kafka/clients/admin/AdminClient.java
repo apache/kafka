@@ -23,6 +23,7 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 import java.util.Collection;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.TimeUnit;
 
 /**
  * The public interface for the {@link KafkaAdminClient}, which supports managing and inspecting topics,
@@ -36,8 +37,8 @@ public abstract class AdminClient implements AutoCloseable {
     /**
      * Create a new AdminClient with the given configuration.
      *
-     * @param props         The configuration.
-     * @return              The new KafkaAdminClient.
+     * @param props The configuration.
+     * @return The new KafkaAdminClient.
      */
     public static AdminClient create(Properties props) {
         return KafkaAdminClient.createInternal(new AdminClientConfig(props));
@@ -46,8 +47,8 @@ public abstract class AdminClient implements AutoCloseable {
     /**
      * Create a new AdminClient with the given configuration.
      *
-     * @param conf          The configuration.
-     * @return              The new KafkaAdminClient.
+     * @param conf The configuration.
+     * @return The new KafkaAdminClient.
      */
     public static AdminClient create(Map<String, Object> conf) {
         return KafkaAdminClient.createInternal(new AdminClientConfig(conf));
@@ -55,8 +56,26 @@ public abstract class AdminClient implements AutoCloseable {
 
     /**
      * Close the AdminClient and release all associated resources.
+     *
+     * See {@link AdminClient#close(long, TimeUnit)}
      */
-    public abstract void close();
+    @Override
+    public void close() {
+        close(Long.MAX_VALUE, TimeUnit.MILLISECONDS);
+    }
+
+    /**
+     * Close the AdminClient and release all associated resources.
+     *
+     * The close operation has a grace period during which current operations will be allowed to
+     * complete, specified by the given duration and time unit.
+     * New operations will not be accepted during the grace period.  Once the grace period is over,
+     * all operations that have not yet been completed will be aborted with a TimeoutException.
+     *
+     * @param duration  The duration to use for the wait time.
+     * @param unit      The time unit to use for the wait time.
+     */
+    public abstract void close(long duration, TimeUnit unit);
 
     /**
      * Create a batch of new topics with the default options.
