@@ -25,10 +25,10 @@ import java.util.Map;
 /**
  * The result of the createAcls call.
  */
-public class CreateAclsResults {
+public class CreateAclsResult {
     private final Map<AclBinding, KafkaFuture<Void>> futures;
 
-    CreateAclsResults(Map<AclBinding, KafkaFuture<Void>> futures) {
+    CreateAclsResult(Map<AclBinding, KafkaFuture<Void>> futures) {
         this.futures = futures;
     }
 

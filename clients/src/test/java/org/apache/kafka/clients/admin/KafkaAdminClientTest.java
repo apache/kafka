@@ -17,7 +17,7 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.clients.NodeApiVersions;
-import org.apache.kafka.clients.admin.DeleteAclsResults.FilterResults;
+import org.apache.kafka.clients.admin.DeleteAclsResult.FilterResults;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
@@ -243,7 +243,7 @@ public class KafkaAdminClientTest {
                         add(new AclCreationResponse(null));
                         add(new AclCreationResponse(null));
                     }}));
-            CreateAclsResults results = env.adminClient().createAcls(new ArrayList<AclBinding>() {{
+            CreateAclsResult results = env.adminClient().createAcls(new ArrayList<AclBinding>() {{
                         add(ACL1);
                         add(ACL2);
                     }});
@@ -287,7 +287,7 @@ public class KafkaAdminClientTest {
                     add(new AclFilterResponse(new SecurityDisabledException("No security"),
                         Collections.<AclDeletionResult>emptySet()));
                 }}));
-            DeleteAclsResults results = env.adminClient().deleteAcls(new ArrayList<AclBindingFilter>() {{
+            DeleteAclsResult results = env.adminClient().deleteAcls(new ArrayList<AclBindingFilter>() {{
                         add(FILTER1);
                         add(FILTER2);
                     }});

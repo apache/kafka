@@ -18,21 +18,26 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.KafkaFuture;
-import org.apache.kafka.common.acl.AclBinding;
+import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.config.ConfigResource;
 
-import java.util.Collection;
+import java.util.Map;
 
-/**
- * The result of the describeAcls call.
- */
-public class DescribeAclsResults {
-    private final KafkaFuture<Collection<AclBinding>> future;
+@InterfaceStability.Unstable
+public class AlterConfigsResult {
 
-    DescribeAclsResults(KafkaFuture<Collection<AclBinding>> future) {
-        this.future = future;
+    private final Map<ConfigResource, KafkaFuture<Void>> futures;
+
+    AlterConfigsResult(Map<ConfigResource, KafkaFuture<Void>> futures) {
+        this.futures = futures;
     }
 
-    public KafkaFuture<Collection<AclBinding>> all() {
-        return future;
+    public Map<ConfigResource, KafkaFuture<Void>> results() {
+        return futures;
     }
+
+    public KafkaFuture<Void> all() {
+        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0]));
+    }
+
 }
