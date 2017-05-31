@@ -18,31 +18,21 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.acl.AclBinding;
 
-import java.util.Map;
+import java.util.Collection;
 
 /**
- * The result of the createAcls call.
+ * The result of the describeAcls call.
  */
-public class CreateAclsResults {
-    private final Map<AclBinding, KafkaFuture<Void>> futures;
+public class DescribeAclsResult {
+    private final KafkaFuture<Collection<AclBinding>> future;
 
-    CreateAclsResults(Map<AclBinding, KafkaFuture<Void>> futures) {
-        this.futures = futures;
+    DescribeAclsResult(KafkaFuture<Collection<AclBinding>> future) {
+        this.future = future;
     }
 
-    /**
-     * Return a map from topic names to futures which can be used to check the status of
-     * individual deletions.
-     */
-    public Map<AclBinding, KafkaFuture<Void>> results() {
-        return futures;
-    }
-
-    /**
-     * Return a future which succeeds only if all the topic deletions succeed.
-     */
-    public KafkaFuture<Void> all() {
-        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0]));
+    public KafkaFuture<Collection<AclBinding>> all() {
+        return future;
     }
 }

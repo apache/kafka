@@ -17,7 +17,9 @@
 
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.HashMap;
@@ -25,43 +27,36 @@ import java.util.Map;
 import java.util.concurrent.ExecutionException;
 
 /**
- * The results of the describeTopic call.
+ * Results of the apiVersions call.
  */
 @InterfaceStability.Unstable
-public class DescribeTopicsResults {
-    private final Map<String, KafkaFuture<TopicDescription>> futures;
+public class ApiVersionsResult {
+    private final Map<Node, KafkaFuture<NodeApiVersions>> futures;
 
-    DescribeTopicsResults(Map<String, KafkaFuture<TopicDescription>> futures) {
+    ApiVersionsResult(Map<Node, KafkaFuture<NodeApiVersions>> futures) {
         this.futures = futures;
     }
 
-    /**
-     * Return a map from topic names to futures which can be used to check the status of
-     * individual topics.
-     */
-    public Map<String, KafkaFuture<TopicDescription>> results() {
+    public Map<Node, KafkaFuture<NodeApiVersions>> results() {
         return futures;
     }
 
-    /**
-     * Return a future which succeeds only if all the topic descriptions succeed.
-     */
-    public KafkaFuture<Map<String, TopicDescription>> all() {
+    public KafkaFuture<Map<Node, NodeApiVersions>> all() {
         return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0])).
-            thenApply(new KafkaFuture.Function<Void, Map<String, TopicDescription>>() {
+            thenApply(new KafkaFuture.Function<Void, Map<Node, NodeApiVersions>>() {
                 @Override
-                public Map<String, TopicDescription> apply(Void v) {
-                    Map<String, TopicDescription> descriptions = new HashMap<>(futures.size());
-                    for (Map.Entry<String, KafkaFuture<TopicDescription>> entry : futures.entrySet()) {
+                public Map<Node, NodeApiVersions> apply(Void v) {
+                    Map<Node, NodeApiVersions> versions = new HashMap<>(futures.size());
+                    for (Map.Entry<Node, KafkaFuture<NodeApiVersions>> entry : futures.entrySet()) {
                         try {
-                            descriptions.put(entry.getKey(), entry.getValue().get());
+                            versions.put(entry.getKey(), entry.getValue().get());
                         } catch (InterruptedException | ExecutionException e) {
                             // This should be unreachable, because allOf ensured that all the futures
                             // completed successfully.
                             throw new RuntimeException(e);
                         }
                     }
-                    return descriptions;
+                    return versions;
                 }
             });
     }

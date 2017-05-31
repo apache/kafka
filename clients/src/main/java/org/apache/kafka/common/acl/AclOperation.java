@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.clients.admin;
+package org.apache.kafka.common.acl;
 
 import java.util.HashMap;
 import java.util.Locale;

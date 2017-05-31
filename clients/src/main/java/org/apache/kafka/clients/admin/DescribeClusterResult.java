@@ -27,12 +27,12 @@ import java.util.Collection;
  * The results of the describeCluster call.
  */
 @InterfaceStability.Unstable
-public class DescribeClusterResults {
+public class DescribeClusterResult {
     private final KafkaFuture<Collection<Node>> nodes;
     private final KafkaFuture<Node> controller;
     private final KafkaFuture<String> clusterId;
 
-    DescribeClusterResults(KafkaFuture<Collection<Node>> nodes,
+    DescribeClusterResult(KafkaFuture<Collection<Node>> nodes,
                            KafkaFuture<Node> controller,
                            KafkaFuture<String> clusterId) {
         this.nodes = nodes;

@@ -19,6 +19,8 @@ package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.acl.AclBinding;
+import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.errors.ApiException;
 
 import java.util.ArrayList;
@@ -29,7 +31,7 @@ import java.util.Map;
 /**
  * The result of the deleteAcls call.
  */
-public class DeleteAclsResults {
+public class DeleteAclsResult {
     public static class FilterResult {
         private final AclBinding acl;
         private final ApiException exception;
@@ -62,7 +64,7 @@ public class DeleteAclsResults {
 
     private final Map<AclBindingFilter, KafkaFuture<FilterResults>> futures;
 
-    DeleteAclsResults(Map<AclBindingFilter, KafkaFuture<FilterResults>> futures) {
+    DeleteAclsResult(Map<AclBindingFilter, KafkaFuture<FilterResults>> futures) {
         this.futures = futures;
     }
 
@@ -91,7 +93,7 @@ public class DeleteAclsResults {
                         } catch (Throwable e) {
                             // This should be unreachable, since the future returned by KafkaFuture#allOf should
                             // have failed if any Future failed.
-                            throw new KafkaException("DeleteAclsResults#all: internal error", e);
+                            throw new KafkaException("DeleteAclsResult#all: internal error", e);
                         }
                         for (FilterResult result : results.acls()) {
                             if (result.exception() != null) {

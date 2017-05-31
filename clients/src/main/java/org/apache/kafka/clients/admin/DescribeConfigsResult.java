@@ -17,47 +17,44 @@
 
 package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.common.KafkaFuture;
-import org.apache.kafka.common.Node;
 import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.config.ConfigResource;
 
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 
-/**
- * Results of the apiVersions call.
- */
 @InterfaceStability.Unstable
-public class ApiVersionsResults {
-    private final Map<Node, KafkaFuture<NodeApiVersions>> futures;
+public class DescribeConfigsResult {
 
-    ApiVersionsResults(Map<Node, KafkaFuture<NodeApiVersions>> futures) {
+    private final Map<ConfigResource, KafkaFuture<Config>> futures;
+
+    DescribeConfigsResult(Map<ConfigResource, KafkaFuture<Config>> futures) {
         this.futures = futures;
     }
 
-    public Map<Node, KafkaFuture<NodeApiVersions>> results() {
+    public Map<ConfigResource, KafkaFuture<Config>> results() {
         return futures;
     }
 
-    public KafkaFuture<Map<Node, NodeApiVersions>> all() {
+    public KafkaFuture<Map<ConfigResource, Config>> all() {
         return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0])).
-            thenApply(new KafkaFuture.Function<Void, Map<Node, NodeApiVersions>>() {
-                @Override
-                public Map<Node, NodeApiVersions> apply(Void v) {
-                    Map<Node, NodeApiVersions> versions = new HashMap<>(futures.size());
-                    for (Map.Entry<Node, KafkaFuture<NodeApiVersions>> entry : futures.entrySet()) {
-                        try {
-                            versions.put(entry.getKey(), entry.getValue().get());
-                        } catch (InterruptedException | ExecutionException e) {
-                            // This should be unreachable, because allOf ensured that all the futures
-                            // completed successfully.
-                            throw new RuntimeException(e);
+                thenApply(new KafkaFuture.Function<Void, Map<ConfigResource, Config>>() {
+                    @Override
+                    public Map<ConfigResource, Config> apply(Void v) {
+                        Map<ConfigResource, Config> configs = new HashMap<>(futures.size());
+                        for (Map.Entry<ConfigResource, KafkaFuture<Config>> entry : futures.entrySet()) {
+                            try {
+                                configs.put(entry.getKey(), entry.getValue().get());
+                            } catch (InterruptedException | ExecutionException e) {
+                                // This should be unreachable, because allOf ensured that all the futures
+                                // completed successfully.
+                                throw new RuntimeException(e);
+                            }
                         }
+                        return configs;
                     }
-                    return versions;
-                }
-            });
+                });
     }
 }

@@ -25,14 +25,18 @@ import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.NodeApiVersions;
-import org.apache.kafka.clients.admin.DeleteAclsResults.FilterResult;
-import org.apache.kafka.clients.admin.DeleteAclsResults.FilterResults;
+import org.apache.kafka.clients.admin.DeleteAclsResult.FilterResult;
+import org.apache.kafka.clients.admin.DeleteAclsResult.FilterResults;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
+import org.apache.kafka.common.TopicPartitionInfo;
+import org.apache.kafka.common.acl.AclBinding;
+import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.BrokerNotAvailableException;
 import org.apache.kafka.common.errors.DisconnectException;
@@ -995,7 +999,7 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     @Override
-    public CreateTopicResults createTopics(final Collection<NewTopic> newTopics,
+    public CreateTopicsResult createTopics(final Collection<NewTopic> newTopics,
                                            final CreateTopicsOptions options) {
         final Map<String, KafkaFutureImpl<Void>> topicFutures = new HashMap<>(newTopics.size());
         final Map<String, CreateTopicsRequest.TopicDetails> topicsMap = new HashMap<>(newTopics.size());
@@ -1046,11 +1050,11 @@ public class KafkaAdminClient extends AdminClient {
                 completeAllExceptionally(topicFutures.values(), throwable);
             }
         }, now);
-        return new CreateTopicResults(new HashMap<String, KafkaFuture<Void>>(topicFutures));
+        return new CreateTopicsResult(new HashMap<String, KafkaFuture<Void>>(topicFutures));
     }
 
     @Override
-    public DeleteTopicResults deleteTopics(final Collection<String> topicNames,
+    public DeleteTopicsResult deleteTopics(final Collection<String> topicNames,
                                            DeleteTopicsOptions options) {
         final Map<String, KafkaFutureImpl<Void>> topicFutures = new HashMap<>(topicNames.size());
         for (String topicName : topicNames) {
@@ -1099,11 +1103,11 @@ public class KafkaAdminClient extends AdminClient {
                 completeAllExceptionally(topicFutures.values(), throwable);
             }
         }, now);
-        return new DeleteTopicResults(new HashMap<String, KafkaFuture<Void>>(topicFutures));
+        return new DeleteTopicsResult(new HashMap<String, KafkaFuture<Void>>(topicFutures));
     }
 
     @Override
-    public ListTopicsResults listTopics(final ListTopicsOptions options) {
+    public ListTopicsResult listTopics(final ListTopicsOptions options) {
         final KafkaFutureImpl<Map<String, TopicListing>> topicListingFuture = new KafkaFutureImpl<>();
         final long now = time.milliseconds();
         runnable.call(new Call("listTopics", calcDeadlineMs(now, options.timeoutMs()),
@@ -1132,11 +1136,11 @@ public class KafkaAdminClient extends AdminClient {
                 topicListingFuture.completeExceptionally(throwable);
             }
         }, now);
-        return new ListTopicsResults(topicListingFuture);
+        return new ListTopicsResult(topicListingFuture);
     }
 
     @Override
-    public DescribeTopicsResults describeTopics(final Collection<String> topicNames, DescribeTopicsOptions options) {
+    public DescribeTopicsResult describeTopics(final Collection<String> topicNames, DescribeTopicsOptions options) {
         final Map<String, KafkaFutureImpl<TopicDescription>> topicFutures = new HashMap<>(topicNames.size());
         final ArrayList<String> topicNamesList = new ArrayList<>();
         for (String topicName : topicNames) {
@@ -1190,11 +1194,11 @@ public class KafkaAdminClient extends AdminClient {
                 completeAllExceptionally(topicFutures.values(), throwable);
             }
         }, now);
-        return new DescribeTopicsResults(new HashMap<String, KafkaFuture<TopicDescription>>(topicFutures));
+        return new DescribeTopicsResult(new HashMap<String, KafkaFuture<TopicDescription>>(topicFutures));
     }
 
     @Override
-    public DescribeClusterResults describeCluster(DescribeClusterOptions options) {
+    public DescribeClusterResult describeCluster(DescribeClusterOptions options) {
         final KafkaFutureImpl<Collection<Node>> describeClusterFuture = new KafkaFutureImpl<>();
         final KafkaFutureImpl<Node> controllerFuture = new KafkaFutureImpl<>();
         final KafkaFutureImpl<String> clusterIdFuture = new KafkaFutureImpl<>();
@@ -1223,11 +1227,11 @@ public class KafkaAdminClient extends AdminClient {
             }
         }, now);
 
-        return new DescribeClusterResults(describeClusterFuture, controllerFuture, clusterIdFuture);
+        return new DescribeClusterResult(describeClusterFuture, controllerFuture, clusterIdFuture);
     }
 
     @Override
-    public ApiVersionsResults apiVersions(Collection<Node> nodes, ApiVersionsOptions options) {
+    public ApiVersionsResult apiVersions(Collection<Node> nodes, ApiVersionsOptions options) {
         final long now = time.milliseconds();
         final long deadlineMs = calcDeadlineMs(now, options.timeoutMs());
         Map<Node, KafkaFuture<NodeApiVersions>> nodeFutures = new HashMap<>();
@@ -1254,12 +1258,12 @@ public class KafkaAdminClient extends AdminClient {
                     }
                 }, now);
         }
-        return new ApiVersionsResults(nodeFutures);
+        return new ApiVersionsResult(nodeFutures);
 
     }
 
     @Override
-    public DescribeAclsResults describeAcls(final AclBindingFilter filter, DescribeAclsOptions options) {
+    public DescribeAclsResult describeAcls(final AclBindingFilter filter, DescribeAclsOptions options) {
         final long now = time.milliseconds();
         final KafkaFutureImpl<Collection<AclBinding>> future = new KafkaFutureImpl<>();
         runnable.call(new Call("describeAcls", calcDeadlineMs(now, options.timeoutMs()),
@@ -1285,11 +1289,11 @@ public class KafkaAdminClient extends AdminClient {
                 future.completeExceptionally(throwable);
             }
         }, now);
-        return new DescribeAclsResults(future);
+        return new DescribeAclsResult(future);
     }
 
     @Override
-    public CreateAclsResults createAcls(Collection<AclBinding> acls, CreateAclsOptions options) {
+    public CreateAclsResult createAcls(Collection<AclBinding> acls, CreateAclsOptions options) {
         final long now = time.milliseconds();
         final Map<AclBinding, KafkaFutureImpl<Void>> futures = new HashMap<>();
         final List<AclCreation> aclCreations = new ArrayList<>();
@@ -1340,11 +1344,11 @@ public class KafkaAdminClient extends AdminClient {
                 completeAllExceptionally(futures.values(), throwable);
             }
         }, now);
-        return new CreateAclsResults(new HashMap<AclBinding, KafkaFuture<Void>>(futures));
+        return new CreateAclsResult(new HashMap<AclBinding, KafkaFuture<Void>>(futures));
     }
 
     @Override
-    public DeleteAclsResults deleteAcls(Collection<AclBindingFilter> filters, DeleteAclsOptions options) {
+    public DeleteAclsResult deleteAcls(Collection<AclBindingFilter> filters, DeleteAclsOptions options) {
         final long now = time.milliseconds();
         final Map<AclBindingFilter, KafkaFutureImpl<FilterResults>> futures = new HashMap<>();
         final List<AclBindingFilter> filterList = new ArrayList<>();
@@ -1392,11 +1396,11 @@ public class KafkaAdminClient extends AdminClient {
                 completeAllExceptionally(futures.values(), throwable);
             }
         }, now);
-        return new DeleteAclsResults(new HashMap<AclBindingFilter, KafkaFuture<FilterResults>>(futures));
+        return new DeleteAclsResult(new HashMap<AclBindingFilter, KafkaFuture<FilterResults>>(futures));
     }
 
     @Override
-    public DescribeConfigsResults describeConfigs(Collection<ConfigResource> configResources, final DescribeConfigsOptions options) {
+    public DescribeConfigsResult describeConfigs(Collection<ConfigResource> configResources, final DescribeConfigsOptions options) {
         final Map<ConfigResource, KafkaFutureImpl<Config>> singleRequestFutures = new HashMap<>();
         final Collection<Resource> singleRequestResources = new ArrayList<>(configResources.size());
 
@@ -1487,7 +1491,7 @@ public class KafkaAdminClient extends AdminClient {
         Map<ConfigResource, KafkaFutureImpl<Config>> allFutures = new HashMap<>(configResources.size());
         allFutures.putAll(singleRequestFutures);
         allFutures.putAll(brokerFutures);
-        return new DescribeConfigsResults(new HashMap<ConfigResource, KafkaFuture<Config>>(allFutures));
+        return new DescribeConfigsResult(new HashMap<ConfigResource, KafkaFuture<Config>>(allFutures));
     }
 
     private Resource configResourceToResource(ConfigResource configResource) {
@@ -1506,7 +1510,7 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     @Override
-    public AlterConfigsResults alterConfigs(Map<ConfigResource, Config> configs, final AlterConfigsOptions options) {
+    public AlterConfigsResult alterConfigs(Map<ConfigResource, Config> configs, final AlterConfigsOptions options) {
         final Map<ConfigResource, KafkaFutureImpl<Void>> futures = new HashMap<>(configs.size());
         for (ConfigResource configResource : configs.keySet()) {
             futures.put(configResource, new KafkaFutureImpl<Void>());
@@ -1548,6 +1552,6 @@ public class KafkaAdminClient extends AdminClient {
                 completeAllExceptionally(futures.values(), throwable);
             }
         }, now);
-        return new AlterConfigsResults(new HashMap<ConfigResource, KafkaFuture<Void>>(futures));
+        return new AlterConfigsResult(new HashMap<ConfigResource, KafkaFuture<Void>>(futures));
     }
 }
