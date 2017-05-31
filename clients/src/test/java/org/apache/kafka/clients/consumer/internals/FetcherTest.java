@@ -50,6 +50,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.ControlRecordType;
 import org.apache.kafka.common.header.internals.RecordHeader;
+import org.apache.kafka.common.record.DefaultRecordBatch;
 import org.apache.kafka.common.record.EndTransactionMarker;
 import org.apache.kafka.common.record.LegacyRecord;
 import org.apache.kafka.common.record.MemoryRecords;
@@ -357,6 +358,44 @@ public class FetcherTest {
         assertEquals(1, records.size());
         assertEquals(2L, records.get(0).offset());
         assertEquals(3, subscriptions.position(tp1).longValue());
+    }
+
+    @Test
+    public void testInvalidDefaultRecordBatch() {
+        ByteBuffer buffer = ByteBuffer.allocate(1024);
+        ByteBufferOutputStream out = new ByteBufferOutputStream(buffer);
+
+        MemoryRecordsBuilder builder = new MemoryRecordsBuilder(out,
+                                                                DefaultRecordBatch.CURRENT_MAGIC_VALUE,
+                                                                CompressionType.NONE,
+                                                                TimestampType.CREATE_TIME,
+                                                                0L, 10L, 0L, (short) 0, 0, false, false, 0, 1024);
+        builder.append(10L, "key".getBytes(), "value".getBytes());
+        builder.close();
+        buffer.flip();
+
+        // Garble the CRC
+        buffer.position(17);
+        buffer.put("beef".getBytes());
+        buffer.position(0);
+
+        subscriptions.assignFromUser(singleton(tp1));
+        subscriptions.seek(tp1, 0);
+
+        // normal fetch
+        assertEquals(1, fetcher.sendFetches());
+        client.prepareResponse(fetchResponse(MemoryRecords.readableRecords(buffer), Errors.NONE, 100L, 0));
+        consumerClient.poll(0);
+
+        // the fetchedRecords() should always throw exception due to the bad batch.
+        for (int i = 0; i < 2; i++) {
+            try {
+                fetcher.fetchedRecords();
+                fail("fetchedRecords should have raised KafkaException");
+            } catch (KafkaException e) {
+                assertEquals(0, subscriptions.position(tp1).longValue());
+            }
+        }
     }
 
     @Test

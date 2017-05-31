@@ -998,6 +998,10 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         private Record nextFetchedRecord() {
             while (true) {
                 if (records == null || !records.hasNext()) {
+                    // If last time there is an exception thrown, we always validate the current batch again.
+                    if (hasExceptionInLastFetch) {
+                        currentBatch.ensureValid();
+                    }
                     maybeCloseRecordStream();
 
                     if (!batches.hasNext()) {
@@ -1005,13 +1009,9 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                         return null;
                     }
 
-                    if (hasExceptionInLastFetch) {
-                        currentBatch.ensureValid();
-                    } else {
-                        lastRecord = null;
-                        currentBatch = batches.next();
-                        maybeEnsureValid(currentBatch);
-                    }
+                    lastRecord = null;
+                    currentBatch = batches.next();
+                    maybeEnsureValid(currentBatch);
 
                     if (isolationLevel == IsolationLevel.READ_COMMITTED && currentBatch.hasProducerId()) {
                         // remove from the aborted transaction queue all aborted transactions which have begun
@@ -1214,7 +1214,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         private final Sensor recordsFetchLag;
 
         private Set<TopicPartition> assignedPartitions;
-        
+
         private FetchManagerMetrics(Metrics metrics, FetcherMetricsRegistry metricsRegistry) {
             this.metrics = metrics;
             this.metricsRegistry = metricsRegistry;
@@ -1287,8 +1287,8 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             Sensor recordsLag = this.metrics.getSensor(name);
             if (recordsLag == null) {
                 recordsLag = this.metrics.sensor(name);
-                recordsLag.add(this.metrics.metricName(name, 
-                        metricsRegistry.partitionRecordsLag.group(), 
+                recordsLag.add(this.metrics.metricName(name,
+                        metricsRegistry.partitionRecordsLag.group(),
                         metricsRegistry.partitionRecordsLag.description()), new Value());
                 recordsLag.add(this.metrics.metricName(name + "-max",
                         metricsRegistry.partitionRecordsLagMax.group(),
