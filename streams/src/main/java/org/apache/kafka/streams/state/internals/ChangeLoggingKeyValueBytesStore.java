@@ -68,7 +68,7 @@ public class ChangeLoggingKeyValueBytesStore extends WrappedStateStore.AbstractS
     }
 
     @Override
-    public void putAll(final List<KeyValue<Bytes, byte[]>> entries) {
+    public synchronized void putAll(final List<KeyValue<Bytes, byte[]>> entries) {
         inner.putAll(entries);
         for (KeyValue<Bytes, byte[]> entry : entries) {
             changeLogger.logChange(entry.key, entry.value);
@@ -83,17 +83,17 @@ public class ChangeLoggingKeyValueBytesStore extends WrappedStateStore.AbstractS
     }
 
     @Override
-    public byte[] get(final Bytes key) {
+    public synchronized byte[] get(final Bytes key) {
         return inner.get(key);
     }
 
     @Override
-    public KeyValueIterator<Bytes, byte[]> range(final Bytes from, final Bytes to) {
+    public synchronized KeyValueIterator<Bytes, byte[]> range(final Bytes from, final Bytes to) {
         return inner.range(from, to);
     }
 
     @Override
-    public KeyValueIterator<Bytes, byte[]> all() {
+    public synchronized KeyValueIterator<Bytes, byte[]> all() {
         return inner.all();
     }
 }
