@@ -139,6 +139,7 @@ public class FetcherTest {
     @Before
     public void setup() throws Exception {
         metadata.update(cluster, Collections.<String>emptySet(), time.milliseconds());
+        client.reset();
         client.setNode(node);
 
         MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE, TimestampType.CREATE_TIME, 1L);
@@ -1332,6 +1333,24 @@ public class FetcherTest {
         testGetOffsetsForTimesWithError(Errors.BROKER_NOT_AVAILABLE, Errors.NONE, 10L, 100L, 10L, 100L);
     }
 
+    @Test(expected = TimeoutException.class)
+    public void testBatchedListOffsetsMetadataErrors() {
+        client.reset();
+
+        Map<TopicPartition, ListOffsetResponse.PartitionData> partitionData = new HashMap<>();
+        partitionData.put(tp1, new ListOffsetResponse.PartitionData(Errors.NOT_LEADER_FOR_PARTITION,
+                ListOffsetResponse.UNKNOWN_TIMESTAMP, ListOffsetResponse.UNKNOWN_OFFSET));
+        partitionData.put(tp2, new ListOffsetResponse.PartitionData(Errors.UNKNOWN_TOPIC_OR_PARTITION,
+                ListOffsetResponse.UNKNOWN_TIMESTAMP, ListOffsetResponse.UNKNOWN_OFFSET));
+        client.prepareResponse(new ListOffsetResponse(0, partitionData));
+
+        Map<TopicPartition, Long> offsetsToSearch = new HashMap<>();
+        offsetsToSearch.put(tp1, ListOffsetRequest.EARLIEST_TIMESTAMP);
+        offsetsToSearch.put(tp2, ListOffsetRequest.EARLIEST_TIMESTAMP);
+
+        fetcher.getOffsetsByTimes(offsetsToSearch, 0);
+    }
+
     @Test
     public void testSkippingAbortedTransactions() {
         Fetcher<byte[], byte[]> fetcher = createFetcher(subscriptions, new Metrics(), new ByteArrayDeserializer(),
@@ -1343,7 +1362,7 @@ public class FetcherTest {
                 new SimpleRecord(time.milliseconds(), "key".getBytes(), "value".getBytes()),
                 new SimpleRecord(time.milliseconds(), "key".getBytes(), "value".getBytes()));
 
-        currentOffset += abortTransaction(buffer, 1L, currentOffset);
+        abortTransaction(buffer, 1L, currentOffset);
 
         buffer.flip();
 
@@ -1740,7 +1759,6 @@ public class FetcherTest {
                                                  long offsetForTp1,
                                                  Long expectedOffsetForTp0,
                                                  Long expectedOffsetForTp1) {
-        client.reset();
         TopicPartition tp0 = tp1;
         TopicPartition tp1 = new TopicPartition(topicName, 1);
         // Ensure metadata has both partition.

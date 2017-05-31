@@ -728,13 +728,16 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                 log.debug("Attempt to fetch offsets for partition {} failed due to obsolete leadership information, retrying.",
                         topicPartition);
                 future.raise(error);
+                return;
             } else if (error == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
                 log.warn("Received unknown topic or partition error in ListOffset request for partition {}. The topic/partition " +
-                        "may not exist or the user may not have Describe access to it", topicPartition);
+                        "may not exist or the user may not have Describe access to it.", topicPartition);
                 future.raise(error);
+                return;
             } else {
                 log.warn("Attempt to fetch offsets for partition {} failed due to: {}", topicPartition, error.message());
                 future.raise(new StaleMetadataException());
+                return;
             }
         }
         if (!future.isDone())
