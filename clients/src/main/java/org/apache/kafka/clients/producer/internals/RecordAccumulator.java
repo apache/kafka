@@ -635,7 +635,7 @@ public final class RecordAccumulator {
             Deque<ProducerBatch> dq = getDeque(batch.topicPartition);
             boolean aborted = false;
             synchronized (dq) {
-                if (!batch.inRetry()) {
+                if (!batch.isClosed()) {
                     aborted = true;
                     batch.abort();
                     dq.remove(batch);

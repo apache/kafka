@@ -298,7 +298,9 @@ public class Sender implements Runnable {
 
     private boolean maybeSendTransactionalRequest(long now) {
         String transactionalId = transactionManager.transactionalId();
-        if (transactionManager.isCompletingTransaction() && !transactionManager.hasPartitionsToAdd() && accumulator.hasUnflushedBatches()) {
+        if (transactionManager.isCompletingTransaction() &&
+                !transactionManager.hasPartitionsToAdd() &&
+                accumulator.hasUnflushedBatches()) {
 
             // If the transaction is being aborted, then we can clear any unsent produce requests
             if (transactionManager.isAborting())
