@@ -50,6 +50,11 @@
     <allow pkg="org.apache.kafka.common.internals" exact-match="true" />
     <allow pkg="org.apache.kafka.test" />
 
+    <subpackage name="acl">
+      <allow pkg="org.apache.kafka.common.acl" />
+      <allow pkg="org.apache.kafka.common.resource" />
+    </subpackage>
+
     <subpackage name="config">
       <allow pkg="org.apache.kafka.common.config" />
       <!-- for testing -->
@@ -66,6 +71,10 @@
       <allow pkg="org.apache.kafka.common.config" />
       <allow pkg="org.apache.kafka.common.metrics" />
       <allow pkg="org.apache.kafka.common.security" />
+    </subpackage>
+
+    <subpackage name="resource">
+      <allow pkg="org.apache.kafka.common.resource" />
     </subpackage>
 
     <subpackage name="security">
@@ -109,9 +118,11 @@
 
     <subpackage name="requests">
       <allow pkg="org.apache.kafka.clients.admin" />
+      <allow pkg="org.apache.kafka.common.acl" />
       <allow pkg="org.apache.kafka.common.protocol" />
       <allow pkg="org.apache.kafka.common.network" />
       <allow pkg="org.apache.kafka.common.requests" />
+      <allow pkg="org.apache.kafka.common.resource" />
       <allow pkg="org.apache.kafka.common.record" />
       <!-- for testing -->
       <allow pkg="org.apache.kafka.common.errors" />
@@ -202,6 +213,7 @@
     <allow pkg="org.openjdk.jmh.annotations" />
     <allow pkg="org.openjdk.jmh.runner" />
     <allow pkg="org.openjdk.jmh.runner.options" />
+    <allow pkg="org.openjdk.jmh.infra" />
     <allow pkg="org.apache.kafka.common" />
     <allow pkg="org.apache.kafka.streams" />
     <allow pkg="org.github.jamm" />

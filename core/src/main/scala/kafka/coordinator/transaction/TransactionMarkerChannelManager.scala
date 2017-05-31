@@ -85,9 +85,6 @@ object TransactionMarkerChannelManager {
       time)
   }
 
-  private[transaction] def requestGenerator(transactionMarkerChannelManager: TransactionMarkerChannelManager): () => Iterable[RequestAndCompletionHandler] = {
-    () => transactionMarkerChannelManager.drainQueuedTransactionMarkers()
-  }
 }
 
 class TxnMarkerQueue(@volatile private var destination: Node) {
@@ -116,7 +113,6 @@ class TxnMarkerQueue(@volatile private var destination: Node) {
 
   def node: Node = destination
 
-  // TODO: this function is only for metrics recording, not yet added
   def totalNumMarkers(): Int = markersPerTxnTopicPartition.map { case(_, queue) => queue.size()}.sum
 
   // visible for testing
@@ -132,10 +128,9 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
 
   private val markersQueuePerBroker: concurrent.Map[Int, TxnMarkerQueue] = concurrent.TrieMap.empty[Int, TxnMarkerQueue]
 
-  private val interBrokerListenerName: ListenerName = config.interBrokerListenerName
+  private val markersQueueForUnknownBroker = new TxnMarkerQueue(Node.noNode)
 
-  // TODO: What is reasonable for this
-  private val brokerNotAliveBackoffMs = 10
+  private val interBrokerListenerName: ListenerName = config.interBrokerListenerName
 
   private val txnMarkerSendThread: InterBrokerSendThread = {
     new InterBrokerSendThread("TxnMarkerSenderThread-" + config.brokerId, networkClient, drainQueuedTransactionMarkers, time)
@@ -143,11 +138,14 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
 
   def start(): Unit = {
     txnMarkerSendThread.start()
-    networkClient.wakeup()    // FIXME: is this really required?
   }
 
   def shutdown(): Unit = {
-    txnMarkerSendThread.shutdown()
+    txnMarkerSendThread.initiateShutdown()
+    // wake up the thread in case it is blocked inside poll
+    networkClient.wakeup()
+    txnMarkerSendThread.awaitShutdown()
+    txnMarkerPurgatory.shutdown()
     markersQueuePerBroker.clear()
   }
 
@@ -155,6 +153,9 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
   private[transaction] def queueForBroker(brokerId: Int) = {
     markersQueuePerBroker.get(brokerId)
   }
+
+  // visible for testing
+  private[transaction] def queueForUnknownBroker = markersQueueForUnknownBroker
 
   // visible for testing
   private[transaction] def senderThread = txnMarkerSendThread
@@ -172,6 +173,22 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
   }
 
   private[transaction] def drainQueuedTransactionMarkers(): Iterable[RequestAndCompletionHandler] = {
+    val txnIdAndMarkerEntries: java.util.List[TxnIdAndMarkerEntry] = new util.ArrayList[TxnIdAndMarkerEntry]()
+    markersQueueForUnknownBroker.forEachTxnTopicPartition { case (_, queue) =>
+      queue.drainTo(txnIdAndMarkerEntries)
+    }
+
+    for (txnIdAndMarker: TxnIdAndMarkerEntry <- txnIdAndMarkerEntries.asScala) {
+      val transactionalId = txnIdAndMarker.txnId
+      val producerId = txnIdAndMarker.txnMarkerEntry.producerId
+      val producerEpoch = txnIdAndMarker.txnMarkerEntry.producerEpoch
+      val txnResult = txnIdAndMarker.txnMarkerEntry.transactionResult
+      val coordinatorEpoch = txnIdAndMarker.txnMarkerEntry.coordinatorEpoch
+      val topicPartitions = txnIdAndMarker.txnMarkerEntry.partitions.asScala.toSet
+
+      addTxnMarkersToBrokerQueue(transactionalId, producerId, producerEpoch, txnResult, coordinatorEpoch, topicPartitions)
+    }
+
     markersQueuePerBroker.map { case (brokerId: Int, brokerRequestQueue: TxnMarkerQueue) =>
       val txnIdAndMarkerEntries: java.util.List[TxnIdAndMarkerEntry] = new util.ArrayList[TxnIdAndMarkerEntry]()
       brokerRequestQueue.forEachTxnTopicPartition { case (_, queue) =>
@@ -191,15 +208,22 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
                           coordinatorEpoch: Int,
                           txnResult: TransactionResult,
                           txnMetadata: TransactionMetadata,
-                          newMetadata: TransactionMetadataTransition): Unit = {
+                          newMetadata: TxnTransitMetadata): Unit = {
 
     def appendToLogCallback(error: Errors): Unit = {
       error match {
         case Errors.NONE =>
           trace(s"Completed sending transaction markers for $transactionalId as $txnResult")
 
-          txnStateManager.getTransactionState(transactionalId) match {
-            case Some(epochAndMetadata) =>
+          txnStateManager.getAndMaybeAddTransactionState(transactionalId) match {
+            case Left(Errors.NOT_COORDINATOR) =>
+              info(s"I am no longer the coordinator for $transactionalId with coordinator epoch $coordinatorEpoch; cancel appending $newMetadata to transaction log")
+
+            case Left(Errors.COORDINATOR_LOAD_IN_PROGRESS) =>
+              info(s"I am loading the transaction partition that contains $transactionalId while my current coordinator epoch is $coordinatorEpoch; " +
+                s"so appending $newMetadata to transaction log since the loading process will continue the left work")
+
+            case Right(Some(epochAndMetadata)) =>
               if (epochAndMetadata.coordinatorEpoch == coordinatorEpoch) {
                 debug(s"Updating $transactionalId's transaction state to $txnMetadata with coordinator epoch $coordinatorEpoch for $transactionalId succeeded")
 
@@ -228,11 +252,9 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
                   s"has been sent to brokers. The cached metadata have been changed to $epochAndMetadata since preparing to send markers")
               }
 
-            case None =>
-              // this transactional id no longer exists, maybe the corresponding partition has already been migrated out.
-              // we will stop appending the completed log entry to transaction topic as the new leader should be doing it.
-              info(s"Updating $transactionalId's transaction state (txn topic partition ${txnStateManager.partitionFor(transactionalId)}) to $newMetadata with coordinator epoch $coordinatorEpoch for $transactionalId " +
-                s"failed after the transaction message has been appended to the log since the corresponding metadata does not exist in the cache anymore")
+            case Right(None) =>
+              throw new IllegalStateException(s"The coordinator still owns the transaction partition for $transactionalId, but there is " +
+                s"no metadata in the cache; this is not expected")
           }
 
         case other =>
@@ -240,14 +262,8 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
       }
     }
 
-    // watch for both the transactional id and the transaction topic partition id,
-    // so we can cancel all the delayed operations for the same partition id;
-    // NOTE this is only possible because the hashcode of Int / String never overlaps
-
-    // TODO: if the delayed txn marker will always have infinite timeout, we can replace it with a map
     val delayedTxnMarker = new DelayedTxnMarker(txnMetadata, appendToLogCallback)
-    val txnTopicPartition = txnStateManager.partitionFor(transactionalId)
-    txnMarkerPurgatory.tryCompleteElseWatch(delayedTxnMarker, Seq(transactionalId, txnTopicPartition))
+    txnMarkerPurgatory.tryCompleteElseWatch(delayedTxnMarker, Seq(transactionalId))
 
     addTxnMarkersToBrokerQueue(transactionalId, txnMetadata.producerId, txnMetadata.producerEpoch, txnResult, coordinatorEpoch, txnMetadata.topicPartitions.toSet)
   }
@@ -256,32 +272,65 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
                                  result: TransactionResult, coordinatorEpoch: Int,
                                  topicPartitions: immutable.Set[TopicPartition]): Unit = {
     val txnTopicPartition = txnStateManager.partitionFor(transactionalId)
-    val partitionsByDestination: immutable.Map[Node, immutable.Set[TopicPartition]] = topicPartitions.groupBy { topicPartition: TopicPartition =>
-      var brokerNode: Option[Node] = None
-
-      // TODO: instead of retry until succeed, we can first put it into an unknown broker queue and let the sender thread to look for its broker and migrate them
-      while (brokerNode.isEmpty) {
-        brokerNode = metadataCache.getPartitionLeaderEndpoint(topicPartition.topic, topicPartition.partition, interBrokerListenerName)
-
-        if (brokerNode.isEmpty) {
-          trace(s"Couldn't find leader endpoint for partition: $topicPartition, retrying.")
-          time.sleep(brokerNotAliveBackoffMs)
-        }
-      }
-      brokerNode.get
+    val partitionsByDestination: immutable.Map[Option[Node], immutable.Set[TopicPartition]] = topicPartitions.groupBy { topicPartition: TopicPartition =>
+      metadataCache.getPartitionLeaderEndpoint(topicPartition.topic, topicPartition.partition, interBrokerListenerName)
     }
 
-    for ((broker: Node, topicPartitions: immutable.Set[TopicPartition]) <- partitionsByDestination) {
-      val marker = new TxnMarkerEntry(producerId, producerEpoch, coordinatorEpoch, result, topicPartitions.toList.asJava)
-      val txnIdAndMarker = TxnIdAndMarkerEntry(transactionalId, marker)
-      addMarkersForBroker(broker, txnTopicPartition, txnIdAndMarker)
+    for ((broker: Option[Node], topicPartitions: immutable.Set[TopicPartition]) <- partitionsByDestination) {
+      broker match {
+        case Some(brokerNode) =>
+          val marker = new TxnMarkerEntry(producerId, producerEpoch, coordinatorEpoch, result, topicPartitions.toList.asJava)
+          val txnIdAndMarker = TxnIdAndMarkerEntry(transactionalId, marker)
+
+          if (brokerNode == Node.noNode) {
+            // if the leader of the partition is known but node not available, put it into an unknown broker queue
+            // and let the sender thread to look for its broker and migrate them later
+            markersQueueForUnknownBroker.addMarkers(txnTopicPartition, txnIdAndMarker)
+          } else {
+            addMarkersForBroker(brokerNode, txnTopicPartition, txnIdAndMarker)
+          }
+
+        case None =>
+          txnStateManager.getAndMaybeAddTransactionState(transactionalId) match {
+            case Left(error) =>
+              info(s"Encountered $error trying to fetch transaction metadata for $transactionalId with coordinator epoch $coordinatorEpoch; cancel sending markers to its partition leaders")
+              txnMarkerPurgatory.cancelForKey(transactionalId)
+
+            case Right(Some(epochAndMetadata)) =>
+              if (epochAndMetadata.coordinatorEpoch != coordinatorEpoch) {
+                info(s"The cached metadata has changed to $epochAndMetadata (old coordinator epoch is $coordinatorEpoch) since preparing to send markers; cancel sending markers to its partition leaders")
+                txnMarkerPurgatory.cancelForKey(transactionalId)
+              } else {
+                // if the leader of the partition is unknown, skip sending the txn marker since
+                // the partition is likely to be deleted already
+                info(s"Couldn't find leader endpoint for partitions $topicPartitions while trying to send transaction markers for " +
+                  s"$transactionalId, these partitions are likely deleted already and hence can be skipped")
+
+                val txnMetadata = epochAndMetadata.transactionMetadata
+
+                txnMetadata synchronized {
+                  topicPartitions.foreach(txnMetadata.removePartition)
+                }
+
+                txnMarkerPurgatory.checkAndComplete(transactionalId)
+              }
+
+            case Right(None) =>
+              throw new IllegalStateException(s"The coordinator still owns the transaction partition for $transactionalId, but there is " +
+                s"no metadata in the cache; this is not expected")
+          }
+      }
     }
 
     networkClient.wakeup()
   }
 
   def removeMarkersForTxnTopicPartition(txnTopicPartitionId: Int): Unit = {
-    txnMarkerPurgatory.cancelForKey(txnTopicPartitionId)
+    markersQueueForUnknownBroker.removeMarkersForTxnTopicPartition(txnTopicPartitionId).foreach { queue =>
+      for (entry: TxnIdAndMarkerEntry <- queue.asScala)
+        removeMarkersForTxnId(entry.txnId)
+    }
+
     markersQueuePerBroker.foreach { case(_, brokerQueue) =>
       brokerQueue.removeMarkersForTxnTopicPartition(txnTopicPartitionId).foreach { queue =>
         for (entry: TxnIdAndMarkerEntry <- queue.asScala)
@@ -296,8 +345,6 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
     txnMarkerPurgatory.cancelForKey(transactionalId)
   }
 
-  // FIXME: Currently, operations registered under partition in txnMarkerPurgatory
-  // are only cleaned during coordinator immigration, which happens rarely. This means potential memory leak
   def completeSendMarkersForTxnId(transactionalId: String): Unit = {
     txnMarkerPurgatory.checkAndComplete(transactionalId)
   }

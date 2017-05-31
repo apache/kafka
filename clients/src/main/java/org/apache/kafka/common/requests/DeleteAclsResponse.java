@@ -16,13 +16,13 @@
  */
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.clients.admin.AccessControlEntry;
-import org.apache.kafka.clients.admin.AclBinding;
-import org.apache.kafka.clients.admin.Resource;
+import org.apache.kafka.common.acl.AccessControlEntry;
+import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.resource.Resource;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,7 +35,6 @@ import java.util.List;
 
 public class DeleteAclsResponse extends AbstractResponse {
     public static final Logger log = LoggerFactory.getLogger(DeleteAclsResponse.class);
-    private final static String THROTTLE_TIME_MS = "throttle_time_ms";
     private final static String FILTER_RESPONSES = "filter_responses";
     private final static String ERROR_CODE = "error_code";
     private final static String ERROR_MESSAGE = "error_message";
@@ -97,7 +96,7 @@ public class DeleteAclsResponse extends AbstractResponse {
     }
 
     public DeleteAclsResponse(Struct struct) {
-        this.throttleTimeMs = struct.getInt(THROTTLE_TIME_MS);
+        this.throttleTimeMs = struct.getInt(THROTTLE_TIME_KEY_NAME);
         this.responses = new ArrayList<>();
         for (Object responseStructObj : struct.getArray(FILTER_RESPONSES)) {
             Struct responseStruct = (Struct) responseStructObj;
@@ -130,7 +129,7 @@ public class DeleteAclsResponse extends AbstractResponse {
     @Override
     protected Struct toStruct(short version) {
         Struct struct = new Struct(ApiKeys.DELETE_ACLS.responseSchema(version));
-        struct.set(THROTTLE_TIME_MS, throttleTimeMs);
+        struct.set(THROTTLE_TIME_KEY_NAME, throttleTimeMs);
         List<Struct> responseStructs = new ArrayList<>();
         for (AclFilterResponse response : responses) {
             Struct responseStruct = struct.instance(FILTER_RESPONSES);

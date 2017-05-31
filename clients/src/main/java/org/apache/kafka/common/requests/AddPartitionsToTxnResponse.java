@@ -29,7 +29,6 @@ import java.util.List;
 import java.util.Map;
 
 public class AddPartitionsToTxnResponse extends AbstractResponse {
-    private static final String THROTTLE_TIME_KEY_NAME = "throttle_time_ms";
     private static final String ERROR_CODE_KEY_NAME = "error_code";
     private static final String ERRORS_KEY_NAME = "errors";
     private static final String TOPIC_NAME = "topic";
@@ -43,11 +42,12 @@ public class AddPartitionsToTxnResponse extends AbstractResponse {
     //   CoordinatorNotAvailable
     //   CoordinatorLoadInProgress
     //   InvalidTxnState
-    //   InvalidPidMapping
+    //   InvalidProducerIdMapping
     //   TopicAuthorizationFailed
     //   InvalidProducerEpoch
     //   UnknownTopicOrPartition
     //   TopicAuthorizationFailed
+    //   TransactionalIdAuthorizationFailed
     private final Map<TopicPartition, Errors> errors;
 
     public AddPartitionsToTxnResponse(int throttleTimeMs, Map<TopicPartition, Errors> errors) {

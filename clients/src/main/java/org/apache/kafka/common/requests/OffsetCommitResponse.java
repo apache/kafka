@@ -30,7 +30,6 @@ import java.util.Map;
 
 public class OffsetCommitResponse extends AbstractResponse {
 
-    private static final String THROTTLE_TIME_KEY_NAME = "throttle_time_ms";
     private static final String RESPONSES_KEY_NAME = "responses";
 
     // topic level fields

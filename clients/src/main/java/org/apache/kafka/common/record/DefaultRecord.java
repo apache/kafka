@@ -18,13 +18,12 @@ package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.internals.RecordHeader;
-import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.common.utils.Checksums;
 import org.apache.kafka.common.utils.Crc32C;
 import org.apache.kafka.common.utils.Utils;
 
-import java.io.DataInputStream;
+import java.io.DataInput;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -60,7 +59,7 @@ import static org.apache.kafka.common.utils.Utils.wrapNullable;
  *  ----------------
  *
  * The offset and timestamp deltas compute the difference relative to the base offset and
- * base timestamp of the log entry that this record is contained in.
+ * base timestamp of the batch that this record is contained in.
  */
 public class DefaultRecord implements Record {
 
@@ -77,7 +76,6 @@ public class DefaultRecord implements Record {
     private final ByteBuffer key;
     private final ByteBuffer value;
     private final Header[] headers;
-    private Long checksum = null;
 
     private DefaultRecord(int sizeInBytes,
                           byte attributes,
@@ -103,7 +101,7 @@ public class DefaultRecord implements Record {
     }
 
     @Override
-    public long sequence() {
+    public int sequence() {
         return sequence;
     }
 
@@ -122,10 +120,8 @@ public class DefaultRecord implements Record {
     }
 
     @Override
-    public long checksum() {
-        if (checksum == null)
-            checksum = computeChecksum(timestamp, key, value);
-        return checksum;
+    public Long checksumOrNull() {
+        return null;
     }
 
     @Override
@@ -174,14 +170,14 @@ public class DefaultRecord implements Record {
     }
 
     /**
-     * Write the record to `out` and return its crc.
+     * Write the record to `out` and return its size.
      */
-    public static long writeTo(DataOutputStream out,
-                               int offsetDelta,
-                               long timestampDelta,
-                               ByteBuffer key,
-                               ByteBuffer value,
-                               Header[] headers) throws IOException {
+    public static int writeTo(DataOutputStream out,
+                              int offsetDelta,
+                              long timestampDelta,
+                              ByteBuffer key,
+                              ByteBuffer value,
+                              Header[] headers) throws IOException {
         int sizeInBytes = sizeOfBodyInBytes(offsetDelta, timestampDelta, key, value, headers);
         ByteUtils.writeVarint(sizeInBytes, out);
 
@@ -230,43 +226,7 @@ public class DefaultRecord implements Record {
             }
         }
 
-        return computeChecksum(timestampDelta, key, value);
-    }
-
-    /**
-     * Write the record to `out` and return its crc.
-     */
-    public static long writeTo(ByteBuffer out,
-                               int offsetDelta,
-                               long timestampDelta,
-                               ByteBuffer key,
-                               ByteBuffer value,
-                               Header[] headers) {
-        try {
-            return writeTo(new DataOutputStream(new ByteBufferOutputStream(out)), offsetDelta, timestampDelta,
-                    key, value, headers);
-        } catch (IOException e) {
-            // cannot actually be raised by ByteBufferOutputStream
-            throw new IllegalStateException("Unexpected exception raised from ByteBufferOutputStream", e);
-        }
-    }
-
-    /**
-     * Compute the checksum of the record from the timestamp, key and value payloads
-     */
-    private static long computeChecksum(long timestamp,
-                                        ByteBuffer key,
-                                        ByteBuffer value) {
-        Checksum crc = Crc32C.create();
-        Checksums.updateLong(crc, timestamp);
-
-        if (key != null)
-            Checksums.update(crc, key, key.remaining());
-
-        if (value != null)
-            Checksums.update(crc, value, value.remaining());
-
-        return crc.getValue();
+        return ByteUtils.sizeOfVarint(sizeInBytes) + sizeInBytes;
     }
 
     @Override
@@ -324,14 +284,14 @@ public class DefaultRecord implements Record {
         return result;
     }
 
-    public static DefaultRecord readFrom(DataInputStream input,
+    public static DefaultRecord readFrom(DataInput input,
                                          long baseOffset,
                                          long baseTimestamp,
                                          int baseSequence,
                                          Long logAppendTime) throws IOException {
         int sizeOfBodyInBytes = ByteUtils.readVarint(input);
         ByteBuffer recordBuffer = ByteBuffer.allocate(sizeOfBodyInBytes);
-        input.readFully(recordBuffer.array(), recordBuffer.arrayOffset(), sizeOfBodyInBytes);
+        input.readFully(recordBuffer.array(), 0, sizeOfBodyInBytes);
         int totalSizeInBytes = ByteUtils.sizeOfVarint(sizeOfBodyInBytes) + sizeOfBodyInBytes;
         return readFrom(recordBuffer, totalSizeInBytes, baseOffset, baseTimestamp, baseSequence, logAppendTime);
     }
@@ -493,10 +453,18 @@ public class DefaultRecord implements Record {
         return size;
     }
 
-    static int recordSizeUpperBound(byte[] key, byte[] value, Header[] headers) {
-        int keySize = key == null ? -1 : key.length;
-        int valueSize = value == null ? -1 : value.length;
+    static int recordSizeUpperBound(ByteBuffer key, ByteBuffer value, Header[] headers) {
+        int keySize = key == null ? -1 : key.remaining();
+        int valueSize = value == null ? -1 : value.remaining();
         return MAX_RECORD_OVERHEAD + sizeOf(keySize, valueSize, headers);
     }
 
+
+    public static long computePartialChecksum(long timestamp, int serializedKeySize, int serializedValueSize) {
+        Checksum checksum = Crc32C.create();
+        Checksums.updateLong(checksum, timestamp);
+        Checksums.updateInt(checksum, serializedKeySize);
+        Checksums.updateInt(checksum, serializedValueSize);
+        return checksum.getValue();
+    }
 }

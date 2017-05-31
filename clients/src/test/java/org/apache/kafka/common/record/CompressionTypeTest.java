@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.record;
 
-import org.apache.kafka.common.utils.ByteBufferInputStream;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.junit.Test;
 
@@ -37,7 +36,7 @@ public class CompressionTypeTest {
         buffer.rewind();
 
         KafkaLZ4BlockInputStream in = (KafkaLZ4BlockInputStream) CompressionType.LZ4.wrapForInput(
-                new ByteBufferInputStream(buffer), RecordBatch.MAGIC_VALUE_V0);
+                buffer, RecordBatch.MAGIC_VALUE_V0, BufferSupplier.NO_CACHING);
         assertTrue(in.ignoreFlagDescriptorChecksum());
     }
 
@@ -51,7 +50,7 @@ public class CompressionTypeTest {
         buffer.rewind();
 
         KafkaLZ4BlockInputStream in = (KafkaLZ4BlockInputStream) CompressionType.LZ4.wrapForInput(
-                new ByteBufferInputStream(buffer), RecordBatch.MAGIC_VALUE_V1);
+                buffer, RecordBatch.MAGIC_VALUE_V1, BufferSupplier.create());
         assertFalse(in.ignoreFlagDescriptorChecksum());
     }
 }

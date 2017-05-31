@@ -17,11 +17,17 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.clients.NodeApiVersions;
-import org.apache.kafka.clients.admin.DeleteAclsResults.FilterResults;
+import org.apache.kafka.clients.admin.DeleteAclsResult.FilterResults;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
+import org.apache.kafka.common.acl.AccessControlEntry;
+import org.apache.kafka.common.acl.AccessControlEntryFilter;
+import org.apache.kafka.common.acl.AclBinding;
+import org.apache.kafka.common.acl.AclBindingFilter;
+import org.apache.kafka.common.acl.AclOperation;
+import org.apache.kafka.common.acl.AclPermissionType;
 import org.apache.kafka.common.errors.SecurityDisabledException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.protocol.Errors;
@@ -33,6 +39,9 @@ import org.apache.kafka.common.requests.DeleteAclsResponse;
 import org.apache.kafka.common.requests.DeleteAclsResponse.AclDeletionResult;
 import org.apache.kafka.common.requests.DeleteAclsResponse.AclFilterResponse;
 import org.apache.kafka.common.requests.DescribeAclsResponse;
+import org.apache.kafka.common.resource.Resource;
+import org.apache.kafka.common.resource.ResourceFilter;
+import org.apache.kafka.common.resource.ResourceType;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.Timeout;
@@ -234,7 +243,7 @@ public class KafkaAdminClientTest {
                         add(new AclCreationResponse(null));
                         add(new AclCreationResponse(null));
                     }}));
-            CreateAclsResults results = env.adminClient().createAcls(new ArrayList<AclBinding>() {{
+            CreateAclsResult results = env.adminClient().createAcls(new ArrayList<AclBinding>() {{
                         add(ACL1);
                         add(ACL2);
                     }});
@@ -278,7 +287,7 @@ public class KafkaAdminClientTest {
                     add(new AclFilterResponse(new SecurityDisabledException("No security"),
                         Collections.<AclDeletionResult>emptySet()));
                 }}));
-            DeleteAclsResults results = env.adminClient().deleteAcls(new ArrayList<AclBindingFilter>() {{
+            DeleteAclsResult results = env.adminClient().deleteAcls(new ArrayList<AclBindingFilter>() {{
                         add(FILTER1);
                         add(FILTER2);
                     }});
@@ -288,7 +297,6 @@ public class KafkaAdminClientTest {
             assertEquals(ACL1, filter1Results.acls().get(0).acl());
             assertEquals(null, filter1Results.acls().get(1).exception());
             assertEquals(ACL2, filter1Results.acls().get(1).acl());
-            assertTrue(filterResults.get(FILTER2).isCompletedExceptionally());
             assertFutureError(filterResults.get(FILTER2), SecurityDisabledException.class);
             assertFutureError(results.all(), SecurityDisabledException.class);
 

@@ -24,7 +24,8 @@ import kafka.log.LogConfig
 import kafka.network.RequestChannel.Session
 import kafka.security.auth._
 import kafka.utils.TestUtils
-import org.apache.kafka.clients.admin.{AccessControlEntry, AccessControlEntryFilter, AclBinding, AclBindingFilter, AclOperation, AclPermissionType, ResourceFilter, Resource => AdminResource, ResourceType => AdminResourceType}
+import org.apache.kafka.common.acl.{AccessControlEntry, AccessControlEntryFilter, AclBinding, AclBindingFilter, AclOperation, AclPermissionType}
+import org.apache.kafka.common.resource.{ResourceFilter, Resource => AdminResource, ResourceType => AdminResourceType}
 import org.apache.kafka.common.{Node, TopicPartition}
 import org.apache.kafka.common.metrics.{KafkaMetric, Quota, Sensor}
 import org.apache.kafka.common.network.{Authenticator, ListenerName, TransportLayer}
@@ -250,19 +251,20 @@ class RequestQuotaTest extends BaseRequestTest {
           new OffsetsForLeaderEpochRequest.Builder().add(tp, 0)
 
         case ApiKeys.ADD_PARTITIONS_TO_TXN =>
-          new AddPartitionsToTxnRequest.Builder("txn1", 1, 0, List(tp).asJava)
+          new AddPartitionsToTxnRequest.Builder("test-transactional-id", 1, 0, List(tp).asJava)
 
         case ApiKeys.ADD_OFFSETS_TO_TXN =>
-          new AddOffsetsToTxnRequest.Builder("txn1", 1, 0, "test-txn-group")
+          new AddOffsetsToTxnRequest.Builder("test-transactional-id", 1, 0, "test-txn-group")
 
         case ApiKeys.END_TXN =>
-          new EndTxnRequest.Builder("txn1", 1, 0, TransactionResult.forId(false))
+          new EndTxnRequest.Builder("test-transactional-id", 1, 0, TransactionResult.forId(false))
 
         case ApiKeys.WRITE_TXN_MARKERS =>
           new WriteTxnMarkersRequest.Builder(List.empty.asJava)
 
         case ApiKeys.TXN_OFFSET_COMMIT =>
-          new TxnOffsetCommitRequest.Builder("test-txn-group", 2, 0, Map.empty.asJava)
+          new TxnOffsetCommitRequest.Builder("test-transactional-id", "test-txn-group", 2, 0,
+            Map.empty[TopicPartition, TxnOffsetCommitRequest.CommittedOffset].asJava)
 
         case ApiKeys.DESCRIBE_ACLS =>
           new DescribeAclsRequest.Builder(AclBindingFilter.ANY)

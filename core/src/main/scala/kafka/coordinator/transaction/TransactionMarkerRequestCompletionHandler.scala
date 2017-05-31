@@ -42,14 +42,24 @@ class TransactionMarkerRequestCompletionHandler(brokerId: Int,
         val transactionalId = txnIdAndMarker.txnId
         val txnMarker = txnIdAndMarker.txnMarkerEntry
 
-        txnStateManager.getTransactionState(transactionalId) match {
-          case None =>
-            info(s"Transaction metadata for $transactionalId does not exist in the cache" +
-              s"any more; cancel sending transaction markers $txnMarker to the brokers")
+        txnStateManager.getAndMaybeAddTransactionState(transactionalId) match {
+
+          case Left(Errors.NOT_COORDINATOR) =>
+            info(s"I am no longer the coordinator for $transactionalId; cancel sending transaction markers $txnMarker to the brokers")
 
             txnMarkerChannelManager.removeMarkersForTxnId(transactionalId)
 
-          case Some(epochAndMetadata) =>
+          case Left(Errors.COORDINATOR_LOAD_IN_PROGRESS) =>
+            info(s"I am loading the transaction partition that contains $transactionalId which means the current markers have to be obsoleted; " +
+              s"cancel sending transaction markers $txnMarker to the brokers")
+
+            txnMarkerChannelManager.removeMarkersForTxnId(transactionalId)
+
+          case Right(None) =>
+            throw new IllegalStateException(s"The coordinator still owns the transaction partition for $transactionalId, but there is " +
+              s"no metadata in the cache; this is not expected")
+
+          case Right(Some(epochAndMetadata)) =>
             if (epochAndMetadata.coordinatorEpoch != txnMarker.coordinatorEpoch) {
               // coordinator epoch has changed, just cancel it from the purgatory
               info(s"Transaction coordinator epoch for $transactionalId has changed from ${txnMarker.coordinatorEpoch} to " +
@@ -57,7 +67,7 @@ class TransactionMarkerRequestCompletionHandler(brokerId: Int,
 
               txnMarkerChannelManager.removeMarkersForTxnId(transactionalId)
             } else {
-              // re-enqueue the markers
+              // re-enqueue the markers with possibly new destination brokers
               trace(s"Re-enqueuing ${txnMarker.transactionResult} transaction markers for transactional id $transactionalId " +
                 s"under coordinator epoch ${txnMarker.coordinatorEpoch}")
 
@@ -83,14 +93,23 @@ class TransactionMarkerRequestCompletionHandler(brokerId: Int,
         if (errors == null)
           throw new IllegalStateException(s"WriteTxnMarkerResponse does not contain expected error map for producer id ${txnMarker.producerId}")
 
-        txnStateManager.getTransactionState(transactionalId) match {
-          case None =>
-            info(s"Transaction metadata for $transactionalId does not exist in the cache" +
-              s"any more; cancel sending transaction markers $txnMarker to the brokers")
+        txnStateManager.getAndMaybeAddTransactionState(transactionalId) match {
+          case Left(Errors.NOT_COORDINATOR) =>
+            info(s"I am no longer the coordinator for $transactionalId; cancel sending transaction markers $txnMarker to the brokers")
 
             txnMarkerChannelManager.removeMarkersForTxnId(transactionalId)
 
-          case Some(epochAndMetadata) =>
+          case Left(Errors.COORDINATOR_LOAD_IN_PROGRESS) =>
+            info(s"I am loading the transaction partition that contains $transactionalId which means the current markers have to be obsoleted; " +
+              s"cancel sending transaction markers $txnMarker to the brokers")
+
+            txnMarkerChannelManager.removeMarkersForTxnId(transactionalId)
+
+          case Right(None) =>
+            throw new IllegalStateException(s"The coordinator still owns the transaction partition for $transactionalId, but there is " +
+              s"no metadata in the cache; this is not expected")
+
+          case Right(Some(epochAndMetadata)) =>
             val txnMetadata = epochAndMetadata.transactionMetadata
             val retryPartitions: mutable.Set[TopicPartition] = mutable.Set.empty[TopicPartition]
             var abortSending: Boolean = false
@@ -135,6 +154,15 @@ class TransactionMarkerRequestCompletionHandler(brokerId: Int,
 
                       txnMarkerChannelManager.removeMarkersForTxnId(transactionalId)
                       abortSending = true
+
+                    case Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT |
+                         Errors.UNSUPPORTED_VERSION =>
+                      // The producer would have failed to send data to the failed topic so we can safely remove the partition
+                      // from the set waiting for markers
+                      info(s"Sending $transactionalId's transaction marker from partition $topicPartition has failed with " +
+                        s" ${error.name}. This partition will be removed from the set of partitions" +
+                        s" waiting for completion")
+                      txnMetadata.removePartition(topicPartition)
 
                     case other =>
                       throw new IllegalStateException(s"Unexpected error ${other.exceptionName} while sending txn marker for $transactionalId")
