@@ -218,9 +218,9 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
         }
 
         @Override
-        public CloseableIterator<Record> streamingIterator() {
+        public CloseableIterator<Record> streamingIterator(BufferSupplier bufferSupplier) {
             loadUnderlyingRecordBatch();
-            return underlying.streamingIterator();
+            return underlying.streamingIterator(bufferSupplier);
         }
 
         @Override

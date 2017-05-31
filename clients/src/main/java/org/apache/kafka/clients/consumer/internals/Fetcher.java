@@ -46,6 +46,7 @@ import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.metrics.stats.Value;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.record.BufferSupplier;
 import org.apache.kafka.common.record.ControlRecordType;
 import org.apache.kafka.common.record.InvalidRecordException;
 import org.apache.kafka.common.record.Record;
@@ -105,6 +106,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
     private final FetchManagerMetrics sensors;
     private final SubscriptionState subscriptions;
     private final ConcurrentLinkedQueue<CompletedFetch> completedFetches;
+    private final BufferSupplier decompressionBufferSupplier = BufferSupplier.create();
 
     private final ExtendedDeserializer<K> keyDeserializer;
     private final ExtendedDeserializer<V> valueDeserializer;
@@ -1039,7 +1041,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                         }
                     }
 
-                    records = currentBatch.streamingIterator();
+                    records = currentBatch.streamingIterator(decompressionBufferSupplier);
                 }
 
                 Record record = records.next();
@@ -1326,6 +1328,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         if (nextInLineRecords != null)
             nextInLineRecords.drain();
         nextInLineExceptionMetadata = null;
+        decompressionBufferSupplier.close();
     }
 
 }
