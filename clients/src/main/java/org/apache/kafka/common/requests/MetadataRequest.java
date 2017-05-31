@@ -41,7 +41,9 @@ public class MetadataRequest extends AbstractRequest {
         private final boolean allowAutoTopicCreation;
 
         public static Builder allTopics() {
-            return new Builder(ALL_TOPICS, false);
+            // This never causes auto-creation, but we set the boolean to true because that is the default value when
+            // deserializing V2 and older. This way, the value is consistent after serialization and deserialization.
+            return new Builder(ALL_TOPICS, true);
         }
 
         public Builder(List<String> topics, boolean allowAutoTopicCreation) {
@@ -62,7 +64,7 @@ public class MetadataRequest extends AbstractRequest {
         public MetadataRequest build(short version) {
             if (version < 1)
                 throw new UnsupportedVersionException("MetadataRequest versions older than 1 are not supported.");
-            if (!allowAutoTopicCreation && version < 3 && topics != null && !topics.isEmpty())
+            if (!allowAutoTopicCreation && version < 3)
                 throw new UnsupportedVersionException("MetadataRequest versions older than 3 don't support the " +
                         "allowAutoTopicCreation field");
             return new MetadataRequest(this.topics, allowAutoTopicCreation, version);
