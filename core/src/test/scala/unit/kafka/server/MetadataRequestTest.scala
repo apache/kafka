@@ -132,12 +132,12 @@ class MetadataRequestTest extends BaseRequestTest {
     val response1 = sendMetadataRequest(new MetadataRequest(Seq(topic1, topic2).asJava, true, ApiKeys.METADATA.latestVersion))
     checkAutoCreatedTopic(topic1, topic2, response1)
 
-    // V2 doesn't support a configurable allowAutoTopicCreation, so the fact that we set it to `false` has no effect
-    val response2 = sendMetadataRequest(new MetadataRequest(Seq(topic2, topic3).asJava, false, 2))
+    // V3 doesn't support a configurable allowAutoTopicCreation, so the fact that we set it to `false` has no effect
+    val response2 = sendMetadataRequest(new MetadataRequest(Seq(topic2, topic3).asJava, false, 3))
     checkAutoCreatedTopic(topic2, topic3, response2)
 
-    // V3 and higher support a configurable allowAutoTopicCreation
-    val response3 = sendMetadataRequest(new MetadataRequest(Seq(topic3, topic4).asJava, false, 3))
+    // V4 and higher support a configurable allowAutoTopicCreation
+    val response3 = sendMetadataRequest(new MetadataRequest(Seq(topic3, topic4).asJava, false, 4))
     assertNull(response3.errors.get(topic3))
     assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, response3.errors.get(topic4))
     assertEquals(None, zkUtils.getTopicPartitionCount(topic4))
