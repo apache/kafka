@@ -45,10 +45,14 @@ public class PluginUtilsTest {
         );
         assertFalse(PluginUtils.shouldLoadInIsolation("sun."));
         assertFalse(PluginUtils.shouldLoadInIsolation("sun.reflect.DelegatingClassLoader"));
+        assertFalse(PluginUtils.shouldLoadInIsolation("com.sun."));
+        assertFalse(PluginUtils.shouldLoadInIsolation("com.sun.jmx.remote.util.ClassLogger"));
         assertFalse(PluginUtils.shouldLoadInIsolation("org.omg."));
         assertFalse(PluginUtils.shouldLoadInIsolation("org.omg.CORBA.Object"));
         assertFalse(PluginUtils.shouldLoadInIsolation("org.w3c.dom."));
         assertFalse(PluginUtils.shouldLoadInIsolation("org.w3c.dom.traversal.TreeWalker"));
+        assertFalse(PluginUtils.shouldLoadInIsolation("org.xml."));
+        assertFalse(PluginUtils.shouldLoadInIsolation("org.xml.sax.EntityResolver"));
     }
 
     @Test
