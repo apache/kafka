@@ -1492,8 +1492,11 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     def sendResponseCallback(producerId: Long, result: TransactionResult)(responseStatus: Map[TopicPartition, PartitionResponse]): Unit = {
       trace(s"End transaction marker append for producer id $producerId completed with status: $responseStatus")
-      errors.put(producerId, responseStatus.mapValues(_.error).asJava)
-
+      val partitionErrors = responseStatus.mapValues(_.error).asJava
+      val previous = errors.putIfAbsent(producerId, partitionErrors)
+      if (previous != null)
+        previous.putAll(partitionErrors)
+      
       val successfulOffsetsPartitions = responseStatus.filter { case (topicPartition, partitionResponse) =>
         topicPartition.topic == GROUP_METADATA_TOPIC_NAME && partitionResponse.error == Errors.NONE
       }.keys
@@ -1519,25 +1522,49 @@ class KafkaApis(val requestChannel: RequestChannel,
     // be nice to have only one append to the log. This requires pushing the building of the control records
     // into Log so that we only append those having a valid producer epoch, and exposing a new appendControlRecord
     // API in ReplicaManager. For now, we've done the simpler approach
+    var skippedMarkers = 0
     for (marker <- markers.asScala) {
       val producerId = marker.producerId
-      val controlRecords = marker.partitions.asScala.map { partition =>
-        val controlRecordType = marker.transactionResult match {
-          case TransactionResult.COMMIT => ControlRecordType.COMMIT
-          case TransactionResult.ABORT => ControlRecordType.ABORT
+      val (goodPartitions, partitionsWithIncorrectMessageFormat) = marker.partitions.asScala.partition { partition =>
+        replicaManager.getMagic(partition) match {
+          case Some(magic) if magic >= RecordBatch.MAGIC_VALUE_V2 => true
+          case _ => false
         }
-        val endTxnMarker = new EndTransactionMarker(controlRecordType, marker.coordinatorEpoch)
-        partition -> MemoryRecords.withEndTransactionMarker(producerId, marker.producerEpoch, endTxnMarker)
-      }.toMap
+      }
 
-      replicaManager.appendRecords(
-        timeout = config.requestTimeoutMs.toLong,
-        requiredAcks = -1,
-        internalTopicsAllowed = true,
-        isFromClient = false,
-        entriesPerPartition = controlRecords,
-        responseCallback = sendResponseCallback(producerId, marker.transactionResult))
+      if (partitionsWithIncorrectMessageFormat.nonEmpty) {
+        val partitionErrors = new util.HashMap[TopicPartition, Errors]()
+        partitionsWithIncorrectMessageFormat.foreach { partition => partitionErrors.put(partition, Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT) }
+        errors.put(producerId, partitionErrors)
+      }
+
+      if (goodPartitions.isEmpty) {
+        numAppends.decrementAndGet()
+        skippedMarkers += 1
+      } else {
+        val controlRecords = goodPartitions.map { partition =>
+          val controlRecordType = marker.transactionResult match {
+            case TransactionResult.COMMIT => ControlRecordType.COMMIT
+            case TransactionResult.ABORT => ControlRecordType.ABORT
+          }
+          val endTxnMarker = new EndTransactionMarker(controlRecordType, marker.coordinatorEpoch)
+          partition -> MemoryRecords.withEndTransactionMarker(producerId, marker.producerEpoch, endTxnMarker)
+        }.toMap
+
+        replicaManager.appendRecords(
+          timeout = config.requestTimeoutMs.toLong,
+          requiredAcks = -1,
+          internalTopicsAllowed = true,
+          isFromClient = false,
+          entriesPerPartition = controlRecords,
+          responseCallback = sendResponseCallback(producerId, marker.transactionResult))
+      }
     }
+
+    // No log appends were written as all partitions had incorrect log format
+    // so we need to send the error response
+    if (skippedMarkers == markers.size())
+      sendResponseExemptThrottle(request, () => sendResponse(request, new WriteTxnMarkersResponse(errors)))
   }
 
   def ensureInterBrokerVersion(version: ApiVersion): Unit = {

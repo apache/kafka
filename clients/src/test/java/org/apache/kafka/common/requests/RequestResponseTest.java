@@ -53,11 +53,9 @@ import org.apache.kafka.common.requests.DeleteAclsResponse.AclFilterResponse;
 import org.apache.kafka.common.utils.Utils;
 import org.junit.Test;
 
-import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.nio.ByteBuffer;
-import java.nio.channels.GatheringByteChannel;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -479,14 +477,14 @@ public class RequestResponseTest {
         send.writeTo(channel);
         channel.close();
 
-        ByteBuffer buf = channel.buf;
+        ByteBuffer buf = channel.buffer();
 
         // read the size
         int size = buf.getInt();
         assertTrue(size > 0);
 
         // read the header
-        ResponseHeader responseHeader = ResponseHeader.parse(channel.buf);
+        ResponseHeader responseHeader = ResponseHeader.parse(channel.buffer());
         assertEquals(header.correlationId(), responseHeader.correlationId());
 
         // read the body
@@ -1046,52 +1044,6 @@ public class RequestResponseTest {
         responses.add(new AclFilterResponse(new SecurityDisabledException("No security"),
             Collections.<AclDeletionResult>emptySet()));
         return new DeleteAclsResponse(0, responses);
-    }
-
-    private static class ByteBufferChannel implements GatheringByteChannel {
-        private final ByteBuffer buf;
-        private boolean closed = false;
-
-        private ByteBufferChannel(long size) {
-            if (size > Integer.MAX_VALUE)
-                throw new IllegalArgumentException("size should be not be greater than Integer.MAX_VALUE");
-            this.buf = ByteBuffer.allocate((int) size);
-        }
-
-        @Override
-        public long write(ByteBuffer[] srcs, int offset, int length) throws IOException {
-            int position = buf.position();
-            for (int i = 0; i < length; i++) {
-                ByteBuffer src = srcs[i].duplicate();
-                if (i == 0)
-                    src.position(offset);
-                buf.put(src);
-            }
-            return buf.position() - position;
-        }
-
-        @Override
-        public long write(ByteBuffer[] srcs) throws IOException {
-            return write(srcs, 0, srcs.length);
-        }
-
-        @Override
-        public int write(ByteBuffer src) throws IOException {
-            int position = buf.position();
-            buf.put(src);
-            return buf.position() - position;
-        }
-
-        @Override
-        public boolean isOpen() {
-            return !closed;
-        }
-
-        @Override
-        public void close() throws IOException {
-            buf.flip();
-            closed = true;
-        }
     }
 
     private DescribeConfigsRequest createDescribeConfigsRequest() {
