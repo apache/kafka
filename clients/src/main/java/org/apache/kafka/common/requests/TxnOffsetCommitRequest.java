@@ -67,7 +67,8 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
         @Override
         public String toString() {
             StringBuilder bld = new StringBuilder();
-            bld.append("(transactionalId=").append(transactionalId).
+            bld.append("(type=TxnOffsetCommitRequest").
+                    append(", transactionalId=").append(transactionalId).
                     append(", producerId=").append(producerId).
                     append(", producerEpoch=").append(producerEpoch).
                     append(", consumerGroupId=").append(consumerGroupId).

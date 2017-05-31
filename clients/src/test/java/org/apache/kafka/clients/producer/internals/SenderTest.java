@@ -403,7 +403,7 @@ public class SenderTest {
         client.setNode(new Node(1, "localhost", 33343));
         prepareAndReceiveInitProducerId(producerId, Errors.CLUSTER_AUTHORIZATION_FAILED);
         assertFalse(transactionManager.hasProducerId());
-        assertTrue(transactionManager.isInErrorState());
+        assertTrue(transactionManager.hasError());
         assertTrue(transactionManager.lastError() instanceof ClusterAuthorizationException);
 
         // cluster authorization is a fatal error for the producer

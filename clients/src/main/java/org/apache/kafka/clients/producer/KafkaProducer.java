@@ -697,7 +697,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             throw new IllegalStateException("Cannot perform a 'send' before completing a call to initTransactions " +
                     "when transactions are enabled.");
 
-        if (transactionManager.isInErrorState()) {
+        if (transactionManager.hasError()) {
             Exception lastError = transactionManager.lastError();
             throw new KafkaException("Cannot perform send because at least one previous transactional or " +
                     "idempotent request has failed with errors.", lastError);
