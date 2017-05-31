@@ -18,6 +18,7 @@ package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
+import org.apache.kafka.common.utils.CloseableIterator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -124,12 +125,13 @@ public class MemoryRecords extends AbstractRecords {
      * @return A FilterResult with a summary of the output (for metrics) and potentially an overflow buffer
      */
     public FilterResult filterTo(TopicPartition partition, RecordFilter filter, ByteBuffer destinationBuffer,
-                                 int maxRecordBatchSize) {
-        return filterTo(partition, batches(), filter, destinationBuffer, maxRecordBatchSize);
+                                 int maxRecordBatchSize, BufferSupplier decompressionBufferSupplier) {
+        return filterTo(partition, batches(), filter, destinationBuffer, maxRecordBatchSize, decompressionBufferSupplier);
     }
 
     private static FilterResult filterTo(TopicPartition partition, Iterable<MutableRecordBatch> batches,
-                                         RecordFilter filter, ByteBuffer destinationBuffer, int maxRecordBatchSize) {
+                                         RecordFilter filter, ByteBuffer destinationBuffer, int maxRecordBatchSize,
+                                         BufferSupplier decompressionBufferSupplier) {
         long maxTimestamp = RecordBatch.NO_TIMESTAMP;
         long maxOffset = -1L;
         long shallowOffsetOfMaxTimestamp = -1L;
@@ -155,21 +157,24 @@ public class MemoryRecords extends AbstractRecords {
             boolean writeOriginalBatch = true;
             List<Record> retainedRecords = new ArrayList<>();
 
-            for (Record record : batch) {
-                messagesRead += 1;
+            try (final CloseableIterator<Record> iterator = batch.streamingIterator(decompressionBufferSupplier)) {
+                while (iterator.hasNext()) {
+                    Record record = iterator.next();
+                    messagesRead += 1;
 
-                if (filter.shouldRetain(batch, record)) {
-                    // Check for log corruption due to KAFKA-4298. If we find it, make sure that we overwrite
-                    // the corrupted batch with correct data.
-                    if (!record.hasMagic(batchMagic))
+                    if (filter.shouldRetain(batch, record)) {
+                        // Check for log corruption due to KAFKA-4298. If we find it, make sure that we overwrite
+                        // the corrupted batch with correct data.
+                        if (!record.hasMagic(batchMagic))
+                            writeOriginalBatch = false;
+
+                        if (record.offset() > maxOffset)
+                            maxOffset = record.offset();
+
+                        retainedRecords.add(record);
+                    } else {
                         writeOriginalBatch = false;
-
-                    if (record.offset() > maxOffset)
-                        maxOffset = record.offset();
-
-                    retainedRecords.add(record);
-                } else {
-                    writeOriginalBatch = false;
+                    }
                 }
             }
 
