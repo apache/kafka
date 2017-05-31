@@ -158,7 +158,10 @@ public class StreamsConfig extends AbstractConfig {
     public static final String DEFAULT_VALUE_SERDE_CLASS_CONFIG = "default.value.serde";
     private static final String DEFAULT_VALUE_SERDE_CLASS_DOC = "Default serializer / deserializer class for value that implements the <code>Serde</code> interface.";
 
-    /** {@code key.serde} */
+    /**
+     * {@code key.serde}
+     * @deprecated Use {@link #DEFAULT_KEY_SERDE_CLASS_CONFIG} instead.
+     */
     @Deprecated
     public static final String KEY_SERDE_CLASS_CONFIG = "key.serde";
     private static final String KEY_SERDE_CLASS_DOC = "Serializer / deserializer class for key that implements the <code>Serde</code> interface. This config is deprecated, use <code>" + DEFAULT_KEY_SERDE_CLASS_CONFIG + "</code> instead";
@@ -235,12 +238,18 @@ public class StreamsConfig extends AbstractConfig {
     public static final String STATE_DIR_CONFIG = "state.dir";
     private static final String STATE_DIR_DOC = "Directory location for state store.";
 
-    /** {@code timestamp.extractor} */
+    /**
+     * {@code timestamp.extractor}
+     * @deprecated Use {@link #DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG} instead.
+     */
     @Deprecated
     public static final String TIMESTAMP_EXTRACTOR_CLASS_CONFIG = "timestamp.extractor";
     private static final String TIMESTAMP_EXTRACTOR_CLASS_DOC = "Timestamp extractor class that implements the <code>TimestampExtractor</code> interface. This config is deprecated, use <code>" + DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG + "</code> instead";
 
-    /** {@code value.serde} */
+    /**
+     * {@code value.serde}
+     * @deprecated Use {@link #DEFAULT_VALUE_SERDE_CLASS_CONFIG} instead.
+     */
     @Deprecated
     public static final String VALUE_SERDE_CLASS_CONFIG = "value.serde";
     private static final String VALUE_SERDE_CLASS_DOC = "Serializer / deserializer class for value that implements the <code>Serde</code> interface. This config is deprecated, use <code>" + DEFAULT_VALUE_SERDE_CLASS_CONFIG + "</code> instead";
@@ -280,11 +289,6 @@ public class StreamsConfig extends AbstractConfig {
                     "/tmp/kafka-streams",
                     Importance.HIGH,
                     STATE_DIR_DOC)
-            .define(ZOOKEEPER_CONNECT_CONFIG,
-                    Type.STRING,
-                    "",
-                    Importance.HIGH,
-                    ZOOKEEPER_CONNECT_DOC)
 
             // MEDIUM
 
@@ -294,6 +298,11 @@ public class StreamsConfig extends AbstractConfig {
                     atLeast(0),
                     Importance.MEDIUM,
                     CACHE_MAX_BYTES_BUFFERING_DOC)
+            .define(CLIENT_ID_CONFIG,
+                    Type.STRING,
+                    "",
+                    Importance.MEDIUM,
+                    CommonClientConfigs.CLIENT_ID_DOC)
             .define(DEFAULT_KEY_SERDE_CLASS_CONFIG,
                     Type.CLASS,
                     Serdes.ByteArraySerde.class.getName(),
@@ -309,11 +318,6 @@ public class StreamsConfig extends AbstractConfig {
                     Serdes.ByteArraySerde.class.getName(),
                     Importance.MEDIUM,
                     DEFAULT_VALUE_SERDE_CLASS_DOC)
-            .define(KEY_SERDE_CLASS_CONFIG,
-                    Type.CLASS,
-                    null,
-                    Importance.MEDIUM,
-                    KEY_SERDE_CLASS_DOC)
             .define(NUM_STANDBY_REPLICAS_CONFIG,
                     Type.INT,
                     0,
@@ -335,16 +339,6 @@ public class StreamsConfig extends AbstractConfig {
                     CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,
                     Importance.MEDIUM,
                     CommonClientConfigs.SECURITY_PROTOCOL_DOC)
-            .define(TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
-                    Type.CLASS,
-                    null,
-                    Importance.MEDIUM,
-                    TIMESTAMP_EXTRACTOR_CLASS_DOC)
-            .define(VALUE_SERDE_CLASS_CONFIG,
-                    Type.CLASS,
-                    null,
-                    Importance.MEDIUM,
-                    VALUE_SERDE_CLASS_DOC)
 
             // LOW
 
@@ -358,11 +352,6 @@ public class StreamsConfig extends AbstractConfig {
                     1000,
                     Importance.LOW,
                     BUFFERED_RECORDS_PER_PARTITION_DOC)
-            .define(CLIENT_ID_CONFIG,
-                    Type.STRING,
-                    "",
-                    Importance.LOW,
-                    CommonClientConfigs.CLIENT_ID_DOC)
             .define(COMMIT_INTERVAL_MS_CONFIG,
                     Type.LONG,
                     DEFAULT_COMMIT_INTERVAL_MS,
@@ -462,7 +451,30 @@ public class StreamsConfig extends AbstractConfig {
                     Type.LONG,
                     24 * 60 * 60 * 1000,
                     Importance.LOW,
-                    WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_DOC);
+                    WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_DOC)
+
+            // @deprecated
+
+            .define(KEY_SERDE_CLASS_CONFIG,
+                    Type.CLASS,
+                    null,
+                    Importance.LOW,
+                    KEY_SERDE_CLASS_DOC)
+            .define(TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
+                    Type.CLASS,
+                    null,
+                    Importance.LOW,
+                    TIMESTAMP_EXTRACTOR_CLASS_DOC)
+            .define(VALUE_SERDE_CLASS_CONFIG,
+                    Type.CLASS,
+                    null,
+                    Importance.LOW,
+                    VALUE_SERDE_CLASS_DOC)
+            .define(ZOOKEEPER_CONNECT_CONFIG,
+                    Type.STRING,
+                    "",
+                    Importance.LOW,
+                    ZOOKEEPER_CONNECT_DOC);
     }
 
     // this is the list of configs for underlying clients

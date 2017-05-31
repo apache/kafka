@@ -667,8 +667,8 @@ KStream&lt;String, String&gt; materialized = joined.through("topic4");
         Note, that different parameters do have different "levels of importance", with the following interpretation:
         </p>
         <ul>
-          <li> HIGH: you most likely need to change the default value if you go to production </li>
-          <li> MEDIUM: default value should be ok, but you should double-check it </li>
+          <li> HIGH: you would most likely change the default value if you go to production </li>
+          <li> MEDIUM: default value might be ok, but you should double-check it </li>
           <li> LOW: default value is most likely ok; only consider to change it if you hit an issues when running in production </li>
         </ul>
 
