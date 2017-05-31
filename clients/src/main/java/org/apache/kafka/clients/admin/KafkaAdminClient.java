@@ -350,8 +350,9 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     @Override
-    public void close(long waitTimeDuration, TimeUnit waitTimeUnit) {
-        long waitTimeMs = waitTimeUnit.toMillis(waitTimeDuration);
+    public void close(long duration, TimeUnit unit) {
+        long waitTimeMs = unit.toMillis(duration);
+        waitTimeMs = Math.min(TimeUnit.DAYS.toMillis(365), waitTimeMs); // Limit the timeout to a year.
         long now = time.milliseconds();
         long newHardShutdownTimeMs = now + waitTimeMs;
         long prev = INVALID_SHUTDOWN_TIME;
@@ -372,8 +373,10 @@ public class KafkaAdminClient extends AdminClient {
                 break;
             }
         }
-        long deltaMs = Math.max(0, newHardShutdownTimeMs - time.milliseconds());
-        log.debug("{}: waiting for the I/O thread to exit.  Hard shutdown in {} ms.", clientId, deltaMs);
+        if (log.isDebugEnabled()) {
+            long deltaMs = Math.max(0, newHardShutdownTimeMs - time.milliseconds());
+            log.debug("{}: waiting for the I/O thread to exit. Hard shutdown in {} ms.", clientId, deltaMs);
+        }
         try {
             // Wait for the thread to be joined.
             thread.join();
@@ -467,7 +470,7 @@ public class KafkaAdminClient extends AdminClient {
             if ((throwable instanceof UnsupportedVersionException) &&
                      handleUnsupportedVersionException((UnsupportedVersionException) throwable)) {
                 log.trace("{} attempting protocol downgrade.", this);
-                runnable.queue(this, now);
+                runnable.enqueue(this, now);
                 return;
             }
             tries++;
@@ -502,7 +505,7 @@ public class KafkaAdminClient extends AdminClient {
                 log.debug("{} failed: {}.  Beginning retry #{}",
                     this, prettyPrintException(throwable), tries);
             }
-            runnable.queue(this, now);
+            runnable.enqueue(this, now);
         }
 
         /**
@@ -613,13 +616,13 @@ public class KafkaAdminClient extends AdminClient {
              *
              * @return              The number of calls which were timed out.
              */
-            int handleTimeouts(Collection<Call> calls) {
+            int handleTimeouts(Collection<Call> calls, String msg) {
                 int numTimedOut = 0;
                 for (Iterator<Call> iter = calls.iterator(); iter.hasNext(); ) {
                     Call call = iter.next();
                     int remainingMs = calcTimeoutMsRemainingAsInt(now, call.deadlineMs);
                     if (remainingMs < 0) {
-                        call.fail(now, new TimeoutException());
+                        call.fail(now, new TimeoutException(msg));
                         iter.remove();
                         numTimedOut++;
                     } else {
@@ -656,7 +659,8 @@ public class KafkaAdminClient extends AdminClient {
          * @param processor     The timeout processor.
          */
         private synchronized void timeoutNewCalls(TimeoutProcessor processor) {
-            int numTimedOut = processor.handleTimeouts(newCalls);
+            int numTimedOut = processor.handleTimeouts(newCalls,
+                    "Timed out waiting for a node assignment.");
             if (numTimedOut > 0)
                 log.debug("{}: timed out {} new calls.", clientId, numTimedOut);
         }
@@ -670,7 +674,8 @@ public class KafkaAdminClient extends AdminClient {
         private void timeoutCallsToSend(TimeoutProcessor processor, Map<Node, List<Call>> callsToSend) {
             int numTimedOut = 0;
             for (List<Call> callList : callsToSend.values()) {
-                numTimedOut += processor.handleTimeouts(callList);
+                numTimedOut += processor.handleTimeouts(callList,
+                    "Timed out waiting to send the call.");
             }
             if (numTimedOut > 0)
                 log.debug("{}: timed out {} call(s) with assigned nodes.", clientId, numTimedOut);
@@ -927,10 +932,12 @@ public class KafkaAdminClient extends AdminClient {
             int numTimedOut = 0;
             TimeoutProcessor timeoutProcessor = new TimeoutProcessor(Long.MAX_VALUE);
             synchronized (this) {
-                numTimedOut += timeoutProcessor.handleTimeouts(newCalls);
+                numTimedOut += timeoutProcessor.handleTimeouts(newCalls,
+                        "The AdminClient thread has exited.");
                 newCalls = null;
             }
-            numTimedOut += timeoutProcessor.handleTimeouts(correlationIdToCalls.values());
+            numTimedOut += timeoutProcessor.handleTimeouts(correlationIdToCalls.values(),
+                    "The AdminClient thread has exited.");
             if (numTimedOut > 0) {
                 log.debug("{}: timed out {} remaining operations.", clientId, numTimedOut);
             }
@@ -949,7 +956,7 @@ public class KafkaAdminClient extends AdminClient {
          * @param call      The new call object.
          * @param now       The current time in milliseconds.
          */
-        void queue(Call call, long now) {
+        void enqueue(Call call, long now) {
             if (log.isDebugEnabled()) {
                 log.debug("{}: queueing {} with a timeout {} ms from now.",
                     clientId, call, call.deadlineMs - now);
@@ -965,7 +972,7 @@ public class KafkaAdminClient extends AdminClient {
                 client.wakeup(); // wake the thread if it is in poll()
             } else {
                 log.debug("{}: the AdminClient thread has exited.  Timing out {}.", clientId, call);
-                call.fail(Long.MAX_VALUE, new TimeoutException());
+                call.fail(Long.MAX_VALUE, new TimeoutException("The AdminClient thread has exited."));
             }
         }
 
@@ -980,9 +987,9 @@ public class KafkaAdminClient extends AdminClient {
         void call(Call call, long now) {
             if (hardShutdownTimeMs.get() != INVALID_SHUTDOWN_TIME) {
                 log.debug("{}: the AdminClient is not accepting new calls.  Timing out {}.", clientId, call);
-                call.fail(Long.MAX_VALUE, new TimeoutException());
+                call.fail(Long.MAX_VALUE, new TimeoutException("The AdminClient thread is not accepting new calls."));
             } else {
-                queue(call, now);
+                enqueue(call, now);
             }
         }
     }

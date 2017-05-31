@@ -68,7 +68,7 @@ public abstract class AdminClient implements AutoCloseable {
      * Close the AdminClient and release all associated resources.
      *
      * The close operation has a grace period during which current operations will be allowed to
-     * complete.  The length of the grace period is controlled by waitTimeUnit and waitTimeDuration.
+     * complete, specified by the given duration and time unit.
      * New operations will not be accepted during the grace period.  Once the grace period is over,
      * all operations that have not yet been completed will be aborted with a TimeoutException.
      *
