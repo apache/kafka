@@ -65,11 +65,13 @@ public class Protocol {
     /* The v2 metadata request is the same as v1. An additional field for cluster id has been added to the v2 metadata response */
     public static final Schema METADATA_REQUEST_V2 = METADATA_REQUEST_V1;
 
-    /* V3 additions: a field for allowing auto topic creation was added to the request and a field for throttle time has
-    * been added to the response */
-    public static final Schema METADATA_REQUEST_V3 = new Schema(new Field("topics",
+    /* The v3 metadata request is the same as v1 and v2. An additional field for throttle time has been added to the v3 metadata response */
+    public static final Schema METADATA_REQUEST_V3 = METADATA_REQUEST_V2;
+
+    /* The v4 metadata request has an additional field for allowing auto topic creation. The response is the same as v3. */
+    public static final Schema METADATA_REQUEST_V4 = new Schema(new Field("topics",
                                                                           ArrayOf.nullable(STRING),
-                                                                     "An array of topics to fetch metadata for. If the topics array is null fetch metadata for all topics."),
+                                                                         "An array of topics to fetch metadata for. If the topics array is null fetch metadata for all topics."),
                                                                 new Field("allow_auto_topic_creation",
                                                                           BOOLEAN,
                                                                           "If this and the broker config 'auto.create.topics.enable' are true, " +
@@ -150,8 +152,10 @@ public class Protocol {
              "The broker id of the controller broker."),
          new Field("topic_metadata", new ArrayOf(TOPIC_METADATA_V1)));
 
-    public static final Schema[] METADATA_REQUEST = {METADATA_REQUEST_V0, METADATA_REQUEST_V1, METADATA_REQUEST_V2, METADATA_REQUEST_V3};
-    public static final Schema[] METADATA_RESPONSE = {METADATA_RESPONSE_V0, METADATA_RESPONSE_V1, METADATA_RESPONSE_V2, METADATA_RESPONSE_V3};
+    public static final Schema METADATA_RESPONSE_V4 = METADATA_RESPONSE_V3;
+
+    public static final Schema[] METADATA_REQUEST = {METADATA_REQUEST_V0, METADATA_REQUEST_V1, METADATA_REQUEST_V2, METADATA_REQUEST_V3, METADATA_REQUEST_V4};
+    public static final Schema[] METADATA_RESPONSE = {METADATA_RESPONSE_V0, METADATA_RESPONSE_V1, METADATA_RESPONSE_V2, METADATA_RESPONSE_V3, METADATA_RESPONSE_V4};
 
     /* Produce api */
 

@@ -64,8 +64,8 @@ public class MetadataRequest extends AbstractRequest {
         public MetadataRequest build(short version) {
             if (version < 1)
                 throw new UnsupportedVersionException("MetadataRequest versions older than 1 are not supported.");
-            if (!allowAutoTopicCreation && version < 3)
-                throw new UnsupportedVersionException("MetadataRequest versions older than 3 don't support the " +
+            if (!allowAutoTopicCreation && version < 4)
+                throw new UnsupportedVersionException("MetadataRequest versions older than 4 don't support the " +
                         "allowAutoTopicCreation field");
             return new MetadataRequest(this.topics, allowAutoTopicCreation, version);
         }
@@ -134,6 +134,7 @@ public class MetadataRequest extends AbstractRequest {
             case 2:
                 return new MetadataResponse(Collections.<Node>emptyList(), null, MetadataResponse.NO_CONTROLLER_ID, topicMetadatas);
             case 3:
+            case 4:
                 return new MetadataResponse(throttleTimeMs, Collections.<Node>emptyList(), null, MetadataResponse.NO_CONTROLLER_ID, topicMetadatas);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
