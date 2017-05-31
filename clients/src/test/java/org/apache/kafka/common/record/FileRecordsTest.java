@@ -26,11 +26,11 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 
+import static java.util.Arrays.asList;
 import static org.apache.kafka.test.TestUtils.tempFile;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -324,8 +324,8 @@ public class FileRecordsTest {
     }
 
     private void doTestConversion(CompressionType compressionType, byte toMagic) throws IOException {
-        List<Long> offsets = Arrays.asList(0L, 2L, 3L, 9L, 11L, 15L);
-        List<SimpleRecord> records = Arrays.asList(
+        List<Long> offsets = asList(0L, 2L, 3L, 9L, 11L, 15L);
+        List<SimpleRecord> records = asList(
                 new SimpleRecord(1L, "k1".getBytes(), "hello".getBytes()),
                 new SimpleRecord(2L, "k2".getBytes(), "goodbye".getBytes()),
                 new SimpleRecord(3L, "k3".getBytes(), "hello again".getBytes()),

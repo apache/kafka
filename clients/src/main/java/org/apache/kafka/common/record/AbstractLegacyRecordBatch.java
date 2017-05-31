@@ -29,6 +29,7 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
 import java.util.ArrayDeque;
 import java.util.NoSuchElementException;
 
@@ -508,6 +509,78 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
         public int hashCode() {
             return buffer != null ? buffer.hashCode() : 0;
         }
+    }
+
+    static class LegacyFileChannelRecordBatch extends FileLogInputStream.FileChannelRecordBatch {
+
+        LegacyFileChannelRecordBatch(long offset,
+                                     byte magic,
+                                     FileChannel channel,
+                                     int position,
+                                     int batchSize) {
+            super(offset, magic, channel, position, batchSize);
+        }
+
+        @Override
+        protected RecordBatch toMemoryRecordBatch(ByteBuffer buffer) {
+            return new ByteBufferLegacyRecordBatch(buffer);
+        }
+
+        @Override
+        public long baseOffset() {
+            return loadFullBatch().baseOffset();
+        }
+
+        @Override
+        public long lastOffset() {
+            return offset;
+        }
+
+        @Override
+        public long producerId() {
+            return RecordBatch.NO_PRODUCER_ID;
+        }
+
+        @Override
+        public short producerEpoch() {
+            return RecordBatch.NO_PRODUCER_EPOCH;
+        }
+
+        @Override
+        public int baseSequence() {
+            return RecordBatch.NO_SEQUENCE;
+        }
+
+        @Override
+        public int lastSequence() {
+            return RecordBatch.NO_SEQUENCE;
+        }
+
+        @Override
+        public Integer countOrNull() {
+            return null;
+        }
+
+        @Override
+        public boolean isTransactional() {
+            return false;
+        }
+
+        @Override
+        public boolean isControlBatch() {
+            return false;
+        }
+
+        @Override
+        public int partitionLeaderEpoch() {
+            return RecordBatch.NO_PARTITION_LEADER_EPOCH;
+        }
+
+        @Override
+        protected int headerSize() {
+            return LOG_OVERHEAD + LegacyRecord.headerSize(magic);
+        }
+
     }
 
 }

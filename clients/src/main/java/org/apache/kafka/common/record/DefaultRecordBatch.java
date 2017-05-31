@@ -26,6 +26,7 @@ import org.apache.kafka.common.utils.Crc32C;
 import java.io.DataInputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -496,6 +497,82 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
             throw new UnsupportedOperationException();
         }
 
+    }
+
+    static class DefaultFileChannelRecordBatch extends FileLogInputStream.FileChannelRecordBatch {
+
+        DefaultFileChannelRecordBatch(long offset,
+                                      byte magic,
+                                      FileChannel channel,
+                                      int position,
+                                      int batchSize) {
+            super(offset, magic, channel, position, batchSize);
+        }
+
+        @Override
+        protected RecordBatch toMemoryRecordBatch(ByteBuffer buffer) {
+            return new DefaultRecordBatch(buffer);
+        }
+
+        @Override
+        public long baseOffset() {
+            return offset;
+        }
+
+        @Override
+        public long lastOffset() {
+            return loadBatchHeader().lastOffset();
+        }
+
+        @Override
+        public long producerId() {
+            return loadBatchHeader().producerId();
+        }
+
+        @Override
+        public short producerEpoch() {
+            return loadBatchHeader().producerEpoch();
+        }
+
+        @Override
+        public int baseSequence() {
+            return loadBatchHeader().baseSequence();
+        }
+
+        @Override
+        public int lastSequence() {
+            return loadBatchHeader().lastSequence();
+        }
+
+        @Override
+        public long checksum() {
+            return loadBatchHeader().checksum();
+        }
+
+        @Override
+        public Integer countOrNull() {
+            return loadBatchHeader().countOrNull();
+        }
+
+        @Override
+        public boolean isTransactional() {
+            return loadBatchHeader().isTransactional();
+        }
+
+        @Override
+        public boolean isControlBatch() {
+            return loadBatchHeader().isControlBatch();
+        }
+
+        @Override
+        public int partitionLeaderEpoch() {
+            return loadBatchHeader().partitionLeaderEpoch();
+        }
+
+        @Override
+        protected int headerSize() {
+            return RECORD_BATCH_OVERHEAD;
+        }
     }
 
 }
