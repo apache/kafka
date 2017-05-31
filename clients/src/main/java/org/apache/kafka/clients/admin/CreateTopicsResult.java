@@ -25,10 +25,10 @@ import java.util.Map;
  * The result of newTopics.
  */
 @InterfaceStability.Unstable
-public class CreateTopicsResults {
+public class CreateTopicsResult {
     private final Map<String, KafkaFuture<Void>> futures;
 
-    CreateTopicsResults(Map<String, KafkaFuture<Void>> futures) {
+    CreateTopicsResult(Map<String, KafkaFuture<Void>> futures) {
         this.futures = futures;
     }
 

@@ -84,9 +84,9 @@ public abstract class AdminClient implements AutoCloseable {
      * Create a batch of new topics with the default options.
      *
      * @param newTopics         The new topics to create.
-     * @return                  The CreateTopicsResults.
+     * @return                  The CreateTopicsResult.
      */
-    public CreateTopicsResults createTopics(Collection<NewTopic> newTopics) {
+    public CreateTopicsResult createTopics(Collection<NewTopic> newTopics) {
         return createTopics(newTopics, new CreateTopicsOptions());
     }
 
@@ -100,9 +100,9 @@ public abstract class AdminClient implements AutoCloseable {
      *
      * @param newTopics         The new topics to create.
      * @param options           The options to use when creating the new topics.
-     * @return                  The CreateTopicsResults.
+     * @return                  The CreateTopicsResult.
      */
-    public abstract CreateTopicsResults createTopics(Collection<NewTopic> newTopics,
+    public abstract CreateTopicsResult createTopics(Collection<NewTopic> newTopics,
                                                     CreateTopicsOptions options);
 
     /**

@@ -999,7 +999,7 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     @Override
-    public CreateTopicsResults createTopics(final Collection<NewTopic> newTopics,
+    public CreateTopicsResult createTopics(final Collection<NewTopic> newTopics,
                                            final CreateTopicsOptions options) {
         final Map<String, KafkaFutureImpl<Void>> topicFutures = new HashMap<>(newTopics.size());
         final Map<String, CreateTopicsRequest.TopicDetails> topicsMap = new HashMap<>(newTopics.size());
@@ -1050,7 +1050,7 @@ public class KafkaAdminClient extends AdminClient {
                 completeAllExceptionally(topicFutures.values(), throwable);
             }
         }, now);
-        return new CreateTopicsResults(new HashMap<String, KafkaFuture<Void>>(topicFutures));
+        return new CreateTopicsResult(new HashMap<String, KafkaFuture<Void>>(topicFutures));
     }
 
     @Override
