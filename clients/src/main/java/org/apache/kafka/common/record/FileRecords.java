@@ -339,35 +339,22 @@ public class FileRecords extends AbstractRecords implements Closeable {
         return batches;
     }
 
-    /**
-     * Get an iterator over the record batches, enforcing a maximum record size
-     * @param maxRecordSize The maximum allowable size of individual records (including compressed record sets)
-     * @return An iterator over the batches
-     */
-    public Iterable<FileChannelRecordBatch> batches(int maxRecordSize) {
-        return batches(maxRecordSize, start);
-    }
-
-    private Iterable<FileChannelRecordBatch> batchesFrom(int start) {
-        return batches(Integer.MAX_VALUE, start);
-    }
-
-    private Iterable<FileChannelRecordBatch> batches(final int maxRecordSize, final int start) {
+    private Iterable<FileChannelRecordBatch> batchesFrom(final int start) {
         return new Iterable<FileChannelRecordBatch>() {
             @Override
             public Iterator<FileChannelRecordBatch> iterator() {
-                return batchIterator(maxRecordSize, start);
+                return batchIterator(start);
             }
         };
     }
 
-    private Iterator<FileChannelRecordBatch> batchIterator(int maxRecordSize, int start) {
+    private Iterator<FileChannelRecordBatch> batchIterator(int start) {
         final int end;
         if (isSlice)
             end = this.end;
         else
             end = this.sizeInBytes();
-        FileLogInputStream inputStream = new FileLogInputStream(channel, maxRecordSize, start, end);
+        FileLogInputStream inputStream = new FileLogInputStream(channel, start, end);
         return new RecordBatchIterator<>(inputStream);
     }
 

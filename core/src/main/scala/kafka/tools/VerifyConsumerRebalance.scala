@@ -23,7 +23,7 @@ import kafka.utils.{CommandLineUtils, Exit, Logging, ZKGroupTopicDirs, ZkUtils}
 
 object VerifyConsumerRebalance extends Logging {
   def main(args: Array[String]) {
-    val parser = new OptionParser()
+    val parser = new OptionParser(false)
 
     val zkConnectOpt = parser.accepts("zookeeper.connect", "ZooKeeper connect string.").
       withRequiredArg().defaultsTo("localhost:2181").ofType(classOf[String])

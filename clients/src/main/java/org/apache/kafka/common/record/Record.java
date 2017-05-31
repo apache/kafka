@@ -38,7 +38,7 @@ public interface Record {
      * Get the sequence number assigned by the producer.
      * @return the sequence number
      */
-    long sequence();
+    int sequence();
 
     /**
      * Get the size in bytes of this record.

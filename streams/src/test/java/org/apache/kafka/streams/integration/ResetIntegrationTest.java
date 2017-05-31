@@ -158,7 +158,7 @@ public class ResetIntegrationTest {
         TestUtils.waitForCondition(consumerGroupInactive, TIMEOUT_MULTIPLIER * STREAMS_CONSUMER_TIMEOUT,
             "Streams Application consumer group did not time out after " + (TIMEOUT_MULTIPLIER * STREAMS_CONSUMER_TIMEOUT) + " ms.");
 
-        // insert bad record to maks sure intermediate user topic gets seekToEnd()
+        // insert bad record to make sure intermediate user topic gets seekToEnd()
         mockTime.sleep(1);
         IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
                 INTERMEDIATE_USER_TOPIC,
@@ -340,7 +340,7 @@ public class ResetIntegrationTest {
         if (intermediateUserTopic != null) {
             parameters = new String[]{
                 "--application-id", APP_ID + testNo,
-                "--bootstrap-server", CLUSTER.bootstrapServers(),
+                "--bootstrap-servers", CLUSTER.bootstrapServers(),
                 "--zookeeper", CLUSTER.zKConnectString(),
                 "--input-topics", INPUT_TOPIC,
                 "--intermediate-topics", INTERMEDIATE_USER_TOPIC
@@ -348,7 +348,7 @@ public class ResetIntegrationTest {
         } else {
             parameters = new String[]{
                 "--application-id", APP_ID + testNo,
-                "--bootstrap-server", CLUSTER.bootstrapServers(),
+                "--bootstrap-servers", CLUSTER.bootstrapServers(),
                 "--zookeeper", CLUSTER.zKConnectString(),
                 "--input-topics", INPUT_TOPIC
             };
