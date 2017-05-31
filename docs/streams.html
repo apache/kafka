@@ -17,7 +17,7 @@
 
 <script><!--#include virtual="js/templateData.js" --></script>
 
-<!--<script id="streams-template" type="text/x-handlebars-template">-->
+<script id="streams-template" type="text/x-handlebars-template">
     <h1>Streams</h1>
 
         <ol class="toc">
@@ -719,7 +719,7 @@ settings.put(StremasConfig.producerConfig(ProducerConfig.RECEIVE_BUFFER_CONFIG),
         <p>
             Introduced in 0.11.0 is a new broker config that is particularly relevant to Kafka Streams applications, <code>group.initial.rebalance.delay.ms</code>.
             This config specifies the time, in milliseconds, that the <code>GroupCoordinator</code> will delay the initial consumer rebalance.
-            The rebalance will be further delayed by the value of <code>group.initial.rebalance.delay.ms<</code> as each new member joins the consumer group, up to a maximum of the value set by <code>max.poll.interval.ms</code>.
+            The rebalance will be further delayed by the value of <code>group.initial.rebalance.delay.ms</code> as each new member joins the consumer group, up to a maximum of the value set by <code>max.poll.interval.ms</code>.
             The net benefit is that this should reduce the overall startup time for Kafka Streams applications with more than one thread.
             The default value for <code>group.initial.rebalance.delay.ms</code> is 3 seconds.
         </p>
@@ -732,7 +732,7 @@ settings.put(StremasConfig.producerConfig(ProducerConfig.RECEIVE_BUFFER_CONFIG),
         </p>
 
 
-        <h4><a id="streams_execute" href="streams_execute">Executing Your Kafka Streams Application</a></h4>
+        <h4><a id="streams_execute" href="#streams_execute">Executing Your Kafka Streams Application</a></h4>
         <p>
         You can call Kafka Streams from anywhere in your application code.
         Very commonly though you would do so within the <code>main()</code> method of your application, or some variant thereof.
@@ -945,7 +945,7 @@ $ java -cp path-to-app-fatjar.jar com.example.MyStreamsApp
             <li> JoinWindows has no default size anymore: JoinWindows.of("name").within(1000) changes to JoinWindows.of(1000) </li>
         </ul>
 
-<!--</script>-->
+</script>
 
 <!--#include virtual="../includes/_header.htm" -->
 <!--#include virtual="../includes/_top.htm" -->
