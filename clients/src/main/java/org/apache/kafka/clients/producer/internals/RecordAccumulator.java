@@ -488,9 +488,9 @@ public final class RecordAccumulator {
                                             // the producer id and sequence here, this attempt will also be accepted,
                                             // causing a duplicate.
                                             int sequenceNumber = transactionManager.sequenceNumber(batch.topicPartition);
-                                            log.debug("Dest: {} : producerId: {}, epoch: {}, Assigning sequence for {}: {}",
-                                                    node, producerIdAndEpoch.producerId, producerIdAndEpoch.epoch,
-                                                    batch.topicPartition, sequenceNumber);
+                                            log.debug("Assigning sequence number {} from producer {} to dequeued " +
+                                                            "batch from partition {} bound for {}.",
+                                                    sequenceNumber, producerIdAndEpoch, batch.topicPartition, node);
                                             batch.setProducerState(producerIdAndEpoch, sequenceNumber, isTransactional);
                                         }
                                         batch.close();

@@ -165,7 +165,8 @@ public class FetchResponse extends AbstractResponse {
             return "(error=" + error + ", highWaterMark=" + highWatermark +
                     ", lastStableOffset = " + lastStableOffset +
                     ", logStartOffset = " + logStartOffset +
-                    ", abortedTransactions = " + abortedTransactions + ", records=" + records + ")";
+                    ", abortedTransactions = " + abortedTransactions +
+                    ", recordsSizeInBytes=" + records.sizeInBytes() + ")";
         }
     }
 

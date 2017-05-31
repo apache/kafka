@@ -108,4 +108,12 @@ public class TxnOffsetCommitResponse extends AbstractResponse {
         return new TxnOffsetCommitResponse(ApiKeys.TXN_OFFSET_COMMIT.parseResponse(version, buffer));
     }
 
+    @Override
+    public String toString() {
+        return "TxnOffsetCommitResponse(" +
+                "errors=" + errors +
+                ", throttleTimeMs=" + throttleTimeMs +
+                ')';
+    }
+
 }
