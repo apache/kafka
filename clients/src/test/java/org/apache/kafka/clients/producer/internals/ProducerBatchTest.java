@@ -75,6 +75,9 @@ public class ProducerBatchTest {
     public void testSplitPreservesMagicAndCompressionType() {
         for (byte magic : Arrays.asList(MAGIC_VALUE_V0, MAGIC_VALUE_V1, MAGIC_VALUE_V2)) {
             for (CompressionType compressionType : CompressionType.values()) {
+                if (compressionType == CompressionType.NONE && magic < MAGIC_VALUE_V2)
+                    continue;
+
                 MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), magic,
                         compressionType, TimestampType.CREATE_TIME, 0L);
 

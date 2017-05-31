@@ -43,6 +43,7 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static org.apache.kafka.common.record.RecordBatch.MAGIC_VALUE_V2;
 import static org.apache.kafka.common.record.RecordBatch.NO_TIMESTAMP;
 
 
@@ -182,32 +183,38 @@ public final class ProducerBatch {
         Iterator<MutableRecordBatch> recordBatchIter = memoryRecords.batches().iterator();
         if (!recordBatchIter.hasNext())
             throw new IllegalStateException("Cannot split an empty producer batch.");
+
+        RecordBatch recordBatch = recordBatchIter.next();
+        if (recordBatch.magic() < MAGIC_VALUE_V2 && !recordBatch.isCompressed())
+            throw new IllegalArgumentException("Batch splitting cannot be used with non-compressed messages " +
+                    "with version v0 and v1");
+
+        if (recordBatchIter.hasNext())
+            throw new IllegalArgumentException("A producer batch should only have one record batch.");
+
         Iterator<Thunk> thunkIter = thunks.iterator();
         // We always allocate batch size because we are already splitting a big batch.
         // And we also Retain the create time of the original batch.
-        while (recordBatchIter.hasNext()) {
-            RecordBatch recordBatch = recordBatchIter.next();
-            ProducerBatch batch = null;
+        ProducerBatch batch = null;
 
-            for (Record record : recordBatch) {
-                assert thunkIter.hasNext();
-                Thunk thunk = thunkIter.next();
-                if (batch == null) {
-                    batch = createBatchOffAccumulatorForRecord(record, splitBatchSize);
-                }
-
-                // A newly created batch can always host the first message.
-                if (!batch.tryAppendForSplit(record.timestamp(), record.key(), record.value(), record.headers(), thunk)) {
-                    batches.add(batch);
-                    batch = createBatchOffAccumulatorForRecord(record, splitBatchSize);
-                    batch.tryAppendForSplit(record.timestamp(), record.key(), record.value(), record.headers(), thunk);
-                }
+        for (Record record : recordBatch) {
+            assert thunkIter.hasNext();
+            Thunk thunk = thunkIter.next();
+            if (batch == null) {
+                batch = createBatchOffAccumulatorForRecord(record, splitBatchSize);
             }
 
-            // Close the last batch and add it to the batch list after split.
-            if (batch != null)
+            // A newly created batch can always host the first message.
+            if (!batch.tryAppendForSplit(record.timestamp(), record.key(), record.value(), record.headers(), thunk)) {
                 batches.add(batch);
+                batch = createBatchOffAccumulatorForRecord(record, splitBatchSize);
+                batch.tryAppendForSplit(record.timestamp(), record.key(), record.value(), record.headers(), thunk);
+            }
         }
+
+        // Close the last batch and add it to the batch list after split.
+        if (batch != null)
+            batches.add(batch);
 
         produceFuture.set(ProduceResponse.INVALID_OFFSET, NO_TIMESTAMP, new RecordBatchTooLargeException());
         produceFuture.done();
