@@ -520,11 +520,15 @@ class TransactionStateManager(brokerId: Int,
                 // in this case directly return NOT_COORDINATOR to client and let it to re-discover the transaction coordinator
                 info(s"Updating $transactionalId's transaction state to $newMetadata with coordinator epoch $coordinatorEpoch for $transactionalId failed after the transaction message " +
                   s"has been appended to the log. The cached coordinator epoch has changed to ${epochAndMetadata.coordinatorEpoch}")
+                if (metadata.pendingState.isDefined)
+                  throw new IllegalStateException(s"TransactionalId ${metadata.transactionalId} has a pending state " +
+                    s"of ${metadata.pendingState.get} even though the coordinator epoch doesn't match. This should not " +
+                    s"happen since the pending state should be cleared on emmigration and immigration, which is the only " +
+                    s"event that can change the coordinatorEpoch.")
 
                 responseError = Errors.NOT_COORDINATOR
               } else {
                 metadata.completeTransitionTo(newMetadata)
-
                 debug(s"Updating $transactionalId's transaction state to $newMetadata with coordinator epoch $coordinatorEpoch for $transactionalId succeeded")
               }
             }
@@ -534,8 +538,21 @@ class TransactionStateManager(brokerId: Int,
             // return NOT_COORDINATOR to let the client re-discover the transaction coordinator
             info(s"Updating $transactionalId's transaction state (txn topic partition ${partitionFor(transactionalId)}) to $newMetadata with coordinator epoch $coordinatorEpoch for $transactionalId " +
               s"failed after the transaction message has been appended to the log since the corresponding metadata does not exist in the cache anymore")
-
             responseError = Errors.NOT_COORDINATOR
+        }
+      } else {
+        // Reset the pending state when returning an error, since there is no active transaction for the transactional id at this point.
+        getAndMaybeAddTransactionState(transactionalId) match {
+          case Right(Some(epochAndTxnMetadata)) =>
+            val metadata = epochAndTxnMetadata.transactionMetadata
+            metadata synchronized {
+              if (epochAndTxnMetadata.coordinatorEpoch == coordinatorEpoch) {
+                debug(s"Transactional id ${metadata.transactionalId}, resetting pending state since we are returing error $responseError")
+                metadata.pendingState = None
+              }
+            }
+          case Left(_) =>
+            // Do nothing here, since we want to return the original append error to the user.
         }
       }
 
