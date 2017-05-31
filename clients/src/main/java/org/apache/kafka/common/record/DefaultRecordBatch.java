@@ -131,7 +131,13 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
                     + ", computed crc = " + computeChecksum() + ")");
     }
 
-    private long baseTimestamp() {
+    /**
+     * Get the timestamp of the first record in this batch. It is always the create time of the record even if the
+     * timestamp type of the batch is log append time.
+     *
+     * @return The base timestamp
+     */
+    public long baseTimestamp() {
         return buffer.getLong(BASE_TIMESTAMP_OFFSET);
     }
 
