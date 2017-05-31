@@ -303,7 +303,7 @@ public class FetcherTest {
         long offset = 0;
         long timestamp = 500L;
 
-        int size = LegacyRecord.recordSize(key, value);
+        int size = LegacyRecord.recordSize(magic, key.length, value.length);
         byte attributes = LegacyRecord.computeAttributes(magic, CompressionType.NONE, TimestampType.CREATE_TIME);
         long crc = LegacyRecord.computeChecksum(magic, attributes, timestamp, key, value);
 
