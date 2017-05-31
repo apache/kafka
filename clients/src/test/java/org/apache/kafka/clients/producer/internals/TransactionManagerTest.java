@@ -26,6 +26,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
+import org.apache.kafka.common.errors.OutOfOrderSequenceException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.TransactionalIdAuthorizationException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
@@ -59,7 +60,6 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -69,6 +69,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 
 import static java.util.Collections.singleton;
+import static java.util.Collections.singletonList;
 import static java.util.Collections.singletonMap;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -79,7 +80,7 @@ import static org.junit.Assert.fail;
 public class TransactionManagerTest {
     private static final int MAX_REQUEST_SIZE = 1024 * 1024;
     private static final short ACKS_ALL = -1;
-    private static final int MAX_RETRIES = 0;
+    private static final int MAX_RETRIES = Integer.MAX_VALUE;
     private static final String CLIENT_ID = "clientId";
     private static final int MAX_BLOCK_TIMEOUT = 1000;
     private static final int REQUEST_TIMEOUT = 1000;
@@ -109,19 +110,8 @@ public class TransactionManagerTest {
         this.transactionManager = new TransactionManager(transactionalId, transactionTimeoutMs);
         Metrics metrics = new Metrics(metricConfig, time);
         this.accumulator = new RecordAccumulator(batchSize, 1024 * 1024, CompressionType.NONE, 0L, 0L, metrics, time, apiVersions, transactionManager);
-        this.sender = new Sender(this.client,
-                this.metadata,
-                this.accumulator,
-                true,
-                MAX_REQUEST_SIZE,
-                ACKS_ALL,
-                MAX_RETRIES,
-                metrics,
-                this.time,
-                REQUEST_TIMEOUT,
-                50,
-                transactionManager,
-                apiVersions);
+        this.sender = new Sender(this.client, this.metadata, this.accumulator, true, MAX_REQUEST_SIZE, ACKS_ALL,
+                MAX_RETRIES, metrics, this.time, REQUEST_TIMEOUT, 50, transactionManager, apiVersions);
         this.metadata.update(this.cluster, Collections.<String>emptySet(), time.milliseconds());
         client.setNode(brokerNode);
     }
@@ -163,7 +153,7 @@ public class TransactionManagerTest {
         transactionManager.maybeAddPartitionToTransaction(tp0);
 
         Future<RecordMetadata> responseFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
-                                                                   "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
+                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
 
         assertFalse(responseFuture.isDone());
         prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, epoch, pid);
@@ -271,7 +261,7 @@ public class TransactionManagerTest {
         sender.run(time.milliseconds());  // find coordinator
         sender.run(time.milliseconds());
 
-        assertTrue(transactionManager.isInErrorState());
+        assertTrue(transactionManager.hasError());
         assertTrue(transactionManager.lastError() instanceof TransactionalIdAuthorizationException);
 
         sender.run(time.milliseconds()); // one more run to fail the InitProducerId future
@@ -294,7 +284,7 @@ public class TransactionManagerTest {
         prepareInitPidResponse(Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED, false, pid, RecordBatch.NO_PRODUCER_EPOCH);
         sender.run(time.milliseconds());
 
-        assertTrue(transactionManager.isInErrorState());
+        assertTrue(transactionManager.hasError());
         assertTrue(initPidResult.isCompleted());
         assertFalse(initPidResult.isSuccessful());
         assertTrue(initPidResult.error() instanceof TransactionalIdAuthorizationException);
@@ -321,7 +311,7 @@ public class TransactionManagerTest {
         prepareFindCoordinatorResponse(Errors.GROUP_AUTHORIZATION_FAILED, false, CoordinatorType.GROUP, consumerGroupId);
         sender.run(time.milliseconds());  // FindCoordinator Failed
         sender.run(time.milliseconds());  // TxnOffsetCommit Aborted
-        assertTrue(transactionManager.isInErrorState());
+        assertTrue(transactionManager.hasError());
         assertTrue(transactionManager.lastError() instanceof GroupAuthorizationException);
         assertTrue(sendOffsetsResult.isCompleted());
         assertFalse(sendOffsetsResult.isSuccessful());
@@ -356,7 +346,7 @@ public class TransactionManagerTest {
         prepareTxnOffsetCommitResponse(consumerGroupId, pid, epoch, singletonMap(tp, Errors.GROUP_AUTHORIZATION_FAILED));
         sender.run(time.milliseconds());  // TxnOffsetCommit Handled
 
-        assertTrue(transactionManager.isInErrorState());
+        assertTrue(transactionManager.hasError());
         assertTrue(transactionManager.lastError() instanceof GroupAuthorizationException);
         assertTrue(sendOffsetsResult.isCompleted());
         assertFalse(sendOffsetsResult.isSuccessful());
@@ -384,7 +374,7 @@ public class TransactionManagerTest {
         prepareAddOffsetsToTxnResponse(Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED, consumerGroupId, pid, epoch);
         sender.run(time.milliseconds());  // AddOffsetsToTxn Handled
 
-        assertTrue(transactionManager.isInErrorState());
+        assertTrue(transactionManager.hasError());
         assertTrue(transactionManager.lastError() instanceof TransactionalIdAuthorizationException);
         assertTrue(sendOffsetsResult.isCompleted());
         assertFalse(sendOffsetsResult.isSuccessful());
@@ -416,7 +406,7 @@ public class TransactionManagerTest {
         prepareTxnOffsetCommitResponse(consumerGroupId, pid, epoch, singletonMap(tp, Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED));
         sender.run(time.milliseconds());  // TxnOffsetCommit Handled
 
-        assertTrue(transactionManager.isInErrorState());
+        assertTrue(transactionManager.hasError());
         assertTrue(transactionManager.lastError() instanceof TransactionalIdAuthorizationException);
         assertTrue(sendOffsetsResult.isCompleted());
         assertFalse(sendOffsetsResult.isSuccessful());
@@ -439,7 +429,7 @@ public class TransactionManagerTest {
         prepareAddPartitionsToTxn(tp, Errors.TOPIC_AUTHORIZATION_FAILED);
         sender.run(time.milliseconds());
 
-        assertTrue(transactionManager.isInErrorState());
+        assertTrue(transactionManager.hasError());
         assertTrue(transactionManager.lastError() instanceof TopicAuthorizationException);
 
         TopicAuthorizationException exception = (TopicAuthorizationException) transactionManager.lastError();
@@ -462,7 +452,7 @@ public class TransactionManagerTest {
         prepareAddPartitionsToTxn(tp, Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED);
         sender.run(time.milliseconds());
 
-        assertTrue(transactionManager.isInErrorState());
+        assertTrue(transactionManager.hasError());
         assertTrue(transactionManager.lastError() instanceof TransactionalIdAuthorizationException);
 
         assertFatalError(TransactionalIdAuthorizationException.class);
@@ -584,7 +574,7 @@ public class TransactionManagerTest {
         sender.run(time.milliseconds());  // send produce.
 
         assertTrue(responseFuture.isDone());
-        assertTrue(transactionManager.isInErrorState());
+        assertTrue(transactionManager.hasError());
         responseFuture.get();
     }
 
@@ -608,16 +598,22 @@ public class TransactionManagerTest {
 
         sender.run(time.milliseconds());  // Send AddPartitionsRequest
         assertFalse(commitResult.isCompleted());
-
         sender.run(time.milliseconds());  // Send Produce Request, returns OutOfOrderSequenceException.
+
         sender.run(time.milliseconds());  // try to commit.
         assertTrue(commitResult.isCompleted());  // commit should be cancelled with exception without being sent.
 
         try {
             commitResult.await();
             fail();  // the get() must throw an exception.
-        } catch (RuntimeException e) {
-            assertTrue(e instanceof KafkaException);
+        } catch (KafkaException e) {
+        }
+
+        try {
+            responseFuture.get();
+            fail("Expected produce future to raise an exception");
+        } catch (ExecutionException e) {
+            assertTrue(e.getCause() instanceof OutOfOrderSequenceException);
         }
 
         // Commit is not allowed, so let's abort and try again.
@@ -627,7 +623,7 @@ public class TransactionManagerTest {
 
         assertTrue(abortResult.isCompleted());
         assertTrue(abortResult.isSuccessful());
-        assertTrue(transactionManager.isReadyForTransaction());  // make sure we are ready for a transaction now.
+        assertTrue(transactionManager.isReady());  // make sure we are ready for a transaction now.
     }
 
     @Test
@@ -643,20 +639,125 @@ public class TransactionManagerTest {
         Future<RecordMetadata> responseFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
                 "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
 
-        TransactionalRequestResult abortResult = transactionManager.beginAbortingTransaction();
         assertFalse(responseFuture.isDone());
         prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, epoch, pid);
         prepareProduceResponse(Errors.OUT_OF_ORDER_SEQUENCE_NUMBER, pid, epoch);
         prepareEndTxnResponse(Errors.NONE, TransactionResult.ABORT, pid, epoch);
 
         sender.run(time.milliseconds());  // Send AddPartitionsRequest
-        assertFalse(abortResult.isCompleted());
-
         sender.run(time.milliseconds());  // Send Produce Request, returns OutOfOrderSequenceException.
+
+        TransactionalRequestResult abortResult = transactionManager.beginAbortingTransaction();
         sender.run(time.milliseconds());  // try to abort
         assertTrue(abortResult.isCompleted());
         assertTrue(abortResult.isSuccessful());
-        assertTrue(transactionManager.isReadyForTransaction());  // make sure we are ready for a transaction now.
+        assertTrue(transactionManager.isReady());  // make sure we are ready for a transaction now.
+    }
+
+    @Test
+    public void testCancelUnsentAddPartitionsAndProduceOnAbort() throws InterruptedException {
+        final long pid = 13131L;
+        final short epoch = 1;
+
+        doInitTransactions(pid, epoch);
+
+        transactionManager.beginTransaction();
+        transactionManager.maybeAddPartitionToTransaction(tp0);
+
+        Future<RecordMetadata> responseFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
+                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
+
+        assertFalse(responseFuture.isDone());
+
+        TransactionalRequestResult abortResult = transactionManager.beginAbortingTransaction();
+        // note since no partitions were added to the transaction, no EndTxn will be sent
+
+        sender.run(time.milliseconds());  // try to abort
+        assertTrue(abortResult.isCompleted());
+        assertTrue(abortResult.isSuccessful());
+        assertTrue(transactionManager.isReady());  // make sure we are ready for a transaction now.
+
+        try {
+            responseFuture.get();
+            fail("Expected produce future to raise an exception");
+        } catch (ExecutionException e) {
+            assertTrue(e.getCause() instanceof KafkaException);
+        }
+    }
+
+    @Test
+    public void testAbortResendsAddPartitionErrorIfRetried() throws InterruptedException {
+        final long producerId = 13131L;
+        final short producerEpoch = 1;
+
+        doInitTransactions(producerId, producerEpoch);
+
+        transactionManager.beginTransaction();
+        transactionManager.maybeAddPartitionToTransaction(tp0);
+        prepareAddPartitionsToTxnResponse(Errors.UNKNOWN_TOPIC_OR_PARTITION, tp0, producerEpoch, producerId);
+
+        Future<RecordMetadata> responseFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
+                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
+
+        sender.run(time.milliseconds());  // Send AddPartitions and let it fail
+        assertFalse(responseFuture.isDone());
+
+        TransactionalRequestResult abortResult = transactionManager.beginAbortingTransaction();
+
+        // we should resend the AddPartitions
+        prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, producerEpoch, producerId);
+        prepareEndTxnResponse(Errors.NONE, TransactionResult.ABORT, producerId, producerEpoch);
+
+        sender.run(time.milliseconds());  // Resend AddPartitions
+        sender.run(time.milliseconds());  // Send EndTxn
+
+        assertTrue(abortResult.isCompleted());
+        assertTrue(abortResult.isSuccessful());
+        assertTrue(transactionManager.isReady());  // make sure we are ready for a transaction now.
+
+        try {
+            responseFuture.get();
+            fail("Expected produce future to raise an exception");
+        } catch (ExecutionException e) {
+            assertTrue(e.getCause() instanceof KafkaException);
+        }
+    }
+
+    @Test
+    public void testAbortResendsProduceRequestIfRetried() throws Exception {
+        final long producerId = 13131L;
+        final short producerEpoch = 1;
+
+        doInitTransactions(producerId, producerEpoch);
+
+        transactionManager.beginTransaction();
+        transactionManager.maybeAddPartitionToTransaction(tp0);
+        prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, producerEpoch, producerId);
+        prepareProduceResponse(Errors.REQUEST_TIMED_OUT, producerId, producerEpoch);
+
+        Future<RecordMetadata> responseFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
+                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
+
+        sender.run(time.milliseconds());  // Send AddPartitions
+        sender.run(time.milliseconds());  // Send ProduceRequest and let it fail
+
+        assertFalse(responseFuture.isDone());
+
+        TransactionalRequestResult abortResult = transactionManager.beginAbortingTransaction();
+
+        // we should resend the ProduceRequest before aborting
+        prepareProduceResponse(Errors.NONE, producerId, producerEpoch);
+        prepareEndTxnResponse(Errors.NONE, TransactionResult.ABORT, producerId, producerEpoch);
+
+        sender.run(time.milliseconds());  // Resend ProduceRequest
+        sender.run(time.milliseconds());  // Send EndTxn
+
+        assertTrue(abortResult.isCompleted());
+        assertTrue(abortResult.isSuccessful());
+        assertTrue(transactionManager.isReady());  // make sure we are ready for a transaction now.
+
+        RecordMetadata recordMetadata = responseFuture.get();
+        assertEquals(tp0.topic(), recordMetadata.topic());
     }
 
     @Test
@@ -739,27 +840,18 @@ public class TransactionManagerTest {
 
     @Test
     public void shouldNotSendAbortTxnRequestWhenOnlyAddPartitionsRequestFailed() throws Exception {
-        client.setNode(brokerNode);
-        // This is called from the initTransactions method in the producer as the first order of business.
-        // It finds the coordinator and then gets a PID.
         final long pid = 13131L;
         final short epoch = 1;
-        transactionManager.initializeTransactions();
-        prepareFindCoordinatorResponse(Errors.NONE, false, FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
 
-        sender.run(time.milliseconds());  // find coordinator
-        sender.run(time.milliseconds());
-
-        prepareInitPidResponse(Errors.NONE, false, pid, epoch);
-        sender.run(time.milliseconds());  // get pid.
+        doInitTransactions(pid, epoch);
 
         transactionManager.beginTransaction();
         transactionManager.maybeAddPartitionToTransaction(tp0);
 
-        TransactionalRequestResult abortResult = transactionManager.beginAbortingTransaction();
-
         prepareAddPartitionsToTxnResponse(Errors.TOPIC_AUTHORIZATION_FAILED, tp0, epoch, pid);
         sender.run(time.milliseconds());  // Send AddPartitionsRequest
+
+        TransactionalRequestResult abortResult = transactionManager.beginAbortingTransaction();
         assertFalse(abortResult.isCompleted());
 
         sender.run(time.milliseconds());
@@ -769,19 +861,10 @@ public class TransactionManagerTest {
 
     @Test
     public void shouldNotSendAbortTxnRequestWhenOnlyAddOffsetsRequestFailed() throws Exception {
-        client.setNode(brokerNode);
-        // This is called from the initTransactions method in the producer as the first order of business.
-        // It finds the coordinator and then gets a PID.
         final long pid = 13131L;
         final short epoch = 1;
-        transactionManager.initializeTransactions();
-        prepareFindCoordinatorResponse(Errors.NONE, false, FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
 
-        sender.run(time.milliseconds());  // find coordinator
-        sender.run(time.milliseconds());
-
-        prepareInitPidResponse(Errors.NONE, false, pid, epoch);
-        sender.run(time.milliseconds());  // get pid.
+        doInitTransactions(pid, epoch);
 
         transactionManager.beginTransaction();
         Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
@@ -815,7 +898,7 @@ public class TransactionManagerTest {
         assertFalse(responseFuture.isDone());
         prepareAddPartitionsToTxn(tp0, error);
         sender.run(time.milliseconds());  // attempt send addPartitions.
-        assertTrue(transactionManager.isInErrorState());
+        assertTrue(transactionManager.hasError());
         assertFalse(transactionManager.transactionContainsPartition(tp0));
     }
 
@@ -883,7 +966,7 @@ public class TransactionManagerTest {
                 AddPartitionsToTxnRequest addPartitionsToTxnRequest = (AddPartitionsToTxnRequest) body;
                 assertEquals(pid, addPartitionsToTxnRequest.producerId());
                 assertEquals(epoch, addPartitionsToTxnRequest.producerEpoch());
-                assertEquals(Arrays.asList(topicPartition), addPartitionsToTxnRequest.partitions());
+                assertEquals(singletonList(topicPartition), addPartitionsToTxnRequest.partitions());
                 assertEquals(transactionalId, addPartitionsToTxnRequest.transactionalId());
                 return true;
             }
@@ -958,23 +1041,23 @@ public class TransactionManagerTest {
             fail("Should have raised " + cause.getSimpleName());
         } catch (KafkaException e) {
             assertTrue(cause.isAssignableFrom(e.getCause().getClass()));
-            assertTrue(transactionManager.isInErrorState());
+            assertTrue(transactionManager.hasError());
         }
 
-        assertTrue(transactionManager.isInErrorState());
+        assertTrue(transactionManager.hasError());
         transactionManager.beginAbortingTransaction();
-        assertFalse(transactionManager.isInErrorState());
+        assertFalse(transactionManager.hasError());
     }
 
     private void assertFatalError(Class<? extends RuntimeException> cause) {
-        assertTrue(transactionManager.isInErrorState());
+        assertTrue(transactionManager.hasError());
 
         try {
             transactionManager.beginAbortingTransaction();
             fail("Should have raised " + cause.getSimpleName());
         } catch (KafkaException e) {
             assertTrue(cause.isAssignableFrom(e.getCause().getClass()));
-            assertTrue(transactionManager.isInErrorState());
+            assertTrue(transactionManager.hasError());
         }
 
         // Transaction abort cannot clear fatal error state
@@ -983,7 +1066,7 @@ public class TransactionManagerTest {
             fail("Should have raised " + cause.getSimpleName());
         } catch (KafkaException e) {
             assertTrue(cause.isAssignableFrom(e.getCause().getClass()));
-            assertTrue(transactionManager.isInErrorState());
+            assertTrue(transactionManager.hasError());
         }
     }
 }

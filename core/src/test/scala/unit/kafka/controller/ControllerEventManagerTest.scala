@@ -23,7 +23,6 @@ import java.util.concurrent.atomic.AtomicInteger
 import com.yammer.metrics.Metrics
 import com.yammer.metrics.core.Timer
 import kafka.utils.TestUtils
-import org.easymock.{EasyMock, IAnswer}
 import org.junit.{After, Test}
 import org.junit.Assert.{assertEquals, fail}
 
@@ -60,20 +59,12 @@ class ControllerEventManagerTest {
 
     val initialTimerCount = timer(metricName).count
 
-    // `ControllerEvent` is sealed so we use EasyMock to create a subclass
-    val eventMock = EasyMock.createMock(classOf[ControllerEvent])
-    EasyMock.expect(eventMock.state).andReturn(controllerState)
-
     // Only return from `process()` once we have checked `controllerEventManager.state`
     val latch = new CountDownLatch(1)
-    EasyMock.expect(eventMock.process()).andAnswer(new IAnswer[Unit]() {
-      def answer(): Unit = {
-        latch.await()
-        process()
-      }
+    val eventMock = ControllerTestUtils.createMockControllerEvent(controllerState, { () =>
+      latch.await()
+      process()
     })
-
-    EasyMock.replay(eventMock)
 
     controllerEventManager.put(eventMock)
     TestUtils.waitUntilTrue(() => controllerEventManager.state == controllerState,

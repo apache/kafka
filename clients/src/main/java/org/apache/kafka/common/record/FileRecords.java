@@ -202,7 +202,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
     public void renameTo(File f) throws IOException {
         try {
             Utils.atomicMoveWithFallback(file.toPath(), f.toPath());
-        }  finally {
+        } finally {
             this.file = f;
         }
     }
@@ -391,7 +391,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
      * @param mutable mutable
      * @param fileAlreadyExists File already exists or not
      * @param initFileSize The size used for pre allocate file, for example 512 * 1025 *1024
-     * @param preallocate Pre allocate file or not, gotten from configuration.
+     * @param preallocate Pre-allocate file or not, gotten from configuration.
      */
     private static FileChannel openChannel(File file,
                                            boolean mutable,

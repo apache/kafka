@@ -554,7 +554,7 @@ public class MemoryRecordsBuilderTest {
         }
     }
 
-    @Parameterized.Parameters
+    @Parameterized.Parameters(name = "bufferOffset={0}, compression={1}")
     public static Collection<Object[]> data() {
         List<Object[]> values = new ArrayList<>();
         for (int bufferOffset : Arrays.asList(0, 15))
