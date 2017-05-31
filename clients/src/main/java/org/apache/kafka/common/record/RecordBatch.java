@@ -80,8 +80,10 @@ public interface RecordBatch extends Iterable<Record> {
     long checksum();
 
     /**
-     * Get the timestamp of this record batch. This is the max timestamp among all records contained in this batch.
-     * This value is updated during compaction.
+     * Get the max timestamp or log append time of this record batch.
+     *
+     * If the timestamp type is create time, this is the max timestamp among all records contained in this batch and
+     * the value is updated during compaction.
      *
      * @return The max timestamp
      */
