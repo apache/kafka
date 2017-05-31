@@ -610,13 +610,13 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
     }
 
 
-    private void updateSubscribedTopics(Assignment assignment) {
-        if (streamThread != null && streamThread.builder.sourceTopicPattern() != null) {
+    private void updateSubscribedTopics(final Assignment assignment) {
+        if (streamThread.builder.sourceTopicPattern() != null) {
             final Set<String> assignedTopics = new HashSet<>();
-            for (TopicPartition topicPartition : assignment.partitions()) {
+            for (final TopicPartition topicPartition : assignment.partitions()) {
                 assignedTopics.add(topicPartition.topic());
             }
-            if (!assignedTopics.isEmpty() && !streamThread.builder.subscriptionUpdates().getUpdates().containsAll(assignedTopics)) {
+            if (!streamThread.builder.subscriptionUpdates().getUpdates().containsAll(assignedTopics)) {
                 final SubscriptionUpdates subscriptionUpdates = new SubscriptionUpdates();
                 assignedTopics.addAll(streamThread.builder.subscriptionUpdates().getUpdates());
                 log.debug("stream-thread [{}] assigned new {} topics possibly matching regex", streamThread.getName(), assignedTopics);
