@@ -140,7 +140,6 @@ public abstract class SetSchemaMetadata<R extends ConnectRecord<R>> implements T
     protected static Object updateSchemaIn(Object keyOrValue, Schema updatedSchema) {
         if (keyOrValue instanceof Struct) {
             Struct origStruct = (Struct) keyOrValue;
-            Schema origSchema = origStruct.schema();
             Struct newStruct = new Struct(updatedSchema);
             for (Field field : updatedSchema.fields()) {
                 // assume both schemas have exact same fields with same names and schemas ...
