@@ -54,10 +54,11 @@ object ConsumerPerformance {
     val totalBytesRead = new AtomicLong(0)
     val consumerTimeout = new AtomicBoolean(false)
     var metrics: mutable.Map[MetricName, _ <: Metric] = null
+    val joinGroupTimeInMs = new AtomicLong(0)
 
     if (!config.hideHeader) {
       if (!config.showDetailedStats)
-        println("start.time, end.time, data.consumed.in.MB, MB.sec, data.consumed.in.nMsg, nMsg.sec")
+        println(s"start.time, end.time, data.consumed.in.MB, MB.sec, data.consumed.in.nMsg, nMsg.sec${if (!config.useOldConsumer) ", join.group.ms" else ""}")
       else
         println("time, data.consumed.in.MB, MB.sec, data.consumed.in.nMsg, nMsg.sec")
     }
@@ -67,7 +68,7 @@ object ConsumerPerformance {
       val consumer = new KafkaConsumer[Array[Byte], Array[Byte]](config.props)
       consumer.subscribe(Collections.singletonList(config.topic))
       startMs = System.currentTimeMillis
-      consume(consumer, List(config.topic), config.numMessages, 1000, config, totalMessagesRead, totalBytesRead)
+      consume(consumer, List(config.topic), config.numMessages, 1000, config, totalMessagesRead, totalBytesRead, joinGroupTimeInMs)
       endMs = System.currentTimeMillis
 
       if (config.printMetrics) {
@@ -100,8 +101,14 @@ object ConsumerPerformance {
     val elapsedSecs = (endMs - startMs) / 1000.0
     if (!config.showDetailedStats) {
       val totalMBRead = (totalBytesRead.get * 1.0) / (1024 * 1024)
-      println("%s, %s, %.4f, %.4f, %d, %.4f".format(config.dateFormat.format(startMs), config.dateFormat.format(endMs),
-        totalMBRead, totalMBRead / elapsedSecs, totalMessagesRead.get, totalMessagesRead.get / elapsedSecs))
+      println(s"%s, %s, %.4f, %.4f, %d, %.4f${if (!config.useOldConsumer) ", %d" else "%s"}".format(
+        config.dateFormat.format(startMs),
+        config.dateFormat.format(endMs),
+        totalMBRead,
+        totalMBRead / elapsedSecs,
+        totalMessagesRead.get,
+        totalMessagesRead.get / elapsedSecs,
+        if (!config.useOldConsumer) joinGroupTimeInMs.get else ""))
     }
 
     if (metrics != null) {
@@ -110,11 +117,12 @@ object ConsumerPerformance {
 
   }
 
-  def consume(consumer: KafkaConsumer[Array[Byte], Array[Byte]], topics: List[String], count: Long, timeout: Long, config: ConsumerPerfConfig, totalMessagesRead: AtomicLong, totalBytesRead: AtomicLong) {
+  def consume(consumer: KafkaConsumer[Array[Byte], Array[Byte]], topics: List[String], count: Long, timeout: Long, config: ConsumerPerfConfig, totalMessagesRead: AtomicLong, totalBytesRead: AtomicLong, joinTime: AtomicLong) {
     var bytesRead = 0L
     var messagesRead = 0L
     var lastBytesRead = 0L
     var lastMessagesRead = 0L
+    var joinEnd = 0L
 
     // Wait for group join, metadata fetch, etc
     val joinTimeout = 10000
@@ -122,6 +130,7 @@ object ConsumerPerformance {
     consumer.subscribe(topics.asJava, new ConsumerRebalanceListener {
       def onPartitionsAssigned(partitions: util.Collection[TopicPartition]) {
         isAssigned.set(true)
+        joinEnd = System.currentTimeMillis
       }
       def onPartitionsRevoked(partitions: util.Collection[TopicPartition]) {
         isAssigned.set(false)
@@ -165,6 +174,7 @@ object ConsumerPerformance {
 
     totalMessagesRead.set(messagesRead)
     totalBytesRead.set(bytesRead)
+    joinTime.set(joinEnd - joinStart)
   }
 
   def printProgressMessage(id: Int, bytesRead: Long, lastBytesRead: Long, messagesRead: Long, lastMessagesRead: Long,
