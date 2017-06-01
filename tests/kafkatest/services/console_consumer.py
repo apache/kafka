@@ -15,6 +15,8 @@
 
 import itertools
 import os
+import time
+from ducktape.utils.util import wait_until
 
 from ducktape.services.background_thread import BackgroundThreadService
 from ducktape.cluster.remoteaccount import RemoteCommandError
@@ -97,7 +99,8 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
     def __init__(self, context, num_nodes, kafka, topic, group_id="test-consumer-group", new_consumer=True,
                  message_validator=None, from_beginning=True, consumer_timeout_ms=None, version=DEV_BRANCH,
                  client_id="console-consumer", print_key=False, jmx_object_names=None, jmx_attributes=None,
-                 enable_systest_events=False, stop_timeout_sec=15, print_timestamp=False):
+                 enable_systest_events=False, stop_timeout_sec=15, print_timestamp=False,
+                 fetch_max_wait_ms=None):
         """
         Args:
             context:                    standard context
@@ -117,6 +120,7 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
             stop_timeout_sec            After stopping a node, wait up to stop_timeout_sec for the node to stop,
                                         and the corresponding background thread to finish successfully.
             print_timestamp             if True, print each message's timestamp as well
+            fetch_max_wait_ms           Maximum wait in milliseconds for a fetch request
         """
         JmxMixin.__init__(self, num_nodes, jmx_object_names, jmx_attributes or [])
         BackgroundThreadService.__init__(self, context, num_nodes)
@@ -136,6 +140,7 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
         self.messages_consumed = {idx: [] for idx in range(1, num_nodes + 1)}
         self.clean_shutdown_nodes = set()
         self.client_id = client_id
+        self.fetch_max_wait_ms = fetch_max_wait_ms
         self.print_key = print_key
         self.log_level = "TRACE"
         self.stop_timeout_sec = stop_timeout_sec
@@ -310,4 +315,33 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
                 self.jmx_object_names += ["kafka.consumer:type=consumer-coordinator-metrics,client-id=%s" % self.client_id]
                 self.jmx_attributes += ["assigned-partitions"]
                 self.assigned_partitions_jmx_attr = "kafka.consumer:type=consumer-coordinator-metrics,client-id=%s:assigned-partitions" % self.client_id
+
+    def wait_for_init(self, init_timeout_sec):
+        if (init_timeout_sec > 0):
+            self.logger.debug("Waiting %ds for the consumer to initialize.", init_timeout_sec)
+            start = int(time.time())
+            wait_until(lambda: self.alive(self.nodes[0]) is True,
+                       timeout_sec=init_timeout_sec,
+                       err_msg="Consumer process took more than %d s to fork" %\
+                       init_timeout_sec)
+            end = int(time.time())
+            # If `JMXConnectFactory.connect` is invoked during the
+            # initialization of the JMX server, it may fail to throw the
+            # specified IOException back to the calling code. The sleep is a
+            # workaround that should allow initialization to complete before we
+            # try to connect. See KAFKA-4620 for more details.
+            time.sleep(1)
+            remaining_time = init_timeout_sec - (end - start)
+            if remaining_time < 0 :
+                remaining_time = 0
+            def has_partitions_assigned(self):
+                try:
+                    return self.has_partitions_assigned(self.nodes[0])
+                except:
+                    return True # FIXME: figure out why jmx tool is failing
+            if self.new_consumer:
+                wait_until(lambda: has_partitions_assigned(self) is True,
+                           timeout_sec=remaining_time,
+                           err_msg="Consumer process took more than %d s to have partitions assigned" %\
+                           remaining_time)
 
