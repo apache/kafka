@@ -76,7 +76,7 @@
         The default value for this is 3 seconds.
         During development and testing it might be desirable to set this to 0 inorder to not delay test execution time.
     </li>
-    <li><code>KafkaConsumer#partitionsFor</code> method will return an empty list instead of <code>null</code> (which is considered a bad practice) in case the metadata for the required topic does not exist.</li>
+    <li><code>org.apache.kafka.common.Cluster#partitionsForTopic</code> method will return an empty list instead of <code>null</code> (which is considered a bad practice) in case the metadata for the required topic does not exist.</li>
     <li>Streams API configuration parameters <code>timestamp.extractor</code>, <code>key.serde</code>, and <code>value.serde</code> were deprecated and
         replaced by <code>default.timestamp.extractor</code>, <code>default.key.serde</code>, and <code>default.value.serde</code>, respectively.
     </li>
