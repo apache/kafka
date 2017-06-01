@@ -18,7 +18,8 @@ package kafka.coordinator.transaction
 
 
 import java.util
-import java.util.concurrent.{BlockingQueue, LinkedBlockingQueue}
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.{BlockingQueue, CountDownLatch, LinkedBlockingQueue}
 
 import kafka.common.{InterBrokerSendThread, RequestAndCompletionHandler}
 import kafka.server.{DelayedOperationPurgatory, KafkaConfig, MetadataCache}
@@ -226,27 +227,42 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
             case Right(Some(epochAndMetadata)) =>
               if (epochAndMetadata.coordinatorEpoch == coordinatorEpoch) {
                 debug(s"Updating $transactionalId's transaction state to $txnMetadata with coordinator epoch $coordinatorEpoch for $transactionalId succeeded")
+                var retryBackoffMs = 100L // TODO: how much do we back-off?
+                val needsRetry = new AtomicBoolean(true)
+                @volatile
+                var appendLatch:CountDownLatch = null
 
-                // try to append to the transaction log
-                def retryAppendCallback(error: Errors): Unit =
-                  error match {
-                    case Errors.NONE =>
-                      trace(s"Completed transaction for $transactionalId with coordinator epoch $coordinatorEpoch, final state: state after commit: ${txnMetadata.state}")
+                def retryAppendCallback(error: Errors): Unit = {
+                  try {
+                    error match {
+                      case Errors.NONE =>
+                        trace(s"Completed transaction for $transactionalId with coordinator epoch $coordinatorEpoch, final state: state after commit: ${txnMetadata.state}")
+                        needsRetry.set(false)
 
-                    case Errors.NOT_COORDINATOR =>
-                      info(s"No longer the coordinator for transactionalId: $transactionalId while trying to append to transaction log, skip writing to transaction log")
+                      case Errors.NOT_COORDINATOR =>
+                        info(s"No longer the coordinator for transactionalId: $transactionalId while trying to append to transaction log, skip writing to transaction log")
+                        needsRetry.set(false)
 
-                    case Errors.COORDINATOR_NOT_AVAILABLE =>
-                      warn(s"Failed updating transaction state for $transactionalId when appending to transaction log due to ${error.exceptionName}. retrying")
+                      case Errors.COORDINATOR_NOT_AVAILABLE =>
+                        warn(s"Failed updating transaction state for $transactionalId when appending to transaction log due to ${error.exceptionName}. retrying")
 
-                      // retry appending
-                      txnStateManager.appendTransactionToLog(transactionalId, coordinatorEpoch, newMetadata, retryAppendCallback)
-
-                    case errors: Errors =>
-                      throw new IllegalStateException(s"Unexpected error ${errors.exceptionName} while appending to transaction log for $transactionalId")
+                      case errors: Errors =>
+                        needsRetry.set(false)
+                        throw new IllegalStateException(s"Unexpected error ${errors.exceptionName} while appending to transaction log for $transactionalId")
+                    }
+                  } finally {
+                    appendLatch.countDown()
                   }
+                }
 
-                txnStateManager.appendTransactionToLog(transactionalId, coordinatorEpoch, newMetadata, retryAppendCallback)
+                while(needsRetry.get()) {
+                  appendLatch = new CountDownLatch(1)
+                  txnStateManager.appendTransactionToLog(transactionalId, coordinatorEpoch, newMetadata, retryAppendCallback)
+                  appendLatch.await()
+                  if (needsRetry.get()) {
+                    time.sleep(retryBackoffMs)
+                  }
+                }
               } else {
                 info(s"Updating $transactionalId's transaction state to $txnMetadata with coordinator epoch $coordinatorEpoch for $transactionalId failed after the transaction markers " +
                   s"has been sent to brokers. The cached metadata have been changed to $epochAndMetadata since preparing to send markers")
