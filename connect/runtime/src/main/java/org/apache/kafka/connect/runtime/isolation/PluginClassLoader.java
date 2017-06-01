@@ -49,11 +49,16 @@ public class PluginClassLoader extends URLClassLoader {
     protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
         Class<?> klass = findLoadedClass(name);
         if (klass == null) {
-            if (PluginUtils.shouldLoadInIsolation(name)) {
-                klass = findClass(name);
-            } else {
-                klass = super.loadClass(name, false);
+            try {
+                if (PluginUtils.shouldLoadInIsolation(name)) {
+                    klass = findClass(name);
+                }
+            } catch(ClassNotFoundException e){
+                // Not found in loader's path. Search in parents.
             }
+        }
+        if (klass == null) {
+            klass = super.loadClass(name, false);
         }
         if (resolve) {
             resolveClass(klass);
