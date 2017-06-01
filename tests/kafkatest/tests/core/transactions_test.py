@@ -183,14 +183,14 @@ class TransactionsTest(Test):
 
         for copier in copiers:
             wait_until(lambda: copier.is_done,
-                       timeout_sec=30,
+                       timeout_sec=60,
                        err_msg="%s - Failed to copy all messages in  %ds." %\
-                       (copier.transactional_id, 30))
+                       (copier.transactional_id, 60))
         self.logger.info("finished copying messages")
 
     @cluster(num_nodes=8)
     @matrix(failure_mode=["clean_bounce", "hard_bounce"],
-            bounce_target=["brokers", "clients"])
+            bounce_target=["brokers"])
     def test_transactions(self, failure_mode, bounce_target):
         security_protocol = 'PLAINTEXT'
         self.kafka.security_protocol = security_protocol

@@ -155,8 +155,9 @@ class TransactionalMessageCopier(KafkaPathResolverMixin, BackgroundThreadService
         if self.is_done:
             return
         node = self.nodes[0]
-        self.consumed = -1
-        self.remaining = -1
+        with self.lock:
+            self.consumed = -1
+            self.remaining = -1
         self.stop_node(node, clean_shutdown)
         self.start_node(node)
 
@@ -174,8 +175,9 @@ class TransactionalMessageCopier(KafkaPathResolverMixin, BackgroundThreadService
         return self.message_copy_finished
 
     def progress_percent(self):
-        if self.remaining < 0:
-            return 0
-        if self.consumed + self.remaining == 0:
-            return 100
-        return (float(self.consumed)/float(self.consumed + self.remaining)) * 100
+        with self.lock:
+            if self.remaining < 0:
+                return 0
+            if self.consumed + self.remaining == 0:
+                return 100
+            return (float(self.consumed)/float(self.consumed + self.remaining)) * 100
