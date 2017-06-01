@@ -173,10 +173,10 @@ public class KStreamCogroupIntegrationTest {
         KGroupedStream<Long, String> stream1 = builder.<Long, String>stream(INPUT_TOPIC_1 + testNumber).groupByKey();
         KGroupedStream<Long, String> stream2 = builder.<Long, String>stream(INPUT_TOPIC_2 + testNumber).groupByKey();
         KGroupedStream<Long, String> stream3 = builder.<Long, String>stream(INPUT_TOPIC_3 + testNumber).groupByKey();
-        stream1.cogroup(INITIALIZER, AGGREGATOR_1, null, COGROUP_STORE_NAME)
+        stream1.cogroup(INITIALIZER, AGGREGATOR_1, null)
                 .cogroup(stream2, AGGREGATOR_2)
                 .cogroup(stream3, AGGREGATOR_3)
-                .aggregate()
+                .aggregate(COGROUP_STORE_NAME)
                 .to(OUTPUT_TOPIC + testNumber);
 
         final KafkaStreams streams = new KafkaStreams(builder, streamsConfig(APP_ID + testNumber));
@@ -234,10 +234,10 @@ public class KStreamCogroupIntegrationTest {
         KGroupedStream<Long, String> stream1 = builder.<Long, String>stream(INPUT_TOPIC_1 + testNumber).groupByKey();
         KGroupedStream<Long, String> stream2 = builder.<Long, String>stream(INPUT_TOPIC_2 + testNumber).groupByKey();
         KGroupedStream<Long, String> stream3 = builder.<Long, String>stream(INPUT_TOPIC_3 + testNumber).groupByKey();
-        stream1.cogroup(INITIALIZER, AGGREGATOR_1, MERGER, SessionWindows.with(5L), null, COGROUP_STORE_NAME)
+        stream1.cogroup(INITIALIZER, AGGREGATOR_1, null)
                 .cogroup(stream2, AGGREGATOR_2)
                 .cogroup(stream3, AGGREGATOR_3)
-                .aggregate()
+                .aggregate(MERGER, SessionWindows.with(5L), COGROUP_STORE_NAME)
                 .to(Serdes.serdeFrom(new WindowedSerializer<>(new LongSerializer()), new WindowedDeserializer<>(new LongDeserializer())), null, OUTPUT_TOPIC + testNumber);
 
         final KafkaStreams streams = new KafkaStreams(builder, streamsConfig(APP_ID + testNumber));
@@ -300,10 +300,10 @@ public class KStreamCogroupIntegrationTest {
         KGroupedStream<Long, String> stream1 = builder.<Long, String>stream(INPUT_TOPIC_1 + testNumber).groupByKey();
         KGroupedStream<Long, String> stream2 = builder.<Long, String>stream(INPUT_TOPIC_2 + testNumber).groupByKey();
         KGroupedStream<Long, String> stream3 = builder.<Long, String>stream(INPUT_TOPIC_3 + testNumber).groupByKey();
-        stream1.cogroup(INITIALIZER, AGGREGATOR_1, TimeWindows.of(10L), null, COGROUP_STORE_NAME)
+        stream1.cogroup(INITIALIZER, AGGREGATOR_1, null)
                 .cogroup(stream2, AGGREGATOR_2)
                 .cogroup(stream3, AGGREGATOR_3)
-                .aggregate()
+                .aggregate(TimeWindows.of(10L), COGROUP_STORE_NAME)
                 .to(Serdes.serdeFrom(new WindowedSerializer<>(new LongSerializer()), new WindowedDeserializer<>(new LongDeserializer())), null, OUTPUT_TOPIC + testNumber);
 
         final KafkaStreams streams = new KafkaStreams(builder, streamsConfig(APP_ID + testNumber));
@@ -357,10 +357,10 @@ public class KStreamCogroupIntegrationTest {
         KGroupedStream<Long, String> stream1 = builder.<Long, String>stream(INPUT_TOPIC_1 + testNumber).groupBy(GROUP_BY);
         KGroupedStream<Long, String> stream2 = builder.<Long, String>stream(INPUT_TOPIC_2 + testNumber).groupBy(GROUP_BY);
         KGroupedStream<Long, String> stream3 = builder.<Long, String>stream(INPUT_TOPIC_3 + testNumber).groupBy(GROUP_BY);
-        stream1.cogroup(INITIALIZER, AGGREGATOR_1, null, COGROUP_STORE_NAME)
+        stream1.cogroup(INITIALIZER, AGGREGATOR_1, null)
                 .cogroup(stream2, AGGREGATOR_2)
                 .cogroup(stream3, AGGREGATOR_3)
-                .aggregate()
+                .aggregate(COGROUP_STORE_NAME)
                 .to(OUTPUT_TOPIC + testNumber);
 
         final KafkaStreams streams = new KafkaStreams(builder, streamsConfig(APP_ID + testNumber));
@@ -414,9 +414,9 @@ public class KStreamCogroupIntegrationTest {
         KGroupedStream<Long, String> stream1 = builder.<Long, String>stream(INPUT_TOPIC_1 + testNumber).groupByKey();
         KGroupedStream<Long, String> stream2 = builder.<Long, String>stream(INPUT_TOPIC_2 + testNumber).groupByKey();
         KTable<Long, String> table = builder.table(INPUT_TOPIC_3 + testNumber, TABLE_STORE_NAME);
-        stream1.cogroup(INITIALIZER, AGGREGATOR_1, null, COGROUP_STORE_NAME)
+        stream1.cogroup(INITIALIZER, AGGREGATOR_1, null)
                 .cogroup(stream2, AGGREGATOR_2)
-                .aggregate()
+                .aggregate(COGROUP_STORE_NAME)
                 .outerJoin(table, JOINER)
                 .to(OUTPUT_TOPIC + testNumber);
 
