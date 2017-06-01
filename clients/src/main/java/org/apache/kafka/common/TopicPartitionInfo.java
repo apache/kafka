@@ -15,9 +15,8 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.clients.admin;
+package org.apache.kafka.common;
 
-import org.apache.kafka.common.Node;
 import org.apache.kafka.common.utils.Utils;
 
 import java.util.List;

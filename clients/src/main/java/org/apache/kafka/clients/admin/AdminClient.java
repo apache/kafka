@@ -18,7 +18,10 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.acl.AclBinding;
+import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.config.ConfigResource;
 
 import java.util.Collection;
 import java.util.Map;
@@ -81,9 +84,9 @@ public abstract class AdminClient implements AutoCloseable {
      * Create a batch of new topics with the default options.
      *
      * @param newTopics         The new topics to create.
-     * @return                  The CreateTopicsResults.
+     * @return                  The CreateTopicsResult.
      */
-    public CreateTopicResults createTopics(Collection<NewTopic> newTopics) {
+    public CreateTopicsResult createTopics(Collection<NewTopic> newTopics) {
         return createTopics(newTopics, new CreateTopicsOptions());
     }
 
@@ -97,9 +100,9 @@ public abstract class AdminClient implements AutoCloseable {
      *
      * @param newTopics         The new topics to create.
      * @param options           The options to use when creating the new topics.
-     * @return                  The CreateTopicsResults.
+     * @return                  The CreateTopicsResult.
      */
-    public abstract CreateTopicResults createTopics(Collection<NewTopic> newTopics,
+    public abstract CreateTopicsResult createTopics(Collection<NewTopic> newTopics,
                                                     CreateTopicsOptions options);
 
     /**
@@ -107,9 +110,9 @@ public abstract class AdminClient implements AutoCloseable {
      * but uses the default options.
      *
      * @param topics            The topic names to delete.
-     * @return                  The DeleteTopicsResults.
+     * @return                  The DeleteTopicsResult.
      */
-    public DeleteTopicResults deleteTopics(Collection<String> topics) {
+    public DeleteTopicsResult deleteTopics(Collection<String> topics) {
         return deleteTopics(topics, new DeleteTopicsOptions());
     }
 
@@ -127,16 +130,16 @@ public abstract class AdminClient implements AutoCloseable {
      *
      * @param topics            The topic names to delete.
      * @param options           The options to use when deleting the topics.
-     * @return                  The DeleteTopicsResults.
+     * @return                  The DeleteTopicsResult.
      */
-    public abstract DeleteTopicResults deleteTopics(Collection<String> topics, DeleteTopicsOptions options);
+    public abstract DeleteTopicsResult deleteTopics(Collection<String> topics, DeleteTopicsOptions options);
 
     /**
      * List the topics available in the cluster with the default options.
      *
-     * @return                  The ListTopicsResults.
+     * @return                  The ListTopicsResult.
      */
-    public ListTopicsResults listTopics() {
+    public ListTopicsResult listTopics() {
         return listTopics(new ListTopicsOptions());
     }
 
@@ -144,9 +147,9 @@ public abstract class AdminClient implements AutoCloseable {
      * List the topics available in the cluster.
      *
      * @param options           The options to use when listing the topics.
-     * @return                  The ListTopicsResults.
+     * @return                  The ListTopicsResult.
      */
-    public abstract ListTopicsResults listTopics(ListTopicsOptions options);
+    public abstract ListTopicsResult listTopics(ListTopicsOptions options);
 
     /**
      * Describe some topics in the cluster, with the default options.
@@ -155,35 +158,29 @@ public abstract class AdminClient implements AutoCloseable {
      *
      * @param topicNames        The names of the topics to describe.
      *
-     * @return                  The DescribeTopicsResults.
+     * @return                  The DescribeTopicsResult.
      */
-    public DescribeTopicsResults describeTopics(Collection<String> topicNames) {
+    public DescribeTopicsResult describeTopics(Collection<String> topicNames) {
         return describeTopics(topicNames, new DescribeTopicsOptions());
     }
 
     /**
      * Describe some topics in the cluster.
      *
-     * Note that if auto.create.topics.enable is true on the brokers,
-     * describeTopics(topicName, ...) may create a topic named topicName.
-     * There are two workarounds: either use AdminClient#listTopics and ensure
-     * that the topic is present before describing, or disable
-     * auto.create.topics.enable.
-     *
      * @param topicNames        The names of the topics to describe.
      * @param options           The options to use when describing the topic.
      *
-     * @return                  The DescribeTopicsResults.
+     * @return                  The DescribeTopicsResult.
      */
-    public abstract DescribeTopicsResults describeTopics(Collection<String> topicNames,
+    public abstract DescribeTopicsResult describeTopics(Collection<String> topicNames,
                                                          DescribeTopicsOptions options);
 
     /**
      * Get information about the nodes in the cluster, using the default options.
      *
-     * @return                  The DescribeClusterResults.
+     * @return                  The DescribeClusterResult.
      */
-    public DescribeClusterResults describeCluster() {
+    public DescribeClusterResult describeCluster() {
         return describeCluster(new DescribeClusterOptions());
     }
 
@@ -191,18 +188,18 @@ public abstract class AdminClient implements AutoCloseable {
      * Get information about the nodes in the cluster.
      *
      * @param options           The options to use when getting information about the cluster.
-     * @return                  The DescribeClusterResults.
+     * @return                  The DescribeClusterResult.
      */
-    public abstract DescribeClusterResults describeCluster(DescribeClusterOptions options);
+    public abstract DescribeClusterResult describeCluster(DescribeClusterOptions options);
 
     /**
      * Get information about the api versions of nodes in the cluster with the default options.
      * See {@link AdminClient#apiVersions(Collection<Node>, ApiVersionsOptions)}
      *
      * @param nodes             The nodes to get information about, or null to get information about all nodes.
-     * @return                  The ApiVersionsResults.
+     * @return                  The ApiVersionsResult.
      */
-    public ApiVersionsResults apiVersions(Collection<Node> nodes) {
+    public ApiVersionsResult apiVersions(Collection<Node> nodes) {
         return apiVersions(nodes, new ApiVersionsOptions());
     }
 
@@ -211,19 +208,18 @@ public abstract class AdminClient implements AutoCloseable {
      *
      * @param nodes             The nodes to get information about, or null to get information about all nodes.
      * @param options           The options to use when getting api versions of the nodes.
-     * @return                  The ApiVersionsResults.
+     * @return                  The ApiVersionsResult.
      */
-    public abstract ApiVersionsResults apiVersions(Collection<Node> nodes, ApiVersionsOptions options);
+    public abstract ApiVersionsResult apiVersions(Collection<Node> nodes, ApiVersionsOptions options);
 
     /**
-<<<<<<< HEAD
      * Similar to #{@link AdminClient#describeAcls(AclBindingFilter, DescribeAclsOptions),
      * but uses the default options.
      *
      * @param filter            The filter to use.
      * @return                  The DeleteAclsResult.
      */
-    public DescribeAclsResults describeAcls(AclBindingFilter filter) {
+    public DescribeAclsResult describeAcls(AclBindingFilter filter) {
         return describeAcls(filter, new DescribeAclsOptions());
     }
 
@@ -237,7 +233,7 @@ public abstract class AdminClient implements AutoCloseable {
      * @param options           The options to use when listing the ACLs.
      * @return                  The DeleteAclsResult.
      */
-    public abstract DescribeAclsResults describeAcls(AclBindingFilter filter, DescribeAclsOptions options);
+    public abstract DescribeAclsResult describeAcls(AclBindingFilter filter, DescribeAclsOptions options);
 
     /**
      * Similar to #{@link AdminClient#createAcls(Collection<AclBinding>, CreateAclsOptions),
@@ -246,7 +242,7 @@ public abstract class AdminClient implements AutoCloseable {
      * @param acls              The ACLs to create
      * @return                  The CreateAclsResult.
      */
-    public CreateAclsResults createAcls(Collection<AclBinding> acls) {
+    public CreateAclsResult createAcls(Collection<AclBinding> acls) {
         return createAcls(acls, new CreateAclsOptions());
     }
 
@@ -260,7 +256,7 @@ public abstract class AdminClient implements AutoCloseable {
      * @param options           The options to use when creating the ACLs.
      * @return                  The CreateAclsResult.
      */
-    public abstract CreateAclsResults createAcls(Collection<AclBinding> acls, CreateAclsOptions options);
+    public abstract CreateAclsResult createAcls(Collection<AclBinding> acls, CreateAclsOptions options);
 
     /**
      * Similar to #{@link AdminClient#deleteAcls(Collection<AclBinding>, DeleteAclsOptions),
@@ -269,7 +265,7 @@ public abstract class AdminClient implements AutoCloseable {
      * @param filters           The filters to use.
      * @return                  The DeleteAclsResult.
      */
-    public DeleteAclsResults deleteAcls(Collection<AclBindingFilter> filters) {
+    public DeleteAclsResult deleteAcls(Collection<AclBindingFilter> filters) {
         return deleteAcls(filters, new DeleteAclsOptions());
     }
 
@@ -280,7 +276,7 @@ public abstract class AdminClient implements AutoCloseable {
      * @param options           The options to use when deleting the ACLs.
      * @return                  The DeleteAclsResult.
      */
-    public abstract DeleteAclsResults deleteAcls(Collection<AclBindingFilter> filters, DeleteAclsOptions options);
+    public abstract DeleteAclsResult deleteAcls(Collection<AclBindingFilter> filters, DeleteAclsOptions options);
 
 
      /**
@@ -289,9 +285,9 @@ public abstract class AdminClient implements AutoCloseable {
      * See {@link #describeConfigs(Collection, DescribeConfigsOptions)} for more details.
      *
      * @param resources         The resources (topic and broker resource types are currently supported)
-     * @return                  The DescribeConfigsResults
+     * @return                  The DescribeConfigsResult
      */
-    public DescribeConfigsResults describeConfigs(Collection<ConfigResource> resources) {
+    public DescribeConfigsResult describeConfigs(Collection<ConfigResource> resources) {
         return describeConfigs(resources, new DescribeConfigsOptions());
     }
 
@@ -308,9 +304,9 @@ public abstract class AdminClient implements AutoCloseable {
      *
      * @param resources         The resources (topic and broker resource types are currently supported)
      * @param options           The options to use when describing configs
-     * @return                  The DescribeConfigsResults
+     * @return                  The DescribeConfigsResult
      */
-    public abstract DescribeConfigsResults describeConfigs(Collection<ConfigResource> resources,
+    public abstract DescribeConfigsResult describeConfigs(Collection<ConfigResource> resources,
                                                            DescribeConfigsOptions options);
 
     /**
@@ -320,9 +316,9 @@ public abstract class AdminClient implements AutoCloseable {
      *
      * @param configs         The resources with their configs (topic is the only resource type with configs that can
      *                        be updated currently)
-     * @return                The AlterConfigsResults
+     * @return                The AlterConfigsResult
      */
-    public AlterConfigsResults alterConfigs(Map<ConfigResource, Config> configs) {
+    public AlterConfigsResult alterConfigs(Map<ConfigResource, Config> configs) {
         return alterConfigs(configs, new AlterConfigsOptions());
     }
 
@@ -335,8 +331,8 @@ public abstract class AdminClient implements AutoCloseable {
      * @param configs         The resources with their configs (topic is the only resource type with configs that can
      *                        be updated currently)
      * @param options         The options to use when describing configs
-     * @return                The AlterConfigsResults
+     * @return                The AlterConfigsResult
      */
-    public abstract AlterConfigsResults alterConfigs(Map<ConfigResource, Config> configs, AlterConfigsOptions options);
+    public abstract AlterConfigsResult alterConfigs(Map<ConfigResource, Config> configs, AlterConfigsOptions options);
 
 }

@@ -118,7 +118,7 @@ public class FetcherTest {
     private int fetchSize = 1000;
     private long retryBackoffMs = 100;
     private MockTime time = new MockTime(1);
-    private Metadata metadata = new Metadata(0, Long.MAX_VALUE);
+    private Metadata metadata = new Metadata(0, Long.MAX_VALUE, true);
     private MockClient client = new MockClient(time, metadata);
     private Cluster cluster = TestUtils.singletonCluster(topicName, 2);
     private Node node = cluster.nodes().get(0);
@@ -303,7 +303,7 @@ public class FetcherTest {
         long offset = 0;
         long timestamp = 500L;
 
-        int size = LegacyRecord.recordSize(key, value);
+        int size = LegacyRecord.recordSize(magic, key.length, value.length);
         byte attributes = LegacyRecord.computeAttributes(magic, CompressionType.NONE, TimestampType.CREATE_TIME);
         long crc = LegacyRecord.computeChecksum(magic, attributes, timestamp, key, value);
 
@@ -1068,16 +1068,15 @@ public class FetcherTest {
     public void testGetTopicMetadataInvalidTopic() {
         client.prepareResponse(newMetadataResponse(topicName, Errors.INVALID_TOPIC_EXCEPTION));
         fetcher.getTopicMetadata(
-            new MetadataRequest.Builder(Collections.singletonList(topicName)), 5000L);
+                new MetadataRequest.Builder(Collections.singletonList(topicName), true), 5000L);
     }
 
     @Test
     public void testGetTopicMetadataUnknownTopic() {
         client.prepareResponse(newMetadataResponse(topicName, Errors.UNKNOWN_TOPIC_OR_PARTITION));
 
-        Map<String, List<PartitionInfo>> topicMetadata =
-                fetcher.getTopicMetadata(
-                        new MetadataRequest.Builder(Collections.singletonList(topicName)), 5000L);
+        Map<String, List<PartitionInfo>> topicMetadata = fetcher.getTopicMetadata(
+                new MetadataRequest.Builder(Collections.singletonList(topicName), true), 5000L);
         assertNull(topicMetadata.get(topicName));
     }
 
@@ -1086,9 +1085,8 @@ public class FetcherTest {
         client.prepareResponse(newMetadataResponse(topicName, Errors.LEADER_NOT_AVAILABLE));
         client.prepareResponse(newMetadataResponse(topicName, Errors.NONE));
 
-        Map<String, List<PartitionInfo>> topicMetadata =
-                fetcher.getTopicMetadata(
-                        new MetadataRequest.Builder(Collections.singletonList(topicName)), 5000L);
+        Map<String, List<PartitionInfo>> topicMetadata = fetcher.getTopicMetadata(
+                new MetadataRequest.Builder(Collections.singletonList(topicName), true), 5000L);
         assertTrue(topicMetadata.containsKey(topicName));
     }
 
@@ -1332,6 +1330,22 @@ public class FetcherTest {
         testGetOffsetsForTimesWithError(Errors.BROKER_NOT_AVAILABLE, Errors.NONE, 10L, 100L, 10L, 100L);
     }
 
+    @Test(expected = TimeoutException.class)
+    public void testBatchedListOffsetsMetadataErrors() {
+        Map<TopicPartition, ListOffsetResponse.PartitionData> partitionData = new HashMap<>();
+        partitionData.put(tp1, new ListOffsetResponse.PartitionData(Errors.NOT_LEADER_FOR_PARTITION,
+                ListOffsetResponse.UNKNOWN_TIMESTAMP, ListOffsetResponse.UNKNOWN_OFFSET));
+        partitionData.put(tp2, new ListOffsetResponse.PartitionData(Errors.UNKNOWN_TOPIC_OR_PARTITION,
+                ListOffsetResponse.UNKNOWN_TIMESTAMP, ListOffsetResponse.UNKNOWN_OFFSET));
+        client.prepareResponse(new ListOffsetResponse(0, partitionData));
+
+        Map<TopicPartition, Long> offsetsToSearch = new HashMap<>();
+        offsetsToSearch.put(tp1, ListOffsetRequest.EARLIEST_TIMESTAMP);
+        offsetsToSearch.put(tp2, ListOffsetRequest.EARLIEST_TIMESTAMP);
+
+        fetcher.getOffsetsByTimes(offsetsToSearch, 0);
+    }
+
     @Test
     public void testSkippingAbortedTransactions() {
         Fetcher<byte[], byte[]> fetcher = createFetcher(subscriptions, new Metrics(), new ByteArrayDeserializer(),
@@ -1343,7 +1357,7 @@ public class FetcherTest {
                 new SimpleRecord(time.milliseconds(), "key".getBytes(), "value".getBytes()),
                 new SimpleRecord(time.milliseconds(), "key".getBytes(), "value".getBytes()));
 
-        currentOffset += abortTransaction(buffer, 1L, currentOffset);
+        abortTransaction(buffer, 1L, currentOffset);
 
         buffer.flip();
 

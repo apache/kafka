@@ -307,6 +307,13 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
             txnStartTimestamp = transitMetadata.txnStartTimestamp
             topicPartitions.clear()
           }
+        case Dead =>
+          // The transactionalId was being expired. The completion of the operation should result in removal of the
+          // the metadata from the cache, so we should never realistically transition to the dead state.
+          throw new IllegalStateException(s"TransactionalId : $transactionalId is trying to complete a transition to " +
+            s"$toState. This means that the transactionalId was being expired, and the only acceptable completion of " +
+            s"this operation is to remove the transaction metadata from the cache, not to persist the $toState in the log.")
+
       }
 
       debug(s"TransactionalId $transactionalId complete transition from $state to $transitMetadata")

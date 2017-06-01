@@ -17,7 +17,7 @@
 package kafka.security.auth
 
 import kafka.common.{BaseEnum, KafkaException}
-import org.apache.kafka.clients.admin.AclOperation
+import org.apache.kafka.common.acl.AclOperation
 
 import scala.util.{Failure, Success, Try}
 

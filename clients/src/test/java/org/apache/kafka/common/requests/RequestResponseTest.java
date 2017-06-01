@@ -16,15 +16,12 @@
  */
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.clients.admin.AccessControlEntry;
-import org.apache.kafka.clients.admin.AccessControlEntryFilter;
-import org.apache.kafka.clients.admin.AclBinding;
-import org.apache.kafka.clients.admin.AclBindingFilter;
-import org.apache.kafka.clients.admin.AclOperation;
-import org.apache.kafka.clients.admin.AclPermissionType;
-import org.apache.kafka.clients.admin.Resource;
-import org.apache.kafka.clients.admin.ResourceFilter;
-import org.apache.kafka.clients.admin.ResourceType;
+import org.apache.kafka.common.acl.AccessControlEntry;
+import org.apache.kafka.common.acl.AccessControlEntryFilter;
+import org.apache.kafka.common.acl.AclBinding;
+import org.apache.kafka.common.acl.AclBindingFilter;
+import org.apache.kafka.common.acl.AclOperation;
+import org.apache.kafka.common.acl.AclPermissionType;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.InvalidRequestException;
@@ -50,6 +47,9 @@ import org.apache.kafka.common.requests.CreateAclsRequest.AclCreation;
 import org.apache.kafka.common.requests.CreateAclsResponse.AclCreationResponse;
 import org.apache.kafka.common.requests.DeleteAclsResponse.AclDeletionResult;
 import org.apache.kafka.common.requests.DeleteAclsResponse.AclFilterResponse;
+import org.apache.kafka.common.resource.Resource;
+import org.apache.kafka.common.resource.ResourceFilter;
+import org.apache.kafka.common.resource.ResourceType;
 import org.apache.kafka.common.utils.Utils;
 import org.junit.Test;
 
@@ -117,6 +117,10 @@ public class RequestResponseTest {
         checkErrorResponse(createMetadataRequest(1, singletonList("topic1")), new UnknownServerException());
         checkResponse(createMetadataResponse(), 2);
         checkErrorResponse(createMetadataRequest(2, singletonList("topic1")), new UnknownServerException());
+        checkResponse(createMetadataResponse(), 3);
+        checkErrorResponse(createMetadataRequest(3, singletonList("topic1")), new UnknownServerException());
+        checkResponse(createMetadataResponse(), 4);
+        checkErrorResponse(createMetadataRequest(4, singletonList("topic1")), new UnknownServerException());
         checkRequest(createOffsetCommitRequest(2));
         checkErrorResponse(createOffsetCommitRequest(2), new UnknownServerException());
         checkResponse(createOffsetCommitResponse(), 0);
@@ -703,7 +707,7 @@ public class RequestResponseTest {
     }
 
     private MetadataRequest createMetadataRequest(int version, List<String> topics) {
-        return new MetadataRequest.Builder(topics).build((short) version);
+        return new MetadataRequest.Builder(topics, true).build((short) version);
     }
 
     private MetadataResponse createMetadataResponse() {

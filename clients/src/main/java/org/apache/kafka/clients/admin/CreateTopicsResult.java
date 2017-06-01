@@ -14,33 +14,34 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Map;
 
 /**
- * The result of the createAcls call.
+ * The result of newTopics.
  */
-public class CreateAclsResults {
-    private final Map<AclBinding, KafkaFuture<Void>> futures;
+@InterfaceStability.Unstable
+public class CreateTopicsResult {
+    private final Map<String, KafkaFuture<Void>> futures;
 
-    CreateAclsResults(Map<AclBinding, KafkaFuture<Void>> futures) {
+    CreateTopicsResult(Map<String, KafkaFuture<Void>> futures) {
         this.futures = futures;
     }
 
     /**
-     * Return a map from topic names to futures which can be used to check the status of
-     * individual deletions.
+     * Return a map from topic names to futures, which can be used to check the status of individual
+     * topic creations.
      */
-    public Map<AclBinding, KafkaFuture<Void>> results() {
+    public Map<String, KafkaFuture<Void>> results() {
         return futures;
     }
 
     /**
-     * Return a future which succeeds only if all the topic deletions succeed.
+     * Return a future which succeeds if all the topic creations succeed.
      */
     public KafkaFuture<Void> all() {
         return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0]));

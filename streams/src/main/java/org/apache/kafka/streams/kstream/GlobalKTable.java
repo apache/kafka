@@ -64,6 +64,6 @@ import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
  * @see KStream#join(GlobalKTable, KeyValueMapper, ValueJoiner)
  * @see KStream#leftJoin(GlobalKTable, KeyValueMapper, ValueJoiner)
  */
-@InterfaceStability.Unstable
+@InterfaceStability.Evolving
 public interface GlobalKTable<K, V> {
 }

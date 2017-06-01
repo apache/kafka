@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor;
 
+import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Utils;
@@ -60,6 +61,7 @@ import java.util.regex.Pattern;
  * to construct an acyclic graph of these nodes, and the builder is then passed into a new {@link org.apache.kafka.streams.KafkaStreams}
  * instance that will then {@link org.apache.kafka.streams.KafkaStreams#start() begin consuming, processing, and producing records}.
  */
+@InterfaceStability.Evolving
 public class TopologyBuilder {
 
     private static final Logger log = LoggerFactory.getLogger(TopologyBuilder.class);
@@ -1528,6 +1530,10 @@ public class TopologyBuilder {
         }
 
         return applicationId + "-" + topic;
+    }
+
+    public SubscriptionUpdates subscriptionUpdates() {
+        return subscriptionUpdates;
     }
 
     public synchronized Pattern sourceTopicPattern() {

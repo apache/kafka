@@ -18,16 +18,17 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.acl.AclBinding;
 
 import java.util.Collection;
 
 /**
  * The result of the describeAcls call.
  */
-public class DescribeAclsResults {
+public class DescribeAclsResult {
     private final KafkaFuture<Collection<AclBinding>> future;
 
-    DescribeAclsResults(KafkaFuture<Collection<AclBinding>> future) {
+    DescribeAclsResult(KafkaFuture<Collection<AclBinding>> future) {
         this.future = future;
     }
 

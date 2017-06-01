@@ -101,7 +101,8 @@ public class StreamsKafkaClient {
 
         final Metadata metadata = new Metadata(streamsConfig.getLong(
             StreamsConfig.RETRY_BACKOFF_MS_CONFIG),
-            streamsConfig.getLong(StreamsConfig.METADATA_MAX_AGE_CONFIG)
+            streamsConfig.getLong(StreamsConfig.METADATA_MAX_AGE_CONFIG),
+            false
         );
         final List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(streamsConfig.getList(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG));
         metadata.update(Cluster.bootstrap(addresses), Collections.<String>emptySet(), time.milliseconds());
@@ -241,7 +242,8 @@ public class StreamsKafkaClient {
     private String getAnyReadyBrokerId() {
         final Metadata metadata = new Metadata(
             streamsConfig.getLong(StreamsConfig.RETRY_BACKOFF_MS_CONFIG),
-            streamsConfig.getLong(StreamsConfig.METADATA_MAX_AGE_CONFIG));
+            streamsConfig.getLong(StreamsConfig.METADATA_MAX_AGE_CONFIG),
+            false);
         final List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(streamsConfig.getList(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG));
         metadata.update(Cluster.bootstrap(addresses), Collections.<String>emptySet(), Time.SYSTEM.milliseconds());
 
@@ -289,7 +291,7 @@ public class StreamsKafkaClient {
 
         final ClientRequest clientRequest = kafkaClient.newClientRequest(
             getAnyReadyBrokerId(),
-            new MetadataRequest.Builder(null),
+            MetadataRequest.Builder.allTopics(),
             Time.SYSTEM.milliseconds(),
             true);
         final ClientResponse clientResponse = sendRequest(clientRequest);

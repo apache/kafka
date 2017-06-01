@@ -14,29 +14,34 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.kafka.common.serialization;
 
-package org.apache.kafka.clients.admin;
-
-import org.apache.kafka.common.KafkaFuture;
-import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.errors.SerializationException;
 
 import java.util.Map;
 
-@InterfaceStability.Unstable
-public class AlterConfigsResults {
+public class ShortDeserializer implements Deserializer<Short> {
 
-    private final Map<ConfigResource, KafkaFuture<Void>> futures;
-
-    AlterConfigsResults(Map<ConfigResource, KafkaFuture<Void>> futures) {
-        this.futures = futures;
+    public void configure(Map<String, ?> configs, boolean isKey) {
+        // nothing to do
     }
 
-    public Map<ConfigResource, KafkaFuture<Void>> results() {
-        return futures;
+    public Short deserialize(String topic, byte[] data) {
+        if (data == null)
+            return null;
+        if (data.length != 2) {
+            throw new SerializationException("Size of data received by ShortDeserializer is not 2");
+        }
+
+        short value = 0;
+        for (byte b : data) {
+            value <<= 8;
+            value |= b & 0xFF;
+        }
+        return value;
     }
 
-    public KafkaFuture<Void> all() {
-        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0]));
+    public void close() {
+        // nothing to do
     }
-
 }

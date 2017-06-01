@@ -1456,5 +1456,4 @@ public class StreamThread extends Thread {
 
         return firstException;
     }
-
 }

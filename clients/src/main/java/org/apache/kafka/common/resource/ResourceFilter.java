@@ -14,21 +14,23 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients.admin;
+
+package org.apache.kafka.common.resource;
 
 import java.util.Objects;
 
 /**
- * Represents a cluster resource with a tuple of (type, name).
+ * A filter which matches Resource objects.
  */
-public class Resource {
+public class ResourceFilter {
     private final ResourceType resourceType;
     private final String name;
 
-    public Resource(ResourceType resourceType, String name) {
+    public static final ResourceFilter ANY = new ResourceFilter(ResourceType.ANY, null);
+
+    public ResourceFilter(ResourceType resourceType, String name) {
         Objects.requireNonNull(resourceType);
         this.resourceType = resourceType;
-        Objects.requireNonNull(name);
         this.name = name;
     }
 
@@ -40,20 +42,13 @@ public class Resource {
         return name;
     }
 
-    /**
-     * Create a filter which matches only this Resource.
-     */
-    public ResourceFilter toFilter() {
-        return new ResourceFilter(resourceType, name);
-    }
-
     @Override
     public String toString() {
         return "(resourceType=" + resourceType + ", name=" + ((name == null) ? "<any>" : name) + ")";
     }
 
     /**
-     * Return true if this Resource has any UNKNOWN components.
+     * Return true if this ResourceFilter has any UNKNOWN components.
      */
     public boolean unknown() {
         return resourceType.unknown();
@@ -61,14 +56,36 @@ public class Resource {
 
     @Override
     public boolean equals(Object o) {
-        if (!(o instanceof Resource))
+        if (!(o instanceof ResourceFilter))
             return false;
-        Resource other = (Resource) o;
+        ResourceFilter other = (ResourceFilter) o;
         return resourceType.equals(other.resourceType) && Objects.equals(name, other.name);
     }
 
     @Override
     public int hashCode() {
         return Objects.hash(resourceType, name);
+    }
+
+    public boolean matches(Resource other) {
+        if ((name != null) && (!name.equals(other.name())))
+            return false;
+        if ((resourceType != ResourceType.ANY) && (!resourceType.equals(other.resourceType())))
+            return false;
+        return true;
+    }
+
+    public boolean matchesAtMostOne() {
+        return findIndefiniteField() == null;
+    }
+
+    public String findIndefiniteField() {
+        if (resourceType == ResourceType.ANY)
+            return "Resource type is ANY.";
+        if (resourceType == ResourceType.UNKNOWN)
+            return "Resource type is UNKNOWN.";
+        if (name == null)
+            return "Resource name is NULL.";
+        return null;
     }
 }

@@ -232,6 +232,15 @@ public class TransactionManager {
         return lastError;
     }
 
+    public synchronized boolean ensurePartitionAdded(TopicPartition tp) {
+        if (isInTransaction() && !partitionsInTransaction.contains(tp)) {
+            transitionToFatalError(new IllegalStateException("Attempted to dequeue a record batch to send " +
+                    "for partition " + tp + ", which hasn't been added to the transaction yet"));
+            return false;
+        }
+        return true;
+    }
+
     public String transactionalId() {
         return transactionalId;
     }
