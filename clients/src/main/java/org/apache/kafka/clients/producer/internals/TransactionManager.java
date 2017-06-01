@@ -928,7 +928,9 @@ public class TransactionManager {
                 Errors error = entry.getValue();
                 if (error == Errors.NONE) {
                     pendingTxnOffsetCommits.remove(topicPartition);
-                } else if (error == Errors.COORDINATOR_NOT_AVAILABLE || error == Errors.NOT_COORDINATOR) {
+                } else if (error == Errors.COORDINATOR_NOT_AVAILABLE
+                        || error == Errors.NOT_COORDINATOR
+                        || error == Errors.REQUEST_TIMED_OUT) {
                     hadFailure = true;
                     if (!coordinatorReloaded) {
                         coordinatorReloaded = true;
