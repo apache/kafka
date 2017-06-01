@@ -129,8 +129,12 @@ public class StreamsKafkaClient {
     }
 
     public void close() throws IOException {
-        for (MetricsReporter metricsReporter: this.reporters) {
-            metricsReporter.close();
+        try {
+            kafkaClient.close();
+        } finally {
+            for (MetricsReporter metricsReporter: this.reporters) {
+                metricsReporter.close();
+            }
         }
     }
 
