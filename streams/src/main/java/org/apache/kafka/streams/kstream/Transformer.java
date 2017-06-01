@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.kstream;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
@@ -45,7 +44,6 @@ import org.apache.kafka.streams.processor.TimestampExtractor;
  * @see KStream#map(KeyValueMapper)
  * @see KStream#flatMap(KeyValueMapper)
  */
-@InterfaceStability.Unstable
 public interface Transformer<K, V, R> {
 
     /**
