@@ -199,6 +199,9 @@ class TransactionStateManager(brokerId: Int,
 
   def getTransactionState(transactionalId: String) = getAndMaybeAddTransactionState(transactionalId, None)
 
+  def putTransactionStateIfNotExists(transactionalId: String, txnMetadata: TransactionMetadata) =
+    getAndMaybeAddTransactionState(transactionalId, Some(txnMetadata))
+
   /**
    * Get the transaction metadata associated with the given transactional id, or an error if
    * the coordinator does not own the transaction partition or is still loading it; if not found
@@ -206,8 +209,8 @@ class TransactionStateManager(brokerId: Int,
    *
    * This function is covered by the state read lock
    */
-  def getAndMaybeAddTransactionState(transactionalId: String,
-                                     createdTxnMetadata: Option[TransactionMetadata]): Either[Errors, Option[CoordinatorEpochAndTxnMetadata]] = {
+  private def getAndMaybeAddTransactionState(transactionalId: String,
+                                             createdTxnMetadata: Option[TransactionMetadata]): Either[Errors, Option[CoordinatorEpochAndTxnMetadata]] = {
     inReadLock(stateLock) {
       val partitionId = partitionFor(transactionalId)
 

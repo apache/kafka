@@ -35,7 +35,7 @@ class TransactionCoordinatorTest {
   val pidManager: ProducerIdManager = EasyMock.createNiceMock(classOf[ProducerIdManager])
   val transactionManager: TransactionStateManager = EasyMock.createNiceMock(classOf[TransactionStateManager])
   val transactionMarkerChannelManager: TransactionMarkerChannelManager = EasyMock.createNiceMock(classOf[TransactionMarkerChannelManager])
-  val capturedTxn: Capture[Option[TransactionMetadata]] = EasyMock.newCapture()
+  val capturedTxn: Capture[TransactionMetadata] = EasyMock.newCapture()
   val capturedErrorsCallback: Capture[Errors => Unit] = EasyMock.newCapture()
   val brokerId = 0
   val coordinatorEpoch = 0
@@ -105,11 +105,11 @@ class TransactionCoordinatorTest {
       .andReturn(Right(None))
       .once()
 
-    EasyMock.expect(transactionManager.getAndMaybeAddTransactionState(EasyMock.eq(transactionalId), EasyMock.capture(capturedTxn)))
+    EasyMock.expect(transactionManager.putTransactionStateIfNotExists(EasyMock.eq(transactionalId), EasyMock.capture(capturedTxn)))
       .andAnswer(new IAnswer[Either[Errors, Option[CoordinatorEpochAndTxnMetadata]]] {
         override def answer(): Either[Errors, Option[CoordinatorEpochAndTxnMetadata]] = {
-          if (capturedTxn.hasCaptured && capturedTxn.getValue.isDefined)
-            Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, capturedTxn.getValue.get)))
+          if (capturedTxn.hasCaptured)
+            Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, capturedTxn.getValue)))
           else
             Right(None)
         }
@@ -448,7 +448,7 @@ class TransactionCoordinatorTest {
 
   @Test
   def shouldRespondWithInvalidRequestOnEndTxnWhenTransactionalIdIsEmpty(): Unit = {
-    EasyMock.expect(transactionManager.getAndMaybeAddTransactionState(EasyMock.eq(transactionalId), EasyMock.eq(None)))
+    EasyMock.expect(transactionManager.getTransactionState(EasyMock.eq(transactionalId)))
       .andReturn(Left(Errors.NOT_COORDINATOR))
     EasyMock.replay(transactionManager)
 
@@ -510,7 +510,7 @@ class TransactionCoordinatorTest {
     EasyMock.expect(transactionManager.validateTransactionTimeoutMs(EasyMock.anyInt()))
       .andReturn(true)
 
-    EasyMock.expect(transactionManager.getAndMaybeAddTransactionState(EasyMock.eq(transactionalId), EasyMock.anyObject[Option[TransactionMetadata]]()))
+    EasyMock.expect(transactionManager.putTransactionStateIfNotExists(EasyMock.eq(transactionalId), EasyMock.anyObject[TransactionMetadata]()))
       .andReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata))))
       .anyTimes()
 

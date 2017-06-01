@@ -100,11 +100,11 @@ class TransactionStateManagerTest {
 
     assertEquals(Right(None), transactionManager.getTransactionState(transactionalId1))
     assertEquals(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata1))),
-      transactionManager.getAndMaybeAddTransactionState(transactionalId1, Some(txnMetadata1)))
+      transactionManager.putTransactionStateIfNotExists(transactionalId1, txnMetadata1))
     assertEquals(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata1))),
       transactionManager.getTransactionState(transactionalId1))
     assertEquals(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata1))),
-      transactionManager.getAndMaybeAddTransactionState(transactionalId1, Some(txnMetadata2)))
+      transactionManager.putTransactionStateIfNotExists(transactionalId1, txnMetadata2))
   }
 
   @Test
@@ -212,7 +212,7 @@ class TransactionStateManagerTest {
     transactionManager.addLoadedTransactionsToCache(partitionId, coordinatorEpoch, new Pool[String, TransactionMetadata]())
 
     // first insert the initial transaction metadata
-    transactionManager.getAndMaybeAddTransactionState(transactionalId1, Some(txnMetadata1))
+    transactionManager.putTransactionStateIfNotExists(transactionalId1, txnMetadata1)
 
     prepareForTxnMessageAppend(Errors.NONE)
     expectedError = Errors.NONE
@@ -281,7 +281,7 @@ class TransactionStateManagerTest {
     transactionManager.addLoadedTransactionsToCache(partitionId, 0, new Pool[String, TransactionMetadata]())
 
     // first insert the initial transaction metadata
-    transactionManager.getAndMaybeAddTransactionState(transactionalId1, Some(txnMetadata1))
+    transactionManager.putTransactionStateIfNotExists(transactionalId1, txnMetadata1)
 
     prepareForTxnMessageAppend(Errors.NONE)
     expectedError = Errors.NOT_COORDINATOR
@@ -300,7 +300,7 @@ class TransactionStateManagerTest {
   def testAppendTransactionToLogWhilePendingStateChanged() = {
     // first insert the initial transaction metadata
     transactionManager.addLoadedTransactionsToCache(partitionId, coordinatorEpoch, new Pool[String, TransactionMetadata]())
-    transactionManager.getAndMaybeAddTransactionState(transactionalId1, Some(txnMetadata1))
+    transactionManager.putTransactionStateIfNotExists(transactionalId1, txnMetadata1)
 
     prepareForTxnMessageAppend(Errors.NONE)
     expectedError = Errors.INVALID_PRODUCER_EPOCH
@@ -329,12 +329,12 @@ class TransactionStateManagerTest {
       transactionManager.addLoadedTransactionsToCache(partitionId, 0, new Pool[String, TransactionMetadata]())
     }
 
-    transactionManager.getAndMaybeAddTransactionState("ongoing", Some(transactionMetadata("ongoing", producerId = 0, state = Ongoing)))
-    transactionManager.getAndMaybeAddTransactionState("not-expiring", Some(transactionMetadata("not-expiring", producerId = 1, state = Ongoing, txnTimeout = 10000)))
-    transactionManager.getAndMaybeAddTransactionState("prepare-commit", Some(transactionMetadata("prepare-commit", producerId = 2, state = PrepareCommit)))
-    transactionManager.getAndMaybeAddTransactionState("prepare-abort", Some(transactionMetadata("prepare-abort", producerId = 3, state = PrepareAbort)))
-    transactionManager.getAndMaybeAddTransactionState("complete-commit", Some(transactionMetadata("complete-commit", producerId = 4, state = CompleteCommit)))
-    transactionManager.getAndMaybeAddTransactionState("complete-abort", Some(transactionMetadata("complete-abort", producerId = 5, state = CompleteAbort)))
+    transactionManager.putTransactionStateIfNotExists("ongoing", transactionMetadata("ongoing", producerId = 0, state = Ongoing))
+    transactionManager.putTransactionStateIfNotExists("not-expiring", transactionMetadata("not-expiring", producerId = 1, state = Ongoing, txnTimeout = 10000))
+    transactionManager.putTransactionStateIfNotExists("prepare-commit", transactionMetadata("prepare-commit", producerId = 2, state = PrepareCommit))
+    transactionManager.putTransactionStateIfNotExists("prepare-abort", transactionMetadata("prepare-abort", producerId = 3, state = PrepareAbort))
+    transactionManager.putTransactionStateIfNotExists("complete-commit", transactionMetadata("complete-commit", producerId = 4, state = CompleteCommit))
+    transactionManager.putTransactionStateIfNotExists("complete-abort", transactionMetadata("complete-abort", producerId = 5, state = CompleteAbort))
 
     time.sleep(2000)
     val expiring = transactionManager.timedOutTransactions()
@@ -453,10 +453,10 @@ class TransactionStateManagerTest {
 
     txnMetadata1.txnLastUpdateTimestamp = time.milliseconds() - txnConfig.transactionalIdExpirationMs
     txnMetadata1.state = txnState
-    transactionManager.getAndMaybeAddTransactionState(transactionalId1, Some(txnMetadata1))
+    transactionManager.putTransactionStateIfNotExists(transactionalId1, txnMetadata1)
 
     txnMetadata2.txnLastUpdateTimestamp = time.milliseconds()
-    transactionManager.getAndMaybeAddTransactionState(transactionalId2, Some(txnMetadata2))
+    transactionManager.putTransactionStateIfNotExists(transactionalId2, txnMetadata2)
 
     transactionManager.enableTransactionalIdExpiration()
     time.sleep(txnConfig.removeExpiredTransactionalIdsIntervalMs)

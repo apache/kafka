@@ -119,7 +119,7 @@ class TransactionCoordinator(brokerId: Int,
             state = Empty,
             topicPartitions = collection.mutable.Set.empty[TopicPartition],
             txnLastUpdateTimestamp = time.milliseconds())
-          txnManager.getAndMaybeAddTransactionState(transactionalId, Some(createdMetadata))
+          txnManager.putTransactionStateIfNotExists(transactionalId, createdMetadata)
 
         case other => other
       }
