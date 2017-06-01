@@ -31,7 +31,7 @@ import java.util.concurrent.TimeUnit;
 
 public class EosTestClient extends SmokeTestUtil {
 
-    static final String appId = "EosTest";
+    static final String APP_ID = "EosTest";
     private final String kafka;
     private final File stateDir;
     private KafkaStreams streams;
@@ -84,7 +84,7 @@ public class EosTestClient extends SmokeTestUtil {
     private static KafkaStreams createKafkaStreams(final File stateDir,
                                                    final String kafka) {
         final Properties props = new Properties();
-        props.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
+        props.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID);
         props.put(StreamsConfig.STATE_DIR_CONFIG, stateDir.toString());
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);
         props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 2);
@@ -143,31 +143,6 @@ public class EosTestClient extends SmokeTestUtil {
             longSerde,
             "sum")
             .to(stringSerde, longSerde, "sum");
-
-        final KGroupedStream<String, Integer> repartitionedData = data.through("repartition").groupByKey();
-//        // max
-//        repartitionedData
-//            .aggregate(
-//                new Initializer<Integer>() {
-//                    @Override
-//                    public Integer apply() {
-//                        return Integer.MIN_VALUE;
-//                    }
-//                },
-//                new Aggregator<String, Integer, Integer>() {
-//                    @Override
-//                    public Integer apply(final String aggKey,
-//                                         final Integer value,
-//                                         final Integer aggregate) {
-//                        return (value > aggregate) ? value : aggregate;
-//                    }
-//                },
-//                intSerde,
-//                "max")
-//            .to(stringSerde, intSerde, "max");
-//
-//        // cnt
-//        repartitionedData.count("cnt").to(stringSerde, longSerde, "cnt");
 
         return new KafkaStreams(builder, props);
     }

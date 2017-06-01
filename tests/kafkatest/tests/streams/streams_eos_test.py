@@ -14,7 +14,6 @@
 # limitations under the License.
 
 from ducktape.mark.resource import cluster
-from ducktape.mark import ignore
 
 from kafkatest.tests.kafka_test import KafkaTest
 from kafkatest.services.streams import StreamsEosTestDriverService, StreamsEosTestJobRunnerService, StreamsEosTestVerifyRunnerService
@@ -30,11 +29,8 @@ class StreamsEosTest(KafkaTest):
         super(StreamsEosTest, self).__init__(test_context, num_zk=1, num_brokers=3, topics={
             'data' : { 'partitions': 5, 'replication-factor': 2 },
             'echo' : { 'partitions': 5, 'replication-factor': 2 },
-            'repartition' : { 'partitions': 5, 'replication-factor': 2 },
             'min' : { 'partitions': 5, 'replication-factor': 2 },
-            'max' : { 'partitions': 5, 'replication-factor': 2 },
-            'sum' : { 'partitions': 5, 'replication-factor': 2 },
-            'cnt' : { 'partitions': 5, 'replication-factor': 2 }
+            'sum' : { 'partitions': 5, 'replication-factor': 2 }
         })
 
         self.driver = StreamsEosTestDriverService(test_context, self.kafka)
@@ -75,10 +71,8 @@ class StreamsEosTest(KafkaTest):
         self.verifier.start()
         self.verifier.wait()
 
-        node = self.verifier.node
-        node.account.ssh("grep ALL-RECORDS-DELIVERED %s" % self.verifier.STDOUT_FILE, allow_fail=False)
+        self.verifier.node.account.ssh("grep ALL-RECORDS-DELIVERED %s" % self.verifier.STDOUT_FILE, allow_fail=False)
 
-    @ignore
     @cluster(num_nodes=8)
     def test_failure_and_recovery(self):
         """
@@ -109,5 +103,4 @@ class StreamsEosTest(KafkaTest):
         self.verifier.start()
         self.verifier.wait()
 
-        node = self.verifier.node
-        node.account.ssh("grep ALL-RECORDS-DELIVERED %s" % self.verifier.STDOUT_FILE, allow_fail=False)
+        self.verifier.node.account.ssh("grep ALL-RECORDS-DELIVERED %s" % self.verifier.STDOUT_FILE, allow_fail=False)
