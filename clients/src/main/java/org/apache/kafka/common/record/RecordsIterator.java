@@ -21,9 +21,8 @@ import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.utils.AbstractIterator;
 import org.apache.kafka.common.utils.Utils;
 
-import java.io.DataInputStream;
-import java.io.EOFException;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.util.ArrayDeque;
 import java.util.Iterator;
@@ -36,16 +35,19 @@ public class RecordsIterator extends AbstractIterator<LogEntry> {
     private final boolean ensureMatchingMagic;
     private final int maxRecordSize;
     private final ShallowRecordsIterator<?> shallowIter;
+    private final BufferSupplier bufferSupplier;
     private DeepRecordsIterator innerIter;
 
     public RecordsIterator(LogInputStream<?> logInputStream,
                            boolean shallow,
                            boolean ensureMatchingMagic,
-                           int maxRecordSize) {
+                           int maxRecordSize,
+                           BufferSupplier bufferSupplier) {
         this.shallowIter = new ShallowRecordsIterator<>(logInputStream);
         this.shallow = shallow;
         this.ensureMatchingMagic = ensureMatchingMagic;
         this.maxRecordSize = maxRecordSize;
+        this.bufferSupplier = bufferSupplier;
     }
 
     /**
@@ -76,7 +78,7 @@ public class RecordsIterator extends AbstractIterator<LogEntry> {
                 // would not try to further decompress underlying messages
                 // There will be at least one element in the inner iterator, so we don't
                 // need to call hasNext() here.
-                innerIter = new DeepRecordsIterator(entry, ensureMatchingMagic, maxRecordSize);
+                innerIter = new DeepRecordsIterator(entry, ensureMatchingMagic, maxRecordSize, bufferSupplier);
                 return innerIter.next();
             }
         } else {
@@ -89,30 +91,35 @@ public class RecordsIterator extends AbstractIterator<LogEntry> {
     }
 
     private static final class DataLogInputStream implements LogInputStream<LogEntry> {
-        private final DataInputStream stream;
-        protected final int maxMessageSize;
 
-        DataLogInputStream(DataInputStream stream, int maxMessageSize) {
+        private final InputStream stream;
+        protected final int maxMessageSize;
+        private final ByteBuffer offsetAndSizeBuffer;
+
+        DataLogInputStream(InputStream stream, int maxMessageSize) {
             this.stream = stream;
             this.maxMessageSize = maxMessageSize;
+            this.offsetAndSizeBuffer = ByteBuffer.allocate(Records.LOG_OVERHEAD);
         }
 
         public LogEntry nextEntry() throws IOException {
-            try {
-                long offset = stream.readLong();
-                int size = stream.readInt();
-                if (size < Record.RECORD_OVERHEAD_V0)
-                    throw new CorruptRecordException(String.format("Record size is less than the minimum record overhead (%d)", Record.RECORD_OVERHEAD_V0));
-                if (size > maxMessageSize)
-                    throw new CorruptRecordException(String.format("Record size exceeds the largest allowable message size (%d).", maxMessageSize));
-
-                byte[] recordBuffer = new byte[size];
-                stream.readFully(recordBuffer, 0, size);
-                ByteBuffer buf = ByteBuffer.wrap(recordBuffer);
-                return LogEntry.create(offset, new Record(buf));
-            } catch (EOFException e) {
+            offsetAndSizeBuffer.clear();
+            Utils.readFully(stream, offsetAndSizeBuffer);
+            if (offsetAndSizeBuffer.hasRemaining())
                 return null;
-            }
+            long offset = offsetAndSizeBuffer.getLong(Records.OFFSET_OFFSET);
+            int size = offsetAndSizeBuffer.getInt(Records.SIZE_OFFSET);
+            if (size < Record.RECORD_OVERHEAD_V0)
+                throw new CorruptRecordException(String.format("Record size is less than the minimum record overhead (%d)", Record.RECORD_OVERHEAD_V0));
+            if (size > maxMessageSize)
+                throw new CorruptRecordException(String.format("Record size exceeds the largest allowable message size (%d).", maxMessageSize));
+
+            ByteBuffer batchBuffer = ByteBuffer.allocate(size);
+            Utils.readFully(stream, batchBuffer);
+            if (batchBuffer.hasRemaining())
+                return null;
+            batchBuffer.flip();
+            return LogEntry.create(offset, new Record(batchBuffer));
         }
     }
 
@@ -141,13 +148,13 @@ public class RecordsIterator extends AbstractIterator<LogEntry> {
         private final long absoluteBaseOffset;
         private final byte wrapperMagic;
 
-        public DeepRecordsIterator(LogEntry wrapperEntry, boolean ensureMatchingMagic, int maxMessageSize) {
+        public DeepRecordsIterator(LogEntry wrapperEntry, boolean ensureMatchingMagic, int maxMessageSize, BufferSupplier bufferSupplier) {
             Record wrapperRecord = wrapperEntry.record();
             this.wrapperMagic = wrapperRecord.magic();
 
             CompressionType compressionType = wrapperRecord.compressionType();
             ByteBuffer buffer = wrapperRecord.value();
-            DataInputStream stream = MemoryRecordsBuilder.wrapForInput(new ByteBufferInputStream(buffer), compressionType, wrapperRecord.magic());
+            InputStream stream = MemoryRecordsBuilder.wrapForInput(buffer, compressionType, wrapperRecord.magic(), bufferSupplier);
             LogInputStream logStream = new DataLogInputStream(stream, maxMessageSize);
 
             long wrapperRecordOffset = wrapperEntry.offset();

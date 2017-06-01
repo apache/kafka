@@ -71,7 +71,7 @@ public class MemoryRecordsTest {
 
         for (int iteration = 0; iteration < 2; iteration++) {
             for (MemoryRecords recs : asList(recs1, recs2)) {
-                Iterator<LogEntry> iter = recs.deepEntries().iterator();
+                Iterator<LogEntry> iter = recs.deepEntries(BufferSupplier.NO_CACHING).iterator();
                 for (int i = 0; i < list.size(); i++) {
                     assertTrue(iter.hasNext());
                     LogEntry entry = iter.next();
@@ -201,7 +201,7 @@ public class MemoryRecordsTest {
                     shallowEntry.record().timestampType());
         }
 
-        List<LogEntry> deepEntries = TestUtils.toList(filteredRecords.deepEntries());
+        List<LogEntry> deepEntries = TestUtils.toList(filteredRecords.deepEntries(BufferSupplier.NO_CACHING));
         assertEquals(4, deepEntries.size());
 
         LogEntry first = deepEntries.get(0);
@@ -263,7 +263,7 @@ public class MemoryRecordsTest {
         }
     }
 
-    @Parameterized.Parameters
+    @Parameterized.Parameters(name = "{index} magic={0}, firstOffset={1}, compressionType={2}")
     public static Collection<Object[]> data() {
         List<Object[]> values = new ArrayList<>();
         for (long firstOffset : asList(0L, 57L))

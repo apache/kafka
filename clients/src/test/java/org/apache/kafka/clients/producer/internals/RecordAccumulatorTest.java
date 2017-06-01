@@ -20,6 +20,7 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.record.BufferSupplier;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.LogEntry;
 import org.apache.kafka.common.record.Record;
@@ -104,7 +105,7 @@ public class RecordAccumulatorTest {
         assertEquals(1, batches.size());
         RecordBatch batch = batches.get(0);
 
-        Iterator<LogEntry> iter = batch.records().deepEntries().iterator();
+        Iterator<LogEntry> iter = batch.records().deepEntries(BufferSupplier.NO_CACHING).iterator();
         for (int i = 0; i < appends; i++) {
             LogEntry entry = iter.next();
             assertEquals("Keys should match", ByteBuffer.wrap(key), entry.record().key());
@@ -133,7 +134,7 @@ public class RecordAccumulatorTest {
         assertEquals(1, batches.size());
         RecordBatch batch = batches.get(0);
 
-        Iterator<LogEntry> iter = batch.records().deepEntries().iterator();
+        Iterator<LogEntry> iter = batch.records().deepEntries(BufferSupplier.NO_CACHING).iterator();
         LogEntry entry = iter.next();
         assertEquals("Keys should match", ByteBuffer.wrap(key), entry.record().key());
         assertEquals("Values should match", ByteBuffer.wrap(value), entry.record().value());
@@ -185,7 +186,7 @@ public class RecordAccumulatorTest {
             List<RecordBatch> batches = accum.drain(cluster, nodes, 5 * 1024, 0).get(node1.id());
             if (batches != null) {
                 for (RecordBatch batch : batches) {
-                    for (LogEntry entry : batch.records().deepEntries())
+                    for (LogEntry entry : batch.records().deepEntries(BufferSupplier.NO_CACHING))
                         read++;
                     accum.deallocate(batch);
                 }

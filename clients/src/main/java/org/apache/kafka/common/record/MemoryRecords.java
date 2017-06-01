@@ -43,8 +43,6 @@ public class MemoryRecords extends AbstractRecords {
         }
     };
 
-    private final Iterable<LogEntry> deepEntries = deepEntries(false);
-
     private int validBytes = -1;
 
     // Construct a writable memory records
@@ -231,27 +229,32 @@ public class MemoryRecords extends AbstractRecords {
     }
 
     @Override
-    public Iterable<LogEntry> deepEntries() {
-        return deepEntries;
+    public Iterable<LogEntry> deepEntries(BufferSupplier bufferSupplier) {
+        return deepEntries(false, bufferSupplier);
     }
 
-    public Iterable<LogEntry> deepEntries(final boolean ensureMatchingMagic) {
+    @Override
+    public Iterable<LogEntry> deepEntries() {
+        return deepEntries(false, BufferSupplier.NO_CACHING);
+    }
+
+    public Iterable<LogEntry> deepEntries(final boolean ensureMatchingMagic, final BufferSupplier bufferSupplier) {
         return new Iterable<LogEntry>() {
             @Override
             public Iterator<LogEntry> iterator() {
-                return deepIterator(ensureMatchingMagic, Integer.MAX_VALUE);
+                return deepIterator(ensureMatchingMagic, Integer.MAX_VALUE, bufferSupplier);
             }
         };
     }
 
-    private Iterator<LogEntry> deepIterator(boolean ensureMatchingMagic, int maxMessageSize) {
+    private Iterator<LogEntry> deepIterator(boolean ensureMatchingMagic, int maxMessageSize, BufferSupplier bufferSupplier) {
         return new RecordsIterator(new ByteBufferLogInputStream(buffer.duplicate(), maxMessageSize), false,
-                ensureMatchingMagic, maxMessageSize);
+                ensureMatchingMagic, maxMessageSize, bufferSupplier);
     }
 
     @Override
     public String toString() {
-        Iterator<LogEntry> iter = deepEntries().iterator();
+        Iterator<LogEntry> iter = deepEntries(BufferSupplier.NO_CACHING).iterator();
         StringBuilder builder = new StringBuilder();
         builder.append('[');
         while (iter.hasNext()) {

@@ -60,7 +60,7 @@ class MessageWriterTest extends JUnitSuite {
   }
 
   private def decompress(compressed: Array[Byte], codec: CompressionCodec): Array[Byte] = {
-    toArray(CompressionFactory(codec, Message.MagicValue_V1, new ByteArrayInputStream(compressed)))
+    toArray(CompressionFactory(codec, Message.MagicValue_V1, ByteBuffer.wrap(compressed)))
   }
 
   private def toArray(in: InputStream): Array[Byte] = {
