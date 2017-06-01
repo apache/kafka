@@ -342,73 +342,12 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
     }
 
     @Override
-    public <T> CogroupedKStream<K, K, T> cogroup(final Initializer<T> initializer,
-                                                final Aggregator<? super K, ? super V, T> aggregator,
-                                                final Serde<T> aggValueSerde,
-                                                final String storeName) {
-        return cogroup(initializer, aggregator, keyValueStore(keySerde, aggValueSerde, storeName));
-    }
-
-    @Override
-    public <T> CogroupedKStream<K, K, T> cogroup(final Initializer<T> initializer,
-                                                 final Aggregator<? super K, ? super V, T> aggregator,
-                                                 final StateStoreSupplier<KeyValueStore> storeSupplier) {
+    public <T> CogroupedKStream<K, T> cogroup(final Initializer<T> initializer,
+                                              final Aggregator<? super K, ? super V, T> aggregator,
+                                              final Serde<T> aggValueSerde) {
         Objects.requireNonNull(initializer, "initializer can't be null");
         Objects.requireNonNull(aggregator, "aggregator can't be null");
-        Objects.requireNonNull(storeSupplier, "storeSupplier can't be null");
-        return new CogroupedKStreamImpl<>(topology, this, initializer, aggregator, storeSupplier);
-    }
-
-    @SuppressWarnings("unchecked")
-    @Override
-    public <T> CogroupedKStream<K, Windowed<K>, T> cogroup(final Initializer<T> initializer,
-                                                           final Aggregator<? super K, ? super V, T> aggregator,
-                                                           final Merger<? super K, T> sessionMerger,
-                                                           final SessionWindows sessionWindows,
-                                                           final Serde<T> aggValueSerde,
-                                                           final String storeName) {
-        Objects.requireNonNull(storeName, "storeName can't be null");
-        Topic.validate(storeName);
-        return cogroup(initializer,
-                       aggregator,
-                       sessionMerger,
-                       sessionWindows,
-                       storeFactory(keySerde, aggValueSerde, storeName).sessionWindowed(sessionWindows.maintainMs()).build());
-    }
-
-    @Override
-    public <T> CogroupedKStream<K, Windowed<K>, T> cogroup(final Initializer<T> initializer,
-                                                           final Aggregator<? super K, ? super V, T> aggregator,
-                                                           final Merger<? super K, T> sessionMerger,
-                                                           final SessionWindows sessionWindows,
-                                                           final StateStoreSupplier<SessionStore> storeSupplier) {
-        Objects.requireNonNull(initializer, "initializer can't be null");
-        Objects.requireNonNull(aggregator, "aggregator can't be null");
-        Objects.requireNonNull(sessionMerger, "sessionMerger can't be null");
-        Objects.requireNonNull(sessionWindows, "sessionWindows can't be null");
-        Objects.requireNonNull(storeSupplier, "storeSupplier can't be null");
-        return new CogroupedKStreamImpl<>(topology, this, initializer, aggregator, sessionMerger, sessionWindows, storeSupplier);
-    }
-
-    @Override
-    public <W extends Window, T> CogroupedKStream<K, Windowed<K>, T> cogroup(final Initializer<T> initializer,
-                                                                             final Aggregator<? super K, ? super V, T> aggregator,
-                                                                             final Windows<W> windows,
-                                                                             final Serde<T> aggValueSerde,
-                                                                             final String storeName) {
-        return cogroup(initializer, aggregator, windows, windowedStore(keySerde, aggValueSerde, windows, storeName));
-    }
-
-    @Override
-    public <W extends Window, T> CogroupedKStream<K, Windowed<K>, T> cogroup(final Initializer<T> initializer,
-                                                                  final Aggregator<? super K, ? super V, T> aggregator,
-                                                                  final Windows<W> windows,
-                                                                  final StateStoreSupplier<WindowStore> storeSupplier) {
-        Objects.requireNonNull(initializer, "initializer can't be null");
-        Objects.requireNonNull(aggregator, "aggregator can't be null");
-        Objects.requireNonNull(windows, "windows can't be null");
-        Objects.requireNonNull(storeSupplier, "storeSupplier can't be null");
-        return new CogroupedKStreamImpl<>(topology, this, initializer, aggregator, windows, storeSupplier);
+        return new CogroupedKStreamImpl<>(topology, this, keySerde, aggValueSerde, initializer, aggregator);
     }
 
     /**

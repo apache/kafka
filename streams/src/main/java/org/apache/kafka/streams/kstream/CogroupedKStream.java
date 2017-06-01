@@ -18,6 +18,10 @@ package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.processor.StateStoreSupplier;
+import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.SessionStore;
+import org.apache.kafka.streams.state.WindowStore;
 
 /**
  * {@code CogroupedKStream} is an abstraction of multiple <i>grouped</i> record streams of {@link KeyValue} pairs.
@@ -36,7 +40,7 @@ import org.apache.kafka.streams.KeyValue;
  * @see KGroupedStream
  */
 @InterfaceStability.Unstable
-public interface CogroupedKStream<K, RK, V> {
+public interface CogroupedKStream<K, V> {
 
     /**
      * 
@@ -44,12 +48,22 @@ public interface CogroupedKStream<K, RK, V> {
      * @param aggregator
      * @return
      */
-    <T> CogroupedKStream<K, RK, V> cogroup(final KGroupedStream<K, T> groupedStream,
+    <T> CogroupedKStream<K, V> cogroup(final KGroupedStream<K, T> groupedStream,
                                            final Aggregator<? super K, ? super T, V> aggregator);
 
     /**
      * 
      * @return
      */
-    KTable<RK, V> aggregate();
+    KTable<K, V> aggregate(final String storeName);
+    
+    KTable<K, V> aggregate(final StateStoreSupplier<KeyValueStore> storeSupplier);
+
+    KTable<Windowed<K>, V> aggregate(final Merger<? super K, V> sessionMerger, final SessionWindows sessionWindows, final String storeName);
+
+    KTable<Windowed<K>, V> aggregate(final Merger<? super K, V> sessionMerger, final SessionWindows sessionWindows, final StateStoreSupplier<SessionStore> storeSupplier);
+
+    <W extends Window> KTable<Windowed<K>, V> aggregate(final Windows<W> windows, final String storeName);
+
+    <W extends Window> KTable<Windowed<K>, V> aggregate(final Windows<W> windows, final StateStoreSupplier<WindowStore> storeSupplier);
 }
