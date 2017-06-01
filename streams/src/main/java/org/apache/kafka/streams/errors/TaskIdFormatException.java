@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.errors;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
 
 /**
  * Indicates a run time error incurred while trying parse the {@link org.apache.kafka.streams.processor.TaskId task id}

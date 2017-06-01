@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.streams.kstream;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.streams.KeyValue;
+
 /**
  * The {@code Reducer} interface for combining two values of the same type into a new value.
  * In contrast to {@link Aggregator} the result type must be the same as the input type.

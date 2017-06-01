@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.kstream;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
 
 /**
  * The {@code Initializer} interface for creating an initial value in aggregations.

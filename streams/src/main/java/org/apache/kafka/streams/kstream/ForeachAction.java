@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.kstream;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
 
 /**
  * The {@code ForeachAction} interface for performing an action on a {@link org.apache.kafka.streams.KeyValue key-value

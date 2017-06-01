@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.errors;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
 
 /**
  * Indicates a pre-run time error incurred while parsing the {@link org.apache.kafka.streams.processor.TopologyBuilder

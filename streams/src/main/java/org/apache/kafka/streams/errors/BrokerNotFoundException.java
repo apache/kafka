@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.errors;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
 
 /**
  * Indicates that none of the specified {@link org.apache.kafka.streams.StreamsConfig#BOOTSTRAP_SERVERS_CONFIG brokers}

@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.errors;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
 
 /**
  * Indicates that there was a problem when trying to access a
