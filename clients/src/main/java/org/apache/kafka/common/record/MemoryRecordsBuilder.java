@@ -120,7 +120,7 @@ public class MemoryRecordsBuilder {
         this.logAppendTime = logAppendTime;
         this.initPos = bufferStream.position();
         this.writeLimit = writeLimit;
-        this.initialCapacity = bufferStream.capacity();
+        this.initialCapacity = bufferStream.initialCapacity();
 
         if (compressionType != CompressionType.NONE) {
             // for compressed records, leave space for the header and the shallow message metadata
