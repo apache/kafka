@@ -26,7 +26,7 @@ import kafka.utils.TestUtils._
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.record.Record
+import org.apache.kafka.common.record.{Record, RecordBatch}
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, IsolationLevel}
 import org.apache.kafka.common.serialization.StringSerializer
 import org.junit.Assert._
@@ -168,6 +168,11 @@ class FetchRequestTest extends BaseRequestTest {
     assertEquals(0, records(partitionData).map(_.sizeInBytes).sum)
   }
 
+  /**
+    * Ensure that we respect the fetch offset when returning records that were converted from an uncompressed v2
+    * record batch to multiple v0/v1 record batches with size 1. If the fetch offset points to inside the record batch,
+    * some records have to be dropped during the conversion.
+    */
   @Test
   def testDownConversionFromBatchedToUnbatchedRespectsOffset(): Unit = {
     // Increase linger so that we have control over the batches created
@@ -187,7 +192,7 @@ class FetchRequestTest extends BaseRequestTest {
     firstBatchFutures.foreach(_.get)
     secondBatchFutures.foreach(_.get)
 
-    def check(fetchOffset: Long, expectedOffset: Long, requestVersion: Short): Unit = {
+    def check(fetchOffset: Long, requestVersion: Short, expectedOffset: Long, expectedNumBatches: Int, expectedMagic: Byte): Unit = {
       val fetchRequest = FetchRequest.Builder.forConsumer(Int.MaxValue, 0, createPartitionMap(Int.MaxValue,
         Seq(topicPartition), Map(topicPartition -> fetchOffset))).build(requestVersion)
       val fetchResponse = sendFetchRequest(leaderId, fetchRequest)
@@ -195,22 +200,34 @@ class FetchRequestTest extends BaseRequestTest {
       assertEquals(Errors.NONE, partitionData.error)
       assertTrue(partitionData.highWatermark > 0)
       val batches = partitionData.records.batches.asScala.toBuffer
-      assertEquals(1, batches.size)
+      assertEquals(expectedNumBatches, batches.size)
       val batch = batches.head
+      assertEquals(expectedMagic, batch.magic)
       assertEquals(expectedOffset, batch.baseOffset)
     }
 
-    // down conversion to message format 0
-    check(fetchOffset = 3, expectedOffset = 3, requestVersion = 1)
-    check(fetchOffset = 15, expectedOffset = 15, requestVersion = 1)
+    // down conversion to message format 0, batches of 1 message are returned so we receive the exact offset we requested
+    check(fetchOffset = 3, expectedOffset = 3, requestVersion = 1, expectedNumBatches = 22,
+      expectedMagic = RecordBatch.MAGIC_VALUE_V0)
+    check(fetchOffset = 15, expectedOffset = 15, requestVersion = 1, expectedNumBatches = 10,
+      expectedMagic = RecordBatch.MAGIC_VALUE_V0)
 
-    // down conversion to message format 1
-    check(fetchOffset = 3, expectedOffset = 3, requestVersion = 2)
-    check(fetchOffset = 15, expectedOffset = 15, requestVersion = 2)
+    // down conversion to message format 1, batches of 1 message are returned so we receive the exact offset we requested
+    check(fetchOffset = 3, expectedOffset = 3, requestVersion = 3, expectedNumBatches = 22,
+      expectedMagic = RecordBatch.MAGIC_VALUE_V1)
+    check(fetchOffset = 15, expectedOffset = 15, requestVersion = 3, expectedNumBatches = 10,
+      expectedMagic = RecordBatch.MAGIC_VALUE_V1)
 
-    // no down conversion
-    check(fetchOffset = 3, expectedOffset = 0, requestVersion = 3)
-    check(fetchOffset = 15, expectedOffset = 10, requestVersion = 3)
+    // no down conversion, we receive a single batch so the received offset won't necessarily be the same
+    check(fetchOffset = 3, expectedOffset = 0, requestVersion = 4, expectedNumBatches = 2,
+      expectedMagic = RecordBatch.MAGIC_VALUE_V2)
+    check(fetchOffset = 15, expectedOffset = 10, requestVersion = 4, expectedNumBatches = 1,
+      expectedMagic = RecordBatch.MAGIC_VALUE_V2)
+
+    // no down conversion, we receive a single batch and the exact offset we requested because it happens to be the
+    // offset of the first record in the batch
+    check(fetchOffset = 10, expectedOffset = 10, requestVersion = 4, expectedNumBatches = 1,
+      expectedMagic = RecordBatch.MAGIC_VALUE_V2)
   }
 
   private def records(partitionData: FetchResponse.PartitionData): Seq[Record] = {

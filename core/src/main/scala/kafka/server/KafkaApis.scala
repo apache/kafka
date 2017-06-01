@@ -510,9 +510,9 @@ class KafkaApis(val requestChannel: RequestChannel,
       // which were written in the new format prior to the version downgrade.
       replicaManager.getMagic(tp).flatMap { magic =>
         val downConvertMagic = {
-          if (magic > 0 && versionId <= 1 && !data.records.hasCompatibleMagic(RecordBatch.MAGIC_VALUE_V0))
+          if (magic > RecordBatch.MAGIC_VALUE_V0 && versionId <= 1 && !data.records.hasCompatibleMagic(RecordBatch.MAGIC_VALUE_V0))
             Some(RecordBatch.MAGIC_VALUE_V0)
-          else if (magic > 1 && versionId <= 3 && !data.records.hasCompatibleMagic(RecordBatch.MAGIC_VALUE_V1))
+          else if (magic > RecordBatch.MAGIC_VALUE_V1 && versionId <= 3 && !data.records.hasCompatibleMagic(RecordBatch.MAGIC_VALUE_V1))
             Some(RecordBatch.MAGIC_VALUE_V1)
           else
             None
