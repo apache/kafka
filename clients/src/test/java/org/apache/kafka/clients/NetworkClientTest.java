@@ -49,7 +49,7 @@ public class NetworkClientTest {
     protected final int requestTimeoutMs = 1000;
     protected final MockTime time = new MockTime();
     protected final MockSelector selector = new MockSelector(time);
-    protected final Metadata metadata = new Metadata(0, Long.MAX_VALUE);
+    protected final Metadata metadata = new Metadata(0, Long.MAX_VALUE, true);
     protected final int nodeId = 1;
     protected final Cluster cluster = TestUtils.singletonCluster("test", nodeId);
     protected final Node node = cluster.nodes().get(0);
@@ -86,8 +86,7 @@ public class NetworkClientTest {
 
     @Test(expected = IllegalStateException.class)
     public void testSendToUnreadyNode() {
-        MetadataRequest.Builder builder =
-                new MetadataRequest.Builder(Arrays.asList("test"));
+        MetadataRequest.Builder builder = new MetadataRequest.Builder(Arrays.asList("test"), true);
         long now = time.milliseconds();
         ClientRequest request = client.newClientRequest("5", builder, now, false);
         client.send(request, now);
@@ -251,8 +250,7 @@ public class NetworkClientTest {
         // metadata request when the remote node disconnects with the request in-flight.
         awaitReady(client, node);
 
-        MetadataRequest.Builder builder =
-                new MetadataRequest.Builder(Collections.<String>emptyList());
+        MetadataRequest.Builder builder = new MetadataRequest.Builder(Collections.<String>emptyList(), true);
         long now = time.milliseconds();
         ClientRequest request = client.newClientRequest(node.idString(), builder, now, true);
         client.send(request, now);

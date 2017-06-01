@@ -282,7 +282,7 @@ public class KafkaAdminClient extends AdminClient {
 
         try {
             metadata = new Metadata(config.getLong(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG),
-                    config.getLong(AdminClientConfig.METADATA_MAX_AGE_CONFIG));
+                    config.getLong(AdminClientConfig.METADATA_MAX_AGE_CONFIG), false);
             List<MetricsReporter> reporters = config.getConfiguredInstances(AdminClientConfig.METRIC_REPORTER_CLASSES_CONFIG,
                 MetricsReporter.class);
             Map<String, String> metricTags = Collections.singletonMap("client-id", clientId);
@@ -1144,7 +1144,7 @@ public class KafkaAdminClient extends AdminClient {
         final Map<String, KafkaFutureImpl<TopicDescription>> topicFutures = new HashMap<>(topicNames.size());
         final ArrayList<String> topicNamesList = new ArrayList<>();
         for (String topicName : topicNames) {
-            if (topicFutures.get(topicName) == null) {
+            if (!topicFutures.containsKey(topicName)) {
                 topicFutures.put(topicName, new KafkaFutureImpl<TopicDescription>());
                 topicNamesList.add(topicName);
             }
@@ -1153,9 +1153,14 @@ public class KafkaAdminClient extends AdminClient {
         runnable.call(new Call("describeTopics", calcDeadlineMs(now, options.timeoutMs()),
             new ControllerNodeProvider()) {
 
+            private boolean supportsDisablingTopicCreation = true;
+
             @Override
             AbstractRequest.Builder createRequest(int timeoutMs) {
-                return new MetadataRequest.Builder(topicNamesList);
+                if (supportsDisablingTopicCreation)
+                    return new MetadataRequest.Builder(topicNamesList, false);
+                else
+                    return MetadataRequest.Builder.allTopics();
             }
 
             @Override
@@ -1190,6 +1195,15 @@ public class KafkaAdminClient extends AdminClient {
             }
 
             @Override
+            boolean handleUnsupportedVersionException(UnsupportedVersionException exception) {
+                if (supportsDisablingTopicCreation) {
+                    supportsDisablingTopicCreation = false;
+                    return true;
+                }
+                return false;
+            }
+
+            @Override
             void handleFailure(Throwable throwable) {
                 completeAllExceptionally(topicFutures.values(), throwable);
             }
@@ -1208,7 +1222,7 @@ public class KafkaAdminClient extends AdminClient {
 
             @Override
             AbstractRequest.Builder createRequest(int timeoutMs) {
-                return new MetadataRequest.Builder(Collections.<String>emptyList());
+                return new MetadataRequest.Builder(Collections.<String>emptyList(), false);
             }
 
             @Override
