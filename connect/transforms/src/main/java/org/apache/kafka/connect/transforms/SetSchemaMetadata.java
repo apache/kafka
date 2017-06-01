@@ -142,10 +142,9 @@ public abstract class SetSchemaMetadata<R extends ConnectRecord<R>> implements T
             Struct origStruct = (Struct) keyOrValue;
             Schema origSchema = origStruct.schema();
             Struct newStruct = new Struct(updatedSchema);
-            for (Field origField : origSchema.fields()) {
-                // assume both schemas have exact same fields with same names ...
-                Field updatedField = updatedSchema.field(origField.name());
-                newStruct.put(updatedField, origStruct.get(origField)); // validates
+            for (Field field : updatedSchema.fields()) {
+                // assume both schemas have exact same fields with same names and schemas ...
+                newStruct.put(field, origStruct.get(field));
             }
             return newStruct;
         }
