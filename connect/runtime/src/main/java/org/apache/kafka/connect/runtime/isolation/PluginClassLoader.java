@@ -53,7 +53,7 @@ public class PluginClassLoader extends URLClassLoader {
                 if (PluginUtils.shouldLoadInIsolation(name)) {
                     klass = findClass(name);
                 }
-            } catch(ClassNotFoundException e){
+            } catch (ClassNotFoundException e) {
                 // Not found in loader's path. Search in parents.
             }
         }
