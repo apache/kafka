@@ -12,7 +12,10 @@
  */
 package org.apache.kafka.common.record;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.record.ByteBufferLogInputStream.ByteBufferLogEntry;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -28,7 +31,7 @@ import java.util.List;
  * or one of the {@link #builder(ByteBuffer, byte, CompressionType, TimestampType) builder} variants.
  */
 public class MemoryRecords extends AbstractRecords {
-
+    private static final Logger log = LoggerFactory.getLogger(MemoryRecords.class);
     public final static MemoryRecords EMPTY = MemoryRecords.readableRecords(ByteBuffer.allocate(0));
 
     private final ByteBuffer buffer;
@@ -107,12 +110,16 @@ public class MemoryRecords extends AbstractRecords {
      * @param destinationBuffer The byte buffer to write the filtered records to
      * @return A FilterResult with a summary of the output (for metrics)
      */
-    public FilterResult filterTo(LogEntryFilter filter, ByteBuffer destinationBuffer) {
-        return filterTo(shallowEntries(), filter, destinationBuffer);
+    public FilterResult filterTo(TopicPartition partition, LogEntryFilter filter, ByteBuffer destinationBuffer,
+                                 int maxRecordSize) {
+        return filterTo(partition, shallowEntries(), filter, destinationBuffer, maxRecordSize);
     }
 
-    private static FilterResult filterTo(Iterable<ByteBufferLogEntry> fromShallowEntries, LogEntryFilter filter,
-                                       ByteBuffer destinationBuffer) {
+    private static FilterResult filterTo(TopicPartition partition,
+                                         Iterable<ByteBufferLogEntry> fromShallowEntries,
+                                         LogEntryFilter filter,
+                                         ByteBuffer destinationBuffer,
+                                         int maxRecordSize) {
         long maxTimestamp = Record.NO_TIMESTAMP;
         long maxOffset = -1L;
         long shallowOffsetOfMaxTimestamp = -1L;
@@ -120,6 +127,8 @@ public class MemoryRecords extends AbstractRecords {
         int bytesRead = 0;
         int messagesRetained = 0;
         int bytesRetained = 0;
+
+        ByteBufferOutputStream bufferOutputStream = new ByteBufferOutputStream(destinationBuffer);
 
         for (ByteBufferLogEntry shallowEntry : fromShallowEntries) {
             bytesRead += shallowEntry.sizeInBytes();
@@ -155,7 +164,7 @@ public class MemoryRecords extends AbstractRecords {
 
             if (writeOriginalEntry) {
                 // There are no messages compacted out and no message format conversion, write the original message set back
-                shallowEntry.writeTo(destinationBuffer);
+                bufferOutputStream.write(shallowEntry.buffer());
                 messagesRetained += retainedEntries.size();
                 bytesRetained += shallowEntry.sizeInBytes();
 
@@ -164,13 +173,27 @@ public class MemoryRecords extends AbstractRecords {
                     shallowOffsetOfMaxTimestamp = shallowEntry.offset();
                 }
             } else if (!retainedEntries.isEmpty()) {
-                ByteBuffer slice = destinationBuffer.slice();
-                MemoryRecordsBuilder builder = builderWithEntries(slice, shallowRecord.timestampType(), shallowRecord.compressionType(),
-                        shallowRecord.timestamp(), retainedEntries);
+                LogEntry firstEntry = retainedEntries.iterator().next();
+                long firstOffset = firstEntry.offset();
+                byte magic = firstEntry.record().magic();
+
+                MemoryRecordsBuilder builder = new MemoryRecordsBuilder(bufferOutputStream, magic,
+                        shallowRecord.compressionType(), shallowRecord.timestampType(),
+                        firstOffset, shallowRecord.timestamp(), bufferOutputStream.buffer().remaining());
+                for (LogEntry entry : retainedEntries)
+                    builder.appendWithOffset(entry.offset(), entry.record());
+
                 MemoryRecords records = builder.build();
-                destinationBuffer.position(destinationBuffer.position() + slice.position());
+                int filteredSizeInBytes = records.sizeInBytes();
+
                 messagesRetained += retainedEntries.size();
                 bytesRetained += records.sizeInBytes();
+
+                if (filteredSizeInBytes > shallowEntry.sizeInBytes() && filteredSizeInBytes > maxRecordSize)
+                    log.warn("Record batch from {} with first offset {} exceeded max record size {} after cleaning " +
+                                    "(new size is {}). Consumers with version earlier than 0.10.1.0 may need to " +
+                                    "increase their fetch sizes.",
+                            partition, firstOffset, maxRecordSize, filteredSizeInBytes);
 
                 MemoryRecordsBuilder.RecordsInfo info = builder.info();
                 if (info.maxTimestamp > maxTimestamp) {
@@ -178,9 +201,17 @@ public class MemoryRecords extends AbstractRecords {
                     shallowOffsetOfMaxTimestamp = info.shallowOffsetOfMaxTimestamp;
                 }
             }
+
+            // If we had to allocate a new buffer to fit the filtered output (see KAFKA-5316), return early to
+            // avoid the need for additional allocations.
+            ByteBuffer outputBuffer = bufferOutputStream.buffer();
+            if (outputBuffer != destinationBuffer)
+                return new FilterResult(outputBuffer, messagesRead, bytesRead, messagesRetained, bytesRetained,
+                    maxOffset, maxTimestamp, shallowOffsetOfMaxTimestamp);
         }
 
-        return new FilterResult(messagesRead, bytesRead, messagesRetained, bytesRetained, maxOffset, maxTimestamp, shallowOffsetOfMaxTimestamp);
+        return new FilterResult(destinationBuffer, messagesRead, bytesRead, messagesRetained, bytesRetained,
+                maxOffset, maxTimestamp, shallowOffsetOfMaxTimestamp);
     }
 
     /**
@@ -259,6 +290,7 @@ public class MemoryRecords extends AbstractRecords {
     }
 
     public static class FilterResult {
+        public final ByteBuffer output;
         public final int messagesRead;
         public final int bytesRead;
         public final int messagesRetained;
@@ -267,13 +299,15 @@ public class MemoryRecords extends AbstractRecords {
         public final long maxTimestamp;
         public final long shallowOffsetOfMaxTimestamp;
 
-        public FilterResult(int messagesRead,
+        public FilterResult(ByteBuffer output,
+                            int messagesRead,
                             int bytesRead,
                             int messagesRetained,
                             int bytesRetained,
                             long maxOffset,
                             long maxTimestamp,
                             long shallowOffsetOfMaxTimestamp) {
+            this.output = output;
             this.messagesRead = messagesRead;
             this.bytesRead = bytesRead;
             this.messagesRetained = messagesRetained;

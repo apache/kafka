@@ -105,6 +105,34 @@ public class MemoryRecordsBuilder {
 
     private MemoryRecords builtRecords;
 
+
+    public MemoryRecordsBuilder(ByteBufferOutputStream bufferStream,
+                                byte magic,
+                                CompressionType compressionType,
+                                TimestampType timestampType,
+                                long baseOffset,
+                                long logAppendTime,
+                                int writeLimit) {
+        this.magic = magic;
+        this.timestampType = timestampType;
+        this.compressionType = compressionType;
+        this.baseOffset = baseOffset;
+        this.logAppendTime = logAppendTime;
+        this.initPos = bufferStream.position();
+        this.writeLimit = writeLimit;
+        this.initialCapacity = bufferStream.initialCapacity();
+
+        if (compressionType != CompressionType.NONE) {
+            // for compressed records, leave space for the header and the shallow message metadata
+            // and move the starting position to the value payload offset
+            bufferStream.position(initPos + Records.LOG_OVERHEAD + Record.recordOverhead(magic));
+        }
+
+        // create the stream
+        this.bufferStream = bufferStream;
+        appendStream = wrapForOutput(bufferStream, compressionType, magic, COMPRESSION_DEFAULT_BUFFER_SIZE);
+    }
+
     /**
      * Construct a new builder.
      *
@@ -126,24 +154,8 @@ public class MemoryRecordsBuilder {
                                 long baseOffset,
                                 long logAppendTime,
                                 int writeLimit) {
-        this.magic = magic;
-        this.timestampType = timestampType;
-        this.compressionType = compressionType;
-        this.baseOffset = baseOffset;
-        this.logAppendTime = logAppendTime;
-        this.initPos = buffer.position();
-        this.writeLimit = writeLimit;
-        this.initialCapacity = buffer.capacity();
-
-        if (compressionType != CompressionType.NONE) {
-            // for compressed records, leave space for the header and the shallow message metadata
-            // and move the starting position to the value payload offset
-            buffer.position(initPos + Records.LOG_OVERHEAD + Record.recordOverhead(magic));
-        }
-
-        // create the stream
-        bufferStream = new ByteBufferOutputStream(buffer);
-        appendStream = wrapForOutput(bufferStream, compressionType, magic, COMPRESSION_DEFAULT_BUFFER_SIZE);
+        this(new ByteBufferOutputStream(buffer), magic, compressionType, timestampType, baseOffset, logAppendTime,
+                writeLimit);
     }
 
     public ByteBuffer buffer() {
@@ -400,7 +412,7 @@ public class MemoryRecordsBuilder {
         try {
             switch (type) {
                 case NONE:
-                    return buffer;
+                    return new DataOutputStream(buffer);
                 case GZIP:
                     return new DataOutputStream(new GZIPOutputStream(buffer, bufferSize));
                 case SNAPPY:
