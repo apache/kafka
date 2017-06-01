@@ -103,17 +103,19 @@ public class DefaultRecordBatchTest {
         builder.appendWithOffset(1234569, 3L, "c".getBytes(), "v".getBytes());
 
         MemoryRecords records = builder.build();
-        for (MutableRecordBatch batch : records.batches()) {
-            assertEquals(pid, batch.producerId());
-            assertEquals(epoch, batch.producerEpoch());
-            assertEquals(baseSequence, batch.baseSequence());
-            assertEquals(0, batch.lastSequence());
-            List<Record> allRecords = TestUtils.toList(batch);
-            assertEquals(3, allRecords.size());
-            assertEquals(Integer.MAX_VALUE - 1, allRecords.get(0).sequence());
-            assertEquals(Integer.MAX_VALUE, allRecords.get(1).sequence());
-            assertEquals(0, allRecords.get(2).sequence());
-        }
+        List<MutableRecordBatch> batches = TestUtils.toList(records.batches());
+        assertEquals(1, batches.size());
+        RecordBatch batch = batches.get(0);
+
+        assertEquals(pid, batch.producerId());
+        assertEquals(epoch, batch.producerEpoch());
+        assertEquals(baseSequence, batch.baseSequence());
+        assertEquals(0, batch.lastSequence());
+        List<Record> allRecords = TestUtils.toList(batch);
+        assertEquals(3, allRecords.size());
+        assertEquals(Integer.MAX_VALUE - 1, allRecords.get(0).sequence());
+        assertEquals(Integer.MAX_VALUE, allRecords.get(1).sequence());
+        assertEquals(0, allRecords.get(2).sequence());
     }
 
     @Test

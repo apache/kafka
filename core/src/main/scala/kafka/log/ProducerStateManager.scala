@@ -107,7 +107,7 @@ private[log] class ProducerAppendInfo(val producerId: Long,
         throw new DuplicateSequenceNumberException(s"Duplicate sequence number for producerId $producerId: (incomingBatch.firstSeq, " +
           s"incomingBatch.lastSeq): ($firstSeq, $lastSeq), (lastEntry.firstSeq, lastEntry.lastSeq): " +
           s"(${this.firstSeq}, ${this.lastSeq}).")
-      } else if (firstSeq != this.lastSeq + 1L && (firstSeq != 0 && this.lastSeq != Short.MaxValue)) {
+      } else if (!(firstSeq == this.lastSeq + 1L || (firstSeq == 0 && this.lastSeq == Short.MaxValue))) {
         throw new OutOfOrderSequenceException(s"Out of order sequence number for producerId $producerId: $firstSeq " +
           s"(incoming seq. number), ${this.lastSeq} (current end sequence number)")
       }
@@ -115,8 +115,8 @@ private[log] class ProducerAppendInfo(val producerId: Long,
   }
 
   private def isProducerFenced(producerEpoch: Short): Boolean = {
-      producerEpoch < 0 || (producerEpoch < this.producerEpoch &&
-        ((Short.MaxValue - this.producerEpoch) + producerEpoch > ProducerStateManager.ProducerEpochWraparoundDelta))
+    producerEpoch < 0 || (producerEpoch < this.producerEpoch &&
+      Short.MaxValue - this.producerEpoch + producerEpoch > ProducerStateManager.MaxProducerEpochWrapAroundDiff)
   }
 
   def append(batch: RecordBatch): Option[CompletedTxn] = {
@@ -226,7 +226,7 @@ object ProducerStateManager {
   // 0 will not suffice. Instead we look for a wrap-around difference which is less than a fixed delta. So
   // if the epoch has reached Short.MaxValue - n and the new epoch is m, then we will treat the new epoch
   // as larger provided that n + m is less than this delta.
-  val ProducerEpochWraparoundDelta = 500
+  val MaxProducerEpochWrapAroundDiff = 500
 
   private val ProducerSnapshotVersion: Short = 1
   private val VersionField = "version"
