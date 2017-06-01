@@ -648,7 +648,7 @@ public class Sender implements Runnable {
             // not all support the same message format version. For example, if a partition migrates from a broker
             // which is supporting the new magic version to one which doesn't, then we will need to convert.
             if (!records.hasMatchingMagic(minUsedMagic))
-                records = batch.records().downConvert(minUsedMagic);
+                records = batch.records().downConvert(minUsedMagic, 0);
             produceRecordsByPartition.put(tp, records);
             recordsByPartition.put(tp, batch);
         }
