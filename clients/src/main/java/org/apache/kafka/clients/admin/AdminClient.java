@@ -167,12 +167,6 @@ public abstract class AdminClient implements AutoCloseable {
     /**
      * Describe some topics in the cluster.
      *
-     * Note that if auto.create.topics.enable is true on the brokers,
-     * describeTopics(topicName, ...) may create a topic named topicName.
-     * There are two workarounds: either use AdminClient#listTopics and ensure
-     * that the topic is present before describing, or disable
-     * auto.create.topics.enable.
-     *
      * @param topicNames        The names of the topics to describe.
      * @param options           The options to use when describing the topic.
      *

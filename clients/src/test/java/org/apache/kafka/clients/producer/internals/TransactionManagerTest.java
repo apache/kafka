@@ -92,7 +92,7 @@ public class TransactionManagerTest {
     private MockTime time = new MockTime();
     private MockClient client = new MockClient(time);
 
-    private Metadata metadata = new Metadata(0, Long.MAX_VALUE, true, new ClusterResourceListeners());
+    private Metadata metadata = new Metadata(0, Long.MAX_VALUE, true, true, new ClusterResourceListeners());
     private ApiVersions apiVersions = new ApiVersions();
     private Cluster cluster = TestUtils.singletonCluster("test", 2);
     private RecordAccumulator accumulator = null;

@@ -213,7 +213,7 @@ class AdminClient(val time: Time,
    */
 
   def deleteRecordsBefore(offsets: Map[TopicPartition, Long]): Future[Map[TopicPartition, DeleteRecordsResult]] = {
-    val metadataRequest = new MetadataRequest.Builder(offsets.keys.map(_.topic()).toSet.toList.asJava)
+    val metadataRequest = new MetadataRequest.Builder(offsets.keys.map(_.topic).toSet.toList.asJava, true)
     val response = sendAnyNode(ApiKeys.METADATA, metadataRequest).asInstanceOf[MetadataResponse]
     val errors = response.errors
     if (!errors.isEmpty)
@@ -425,7 +425,7 @@ object AdminClient {
   def create(config: AdminConfig): AdminClient = {
     val time = Time.SYSTEM
     val metrics = new Metrics(time)
-    val metadata = new Metadata
+    val metadata = new Metadata(100L, 60 * 60 * 1000L, true)
     val channelBuilder = ClientUtils.createChannelBuilder(config)
     val requestTimeoutMs = config.getInt(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG)
     val retryBackoffMs = config.getLong(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG)

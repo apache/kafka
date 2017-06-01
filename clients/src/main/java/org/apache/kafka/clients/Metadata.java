@@ -66,17 +66,11 @@ public final class Metadata {
     private final List<Listener> listeners;
     private final ClusterResourceListeners clusterResourceListeners;
     private boolean needMetadataForAllTopics;
+    private final boolean allowAutoTopicCreation;
     private final boolean topicExpiryEnabled;
 
-    /**
-     * Create a metadata instance with reasonable defaults
-     */
-    public Metadata() {
-        this(100L, 60 * 60 * 1000L);
-    }
-
-    public Metadata(long refreshBackoffMs, long metadataExpireMs) {
-        this(refreshBackoffMs, metadataExpireMs, false, new ClusterResourceListeners());
+    public Metadata(long refreshBackoffMs, long metadataExpireMs, boolean allowAutoTopicCreation) {
+        this(refreshBackoffMs, metadataExpireMs, allowAutoTopicCreation, false, new ClusterResourceListeners());
     }
 
     /**
@@ -84,12 +78,16 @@ public final class Metadata {
      * @param refreshBackoffMs The minimum amount of time that must expire between metadata refreshes to avoid busy
      *        polling
      * @param metadataExpireMs The maximum amount of time that metadata can be retained without refresh
+     * @param allowAutoTopicCreation If this and the broker config 'auto.create.topics.enable' are true, topics that
+     *                               don't exist will be created by the broker when a metadata request is sent
      * @param topicExpiryEnabled If true, enable expiry of unused topics
      * @param clusterResourceListeners List of ClusterResourceListeners which will receive metadata updates.
      */
-    public Metadata(long refreshBackoffMs, long metadataExpireMs, boolean topicExpiryEnabled, ClusterResourceListeners clusterResourceListeners) {
+    public Metadata(long refreshBackoffMs, long metadataExpireMs, boolean allowAutoTopicCreation,
+                    boolean topicExpiryEnabled, ClusterResourceListeners clusterResourceListeners) {
         this.refreshBackoffMs = refreshBackoffMs;
         this.metadataExpireMs = metadataExpireMs;
+        this.allowAutoTopicCreation = allowAutoTopicCreation;
         this.topicExpiryEnabled = topicExpiryEnabled;
         this.lastRefreshMs = 0L;
         this.lastSuccessfulRefreshMs = 0L;
@@ -273,6 +271,10 @@ public final class Metadata {
      */
     public synchronized long lastSuccessfulUpdate() {
         return this.lastSuccessfulRefreshMs;
+    }
+
+    public boolean allowAutoTopicCreation() {
+        return allowAutoTopicCreation;
     }
 
     /**

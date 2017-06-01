@@ -108,9 +108,39 @@ class MetadataRequestTest extends BaseRequestTest {
 
     // v0, Doesn't support a "no topics" request
     // v1, Empty list represents "no topics"
-    val metadataResponse = sendMetadataRequest(new MetadataRequest(List[String]().asJava, 1.toShort))
+    val metadataResponse = sendMetadataRequest(new MetadataRequest(List[String]().asJava, true, 1.toShort))
     assertTrue("Response should have no errors", metadataResponse.errors.isEmpty)
     assertTrue("Response should have no topics", metadataResponse.topicMetadata.isEmpty)
+  }
+
+  @Test
+  def testAutoTopicCreation(): Unit = {
+    def checkAutoCreatedTopic(existingTopic: String, autoCreatedTopic: String, response: MetadataResponse): Unit = {
+      assertNull(response.errors.get(existingTopic))
+      assertEquals(Errors.LEADER_NOT_AVAILABLE, response.errors.get(autoCreatedTopic))
+      assertEquals(Some(servers.head.config.numPartitions), zkUtils.getTopicPartitionCount(autoCreatedTopic))
+      for (i <- 0 until servers.head.config.numPartitions)
+        TestUtils.waitUntilMetadataIsPropagated(servers, autoCreatedTopic, i)
+    }
+
+    val topic1 = "t1"
+    val topic2 = "t2"
+    val topic3 = "t3"
+    val topic4 = "t4"
+    TestUtils.createTopic(zkUtils, topic1, 1, 1, servers)
+
+    val response1 = sendMetadataRequest(new MetadataRequest(Seq(topic1, topic2).asJava, true, ApiKeys.METADATA.latestVersion))
+    checkAutoCreatedTopic(topic1, topic2, response1)
+
+    // V3 doesn't support a configurable allowAutoTopicCreation, so the fact that we set it to `false` has no effect
+    val response2 = sendMetadataRequest(new MetadataRequest(Seq(topic2, topic3).asJava, false, 3))
+    checkAutoCreatedTopic(topic2, topic3, response2)
+
+    // V4 and higher support a configurable allowAutoTopicCreation
+    val response3 = sendMetadataRequest(new MetadataRequest(Seq(topic3, topic4).asJava, false, 4))
+    assertNull(response3.errors.get(topic3))
+    assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, response3.errors.get(topic4))
+    assertEquals(None, zkUtils.getTopicPartitionCount(topic4))
   }
 
   @Test
@@ -120,7 +150,7 @@ class MetadataRequestTest extends BaseRequestTest {
     TestUtils.createTopic(zkUtils, "t2", 3, 2, servers)
 
     // v0, Empty list represents all topics
-    val metadataResponseV0 = sendMetadataRequest(new MetadataRequest(List[String]().asJava, 0.toShort))
+    val metadataResponseV0 = sendMetadataRequest(new MetadataRequest(List[String]().asJava, true, 0.toShort))
     assertTrue("V0 Response should have no errors", metadataResponseV0.errors.isEmpty)
     assertEquals("V0 Response should have 2 (all) topics", 2, metadataResponseV0.topicMetadata.size())
 
@@ -139,7 +169,7 @@ class MetadataRequestTest extends BaseRequestTest {
     TestUtils.createTopic(zkUtils, replicaDownTopic, 1, replicaCount, servers)
 
     // Kill a replica node that is not the leader
-    val metadataResponse = sendMetadataRequest(new MetadataRequest(List(replicaDownTopic).asJava, 1.toShort))
+    val metadataResponse = sendMetadataRequest(new MetadataRequest(List(replicaDownTopic).asJava, true, 1.toShort))
     val partitionMetadata = metadataResponse.topicMetadata.asScala.head.partitionMetadata.asScala.head
     val downNode = servers.find { server =>
       val serverId = server.apis.brokerId
@@ -150,14 +180,14 @@ class MetadataRequestTest extends BaseRequestTest {
     downNode.shutdown()
 
     TestUtils.waitUntilTrue(() => {
-      val response = sendMetadataRequest(new MetadataRequest(List(replicaDownTopic).asJava, 1.toShort))
+      val response = sendMetadataRequest(new MetadataRequest(List(replicaDownTopic).asJava, true, 1.toShort))
       val metadata = response.topicMetadata.asScala.head.partitionMetadata.asScala.head
       val replica = metadata.replicas.asScala.find(_.id == downNode.apis.brokerId).get
       replica.host == "" & replica.port == -1
     }, "Replica was not found down", 5000)
 
     // Validate version 0 still filters unavailable replicas and contains error
-    val v0MetadataResponse = sendMetadataRequest(new MetadataRequest(List(replicaDownTopic).asJava, 0.toShort))
+    val v0MetadataResponse = sendMetadataRequest(new MetadataRequest(List(replicaDownTopic).asJava, true, 0.toShort))
     val v0BrokerIds = v0MetadataResponse.brokers().asScala.map(_.id).toSeq
     assertTrue("Response should have no errors", v0MetadataResponse.errors.isEmpty)
     assertFalse(s"The downed broker should not be in the brokers list", v0BrokerIds.contains(downNode))
@@ -167,7 +197,7 @@ class MetadataRequestTest extends BaseRequestTest {
     assertTrue(s"Response should have ${replicaCount - 1} replicas", v0PartitionMetadata.replicas.size == replicaCount - 1)
 
     // Validate version 1 returns unavailable replicas with no error
-    val v1MetadataResponse = sendMetadataRequest(new MetadataRequest(List(replicaDownTopic).asJava, 1.toShort))
+    val v1MetadataResponse = sendMetadataRequest(new MetadataRequest(List(replicaDownTopic).asJava, true, 1.toShort))
     val v1BrokerIds = v1MetadataResponse.brokers().asScala.map(_.id).toSeq
     assertTrue("Response should have no errors", v1MetadataResponse.errors.isEmpty)
     assertFalse(s"The downed broker should not be in the brokers list", v1BrokerIds.contains(downNode))

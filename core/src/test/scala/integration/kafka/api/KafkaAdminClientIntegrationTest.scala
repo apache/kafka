@@ -30,8 +30,7 @@ import org.apache.kafka.clients.admin.NewTopic
 import org.apache.kafka.common.KafkaFuture
 import org.apache.kafka.common.acl.{AccessControlEntry, AclBinding, AclBindingFilter, AclOperation, AclPermissionType}
 import org.apache.kafka.common.config.ConfigResource
-import org.apache.kafka.common.errors.{InvalidRequestException, SecurityDisabledException, TopicExistsException}
-import org.apache.kafka.common.errors.{InvalidRequestException, SecurityDisabledException, TimeoutException, TopicExistsException}
+import org.apache.kafka.common.errors.{InvalidRequestException, SecurityDisabledException, TimeoutException, TopicExistsException, UnknownTopicOrPartitionException}
 import org.apache.kafka.common.protocol.ApiKeys
 import org.junit.{After, Before, Rule, Test}
 import org.apache.kafka.common.requests.MetadataResponse
@@ -80,7 +79,7 @@ class KafkaAdminClientIntegrationTest extends KafkaServerTestHarness with Loggin
 
   def waitForTopics(client: AdminClient, expectedPresent: Seq[String], expectedMissing: Seq[String]): Unit = {
     TestUtils.waitUntilTrue(() => {
-        val topics = client.listTopics().names().get()
+        val topics = client.listTopics.names.get()
         expectedPresent.forall(topicName => topics.contains(topicName)) &&
           expectedMissing.forall(topicName => !topics.contains(topicName))
       }, "timed out waiting for topics")
@@ -123,21 +122,39 @@ class KafkaAdminClientIntegrationTest extends KafkaServerTestHarness with Loggin
     val topics = Seq("mytopic", "mytopic2")
     val newTopics = topics.map(new NewTopic(_, 1, 1))
     client.createTopics(newTopics.asJava, new CreateTopicsOptions().validateOnly(true)).all.get()
-    waitForTopics(client, List(), List("mytopic", "mytopic2"))
+    waitForTopics(client, List(), topics)
 
     client.createTopics(newTopics.asJava).all.get()
-    waitForTopics(client, List("mytopic", "mytopic2"), List())
+    waitForTopics(client, topics, List())
 
     val results = client.createTopics(newTopics.asJava).results()
     assertTrue(results.containsKey("mytopic"))
     assertFutureExceptionTypeEquals(results.get("mytopic"), classOf[TopicExistsException])
     assertTrue(results.containsKey("mytopic2"))
     assertFutureExceptionTypeEquals(results.get("mytopic2"), classOf[TopicExistsException])
-    val topicsFromDescribe = client.describeTopics(Seq("mytopic", "mytopic2").asJava).all.get().asScala.keys
+    val topicsFromDescribe = client.describeTopics(topics.asJava).all.get().asScala.keys
     assertEquals(topics.toSet, topicsFromDescribe)
 
     client.deleteTopics(topics.asJava).all.get()
-    waitForTopics(client, List(), List("mytopic", "mytopic2"))
+    waitForTopics(client, List(), topics)
+  }
+
+  /**
+    * describe should not auto create topics
+    */
+  @Test
+  def testDescribeNonExistingTopic(): Unit = {
+    client = AdminClient.create(createConfig())
+
+    val existingTopic = "existing-topic"
+    client.createTopics(Seq(existingTopic).map(new NewTopic(_, 1, 1)).asJava).all.get()
+    waitForTopics(client, Seq(existingTopic), List())
+
+    val nonExistingTopic = "non-existing"
+    val results = client.describeTopics(Seq(nonExistingTopic, existingTopic).asJava).results
+    assertEquals(existingTopic, results.get(existingTopic).get.name)
+    intercept[ExecutionException](results.get(nonExistingTopic).get).getCause.isInstanceOf[UnknownTopicOrPartitionException]
+    assertEquals(None, zkUtils.getTopicPartitionCount(nonExistingTopic))
   }
 
   @Test
