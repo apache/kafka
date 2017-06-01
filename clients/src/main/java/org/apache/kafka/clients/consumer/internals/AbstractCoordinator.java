@@ -457,7 +457,6 @@ public abstract class AbstractCoordinator implements Closeable {
                     } else {
                         AbstractCoordinator.this.generation = new Generation(joinResponse.generationId(),
                                 joinResponse.memberId(), joinResponse.groupProtocol());
-                        AbstractCoordinator.this.rejoinNeeded = false;
                         if (joinResponse.isLeader()) {
                             onJoinLeader(joinResponse).chain(future);
                         } else {
@@ -537,6 +536,7 @@ public abstract class AbstractCoordinator implements Closeable {
             if (error == Errors.NONE) {
                 sensors.syncLatency.record(response.requestLatencyMs());
                 future.complete(syncResponse.memberAssignment());
+                AbstractCoordinator.this.rejoinNeeded = false;
             } else {
                 requestRejoin();
 
@@ -785,7 +785,6 @@ public abstract class AbstractCoordinator implements Closeable {
             // mark the coordinator as dead
             if (e instanceof DisconnectException) {
                 coordinatorDead();
-                requestRejoin();
             }
             future.raise(e);
         }

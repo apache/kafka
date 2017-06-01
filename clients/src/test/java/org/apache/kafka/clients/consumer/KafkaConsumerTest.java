@@ -1268,7 +1268,7 @@ public class KafkaConsumerTest {
         Cluster cluster = TestUtils.singletonCluster(topic, 1);
         Node node = cluster.nodes().get(0);
 
-        Metadata metadata = new Metadata(0, Long.MAX_VALUE);
+        Metadata metadata = new Metadata(0, Long.MAX_VALUE, false);
         metadata.update(cluster, Collections.<String>emptySet(), time.milliseconds());
 
         MockClient client = new MockClient(time, metadata);
