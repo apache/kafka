@@ -808,6 +808,12 @@ $ java -cp path-to-app-fatjar.jar com.example.MyStreamsApp
         <h2><a id="streams_upgrade_and_api" href="#streams_upgrade_and_api">Upgrade Guide and API Changes</a></h2>
 
         <p>
+        If you want to upgrade from 0.10.2.x to 0.11.0 you don't need to do any code changes as the public API is fully backward compatible.
+        However, some configuration parameters were deprecated and thus it is recommend to update your code eventually to allow for future upgrades.
+        See <a href="#streams_api_changes_0110">below</a> a complete list of 0.11.0 API and semantical changes that allow you to advance your application and/or simplify your code base, including the usage of new features.
+        </p>
+
+        <p>
         If you want to upgrade from 0.10.1.x to 0.10.2, see the <a href="/{{version}}/documentation/#upgrade_1020_streams">Upgrade Section for 0.10.2</a>.
         It highlights incompatible changes you need to consider to upgrade your code and application.
         See <a href="#streams_api_changes_0102">below</a> a complete list of 0.10.2 API and semantical changes that allow you to advance your application and/or simplify your code base, including the usage of new features.
@@ -819,13 +825,26 @@ $ java -cp path-to-app-fatjar.jar com.example.MyStreamsApp
         See <a href="#streams_api_changes_0101">below</a> a complete list of 0.10.1 API changes that allow you to advance your application and/or simplify your code base, including the usage of new features.
         </p>
 
-         <h3><a id="streams_api_changes_01021" href="#streams_api_changes_0102">Notable changes in 0.10.2.1</a></h3>
-         <p>
-            Parameter updates in <code>StreamsConfig</code>:
+        <h3><a id="streams_api_changes_0110" href="#streams_api_changes_0110">Notable changes in 0.11.0.0</a></h3>
+
+        <p>
+        Parameter updates in <code>StreamsConfig</code>:
         </p>
-          <ul>
-            <li> of particular importance to improve the resiliency of a Kafka Streams application are two changes to default parameters of producer <code>retries</code> and consumer <code>max.poll.interval.ms</code> </li>
-          </ul>
+        <ul>
+          <li> <code>timestamp.extractor</code> was deprecated and replaced by <code>default.timestamp.extractor</code>
+          <li> <code>key.serde</code> was deprecated and replaced by <code>default.key.serde</code>
+          <li> <code>value.serde</code> was deprecated and replaced by <code>default.value.serde</code>
+        </ul>
+
+        <h3><a id="streams_api_changes_01021" href="#streams_api_changes_01021">Notable changes in 0.10.2.1</a></h3>
+
+        <p>
+        Parameter updates in <code>StreamsConfig</code>:
+        </p>
+        <ul>
+          <li> of particular importance to improve the resiliency of a Kafka Streams application are two changes to default parameters of producer <code>retries</code> and consumer <code>max.poll.interval.ms</code> </li>
+        </ul>
+
         <h3><a id="streams_api_changes_0102" href="#streams_api_changes_0102">Streams API changes in 0.10.2.0</a></h3>
 
         <p>
