@@ -51,6 +51,7 @@ public class DelegatingClassLoader extends URLClassLoader {
     private static final Logger log = LoggerFactory.getLogger(DelegatingClassLoader.class);
 
     private final Map<String, SortedMap<PluginDesc<?>, ClassLoader>> pluginLoaders;
+    private final Map<String, String> aliases;
     private final SortedSet<PluginDesc<Connector>> connectors;
     private final SortedSet<PluginDesc<Converter>> converters;
     private final SortedSet<PluginDesc<Transformation>> transformations;
@@ -61,6 +62,7 @@ public class DelegatingClassLoader extends URLClassLoader {
         super(new URL[0], parent);
         this.pluginPaths = pluginPaths;
         this.pluginLoaders = new HashMap<>();
+        this.aliases = new HashMap<>();
         this.activePaths = new HashMap<>();
         this.connectors = new TreeSet<>();
         this.converters = new TreeSet<>();
@@ -89,8 +91,10 @@ public class DelegatingClassLoader extends URLClassLoader {
 
     public ClassLoader connectorLoader(String connectorClassOrAlias) {
         log.debug("Getting plugin class loader for connector: '{}'", connectorClassOrAlias);
-        SortedMap<PluginDesc<?>, ClassLoader> inner =
-                pluginLoaders.get(connectorClassOrAlias);
+        String fullName = aliases.containsKey(connectorClassOrAlias)
+                          ? aliases.get(connectorClassOrAlias)
+                          : connectorClassOrAlias;
+        SortedMap<PluginDesc<?>, ClassLoader> inner = pluginLoaders.get(fullName);
         if (inner == null) {
             log.error(
                     "Plugin class loader for connector: '{}' was not found. Returning: {}",
@@ -257,16 +261,17 @@ public class DelegatingClassLoader extends URLClassLoader {
             return super.loadClass(name, resolve);
         }
 
-        SortedMap<PluginDesc<?>, ClassLoader> inner = pluginLoaders.get(name);
+        String fullName = aliases.containsKey(name) ? aliases.get(name) : name;
+        SortedMap<PluginDesc<?>, ClassLoader> inner = pluginLoaders.get(fullName);
         if (inner != null) {
-            log.trace("Retrieving loaded class '{}' from '{}'", name, inner.get(inner.lastKey()));
             ClassLoader pluginLoader = inner.get(inner.lastKey());
+            log.trace("Retrieving loaded class '{}' from '{}'", fullName, pluginLoader);
             return pluginLoader instanceof PluginClassLoader
-                   ? ((PluginClassLoader) pluginLoader).loadClass(name, resolve)
-                   : super.loadClass(name, resolve);
+                   ? ((PluginClassLoader) pluginLoader).loadClass(fullName, resolve)
+                   : super.loadClass(fullName, resolve);
         }
 
-        return super.loadClass(name, resolve);
+        return super.loadClass(fullName, resolve);
     }
 
     private void addAllAliases() {
@@ -280,12 +285,11 @@ public class DelegatingClassLoader extends URLClassLoader {
             if (PluginUtils.isAliasUnique(plugin, plugins)) {
                 String simple = PluginUtils.simpleName(plugin);
                 String pruned = PluginUtils.prunedName(plugin);
-                SortedMap<PluginDesc<?>, ClassLoader> inner = pluginLoaders.get(plugin.className());
-                pluginLoaders.put(simple, inner);
+                aliases.put(simple, plugin.className());
                 if (simple.equals(pruned)) {
                     log.info("Added alias '{}' to plugin '{}'", simple, plugin.className());
                 } else {
-                    pluginLoaders.put(pruned, inner);
+                    aliases.put(pruned, plugin.className());
                     log.info(
                             "Added aliases '{}' and '{}' to plugin '{}'",
                             simple,

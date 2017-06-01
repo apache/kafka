@@ -55,6 +55,7 @@ public class PluginClassLoader extends URLClassLoader {
                 }
             } catch (ClassNotFoundException e) {
                 // Not found in loader's path. Search in parents.
+                log.trace("Class '{}' not found. Delegating to parent", name);
             }
         }
         if (klass == null) {
