@@ -30,6 +30,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.header.Headers
 import org.apache.kafka.common.header.internals.RecordHeaders
 
+import scala.collection.mutable
 import scala.collection.mutable.HashMap
 
 /**
@@ -61,6 +62,7 @@ class NewShinyConsumer(topic: Option[String], partitionId: Option[Int], offset: 
 
   consumerInit()
   var recordIter = consumer.poll(0).iterator
+  val partitions = new mutable.HashMap[(String, Integer), TopicPartition]
 
   def consumerInit() {
     (topic, partitionId, offset, whitelist) match {
@@ -99,9 +101,15 @@ class NewShinyConsumer(topic: Option[String], partitionId: Option[Int], offset: 
     }
 
     val record = recordIter.next
+    partitions.get((record.topic, record.partition)) match {
+      case Some(tp) =>
+        offsets.put(tp, record.offset + 1)
+      case None =>
+        val tp = new TopicPartition(record.topic, record.partition)
+        partitions.put((record.topic, record.partition), tp)
+        offsets.put(tp, record.offset + 1)
+    }
 
-    val tp = new TopicPartition(record.topic, record.partition)
-    offsets.put(tp, record.offset + 1)
     BaseConsumerRecord(record.topic,
                        record.partition,
                        record.offset,
