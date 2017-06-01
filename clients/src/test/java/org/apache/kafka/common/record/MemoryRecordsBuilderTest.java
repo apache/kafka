@@ -432,7 +432,7 @@ public class MemoryRecordsBuilderTest {
 
         buffer.flip();
 
-        Records records = MemoryRecords.readableRecords(buffer).downConvert(RecordBatch.MAGIC_VALUE_V1);
+        Records records = MemoryRecords.readableRecords(buffer).downConvert(RecordBatch.MAGIC_VALUE_V1, 0);
 
         List<? extends RecordBatch> batches = Utils.toList(records.batches().iterator());
         if (compressionType != CompressionType.NONE) {
@@ -469,24 +469,57 @@ public class MemoryRecordsBuilderTest {
 
         buffer.flip();
 
-        Records records = MemoryRecords.readableRecords(buffer).downConvert(RecordBatch.MAGIC_VALUE_V1);
+        Records records = MemoryRecords.readableRecords(buffer).downConvert(RecordBatch.MAGIC_VALUE_V1, 0);
 
         List<? extends RecordBatch> batches = Utils.toList(records.batches().iterator());
         if (compressionType != CompressionType.NONE) {
             assertEquals(2, batches.size());
             assertEquals(RecordBatch.MAGIC_VALUE_V0, batches.get(0).magic());
+            assertEquals(0, batches.get(0).baseOffset());
             assertEquals(RecordBatch.MAGIC_VALUE_V1, batches.get(1).magic());
+            assertEquals(1, batches.get(1).baseOffset());
         } else {
             assertEquals(3, batches.size());
             assertEquals(RecordBatch.MAGIC_VALUE_V0, batches.get(0).magic());
+            assertEquals(0, batches.get(0).baseOffset());
             assertEquals(RecordBatch.MAGIC_VALUE_V1, batches.get(1).magic());
+            assertEquals(1, batches.get(1).baseOffset());
             assertEquals(RecordBatch.MAGIC_VALUE_V1, batches.get(2).magic());
+            assertEquals(2, batches.get(2).baseOffset());
         }
 
         List<Record> logRecords = Utils.toList(records.records().iterator());
-        assertEquals(ByteBuffer.wrap("1".getBytes()), logRecords.get(0).key());
-        assertEquals(ByteBuffer.wrap("2".getBytes()), logRecords.get(1).key());
-        assertEquals(ByteBuffer.wrap("3".getBytes()), logRecords.get(2).key());
+        assertEquals("1", utf8(logRecords.get(0).key()));
+        assertEquals("2", utf8(logRecords.get(1).key()));
+        assertEquals("3", utf8(logRecords.get(2).key()));
+
+        records = MemoryRecords.readableRecords(buffer).downConvert(RecordBatch.MAGIC_VALUE_V1, 2L);
+
+        batches = Utils.toList(records.batches().iterator());
+        logRecords = Utils.toList(records.records().iterator());
+
+        if (compressionType != CompressionType.NONE) {
+            assertEquals(2, batches.size());
+            assertEquals(RecordBatch.MAGIC_VALUE_V0, batches.get(0).magic());
+            assertEquals(0, batches.get(0).baseOffset());
+            assertEquals(RecordBatch.MAGIC_VALUE_V1, batches.get(1).magic());
+            assertEquals(1, batches.get(1).baseOffset());
+            assertEquals("1", utf8(logRecords.get(0).key()));
+            assertEquals("2", utf8(logRecords.get(1).key()));
+            assertEquals("3", utf8(logRecords.get(2).key()));
+        } else {
+            assertEquals(2, batches.size());
+            assertEquals(RecordBatch.MAGIC_VALUE_V0, batches.get(0).magic());
+            assertEquals(0, batches.get(0).baseOffset());
+            assertEquals(RecordBatch.MAGIC_VALUE_V1, batches.get(1).magic());
+            assertEquals(2, batches.get(1).baseOffset());
+            assertEquals("1", utf8(logRecords.get(0).key()));
+            assertEquals("3", utf8(logRecords.get(1).key()));
+        }
+    }
+
+    private String utf8(ByteBuffer buffer) {
+        return Utils.utf8(buffer, buffer.remaining());
     }
 
     @Test

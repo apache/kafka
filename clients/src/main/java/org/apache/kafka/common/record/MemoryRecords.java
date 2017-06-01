@@ -109,8 +109,8 @@ public class MemoryRecords extends AbstractRecords {
     }
 
     @Override
-    public MemoryRecords downConvert(byte toMagic) {
-        return downConvert(batches(), toMagic);
+    public MemoryRecords downConvert(byte toMagic, long firstOffset) {
+        return downConvert(batches(), toMagic, firstOffset);
     }
 
     /**
