@@ -187,7 +187,7 @@ class TransactionCoordinator(brokerId: Int,
     } else {
       // caller should have synchronized on txnMetadata already
       txnMetadata.state match {
-        case PrepareAbort | PrepareCommit  =>
+        case PrepareAbort | PrepareCommit =>
           // reply to client and let client backoff and retry
           Left(initTransactionError(Errors.CONCURRENT_TRANSACTIONS))
 
