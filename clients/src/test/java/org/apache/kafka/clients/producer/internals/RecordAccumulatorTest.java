@@ -584,7 +584,7 @@ public class RecordAccumulatorTest {
         assertNotNull(future1);
         assertNotNull(future2);
         batch.close();
-        // Enqueue the batch to the accumulator so that as if the batch was created by the accumulator.
+        // Enqueue the batch to the accumulator as if the batch was created by the accumulator.
         accum.reenqueue(batch, now);
         time.sleep(101L);
         // Drain the batch.

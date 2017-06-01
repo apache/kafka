@@ -49,6 +49,8 @@ public interface Records {
     // the magic offset is at the same offset for all current message formats, but the 4 bytes
     // between the size and the magic is dependent on the version.
     int MAGIC_OFFSET = 16;
+    int MAGIC_LENGTH = 1;
+    int HEADER_SIZE_UP_TO_MAGIC = MAGIC_OFFSET + MAGIC_LENGTH;
 
     /**
      * The size of these records in bytes.

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state;
 
+import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
@@ -34,6 +35,7 @@ import java.util.Map;
 /**
  * Factory for creating state stores in Kafka Streams.
  */
+@InterfaceStability.Evolving
 public class Stores {
 
     private static final Logger log = LoggerFactory.getLogger(Stores.class);

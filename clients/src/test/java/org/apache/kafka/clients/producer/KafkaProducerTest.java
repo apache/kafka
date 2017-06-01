@@ -325,7 +325,8 @@ public class KafkaProducerTest {
         KafkaProducer<String, String> producer = new KafkaProducer<>(props, new StringSerializer(), new StringSerializer());
         long refreshBackoffMs = 500L;
         long metadataExpireMs = 60000L;
-        final Metadata metadata = new Metadata(refreshBackoffMs, metadataExpireMs, true, new ClusterResourceListeners());
+        final Metadata metadata = new Metadata(refreshBackoffMs, metadataExpireMs, true,
+                true, new ClusterResourceListeners());
         final Time time = new MockTime();
         MemberModifier.field(KafkaProducer.class, "metadata").set(producer, metadata);
         MemberModifier.field(KafkaProducer.class, "time").set(producer, time);

@@ -50,6 +50,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.ControlRecordType;
 import org.apache.kafka.common.header.internals.RecordHeader;
+import org.apache.kafka.common.record.DefaultRecordBatch;
 import org.apache.kafka.common.record.EndTransactionMarker;
 import org.apache.kafka.common.record.LegacyRecord;
 import org.apache.kafka.common.record.MemoryRecords;
@@ -117,7 +118,7 @@ public class FetcherTest {
     private int fetchSize = 1000;
     private long retryBackoffMs = 100;
     private MockTime time = new MockTime(1);
-    private Metadata metadata = new Metadata(0, Long.MAX_VALUE);
+    private Metadata metadata = new Metadata(0, Long.MAX_VALUE, true);
     private MockClient client = new MockClient(time, metadata);
     private Cluster cluster = TestUtils.singletonCluster(topicName, 2);
     private Node node = cluster.nodes().get(0);
@@ -261,8 +262,11 @@ public class FetcherTest {
             int i = 0;
             @Override
             public byte[] deserialize(String topic, byte[] data) {
-                if (i++ == 1)
+                if (i++ % 2 == 1) {
+                    // Should be blocked on the value deserialization of the first record.
+                    assertEquals(new String(data, StandardCharsets.UTF_8), "value-1");
                     throw new SerializationException();
+                }
                 return data;
             }
         };
@@ -276,12 +280,15 @@ public class FetcherTest {
 
         assertEquals(1, fetcher.sendFetches());
         consumerClient.poll(0);
-        try {
-            fetcher.fetchedRecords();
-            fail("fetchedRecords should have raised");
-        } catch (SerializationException e) {
-            // the position should not advance since no data has been returned
-            assertEquals(1, subscriptions.position(tp1).longValue());
+        // The fetcher should block on Deserialization error
+        for (int i = 0; i < 2; i++) {
+            try {
+                fetcher.fetchedRecords();
+                fail("fetchedRecords should have raised");
+            } catch (SerializationException e) {
+                // the position should not advance since no data has been returned
+                assertEquals(1, subscriptions.position(tp1).longValue());
+            }
         }
     }
 
@@ -296,7 +303,7 @@ public class FetcherTest {
         long offset = 0;
         long timestamp = 500L;
 
-        int size = LegacyRecord.recordSize(key, value);
+        int size = LegacyRecord.recordSize(magic, key.length, value.length);
         byte attributes = LegacyRecord.computeAttributes(magic, CompressionType.NONE, TimestampType.CREATE_TIME);
         long crc = LegacyRecord.computeChecksum(magic, attributes, timestamp, key, value);
 
@@ -329,17 +336,66 @@ public class FetcherTest {
         assertEquals(1, fetcher.fetchedRecords().get(tp1).size());
         assertEquals(1, subscriptions.position(tp1).longValue());
 
-        // the second fetchedRecords() should throw exception due to the second invalid message
-        try {
-            fetcher.fetchedRecords();
-            fail("fetchedRecords should have raised KafkaException");
-        } catch (KafkaException e) {
-            assertEquals(1, subscriptions.position(tp1).longValue());
+        // the fetchedRecords() should always throw exception due to the second invalid message
+        for (int i = 0; i < 2; i++) {
+            try {
+                fetcher.fetchedRecords();
+                fail("fetchedRecords should have raised KafkaException");
+            } catch (KafkaException e) {
+                assertEquals(1, subscriptions.position(tp1).longValue());
+            }
         }
 
-        // the third fetchedRecords() should return the third valid message
-        assertEquals(1, fetcher.fetchedRecords().get(tp1).size());
+        // Seek to skip the bad record and fetch again.
+        subscriptions.seek(tp1, 2);
+        // Should not throw exception after the seek.
+        fetcher.fetchedRecords();
+        assertEquals(1, fetcher.sendFetches());
+        client.prepareResponse(fetchResponse(MemoryRecords.readableRecords(buffer), Errors.NONE, 100L, 0));
+        consumerClient.poll(0);
+
+        List<ConsumerRecord<byte[], byte[]>> records = fetcher.fetchedRecords().get(tp1);
+        assertEquals(1, records.size());
+        assertEquals(2L, records.get(0).offset());
         assertEquals(3, subscriptions.position(tp1).longValue());
+    }
+
+    @Test
+    public void testInvalidDefaultRecordBatch() {
+        ByteBuffer buffer = ByteBuffer.allocate(1024);
+        ByteBufferOutputStream out = new ByteBufferOutputStream(buffer);
+
+        MemoryRecordsBuilder builder = new MemoryRecordsBuilder(out,
+                                                                DefaultRecordBatch.CURRENT_MAGIC_VALUE,
+                                                                CompressionType.NONE,
+                                                                TimestampType.CREATE_TIME,
+                                                                0L, 10L, 0L, (short) 0, 0, false, false, 0, 1024);
+        builder.append(10L, "key".getBytes(), "value".getBytes());
+        builder.close();
+        buffer.flip();
+
+        // Garble the CRC
+        buffer.position(17);
+        buffer.put("beef".getBytes());
+        buffer.position(0);
+
+        subscriptions.assignFromUser(singleton(tp1));
+        subscriptions.seek(tp1, 0);
+
+        // normal fetch
+        assertEquals(1, fetcher.sendFetches());
+        client.prepareResponse(fetchResponse(MemoryRecords.readableRecords(buffer), Errors.NONE, 100L, 0));
+        consumerClient.poll(0);
+
+        // the fetchedRecords() should always throw exception due to the bad batch.
+        for (int i = 0; i < 2; i++) {
+            try {
+                fetcher.fetchedRecords();
+                fail("fetchedRecords should have raised KafkaException");
+            } catch (KafkaException e) {
+                assertEquals(0, subscriptions.position(tp1).longValue());
+            }
+        }
     }
 
     @Test
@@ -373,7 +429,7 @@ public class FetcherTest {
     @Test
     public void testHeaders() {
         Fetcher<byte[], byte[]> fetcher = createFetcher(subscriptions, new Metrics(time));
-        
+
         MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE, TimestampType.CREATE_TIME, 1L);
         builder.append(0L, "key".getBytes(), "value-1".getBytes());
 
@@ -397,14 +453,14 @@ public class FetcherTest {
         assertEquals(1, fetcher.sendFetches());
         consumerClient.poll(0);
         records = fetcher.fetchedRecords().get(tp1);
-        
+
         assertEquals(3, records.size());
 
         Iterator<ConsumerRecord<byte[], byte[]>> recordIterator = records.iterator();
-        
+
         ConsumerRecord<byte[], byte[]> record = recordIterator.next();
         assertNull(record.headers().lastHeader("headerKey"));
-        
+
         record = recordIterator.next();
         assertEquals("headerValue", new String(record.headers().lastHeader("headerKey").value(), StandardCharsets.UTF_8));
         assertEquals("headerKey", record.headers().lastHeader("headerKey").key());
@@ -704,19 +760,20 @@ public class FetcherTest {
         consumerClient.poll(0);
 
         assertFalse(subscriptionsNoAutoReset.isOffsetResetNeeded(tp1));
-        try {
-            fetcherNoAutoReset.fetchedRecords();
-            fail("Should have thrown OffsetOutOfRangeException");
-        } catch (OffsetOutOfRangeException e) {
-            assertTrue(e.offsetOutOfRangePartitions().containsKey(tp1));
-            assertEquals(e.offsetOutOfRangePartitions().size(), 1);
+        for (int i = 0; i < 2; i++) {
+            try {
+                fetcherNoAutoReset.fetchedRecords();
+                fail("Should have thrown OffsetOutOfRangeException");
+            } catch (OffsetOutOfRangeException e) {
+                assertTrue(e.offsetOutOfRangePartitions().containsKey(tp1));
+                assertEquals(e.offsetOutOfRangePartitions().size(), 1);
+            }
         }
-        assertEquals(0, fetcherNoAutoReset.fetchedRecords().size());
     }
 
     @Test
     public void testFetchPositionAfterException() {
-        // verify the advancement in the next fetch offset equals the number of fetched records when
+        // verify the advancement in the next fetch offset equals to the number of fetched records when
         // some fetched partitions cause Exception. This ensures that consumer won't lose record upon exception
         subscriptionsNoAutoReset.assignFromUser(Utils.mkSet(tp1, tp2));
         subscriptionsNoAutoReset.seek(tp1, 1);
@@ -724,25 +781,21 @@ public class FetcherTest {
 
         assertEquals(1, fetcherNoAutoReset.sendFetches());
 
-        Map<TopicPartition, FetchResponse.PartitionData> partitions = new HashMap<>();
-        partitions.put(tp1, new FetchResponse.PartitionData(Errors.OFFSET_OUT_OF_RANGE, 100,
-            FetchResponse.INVALID_LAST_STABLE_OFFSET, FetchResponse.INVALID_LOG_START_OFFSET, null, MemoryRecords.EMPTY));
+        Map<TopicPartition, FetchResponse.PartitionData> partitions = new LinkedHashMap<>();
         partitions.put(tp2, new FetchResponse.PartitionData(Errors.NONE, 100,
             FetchResponse.INVALID_LAST_STABLE_OFFSET, FetchResponse.INVALID_LOG_START_OFFSET, null, records));
+        partitions.put(tp1, new FetchResponse.PartitionData(Errors.OFFSET_OUT_OF_RANGE, 100,
+                FetchResponse.INVALID_LAST_STABLE_OFFSET, FetchResponse.INVALID_LOG_START_OFFSET, null, MemoryRecords.EMPTY));
         client.prepareResponse(new FetchResponse(new LinkedHashMap<>(partitions), 0));
         consumerClient.poll(0);
 
         List<ConsumerRecord<byte[], byte[]>> fetchedRecords = new ArrayList<>();
         List<OffsetOutOfRangeException> exceptions = new ArrayList<>();
 
-        try {
-            for (List<ConsumerRecord<byte[], byte[]>> records: fetcherNoAutoReset.fetchedRecords().values())
-                fetchedRecords.addAll(records);
-        } catch (OffsetOutOfRangeException e) {
-            exceptions.add(e);
-        }
+        for (List<ConsumerRecord<byte[], byte[]>> records: fetcherNoAutoReset.fetchedRecords().values())
+            fetchedRecords.addAll(records);
 
-        assertEquals(fetchedRecords.size(), subscriptionsNoAutoReset.position(tp2).longValue() - 1);
+        assertEquals(fetchedRecords.size(), subscriptionsNoAutoReset.position(tp2) - 1);
 
         try {
             for (List<ConsumerRecord<byte[], byte[]>> records: fetcherNoAutoReset.fetchedRecords().values())
@@ -1015,16 +1068,15 @@ public class FetcherTest {
     public void testGetTopicMetadataInvalidTopic() {
         client.prepareResponse(newMetadataResponse(topicName, Errors.INVALID_TOPIC_EXCEPTION));
         fetcher.getTopicMetadata(
-            new MetadataRequest.Builder(Collections.singletonList(topicName)), 5000L);
+                new MetadataRequest.Builder(Collections.singletonList(topicName), true), 5000L);
     }
 
     @Test
     public void testGetTopicMetadataUnknownTopic() {
         client.prepareResponse(newMetadataResponse(topicName, Errors.UNKNOWN_TOPIC_OR_PARTITION));
 
-        Map<String, List<PartitionInfo>> topicMetadata =
-                fetcher.getTopicMetadata(
-                        new MetadataRequest.Builder(Collections.singletonList(topicName)), 5000L);
+        Map<String, List<PartitionInfo>> topicMetadata = fetcher.getTopicMetadata(
+                new MetadataRequest.Builder(Collections.singletonList(topicName), true), 5000L);
         assertNull(topicMetadata.get(topicName));
     }
 
@@ -1033,9 +1085,8 @@ public class FetcherTest {
         client.prepareResponse(newMetadataResponse(topicName, Errors.LEADER_NOT_AVAILABLE));
         client.prepareResponse(newMetadataResponse(topicName, Errors.NONE));
 
-        Map<String, List<PartitionInfo>> topicMetadata =
-                fetcher.getTopicMetadata(
-                        new MetadataRequest.Builder(Collections.singletonList(topicName)), 5000L);
+        Map<String, List<PartitionInfo>> topicMetadata = fetcher.getTopicMetadata(
+                new MetadataRequest.Builder(Collections.singletonList(topicName), true), 5000L);
         assertTrue(topicMetadata.containsKey(topicName));
     }
 
@@ -1279,6 +1330,22 @@ public class FetcherTest {
         testGetOffsetsForTimesWithError(Errors.BROKER_NOT_AVAILABLE, Errors.NONE, 10L, 100L, 10L, 100L);
     }
 
+    @Test(expected = TimeoutException.class)
+    public void testBatchedListOffsetsMetadataErrors() {
+        Map<TopicPartition, ListOffsetResponse.PartitionData> partitionData = new HashMap<>();
+        partitionData.put(tp1, new ListOffsetResponse.PartitionData(Errors.NOT_LEADER_FOR_PARTITION,
+                ListOffsetResponse.UNKNOWN_TIMESTAMP, ListOffsetResponse.UNKNOWN_OFFSET));
+        partitionData.put(tp2, new ListOffsetResponse.PartitionData(Errors.UNKNOWN_TOPIC_OR_PARTITION,
+                ListOffsetResponse.UNKNOWN_TIMESTAMP, ListOffsetResponse.UNKNOWN_OFFSET));
+        client.prepareResponse(new ListOffsetResponse(0, partitionData));
+
+        Map<TopicPartition, Long> offsetsToSearch = new HashMap<>();
+        offsetsToSearch.put(tp1, ListOffsetRequest.EARLIEST_TIMESTAMP);
+        offsetsToSearch.put(tp2, ListOffsetRequest.EARLIEST_TIMESTAMP);
+
+        fetcher.getOffsetsByTimes(offsetsToSearch, 0);
+    }
+
     @Test
     public void testSkippingAbortedTransactions() {
         Fetcher<byte[], byte[]> fetcher = createFetcher(subscriptions, new Metrics(), new ByteArrayDeserializer(),
@@ -1290,7 +1357,7 @@ public class FetcherTest {
                 new SimpleRecord(time.milliseconds(), "key".getBytes(), "value".getBytes()),
                 new SimpleRecord(time.milliseconds(), "key".getBytes(), "value".getBytes()));
 
-        currentOffset += abortTransaction(buffer, 1L, currentOffset);
+        abortTransaction(buffer, 1L, currentOffset);
 
         buffer.flip();
 
