@@ -30,7 +30,6 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.header.Headers
 import org.apache.kafka.common.header.internals.RecordHeaders
 
-import scala.collection.mutable
 import scala.collection.mutable.HashMap
 
 /**
@@ -62,7 +61,7 @@ class NewShinyConsumer(topic: Option[String], partitionId: Option[Int], offset: 
 
   consumerInit()
   var recordIter = consumer.poll(0).iterator
-  val partitions = new mutable.HashMap[(String, Integer), TopicPartition]
+  val partitions = new HashMap[(String, Integer), TopicPartition]
 
   def consumerInit() {
     (topic, partitionId, offset, whitelist) match {
