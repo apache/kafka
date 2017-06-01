@@ -415,7 +415,7 @@ public class StreamsConfig extends AbstractConfig {
                     CommonClientConfigs.RECONNECT_BACKOFF_MS_DOC)
             .define(RECONNECT_BACKOFF_MAX_MS_CONFIG,
                     Type.LONG,
-                    50L,
+                    1000L,
                     atLeast(0L),
                     ConfigDef.Importance.LOW,
                     CommonClientConfigs.RECONNECT_BACKOFF_MAX_MS_DOC)
@@ -569,7 +569,8 @@ public class StreamsConfig extends AbstractConfig {
 
     @Override
     protected Map<String, Object> postProcessParsedConfig(final Map<String, Object> parsedValues) {
-        final Map<String, Object> configUpdates = new HashMap<>();
+        final Map<String, Object> configUpdates =
+            CommonClientConfigs.postProcessReconnectBackoffConfigs(this, parsedValues);
 
         final boolean eosEnabled = EXACTLY_ONCE.equals(parsedValues.get(PROCESSING_GUARANTEE_CONFIG));
         if (eosEnabled && !originals().containsKey(COMMIT_INTERVAL_MS_CONFIG)) {
