@@ -783,8 +783,10 @@ public abstract class AbstractCoordinator implements Closeable {
         @Override
         public void onFailure(RuntimeException e, RequestFuture<T> future) {
             // mark the coordinator as dead
-            if (e instanceof DisconnectException)
+            if (e instanceof DisconnectException) {
                 coordinatorDead();
+                requestRejoin();
+            }
             future.raise(e);
         }
 
