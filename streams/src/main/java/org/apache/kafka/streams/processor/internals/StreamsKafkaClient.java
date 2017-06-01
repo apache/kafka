@@ -144,6 +144,7 @@ public class StreamsKafkaClient {
         for (MetricsReporter metricsReporter: this.reporters) {
             metricsReporter.close();
         }
+        kafkaClient.close();
     }
 
     /**
