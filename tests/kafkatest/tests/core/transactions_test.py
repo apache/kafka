@@ -190,7 +190,7 @@ class TransactionsTest(Test):
 
     @cluster(num_nodes=8)
     @matrix(failure_mode=["clean_bounce", "hard_bounce"],
-            bounce_target=["brokers"])
+            bounce_target=["brokers", "clients"])
     def test_transactions(self, failure_mode, bounce_target):
         security_protocol = 'PLAINTEXT'
         self.kafka.security_protocol = security_protocol
