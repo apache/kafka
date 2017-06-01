@@ -43,10 +43,6 @@ public class PluginUtilsTest {
         assertFalse(PluginUtils.shouldLoadInIsolation(
                 "javax.management.loading.ClassLoaderRepository")
         );
-        assertFalse(PluginUtils.shouldLoadInIsolation("sun."));
-        assertFalse(PluginUtils.shouldLoadInIsolation("sun.reflect.DelegatingClassLoader"));
-        assertFalse(PluginUtils.shouldLoadInIsolation("com.sun."));
-        assertFalse(PluginUtils.shouldLoadInIsolation("com.sun.jmx.remote.util.ClassLogger"));
         assertFalse(PluginUtils.shouldLoadInIsolation("org.omg."));
         assertFalse(PluginUtils.shouldLoadInIsolation("org.omg.CORBA.Object"));
         assertFalse(PluginUtils.shouldLoadInIsolation("org.w3c.dom."));

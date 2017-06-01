@@ -41,8 +41,6 @@ public class PluginUtils {
     private static final String BLACKLIST = "^(?:"
             + "java"
             + "|javax"
-            + "|sun"
-            + "|com\\.sun"
             + "|org\\.omg"
             + "|org\\.w3c\\.dom"
             + "|org\\.xml"
