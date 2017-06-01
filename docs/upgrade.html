@@ -60,8 +60,6 @@
     <li>The <code>offsets.topic.replication.factor</code> broker config is now enforced upon auto topic creation. Internal
         auto topic creation will fail with a GROUP_COORDINATOR_NOT_AVAILABLE error until the cluster size meets this
         replication factor requirement.</li>
-    <li>By default <code>message.timestamp.difference.max.ms</code> is the same as <code>retention.ms</code> instead of
-        <code>Long.MAX_VALUE</code>.</li>
     <li>The broker configuration <code>max.message.bytes</code> now applies to the total size of a batch of messages.
         Previously the setting applied to batches of compressed messages, or to non-compressed messages individually. In practice,
         the change is minor since a message batch may consist of only a single message, so the limitation on the size of

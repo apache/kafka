@@ -202,6 +202,7 @@
     <allow pkg="org.openjdk.jmh.annotations" />
     <allow pkg="org.openjdk.jmh.runner" />
     <allow pkg="org.openjdk.jmh.runner.options" />
+    <allow pkg="org.openjdk.jmh.infra" />
     <allow pkg="org.apache.kafka.common" />
     <allow pkg="org.apache.kafka.streams" />
     <allow pkg="org.github.jamm" />

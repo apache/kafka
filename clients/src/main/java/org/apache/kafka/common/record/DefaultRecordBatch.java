@@ -18,11 +18,10 @@ package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.header.Header;
-import org.apache.kafka.common.utils.ByteBufferInputStream;
+import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.common.utils.CloseableIterator;
 import org.apache.kafka.common.utils.Crc32C;
-import org.apache.kafka.common.utils.Utils;
 
 import java.io.DataInputStream;
 import java.io.IOException;
@@ -44,7 +43,7 @@ import static org.apache.kafka.common.record.Records.LOG_OVERHEAD;
  *  Magic => Int8
  *  CRC => Uint32
  *  Attributes => Int16
- *  LastOffsetDelta => Int32
+ *  LastOffsetDelta => Int32 // also serves as LastSequenceDelta
  *  BaseTimestamp => Int64
  *  MaxTimestamp => Int64
  *  ProducerId => Int64
@@ -60,6 +59,13 @@ import static org.apache.kafka.common.record.Records.LOG_OVERHEAD;
  * the bytes between the batch length and the magic byte. The partition leader epoch field is not included in the CRC
  * computation to avoid the need to recompute the CRC when this field is assigned for every batch that is received by
  * the broker. The CRC-32C (Castagnoli) polynomial is used for the computation.
+ *
+ * On compaction: unlike the older message formats, magic v2 and above preserves the first and last offset/sequence
+ * numbers from the original batch when the log is cleaned. This is required in order to be able to restore the
+ * producer's state when the log is reloaded. If we did not retain the last sequence number, for example, then
+ * after a partition leader failure, the producer might see an OutOfSequence error. The base sequence number must
+ * be preserved for duplicate checking (the broker checks incoming Produce requests for duplicates by verifying
+ * that the first and last sequence numbers of the incoming batch match the last from that producer).
  *
  * The current attributes are given below:
  *
@@ -200,6 +206,11 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
     }
 
     @Override
+    public void writeTo(ByteBufferOutputStream outputStream) {
+        outputStream.write(this.buffer.duplicate());
+    }
+
+    @Override
     public boolean isTransactional() {
         return (attributes() & TRANSACTIONAL_FLAG_MASK) > 0;
     }
@@ -214,17 +225,17 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
         return buffer.getInt(PARTITION_LEADER_EPOCH_OFFSET);
     }
 
-    private CloseableIterator<Record> compressedIterator() {
+    private CloseableIterator<Record> compressedIterator(BufferSupplier bufferSupplier) {
         ByteBuffer buffer = this.buffer.duplicate();
         buffer.position(RECORDS_OFFSET);
-        final DataInputStream stream = new DataInputStream(compressionType().wrapForInput(
-                new ByteBufferInputStream(buffer), magic()));
+        final DataInputStream inputStream = new DataInputStream(compressionType().wrapForInput(buffer, magic(),
+                bufferSupplier));
 
         return new RecordIterator() {
             @Override
             protected Record readNext(long baseOffset, long baseTimestamp, int baseSequence, Long logAppendTime) {
                 try {
-                    return DefaultRecord.readFrom(stream, baseOffset, baseTimestamp, baseSequence, logAppendTime);
+                    return DefaultRecord.readFrom(inputStream, baseOffset, baseTimestamp, baseSequence, logAppendTime);
                 } catch (IOException e) {
                     throw new KafkaException("Failed to decompress record stream", e);
                 }
@@ -233,7 +244,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
             @Override
             public void close() {
                 try {
-                    stream.close();
+                    inputStream.close();
                 } catch (IOException e) {
                     throw new KafkaException("Failed to close record stream", e);
                 }
@@ -262,7 +273,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
         // for a normal iterator, we cannot ensure that the underlying compression stream is closed,
         // so we decompress the full record set here. Use cases which call for a lower memory footprint
         // can use `streamingIterator` at the cost of additional complexity
-        try (CloseableIterator<Record> iterator = compressedIterator()) {
+        try (CloseableIterator<Record> iterator = compressedIterator(BufferSupplier.NO_CACHING)) {
             List<Record> records = new ArrayList<>(count());
             while (iterator.hasNext())
                 records.add(iterator.next());
@@ -272,9 +283,9 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
 
 
     @Override
-    public CloseableIterator<Record> streamingIterator() {
+    public CloseableIterator<Record> streamingIterator(BufferSupplier bufferSupplier) {
         if (isCompressed())
-            return compressedIterator();
+            return compressedIterator(bufferSupplier);
         else
             return uncompressedIterator();
     }
@@ -435,13 +446,6 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
                     record.headers());
         }
         return size;
-    }
-
-    /**
-     * Get an upper bound on the size of a batch with only a single record using a given key and value.
-     */
-    static int batchSizeUpperBound(byte[] key, byte[] value, Header[] headers) {
-        return batchSizeUpperBound(Utils.wrapNullable(key), Utils.wrapNullable(value), headers);
     }
 
     /**

@@ -160,9 +160,12 @@ For a detailed description of findbugs bug categories, see http://findbugs.sourc
     </Match>
 
     <Match>
-        <!-- Suppress some minor warnings about machine-generated code for LRU cache
+        <!-- Suppress some minor warnings about machine-generated code for
              benchmarking. -->
-        <Package name="org.apache.kafka.jmh.cache.generated"/>
+        <Or>
+            <Package name="org.apache.kafka.jmh.cache.generated"/>
+            <Package name="org.apache.kafka.jmh.record.generated"/>
+        </Or>
     </Match>
 
     <Match>

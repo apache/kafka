@@ -19,6 +19,7 @@ package org.apache.kafka.common.protocol;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.SchemaException;
 import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.record.RecordBatch;
 
 import java.nio.ByteBuffer;
 
@@ -26,25 +27,25 @@ import java.nio.ByteBuffer;
  * Identifiers for all the Kafka APIs
  */
 public enum ApiKeys {
-    PRODUCE(0, "Produce", false),
-    FETCH(1, "Fetch", false),
-    LIST_OFFSETS(2, "Offsets", false),
-    METADATA(3, "Metadata", false),
+    PRODUCE(0, "Produce"),
+    FETCH(1, "Fetch"),
+    LIST_OFFSETS(2, "Offsets"),
+    METADATA(3, "Metadata"),
     LEADER_AND_ISR(4, "LeaderAndIsr", true),
     STOP_REPLICA(5, "StopReplica", true),
     UPDATE_METADATA_KEY(6, "UpdateMetadata", true),
     CONTROLLED_SHUTDOWN_KEY(7, "ControlledShutdown", true),
-    OFFSET_COMMIT(8, "OffsetCommit", false),
-    OFFSET_FETCH(9, "OffsetFetch", false),
-    FIND_COORDINATOR(10, "FindCoordinator", false),
-    JOIN_GROUP(11, "JoinGroup", false),
-    HEARTBEAT(12, "Heartbeat", false),
-    LEAVE_GROUP(13, "LeaveGroup", false),
-    SYNC_GROUP(14, "SyncGroup", false),
-    DESCRIBE_GROUPS(15, "DescribeGroups", false),
-    LIST_GROUPS(16, "ListGroups", false),
-    SASL_HANDSHAKE(17, "SaslHandshake", false),
-    API_VERSIONS(18, "ApiVersions", false) {
+    OFFSET_COMMIT(8, "OffsetCommit"),
+    OFFSET_FETCH(9, "OffsetFetch"),
+    FIND_COORDINATOR(10, "FindCoordinator"),
+    JOIN_GROUP(11, "JoinGroup"),
+    HEARTBEAT(12, "Heartbeat"),
+    LEAVE_GROUP(13, "LeaveGroup"),
+    SYNC_GROUP(14, "SyncGroup"),
+    DESCRIBE_GROUPS(15, "DescribeGroups"),
+    LIST_GROUPS(16, "ListGroups"),
+    SASL_HANDSHAKE(17, "SaslHandshake"),
+    API_VERSIONS(18, "ApiVersions") {
         @Override
         public Struct parseResponse(short version, ByteBuffer buffer) {
             // Fallback to version 0 for ApiVersions response. If a client sends an ApiVersionsRequest
@@ -53,21 +54,21 @@ public enum ApiKeys {
             return parseResponse(version, buffer, (short) 0);
         }
     },
-    CREATE_TOPICS(19, "CreateTopics", false),
-    DELETE_TOPICS(20, "DeleteTopics", false),
-    DELETE_RECORDS(21, "DeleteRecords", false),
-    INIT_PRODUCER_ID(22, "InitProducerId", false),
+    CREATE_TOPICS(19, "CreateTopics"),
+    DELETE_TOPICS(20, "DeleteTopics"),
+    DELETE_RECORDS(21, "DeleteRecords"),
+    INIT_PRODUCER_ID(22, "InitProducerId"),
     OFFSET_FOR_LEADER_EPOCH(23, "OffsetForLeaderEpoch", true),
-    ADD_PARTITIONS_TO_TXN(24, "AddPartitionsToTxn", false),
-    ADD_OFFSETS_TO_TXN(25, "AddOffsetsToTxn", false),
-    END_TXN(26, "EndTxn", false),
-    WRITE_TXN_MARKERS(27, "WriteTxnMarkers", true),
-    TXN_OFFSET_COMMIT(28, "TxnOffsetCommit", false),
-    DESCRIBE_ACLS(29, "DescribeAcls", false),
-    CREATE_ACLS(30, "CreateAcls", false),
-    DELETE_ACLS(31, "DeleteAcls", false),
-    DESCRIBE_CONFIGS(32, "DescribeConfigs", false),
-    ALTER_CONFIGS(33, "AlterConfigs", false);
+    ADD_PARTITIONS_TO_TXN(24, "AddPartitionsToTxn", false, RecordBatch.MAGIC_VALUE_V2),
+    ADD_OFFSETS_TO_TXN(25, "AddOffsetsToTxn", false, RecordBatch.MAGIC_VALUE_V2),
+    END_TXN(26, "EndTxn", false, RecordBatch.MAGIC_VALUE_V2),
+    WRITE_TXN_MARKERS(27, "WriteTxnMarkers", true, RecordBatch.MAGIC_VALUE_V2),
+    TXN_OFFSET_COMMIT(28, "TxnOffsetCommit", false, RecordBatch.MAGIC_VALUE_V2),
+    DESCRIBE_ACLS(29, "DescribeAcls"),
+    CREATE_ACLS(30, "CreateAcls"),
+    DELETE_ACLS(31, "DeleteAcls"),
+    DESCRIBE_CONFIGS(32, "DescribeConfigs"),
+    ALTER_CONFIGS(33, "AlterConfigs");
 
     private static final ApiKeys[] ID_TO_TYPE;
     private static final int MIN_API_KEY = 0;
@@ -93,12 +94,24 @@ public enum ApiKeys {
     /** indicates if this is a ClusterAction request used only by brokers */
     public final boolean clusterAction;
 
+    /** indicates the minimum required inter broker magic required to support the API */
+    public final byte minRequiredInterBrokerMagic;
+
+    ApiKeys(int id, String name) {
+        this(id, name, false);
+    }
+
     ApiKeys(int id, String name, boolean clusterAction) {
+        this(id, name, clusterAction, RecordBatch.MAGIC_VALUE_V0);
+    }
+
+    ApiKeys(int id, String name, boolean clusterAction, byte minRequiredInterBrokerMagic) {
         if (id < 0)
             throw new IllegalArgumentException("id must not be negative, id: " + id);
         this.id = (short) id;
         this.name = name;
         this.clusterAction = clusterAction;
+        this.minRequiredInterBrokerMagic = minRequiredInterBrokerMagic;
     }
 
     public static ApiKeys forId(int id) {

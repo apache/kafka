@@ -16,9 +16,6 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
-import java.util.ArrayDeque;
-import java.util.Deque;
-import java.util.Iterator;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.TopicPartition;
@@ -27,23 +24,24 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.record.AbstractRecords;
 import org.apache.kafka.common.record.CompressionRatioEstimator;
-import org.apache.kafka.common.record.CompressionType;
+import org.apache.kafka.common.record.MemoryRecords;
+import org.apache.kafka.common.record.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.MutableRecordBatch;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.RecordBatch;
-import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.MemoryRecordsBuilder;
-import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.requests.ProduceResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
+import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.apache.kafka.common.record.RecordBatch.NO_TIMESTAMP;
 
@@ -119,9 +117,9 @@ public final class ProducerBatch {
     }
 
     /**
-     +     * This method is only used by {@link #split(int)} when splitting a large batch to smaller ones.
-     +     * @return true if the record has been successfully appended, false otherwise.
-     +     */
+     * This method is only used by {@link #split(int)} when splitting a large batch to smaller ones.
+     * @return true if the record has been successfully appended, false otherwise.
+     */
     private boolean tryAppendForSplit(long timestamp, ByteBuffer key, ByteBuffer value, Header[] headers, Thunk thunk) {
         if (!recordsBuilder.hasRoomFor(timestamp, key, value)) {
             return false;
@@ -196,15 +194,13 @@ public final class ProducerBatch {
             assert thunkIter.hasNext();
             Thunk thunk = thunkIter.next();
             if (batch == null) {
-                batch = createBatchOffAccumulatorForRecord(this.topicPartition, this.recordsBuilder.compressionType(),
-                                                           record, splitBatchSize, this.createdMs);
+                batch = createBatchOffAccumulatorForRecord(record, splitBatchSize);
             }
 
             // A newly created batch can always host the first message.
             if (!batch.tryAppendForSplit(record.timestamp(), record.key(), record.value(), record.headers(), thunk)) {
                 batches.add(batch);
-                batch = createBatchOffAccumulatorForRecord(this.topicPartition, this.recordsBuilder.compressionType(),
-                                                           record, splitBatchSize, this.createdMs);
+                batch = createBatchOffAccumulatorForRecord(record, splitBatchSize);
                 batch.tryAppendForSplit(record.timestamp(), record.key(), record.value(), record.headers(), thunk);
             }
         }
@@ -217,30 +213,13 @@ public final class ProducerBatch {
         return batches;
     }
 
-    private ProducerBatch createBatchOffAccumulatorForRecord(TopicPartition tp,
-                                                             CompressionType compressionType,
-                                                             Record record,
-                                                             int batchSize,
-                                                             long createdMs) {
-        int initialSize = Math.max(Records.LOG_OVERHEAD + AbstractRecords.sizeInBytesUpperBound(magic(),
-                                                                                                record.key(),
-                                                                                                record.value(),
-                                                                                                record.headers()),
-                                   batchSize);
-        return createBatchOffAccumulator(tp, compressionType, initialSize, createdMs);
-    }
-
-    // package private for testing purpose.
-    static ProducerBatch createBatchOffAccumulator(TopicPartition tp,
-                                                   CompressionType compressionType,
-                                                   int batchSize,
-                                                   long createdMs) {
-        ByteBuffer buffer = ByteBuffer.allocate(batchSize);
-        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer,
-                                                             compressionType,
-                                                             TimestampType.CREATE_TIME,
-                                                             batchSize);
-        return new ProducerBatch(tp, builder, createdMs, true);
+    private ProducerBatch createBatchOffAccumulatorForRecord(Record record, int batchSize) {
+        int initialSize = Math.max(AbstractRecords.sizeInBytesUpperBound(magic(),
+                record.key(), record.value(), record.headers()), batchSize);
+        ByteBuffer buffer = ByteBuffer.allocate(initialSize);
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic(), recordsBuilder.compressionType(),
+                TimestampType.CREATE_TIME, 0L, recordsBuilder.isTransactional());
+        return new ProducerBatch(topicPartition, builder, this.createdMs, true);
     }
 
     /**

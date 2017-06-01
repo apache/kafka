@@ -38,14 +38,14 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.CompressionRatioEstimator;
 import org.apache.kafka.common.record.CompressionType;
+import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MutableRecordBatch;
 import org.apache.kafka.common.record.RecordBatch;
-import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.requests.InitProducerIdRequest;
-import org.apache.kafka.common.requests.ProduceRequest;
 import org.apache.kafka.common.requests.InitProducerIdResponse;
+import org.apache.kafka.common.requests.ProduceRequest;
 import org.apache.kafka.common.requests.ProduceResponse;
 import org.apache.kafka.common.requests.ResponseHeader;
 import org.apache.kafka.common.utils.MockTime;
@@ -61,6 +61,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
@@ -229,7 +230,7 @@ public class SenderTest {
                 time, true, new ApiVersions(), throttleTimeSensor);
 
         short apiVersionsResponseVersion = ApiKeys.API_VERSIONS.latestVersion();
-        ByteBuffer buffer = ApiVersionsResponse.createApiVersionsResponse(400).serialize(apiVersionsResponseVersion, new ResponseHeader(0));
+        ByteBuffer buffer = ApiVersionsResponse.createApiVersionsResponse(400, RecordBatch.CURRENT_MAGIC_VALUE).serialize(apiVersionsResponseVersion, new ResponseHeader(0));
         selector.delayedReceive(new DelayedReceive(node.idString(), new NetworkReceive(node.idString(), buffer)));
         while (!client.ready(node, time.milliseconds()))
             client.poll(1, time.milliseconds());
@@ -554,28 +555,18 @@ public class SenderTest {
         CompressionRatioEstimator.setEstimation(topic, CompressionType.GZIP, 0.2f);
         Metrics m = new Metrics();
         TransactionManager txnManager = new TransactionManager("testSplitBatchAndSend", 0);
-        txnManager.setProducerIdAndEpoch(new ProducerIdAndEpoch(123456L, (short) 0));
+        ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(123456L, (short) 0);
+        txnManager.setProducerIdAndEpoch(producerIdAndEpoch);
         accumulator = new RecordAccumulator(batchSize, 1024 * 1024, CompressionType.GZIP, 0L, 0L, m, time,
                                             new ApiVersions(), txnManager);
         try {
-            Sender sender = new Sender(client,
-                                       metadata,
-                                       this.accumulator,
-                                       true,
-                                       MAX_REQUEST_SIZE,
-                                       ACKS_ALL,
-                                       maxRetries,
-                                       m,
-                                       time,
-                                       REQUEST_TIMEOUT,
-                                       1000L,
-                                       txnManager,
-                                       new ApiVersions());
+            Sender sender = new Sender(client, metadata, this.accumulator, true, MAX_REQUEST_SIZE, ACKS_ALL, maxRetries,
+                    m, time, REQUEST_TIMEOUT, 1000L, txnManager, new ApiVersions());
             // Create a two broker cluster, with partition 0 on broker 0 and partition 1 on broker 1
             Cluster cluster1 = TestUtils.clusterWith(2, topic, 2);
             metadata.update(cluster1, Collections.<String>emptySet(), time.milliseconds());
             // Send the first message.
-            TopicPartition tp2 = new TopicPartition(topic, 1);
+            final TopicPartition tp2 = new TopicPartition(topic, 1);
             Future<RecordMetadata> f1 =
                     accumulator.append(tp2, 0L, "key1".getBytes(), new byte[batchSize / 2], null, null, MAX_BLOCK_TIMEOUT).future;
             Future<RecordMetadata> f2 =
@@ -607,7 +598,8 @@ public class SenderTest {
             assertTrue("Client ready status should be true", client.isReady(node, 0L));
 
             responseMap.put(tp2, new ProduceResponse.PartitionResponse(Errors.NONE, 0L, 0L));
-            client.respond(new ProduceResponse(responseMap));
+            client.respond(produceRequestMatcher(tp2, producerIdAndEpoch, 0, false), new ProduceResponse(responseMap));
+
             sender.run(time.milliseconds()); // receive
             assertTrue("The future should have been done.", f1.isDone());
             assertEquals("The sequence number should be 1", 1, txnManager.sequenceNumber(tp2).longValue());
@@ -621,7 +613,8 @@ public class SenderTest {
             assertTrue("Client ready status should be true", client.isReady(node, 0L));
 
             responseMap.put(tp2, new ProduceResponse.PartitionResponse(Errors.NONE, 1L, 0L));
-            client.respond(new ProduceResponse(responseMap));
+            client.respond(produceRequestMatcher(tp2, producerIdAndEpoch, 1, false), new ProduceResponse(responseMap));
+
             sender.run(time.milliseconds()); // receive
             assertTrue("The future should have been done.", f2.isDone());
             assertEquals("The sequence number should be 2", 2, txnManager.sequenceNumber(tp2).longValue());
@@ -633,6 +626,36 @@ public class SenderTest {
         } finally {
             m.close();
         }
+    }
+
+    private MockClient.RequestMatcher produceRequestMatcher(final TopicPartition tp,
+                                                            final ProducerIdAndEpoch producerIdAndEpoch,
+                                                            final int sequence,
+                                                            final boolean isTransactional) {
+        return new MockClient.RequestMatcher() {
+            @Override
+            public boolean matches(AbstractRequest body) {
+                if (!(body instanceof ProduceRequest))
+                    return false;
+
+                ProduceRequest request = (ProduceRequest) body;
+                Map<TopicPartition, MemoryRecords> recordsMap = request.partitionRecordsOrFail();
+                MemoryRecords records = recordsMap.get(tp);
+                if (records == null)
+                    return false;
+
+                List<MutableRecordBatch> batches = TestUtils.toList(records.batches());
+                if (batches.isEmpty() || batches.size() > 1)
+                    return false;
+
+                MutableRecordBatch batch = batches.get(0);
+                return batch.baseOffset() == 0L &&
+                        batch.baseSequence() == sequence &&
+                        batch.producerId() == producerIdAndEpoch.producerId &&
+                        batch.producerEpoch() == producerIdAndEpoch.epoch &&
+                        batch.isTransactional() == isTransactional;
+            }
+        };
     }
 
     private void completedWithError(Future<RecordMetadata> future, Errors error) throws Exception {
