@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.errors;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
 
 /**
  * Indicates that none of the specified {@link org.apache.kafka.streams.StreamsConfig#BOOTSTRAP_SERVERS_CONFIG brokers}
@@ -24,7 +23,6 @@ import org.apache.kafka.common.annotation.InterfaceStability;
  *
  * @see org.apache.kafka.streams.StreamsConfig
  */
-@InterfaceStability.Unstable
 public class BrokerNotFoundException extends StreamsException {
 
     private final static long serialVersionUID = 1L;

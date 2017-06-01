@@ -54,7 +54,7 @@ import org.apache.kafka.streams.processor.TopologyBuilder;
  * @see KStreamBuilder#stream(String...)
  */
 @SuppressWarnings("unused")
-@InterfaceStability.Unstable
+@InterfaceStability.Evolving
 public interface KStream<K, V> {
 
     /**
