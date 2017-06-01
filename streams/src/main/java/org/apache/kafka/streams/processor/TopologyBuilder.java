@@ -1532,6 +1532,10 @@ public class TopologyBuilder {
         return applicationId + "-" + topic;
     }
 
+    public SubscriptionUpdates subscriptionUpdates() {
+        return subscriptionUpdates;
+    }
+
     public synchronized Pattern sourceTopicPattern() {
         if (this.topicPattern == null) {
             final List<String> allSourceTopics = new ArrayList<>();
