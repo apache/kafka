@@ -276,9 +276,6 @@ public class TransactionalMessageCopier {
                 producer.commitTransaction();
                 remainingMessages.set(maxMessages - numMessagesProcessed.addAndGet(messagesInCurrentTransaction));
             }
-        } catch (Exception e) {
-            e.printStackTrace();
-            exitCode = 1;
         } finally {
             producer.close();
             synchronized (consumer) {
