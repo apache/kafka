@@ -77,14 +77,9 @@ object ConsoleConsumer extends Logging {
     try {
       process(conf.maxMessages, conf.formatter, consumer, System.out, conf.skipMessageOnError)
     } finally {
-      consumer.cleanup()
       conf.formatter.close()
       reportRecordCount()
-
-      // if we generated a random group id (as none specified explicitly) then avoid polluting zookeeper with persistent group data, this is a hack
-      if (!conf.groupIdPassed)
-        ZkUtils.maybeDeletePath(conf.options.valueOf(conf.zkConnectOpt), "/consumers/" + conf.consumerProps.get("group.id"))
-
+      shutDownConsumerAndRemoveItsConsumersNode(consumer, conf)
       shutdownLatch.countDown()
     }
   }
@@ -106,7 +101,7 @@ object ConsoleConsumer extends Logging {
   def addShutdownHook(consumer: BaseConsumer, conf: ConsumerConfig) {
     Runtime.getRuntime.addShutdownHook(new Thread() {
       override def run() {
-        consumer.stop()
+        shutDownConsumerAndRemoveItsConsumersNode(consumer, conf)
 
         shutdownLatch.await()
 
@@ -115,6 +110,13 @@ object ConsoleConsumer extends Logging {
         }
       }
     })
+  }
+
+  def shutDownConsumerAndRemoveItsConsumersNode(consumer: BaseConsumer, conf: ConsumerConfig): Unit = {
+    consumer.stop();
+    // if we generated a random group id (as none specified explicitly) then avoid polluting zookeeper with persistent group data, this is a hack
+    if (!conf.groupIdPassed)
+      ZkUtils.maybeDeletePath(conf.options.valueOf(conf.zkConnectOpt), "/consumers/" + conf.consumerProps.get("group.id"))
   }
 
   def process(maxMessages: Integer, formatter: MessageFormatter, consumer: BaseConsumer, output: PrintStream, skipMessageOnError: Boolean) {
