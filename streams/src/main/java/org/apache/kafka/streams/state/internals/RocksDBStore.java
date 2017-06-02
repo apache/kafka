@@ -355,11 +355,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
     @Override
     public synchronized void flush() {
-        if (db == null) {
-            return;
-        }
-        // flush RocksDB
-        flushInternal();
+        //NO-OP method since we don't flush on commits
     }
     /**
      * @throws ProcessorStateException if flushing failed because of any internal store exceptions
