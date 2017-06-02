@@ -45,9 +45,9 @@ import scala.collection.JavaConverters._
  *
  * Also see {@link org.apache.kafka.clients.admin.KafkaAdminClientTest} for a unit test of the admin client.
  */
-class KafkaAdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
+class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
 
-  import KafkaAdminClientIntegrationTest._
+  import AdminClientIntegrationTest._
 
   @Rule
   def globalTimeout = Timeout.millis(120000)
@@ -181,7 +181,72 @@ class KafkaAdminClientIntegrationTest extends KafkaServerTestHarness with Loggin
   @Test
   def testDescribeAndAlterConfigs(): Unit = {
     client = AdminClient.create(createConfig)
-    checkValidDescribeAlterConfigs(zkUtils, servers, client)
+
+    // Create topics
+    val topic1 = "describe-alter-configs-topic-1"
+    val topicResource1 = new ConfigResource(ConfigResource.Type.TOPIC, topic1)
+    val topicConfig1 = new Properties
+    topicConfig1.setProperty(LogConfig.MaxMessageBytesProp, "500000")
+    topicConfig1.setProperty(LogConfig.RetentionMsProp, "60000000")
+    TestUtils.createTopic(zkUtils, topic1, 1, 1, servers, topicConfig1)
+
+    val topic2 = "describe-alter-configs-topic-2"
+    val topicResource2 = new ConfigResource(ConfigResource.Type.TOPIC, topic2)
+    TestUtils.createTopic(zkUtils, topic2, 1, 1, servers, new Properties)
+
+    // Describe topics and broker
+    val brokerResource1 = new ConfigResource(ConfigResource.Type.BROKER, servers(1).config.brokerId.toString)
+    val brokerResource2 = new ConfigResource(ConfigResource.Type.BROKER, servers(2).config.brokerId.toString)
+    val configResources = Seq(topicResource1, topicResource2, brokerResource1, brokerResource2)
+    var describeResult = client.describeConfigs(configResources.asJava)
+    var configs = describeResult.all.get
+
+    assertEquals(4, configs.size)
+
+    val maxMessageBytes1 = configs.get(topicResource1).get(LogConfig.MaxMessageBytesProp)
+    assertEquals(LogConfig.MaxMessageBytesProp, maxMessageBytes1.name)
+    assertEquals(topicConfig1.get(LogConfig.MaxMessageBytesProp), maxMessageBytes1.value)
+    assertFalse(maxMessageBytes1.isDefault)
+    assertFalse(maxMessageBytes1.isSensitive)
+    assertFalse(maxMessageBytes1.isReadOnly)
+
+    assertEquals(topicConfig1.get(LogConfig.RetentionMsProp),
+      configs.get(topicResource1).get(LogConfig.RetentionMsProp).value)
+
+    val maxMessageBytes2 = configs.get(topicResource2).get(LogConfig.MaxMessageBytesProp)
+    assertEquals(Defaults.MessageMaxBytes.toString, maxMessageBytes2.value)
+    assertEquals(LogConfig.MaxMessageBytesProp, maxMessageBytes2.name)
+    assertTrue(maxMessageBytes2.isDefault)
+    assertFalse(maxMessageBytes2.isSensitive)
+    assertFalse(maxMessageBytes2.isReadOnly)
+
+    assertEquals(servers(1).config.values.size, configs.get(brokerResource1).entries.size)
+    assertEquals(servers(1).config.brokerId.toString, configs.get(brokerResource1).get(KafkaConfig.BrokerIdProp).value)
+    val listenerSecurityProtocolMap = configs.get(brokerResource1).get(KafkaConfig.ListenerSecurityProtocolMapProp)
+    assertEquals(servers(1).config.getString(KafkaConfig.ListenerSecurityProtocolMapProp), listenerSecurityProtocolMap.value)
+    assertEquals(KafkaConfig.ListenerSecurityProtocolMapProp, listenerSecurityProtocolMap.name)
+    assertFalse(listenerSecurityProtocolMap.isDefault)
+    assertFalse(listenerSecurityProtocolMap.isSensitive)
+    assertTrue(listenerSecurityProtocolMap.isReadOnly)
+    val truststorePassword = configs.get(brokerResource1).get(KafkaConfig.SslTruststorePasswordProp)
+    assertEquals(KafkaConfig.SslTruststorePasswordProp, truststorePassword.name)
+    assertNull(truststorePassword.value)
+    assertFalse(truststorePassword.isDefault)
+    assertTrue(truststorePassword.isSensitive)
+    assertTrue(truststorePassword.isReadOnly)
+    val compressionType = configs.get(brokerResource1).get(KafkaConfig.CompressionTypeProp)
+    assertEquals(servers(1).config.compressionType.toString, compressionType.value)
+    assertEquals(KafkaConfig.CompressionTypeProp, compressionType.name)
+    assertTrue(compressionType.isDefault)
+    assertFalse(compressionType.isSensitive)
+    assertTrue(compressionType.isReadOnly)
+
+    assertEquals(servers(2).config.values.size, configs.get(brokerResource2).entries.size)
+    assertEquals(servers(2).config.brokerId.toString, configs.get(brokerResource2).get(KafkaConfig.BrokerIdProp).value)
+    assertEquals(servers(2).config.logCleanerThreads.toString,
+      configs.get(brokerResource2).get(KafkaConfig.LogCleanerThreadsProp).value)
+
+    checkValidAlterConfigs(zkUtils, servers, client, topicResource1, topicResource2)
   }
 
   @Test
@@ -281,75 +346,12 @@ class KafkaAdminClientIntegrationTest extends KafkaServerTestHarness with Loggin
   }
 }
 
-object KafkaAdminClientIntegrationTest {
+object AdminClientIntegrationTest {
 
   import org.scalatest.Assertions._
 
-  def checkValidDescribeAlterConfigs(zkUtils: ZkUtils, servers: Seq[KafkaServer], client: AdminClient): Unit = {
-    // Create topics
-    val topic1 = "describe-alter-configs-topic-1"
-    val topicResource1 = new ConfigResource(ConfigResource.Type.TOPIC, topic1)
-    val topicConfig1 = new Properties
-    topicConfig1.setProperty(LogConfig.MaxMessageBytesProp, "500000")
-    topicConfig1.setProperty(LogConfig.RetentionMsProp, "60000000")
-    TestUtils.createTopic(zkUtils, topic1, 1, 1, servers, topicConfig1)
-
-    val topic2 = "describe-alter-configs-topic-2"
-    val topicResource2 = new ConfigResource(ConfigResource.Type.TOPIC, topic2)
-    TestUtils.createTopic(zkUtils, topic2, 1, 1, servers, new Properties)
-
-    // Describe topics and broker
-    val brokerResource1 = new ConfigResource(ConfigResource.Type.BROKER, servers(1).config.brokerId.toString)
-    val brokerResource2 = new ConfigResource(ConfigResource.Type.BROKER, servers(2).config.brokerId.toString)
-    val configResources = Seq(topicResource1, topicResource2, brokerResource1, brokerResource2)
-    var describeResult = client.describeConfigs(configResources.asJava)
-    var configs = describeResult.all.get
-
-    assertEquals(4, configs.size)
-
-    val maxMessageBytes1 = configs.get(topicResource1).get(LogConfig.MaxMessageBytesProp)
-    assertEquals(LogConfig.MaxMessageBytesProp, maxMessageBytes1.name)
-    assertEquals(topicConfig1.get(LogConfig.MaxMessageBytesProp), maxMessageBytes1.value)
-    assertFalse(maxMessageBytes1.isDefault)
-    assertFalse(maxMessageBytes1.isSensitive)
-    assertFalse(maxMessageBytes1.isReadOnly)
-
-    assertEquals(topicConfig1.get(LogConfig.RetentionMsProp),
-      configs.get(topicResource1).get(LogConfig.RetentionMsProp).value)
-
-    val maxMessageBytes2 = configs.get(topicResource2).get(LogConfig.MaxMessageBytesProp)
-    assertEquals(Defaults.MessageMaxBytes.toString, maxMessageBytes2.value)
-    assertEquals(LogConfig.MaxMessageBytesProp, maxMessageBytes2.name)
-    assertTrue(maxMessageBytes2.isDefault)
-    assertFalse(maxMessageBytes2.isSensitive)
-    assertFalse(maxMessageBytes2.isReadOnly)
-
-    assertEquals(servers(1).config.values.size, configs.get(brokerResource1).entries.size)
-    assertEquals(servers(1).config.brokerId.toString, configs.get(brokerResource1).get(KafkaConfig.BrokerIdProp).value)
-    val listenerSecurityProtocolMap = configs.get(brokerResource1).get(KafkaConfig.ListenerSecurityProtocolMapProp)
-    assertEquals(servers(1).config.getString(KafkaConfig.ListenerSecurityProtocolMapProp), listenerSecurityProtocolMap.value)
-    assertEquals(KafkaConfig.ListenerSecurityProtocolMapProp, listenerSecurityProtocolMap.name)
-    assertFalse(listenerSecurityProtocolMap.isDefault)
-    assertFalse(listenerSecurityProtocolMap.isSensitive)
-    assertTrue(listenerSecurityProtocolMap.isReadOnly)
-    val truststorePassword = configs.get(brokerResource1).get(KafkaConfig.SslTruststorePasswordProp)
-    assertEquals(KafkaConfig.SslTruststorePasswordProp, truststorePassword.name)
-    assertNull(truststorePassword.value)
-    assertFalse(truststorePassword.isDefault)
-    assertTrue(truststorePassword.isSensitive)
-    assertTrue(truststorePassword.isReadOnly)
-    val compressionType = configs.get(brokerResource1).get(KafkaConfig.CompressionTypeProp)
-    assertEquals(servers(1).config.compressionType.toString, compressionType.value)
-    assertEquals(KafkaConfig.CompressionTypeProp, compressionType.name)
-    assertTrue(compressionType.isDefault)
-    assertFalse(compressionType.isSensitive)
-    assertTrue(compressionType.isReadOnly)
-
-    assertEquals(servers(2).config.values.size, configs.get(brokerResource2).entries.size)
-    assertEquals(servers(2).config.brokerId.toString, configs.get(brokerResource2).get(KafkaConfig.BrokerIdProp).value)
-    assertEquals(servers(2).config.logCleanerThreads.toString,
-      configs.get(brokerResource2).get(KafkaConfig.LogCleanerThreadsProp).value)
-
+  def checkValidAlterConfigs(zkUtils: ZkUtils, servers: Seq[KafkaServer], client: AdminClient,
+                             topicResource1: ConfigResource, topicResource2: ConfigResource): Unit = {
     // Alter topics
     var topicConfigEntries1 = Seq(
       new ConfigEntry(LogConfig.FlushMsProp, "1000")
@@ -369,8 +371,8 @@ object KafkaAdminClientIntegrationTest {
     alterResult.all.get
 
     // Verify that topics were updated correctly
-    describeResult = client.describeConfigs(Seq(topicResource1, topicResource2).asJava)
-    configs = describeResult.all.get
+    var describeResult = client.describeConfigs(Seq(topicResource1, topicResource2).asJava)
+    var configs = describeResult.all.get
 
     assertEquals(2, configs.size)
 
@@ -412,7 +414,6 @@ object KafkaAdminClientIntegrationTest {
   }
 
   def checkInvalidAlterConfigs(zkUtils: ZkUtils, servers: Seq[KafkaServer], client: AdminClient): Unit = {
-
     // Create topics
     val topic1 = "invalid-alter-configs-topic-1"
     val topicResource1 = new ConfigResource(ConfigResource.Type.TOPIC, topic1)
@@ -456,7 +457,7 @@ object KafkaAdminClientIntegrationTest {
 
     assertEquals("snappy", configs.get(topicResource2).get(LogConfig.CompressionTypeProp).value)
 
-    assertEquals(Defaults.CompressionType.toString, configs.get(brokerResource).get(LogConfig.CompressionTypeProp).value)
+    assertEquals(Defaults.CompressionType.toString, configs.get(brokerResource).get(KafkaConfig.CompressionTypeProp).value)
 
     // Alter configs with validateOnly = true: first and third are invalid, second is valid
     topicConfigEntries2 = Seq(new ConfigEntry(LogConfig.CompressionTypeProp, "gzip")).asJava
@@ -484,7 +485,7 @@ object KafkaAdminClientIntegrationTest {
 
     assertEquals("snappy", configs.get(topicResource2).get(LogConfig.CompressionTypeProp).value)
 
-    assertEquals(Defaults.CompressionType.toString, configs.get(brokerResource).get(LogConfig.CompressionTypeProp).value)
+    assertEquals(Defaults.CompressionType.toString, configs.get(brokerResource).get(KafkaConfig.CompressionTypeProp).value)
   }
 
 }
