@@ -234,7 +234,9 @@ public class TransactionManager {
     }
 
     public synchronized boolean ensurePartitionAdded(TopicPartition tp) {
-        if (isInTransaction() || hasError()) {
+        if (hasFatalError())
+            return false;
+        if (isInTransaction() || hasAbortableError()) {
             // We should enter this branch in an error state because if this partition is already in the transaction,
             // there is a chance that the corresponding batch is in retry. So we must let it completely flush.
             if (!(transactionContainsPartition(tp) || isPartitionPending(tp))) {
@@ -464,6 +466,14 @@ public class TransactionManager {
             log.debug("Transition from state {} to {}", logPrefix, currentState, target);
 
         currentState = target;
+    }
+
+    private boolean hasFatalError() {
+        return currentState == State.FATAL_ERROR;
+    }
+
+    private boolean hasAbortableError() {
+        return currentState == State.ABORTABLE_ERROR;
     }
 
     private void ensureTransactional() {
