@@ -23,9 +23,9 @@ import java.util.concurrent.{ExecutionException, TimeUnit}
 import org.apache.kafka.common.utils.{Time, Utils}
 import kafka.integration.KafkaServerTestHarness
 import kafka.log.LogConfig
-import kafka.server.{Defaults, KafkaConfig}
+import kafka.server.{Defaults, KafkaConfig, KafkaServer}
 import org.apache.kafka.clients.admin._
-import kafka.utils.{Logging, TestUtils}
+import kafka.utils.{Logging, TestUtils, ZkUtils}
 import org.apache.kafka.clients.admin.NewTopic
 import org.apache.kafka.common.KafkaFuture
 import org.apache.kafka.common.acl.{AccessControlEntry, AclBinding, AclBindingFilter, AclOperation, AclPermissionType}
@@ -46,6 +46,8 @@ import scala.collection.JavaConverters._
  * Also see {@link org.apache.kafka.clients.admin.KafkaAdminClientTest} for a unit test of the admin client.
  */
 class KafkaAdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
+
+  import KafkaAdminClientIntegrationTest._
 
   @Rule
   def globalTimeout = Timeout.millis(120000)
@@ -179,7 +181,111 @@ class KafkaAdminClientIntegrationTest extends KafkaServerTestHarness with Loggin
   @Test
   def testDescribeAndAlterConfigs(): Unit = {
     client = AdminClient.create(createConfig)
+    checkValidDescribeAlterConfigs(zkUtils, servers, client)
+  }
 
+  @Test
+  def testInvalidAlterConfigs(): Unit = {
+    client = AdminClient.create(createConfig)
+    checkInvalidAlterConfigs(zkUtils, servers, client)
+  }
+
+  val ACL1 = new AclBinding(new Resource(ResourceType.TOPIC, "mytopic3"),
+      new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.DESCRIBE, AclPermissionType.ALLOW))
+
+  /**
+   * Test that ACL operations are not possible when the authorizer is disabled.
+   * Also see {@link kafka.api.SaslSslAdminClientIntegrationTest} for tests of ACL operations
+   * when the authorizer is enabled.
+   */
+  @Test
+  def testAclOperations(): Unit = {
+    client = AdminClient.create(createConfig())
+    assertFutureExceptionTypeEquals(client.describeAcls(AclBindingFilter.ANY).all(), classOf[SecurityDisabledException])
+    assertFutureExceptionTypeEquals(client.createAcls(Collections.singleton(ACL1)).all(),
+        classOf[SecurityDisabledException])
+    assertFutureExceptionTypeEquals(client.deleteAcls(Collections.singleton(ACL1.toFilter())).all(),
+      classOf[SecurityDisabledException])
+    client.close()
+  }
+
+  /**
+    * Test closing the AdminClient with a generous timeout.  Calls in progress should be completed,
+    * since they can be done within the timeout.  New calls should receive timeouts.
+    */
+  @Test
+  def testDelayedClose(): Unit = {
+    client = AdminClient.create(createConfig())
+    val topics = Seq("mytopic", "mytopic2")
+    val newTopics = topics.map(new NewTopic(_, 1, 1))
+    val future = client.createTopics(newTopics.asJava, new CreateTopicsOptions().validateOnly(true)).all()
+    client.close(2, TimeUnit.HOURS)
+    val future2 = client.createTopics(newTopics.asJava, new CreateTopicsOptions().validateOnly(true)).all()
+    assertFutureExceptionTypeEquals(future2, classOf[TimeoutException])
+    future.get
+    client.close(30, TimeUnit.MINUTES) // multiple close-with-timeout should have no effect
+  }
+
+  /**
+    * Test closing the AdminClient with a timeout of 0, when there are calls with extremely long
+    * timeouts in progress.  The calls should be aborted after the hard shutdown timeout elapses.
+    */
+  @Test
+  def testForceClose(): Unit = {
+    val config = createConfig()
+    config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:22")
+    client = AdminClient.create(config)
+    // Because the bootstrap servers are set up incorrectly, this call will not complete, but must be
+    // cancelled by the close operation.
+    val future = client.createTopics(Seq("mytopic", "mytopic2").map(new NewTopic(_, 1, 1)).asJava,
+      new CreateTopicsOptions().timeoutMs(900000)).all()
+    client.close(0, TimeUnit.MILLISECONDS)
+    assertFutureExceptionTypeEquals(future, classOf[TimeoutException])
+  }
+
+  /**
+    * Check that a call with a timeout does not complete before the minimum timeout has elapsed,
+    * even when the default request timeout is shorter.
+    */
+  @Test
+  def testMinimumRequestTimeouts(): Unit = {
+    val config = createConfig()
+    config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:22")
+    config.put(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "0")
+    client = AdminClient.create(config)
+    val startTimeMs = Time.SYSTEM.milliseconds()
+    val future = client.createTopics(Seq("mytopic", "mytopic2").map(new NewTopic(_, 1, 1)).asJava,
+      new CreateTopicsOptions().timeoutMs(2)).all()
+    assertFutureExceptionTypeEquals(future, classOf[TimeoutException])
+    val endTimeMs = Time.SYSTEM.milliseconds()
+    assertTrue("Expected the timeout to take at least one millisecond.", endTimeMs > startTimeMs);
+    client.close()
+  }
+
+  override def generateConfigs() = {
+    val cfgs = TestUtils.createBrokerConfigs(brokerCount, zkConnect, interBrokerSecurityProtocol = Some(securityProtocol),
+      trustStoreFile = trustStoreFile, saslProperties = serverSaslProperties)
+    cfgs.foreach { config =>
+      config.setProperty(KafkaConfig.ListenersProp, s"${listenerName.value}://localhost:${TestUtils.RandomPort}")
+      config.remove(KafkaConfig.InterBrokerSecurityProtocolProp)
+      config.setProperty(KafkaConfig.InterBrokerListenerNameProp, listenerName.value)
+      config.setProperty(KafkaConfig.ListenerSecurityProtocolMapProp, s"${listenerName.value}:${securityProtocol.name}")
+      config.setProperty(KafkaConfig.DeleteTopicEnableProp, "true")
+      // We set this in order to test that we don't expose sensitive data via describe configs. This will already be
+      // set for subclasses with security enabled and we don't want to overwrite it.
+      if (!config.containsKey(KafkaConfig.SslTruststorePasswordProp))
+        config.setProperty(KafkaConfig.SslTruststorePasswordProp, "some.invalid.pass")
+    }
+    cfgs.foreach(_.putAll(serverConfig))
+    cfgs.map(KafkaConfig.fromProps)
+  }
+}
+
+object KafkaAdminClientIntegrationTest {
+
+  import org.scalatest.Assertions._
+
+  def checkValidDescribeAlterConfigs(zkUtils: ZkUtils, servers: Seq[KafkaServer], client: AdminClient): Unit = {
     // Create topics
     val topic1 = "describe-alter-configs-topic-1"
     val topicResource1 = new ConfigResource(ConfigResource.Type.TOPIC, topic1)
@@ -305,9 +411,7 @@ class KafkaAdminClientIntegrationTest extends KafkaServerTestHarness with Loggin
     assertEquals("0.9", configs.get(topicResource2).get(LogConfig.MinCleanableDirtyRatioProp).value)
   }
 
-  @Test
-  def testInvalidAlterConfigs(): Unit = {
-    client = AdminClient.create(createConfig)
+  def checkInvalidAlterConfigs(zkUtils: ZkUtils, servers: Seq[KafkaServer], client: AdminClient): Unit = {
 
     // Create topics
     val topic1 = "invalid-alter-configs-topic-1"
@@ -383,93 +487,4 @@ class KafkaAdminClientIntegrationTest extends KafkaServerTestHarness with Loggin
     assertEquals(Defaults.CompressionType.toString, configs.get(brokerResource).get(LogConfig.CompressionTypeProp).value)
   }
 
-  val ACL1 = new AclBinding(new Resource(ResourceType.TOPIC, "mytopic3"),
-      new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.DESCRIBE, AclPermissionType.ALLOW));
-
-  /**
-   * Test that ACL operations are not possible when the authorizer is disabled.
-   * Also see {@link kafka.api.SaslSslAdminClientIntegrationTest} for tests of ACL operations
-   * when the authorizer is enabled.
-   */
-  @Test
-  def testAclOperations(): Unit = {
-    client = AdminClient.create(createConfig())
-    assertFutureExceptionTypeEquals(client.describeAcls(AclBindingFilter.ANY).all(), classOf[SecurityDisabledException])
-    assertFutureExceptionTypeEquals(client.createAcls(Collections.singleton(ACL1)).all(),
-        classOf[SecurityDisabledException])
-    assertFutureExceptionTypeEquals(client.deleteAcls(Collections.singleton(ACL1.toFilter())).all(),
-      classOf[SecurityDisabledException])
-    client.close()
-  }
-
-  /**
-    * Test closing the AdminClient with a generous timeout.  Calls in progress should be completed,
-    * since they can be done within the timeout.  New calls should receive timeouts.
-    */
-  @Test
-  def testDelayedClose(): Unit = {
-    client = AdminClient.create(createConfig())
-    val topics = Seq("mytopic", "mytopic2")
-    val newTopics = topics.map(new NewTopic(_, 1, 1))
-    val future = client.createTopics(newTopics.asJava, new CreateTopicsOptions().validateOnly(true)).all()
-    client.close(2, TimeUnit.HOURS)
-    val future2 = client.createTopics(newTopics.asJava, new CreateTopicsOptions().validateOnly(true)).all()
-    assertFutureExceptionTypeEquals(future2, classOf[TimeoutException])
-    future.get
-    client.close(30, TimeUnit.MINUTES) // multiple close-with-timeout should have no effect
-  }
-
-  /**
-    * Test closing the AdminClient with a timeout of 0, when there are calls with extremely long
-    * timeouts in progress.  The calls should be aborted after the hard shutdown timeout elapses.
-    */
-  @Test
-  def testForceClose(): Unit = {
-    val config = createConfig()
-    config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:22")
-    client = AdminClient.create(config)
-    // Because the bootstrap servers are set up incorrectly, this call will not complete, but must be
-    // cancelled by the close operation.
-    val future = client.createTopics(Seq("mytopic", "mytopic2").map(new NewTopic(_, 1, 1)).asJava,
-      new CreateTopicsOptions().timeoutMs(900000)).all()
-    client.close(0, TimeUnit.MILLISECONDS)
-    assertFutureExceptionTypeEquals(future, classOf[TimeoutException])
-  }
-
-  /**
-    * Check that a call with a timeout does not complete before the minimum timeout has elapsed,
-    * even when the default request timeout is shorter.
-    */
-  @Test
-  def testMinimumRequestTimeouts(): Unit = {
-    val config = createConfig()
-    config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:22")
-    config.put(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "0")
-    client = AdminClient.create(config)
-    val startTimeMs = Time.SYSTEM.milliseconds()
-    val future = client.createTopics(Seq("mytopic", "mytopic2").map(new NewTopic(_, 1, 1)).asJava,
-      new CreateTopicsOptions().timeoutMs(2)).all()
-    assertFutureExceptionTypeEquals(future, classOf[TimeoutException])
-    val endTimeMs = Time.SYSTEM.milliseconds()
-    assertTrue("Expected the timeout to take at least one millisecond.", endTimeMs > startTimeMs);
-    client.close()
-  }
-
-  override def generateConfigs() = {
-    val cfgs = TestUtils.createBrokerConfigs(brokerCount, zkConnect, interBrokerSecurityProtocol = Some(securityProtocol),
-      trustStoreFile = trustStoreFile, saslProperties = serverSaslProperties)
-    cfgs.foreach { config =>
-      config.setProperty(KafkaConfig.ListenersProp, s"${listenerName.value}://localhost:${TestUtils.RandomPort}")
-      config.remove(KafkaConfig.InterBrokerSecurityProtocolProp)
-      config.setProperty(KafkaConfig.InterBrokerListenerNameProp, listenerName.value)
-      config.setProperty(KafkaConfig.ListenerSecurityProtocolMapProp, s"${listenerName.value}:${securityProtocol.name}")
-      config.setProperty(KafkaConfig.DeleteTopicEnableProp, "true")
-      // We set this in order to test that we don't expose sensitive data via describe configs. This will already be
-      // set for subclasses with security enabled and we don't want to overwrite it.
-      if (!config.containsKey(KafkaConfig.SslTruststorePasswordProp))
-        config.setProperty(KafkaConfig.SslTruststorePasswordProp, "some.invalid.pass")
-    }
-    cfgs.foreach(_.putAll(serverConfig))
-    cfgs.map(KafkaConfig.fromProps)
-  }
 }
