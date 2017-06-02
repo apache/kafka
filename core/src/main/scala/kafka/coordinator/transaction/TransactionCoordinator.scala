@@ -167,12 +167,11 @@ class TransactionCoordinator(brokerId: Int,
           } else {
             def sendPidResponseCallback(error: Errors): Unit = {
               if (error == Errors.NONE) {
-                info(s"Init'd transactionalId $transactionalId with producerId ${newMetadata.producerId} and producer " +
+                info(s"Initialized transactionalId $transactionalId with producerId ${newMetadata.producerId} and producer " +
                   s"epoch ${newMetadata.producerEpoch} on partition " +
                   s"${Topic.TRANSACTION_STATE_TOPIC_NAME}-${txnManager.partitionFor(transactionalId)}")
                 responseCallback(initTransactionMetadata(newMetadata))
-              }
-              else {
+              } else {
                 responseCallback(initTransactionError(error))
               }
             }
