@@ -166,9 +166,11 @@ public class TransactionManagerTest {
 
         prepareProduceResponse(Errors.NONE, pid, epoch);
         assertFalse(transactionManager.transactionContainsPartition(tp0));
+        assertFalse(transactionManager.ensurePartitionAdded(tp0));
         sender.run(time.milliseconds());  // send addPartitions.
         // Check that only addPartitions was sent.
         assertTrue(transactionManager.transactionContainsPartition(tp0));
+        assertTrue(transactionManager.ensurePartitionAdded(tp0));
         assertFalse(responseFuture.isDone());
 
         sender.run(time.milliseconds());  // send produce request.
@@ -903,6 +905,9 @@ public class TransactionManagerTest {
         accumulator.append(tp1, time.milliseconds(), "key".getBytes(),
                 "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT);
 
+        assertFalse(transactionManager.ensurePartitionAdded(tp0));
+        assertFalse(transactionManager.ensurePartitionAdded(tp1));
+
         Node node1 = new Node(0, "localhost", 1111);
         Node node2 = new Node(1, "localhost", 1112);
         PartitionInfo part1 = new PartitionInfo(topic, 0, node1, null, null);
@@ -922,6 +927,43 @@ public class TransactionManagerTest {
         assertTrue(drainedBatches.containsKey(node2.id()));
         assertTrue(drainedBatches.get(node2.id()).isEmpty());
         assertFalse(transactionManager.hasError());
+    }
+
+    @Test
+    public void testAllowDrainInAbortableErrorState() throws InterruptedException {
+        final long pid = 13131L;
+        final short epoch = 1;
+        doInitTransactions(pid, epoch);
+        transactionManager.beginTransaction();
+        transactionManager.maybeAddPartitionToTransaction(tp1);
+        prepareAddPartitionsToTxn(tp1, Errors.NONE);
+        sender.run(time.milliseconds());  // Send AddPartitions, tp1 should be in the transaction now.
+
+        assertTrue(transactionManager.transactionContainsPartition(tp1));
+
+        transactionManager.maybeAddPartitionToTransaction(tp0);
+        prepareAddPartitionsToTxn(tp0, Errors.TOPIC_AUTHORIZATION_FAILED);
+        sender.run(time.milliseconds());  // Send AddPartitions, should be in abortable state.
+
+        assertTrue(transactionManager.hasAbortableError());
+        assertTrue(transactionManager.ensurePartitionAdded(tp1));
+
+        // Try to drain a message destined for tp1, it should get drained.
+        Node node1 = new Node(1, "localhost", 1112);
+        PartitionInfo part1 = new PartitionInfo(topic, 1, node1, null, null);
+        Cluster cluster = new Cluster(null, Arrays.asList(node1), Arrays.asList(part1),
+                Collections.<String>emptySet(), Collections.<String>emptySet());
+        accumulator.append(tp1, time.milliseconds(), "key".getBytes(),
+                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT);
+        Map<Integer, List<ProducerBatch>> drainedBatches = accumulator.drain(cluster, Collections.singleton(node1),
+                Integer.MAX_VALUE,
+                time.milliseconds());
+
+        // We should drain the appended record since we are in abortable state and the partition has already been
+        // added to the transaction.
+        assertTrue(drainedBatches.containsKey(node1.id()));
+        assertEquals(1, drainedBatches.get(node1.id()).size());
+        assertTrue(transactionManager.hasAbortableError());
     }
 
     @Test
@@ -946,7 +988,7 @@ public class TransactionManagerTest {
         // We shouldn't drain batches which haven't been added to the transaction yet.
         assertTrue(drainedBatches.containsKey(node1.id()));
         assertTrue(drainedBatches.get(node1.id()).isEmpty());
-        assertTrue(transactionManager.hasError());
+        assertTrue(transactionManager.hasFatalError());
     }
 
     private void verifyAddPartitionsFailsWithPartitionLevelError(final Errors error) throws InterruptedException {

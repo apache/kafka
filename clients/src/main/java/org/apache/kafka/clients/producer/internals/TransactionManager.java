@@ -239,12 +239,12 @@ public class TransactionManager {
         if (isInTransaction() || hasAbortableError()) {
             // We should enter this branch in an error state because if this partition is already in the transaction,
             // there is a chance that the corresponding batch is in retry. So we must let it completely flush.
-            if (!(transactionContainsPartition(tp) || isPartitionPending(tp))) {
+            if (!(partitionsInTransaction.contains(tp) || isPartitionPending(tp))) {
                 transitionToFatalError(new IllegalStateException("Attempted to dequeue a record batch to send " +
                         "for partition " + tp + ", which would never be added to the transaction."));
                 return false;
             }
-            return transactionContainsPartition(tp);
+            return partitionsInTransaction.contains(tp);
         }
         return true;
     }
@@ -423,6 +423,16 @@ public class TransactionManager {
         return inFlightRequestCorrelationId != NO_INFLIGHT_REQUEST_CORRELATION_ID;
     }
 
+    // visible for testing.
+    boolean hasFatalError() {
+        return currentState == State.FATAL_ERROR;
+    }
+
+    // visible for testing.
+    boolean hasAbortableError() {
+        return currentState == State.ABORTABLE_ERROR;
+    }
+
     // visible for testing
     synchronized boolean transactionContainsPartition(TopicPartition topicPartition) {
         return isInTransaction() && partitionsInTransaction.contains(topicPartition);
@@ -466,14 +476,6 @@ public class TransactionManager {
             log.debug("Transition from state {} to {}", logPrefix, currentState, target);
 
         currentState = target;
-    }
-
-    private boolean hasFatalError() {
-        return currentState == State.FATAL_ERROR;
-    }
-
-    private boolean hasAbortableError() {
-        return currentState == State.ABORTABLE_ERROR;
     }
 
     private void ensureTransactional() {
