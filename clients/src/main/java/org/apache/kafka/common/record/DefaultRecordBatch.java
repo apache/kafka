@@ -289,11 +289,6 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
     }
 
     @Override
-    public Iterator<Record> unassignedOffsetsIterator() {
-        return iterator();
-    }
-
-    @Override
     public CloseableIterator<Record> streamingIterator(BufferSupplier bufferSupplier) {
         if (isCompressed())
             return compressedIterator(bufferSupplier);

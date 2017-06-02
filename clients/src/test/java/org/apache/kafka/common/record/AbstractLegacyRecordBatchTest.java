@@ -59,7 +59,7 @@ public class AbstractLegacyRecordBatchTest {
     }
 
     @Test
-    public void testIterateCompressedRecordWithWrapperOffsetZeroV0() {
+    public void testIterateCompressedRecordWithWrapperOffsetZero() {
         for (byte magic : Arrays.asList(RecordBatch.MAGIC_VALUE_V0, RecordBatch.MAGIC_VALUE_V1)) {
             SimpleRecord[] simpleRecords = new SimpleRecord[] {
                     new SimpleRecord(1L, "a".getBytes(), "1".getBytes()),
@@ -74,11 +74,8 @@ public class AbstractLegacyRecordBatchTest {
             batch.setLastOffset(0L);
 
             long offset = 0L;
-            Iterator<Record> iterator = batch.unassignedOffsetsIterator();
-            while (iterator.hasNext()) {
-                Record record = iterator.next();
+            for (Record record : batch)
                 assertEquals(offset++, record.offset());
-            }
         }
     }
 
@@ -94,7 +91,7 @@ public class AbstractLegacyRecordBatchTest {
                 CompressionType.GZIP, TimestampType.CREATE_TIME, simpleRecords);
 
         ByteBufferLegacyRecordBatch batch = new ByteBufferLegacyRecordBatch(records.buffer());
-        batch.setLastOffset(0L);
+        batch.setLastOffset(1L);
 
         batch.iterator();
     }

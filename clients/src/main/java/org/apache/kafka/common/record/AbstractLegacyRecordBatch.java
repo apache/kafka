@@ -224,17 +224,12 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
      */
     @Override
     public Iterator<Record> iterator() {
-        return iterator(BufferSupplier.NO_CACHING, true);
+        return iterator(BufferSupplier.NO_CACHING);
     }
 
-    @Override
-    public Iterator<Record> unassignedOffsetsIterator() {
-        return iterator(BufferSupplier.NO_CACHING, false);
-    }
-
-    private CloseableIterator<Record> iterator(BufferSupplier bufferSupplier, boolean hasAssignedOffsets) {
+    private CloseableIterator<Record> iterator(BufferSupplier bufferSupplier) {
         if (isCompressed())
-            return new DeepRecordsIterator(this, false, Integer.MAX_VALUE, bufferSupplier, hasAssignedOffsets);
+            return new DeepRecordsIterator(this, false, Integer.MAX_VALUE, bufferSupplier);
 
         return new CloseableIterator<Record>() {
             private boolean hasNext = true;
@@ -265,7 +260,7 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
     @Override
     public CloseableIterator<Record> streamingIterator(BufferSupplier bufferSupplier) {
         // the older message format versions do not support streaming, so we return the normal iterator
-        return iterator(bufferSupplier, true);
+        return iterator(bufferSupplier);
     }
 
     static void writeHeader(ByteBuffer buffer, long offset, int size) {
@@ -320,8 +315,7 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
         private DeepRecordsIterator(AbstractLegacyRecordBatch wrapperEntry,
                                     boolean ensureMatchingMagic,
                                     int maxMessageSize,
-                                    BufferSupplier bufferSupplier,
-                                    boolean hasOffsetsAssigned) {
+                                    BufferSupplier bufferSupplier) {
             LegacyRecord wrapperRecord = wrapperEntry.outerRecord();
             this.wrapperMagic = wrapperRecord.magic();
             if (wrapperMagic != RecordBatch.MAGIC_VALUE_V0 && wrapperMagic != RecordBatch.MAGIC_VALUE_V1)
@@ -370,7 +364,7 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
                 if (innerEntries.isEmpty())
                     throw new InvalidRecordException("Found invalid compressed record set with no inner records");
 
-                if (!hasOffsetsAssigned) {
+                if (lastOffsetFromWrapper == 0) {
                     // If offsets are not assigned, then we do not use the offset from the wrapper record because
                     // the value could be set differently depending on the client. For example, older clients
                     // always used offset 0 in the wrapper record, while post-0.10.1 clients used the last offset

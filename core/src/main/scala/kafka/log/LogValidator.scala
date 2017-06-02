@@ -126,7 +126,7 @@ private[kafka] object LogValidator extends Logging {
     for (batch <- records.batches.asScala) {
       validateBatch(batch, isFromClient, toMagicValue)
 
-      for (record <- batch.unassignedOffsetsIterator.asScala) {
+      for (record <- batch.asScala) {
         validateRecord(batch, record, now, timestampType, timestampDiffMaxMs, compactedTopic)
         builder.appendWithOffset(offsetCounter.getAndIncrement(), record)
       }
@@ -160,7 +160,7 @@ private[kafka] object LogValidator extends Logging {
       var maxBatchTimestamp = RecordBatch.NO_TIMESTAMP
       var offsetOfMaxBatchTimestamp = -1L
 
-      for (record <- batch.unassignedOffsetsIterator.asScala) {
+      for (record <- batch.asScala) {
         validateRecord(batch, record, now, timestampType, timestampDiffMaxMs, compactedTopic)
         val offset = offsetCounter.getAndIncrement()
         if (batch.magic > RecordBatch.MAGIC_VALUE_V0 && record.timestamp > maxBatchTimestamp) {
@@ -235,7 +235,7 @@ private[kafka] object LogValidator extends Logging {
         if (sourceCodec == NoCompressionCodec && batch.isControlBatch)
           inPlaceAssignment = true
 
-        for (record <- batch.unassignedOffsetsIterator.asScala) {
+        for (record <- batch.asScala) {
           validateRecord(batch, record, now, timestampType, timestampDiffMaxMs, compactedTopic)
           if (sourceCodec != NoCompressionCodec && record.isCompressed)
             throw new InvalidRecordException("Compressed outer record should not have an inner record with a " +
