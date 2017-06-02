@@ -60,7 +60,6 @@ class AddPartitionsToTxnRequestTest extends BaseRequestTest {
     assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, response.errors().get(nonExistentTopic))
   }
 
-
   private def sendAddPartitionsRequest(leaderId: Int, request: AddPartitionsToTxnRequest) : AddPartitionsToTxnResponse = {
     val response = connectAndSend(request, ApiKeys.ADD_PARTITIONS_TO_TXN, destination = brokerSocketServer(leaderId))
     AddPartitionsToTxnResponse.parse(response, request.version)
@@ -73,5 +72,4 @@ class AddPartitionsToTxnRequestTest extends BaseRequestTest {
     val builder = new AddPartitionsToTxnRequest.Builder(transactionalId, producerId, producerEpoch, partitions)
     builder.build()
   }
-
 }
