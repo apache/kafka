@@ -33,4 +33,9 @@ class ProducerIdAndEpoch {
     public boolean isValid() {
         return NO_PRODUCER_ID < producerId;
     }
+
+    @Override
+    public String toString() {
+        return "(producerId=" + producerId + ", epoch='" + epoch + ")";
+    }
 }

@@ -22,6 +22,7 @@ import java.nio.ByteBuffer
 
 import joptsimple.OptionParser
 import kafka.coordinator.group.{GroupMetadataKey, GroupMetadataManager, OffsetKey}
+import kafka.coordinator.transaction.TransactionLog
 import kafka.log._
 import kafka.serializer.Decoder
 import kafka.utils._
@@ -60,8 +61,10 @@ object DumpLogSegments {
                                .withOptionalArg()
                                .ofType(classOf[java.lang.String])
                                .defaultsTo("kafka.serializer.StringDecoder")
-    val offsetsOpt = parser.accepts("offsets-decoder", "if set, log data will be parsed as offset data from __consumer_offsets topic.")
-
+    val offsetsOpt = parser.accepts("offsets-decoder", "if set, log data will be parsed as offset data from the " +
+      "__consumer_offsets topic.")
+    val transactionLogOpt = parser.accepts("transaction-log-decoder", "if set, log data will be parsed as " +
+      "transaction metadata from the __transaction_state topic.")
 
     if(args.length == 0)
       CommandLineUtils.printUsageAndDie(parser, "Parse a log file and dump its contents to the console, useful for debugging a seemingly corrupt log segment.")
@@ -70,7 +73,11 @@ object DumpLogSegments {
 
     CommandLineUtils.checkRequiredArgs(parser, options, filesOpt)
 
-    val printDataLog = options.has(printOpt) || options.has(offsetsOpt) || options.has(valueDecoderOpt) || options.has(keyDecoderOpt)
+    val printDataLog = options.has(printOpt) ||
+      options.has(offsetsOpt) ||
+      options.has(transactionLogOpt) ||
+      options.has(valueDecoderOpt) ||
+      options.has(keyDecoderOpt)
     val verifyOnly = options.has(verifyOpt)
     val indexSanityOnly = options.has(indexSanityOpt)
 
@@ -80,6 +87,8 @@ object DumpLogSegments {
 
     val messageParser = if (options.has(offsetsOpt)) {
       new OffsetsMessageParser
+    } else if (options.has(transactionLogOpt)) {
+      new TransactionLogMessageParser
     } else {
       val valueDecoder: Decoder[_] = CoreUtils.createObject[Decoder[_]](options.valueOf(valueDecoderOpt), new VerifiableProperties)
       val keyDecoder: Decoder[_] = CoreUtils.createObject[Decoder[_]](options.valueOf(keyDecoderOpt), new VerifiableProperties)
@@ -263,6 +272,24 @@ object DumpLogSegments {
     }
   }
 
+  private class TransactionLogMessageParser extends MessageParser[String, String] {
+
+    override def parse(record: Record): (Option[String], Option[String]) = {
+      val txnKey = TransactionLog.readTxnRecordKey(record.key)
+      val txnMetadata = TransactionLog.readTxnRecordValue(txnKey.transactionalId, record.value)
+
+      val keyString = s"transactionalId=${txnKey.transactionalId}"
+      val valueString = s"producerId:${txnMetadata.producerId}," +
+        s"producerEpoch:${txnMetadata.producerEpoch}," +
+        s"state=${txnMetadata.state}," +
+        s"partitions=${txnMetadata.topicPartitions}," +
+        s"lastUpdateTimestamp=${txnMetadata.txnLastUpdateTimestamp}"
+
+      (Some(keyString), Some(valueString))
+    }
+
+  }
+
   private class OffsetsMessageParser extends MessageParser[String, String] {
     private def hex(bytes: Array[Byte]): String = {
       if (bytes.isEmpty)
@@ -356,7 +383,8 @@ object DumpLogSegments {
             " compresscodec: " + batch.compressionType)
 
           if (batch.magic >= RecordBatch.MAGIC_VALUE_V2) {
-            print(" crc: " + batch.checksum + " sequence: " + record.sequence +
+            print(" producerId: " + batch.producerId + " sequence: " + record.sequence +
+              " isTransactional: " + batch.isTransactional +
               " headerKeys: " + record.headers.map(_.key).mkString("[", ",", "]"))
           } else {
             print(" crc: " + record.checksumOrNull)

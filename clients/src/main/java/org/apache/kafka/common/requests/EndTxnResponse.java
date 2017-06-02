@@ -66,4 +66,12 @@ public class EndTxnResponse extends AbstractResponse {
     public static EndTxnResponse parse(ByteBuffer buffer, short version) {
         return new EndTxnResponse(ApiKeys.END_TXN.parseResponse(version, buffer));
     }
+
+    @Override
+    public String toString() {
+        return "EndTxnResponse(" +
+                "error=" + error +
+                ", throttleTimeMs=" + throttleTimeMs +
+                ')';
+    }
 }
