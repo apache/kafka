@@ -1606,9 +1606,9 @@ class KafkaApis(val requestChannel: RequestChannel,
         || unauthorizedForWriteRequestInfo.nonEmpty
         || internalTopics.nonEmpty) {
 
-        // Any failed partition check causes the entire request to fail. We only send back error responses
-        // for the partitions that failed to avoid needing to send an ambiguous error code for the partitions
-        // which succeeded.
+        // Any failed partition check causes the entire request to fail. We send the appropriate error codes for the
+        // partitions which failed, and an 'OPERATION_NOT_ATTEMPTED' error code for the partitions which succeeded
+        // the authorization check to indicate that they were not added to the transaction.
         val partitionErrors = (unauthorizedForWriteRequestInfo.map(_ -> Errors.TOPIC_AUTHORIZATION_FAILED) ++
           nonExistingOrUnauthorizedForDescribeTopics.map(_ -> Errors.UNKNOWN_TOPIC_OR_PARTITION) ++
           internalTopics.map(_ ->Errors.TOPIC_AUTHORIZATION_FAILED) ++
