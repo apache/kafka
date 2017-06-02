@@ -19,6 +19,7 @@ package kafka.common
 import kafka.utils.ShutdownableThread
 import org.apache.kafka.clients.{ClientResponse, NetworkClient, RequestCompletionHandler}
 import org.apache.kafka.common.Node
+import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.requests.AbstractRequest
 import org.apache.kafka.common.utils.Time
 
@@ -40,32 +41,39 @@ class InterBrokerSendThread(name: String,
     val now = time.milliseconds()
     var pollTimeout = Long.MaxValue
 
-    val requestsToSend: Iterable[RequestAndCompletionHandler] = requestGenerator()
+    try {
+      val requestsToSend: Iterable[RequestAndCompletionHandler] = requestGenerator()
 
-    for (request: RequestAndCompletionHandler <- requestsToSend) {
-      val destination = Integer.toString(request.destination.id())
-      val completionHandler = request.handler
-      val clientRequest = networkClient.newClientRequest(destination,
-        request.request,
-        now,
-        true,
-        completionHandler)
+      for (request: RequestAndCompletionHandler <- requestsToSend) {
+        val destination = Integer.toString(request.destination.id())
+        val completionHandler = request.handler
+        val clientRequest = networkClient.newClientRequest(destination,
+          request.request,
+          now,
+          true,
+          completionHandler)
 
-      if (networkClient.ready(request.destination, now)) {
-        networkClient.send(clientRequest, now)
-      } else {
-        val disConnectedResponse: ClientResponse = new ClientResponse(clientRequest.makeHeader(request.request.desiredOrLatestVersion()),
-          completionHandler, destination,
-          now /* createdTimeMs */, now /* receivedTimeMs */, true /* disconnected */, null /* versionMismatch */, null /* responseBody */)
+        if (networkClient.ready(request.destination, now)) {
+          networkClient.send(clientRequest, now)
+        } else {
+          val disConnectedResponse: ClientResponse = new ClientResponse(clientRequest.makeHeader(request.request.desiredOrLatestVersion()),
+            completionHandler, destination,
+            now /* createdTimeMs */ , now /* receivedTimeMs */ , true /* disconnected */ , null /* versionMismatch */ , null /* responseBody */)
 
-        // poll timeout would be the minimum of connection delay if there are any dest yet to be reached;
-        // otherwise it is infinity
-        pollTimeout = Math.min(pollTimeout, networkClient.connectionDelay(request.destination, now))
+          // poll timeout would be the minimum of connection delay if there are any dest yet to be reached;
+          // otherwise it is infinity
+          pollTimeout = Math.min(pollTimeout, networkClient.connectionDelay(request.destination, now))
 
-        completionHandler.onComplete(disConnectedResponse)
+          completionHandler.onComplete(disConnectedResponse)
+        }
       }
+      networkClient.poll(pollTimeout, now)
+    } catch {
+      case e: FatalExitError => throw e
+      case t: Throwable =>
+        error(s"unhandled exception caught in InterBrokerSendThread", t)
+        throw new FatalExitError()
     }
-    networkClient.poll(pollTimeout, now)
   }
 }
 
