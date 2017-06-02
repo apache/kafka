@@ -28,6 +28,7 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.RetriableException;
@@ -480,7 +481,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 return future.value();
 
             if (!future.isRetriable())
-                throw future.exception();
+                throw new ApiException("Fetching committed offsets failed.", future.exception());
 
             time.sleep(retryBackoffMs);
         }
@@ -611,7 +612,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             }
 
             if (!future.isRetriable())
-                throw future.exception();
+                throw new ApiException("Committing offsets failed.", future.exception());
 
             time.sleep(retryBackoffMs);
 

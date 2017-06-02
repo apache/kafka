@@ -22,6 +22,8 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.utils.Utils;
+import org.hamcrest.Description;
+import org.hamcrest.TypeSafeMatcher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -323,4 +325,36 @@ public class TestUtils {
         return list;
     }
 
+    public static class ExceptionCauseMatcher extends TypeSafeMatcher<Throwable> {
+
+        private final Class<? extends Throwable> type;
+        private final String expectedMessage;
+
+        public ExceptionCauseMatcher(Class<? extends Throwable> type) {
+            this(type, null);
+        }
+
+        public ExceptionCauseMatcher(Class<? extends Throwable> type, String expectedMessage) {
+            this.type = type;
+            this.expectedMessage = expectedMessage;
+        }
+
+        @Override
+        protected boolean matchesSafely(Throwable item) {
+            return item.getClass().isAssignableFrom(type) &&
+                    (expectedMessage == null || item.getMessage().contains(expectedMessage));
+        }
+
+        @Override
+        public void describeTo(Description description) {
+            description.appendText("Expects type '")
+                    .appendValue(type)
+                    .appendText("'");
+            if (expectedMessage != null) {
+                description.appendText(" and a message '")
+                        .appendValue(expectedMessage)
+                        .appendText("'");
+            }
+        }
+    }
 }

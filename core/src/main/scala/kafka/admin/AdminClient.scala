@@ -26,7 +26,7 @@ import org.apache.kafka.clients._
 import org.apache.kafka.clients.consumer.internals.{ConsumerNetworkClient, ConsumerProtocol, RequestFuture, RequestFutureAdapter}
 import org.apache.kafka.common.config.ConfigDef.{Importance, Type}
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef}
-import org.apache.kafka.common.errors.TimeoutException
+import org.apache.kafka.common.errors.{ApiException, TimeoutException}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.Selector
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
@@ -88,7 +88,7 @@ class AdminClient(val time: Time,
     if (future.succeeded())
       future.value().responseBody()
     else
-      throw future.exception()
+      throw new ApiException("API call to broker failed.", future.exception())
   }
 
   private def sendAnyNode(api: ApiKeys, request: AbstractRequest.Builder[_ <: AbstractRequest]): AbstractResponse = {

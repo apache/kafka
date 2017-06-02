@@ -29,6 +29,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.InvalidMetadataException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
@@ -314,7 +315,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             client.poll(future, remaining);
 
             if (future.failed() && !future.isRetriable())
-                throw future.exception();
+                throw new ApiException("Fetching metadata failed.", future.exception());
 
             if (future.succeeded()) {
                 MetadataResponse response = (MetadataResponse) future.value().responseBody();
@@ -459,7 +460,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                 return future.value();
 
             if (!future.isRetriable())
-                throw future.exception();
+                throw new ApiException("Fetching offsets failed.", future.exception());
 
             long elapsed = time.milliseconds() - startMs;
             remaining = timeout - elapsed;

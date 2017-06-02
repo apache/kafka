@@ -36,7 +36,7 @@ import java.util.concurrent.atomic.AtomicReference;
  *         ClientResponse response = future.value();
  *         // Handle response
  *     } else {
- *         throw future.exception();
+ *         throw new ApiException("api call failed.", future.exception());
  *     }
  * </pre>
  *

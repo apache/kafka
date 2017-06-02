@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -30,9 +30,10 @@ import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, ConsumerReco
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.{KafkaException, TopicPartition}
-import org.apache.kafka.common.errors.{GroupAuthorizationException, TimeoutException, TopicAuthorizationException}
+import org.apache.kafka.common.errors.{ApiException, GroupAuthorizationException, TimeoutException, TopicAuthorizationException}
 import org.junit.Assert._
-import org.junit.{After, Before, Test}
+import org.junit.{After, Before, Rule, Test}
+import org.junit.rules.ExpectedException
 
 import scala.collection.JavaConverters._
 
@@ -55,6 +56,9 @@ import scala.collection.JavaConverters._
   * would end up with ZooKeeperTestHarness twice.
   */
 abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
+  val exception = ExpectedException.none();
+  @Rule def expectedExceptionDef = exception
+
   override val producerCount = 1
   override val consumerCount = 2
   override val serverCount = 3
@@ -172,7 +176,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
                                 saslProperties = this.clientSaslProperties,
                                 props = Some(producerConfig))
   }
-  
+
   /**
     * Closes MiniKDC last when tearing down.
     */
@@ -233,7 +237,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
         assertEquals(Set(topic).asJava, e.unauthorizedTopics())
     }
   }
-  
+
    /**
     * Tests that a consumer fails to consume messages without the appropriate
     * ACL set.
@@ -245,7 +249,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     // the exception is expected when the consumer attempts to lookup offsets
     consumeRecords(this.consumers.head)
   }
-  
+
   @Test(expected = classOf[TimeoutException])
   def testNoConsumeWithoutDescribeAclViaSubscribe {
     noConsumeWithoutDescribeAclSetup
@@ -253,7 +257,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     // this should timeout since the consumer will not be able to fetch any metadata for the topic
     consumeRecords(this.consumers.head, timeout = 3000)
   }
-  
+
   private def noConsumeWithoutDescribeAclSetup {
     AclCommand.main(produceAclArgs)
     AclCommand.main(groupAclArgs)
@@ -270,7 +274,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
       TestUtils.waitAndVerifyAcls(GroupReadAcl, s.apis.authorizer.get, groupResource)
     }
   }
- 
+
   /**
     * Tests that a consumer fails to consume messages without the appropriate
     * ACL set.
@@ -288,7 +292,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
         assertEquals(Set(topic).asJava, e.unauthorizedTopics())
     }
   }
-  
+
   @Test
   def testNoConsumeWithDescribeAclViaSubscribe {
     noConsumeWithDescribeAclSetup
@@ -302,7 +306,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
         assertEquals(Set(topic).asJava, e.unauthorizedTopics())
     }
   }
-  
+
   private def noConsumeWithDescribeAclSetup {
     AclCommand.main(produceAclArgs)
     AclCommand.main(groupAclArgs)
@@ -319,19 +323,17 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     */
   @Test
   def testNoGroupAcl {
+    exception.expect(classOf[ApiException])
+    exception.expectCause(new ExceptionCauseMatcher(
+                classOf[GroupAuthorizationException], Some(s"Not authorized to access group: $group")))
+
     AclCommand.main(produceAclArgs)
     servers.foreach { s =>
       TestUtils.waitAndVerifyAcls(TopicWriteAcl ++ TopicDescribeAcl, s.apis.authorizer.get, topicResource)
     }
     sendRecords(numRecords, tp)
     consumers.head.assign(List(tp).asJava)
-    try {
-      consumeRecords(this.consumers.head)
-      fail("Topic authorization exception expected")
-    } catch {
-      case e: GroupAuthorizationException =>
-        assertEquals(group, e.groupId())
-    }
+    consumeRecords(this.consumers.head)
   }
 
   private def sendRecords(numRecords: Int, tp: TopicPartition) {

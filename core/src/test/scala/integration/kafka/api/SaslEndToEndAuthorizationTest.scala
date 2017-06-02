@@ -21,7 +21,7 @@ import java.util.Properties
 import kafka.utils.TestUtils
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.kafka.common.config.SaslConfigs
-import org.apache.kafka.common.errors.GroupAuthorizationException
+import org.apache.kafka.common.errors.{ApiException, GroupAuthorizationException}
 import org.junit.{Before, Test}
 
 import scala.collection.immutable.List
@@ -31,10 +31,10 @@ abstract class SaslEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
   override protected def securityProtocol = SecurityProtocol.SASL_SSL
   override protected val serverSaslProperties = Some(kafkaServerSaslProperties(kafkaServerSaslMechanisms, kafkaClientSaslMechanism))
   override protected val clientSaslProperties = Some(kafkaClientSaslProperties(kafkaClientSaslMechanism))
-  
+
   protected def kafkaClientSaslMechanism: String
   protected def kafkaServerSaslMechanisms: List[String]
-  
+
   @Before
   override def setUp {
     // create static config including client login context with credentials for JaasTestUtils 'client2'
@@ -49,11 +49,15 @@ abstract class SaslEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
 
   /**
     * Test with two consumers, each with different valid SASL credentials.
-    * The first consumer succeeds because it is allowed by the ACL, 
+    * The first consumer succeeds because it is allowed by the ACL,
     * the second one connects ok, but fails to consume messages due to the ACL.
     */
   @Test(timeout = 15000)
   def testTwoConsumersWithDifferentSaslCredentials {
+    exception.expect(classOf[ApiException])
+    exception.expectCause(new ExceptionCauseMatcher(
+                classOf[GroupAuthorizationException], Some(s"Not authorized to access group: $group")))
+
     setAclsAndProduce()
     val consumer1 = consumers.head
 
@@ -73,12 +77,6 @@ abstract class SaslEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
     consumer2.assign(List(tp).asJava)
 
     consumeRecords(consumer1, numRecords)
-
-    try {
-      consumeRecords(consumer2)
-      fail("Expected exception as consumer2 has no access to group")
-    } catch {
-      case _: GroupAuthorizationException => //expected
-    }
+    consumeRecords(consumer2)
   }
 }

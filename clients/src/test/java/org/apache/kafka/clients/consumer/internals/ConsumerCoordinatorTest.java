@@ -55,7 +55,9 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.ExpectedException;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
@@ -84,6 +86,8 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 public class ConsumerCoordinatorTest {
+    @Rule
+    public ExpectedException exception = ExpectedException.none();
 
     private String topic1 = "test1";
     private String topic2 = "test2";
@@ -155,14 +159,21 @@ public class ConsumerCoordinatorTest {
         assertTrue(future.succeeded());
     }
 
-    @Test(expected = GroupAuthorizationException.class)
+    @Test
     public void testGroupDescribeUnauthorized() {
+        exception.expect(ApiException.class);
+        exception.expectCause(new TestUtils.ExceptionCauseMatcher(
+                GroupAuthorizationException.class, "Not authorized to access group: " + groupId));
         client.prepareResponse(groupCoordinatorResponse(node, Errors.GROUP_AUTHORIZATION_FAILED));
         coordinator.ensureCoordinatorReady();
     }
 
-    @Test(expected = GroupAuthorizationException.class)
+    @Test
     public void testGroupReadUnauthorized() {
+        exception.expect(ApiException.class);
+        exception.expectCause(new TestUtils.ExceptionCauseMatcher(
+                GroupAuthorizationException.class, "Not authorized to access group: " + groupId));
+
         subscriptions.subscribe(singleton(topic1), rebalanceListener);
 
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
@@ -1221,8 +1232,12 @@ public class ConsumerCoordinatorTest {
         coordinator.commitOffsetsSync(Collections.singletonMap(t1p, new OffsetAndMetadata(100L, "metadata")), Long.MAX_VALUE);
     }
 
-    @Test(expected = OffsetMetadataTooLarge.class)
+    @Test
     public void testCommitOffsetMetadataTooLarge() {
+        exception.expect(ApiException.class);
+        exception.expectCause(new TestUtils.ExceptionCauseMatcher(
+                OffsetMetadataTooLarge.class, "The metadata field of the offset request was too large."));
+
         // since offset metadata is provided by the user, we have to propagate the exception so they can handle it
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         coordinator.ensureCoordinatorReady();
@@ -1231,8 +1246,11 @@ public class ConsumerCoordinatorTest {
         coordinator.commitOffsetsSync(Collections.singletonMap(t1p, new OffsetAndMetadata(100L, "metadata")), Long.MAX_VALUE);
     }
 
-    @Test(expected = CommitFailedException.class)
+    @Test
     public void testCommitOffsetIllegalGeneration() {
+        exception.expect(ApiException.class);
+        exception.expectCause(new TestUtils.ExceptionCauseMatcher(CommitFailedException.class));
+
         // we cannot retry if a rebalance occurs before the commit completed
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         coordinator.ensureCoordinatorReady();
@@ -1241,8 +1259,11 @@ public class ConsumerCoordinatorTest {
         coordinator.commitOffsetsSync(Collections.singletonMap(t1p, new OffsetAndMetadata(100L, "metadata")), Long.MAX_VALUE);
     }
 
-    @Test(expected = CommitFailedException.class)
+    @Test
     public void testCommitOffsetUnknownMemberId() {
+        exception.expect(ApiException.class);
+        exception.expectCause(new TestUtils.ExceptionCauseMatcher(CommitFailedException.class));
+
         // we cannot retry if a rebalance occurs before the commit completed
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         coordinator.ensureCoordinatorReady();
@@ -1251,8 +1272,11 @@ public class ConsumerCoordinatorTest {
         coordinator.commitOffsetsSync(Collections.singletonMap(t1p, new OffsetAndMetadata(100L, "metadata")), Long.MAX_VALUE);
     }
 
-    @Test(expected = CommitFailedException.class)
+    @Test
     public void testCommitOffsetRebalanceInProgress() {
+        exception.expect(ApiException.class);
+        exception.expectCause(new TestUtils.ExceptionCauseMatcher(CommitFailedException.class));
+
         // we cannot retry if a rebalance occurs before the commit completed
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         coordinator.ensureCoordinatorReady();
@@ -1271,8 +1295,11 @@ public class ConsumerCoordinatorTest {
         coordinator.commitOffsetsSync(Collections.singletonMap(t1p, new OffsetAndMetadata(100L)), Long.MAX_VALUE);
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void testCommitSyncNegativeOffset() {
+        exception.expect(ApiException.class);
+        exception.expectCause(new TestUtils.ExceptionCauseMatcher(IllegalArgumentException.class, "Invalid offset: -1"));
+
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         coordinator.commitOffsetsSync(Collections.singletonMap(t1p, new OffsetAndMetadata(-1L)), Long.MAX_VALUE);
     }
@@ -1316,18 +1343,17 @@ public class ConsumerCoordinatorTest {
 
     @Test
     public void testRefreshOffsetsGroupNotAuthorized() {
+        exception.expect(ApiException.class);
+        exception.expectCause(new TestUtils.ExceptionCauseMatcher(
+                GroupAuthorizationException.class, "Not authorized to access group: " + groupId));
+
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         coordinator.ensureCoordinatorReady();
 
         subscriptions.assignFromUser(singleton(t1p));
         subscriptions.needRefreshCommits();
         client.prepareResponse(offsetFetchResponse(Errors.GROUP_AUTHORIZATION_FAILED));
-        try {
-            coordinator.refreshCommittedOffsetsIfNeeded();
-            fail("Expected group authorization error");
-        } catch (GroupAuthorizationException e) {
-            assertEquals(groupId, e.groupId());
-        }
+        coordinator.refreshCommittedOffsetsIfNeeded();
     }
 
     @Test(expected = KafkaException.class)
