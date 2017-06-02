@@ -237,12 +237,12 @@ public class TransactionManager {
         if (isInTransaction() || hasError()) {
             // We should enter this branch in an error state because if this partition is already in the transaction,
             // there is a chance that the corresponding batch is in retry. So we must let it completely flush.
-            if (!wouldTransactionContainPartition(tp)) {
+            if (!(transactionContainsPartition(tp) || isPartitionPending(tp))) {
                 transitionToFatalError(new IllegalStateException("Attempted to dequeue a record batch to send " +
                         "for partition " + tp + ", which would never be added to the transaction."));
                 return false;
             }
-            return partitionsInTransaction.contains(tp);
+            return transactionContainsPartition(tp);
         }
         return true;
     }
@@ -436,10 +436,8 @@ public class TransactionManager {
         return isTransactional() && currentState == State.READY;
     }
 
-    private synchronized boolean wouldTransactionContainPartition(TopicPartition tp) {
-        return isInTransaction() && (partitionsInTransaction.contains(tp)
-                || pendingPartitionsInTransaction.contains(tp)
-                || newPartitionsInTransaction.contains(tp));
+    private synchronized boolean isPartitionPending(TopicPartition tp) {
+        return isInTransaction() && (pendingPartitionsInTransaction.contains(tp) || newPartitionsInTransaction.contains(tp));
     }
 
     private void transitionTo(State target) {
@@ -460,7 +458,7 @@ public class TransactionManager {
         }
 
         if (lastError != null)
-            log.error("{}Transition from state {} to error state {}", logPrefix , currentState,
+            log.error("{}Transition from state {} to error state {}", logPrefix, currentState,
                     target, lastError);
         else
             log.debug("Transition from state {} to {}", logPrefix, currentState, target);
