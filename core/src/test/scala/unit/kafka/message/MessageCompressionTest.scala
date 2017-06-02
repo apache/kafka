@@ -28,11 +28,11 @@ class MessageCompressionTest extends JUnitSuite {
   @Test
   def testSimpleCompressDecompress() {
     val codecs = mutable.ArrayBuffer[CompressionCodec](GZIPCompressionCodec)
-    if(isSnappyAvailable)
+    if (isSnappyAvailable)
       codecs += SnappyCompressionCodec
-    if(isLZ4Available)
+    if (isLZ4Available)
       codecs += LZ4CompressionCodec
-    for(codec <- codecs)
+    for (codec <- codecs)
       testSimpleCompressDecompress(codec)
   }
 
@@ -48,10 +48,10 @@ class MessageCompressionTest extends JUnitSuite {
 
     testCompressSize(GZIPCompressionCodec, messages, 396)
 
-    if(isSnappyAvailable)
-      testCompressSize(SnappyCompressionCodec, messages, 1063)
+    if (isSnappyAvailable)
+      testCompressSize(SnappyCompressionCodec, messages, 502)
 
-    if(isLZ4Available)
+    if (isLZ4Available)
       testCompressSize(LZ4CompressionCodec, messages, 387)
   }
 
