@@ -25,7 +25,8 @@ import kafka.server.{DelayedOperationPurgatory, KafkaConfig, MetadataCache}
 import kafka.utils.Logging
 import org.apache.kafka.clients._
 import org.apache.kafka.common.{Node, TopicPartition}
-import org.apache.kafka.common.metrics.Metrics
+import org.apache.kafka.common.metrics.{Metrics, Sensor}
+import org.apache.kafka.common.metrics.stats.Total
 import org.apache.kafka.common.network._
 import org.apache.kafka.common.requests.{TransactionResult, WriteTxnMarkersRequest}
 import org.apache.kafka.common.security.JaasContext
@@ -82,7 +83,8 @@ object TransactionMarkerChannelManager {
       networkClient,
       txnStateManager,
       txnMarkerPurgatory,
-      time
+      time,
+      metrics
     )
   }
 
@@ -125,11 +127,18 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
                                       networkClient: NetworkClient,
                                       txnStateManager: TransactionStateManager,
                                       txnMarkerPurgatory: DelayedOperationPurgatory[DelayedTxnMarker],
-                                      time: Time) extends Logging {
+                                      time: Time,
+                                      metrics:Metrics) extends Logging {
+
+  private def addQueueLengthMetric(sensor: Sensor, namePrefix: String): Unit = {
+    sensor.add(metrics.metricName(s"$namePrefix-queue-length", "transaction-marker-channel-metrics"), new Total())
+  }
 
   private val markersQueuePerBroker: concurrent.Map[Int, TxnMarkerQueue] = concurrent.TrieMap.empty[Int, TxnMarkerQueue]
 
   private val markersQueueForUnknownBroker = new TxnMarkerQueue(Node.noNode)
+  private val unknownBrokerQueueSensor = metrics.sensor("unknown-broker-queue")
+  addQueueLengthMetric(unknownBrokerQueueSensor, "unknown-broker")
 
   private val interBrokerListenerName: ListenerName = config.interBrokerListenerName
 
@@ -138,6 +147,9 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
   }
 
   private val txnLogAppendRetryQueue = new LinkedBlockingQueue[TxnLogAppend]()
+
+  private val txnLogAppendRetryQueueSensor = metrics.sensor("txn-log-append-retry-queue")
+  addQueueLengthMetric(txnLogAppendRetryQueueSensor, "txn-log-append-retry")
 
   def start(): Unit = {
     txnMarkerSendThread.start()
@@ -179,7 +191,10 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
     val txnLogAppendRetries: java.util.List[TxnLogAppend] = new util.ArrayList[TxnLogAppend]()
     txnLogAppendRetryQueue.drainTo(txnLogAppendRetries)
     debug(s"retrying: ${txnLogAppendRetries.size} transaction log appends")
-    txnLogAppendRetries.asScala.foreach { txnLogAppend => tryAppendToLog(txnLogAppend) }
+    txnLogAppendRetries.asScala.foreach { txnLogAppend =>
+      txnLogAppendRetryQueueSensor.record(-1)
+      tryAppendToLog(txnLogAppend)
+    }
   }
 
 
@@ -191,6 +206,7 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
     }
 
     for (txnIdAndMarker: TxnIdAndMarkerEntry <- txnIdAndMarkerEntries.asScala) {
+      unknownBrokerQueueSensor.record(-1)
       val transactionalId = txnIdAndMarker.txnId
       val producerId = txnIdAndMarker.txnMarkerEntry.producerId
       val producerEpoch = txnIdAndMarker.txnMarkerEntry.producerEpoch
@@ -273,6 +289,7 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
 
         case Errors.COORDINATOR_NOT_AVAILABLE =>
           warn(s"Failed updating transaction state for ${txnLogAppend.transactionalId} when appending to transaction log due to ${error.exceptionName}. retrying")
+          txnLogAppendRetryQueueSensor.record(1)
           // enqueue for retry
           txnLogAppendRetryQueue.add(txnLogAppend)
 
@@ -298,6 +315,7 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
           val txnIdAndMarker = TxnIdAndMarkerEntry(transactionalId, marker)
 
           if (brokerNode == Node.noNode) {
+            unknownBrokerQueueSensor.record(1)
             // if the leader of the partition is known but node not available, put it into an unknown broker queue
             // and let the sender thread to look for its broker and migrate them later
             markersQueueForUnknownBroker.addMarkers(txnTopicPartition, txnIdAndMarker)
