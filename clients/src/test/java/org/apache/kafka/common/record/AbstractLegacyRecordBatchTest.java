@@ -21,7 +21,6 @@ import org.apache.kafka.common.utils.Utils;
 import org.junit.Test;
 
 import java.util.Arrays;
-import java.util.Iterator;
 import java.util.List;
 
 import static org.junit.Assert.assertEquals;
@@ -62,9 +61,9 @@ public class AbstractLegacyRecordBatchTest {
     public void testIterateCompressedRecordWithWrapperOffsetZero() {
         for (byte magic : Arrays.asList(RecordBatch.MAGIC_VALUE_V0, RecordBatch.MAGIC_VALUE_V1)) {
             SimpleRecord[] simpleRecords = new SimpleRecord[] {
-                    new SimpleRecord(1L, "a".getBytes(), "1".getBytes()),
-                    new SimpleRecord(2L, "b".getBytes(), "2".getBytes()),
-                    new SimpleRecord(3L, "c".getBytes(), "3".getBytes())
+                new SimpleRecord(1L, "a".getBytes(), "1".getBytes()),
+                new SimpleRecord(2L, "b".getBytes(), "2".getBytes()),
+                new SimpleRecord(3L, "c".getBytes(), "3".getBytes())
             };
 
             MemoryRecords records = MemoryRecords.withRecords(magic, 0L,
@@ -82,9 +81,9 @@ public class AbstractLegacyRecordBatchTest {
     @Test(expected = InvalidRecordException.class)
     public void testInvalidWrapperOffsetV1() {
         SimpleRecord[] simpleRecords = new SimpleRecord[] {
-                new SimpleRecord(1L, "a".getBytes(), "1".getBytes()),
-                new SimpleRecord(2L, "b".getBytes(), "2".getBytes()),
-                new SimpleRecord(3L, "c".getBytes(), "3".getBytes())
+            new SimpleRecord(1L, "a".getBytes(), "1".getBytes()),
+            new SimpleRecord(2L, "b".getBytes(), "2".getBytes()),
+            new SimpleRecord(3L, "c".getBytes(), "3".getBytes())
         };
 
         MemoryRecords records = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V1, 0L,
