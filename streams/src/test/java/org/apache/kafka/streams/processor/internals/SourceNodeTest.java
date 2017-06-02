@@ -31,39 +31,35 @@ import static org.hamcrest.MatcherAssert.assertThat;
 public class SourceNodeTest {
     @Test
     public void shouldProvideTopicHeadersAndDataToKeyDeserializer() {
-        SourceNode<String, String> sourceNode = new MockSourceNode<>(new String[]{""}, new TheExtendedDeserializer(), new TheExtendedDeserializer());
-        RecordHeaders headers = new RecordHeaders();
-        String deserializeKey = sourceNode.deserializeKey("topic", headers, "data".getBytes(StandardCharsets.UTF_8));
+        final SourceNode<String, String> sourceNode = new MockSourceNode<>(new String[]{""}, new TheExtendedDeserializer(), new TheExtendedDeserializer());
+        final RecordHeaders headers = new RecordHeaders();
+        final String deserializeKey = sourceNode.deserializeKey("topic", headers, "data".getBytes(StandardCharsets.UTF_8));
         assertThat(deserializeKey, is("topic" + headers + "data"));
     }
 
     @Test
     public void shouldProvideTopicHeadersAndDataToValueDeserializer() {
-        SourceNode<String, String> sourceNode = new MockSourceNode<>(new String[]{""}, new TheExtendedDeserializer(), new TheExtendedDeserializer());
-        RecordHeaders headers = new RecordHeaders();
-        String deserializeKey = sourceNode.deserializeValue("topic", headers, "data".getBytes(StandardCharsets.UTF_8));
-        assertThat(deserializeKey, is("topic" + headers + "data"));
+        final SourceNode<String, String> sourceNode = new MockSourceNode<>(new String[]{""}, new TheExtendedDeserializer(), new TheExtendedDeserializer());
+        final RecordHeaders headers = new RecordHeaders();
+        final String deserializedValue = sourceNode.deserializeValue("topic", headers, "data".getBytes(StandardCharsets.UTF_8));
+        assertThat(deserializedValue, is("topic" + headers + "data"));
     }
 
     public static class TheExtendedDeserializer implements ExtendedDeserializer<String> {
         @Override
-        public String deserialize(String topic, Headers headers, byte[] data) {
+        public String deserialize(final String topic, final Headers headers, final byte[] data) {
             return topic + headers + new String(data, StandardCharsets.UTF_8);
         }
 
         @Override
-        public void configure(Map<String, ?> configs, boolean isKey) {
-
-        }
+        public void configure(final Map<String, ?> configs, final boolean isKey) { }
 
         @Override
-        public String deserialize(String topic, byte[] data) {
+        public String deserialize(final String topic, final byte[] data) {
             return deserialize(topic, null, data);
         }
 
         @Override
-        public void close() {
-
-        }
+        public void close() { }
     }
 }
