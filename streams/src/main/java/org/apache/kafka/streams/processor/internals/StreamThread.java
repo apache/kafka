@@ -239,6 +239,7 @@ public class StreamThread extends Thread {
 
     abstract class AbstractTaskCreator {
         void retryWithBackoff(final Map<TaskId, Set<TopicPartition>> tasksToBeCreated, final long start) {
+            final long maxBackoffTimeMs = 1000L;
             long backoffTimeMs = 50L;
             final Set<TaskId> retryingTasks = new HashSet<>();
             long nextLoggingTime = System.currentTimeMillis() + 10000;
@@ -259,7 +260,7 @@ public class StreamThread extends Thread {
                     } catch (final LockException e) {
                         // ignore and retry
                         if (!retryingTasks.contains(taskId)) {
-                            log.warn("{} Could not create task {}. Will retry. {}", logPrefix, taskId, e);
+                            log.warn("{} Could not create task {}. Will retry. {}", logPrefix, taskId, e.getMessage());
                             retryingTasks.add(taskId);
                         }
                     }
@@ -272,6 +273,7 @@ public class StreamThread extends Thread {
                 try {
                     Thread.sleep(backoffTimeMs);
                     backoffTimeMs <<= 1;
+                    backoffTimeMs = Math.min(backoffTimeMs, maxBackoffTimeMs);
                 } catch (final InterruptedException e) {
                     // ignore
                 }
