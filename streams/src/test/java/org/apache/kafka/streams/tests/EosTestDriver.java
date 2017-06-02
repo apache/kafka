@@ -53,6 +53,7 @@ import java.util.Set;
 public class EosTestDriver extends SmokeTestUtil {
 
     private static final int MAX_NUMBER_OF_KEYS = 100;
+    private static final long MAX_IDLE_TIME_MS = 300000L;
 
     private static boolean isRunning = true;
 
@@ -74,12 +75,12 @@ public class EosTestDriver extends SmokeTestUtil {
 
         final KafkaProducer<String, Integer> producer = new KafkaProducer<>(producerProps);
 
-        final Random rand = new Random();
+        final Random rand = new Random(System.currentTimeMillis());
 
         int numRecordsProduced = 0;
         while (isRunning) {
             final String key = "" + rand.nextInt(MAX_NUMBER_OF_KEYS);
-            final int value = rand.nextInt(Integer.MAX_VALUE);
+            final int value = rand.nextInt(10000);
 
             final ProducerRecord<String, Integer> record = new ProducerRecord<>("data", key, value);
 
@@ -121,7 +122,7 @@ public class EosTestDriver extends SmokeTestUtil {
             consumer.seekToBeginning(partitions);
 
             final Map<String, Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>>> recordPerTopicPerPartition
-                = getOutputRecords(consumer, committedOffsets, partitions);
+                = getOutputRecords(consumer, committedOffsets);
 
             truncate("data", recordPerTopicPerPartition, committedOffsets);
 
@@ -130,7 +131,7 @@ public class EosTestDriver extends SmokeTestUtil {
 
             verifyAllTransactionFinished(consumer, kafka);
 
-            // no not modify: required test output
+            // do not modify: required test output
             System.out.println("ALL-RECORDS-DELIVERED");
         } catch (final Exception e) {
             e.printStackTrace(System.err);
@@ -143,7 +144,7 @@ public class EosTestDriver extends SmokeTestUtil {
         try {
             adminClient = AdminClient.createSimplePlaintext(kafka);
 
-            final long maxWaitTime = System.currentTimeMillis() + 30000;
+            final long maxWaitTime = System.currentTimeMillis() + MAX_IDLE_TIME_MS;
             while (!adminClient.describeConsumerGroup(EosTestClient.APP_ID, 10000).consumers().get().isEmpty()) {
                 if (System.currentTimeMillis() > maxWaitTime) {
                     throw new RuntimeException("Streams application not down after 30 seconds.");
@@ -189,17 +190,16 @@ public class EosTestDriver extends SmokeTestUtil {
     }
 
     private static Map<String, Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>>> getOutputRecords(final KafkaConsumer<byte[], byte[]> consumer,
-                                                                                                           final Map<TopicPartition, Long> committedOffsets,
-                                                                                                           final List<TopicPartition> partitions) {
+                                                                                                           final Map<TopicPartition, Long> committedOffsets) {
         final Map<String, Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>>> recordPerTopicPerPartition = new HashMap<>();
 
-        long maxWaitTime = System.currentTimeMillis() + 30000;
+        long maxWaitTime = System.currentTimeMillis() + MAX_IDLE_TIME_MS;
         boolean allRecordsReceived = false;
         while (!allRecordsReceived && System.currentTimeMillis() < maxWaitTime) {
             final ConsumerRecords<byte[], byte[]> receivedRecords = consumer.poll(500);
 
             for (final ConsumerRecord<byte[], byte[]> record : receivedRecords) {
-                maxWaitTime = System.currentTimeMillis() + 30000;
+                maxWaitTime = System.currentTimeMillis() + MAX_IDLE_TIME_MS;
                 addRecord(record, recordPerTopicPerPartition);
             }
 
@@ -261,9 +261,16 @@ public class EosTestDriver extends SmokeTestUtil {
         }
 
         for (final Map.Entry<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> partitionRecords : receivedRecords.entrySet()) {
-            final Long committed = committedOffsets.get(partitionRecords.getKey());
-            if (partitionRecords.getValue().size() < (committed == null ? 0 : committed)) {
-                return false;
+            final TopicPartition partition = partitionRecords.getKey();
+            final int numberOfReceivedRecords = partitionRecords.getValue().size();
+            final Long committed = committedOffsets.get(partition);
+            if (committed != null) {
+                if (numberOfReceivedRecords < committed) {
+                    return false;
+                }
+            } else if (numberOfReceivedRecords > 0) {
+                throw new RuntimeException("Result verification failed for partition " + partition
+                    + ". No offset was committed but we received " + numberOfReceivedRecords + " records.");
             }
         }
 
@@ -302,7 +309,8 @@ public class EosTestDriver extends SmokeTestUtil {
 
         for (final Map.Entry<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> partitionRecords : topicRecords.entrySet()) {
             final TopicPartition tp = partitionRecords.getKey();
-            truncatedTopicRecords.put(tp, partitionRecords.getValue().subList(0, committedOffsets.get(tp).intValue()));
+            final Long committed = committedOffsets.get(tp);
+            truncatedTopicRecords.put(tp, partitionRecords.getValue().subList(0, committed != null ? committed.intValue() : 0));
         }
 
         recordPerTopicPerPartition.put(topic, truncatedTopicRecords);
@@ -418,7 +426,7 @@ public class EosTestDriver extends SmokeTestUtil {
 
         final StringDeserializer stringDeserializer = new StringDeserializer();
 
-        final long maxWaitTime = System.currentTimeMillis() + 30000;
+        final long maxWaitTime = System.currentTimeMillis() + MAX_IDLE_TIME_MS;
         while (!partitions.isEmpty() && System.currentTimeMillis() < maxWaitTime) {
             final ConsumerRecords<byte[], byte[]> records = consumer.poll(100);
             for (final ConsumerRecord<byte[], byte[]> record : records) {
@@ -442,7 +450,7 @@ public class EosTestDriver extends SmokeTestUtil {
             }
         }
         if (!partitions.isEmpty()) {
-            throw new RuntimeException("Could not read all verification records within 30 sec.");
+            throw new RuntimeException("Could not read all verification records. Did not receive any new record within the last 30 sec.");
         }
     }
 

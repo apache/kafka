@@ -32,7 +32,6 @@ class StreamsEosTest(KafkaTest):
             'min' : { 'partitions': 5, 'replication-factor': 2 },
             'sum' : { 'partitions': 5, 'replication-factor': 2 }
         })
-
         self.driver = StreamsEosTestDriverService(test_context, self.kafka)
         self.processor1 = StreamsEosTestJobRunnerService(test_context, self.kafka)
         self.processor2 = StreamsEosTestJobRunnerService(test_context, self.kafka)
