@@ -87,4 +87,13 @@ public class InitProducerIdResponse extends AbstractResponse {
         return new InitProducerIdResponse(ApiKeys.INIT_PRODUCER_ID.parseResponse(version, buffer));
     }
 
+    @Override
+    public String toString() {
+        return "InitProducerIdResponse(" +
+                "error=" + error +
+                ", producerId=" + producerId +
+                ", producerEpoch=" + epoch +
+                ", throttleTimeMs=" + throttleTimeMs +
+                ')';
+    }
 }
