@@ -110,12 +110,12 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
 
     val topicConfigEntries1 = Seq(
       new ConfigEntry(LogConfig.MinCleanableDirtyRatioProp, "0.9"),
-      new ConfigEntry(LogConfig.CompressionTypeProp, "lz4") // policy doesn't allow this
+      new ConfigEntry(LogConfig.MinInSyncReplicasProp, "2") // policy doesn't allow this
     ).asJava
 
     var topicConfigEntries2 = Seq(new ConfigEntry(LogConfig.MinCleanableDirtyRatioProp, "0.8")).asJava
 
-    var topicConfigEntries3 = Seq(new ConfigEntry(LogConfig.CompressionTypeProp, "invalid-compression")).asJava
+    val topicConfigEntries3 = Seq(new ConfigEntry(LogConfig.MinInSyncReplicasProp, "-1")).asJava
 
     val brokerResource = new ConfigResource(ConfigResource.Type.BROKER, servers.head.config.brokerId.toString)
     val brokerConfigEntries = Seq(new ConfigEntry(KafkaConfig.SslTruststorePasswordProp, "12313")).asJava
@@ -141,8 +141,8 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
 
     assertEquals(Defaults.LogCleanerMinCleanRatio.toString,
       configs.get(topicResource1).get(LogConfig.MinCleanableDirtyRatioProp).value)
-    assertEquals(Defaults.CompressionType.toString,
-      configs.get(topicResource1).get(LogConfig.CompressionTypeProp).value)
+    assertEquals(Defaults.MinInSyncReplicas.toString,
+      configs.get(topicResource1).get(LogConfig.MinInSyncReplicasProp).value)
 
     assertEquals("0.8", configs.get(topicResource2).get(LogConfig.MinCleanableDirtyRatioProp).value)
 
@@ -171,8 +171,8 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
 
     assertEquals(Defaults.LogCleanerMinCleanRatio.toString,
       configs.get(topicResource1).get(LogConfig.MinCleanableDirtyRatioProp).value)
-    assertEquals(Defaults.CompressionType.toString,
-      configs.get(topicResource1).get(LogConfig.CompressionTypeProp).value)
+    assertEquals(Defaults.MinInSyncReplicas.toString,
+      configs.get(topicResource1).get(LogConfig.MinInSyncReplicasProp).value)
 
     assertEquals("0.8", configs.get(topicResource2).get(LogConfig.MinCleanableDirtyRatioProp).value)
 
@@ -199,8 +199,8 @@ object AdminClientWithPoliciesIntegrationTest {
       require(!requestMetadata.configs.isEmpty, "request configs should not be empty")
       require(requestMetadata.resource.name.nonEmpty, "resource name should not be empty")
       require(requestMetadata.resource.name.contains("topic"))
-      if (requestMetadata.configs.containsKey(TopicConfig.COMPRESSION_TYPE_CONFIG))
-        throw new PolicyViolationException("Compression type cannot be updated")
+      if (requestMetadata.configs.containsKey(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG))
+        throw new PolicyViolationException("Min in sync replicas cannot be updated")
     }
 
     def close(): Unit = closed = true
