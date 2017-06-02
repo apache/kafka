@@ -201,8 +201,13 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
   }
 
   def prepareAddPartitions(addedTopicPartitions: immutable.Set[TopicPartition], updateTimestamp: Long): TxnTransitMetadata = {
+    val newTxnStartTimestamp = state match {
+      case Empty | CompleteAbort | CompleteCommit => txnStartTimestamp
+      case _ => updateTimestamp
+    }
+
     prepareTransitionTo(Ongoing, producerId, producerEpoch, txnTimeoutMs, (topicPartitions ++ addedTopicPartitions).toSet,
-      updateTimestamp, updateTimestamp)
+      newTxnStartTimestamp, updateTimestamp)
   }
 
   def prepareAbortOrCommit(newState: TransactionState, updateTimestamp: Long): TxnTransitMetadata = {
