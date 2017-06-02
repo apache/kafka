@@ -30,10 +30,8 @@ import org.junit.Assert._
 import scala.collection.JavaConversions._
 
 class AddPartitionsToTxnRequestTest extends BaseRequestTest {
-
   private val topic1 = "foobartopic"
   val numPartitions = 3
-
 
   override def propertyOverrides(properties: Properties): Unit =
     properties.put(KafkaConfig.AutoCreateTopicsEnableProp, false.toString)
@@ -41,7 +39,6 @@ class AddPartitionsToTxnRequestTest extends BaseRequestTest {
   @Before
   override def setUp(): Unit = {
     super.setUp()
-
     TestUtils.createTopic(zkUtils, topic1, numPartitions, servers.size, servers, new Properties())
   }
 
@@ -70,13 +67,11 @@ class AddPartitionsToTxnRequestTest extends BaseRequestTest {
   }
 
   private def createRequest(partitions: List[TopicPartition]): AddPartitionsToTxnRequest = {
-
     val transactionalId = "foobar"
     val producerId = 1000L
     val producerEpoch: Short = 0
     val builder = new AddPartitionsToTxnRequest.Builder(transactionalId, producerId, producerEpoch, partitions)
     builder.build()
-
   }
 
 }
