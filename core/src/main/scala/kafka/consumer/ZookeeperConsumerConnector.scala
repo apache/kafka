@@ -699,9 +699,9 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
             if (topicRegistry.size == 0)
               new java.util.HashMap[String, java.util.Set[java.lang.Integer]]
             else
-              topicRegistry.map(topics =>
-                topics._1 -> topics._2.keys   // note this is incorrect, see KAFKA-2284
-              ).toMap.asJava.asInstanceOf[java.util.Map[String, java.util.Set[java.lang.Integer]]]
+              mapAsJavaMap(topicRegistry.map(topics =>
+                topics._1 -> setAsJavaSet(topics._2.keys.asInstanceOf[mutable.Set[Integer]])
+              ).toMap)
           )
         }
         releasePartitionOwnership(topicRegistry)
