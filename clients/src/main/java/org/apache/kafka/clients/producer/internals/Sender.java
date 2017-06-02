@@ -217,7 +217,6 @@ public class Sender implements Runnable {
         }
 
         long pollTimeout = sendProducerData(now);
-        log.trace("waiting {}ms in poll", pollTimeout);
         client.poll(pollTimeout, now);
     }
 
@@ -298,7 +297,6 @@ public class Sender implements Runnable {
     }
 
     private boolean maybeSendTransactionalRequest(long now) {
-        String transactionalId = transactionManager.transactionalId();
         if (transactionManager.isCompletingTransaction() &&
                 !transactionManager.hasPartitionsToAdd() &&
                 accumulator.hasUnflushedBatches()) {
@@ -315,22 +313,15 @@ public class Sender implements Runnable {
                 accumulator.beginFlush();
 
             // Do not send the EndTxn until all pending batches have been completed
-            if (accumulator.hasUnflushedBatches()) {
-                log.trace("TransactionalId: {} -- Waiting for pending batches to be flushed before completing transaction",
-                        transactionalId);
+            if (accumulator.hasUnflushedBatches())
                 return false;
-            }
         }
 
         TransactionManager.TxnRequestHandler nextRequestHandler = transactionManager.nextRequestHandler();
-        if (nextRequestHandler == null) {
-            log.trace("TransactionalId: {} -- There are no pending transactional requests to send", transactionalId);
+        if (nextRequestHandler == null)
             return false;
-        }
 
         AbstractRequest.Builder<?> requestBuilder = nextRequestHandler.requestBuilder();
-        log.trace("TransactionalId: {} -- Preparing to send request {}", transactionalId, requestBuilder);
-
         while (true) {
             Node targetNode = null;
             try {
@@ -340,6 +331,7 @@ public class Sender implements Runnable {
                         transactionManager.lookupCoordinator(nextRequestHandler);
                         break;
                     }
+
                     if (!NetworkClientUtils.awaitReady(client, targetNode, time, requestTimeout)) {
                         transactionManager.lookupCoordinator(nextRequestHandler);
                         break;
@@ -347,33 +339,30 @@ public class Sender implements Runnable {
                 } else {
                     targetNode = awaitLeastLoadedNodeReady(requestTimeout);
                 }
+
                 if (targetNode != null) {
-                    if (nextRequestHandler.isRetry()) {
-                        log.trace("TransactionalId: {} -- Waiting {}ms before resending request {}",
-                                transactionalId,
-                                retryBackoffMs, requestBuilder);
+                    if (nextRequestHandler.isRetry())
                         time.sleep(retryBackoffMs);
-                    }
+
                     ClientRequest clientRequest = client.newClientRequest(targetNode.idString(),
                             requestBuilder, now, true, nextRequestHandler);
                     transactionManager.setInFlightRequestCorrelationId(clientRequest.correlationId());
-                    log.debug("TransactionalId: {} -- Sending transactional request {} to node {}",
-                            transactionalId, requestBuilder, clientRequest.destination());
+                    log.debug("{}Sending transactional request {} to node {}",
+                            transactionManager.logPrefix, requestBuilder, targetNode);
+
                     client.send(clientRequest, now);
                     return true;
                 }
             } catch (IOException e) {
-                log.debug("TransactionalId: {} -- Disconnect from {} while trying to send request {}. Going " +
-                                "to back off and retry", transactionalId, targetNode, requestBuilder);
+                log.debug("{}Disconnect from {} while trying to send request {}. Going " +
+                        "to back off and retry", transactionManager.logPrefix, targetNode, requestBuilder);
             }
-            log.trace("TransactionalId: {} -- About to wait for {}ms before trying to send another request.",
-                    transactionalId, retryBackoffMs);
+
             time.sleep(retryBackoffMs);
             metadata.requestUpdate();
         }
 
         transactionManager.retry(nextRequestHandler);
-
         return true;
     }
 
@@ -648,7 +637,7 @@ public class Sender implements Runnable {
             // not all support the same message format version. For example, if a partition migrates from a broker
             // which is supporting the new magic version to one which doesn't, then we will need to convert.
             if (!records.hasMatchingMagic(minUsedMagic))
-                records = batch.records().downConvert(minUsedMagic);
+                records = batch.records().downConvert(minUsedMagic, 0);
             produceRecordsByPartition.put(tp, records);
             recordsByPartition.put(tp, batch);
         }

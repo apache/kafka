@@ -17,6 +17,7 @@
 package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
 import org.easymock.EasyMock;
 import org.junit.Before;
@@ -26,6 +27,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
@@ -308,7 +310,7 @@ public class FileRecordsTest {
         int start = fileRecords.searchForOffsetWithSize(1, 0).position;
         int size = batch.sizeInBytes();
         FileRecords slice = fileRecords.read(start, size - 1);
-        Records messageV0 = slice.downConvert(RecordBatch.MAGIC_VALUE_V0);
+        Records messageV0 = slice.downConvert(RecordBatch.MAGIC_VALUE_V0, 0);
         assertTrue("No message should be there", batches(messageV0).isEmpty());
         assertEquals("There should be " + (size - 1) + " bytes", size - 1, messageV0.sizeInBytes());
     }
@@ -324,31 +326,34 @@ public class FileRecordsTest {
     }
 
     private void doTestConversion(CompressionType compressionType, byte toMagic) throws IOException {
-        List<Long> offsets = asList(0L, 2L, 3L, 9L, 11L, 15L);
+        List<Long> offsets = asList(0L, 2L, 3L, 9L, 11L, 15L, 16L, 17L, 22L, 24L);
         List<SimpleRecord> records = asList(
                 new SimpleRecord(1L, "k1".getBytes(), "hello".getBytes()),
                 new SimpleRecord(2L, "k2".getBytes(), "goodbye".getBytes()),
                 new SimpleRecord(3L, "k3".getBytes(), "hello again".getBytes()),
                 new SimpleRecord(4L, "k4".getBytes(), "goodbye for now".getBytes()),
                 new SimpleRecord(5L, "k5".getBytes(), "hello again".getBytes()),
-                new SimpleRecord(6L, "k6".getBytes(), "goodbye forever".getBytes()));
+                new SimpleRecord(6L, "k6".getBytes(), "I sense indecision".getBytes()),
+                new SimpleRecord(7L, "k7".getBytes(), "what now".getBytes()),
+                new SimpleRecord(8L, "k8".getBytes(), "running out".getBytes()),
+                new SimpleRecord(9L, "k9".getBytes(), "ok, almost done".getBytes()),
+                new SimpleRecord(10L, "k10".getBytes(), "finally".getBytes()));
 
         ByteBuffer buffer = ByteBuffer.allocate(1024);
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V0, compressionType,
                 TimestampType.CREATE_TIME, 0L);
-        for (int i = 0; i < 2; i++)
+        for (int i = 0; i < 3; i++)
             builder.appendWithOffset(offsets.get(i), records.get(i));
         builder.close();
 
-        builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V1, compressionType,
-                TimestampType.CREATE_TIME, 0L);
-        for (int i = 2; i < 4; i++)
+        builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V1, compressionType, TimestampType.CREATE_TIME,
+                0L);
+        for (int i = 3; i < 6; i++)
             builder.appendWithOffset(offsets.get(i), records.get(i));
         builder.close();
 
-        builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, compressionType,
-                TimestampType.CREATE_TIME, 0L);
-        for (int i = 4; i < 6; i++)
+        builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, compressionType, TimestampType.CREATE_TIME, 0L);
+        for (int i = 6; i < 10; i++)
             builder.appendWithOffset(offsets.get(i), records.get(i));
         builder.close();
 
@@ -357,9 +362,32 @@ public class FileRecordsTest {
         try (FileRecords fileRecords = FileRecords.open(tempFile())) {
             fileRecords.append(MemoryRecords.readableRecords(buffer));
             fileRecords.flush();
-            Records convertedRecords = fileRecords.downConvert(toMagic);
+            Records convertedRecords = fileRecords.downConvert(toMagic, 0L);
             verifyConvertedRecords(records, offsets, convertedRecords, compressionType, toMagic);
+
+            if (toMagic <= RecordBatch.MAGIC_VALUE_V1 && compressionType == CompressionType.NONE) {
+                long firstOffset;
+                if (toMagic == RecordBatch.MAGIC_VALUE_V0)
+                    firstOffset = 11L; // v1 record
+                else
+                    firstOffset = 17; // v2 record
+                Records convertedRecords2 = fileRecords.downConvert(toMagic, firstOffset);
+                List<Long> filteredOffsets = new ArrayList<>(offsets);
+                List<SimpleRecord> filteredRecords = new ArrayList<>(records);
+                int index = filteredOffsets.indexOf(firstOffset) - 1;
+                filteredRecords.remove(index);
+                filteredOffsets.remove(index);
+                verifyConvertedRecords(filteredRecords, filteredOffsets, convertedRecords2, compressionType, toMagic);
+            } else {
+                // firstOffset doesn't have any effect in this case
+                Records convertedRecords2 = fileRecords.downConvert(toMagic, 10L);
+                verifyConvertedRecords(records, offsets, convertedRecords2, compressionType, toMagic);
+            }
         }
+    }
+
+    private String utf8(ByteBuffer buffer) {
+        return Utils.utf8(buffer, buffer.remaining());
     }
 
     private void verifyConvertedRecords(List<SimpleRecord> initialRecords,
@@ -378,8 +406,8 @@ public class FileRecordsTest {
             for (Record record : batch) {
                 assertTrue("Inner record should have magic " + magicByte, record.hasMagic(batch.magic()));
                 assertEquals("Offset should not change", initialOffsets.get(i).longValue(), record.offset());
-                assertEquals("Key should not change", initialRecords.get(i).key(), record.key());
-                assertEquals("Value should not change", initialRecords.get(i).value(), record.value());
+                assertEquals("Key should not change", utf8(initialRecords.get(i).key()), utf8(record.key()));
+                assertEquals("Value should not change", utf8(initialRecords.get(i).value()), utf8(record.value()));
                 assertFalse(record.hasTimestampType(TimestampType.LOG_APPEND_TIME));
                 if (batch.magic() == RecordBatch.MAGIC_VALUE_V0) {
                     assertEquals(RecordBatch.NO_TIMESTAMP, record.timestamp());

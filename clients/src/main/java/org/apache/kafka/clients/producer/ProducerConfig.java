@@ -328,6 +328,11 @@ public class ProducerConfig extends AbstractConfig {
                                         TRANSACTIONAL_ID_DOC);
     }
 
+    @Override
+    protected Map<String, Object> postProcessParsedConfig(final Map<String, Object> parsedValues) {
+        return CommonClientConfigs.postProcessReconnectBackoffConfigs(this, parsedValues);
+    }
+
     public static Map<String, Object> addSerializerToConfig(Map<String, Object> configs,
                                                             Serializer<?> keySerializer, Serializer<?> valueSerializer) {
         Map<String, Object> newConfigs = new HashMap<>();

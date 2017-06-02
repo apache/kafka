@@ -22,6 +22,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kafka.server.{DelayedOperationPurgatory, KafkaConfig, MetadataCache, ReplicaManager}
 import kafka.utils.{Logging, Scheduler, ZkUtils}
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.RecordBatch
@@ -144,8 +145,8 @@ class TransactionCoordinator(brokerId: Int,
       }
 
       result match {
-        case Left(producerIdResult) =>
-          responseCallback(producerIdResult)
+        case Left(error) =>
+          responseCallback(error)
 
         case Right((coordinatorEpoch, newMetadata)) =>
           if (newMetadata.txnState == Ongoing) {
@@ -165,10 +166,14 @@ class TransactionCoordinator(brokerId: Int,
               sendRetriableErrorCallback)
           } else {
             def sendPidResponseCallback(error: Errors): Unit = {
-              if (error == Errors.NONE)
+              if (error == Errors.NONE) {
+                info(s"Initialized transactionalId $transactionalId with producerId ${newMetadata.producerId} and producer " +
+                  s"epoch ${newMetadata.producerEpoch} on partition " +
+                  s"${Topic.TRANSACTION_STATE_TOPIC_NAME}-${txnManager.partitionFor(transactionalId)}")
                 responseCallback(initTransactionMetadata(newMetadata))
-              else
+              } else {
                 responseCallback(initTransactionError(error))
+              }
             }
 
             txnManager.appendTransactionToLog(transactionalId, coordinatorEpoch, newMetadata, sendPidResponseCallback)

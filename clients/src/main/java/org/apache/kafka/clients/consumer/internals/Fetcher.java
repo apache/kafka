@@ -223,6 +223,10 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                                 TopicPartition partition = entry.getKey();
                                 long fetchOffset = request.fetchData().get(partition).fetchOffset;
                                 FetchResponse.PartitionData fetchData = entry.getValue();
+
+                                log.debug("Fetch at offset {} for partition {} returned fetch data {}", fetchOffset,
+                                        partition, fetchData);
+
                                 completedFetches.add(new CompletedFetch(partition, fetchOffset, fetchData, metricAggregator,
                                         resp.requestHeader().apiVersion()));
                             }
@@ -232,7 +236,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
 
                         @Override
                         public void onFailure(RuntimeException e) {
-                            log.debug("Fetch request to {} for partitions {} failed", fetchTarget, request.fetchData().keySet(), e);
+                            log.debug("Fetch request {} to {} failed", request.fetchData(), fetchTarget, e);
                         }
                     });
         }
@@ -792,8 +796,9 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         Map<Node, FetchRequest.Builder> requests = new HashMap<>();
         for (Map.Entry<Node, LinkedHashMap<TopicPartition, FetchRequest.PartitionData>> entry : fetchable.entrySet()) {
             Node node = entry.getKey();
-            FetchRequest.Builder fetch = FetchRequest.Builder.forConsumer(this.maxWaitMs, this.minBytes, entry.getValue(), isolationLevel).
-                    setMaxBytes(this.maxBytes);
+            FetchRequest.Builder fetch = FetchRequest.Builder.forConsumer(this.maxWaitMs, this.minBytes,
+                    entry.getValue(), isolationLevel)
+                    .setMaxBytes(this.maxBytes);
             requests.put(node, fetch);
         }
         return requests;

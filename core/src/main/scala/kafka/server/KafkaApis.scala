@@ -508,19 +508,24 @@ class KafkaApis(val requestChannel: RequestChannel,
       // know it must be supported. However, if the magic version is changed from a higher version back to a
       // lower version, this check will no longer be valid and we will fail to down-convert the messages
       // which were written in the new format prior to the version downgrade.
-      replicaManager.getMagic(tp) match {
-        case Some(magic) if magic > 0 && versionId <= 1 && !data.records.hasCompatibleMagic(RecordBatch.MAGIC_VALUE_V0) =>
-          trace(s"Down converting message to V0 for fetch request from $clientId")
-          new FetchResponse.PartitionData(data.error, data.highWatermark, FetchResponse.INVALID_LAST_STABLE_OFFSET,
-              data.logStartOffset, data.abortedTransactions, data.records.downConvert(RecordBatch.MAGIC_VALUE_V0))
+      replicaManager.getMagic(tp).flatMap { magic =>
+        val downConvertMagic = {
+          if (magic > RecordBatch.MAGIC_VALUE_V0 && versionId <= 1 && !data.records.hasCompatibleMagic(RecordBatch.MAGIC_VALUE_V0))
+            Some(RecordBatch.MAGIC_VALUE_V0)
+          else if (magic > RecordBatch.MAGIC_VALUE_V1 && versionId <= 3 && !data.records.hasCompatibleMagic(RecordBatch.MAGIC_VALUE_V1))
+            Some(RecordBatch.MAGIC_VALUE_V1)
+          else
+            None
+        }
 
-        case Some(magic) if magic > 1 && versionId <= 3 && !data.records.hasCompatibleMagic(RecordBatch.MAGIC_VALUE_V1) =>
-          trace(s"Down converting message to V1 for fetch request from $clientId")
+        downConvertMagic.map { magic =>
+          trace(s"Down converting records from partition $tp to message format version $magic for fetch request from $clientId")
+          val converted = data.records.downConvert(magic, fetchRequest.fetchData.get(tp).fetchOffset)
           new FetchResponse.PartitionData(data.error, data.highWatermark, FetchResponse.INVALID_LAST_STABLE_OFFSET,
-              data.logStartOffset, data.abortedTransactions, data.records.downConvert(RecordBatch.MAGIC_VALUE_V1))
+            data.logStartOffset, data.abortedTransactions, converted)
+        }
 
-        case _ => data
-      }
+      }.getOrElse(data)
     }
 
     // the callback for process a fetch response, invoked before throttling
@@ -549,7 +554,9 @@ class KafkaApis(val requestChannel: RequestChannel,
       def fetchResponseCallback(bandwidthThrottleTimeMs: Int) {
         def createResponse(requestThrottleTimeMs: Int): RequestChannel.Response = {
           val convertedData = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData]
-          fetchedPartitionData.asScala.foreach(e => convertedData.put(e._1, convertedPartitionData(e._1, e._2)))
+          fetchedPartitionData.asScala.foreach { case (tp, partitionData) =>
+            convertedData.put(tp, convertedPartitionData(tp, partitionData))
+          }
           val response = new FetchResponse(convertedData, 0)
           val responseStruct = response.toStruct(versionId)
 

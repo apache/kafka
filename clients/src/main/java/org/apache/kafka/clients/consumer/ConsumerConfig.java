@@ -447,6 +447,11 @@ public class ConsumerConfig extends AbstractConfig {
 
     }
 
+    @Override
+    protected Map<String, Object> postProcessParsedConfig(final Map<String, Object> parsedValues) {
+        return CommonClientConfigs.postProcessReconnectBackoffConfigs(this, parsedValues);
+    }
+
     public static Map<String, Object> addDeserializerToConfig(Map<String, Object> configs,
                                                               Deserializer<?> keyDeserializer,
                                                               Deserializer<?> valueDeserializer) {
