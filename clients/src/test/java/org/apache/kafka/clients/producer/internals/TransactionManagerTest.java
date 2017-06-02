@@ -427,21 +427,26 @@ public class TransactionManagerTest {
     public void testTopicAuthorizationFailureInAddPartitions() {
         final long pid = 13131L;
         final short epoch = 1;
-        final TopicPartition tp = new TopicPartition("foo", 0);
+        final TopicPartition tp0 = new TopicPartition("foo", 0);
+        final TopicPartition tp1 = new TopicPartition("bar", 0);
 
         doInitTransactions(pid, epoch);
 
         transactionManager.beginTransaction();
-        transactionManager.maybeAddPartitionToTransaction(tp);
+        transactionManager.maybeAddPartitionToTransaction(tp0);
+        transactionManager.maybeAddPartitionToTransaction(tp1);
+        Map<TopicPartition, Errors> errors = new HashMap<>();
+        errors.put(tp0, Errors.TOPIC_AUTHORIZATION_FAILED);
+        errors.put(tp1, Errors.OPERATION_NOT_ATTEMPTED);
 
-        prepareAddPartitionsToTxn(tp, Errors.TOPIC_AUTHORIZATION_FAILED);
+        prepareAddPartitionsToTxn(errors);
         sender.run(time.milliseconds());
 
         assertTrue(transactionManager.hasError());
         assertTrue(transactionManager.lastError() instanceof TopicAuthorizationException);
 
         TopicAuthorizationException exception = (TopicAuthorizationException) transactionManager.lastError();
-        assertEquals(singleton(tp.topic()), exception.unauthorizedTopics());
+        assertEquals(singleton(tp0.topic()), exception.unauthorizedTopics());
 
         assertAbortableError(TopicAuthorizationException.class);
     }
@@ -1009,14 +1014,19 @@ public class TransactionManagerTest {
         assertFalse(transactionManager.transactionContainsPartition(tp0));
     }
 
-    private void prepareAddPartitionsToTxn(final TopicPartition tp, final Errors error) {
+    private void prepareAddPartitionsToTxn(final Map<TopicPartition, Errors> errors) {
         client.prepareResponse(new MockClient.RequestMatcher() {
             @Override
             public boolean matches(AbstractRequest body) {
-                return body instanceof AddPartitionsToTxnRequest &&
-                        ((AddPartitionsToTxnRequest) body).partitions().contains(tp);
+                AddPartitionsToTxnRequest request = (AddPartitionsToTxnRequest) body;
+                assertEquals(new HashSet<>(request.partitions()), new HashSet<>(errors.keySet()));
+                return true;
             }
-        }, new AddPartitionsToTxnResponse(0, singletonMap(tp, error)));
+        }, new AddPartitionsToTxnResponse(0, errors));
+    }
+
+    private void prepareAddPartitionsToTxn(final TopicPartition tp, final Errors error) {
+        prepareAddPartitionsToTxn(Collections.singletonMap(tp, error));
     }
 
     private void prepareFindCoordinatorResponse(Errors error, boolean shouldDisconnect,
