@@ -17,13 +17,14 @@
 
 package kafka.consumer
 
+import java.util
 import java.util.{Collections, Properties}
 import java.util.regex.Pattern
 
 import kafka.api.OffsetRequest
 import kafka.common.StreamEndException
 import kafka.message.Message
-import org.apache.kafka.clients.consumer.OffsetAndMetadata
+import org.apache.kafka.clients.consumer.{ConsumerRecord, OffsetAndMetadata}
 import org.apache.kafka.clients.consumer.internals.NoOpConsumerRebalanceListener
 import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.TopicPartition
@@ -60,8 +61,10 @@ class NewShinyConsumer(topic: Option[String], partitionId: Option[Int], offset: 
   val offsets = new HashMap[TopicPartition, Long]()
 
   consumerInit()
-  var recordIter = consumer.poll(0).iterator
-  val partitions = new HashMap[(String, Integer), TopicPartition]
+  private var currentPartition: TopicPartition = null
+  private var polledRecords = consumer.poll(0)
+  private var partitionIter = polledRecords.partitions.iterator
+  private var recordIter: util.Iterator[ConsumerRecord[Array[Byte], Array[Byte]]] = null
 
   def consumerInit() {
     (topic, partitionId, offset, whitelist) match {
@@ -93,30 +96,30 @@ class NewShinyConsumer(topic: Option[String], partitionId: Option[Int], offset: 
   }
 
   override def receive(): BaseConsumerRecord = {
-    if (!recordIter.hasNext) {
-      recordIter = consumer.poll(timeoutMs).iterator
-      if (!recordIter.hasNext)
-        throw new ConsumerTimeoutException
+    if (recordIter == null || !recordIter.hasNext) {
+      if (!partitionIter.hasNext) {
+        polledRecords = consumer.poll(timeoutMs)
+        partitionIter = polledRecords.partitions.iterator
+
+        if (!partitionIter.hasNext)
+          throw new ConsumerTimeoutException
+      }
+
+      currentPartition = partitionIter.next
+      recordIter = polledRecords.records(currentPartition).iterator
     }
 
     val record = recordIter.next
-    partitions.get((record.topic, record.partition)) match {
-      case Some(tp) =>
-        offsets.put(tp, record.offset + 1)
-      case None =>
-        val tp = new TopicPartition(record.topic, record.partition)
-        partitions.put((record.topic, record.partition), tp)
-        offsets.put(tp, record.offset + 1)
-    }
+    offsets.put(currentPartition, record.offset + 1)
 
     BaseConsumerRecord(record.topic,
-                       record.partition,
-                       record.offset,
-                       record.timestamp,
-                       record.timestampType,
-                       record.key,
-                       record.value,
-                       record.headers)
+      record.partition,
+      record.offset,
+      record.timestamp,
+      record.timestampType,
+      record.key,
+      record.value,
+      record.headers)
   }
 
   override def stop() {
