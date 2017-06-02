@@ -171,7 +171,7 @@ public class SaslAuthenticatorTest {
         try {
             selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
             fail("SASL/PLAIN channel created without username");
-        } catch (KafkaException e) {
+        } catch (IOException e) {
             // Expected exception
         }
     }
@@ -192,7 +192,7 @@ public class SaslAuthenticatorTest {
         try {
             selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
             fail("SASL/PLAIN channel created without password");
-        } catch (KafkaException e) {
+        } catch (IOException e) {
             // Expected exception
         }
     }

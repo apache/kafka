@@ -19,6 +19,7 @@ package org.apache.kafka.common.security.authenticator;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.IllegalSaslStateException;
 import org.apache.kafka.common.errors.UnsupportedSaslMechanismException;
@@ -106,13 +107,21 @@ public class SaslClientAuthenticator implements Authenticator {
 
             setSaslState(handshakeRequestEnable ? SaslState.SEND_HANDSHAKE_REQUEST : SaslState.INITIAL);
 
-            // determine client principal from subject.
-            if (!subject.getPrincipals().isEmpty()) {
-                Principal clientPrincipal = subject.getPrincipals().iterator().next();
-                this.clientPrincipalName = clientPrincipal.getName();
-            } else {
-                clientPrincipalName = null;
+            // determine client principal from subject for Kerberos. For other mechanisms, the authenticated
+            // principal (username for PLAIN and SCRAM) is used as authorization id.
+            if (mechanism.equals(SaslConfigs.GSSAPI_MECHANISM)) {
+                try {
+                    Principal clientPrincipal = subject.getPrincipals().iterator().next();
+                    this.clientPrincipalName = clientPrincipal.getName();
+                } catch (RuntimeException e) {
+                    // During Kerberos re-login, principal is reset on subject. Handle
+                    // RuntimeException when obtaining Principal to avoid synchronization.
+                    // If principal is not known, throw an exception so the connection is
+                    // retried after any configured backoff.
+                    throw new KafkaException("Client principal could not be determined from Subject, this may be a transient failure due to Kerberos re-login", e);
+                }
             }
+
             callbackHandler = new SaslClientCallbackHandler();
             callbackHandler.configure(configs, Mode.CLIENT, subject, mechanism);
 
