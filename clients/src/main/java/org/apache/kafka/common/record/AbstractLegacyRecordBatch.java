@@ -365,10 +365,7 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
                     throw new InvalidRecordException("Found invalid compressed record set with no inner records");
 
                 if (lastOffsetFromWrapper == 0) {
-                    // If offsets are not assigned, then we do not use the offset from the wrapper record because
-                    // the value could be set differently depending on the client. For example, older clients
-                    // always used offset 0 in the wrapper record, while post-0.10.1 clients used the last offset
-                    // from the inner record's relative offsets.
+                    // The outer offset may be 0 if this is produce data from an older client.
                     this.absoluteBaseOffset = 0;
                 } else if (wrapperMagic == RecordBatch.MAGIC_VALUE_V1) {
                     long lastInnerOffset = innerEntries.getLast().offset();
