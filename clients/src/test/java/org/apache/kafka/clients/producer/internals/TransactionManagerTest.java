@@ -920,9 +920,7 @@ public class TransactionManagerTest {
     }
 
     private void prepareAddPartitionsToTxn(final TopicPartition tp, final Errors error) {
-        Map<TopicPartition, Errors> errors = new HashMap<>();
-        errors.put(tp, error);
-        prepareAddPartitionsToTxn(errors);
+        prepareAddPartitionsToTxn(Collections.singletonMap(tp, error));
     }
 
     private void prepareFindCoordinatorResponse(Errors error, boolean shouldDisconnect,
