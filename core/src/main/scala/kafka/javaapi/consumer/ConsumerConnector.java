@@ -25,6 +25,10 @@ import kafka.serializer.Decoder;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * @deprecated since 0.11.0.0, this interface will be removed in a future release.
+ */
+@Deprecated
 public interface ConsumerConnector {
     /**
      *  Create a list of MessageStreams of type T for each topic.

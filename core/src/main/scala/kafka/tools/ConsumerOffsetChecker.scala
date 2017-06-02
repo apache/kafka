@@ -34,6 +34,7 @@ import kafka.api.PartitionOffsetRequestInfo
 import org.I0Itec.zkclient.exception.ZkNoNodeException
 import org.apache.kafka.common.network.ListenerName
 
+@deprecated("This class has been deprecated and will be removed in a future release.", "0.11.0.0")
 object ConsumerOffsetChecker extends Logging {
 
   private val consumerMap: mutable.Map[Int, Option[SimpleConsumer]] = mutable.Map()

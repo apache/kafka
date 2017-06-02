@@ -61,6 +61,7 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
   }
 
   @Test
+  @deprecated("This test has been deprecated and will be removed in a future release.", "0.11.0.0")
   def testDescribeNonExistingGroup() {
     // mocks
     props.setProperty("zookeeper.connect", zkConnect)
@@ -82,6 +83,7 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
   }
 
   @Test
+  @deprecated("This test has been deprecated and will be removed in a future release.", "0.11.0.0")
   def testDescribeExistingGroup() {
     // mocks
     props.setProperty("zookeeper.connect", zkConnect)
@@ -108,6 +110,7 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
   }
 
   @Test
+  @deprecated("This test has been deprecated and will be removed in a future release.", "0.11.0.0")
   def testDescribeExistingGroupWithNoMembers() {
     // mocks
     props.setProperty("zookeeper.connect", zkConnect)
@@ -141,6 +144,7 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
   }
 
   @Test
+  @deprecated("This test has been deprecated and will be removed in a future release.", "0.11.0.0")
   def testDescribeConsumersWithNoAssignedPartitions() {
     // mocks
     props.setProperty("zookeeper.connect", zkConnect)
