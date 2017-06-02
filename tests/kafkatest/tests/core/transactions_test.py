@@ -214,6 +214,8 @@ class TransactionsTest(Test):
         security_protocol = 'PLAINTEXT'
         self.kafka.security_protocol = security_protocol
         self.kafka.interbroker_security_protocol = security_protocol
+        self.kafka.logs["kafka_data"]["collect_default"] = True
+        self.kafka.logs["kafka_operational_logs_debug"]["collect_default"] = True
         self.kafka.start()
         input_messages = self.seed_messages()
         concurrently_consumed_messages = self.copy_messages_transactionally(failure_mode, bounce_target)
