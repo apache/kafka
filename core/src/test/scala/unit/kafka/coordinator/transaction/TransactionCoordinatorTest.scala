@@ -47,7 +47,7 @@ class TransactionCoordinatorTest {
   private val partitions = mutable.Set[TopicPartition](new TopicPartition("topic1", 0))
   private val scheduler = new MockScheduler(time)
 
-  val coordinator: TransactionCoordinator = new TransactionCoordinator(brokerId,
+  val coordinator = new TransactionCoordinator(brokerId,
     scheduler,
     pidManager,
     transactionManager,
