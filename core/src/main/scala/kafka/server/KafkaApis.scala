@@ -1598,7 +1598,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           authorize(request.session, Describe, new Resource(Topic, tp.topic)) && metadataCache.contains(tp)
         }
 
-      val unauthorizedForWriteRequestInfo = existingAndAuthorizedForDescribeTopics.filterNot { tp =>
+      val (authorizedPartitions, unauthorizedForWriteRequestInfo) = existingAndAuthorizedForDescribeTopics.partition { tp =>
         authorize(request.session, Write, new Resource(Topic, tp.topic))
       }
 
@@ -1611,7 +1611,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         // which succeeded.
         val partitionErrors = (unauthorizedForWriteRequestInfo.map(_ -> Errors.TOPIC_AUTHORIZATION_FAILED) ++
           nonExistingOrUnauthorizedForDescribeTopics.map(_ -> Errors.UNKNOWN_TOPIC_OR_PARTITION) ++
-          internalTopics.map(_ ->Errors.TOPIC_AUTHORIZATION_FAILED)).toMap
+          internalTopics.map(_ ->Errors.TOPIC_AUTHORIZATION_FAILED) ++
+          authorizedPartitions.map(_ -> Errors.OPERATION_NOT_ATTEMPTED)).toMap
 
         sendResponseMaybeThrottle(request, requestThrottleMs =>
           new AddPartitionsToTxnResponse(requestThrottleMs, partitionErrors.asJava))
