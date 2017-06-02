@@ -234,10 +234,17 @@ public class TransactionManager {
     }
 
     public synchronized boolean ensurePartitionAdded(TopicPartition tp) {
-        if (isInTransaction() && !partitionsInTransaction.contains(tp)) {
-            transitionToFatalError(new IllegalStateException("Attempted to dequeue a record batch to send " +
-                    "for partition " + tp + ", which hasn't been added to the transaction yet"));
+        if (hasFatalError())
             return false;
+        if (isInTransaction() || hasAbortableError()) {
+            // We should enter this branch in an error state because if this partition is already in the transaction,
+            // there is a chance that the corresponding batch is in retry. So we must let it completely flush.
+            if (!(partitionsInTransaction.contains(tp) || isPartitionPending(tp))) {
+                transitionToFatalError(new IllegalStateException("Attempted to dequeue a record batch to send " +
+                        "for partition " + tp + ", which would never be added to the transaction."));
+                return false;
+            }
+            return partitionsInTransaction.contains(tp);
         }
         return true;
     }
@@ -416,6 +423,16 @@ public class TransactionManager {
         return inFlightRequestCorrelationId != NO_INFLIGHT_REQUEST_CORRELATION_ID;
     }
 
+    // visible for testing.
+    boolean hasFatalError() {
+        return currentState == State.FATAL_ERROR;
+    }
+
+    // visible for testing.
+    boolean hasAbortableError() {
+        return currentState == State.ABORTABLE_ERROR;
+    }
+
     // visible for testing
     synchronized boolean transactionContainsPartition(TopicPartition topicPartition) {
         return isInTransaction() && partitionsInTransaction.contains(topicPartition);
@@ -429,6 +446,10 @@ public class TransactionManager {
     // visible for testing
     synchronized boolean isReady() {
         return isTransactional() && currentState == State.READY;
+    }
+
+    private synchronized boolean isPartitionPending(TopicPartition tp) {
+        return isInTransaction() && (pendingPartitionsInTransaction.contains(tp) || newPartitionsInTransaction.contains(tp));
     }
 
     private void transitionTo(State target) {
@@ -448,7 +469,12 @@ public class TransactionManager {
             lastError = null;
         }
 
-        log.debug("{}Transition from state {} to {}", logPrefix, currentState, target);
+        if (lastError != null)
+            log.error("{}Transition from state {} to error state {}", logPrefix, currentState,
+                    target, lastError);
+        else
+            log.debug("Transition from state {} to {}", logPrefix, currentState, target);
+
         currentState = target;
     }
 
