@@ -421,6 +421,7 @@ class ZkUtils(val zkClient: ZkClient,
     }
   }
 
+  @deprecated("This method has been deprecated and will be removed in a future release.", "0.11.0.0")
   def getConsumerPartitionOwnerPath(group: String, topic: String, partition: Int): String = {
     val topicDirs = new ZKGroupTopicDirs(group, topic)
     topicDirs.consumerOwnerDir + "/" + partition
@@ -823,11 +824,13 @@ class ZkUtils(val zkClient: ZkClient,
     zkClient.delete(brokerPartTopicPath)
   }
 
+  @deprecated("This method has been deprecated and will be removed in a future release.", "0.11.0.0")
   def getConsumersInGroup(group: String): Seq[String] = {
     val dirs = new ZKGroupDirs(group)
     getChildren(dirs.consumerRegistryDir)
   }
 
+  @deprecated("This method has been deprecated and will be removed in a future release.", "0.11.0.0")
   def getConsumersPerTopic(group: String, excludeInternalTopics: Boolean): mutable.Map[String, List[ConsumerThreadId]] = {
     val dirs = new ZKGroupDirs(group)
     val consumers = getChildrenParentMayNotExist(dirs.consumerRegistryDir)
@@ -847,6 +850,7 @@ class ZkUtils(val zkClient: ZkClient,
     consumersPerTopicMap
   }
 
+  @deprecated("This method has been deprecated and will be removed in a future release.", "0.11.0.0")
   def getTopicsPerMemberId(group: String, excludeInternalTopics: Boolean = true): Map[String, List[String]] = {
     val dirs = new ZKGroupDirs(group)
     val memberIds = getChildrenParentMayNotExist(dirs.consumerRegistryDir)
@@ -916,14 +920,17 @@ class ZkUtils(val zkClient: ZkClient,
     }
   }
 
+  @deprecated("This method has been deprecated and will be removed in a future release.", "0.11.0.0")
   def getConsumerGroups() = {
     getChildren(ConsumersPath)
   }
 
+  @deprecated("This method has been deprecated and will be removed in a future release.", "0.11.0.0")
   def getTopicsByConsumerGroup(consumerGroup:String) = {
     getChildrenParentMayNotExist(new ZKGroupDirs(consumerGroup).consumerGroupOwnersDir)
   }
 
+  @deprecated("This method has been deprecated and will be removed in a future release.", "0.11.0.0")
   def getAllConsumerGroupsForTopic(topic: String): Set[String] = {
     val groups = getChildrenParentMayNotExist(ConsumersPath)
     if (groups == null) Set.empty
@@ -957,6 +964,7 @@ private object ZKStringSerializer extends ZkSerializer {
   }
 }
 
+@deprecated("This class has been deprecated and will be removed in a future release.", "0.11.0.0")
 class ZKGroupDirs(val group: String) {
   def consumerDir = ConsumersPath
   def consumerGroupDir = consumerDir + "/" + group
@@ -965,6 +973,7 @@ class ZKGroupDirs(val group: String) {
   def consumerGroupOwnersDir = consumerGroupDir + "/owners"
 }
 
+@deprecated("This class has been deprecated and will be removed in a future release.", "0.11.0.0")
 class ZKGroupTopicDirs(group: String, topic: String) extends ZKGroupDirs(group) {
   def consumerOffsetDir = consumerGroupOffsetsDir + "/" + topic
   def consumerOwnerDir = consumerGroupOwnersDir + "/" + topic

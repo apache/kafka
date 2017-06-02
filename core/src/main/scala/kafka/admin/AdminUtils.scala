@@ -352,6 +352,7 @@ object AdminUtils extends Logging with AdminUtilities {
       }
     }
 
+  @deprecated("This method has been deprecated and will be removed in a future release.", "0.11.0.0")
   def isConsumerGroupActive(zkUtils: ZkUtils, group: String) = {
     zkUtils.getConsumersInGroup(group).nonEmpty
   }
@@ -363,6 +364,7 @@ object AdminUtils extends Logging with AdminUtilities {
    * @param group Consumer group
    * @return whether or not we deleted the consumer group information
    */
+  @deprecated("This method has been deprecated and will be removed in a future release.", "0.11.0.0")
   def deleteConsumerGroupInZK(zkUtils: ZkUtils, group: String) = {
     if (!isConsumerGroupActive(zkUtils, group)) {
       val dir = new ZKGroupDirs(group)
@@ -381,6 +383,7 @@ object AdminUtils extends Logging with AdminUtilities {
    * @param topic Topic of the consumer group information we wish to delete
    * @return whether or not we deleted the consumer group information for the given topic
    */
+  @deprecated("This method has been deprecated and will be removed in a future release.", "0.11.0.0")
   def deleteConsumerGroupInfoForTopicInZK(zkUtils: ZkUtils, group: String, topic: String) = {
     val topics = zkUtils.getTopicsByConsumerGroup(group)
     if (topics == Seq(topic)) {
@@ -401,6 +404,7 @@ object AdminUtils extends Logging with AdminUtilities {
    * @param zkUtils Zookeeper utilities
    * @param topic Topic of the consumer group information we wish to delete
    */
+  @deprecated("This method has been deprecated and will be removed in a future release.", "0.11.0.0")
   def deleteAllConsumerGroupInfoForTopicInZK(zkUtils: ZkUtils, topic: String) {
     val groups = zkUtils.getAllConsumerGroupsForTopic(topic)
     groups.foreach(group => deleteConsumerGroupInfoForTopicInZK(zkUtils, group, topic))

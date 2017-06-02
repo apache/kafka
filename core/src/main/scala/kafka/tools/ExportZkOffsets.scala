@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -30,23 +30,25 @@ import scala.collection.JavaConverters._
 /**
  *  A utility that retrieves the offset of broker partitions in ZK and
  *  prints to an output file in the following format:
- *  
+ *
  *  /consumers/group1/offsets/topic1/1-0:286894308
  *  /consumers/group1/offsets/topic1/2-0:284803985
- *  
+ *
  *  This utility expects 3 arguments:
  *  1. Zk host:port string
  *  2. group name (all groups implied if omitted)
  *  3. output filename
- *     
+ *
  *  To print debug message, add the following line to log4j.properties:
  *  log4j.logger.kafka.tools.ExportZkOffsets$=DEBUG
  *  (for eclipse debugging, copy log4j.properties to the binary directory in "core" such as core/bin)
  */
+@deprecated("This class has been deprecated and will be removed in a future release.", "0.11.0.0")
 object ExportZkOffsets extends Logging {
 
   def main(args: Array[String]) {
     val parser = new OptionParser(false)
+    warn("WARNING: ExportZkOffsets is deprecated and will be dropped in a future release following 0.11.0.0.")
 
     val zkConnectOpt = parser.accepts("zkconnect", "ZooKeeper connect string.")
                             .withRequiredArg()
@@ -59,19 +61,19 @@ object ExportZkOffsets extends Logging {
                             .withRequiredArg()
                             .ofType(classOf[String])
     parser.accepts("help", "Print this message.")
-    
+
     if(args.length == 0)
       CommandLineUtils.printUsageAndDie(parser, "Export consumer offsets to an output file.")
-            
+
     val options = parser.parse(args : _*)
-    
+
     if (options.has("help")) {
        parser.printHelpOn(System.out)
        Exit.exit(0)
     }
-    
+
     CommandLineUtils.checkRequiredArgs(parser, options, zkConnectOpt, outFileOpt)
-    
+
     val zkConnect  = options.valueOf(zkConnectOpt)
     val groups     = options.valuesOf(groupOpt)
     val outfile    = options.valueOf(outFileOpt)
@@ -79,13 +81,13 @@ object ExportZkOffsets extends Logging {
     var zkUtils   : ZkUtils    = null
     val fileWriter : OutputStreamWriter =
         new OutputStreamWriter(new FileOutputStream(outfile), StandardCharsets.UTF_8)
-    
+
     try {
       zkUtils = ZkUtils(zkConnect,
                         30000,
                         30000,
                         JaasUtils.isZkSecurityEnabled())
-      
+
       var consumerGroups: Seq[String] = null
 
       if (groups.size == 0) {
@@ -94,13 +96,13 @@ object ExportZkOffsets extends Logging {
       else {
         consumerGroups = groups.asScala
       }
-      
+
       for (consumerGrp <- consumerGroups) {
         val topicsList = getTopicsList(zkUtils, consumerGrp)
-        
+
         for (topic <- topicsList) {
           val bidPidList = getBrokeridPartition(zkUtils, consumerGrp, topic)
-          
+
           for (bidPid <- bidPidList) {
             val zkGrpTpDir = new ZKGroupTopicDirs(consumerGrp,topic)
             val offsetPath = zkGrpTpDir.consumerOffsetDir + "/" + bidPid
@@ -113,9 +115,9 @@ object ExportZkOffsets extends Logging {
             }
           }
         }
-      }      
+      }
     }
-    finally {      
+    finally {
       fileWriter.flush()
       fileWriter.close()
     }
@@ -123,7 +125,7 @@ object ExportZkOffsets extends Logging {
 
   private def getBrokeridPartition(zkUtils: ZkUtils, consumerGroup: String, topic: String): List[String] =
     zkUtils.getChildrenParentMayNotExist("/consumers/%s/offsets/%s".format(consumerGroup, topic)).toList
-  
+
   private def getTopicsList(zkUtils: ZkUtils, consumerGroup: String): List[String] =
     zkUtils.getChildren("/consumers/%s/offsets".format(consumerGroup)).toList
 
