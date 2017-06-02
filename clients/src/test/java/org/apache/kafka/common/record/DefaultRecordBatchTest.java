@@ -90,6 +90,35 @@ public class DefaultRecordBatchTest {
     }
 
     @Test
+    public void buildDefaultRecordBatchWithSequenceWrapAround() {
+        long pid = 23423L;
+        short epoch = 145;
+        int baseSequence = Integer.MAX_VALUE - 1;
+        ByteBuffer buffer = ByteBuffer.allocate(2048);
+
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, CompressionType.NONE,
+                TimestampType.CREATE_TIME, 1234567L, RecordBatch.NO_TIMESTAMP, pid, epoch, baseSequence);
+        builder.appendWithOffset(1234567, 1L, "a".getBytes(), "v".getBytes());
+        builder.appendWithOffset(1234568, 2L, "b".getBytes(), "v".getBytes());
+        builder.appendWithOffset(1234569, 3L, "c".getBytes(), "v".getBytes());
+
+        MemoryRecords records = builder.build();
+        List<MutableRecordBatch> batches = TestUtils.toList(records.batches());
+        assertEquals(1, batches.size());
+        RecordBatch batch = batches.get(0);
+
+        assertEquals(pid, batch.producerId());
+        assertEquals(epoch, batch.producerEpoch());
+        assertEquals(baseSequence, batch.baseSequence());
+        assertEquals(0, batch.lastSequence());
+        List<Record> allRecords = TestUtils.toList(batch);
+        assertEquals(3, allRecords.size());
+        assertEquals(Integer.MAX_VALUE - 1, allRecords.get(0).sequence());
+        assertEquals(Integer.MAX_VALUE, allRecords.get(1).sequence());
+        assertEquals(0, allRecords.get(2).sequence());
+    }
+
+    @Test
     public void testSizeInBytes() {
         Header[] headers = new Header[] {
             new RecordHeader("foo", "value".getBytes()),
@@ -263,6 +292,13 @@ public class DefaultRecordBatchTest {
         try (CloseableIterator<Record> streamingIterator = batch.streamingIterator(BufferSupplier.create())) {
             TestUtils.checkEquals(streamingIterator, batch.iterator());
         }
+    }
+
+    @Test
+    public void testIncrementSequence() {
+        assertEquals(10, DefaultRecordBatch.incrementSequence(5, 5));
+        assertEquals(0, DefaultRecordBatch.incrementSequence(Integer.MAX_VALUE, 1));
+        assertEquals(4, DefaultRecordBatch.incrementSequence(Integer.MAX_VALUE - 5, 10));
     }
 
 }

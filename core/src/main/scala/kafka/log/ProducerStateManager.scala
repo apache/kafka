@@ -91,11 +91,11 @@ private[log] class ProducerAppendInfo(val producerId: Long,
   private val transactions = ListBuffer.empty[TxnMetadata]
 
   private def validateAppend(producerEpoch: Short, firstSeq: Int, lastSeq: Int) = {
-    if (this.producerEpoch > producerEpoch) {
+    if (isFenced(producerEpoch)) {
       throw new ProducerFencedException(s"Producer's epoch is no longer valid. There is probably another producer " +
         s"with a newer epoch. $producerEpoch (request epoch), ${this.producerEpoch} (server epoch)")
     } else if (validateSequenceNumbers) {
-      if (this.producerEpoch == RecordBatch.NO_PRODUCER_EPOCH || this.producerEpoch < producerEpoch) {
+      if (producerEpoch != this.producerEpoch) {
         if (firstSeq != 0)
           throw new OutOfOrderSequenceException(s"Invalid sequence number for new epoch: $producerEpoch " +
             s"(request epoch), $firstSeq (seq. number)")
@@ -107,11 +107,19 @@ private[log] class ProducerAppendInfo(val producerId: Long,
         throw new DuplicateSequenceNumberException(s"Duplicate sequence number for producerId $producerId: (incomingBatch.firstSeq, " +
           s"incomingBatch.lastSeq): ($firstSeq, $lastSeq), (lastEntry.firstSeq, lastEntry.lastSeq): " +
           s"(${this.firstSeq}, ${this.lastSeq}).")
-      } else if (firstSeq != this.lastSeq + 1L) {
+      } else if (!inSequence(firstSeq, lastSeq)) {
         throw new OutOfOrderSequenceException(s"Out of order sequence number for producerId $producerId: $firstSeq " +
           s"(incoming seq. number), ${this.lastSeq} (current end sequence number)")
       }
     }
+  }
+
+  private def inSequence(firstSeq: Int, lastSeq: Int): Boolean = {
+    firstSeq == this.lastSeq + 1L || (firstSeq == 0 && this.lastSeq == Int.MaxValue)
+  }
+
+  private def isFenced(producerEpoch: Short): Boolean = {
+    producerEpoch < this.producerEpoch
   }
 
   def append(batch: RecordBatch): Option[CompletedTxn] = {
@@ -158,14 +166,14 @@ private[log] class ProducerAppendInfo(val producerId: Long,
                          producerEpoch: Short,
                          offset: Long,
                          timestamp: Long): CompletedTxn = {
-    if (this.producerEpoch > producerEpoch)
+    if (isFenced(producerEpoch))
       throw new ProducerFencedException(s"Invalid producer epoch: $producerEpoch (zombie): ${this.producerEpoch} (current)")
 
     if (this.coordinatorEpoch > endTxnMarker.coordinatorEpoch)
       throw new TransactionCoordinatorFencedException(s"Invalid coordinator epoch: ${endTxnMarker.coordinatorEpoch} " +
         s"(zombie), $coordinatorEpoch (current)")
 
-    if (producerEpoch > this.producerEpoch) {
+    if (producerEpoch != this.producerEpoch) {
       // it is possible that this control record is the first record seen from a new epoch (the producer
       // may fail before sending to the partition or the request itself could fail for some reason). In this
       // case, we bump the epoch and reset the sequence numbers
