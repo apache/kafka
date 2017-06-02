@@ -234,10 +234,15 @@ public class TransactionManager {
     }
 
     public synchronized boolean ensurePartitionAdded(TopicPartition tp) {
-        if (isInTransaction() && !partitionsInTransaction.contains(tp)) {
-            transitionToFatalError(new IllegalStateException("Attempted to dequeue a record batch to send " +
-                    "for partition " + tp + ", which hasn't been added to the transaction yet"));
-            return false;
+        if (isInTransaction() || hasError()) {
+            // We should enter this branch in an error state because if this partition is already in the transaction,
+            // there is a chance that the corresponding batch is in retry. So we must let it completely flush.
+            if (!wouldTransactionContainPartition(tp)) {
+                transitionToFatalError(new IllegalStateException("Attempted to dequeue a record batch to send " +
+                        "for partition " + tp + ", which would never be added to the transaction."));
+                return false;
+            }
+            return partitionsInTransaction.contains(tp);
         }
         return true;
     }
@@ -431,6 +436,12 @@ public class TransactionManager {
         return isTransactional() && currentState == State.READY;
     }
 
+    private synchronized boolean wouldTransactionContainPartition(TopicPartition tp) {
+        return isInTransaction() && (partitionsInTransaction.contains(tp)
+                || pendingPartitionsInTransaction.contains(tp)
+                || newPartitionsInTransaction.contains(tp));
+    }
+
     private void transitionTo(State target) {
         transitionTo(target, null);
     }
@@ -448,7 +459,12 @@ public class TransactionManager {
             lastError = null;
         }
 
-        log.debug("{}Transition from state {} to {}", logPrefix, currentState, target);
+        if (lastError != null)
+            log.error("{}Transition from state {} to error state {}", logPrefix , currentState,
+                    target, lastError);
+        else
+            log.debug("Transition from state {} to {}", logPrefix, currentState, target);
+
         currentState = target;
     }
 
