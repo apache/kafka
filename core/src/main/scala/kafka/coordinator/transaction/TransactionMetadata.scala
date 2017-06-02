@@ -282,8 +282,8 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
     //
     // if valid, transition is done via overwriting the whole object to ensure synchronization
 
-    val toState = pendingState.getOrElse(throw new IllegalStateException("Completing transaction state transition " +
-      "while it does not have a pending state"))
+    val toState = pendingState.getOrElse(throw new IllegalStateException(s"TransactionalId $transactionalId " +
+      "completing transaction state transition while it does not have a pending state"))
 
     if (toState != transitMetadata.txnState || txnLastUpdateTimestamp > transitMetadata.txnLastUpdateTimestamp) {
       throwStateTransitionFailure(toState)
@@ -362,8 +362,8 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
   }
 
   private def throwStateTransitionFailure(toState: TransactionState): Unit = {
-    throw new IllegalStateException(s"TransactionalId $transactionalId failed state transition to state $toState failed " +
-      s"due to unexpected metadata")
+    throw new IllegalStateException(s"TransactionalId $transactionalId failed transition to state $toState " +
+      "due to unexpected metadata")
   }
 
   def pendingTransitionInProgress: Boolean = pendingState.isDefined
