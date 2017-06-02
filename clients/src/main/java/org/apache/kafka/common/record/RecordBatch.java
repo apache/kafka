@@ -231,6 +231,19 @@ public interface RecordBatch extends Iterable<Record> {
     CloseableIterator<Record> streamingIterator(BufferSupplier decompressionBufferSupplier);
 
     /**
+     * Get an iterator over the records assuming that offsets have not yet been assigned. This is used
+     * by the broker for record validation prior to assigning offsets.
+     *
+     * @param decompressionBufferSupplier The supplier of ByteBuffer(s) used for decompression if supported.
+     *                                    For small record batches, allocating a potentially large buffer (64 KB for LZ4)
+     *                                    will dominate the cost of decompressing and iterating over the records in the
+     *                                    batch. As such, a supplier that reuses buffers will have a significant
+     *                                    performance impact.
+     * @return The iterator
+     */
+    Iterator<Record> unassignedOffsetsIterator();
+
+    /**
      * Check whether this is a control batch (i.e. whether the control bit is set in the batch attributes).
      * For magic versions prior to 2, this is always false.
      *

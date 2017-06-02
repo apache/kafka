@@ -31,6 +31,7 @@ import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.util.ArrayDeque;
+import java.util.Iterator;
 import java.util.NoSuchElementException;
 
 import static org.apache.kafka.common.record.Records.LOG_OVERHEAD;
@@ -222,13 +223,18 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
      * @return An iterator over the records contained within this batch
      */
     @Override
-    public CloseableIterator<Record> iterator() {
-        return iterator(BufferSupplier.NO_CACHING);
+    public Iterator<Record> iterator() {
+        return iterator(BufferSupplier.NO_CACHING, true);
     }
 
-    private CloseableIterator<Record> iterator(BufferSupplier bufferSupplier) {
+    @Override
+    public Iterator<Record> unassignedOffsetsIterator() {
+        return iterator(BufferSupplier.NO_CACHING, false);
+    }
+
+    private CloseableIterator<Record> iterator(BufferSupplier bufferSupplier, boolean hasAssignedOffsets) {
         if (isCompressed())
-            return new DeepRecordsIterator(this, false, Integer.MAX_VALUE, bufferSupplier);
+            return new DeepRecordsIterator(this, false, Integer.MAX_VALUE, bufferSupplier, hasAssignedOffsets);
 
         return new CloseableIterator<Record>() {
             private boolean hasNext = true;
@@ -259,7 +265,7 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
     @Override
     public CloseableIterator<Record> streamingIterator(BufferSupplier bufferSupplier) {
         // the older message format versions do not support streaming, so we return the normal iterator
-        return iterator(bufferSupplier);
+        return iterator(bufferSupplier, true);
     }
 
     static void writeHeader(ByteBuffer buffer, long offset, int size) {
@@ -307,14 +313,19 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
     }
 
     private static class DeepRecordsIterator extends AbstractIterator<Record> implements CloseableIterator<Record> {
-        private final ArrayDeque<AbstractLegacyRecordBatch> batches;
+        private final ArrayDeque<AbstractLegacyRecordBatch> innerEntries;
         private final long absoluteBaseOffset;
         private final byte wrapperMagic;
 
-        private DeepRecordsIterator(AbstractLegacyRecordBatch wrapperEntry, boolean ensureMatchingMagic,
-                                    int maxMessageSize, BufferSupplier bufferSupplier) {
+        private DeepRecordsIterator(AbstractLegacyRecordBatch wrapperEntry,
+                                    boolean ensureMatchingMagic,
+                                    int maxMessageSize,
+                                    BufferSupplier bufferSupplier,
+                                    boolean hasOffsetsAssigned) {
             LegacyRecord wrapperRecord = wrapperEntry.outerRecord();
             this.wrapperMagic = wrapperRecord.magic();
+            if (wrapperMagic != RecordBatch.MAGIC_VALUE_V0 && wrapperMagic != RecordBatch.MAGIC_VALUE_V1)
+                throw new InvalidRecordException("Invalid wrapper magic found in legacy deep record iterator " + wrapperMagic);
 
             CompressionType compressionType = wrapperRecord.compressionType();
             ByteBuffer wrapperValue = wrapperRecord.value();
@@ -325,47 +336,55 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
             InputStream stream = compressionType.wrapForInput(wrapperValue, wrapperRecord.magic(), bufferSupplier);
             LogInputStream<AbstractLegacyRecordBatch> logStream = new DataLogInputStream(stream, maxMessageSize);
 
-            long wrapperRecordOffset = wrapperEntry.lastOffset();
-            long wrapperRecordTimestamp = wrapperRecord.timestamp();
-            this.batches = new ArrayDeque<>();
+            long lastOffsetFromWrapper = wrapperEntry.lastOffset();
+            long timestampFromWrapper = wrapperRecord.timestamp();
+            this.innerEntries = new ArrayDeque<>();
 
             // If relative offset is used, we need to decompress the entire message first to compute
             // the absolute offset. For simplicity and because it's a format that is on its way out, we
             // do the same for message format version 0
             try {
                 while (true) {
-                    AbstractLegacyRecordBatch batch = logStream.nextBatch();
-                    if (batch == null)
+                    AbstractLegacyRecordBatch innerEntry = logStream.nextBatch();
+                    if (innerEntry == null)
                         break;
 
-                    LegacyRecord record = batch.outerRecord();
+                    LegacyRecord record = innerEntry.outerRecord();
                     byte magic = record.magic();
 
                     if (ensureMatchingMagic && magic != wrapperMagic)
                         throw new InvalidRecordException("Compressed message magic " + magic +
                                 " does not match wrapper magic " + wrapperMagic);
 
-                    if (magic > RecordBatch.MAGIC_VALUE_V0) {
+                    if (magic == RecordBatch.MAGIC_VALUE_V1) {
                         LegacyRecord recordWithTimestamp = new LegacyRecord(
                                 record.buffer(),
-                                wrapperRecordTimestamp,
+                                timestampFromWrapper,
                                 wrapperRecord.timestampType());
-                        batch = new BasicLegacyRecordBatch(batch.lastOffset(), recordWithTimestamp);
+                        innerEntry = new BasicLegacyRecordBatch(innerEntry.lastOffset(), recordWithTimestamp);
                     }
-                    batches.addLast(batch);
 
-                    // break early if we reach the last offset in the batch
-                    if (batch.offset() == wrapperRecordOffset)
-                        break;
+                    innerEntries.addLast(innerEntry);
                 }
 
-                if (batches.isEmpty())
+                if (innerEntries.isEmpty())
                     throw new InvalidRecordException("Found invalid compressed record set with no inner records");
 
-                if (wrapperMagic > RecordBatch.MAGIC_VALUE_V0)
-                    this.absoluteBaseOffset = wrapperRecordOffset - batches.getLast().lastOffset();
-                else
+                if (!hasOffsetsAssigned) {
+                    // If offsets are not assigned, then we do not use the offset from the wrapper record because
+                    // the value could be set differently depending on the client. For example, older clients
+                    // always used offset 0 in the wrapper record, while post-0.10.1 clients used the last offset
+                    // from the inner record's relative offsets.
+                    this.absoluteBaseOffset = 0;
+                } else if (wrapperMagic == RecordBatch.MAGIC_VALUE_V1) {
+                    long lastInnerOffset = innerEntries.getLast().offset();
+                    if (lastOffsetFromWrapper < lastInnerOffset)
+                        throw new InvalidRecordException("Found invalid wrapper offset in compressed v1 message set: "
+                                + lastOffsetFromWrapper);
+                    this.absoluteBaseOffset = lastOffsetFromWrapper - lastInnerOffset;
+                } else {
                     this.absoluteBaseOffset = -1;
+                }
             } catch (IOException e) {
                 throw new KafkaException(e);
             } finally {
@@ -375,14 +394,14 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
 
         @Override
         protected Record makeNext() {
-            if (batches.isEmpty())
+            if (innerEntries.isEmpty())
                 return allDone();
 
-            AbstractLegacyRecordBatch entry = batches.remove();
+            AbstractLegacyRecordBatch entry = innerEntries.remove();
 
             // Convert offset to absolute offset if needed.
-            if (absoluteBaseOffset >= 0) {
-                long absoluteOffset = absoluteBaseOffset + entry.lastOffset();
+            if (wrapperMagic == RecordBatch.MAGIC_VALUE_V1) {
+                long absoluteOffset = absoluteBaseOffset + entry.offset();
                 entry = new BasicLegacyRecordBatch(absoluteOffset, entry.outerRecord());
             }
 

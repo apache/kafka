@@ -20,6 +20,8 @@ import org.apache.kafka.common.record.AbstractLegacyRecordBatch.ByteBufferLegacy
 import org.apache.kafka.common.utils.Utils;
 import org.junit.Test;
 
+import java.util.Arrays;
+import java.util.Iterator;
 import java.util.List;
 
 import static org.junit.Assert.assertEquals;
@@ -54,6 +56,47 @@ public class AbstractLegacyRecordBatchTest {
         long offset = firstOffset;
         for (Record record : records.records())
             assertEquals(offset++, record.offset());
+    }
+
+    @Test
+    public void testIterateCompressedRecordWithWrapperOffsetZeroV0() {
+        for (byte magic : Arrays.asList(RecordBatch.MAGIC_VALUE_V0, RecordBatch.MAGIC_VALUE_V1)) {
+            SimpleRecord[] simpleRecords = new SimpleRecord[] {
+                    new SimpleRecord(1L, "a".getBytes(), "1".getBytes()),
+                    new SimpleRecord(2L, "b".getBytes(), "2".getBytes()),
+                    new SimpleRecord(3L, "c".getBytes(), "3".getBytes())
+            };
+
+            MemoryRecords records = MemoryRecords.withRecords(magic, 0L,
+                    CompressionType.GZIP, TimestampType.CREATE_TIME, simpleRecords);
+
+            ByteBufferLegacyRecordBatch batch = new ByteBufferLegacyRecordBatch(records.buffer());
+            batch.setLastOffset(0L);
+
+            long offset = 0L;
+            Iterator<Record> iterator = batch.unassignedOffsetsIterator();
+            while (iterator.hasNext()) {
+                Record record = iterator.next();
+                assertEquals(offset++, record.offset());
+            }
+        }
+    }
+
+    @Test(expected = InvalidRecordException.class)
+    public void testInvalidWrapperOffsetV1() {
+        SimpleRecord[] simpleRecords = new SimpleRecord[] {
+                new SimpleRecord(1L, "a".getBytes(), "1".getBytes()),
+                new SimpleRecord(2L, "b".getBytes(), "2".getBytes()),
+                new SimpleRecord(3L, "c".getBytes(), "3".getBytes())
+        };
+
+        MemoryRecords records = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V1, 0L,
+                CompressionType.GZIP, TimestampType.CREATE_TIME, simpleRecords);
+
+        ByteBufferLegacyRecordBatch batch = new ByteBufferLegacyRecordBatch(records.buffer());
+        batch.setLastOffset(0L);
+
+        batch.iterator();
     }
 
     @Test(expected = IllegalArgumentException.class)

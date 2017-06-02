@@ -155,6 +155,11 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
         }
 
         @Override
+        public Iterator<Record> unassignedOffsetsIterator() {
+            return loadFullBatch().unassignedOffsetsIterator();
+        }
+
+        @Override
         public boolean isValid() {
             return loadFullBatch().isValid();
         }
