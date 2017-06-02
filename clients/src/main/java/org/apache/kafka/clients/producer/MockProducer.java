@@ -41,6 +41,8 @@ import java.util.Objects;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
+import static org.apache.kafka.common.serialization.ExtendedSerializer.Wrapper.ensureExtended;
+
 /**
  * A mock of the producer interface you can use for testing code that uses Kafka.
  * <p>
@@ -129,10 +131,6 @@ public class MockProducer<K, V> implements Producer<K, V> {
      */
     public MockProducer() {
         this(Cluster.empty(), false, null, null, null);
-    }
-
-    private <T> ExtendedSerializer<T> ensureExtended(Serializer<T> serializer) {
-        return serializer instanceof ExtendedSerializer ? (ExtendedSerializer<T>) serializer : new ExtendedSerializer.Wrapper<>(serializer);
     }
 
     @Override
