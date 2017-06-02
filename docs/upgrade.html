@@ -60,6 +60,12 @@
     <li>The <code>offsets.topic.replication.factor</code> broker config is now enforced upon auto topic creation. Internal
         auto topic creation will fail with a GROUP_COORDINATOR_NOT_AVAILABLE error until the cluster size meets this
         replication factor requirement.</li>
+    <li> When compressing data with snappy, the producer and broker will use the compression scheme's default block size (2 x 32 KB)
+         instead of 1 KB in order to improve the compression ratio. There have been reports of data compressed with the smaller
+         block size being 50% larger than when compressed with the larger block size. For the snappy case, a producer with 5000
+         partitions will require an additional 315 MB of JVM heap.</li>
+    <li> Similarly, when compressing data with gzip, the producer and broker will use 8 KB instead of 1 KB as the buffer size. The default
+         for gzip is excessively low (512 bytes). </li>
     <li>The broker configuration <code>max.message.bytes</code> now applies to the total size of a batch of messages.
         Previously the setting applied to batches of compressed messages, or to non-compressed messages individually. In practice,
         the change is minor since a message batch may consist of only a single message, so the limitation on the size of

@@ -38,7 +38,6 @@ import static org.apache.kafka.common.utils.Utils.wrapNullable;
  */
 public class MemoryRecordsBuilder {
     private static final float COMPRESSION_RATE_ESTIMATION_FACTOR = 1.05f;
-    private static final int COMPRESSION_DEFAULT_BUFFER_SIZE = 1024;
 
     private final TimestampType timestampType;
     private final CompressionType compressionType;
@@ -124,8 +123,7 @@ public class MemoryRecordsBuilder {
         }
 
         this.bufferStream = bufferStream;
-        this.appendStream = new DataOutputStream(compressionType.wrapForOutput(this.bufferStream, magic,
-                COMPRESSION_DEFAULT_BUFFER_SIZE));
+        this.appendStream = new DataOutputStream(compressionType.wrapForOutput(this.bufferStream, magic));
     }
 
     /**
