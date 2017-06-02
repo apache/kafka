@@ -1783,43 +1783,14 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   private def convertToResourceAndAcl(filter: AclBindingFilter): Try[(Resource, Acl)] = {
-    filter.resourceFilter().resourceType() match {
-      case AdminResourceType.UNKNOWN => return Failure(new InvalidRequestException("Invalid UNKNOWN resource type"))
-      case AdminResourceType.ANY => return Failure(new InvalidRequestException("Invalid ANY resource type"))
-      case _ =>
-    }
-    val resourceType: ResourceType = try {
-      ResourceType.fromJava(filter.resourceFilter.resourceType)
-    } catch {
-      case throwable: Throwable => return Failure(new InvalidRequestException("Invalid resource type"))
-    }
-    val principal: KafkaPrincipal = try {
-      KafkaPrincipal.fromString(filter.entryFilter.principal)
-    } catch {
-      case throwable: Throwable => return Failure(new InvalidRequestException("Invalid principal"))
-    }
-    filter.entryFilter.operation match {
-      case AclOperation.UNKNOWN => return Failure(new InvalidRequestException("Invalid UNKNOWN operation type"))
-      case AclOperation.ANY => return Failure(new InvalidRequestException("Invalid ANY operation type"))
-      case _ =>
-    }
-    val operation: Operation = try {
-      Operation.fromJava(filter.entryFilter.operation)
-    } catch {
-      case throwable: Throwable => return Failure(new InvalidRequestException(throwable.getMessage))
-    }
-    filter.entryFilter.permissionType match {
-      case AclPermissionType.UNKNOWN => new InvalidRequestException("Invalid UNKNOWN permission type")
-      case AclPermissionType.ANY => new InvalidRequestException("Invalid ANY permission type")
-      case _ =>
-    }
-    val permissionType: PermissionType = try {
-      PermissionType.fromJava(filter.entryFilter.permissionType)
-    } catch {
-      case throwable: Throwable => return Failure(new InvalidRequestException(throwable.getMessage))
-    }
-    Success((Resource(resourceType, filter.resourceFilter().name()), Acl(principal, permissionType,
-      filter.entryFilter.host, operation)))
+      for {
+        resourceType <- Try(ResourceType.fromJava(filter.resourceFilter.resourceType))
+        principal <- Try(KafkaPrincipal.fromString(filter.entryFilter.principal))
+        operation <- Try(Operation.fromJava(filter.entryFilter.operation))
+        permissionType <- Try(PermissionType.fromJava(filter.entryFilter.permissionType))
+        resource = Resource(resourceType, filter.resourceFilter.name)
+        acl = Acl(principal, permissionType, filter.entryFilter.host, operation)
+      } yield (resource, acl)
   }
 
   private def convertToAclBinding(resource: Resource, acl: Acl): AclBinding = {

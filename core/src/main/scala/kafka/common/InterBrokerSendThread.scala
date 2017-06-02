@@ -33,7 +33,6 @@ abstract class InterBrokerSendThread(name: String,
                                      isInterruptible: Boolean = true)
   extends ShutdownableThread(name, isInterruptible) {
 
-  // visible for testing
   def generateRequests(): Iterable[RequestAndCompletionHandler]
 
   override def shutdown(): Unit = {
