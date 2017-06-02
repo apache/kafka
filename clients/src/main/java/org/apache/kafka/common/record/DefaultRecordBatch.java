@@ -290,7 +290,6 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
         }
     }
 
-
     @Override
     public CloseableIterator<Record> streamingIterator(BufferSupplier bufferSupplier) {
         if (isCompressed())
