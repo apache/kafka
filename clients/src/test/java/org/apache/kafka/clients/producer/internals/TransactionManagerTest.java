@@ -60,13 +60,11 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
@@ -434,7 +432,7 @@ public class TransactionManagerTest {
         errors.put(tp0, Errors.TOPIC_AUTHORIZATION_FAILED);
         errors.put(tp1, Errors.OPERATION_NOT_ATTEMPTED);
 
-        prepareAddPartitionsToTxn(Arrays.asList(tp0, tp1), errors);
+        prepareAddPartitionsToTxn(errors);
         sender.run(time.milliseconds());
 
         assertTrue(transactionManager.hasError());
@@ -910,25 +908,21 @@ public class TransactionManagerTest {
         assertFalse(transactionManager.transactionContainsPartition(tp0));
     }
 
-    private void prepareAddPartitionsToTxn(final List<TopicPartition> partitions, final Map<TopicPartition, Errors> errors) {
+    private void prepareAddPartitionsToTxn(final Map<TopicPartition, Errors> errors) {
         client.prepareResponse(new MockClient.RequestMatcher() {
             @Override
             public boolean matches(AbstractRequest body) {
                 AddPartitionsToTxnRequest request = (AddPartitionsToTxnRequest) body;
-                assertEquals(new HashSet<>(request.partitions()), new HashSet<>(partitions));
+                assertEquals(new HashSet<>(request.partitions()), new HashSet<>(errors.keySet()));
                 return true;
             }
         }, new AddPartitionsToTxnResponse(0, errors));
     }
 
     private void prepareAddPartitionsToTxn(final TopicPartition tp, final Errors error) {
-        client.prepareResponse(new MockClient.RequestMatcher() {
-            @Override
-            public boolean matches(AbstractRequest body) {
-                return body instanceof AddPartitionsToTxnRequest &&
-                        ((AddPartitionsToTxnRequest) body).partitions().contains(tp);
-            }
-        }, new AddPartitionsToTxnResponse(0, singletonMap(tp, error)));
+        Map<TopicPartition, Errors> errors = new HashMap<>();
+        errors.put(tp, error);
+        prepareAddPartitionsToTxn(errors);
     }
 
     private void prepareFindCoordinatorResponse(Errors error, boolean shouldDisconnect,

@@ -709,7 +709,8 @@ public class TransactionManager {
                 } else if (error == Errors.TOPIC_AUTHORIZATION_FAILED) {
                     unauthorizedTopics.add(topicPartition.topic());
                 } else if (error == Errors.OPERATION_NOT_ATTEMPTED) {
-                    log.info("{}Did not attempt to add partition {} to transaction because other partitions in the batch had errors.", logPrefix, topicPartition);
+                    log.debug("{}Did not attempt to add partition {} to transaction because other partitions in the batch had errors.", logPrefix, topicPartition);
+                    hasPartitionErrors = true;
                 } else {
                     log.error("{}Could not add partition {} due to unexpected error {}", logPrefix, topicPartition, error);
                     hasPartitionErrors = true;

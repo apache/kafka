@@ -1611,7 +1611,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         // the authorization check to indicate that they were not added to the transaction.
         val partitionErrors = (unauthorizedForWriteRequestInfo.map(_ -> Errors.TOPIC_AUTHORIZATION_FAILED) ++
           nonExistingOrUnauthorizedForDescribeTopics.map(_ -> Errors.UNKNOWN_TOPIC_OR_PARTITION) ++
-          internalTopics.map(_ ->Errors.TOPIC_AUTHORIZATION_FAILED) ++
+          internalTopics.map(_ -> Errors.TOPIC_AUTHORIZATION_FAILED) ++
           authorizedPartitions.map(_ -> Errors.OPERATION_NOT_ATTEMPTED)).toMap
 
         sendResponseMaybeThrottle(request, requestThrottleMs =>

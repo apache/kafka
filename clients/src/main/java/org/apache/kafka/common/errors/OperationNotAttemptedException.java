@@ -16,6 +16,10 @@
  */
 package org.apache.kafka.common.errors;
 
+/**
+ * Indicates that the broker did not attempt to execute this operation. This may happen for batched RPCs where some
+ * operations in the batch failed, causing the broker to respond without trying the rest.
+ */
 public class OperationNotAttemptedException extends ApiException {
     public OperationNotAttemptedException(final String message) {
         super(message);
