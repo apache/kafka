@@ -115,11 +115,12 @@
 </ul>
 
 <h5><a id="upgrade_11_exactly_once_semantics" href="#upgrade_11_exactly_once_semantics">Notes on the new message format in 0.11.0</a></h5>
-<p>Kafka 0.11.0 includes "beta" support for idempotent and transactional capabilities in the producer. Idempotent delivery
+<p>Kafka 0.11.0 includes support for idempotent and transactional capabilities in the producer. Idempotent delivery
   ensures that messages are delivered exactly once to a particular topic partition during the lifetime of a single producer.
   Transactional delivery allows producers to send data to multiple partitions such that either all messages are successfully
   delivered, or none of them are. Together, these capabilities enable "exactly once semantics" (or EoS) in Kafka. More details on these
-  features are available in the user guide, but below we add a few specific notes on enabling them in an upgraded cluster.</p>
+  features are available in the user guide, but below we add a few specific notes on enabling them in an upgraded cluster.
+  Note that enabling EoS is not required and there is very little impact on the broker's behavior if unused.</p>
 
 <ol>
   <li>Only the new Java producer and consumer support EoS.</li>
@@ -142,8 +143,8 @@
   and improved replication fault tolerance
   (see <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-101+-+Alter+Replication+Protocol+to+use+Leader+Epoch+rather+than+High+Watermark+for+Truncation">KIP-101</a>).
   Although the new format contains more information to make these improvements possible, we have made the batch format much
-  more efficient. As long as the number of messages per batch is more than 2, you can expect lower overall batch sizes. For smaller
-  batches, however, there will be some performance impact. See <a href="bit.ly/kafka-eos-perf">here</a> for the results of our
+  more efficient. As long as the number of messages per batch is more than 2, you can expect lower overall overhead. For smaller
+  batches, however, there may be a small performance impact. See <a href="bit.ly/kafka-eos-perf">here</a> for the results of our
   own performance testing.
 </p>
 <p>Most of the discussion of the performance impact of <a href="#upgrade_10_performance_impact">upgrading to the 0.10.0 message format</a>
