@@ -79,6 +79,33 @@ class ProducerStateManagerTest extends JUnitSuite {
   }
 
   @Test
+  def testProducerSequenceWrapAround(): Unit = {
+    val epoch = 15.toShort
+    val sequence = Int.MaxValue
+    val offset = 735L
+    append(stateManager, producerId, epoch, sequence, offset, isLoadingFromLog = true)
+
+    append(stateManager, producerId, epoch, 0, offset + 500)
+
+    val maybeLastEntry = stateManager.lastEntry(producerId)
+    assertTrue(maybeLastEntry.isDefined)
+
+    val lastEntry = maybeLastEntry.get
+    assertEquals(epoch, lastEntry.producerEpoch)
+    assertEquals(0, lastEntry.firstSeq)
+    assertEquals(0, lastEntry.lastSeq)
+  }
+
+  @Test(expected = classOf[OutOfOrderSequenceException])
+  def testProducerSequenceInvalidWrapAround(): Unit = {
+    val epoch = 15.toShort
+    val sequence = Int.MaxValue
+    val offset = 735L
+    append(stateManager, producerId, epoch, sequence, offset, isLoadingFromLog = true)
+    append(stateManager, producerId, epoch, 1, offset + 500)
+  }
+
+  @Test
   def testNoValidationOnFirstEntryWhenLoadingLog(): Unit = {
     val epoch = 5.toShort
     val sequence = 16

@@ -18,6 +18,7 @@
 package kafka.api
 
 import java.util.Properties
+import java.util.concurrent.TimeUnit
 
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
@@ -26,13 +27,12 @@ import org.apache.kafka.clients.consumer.{ConsumerConfig, ConsumerRecord, KafkaC
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.ProducerFencedException
 import org.apache.kafka.common.protocol.SecurityProtocol
-import org.junit.{After, Before, Ignore, Test}
+import org.junit.{After, Before, Test}
 import org.junit.Assert._
 
 import scala.collection.JavaConversions._
 import scala.collection.mutable.ArrayBuffer
 import scala.concurrent.ExecutionException
-import scala.util.Random
 
 class TransactionsTest extends KafkaServerTestHarness {
   val numServers = 3
@@ -321,8 +321,10 @@ class TransactionsTest extends KafkaServerTestHarness {
 
       producer2.initTransactions()  // ok, will abort the open transaction.
       producer2.beginTransaction()
-      producer2.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, "2", "4", willBeCommitted = true)).get()
-      producer2.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, "2", "4", willBeCommitted = true)).get()
+      producer2.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, "2", "4", willBeCommitted = true))
+        .get(20, TimeUnit.SECONDS)
+      producer2.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, "2", "4", willBeCommitted = true))
+        .get(20, TimeUnit.SECONDS)
 
       try {
         producer1.beginTransaction()

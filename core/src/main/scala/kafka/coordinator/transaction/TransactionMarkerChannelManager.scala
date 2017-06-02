@@ -215,7 +215,7 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
         case Errors.NONE =>
           trace(s"Completed sending transaction markers for $transactionalId as $txnResult")
 
-          txnStateManager.getAndMaybeAddTransactionState(transactionalId) match {
+          txnStateManager.getTransactionState(transactionalId) match {
             case Left(Errors.NOT_COORDINATOR) =>
               info(s"I am no longer the coordinator for $transactionalId with coordinator epoch $coordinatorEpoch; cancel appending $newMetadata to transaction log")
 
@@ -291,7 +291,7 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
           }
 
         case None =>
-          txnStateManager.getAndMaybeAddTransactionState(transactionalId) match {
+          txnStateManager.getTransactionState(transactionalId) match {
             case Left(error) =>
               info(s"Encountered $error trying to fetch transaction metadata for $transactionalId with coordinator epoch $coordinatorEpoch; cancel sending markers to its partition leaders")
               txnMarkerPurgatory.cancelForKey(transactionalId)
