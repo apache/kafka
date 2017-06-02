@@ -18,7 +18,6 @@
 package kafka.message
 
 import java.nio._
-import java.util.HashMap
 
 import org.apache.kafka.common.protocol.Errors
 
@@ -38,7 +37,7 @@ case class MessageTestVal(key: Array[Byte],
 
 class MessageTest extends JUnitSuite {
 
-  var messages = new mutable.ArrayBuffer[MessageTestVal]()
+  val messages = new mutable.ArrayBuffer[MessageTestVal]()
 
   @Before
   def setUp(): Unit = {
@@ -57,7 +56,7 @@ class MessageTest extends JUnitSuite {
   }
 
   @Test
-  def testFieldValues {
+  def testFieldValues = {
     for(v <- messages) {
       // check payload
       if(v.payload == null) {
@@ -66,26 +65,31 @@ class MessageTest extends JUnitSuite {
       } else {
         TestUtils.checkEquals(ByteBuffer.wrap(v.payload), v.message.payload)
       }
+
       // check timestamp
-      if (v.magicValue > Message.MagicValue_V0)
+      if (v.magicValue > Message.MagicValue_V0) {
         assertEquals("Timestamp should be the same", v.timestamp, v.message.timestamp)
-       else
+      } else {
         assertEquals("Timestamp should be the NoTimestamp", Message.NoTimestamp, v.message.timestamp)
+      }
 
       // check magic value
       assertEquals(v.magicValue, v.message.magic)
+
       // check key
-      if(v.message.hasKey)
+      if(v.message.hasKey) {
         TestUtils.checkEquals(ByteBuffer.wrap(v.key), v.message.key)
-      else
+      } else {
         assertEquals(null, v.message.key)
+      }
+
       // check compression codec
       assertEquals(v.codec, v.message.compressionCodec)
     }
   }
 
   @Test
-  def testChecksum() {
+  def testChecksum() = {
     for(v <- messages) {
       assertTrue("Auto-computed checksum should be valid", v.message.isValid)
       // garble checksum
@@ -96,7 +100,7 @@ class MessageTest extends JUnitSuite {
   }
 
   @Test
-  def testEquality() {
+  def testEquality() = {
     for (v <- messages) {
       assertFalse("Should not equal null", v.message.equals(null))
       assertFalse("Should not equal a random string", v.message.equals("asdf"))
@@ -107,32 +111,31 @@ class MessageTest extends JUnitSuite {
   }
 
   @Test(expected = classOf[IllegalArgumentException])
-  def testInvalidTimestampAndMagicValueCombination() {
-      new Message("hello".getBytes, 0L, Message.MagicValue_V0)
+  def testInvalidTimestampAndMagicValueCombination() = {
+      val msg = new Message("hello".getBytes, 0L, Message.MagicValue_V0)
   }
 
   @Test(expected = classOf[IllegalArgumentException])
-  def testInvalidTimestamp() {
-    new Message("hello".getBytes, -3L, Message.MagicValue_V1)
+  def testInvalidTimestamp() = {
+    val msg = new Message("hello".getBytes, -3L, Message.MagicValue_V1)
   }
 
   @Test(expected = classOf[IllegalArgumentException])
-  def testInvalidMagicByte() {
-    new Message("hello".getBytes, 0L, 2.toByte)
+  def testInvalidMagicByte() = {
+    val msg = new Message("hello".getBytes, 0L, 2.toByte)
   }
 
   @Test
-  def testIsHashable() {
+  def testIsHashable() = {
     // this is silly, but why not
-    val m = new HashMap[Message, Message]()
-    for(v <- messages)
-      m.put(v.message, v.message)
-    for(v <- messages)
-      assertEquals(v.message, m.get(v.message))
+    val map = messages.map(m => m.message -> m.message).toMap
+    messages.foreach(m => 
+      assertEquals(Some(m.message), map.get(m.message))
+    )
   }
 
   @Test
-  def testExceptionMapping() {
+  def testExceptionMapping() = {
     val expected = Errors.CORRUPT_MESSAGE
     val actual = Errors.forException(new InvalidMessageException())
 
