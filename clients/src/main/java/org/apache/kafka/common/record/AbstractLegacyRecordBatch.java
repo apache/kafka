@@ -364,15 +364,17 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
                 if (innerEntries.isEmpty())
                     throw new InvalidRecordException("Found invalid compressed record set with no inner records");
 
-                if (lastOffsetFromWrapper == 0) {
-                    // The outer offset may be 0 if this is produce data from an older client.
-                    this.absoluteBaseOffset = 0;
-                } else if (wrapperMagic == RecordBatch.MAGIC_VALUE_V1) {
-                    long lastInnerOffset = innerEntries.getLast().offset();
-                    if (lastOffsetFromWrapper < lastInnerOffset)
-                        throw new InvalidRecordException("Found invalid wrapper offset in compressed v1 message set: "
-                                + lastOffsetFromWrapper);
-                    this.absoluteBaseOffset = lastOffsetFromWrapper - lastInnerOffset;
+                if (wrapperMagic == RecordBatch.MAGIC_VALUE_V1) {
+                    if (lastOffsetFromWrapper == 0) {
+                        // The outer offset may be 0 if this is produce data from an older client.
+                        this.absoluteBaseOffset = 0;
+                    } else {
+                        long lastInnerOffset = innerEntries.getLast().offset();
+                        if (lastOffsetFromWrapper < lastInnerOffset)
+                            throw new InvalidRecordException("Found invalid wrapper offset in compressed v1 message set: "
+                                    + lastOffsetFromWrapper);
+                        this.absoluteBaseOffset = lastOffsetFromWrapper - lastInnerOffset;
+                    }
                 } else {
                     this.absoluteBaseOffset = -1;
                 }
