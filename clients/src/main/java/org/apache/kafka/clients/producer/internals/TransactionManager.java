@@ -473,7 +473,7 @@ public class TransactionManager {
             log.error("{}Transition from state {} to error state {}", logPrefix, currentState,
                     target, lastError);
         else
-            log.debug("Transition from state {} to {}", logPrefix, currentState, target);
+            log.debug("{}Transition from state {} to {}", logPrefix, currentState, target);
 
         currentState = target;
     }
