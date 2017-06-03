@@ -23,9 +23,9 @@ import java.util.concurrent.{ExecutionException, TimeUnit}
 import org.apache.kafka.common.utils.{Time, Utils}
 import kafka.integration.KafkaServerTestHarness
 import kafka.log.LogConfig
-import kafka.server.{Defaults, KafkaConfig}
+import kafka.server.{Defaults, KafkaConfig, KafkaServer}
 import org.apache.kafka.clients.admin._
-import kafka.utils.{Logging, TestUtils}
+import kafka.utils.{Logging, TestUtils, ZkUtils}
 import org.apache.kafka.clients.admin.NewTopic
 import org.apache.kafka.common.KafkaFuture
 import org.apache.kafka.common.acl.{AccessControlEntry, AclBinding, AclBindingFilter, AclOperation, AclPermissionType}
@@ -45,7 +45,9 @@ import scala.collection.JavaConverters._
  *
  * Also see {@link org.apache.kafka.clients.admin.KafkaAdminClientTest} for a unit test of the admin client.
  */
-class KafkaAdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
+class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
+
+  import AdminClientIntegrationTest._
 
   @Rule
   def globalTimeout = Timeout.millis(120000)
@@ -244,147 +246,17 @@ class KafkaAdminClientIntegrationTest extends KafkaServerTestHarness with Loggin
     assertEquals(servers(2).config.logCleanerThreads.toString,
       configs.get(brokerResource2).get(KafkaConfig.LogCleanerThreadsProp).value)
 
-    // Alter topics
-    var topicConfigEntries1 = Seq(
-      new ConfigEntry(LogConfig.FlushMsProp, "1000")
-    ).asJava
-
-    var topicConfigEntries2 = Seq(
-      new ConfigEntry(LogConfig.MinCleanableDirtyRatioProp, "0.9"),
-      new ConfigEntry(LogConfig.CompressionTypeProp, "lz4")
-    ).asJava
-
-    var alterResult = client.alterConfigs(Map(
-      topicResource1 -> new Config(topicConfigEntries1),
-      topicResource2 -> new Config(topicConfigEntries2)
-    ).asJava)
-
-    assertEquals(Set(topicResource1, topicResource2).asJava, alterResult.results.keySet)
-    alterResult.all.get
-
-    // Verify that topics were updated correctly
-    describeResult = client.describeConfigs(Seq(topicResource1, topicResource2).asJava)
-    configs = describeResult.all.get
-
-    assertEquals(2, configs.size)
-
-    assertEquals("1000", configs.get(topicResource1).get(LogConfig.FlushMsProp).value)
-    assertEquals(Defaults.MessageMaxBytes.toString,
-      configs.get(topicResource1).get(LogConfig.MaxMessageBytesProp).value)
-    assertEquals((Defaults.LogRetentionHours * 60 * 60 * 1000).toString,
-      configs.get(topicResource1).get(LogConfig.RetentionMsProp).value)
-
-    assertEquals("0.9", configs.get(topicResource2).get(LogConfig.MinCleanableDirtyRatioProp).value)
-    assertEquals("lz4", configs.get(topicResource2).get(LogConfig.CompressionTypeProp).value)
-
-    // Alter topics with validateOnly=true
-    topicConfigEntries1 = Seq(
-      new ConfigEntry(LogConfig.MaxMessageBytesProp, "10")
-    ).asJava
-
-    topicConfigEntries2 = Seq(
-      new ConfigEntry(LogConfig.MinCleanableDirtyRatioProp, "0.3")
-    ).asJava
-
-    alterResult = client.alterConfigs(Map(
-      topicResource1 -> new Config(topicConfigEntries1),
-      topicResource2 -> new Config(topicConfigEntries2)
-    ).asJava, new AlterConfigsOptions().validateOnly(true))
-
-    assertEquals(Set(topicResource1, topicResource2).asJava, alterResult.results.keySet)
-    alterResult.all.get
-
-    // Verify that topics were not updated due to validateOnly = true
-    describeResult = client.describeConfigs(Seq(topicResource1, topicResource2).asJava)
-    configs = describeResult.all.get
-
-    assertEquals(2, configs.size)
-
-    assertEquals(Defaults.MessageMaxBytes.toString,
-      configs.get(topicResource1).get(LogConfig.MaxMessageBytesProp).value)
-    assertEquals("0.9", configs.get(topicResource2).get(LogConfig.MinCleanableDirtyRatioProp).value)
+    checkValidAlterConfigs(zkUtils, servers, client, topicResource1, topicResource2)
   }
 
   @Test
   def testInvalidAlterConfigs(): Unit = {
     client = AdminClient.create(createConfig)
-
-    // Create topics
-    val topic1 = "invalid-alter-configs-topic-1"
-    val topicResource1 = new ConfigResource(ConfigResource.Type.TOPIC, topic1)
-    TestUtils.createTopic(zkUtils, topic1, 1, 1, servers, new Properties())
-
-    val topic2 = "invalid-alter-configs-topic-2"
-    val topicResource2 = new ConfigResource(ConfigResource.Type.TOPIC, topic2)
-    TestUtils.createTopic(zkUtils, topic2, 1, 1, servers, new Properties)
-
-    val topicConfigEntries1 = Seq(
-      new ConfigEntry(LogConfig.MinCleanableDirtyRatioProp, "1.1"), // this value is invalid as it's above 1.0
-      new ConfigEntry(LogConfig.CompressionTypeProp, "lz4")
-    ).asJava
-
-    var topicConfigEntries2 = Seq(new ConfigEntry(LogConfig.CompressionTypeProp, "snappy")).asJava
-
-    val brokerResource = new ConfigResource(ConfigResource.Type.BROKER, servers.head.config.brokerId.toString)
-    val brokerConfigEntries = Seq(new ConfigEntry(KafkaConfig.CompressionTypeProp, "gzip")).asJava
-
-    // Alter configs: first and third are invalid, second is valid
-    var alterResult = client.alterConfigs(Map(
-      topicResource1 -> new Config(topicConfigEntries1),
-      topicResource2 -> new Config(topicConfigEntries2),
-      brokerResource -> new Config(brokerConfigEntries)
-    ).asJava)
-
-    assertEquals(Set(topicResource1, topicResource2, brokerResource).asJava, alterResult.results.keySet)
-    assertTrue(intercept[ExecutionException](alterResult.results.get(topicResource1).get).getCause.isInstanceOf[InvalidRequestException])
-    alterResult.results.get(topicResource2).get
-    assertTrue(intercept[ExecutionException](alterResult.results.get(brokerResource).get).getCause.isInstanceOf[InvalidRequestException])
-
-    // Verify that first and third resources were not updated and second was updated
-    var describeResult = client.describeConfigs(Seq(topicResource1, topicResource2, brokerResource).asJava)
-    var configs = describeResult.all.get
-    assertEquals(3, configs.size)
-
-    assertEquals(Defaults.LogCleanerMinCleanRatio.toString,
-      configs.get(topicResource1).get(LogConfig.MinCleanableDirtyRatioProp).value)
-    assertEquals(Defaults.CompressionType.toString,
-      configs.get(topicResource1).get(LogConfig.CompressionTypeProp).value)
-
-    assertEquals("snappy", configs.get(topicResource2).get(LogConfig.CompressionTypeProp).value)
-
-    assertEquals(Defaults.CompressionType.toString, configs.get(brokerResource).get(LogConfig.CompressionTypeProp).value)
-
-    // Alter configs with validateOnly = true: first and third are invalid, second is valid
-    topicConfigEntries2 = Seq(new ConfigEntry(LogConfig.CompressionTypeProp, "gzip")).asJava
-
-    alterResult = client.alterConfigs(Map(
-      topicResource1 -> new Config(topicConfigEntries1),
-      topicResource2 -> new Config(topicConfigEntries2),
-      brokerResource -> new Config(brokerConfigEntries)
-    ).asJava, new AlterConfigsOptions().validateOnly(true))
-
-    assertEquals(Set(topicResource1, topicResource2, brokerResource).asJava, alterResult.results.keySet)
-    assertTrue(intercept[ExecutionException](alterResult.results.get(topicResource1).get).getCause.isInstanceOf[InvalidRequestException])
-    alterResult.results.get(topicResource2).get
-    assertTrue(intercept[ExecutionException](alterResult.results.get(brokerResource).get).getCause.isInstanceOf[InvalidRequestException])
-
-    // Verify that no resources are updated since validate_only = true
-    describeResult = client.describeConfigs(Seq(topicResource1, topicResource2, brokerResource).asJava)
-    configs = describeResult.all.get
-    assertEquals(3, configs.size)
-
-    assertEquals(Defaults.LogCleanerMinCleanRatio.toString,
-      configs.get(topicResource1).get(LogConfig.MinCleanableDirtyRatioProp).value)
-    assertEquals(Defaults.CompressionType.toString,
-      configs.get(topicResource1).get(LogConfig.CompressionTypeProp).value)
-
-    assertEquals("snappy", configs.get(topicResource2).get(LogConfig.CompressionTypeProp).value)
-
-    assertEquals(Defaults.CompressionType.toString, configs.get(brokerResource).get(LogConfig.CompressionTypeProp).value)
+    checkInvalidAlterConfigs(zkUtils, servers, client)
   }
 
   val ACL1 = new AclBinding(new Resource(ResourceType.TOPIC, "mytopic3"),
-      new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.DESCRIBE, AclPermissionType.ALLOW));
+      new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.DESCRIBE, AclPermissionType.ALLOW))
 
   /**
    * Test that ACL operations are not possible when the authorizer is disabled.
@@ -472,4 +344,148 @@ class KafkaAdminClientIntegrationTest extends KafkaServerTestHarness with Loggin
     cfgs.foreach(_.putAll(serverConfig))
     cfgs.map(KafkaConfig.fromProps)
   }
+}
+
+object AdminClientIntegrationTest {
+
+  import org.scalatest.Assertions._
+
+  def checkValidAlterConfigs(zkUtils: ZkUtils, servers: Seq[KafkaServer], client: AdminClient,
+                             topicResource1: ConfigResource, topicResource2: ConfigResource): Unit = {
+    // Alter topics
+    var topicConfigEntries1 = Seq(
+      new ConfigEntry(LogConfig.FlushMsProp, "1000")
+    ).asJava
+
+    var topicConfigEntries2 = Seq(
+      new ConfigEntry(LogConfig.MinCleanableDirtyRatioProp, "0.9"),
+      new ConfigEntry(LogConfig.CompressionTypeProp, "lz4")
+    ).asJava
+
+    var alterResult = client.alterConfigs(Map(
+      topicResource1 -> new Config(topicConfigEntries1),
+      topicResource2 -> new Config(topicConfigEntries2)
+    ).asJava)
+
+    assertEquals(Set(topicResource1, topicResource2).asJava, alterResult.results.keySet)
+    alterResult.all.get
+
+    // Verify that topics were updated correctly
+    var describeResult = client.describeConfigs(Seq(topicResource1, topicResource2).asJava)
+    var configs = describeResult.all.get
+
+    assertEquals(2, configs.size)
+
+    assertEquals("1000", configs.get(topicResource1).get(LogConfig.FlushMsProp).value)
+    assertEquals(Defaults.MessageMaxBytes.toString,
+      configs.get(topicResource1).get(LogConfig.MaxMessageBytesProp).value)
+    assertEquals((Defaults.LogRetentionHours * 60 * 60 * 1000).toString,
+      configs.get(topicResource1).get(LogConfig.RetentionMsProp).value)
+
+    assertEquals("0.9", configs.get(topicResource2).get(LogConfig.MinCleanableDirtyRatioProp).value)
+    assertEquals("lz4", configs.get(topicResource2).get(LogConfig.CompressionTypeProp).value)
+
+    // Alter topics with validateOnly=true
+    topicConfigEntries1 = Seq(
+      new ConfigEntry(LogConfig.MaxMessageBytesProp, "10")
+    ).asJava
+
+    topicConfigEntries2 = Seq(
+      new ConfigEntry(LogConfig.MinCleanableDirtyRatioProp, "0.3")
+    ).asJava
+
+    alterResult = client.alterConfigs(Map(
+      topicResource1 -> new Config(topicConfigEntries1),
+      topicResource2 -> new Config(topicConfigEntries2)
+    ).asJava, new AlterConfigsOptions().validateOnly(true))
+
+    assertEquals(Set(topicResource1, topicResource2).asJava, alterResult.results.keySet)
+    alterResult.all.get
+
+    // Verify that topics were not updated due to validateOnly = true
+    describeResult = client.describeConfigs(Seq(topicResource1, topicResource2).asJava)
+    configs = describeResult.all.get
+
+    assertEquals(2, configs.size)
+
+    assertEquals(Defaults.MessageMaxBytes.toString,
+      configs.get(topicResource1).get(LogConfig.MaxMessageBytesProp).value)
+    assertEquals("0.9", configs.get(topicResource2).get(LogConfig.MinCleanableDirtyRatioProp).value)
+  }
+
+  def checkInvalidAlterConfigs(zkUtils: ZkUtils, servers: Seq[KafkaServer], client: AdminClient): Unit = {
+    // Create topics
+    val topic1 = "invalid-alter-configs-topic-1"
+    val topicResource1 = new ConfigResource(ConfigResource.Type.TOPIC, topic1)
+    TestUtils.createTopic(zkUtils, topic1, 1, 1, servers, new Properties())
+
+    val topic2 = "invalid-alter-configs-topic-2"
+    val topicResource2 = new ConfigResource(ConfigResource.Type.TOPIC, topic2)
+    TestUtils.createTopic(zkUtils, topic2, 1, 1, servers, new Properties)
+
+    val topicConfigEntries1 = Seq(
+      new ConfigEntry(LogConfig.MinCleanableDirtyRatioProp, "1.1"), // this value is invalid as it's above 1.0
+      new ConfigEntry(LogConfig.CompressionTypeProp, "lz4")
+    ).asJava
+
+    var topicConfigEntries2 = Seq(new ConfigEntry(LogConfig.CompressionTypeProp, "snappy")).asJava
+
+    val brokerResource = new ConfigResource(ConfigResource.Type.BROKER, servers.head.config.brokerId.toString)
+    val brokerConfigEntries = Seq(new ConfigEntry(KafkaConfig.CompressionTypeProp, "gzip")).asJava
+
+    // Alter configs: first and third are invalid, second is valid
+    var alterResult = client.alterConfigs(Map(
+      topicResource1 -> new Config(topicConfigEntries1),
+      topicResource2 -> new Config(topicConfigEntries2),
+      brokerResource -> new Config(brokerConfigEntries)
+    ).asJava)
+
+    assertEquals(Set(topicResource1, topicResource2, brokerResource).asJava, alterResult.results.keySet)
+    assertTrue(intercept[ExecutionException](alterResult.results.get(topicResource1).get).getCause.isInstanceOf[InvalidRequestException])
+    alterResult.results.get(topicResource2).get
+    assertTrue(intercept[ExecutionException](alterResult.results.get(brokerResource).get).getCause.isInstanceOf[InvalidRequestException])
+
+    // Verify that first and third resources were not updated and second was updated
+    var describeResult = client.describeConfigs(Seq(topicResource1, topicResource2, brokerResource).asJava)
+    var configs = describeResult.all.get
+    assertEquals(3, configs.size)
+
+    assertEquals(Defaults.LogCleanerMinCleanRatio.toString,
+      configs.get(topicResource1).get(LogConfig.MinCleanableDirtyRatioProp).value)
+    assertEquals(Defaults.CompressionType.toString,
+      configs.get(topicResource1).get(LogConfig.CompressionTypeProp).value)
+
+    assertEquals("snappy", configs.get(topicResource2).get(LogConfig.CompressionTypeProp).value)
+
+    assertEquals(Defaults.CompressionType.toString, configs.get(brokerResource).get(KafkaConfig.CompressionTypeProp).value)
+
+    // Alter configs with validateOnly = true: first and third are invalid, second is valid
+    topicConfigEntries2 = Seq(new ConfigEntry(LogConfig.CompressionTypeProp, "gzip")).asJava
+
+    alterResult = client.alterConfigs(Map(
+      topicResource1 -> new Config(topicConfigEntries1),
+      topicResource2 -> new Config(topicConfigEntries2),
+      brokerResource -> new Config(brokerConfigEntries)
+    ).asJava, new AlterConfigsOptions().validateOnly(true))
+
+    assertEquals(Set(topicResource1, topicResource2, brokerResource).asJava, alterResult.results.keySet)
+    assertTrue(intercept[ExecutionException](alterResult.results.get(topicResource1).get).getCause.isInstanceOf[InvalidRequestException])
+    alterResult.results.get(topicResource2).get
+    assertTrue(intercept[ExecutionException](alterResult.results.get(brokerResource).get).getCause.isInstanceOf[InvalidRequestException])
+
+    // Verify that no resources are updated since validate_only = true
+    describeResult = client.describeConfigs(Seq(topicResource1, topicResource2, brokerResource).asJava)
+    configs = describeResult.all.get
+    assertEquals(3, configs.size)
+
+    assertEquals(Defaults.LogCleanerMinCleanRatio.toString,
+      configs.get(topicResource1).get(LogConfig.MinCleanableDirtyRatioProp).value)
+    assertEquals(Defaults.CompressionType.toString,
+      configs.get(topicResource1).get(LogConfig.CompressionTypeProp).value)
+
+    assertEquals("snappy", configs.get(topicResource2).get(LogConfig.CompressionTypeProp).value)
+
+    assertEquals(Defaults.CompressionType.toString, configs.get(brokerResource).get(KafkaConfig.CompressionTypeProp).value)
+  }
+
 }
