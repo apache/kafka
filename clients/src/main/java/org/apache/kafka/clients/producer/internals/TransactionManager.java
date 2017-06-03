@@ -397,7 +397,6 @@ public class TransactionManager {
             nextRequestHandler = pendingRequests.poll();
         }
 
-
         if (nextRequestHandler != null)
             log.trace("{}Request {} dequeued for sending", logPrefix, nextRequestHandler.requestBuilder());
 
