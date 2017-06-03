@@ -39,30 +39,35 @@ public class CastTest {
     public void testConfigEmpty() {
         final Cast<SourceRecord> xform = new Cast.Key<>();
         xform.configure(Collections.singletonMap(Cast.SPEC_CONFIG, ""));
+        xform.close();
     }
 
     @Test(expected = ConfigException.class)
     public void testConfigInvalidSchemaType() {
         final Cast<SourceRecord> xform = new Cast.Key<>();
         xform.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "foo:faketype"));
+        xform.close();
     }
 
     @Test(expected = ConfigException.class)
     public void testConfigInvalidTargetType() {
         final Cast<SourceRecord> xform = new Cast.Key<>();
         xform.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "foo:array"));
+        xform.close();
     }
 
     @Test(expected = ConfigException.class)
     public void testConfigInvalidMap() {
         final Cast<SourceRecord> xform = new Cast.Key<>();
         xform.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "foo:int8:extra"));
+        xform.close();
     }
 
     @Test(expected = ConfigException.class)
     public void testConfigMixWholeAndFieldTransformation() {
         final Cast<SourceRecord> xform = new Cast.Key<>();
         xform.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "foo:int8,int32"));
+        xform.close();
     }
 
     @Test
@@ -74,6 +79,7 @@ public class CastTest {
 
         assertEquals(Schema.Type.INT8, transformed.keySchema().type());
         assertEquals((byte) 42, transformed.key());
+        xform.close();
     }
 
     @Test
@@ -85,6 +91,7 @@ public class CastTest {
 
         assertEquals(Schema.Type.INT8, transformed.valueSchema().type());
         assertEquals((byte) 42, transformed.value());
+        xform.close();
     }
 
     @Test
@@ -96,6 +103,7 @@ public class CastTest {
 
         assertEquals(Schema.Type.INT16, transformed.valueSchema().type());
         assertEquals((short) 42, transformed.value());
+        xform.close();
     }
 
     @Test
@@ -107,6 +115,7 @@ public class CastTest {
 
         assertEquals(Schema.Type.INT32, transformed.valueSchema().type());
         assertEquals(42, transformed.value());
+        xform.close();
     }
 
     @Test
@@ -118,6 +127,7 @@ public class CastTest {
 
         assertEquals(Schema.Type.INT64, transformed.valueSchema().type());
         assertEquals((long) 42, transformed.value());
+        xform.close();
     }
 
     @Test
@@ -129,6 +139,7 @@ public class CastTest {
 
         assertEquals(Schema.Type.FLOAT32, transformed.valueSchema().type());
         assertEquals(42.f, transformed.value());
+        xform.close();
     }
 
     @Test
@@ -140,6 +151,7 @@ public class CastTest {
 
         assertEquals(Schema.Type.FLOAT64, transformed.valueSchema().type());
         assertEquals(42., transformed.value());
+        xform.close();
     }
 
     @Test
@@ -151,6 +163,7 @@ public class CastTest {
 
         assertEquals(Schema.Type.BOOLEAN, transformed.valueSchema().type());
         assertEquals(true, transformed.value());
+        xform.close();
     }
 
     @Test
@@ -162,6 +175,7 @@ public class CastTest {
 
         assertEquals(Schema.Type.BOOLEAN, transformed.valueSchema().type());
         assertEquals(false, transformed.value());
+        xform.close();
     }
 
     @Test
@@ -173,6 +187,7 @@ public class CastTest {
 
         assertEquals(Schema.Type.STRING, transformed.valueSchema().type());
         assertEquals("42", transformed.value());
+        xform.close();
     }
 
     @Test
@@ -186,6 +201,7 @@ public class CastTest {
         assertEquals(Schema.Type.INT32, transformed.valueSchema().type());
         assertEquals(42, transformed.value());
         assertEquals(-42, transformed.valueSchema().defaultValue());
+        xform.close();
     }
 
     @Test
@@ -197,6 +213,7 @@ public class CastTest {
 
         assertNull(transformed.keySchema());
         assertEquals((byte) 42, transformed.key());
+        xform.close();
     }
 
     @Test
@@ -208,6 +225,7 @@ public class CastTest {
 
         assertNull(transformed.valueSchema());
         assertEquals((byte) 42, transformed.value());
+        xform.close();
     }
 
     @Test
@@ -219,6 +237,7 @@ public class CastTest {
 
         assertNull(transformed.valueSchema());
         assertEquals((short) 42, transformed.value());
+        xform.close();
     }
 
     @Test
@@ -230,6 +249,7 @@ public class CastTest {
 
         assertNull(transformed.valueSchema());
         assertEquals(42, transformed.value());
+        xform.close();
     }
 
     @Test
@@ -241,6 +261,7 @@ public class CastTest {
 
         assertNull(transformed.valueSchema());
         assertEquals((long) 42, transformed.value());
+        xform.close();
     }
 
     @Test
@@ -252,6 +273,7 @@ public class CastTest {
 
         assertNull(transformed.valueSchema());
         assertEquals(42.f, transformed.value());
+        xform.close();
     }
 
     @Test
@@ -263,6 +285,7 @@ public class CastTest {
 
         assertNull(transformed.valueSchema());
         assertEquals(42., transformed.value());
+        xform.close();
     }
 
     @Test
@@ -274,6 +297,7 @@ public class CastTest {
 
         assertNull(transformed.valueSchema());
         assertEquals(true, transformed.value());
+        xform.close();
     }
 
     @Test
@@ -285,6 +309,7 @@ public class CastTest {
 
         assertNull(transformed.valueSchema());
         assertEquals(false, transformed.value());
+        xform.close();
     }
 
     @Test
@@ -296,6 +321,7 @@ public class CastTest {
 
         assertNull(transformed.valueSchema());
         assertEquals("42", transformed.value());
+        xform.close();
     }
 
     @Test(expected = DataException.class)
@@ -303,6 +329,7 @@ public class CastTest {
         final Cast<SourceRecord> xform = new Cast.Value<>();
         xform.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "int8"));
         xform.apply(new SourceRecord(null, null, "topic", 0, null, Collections.singletonList("foo")));
+        xform.close();
     }
 
 
@@ -351,6 +378,7 @@ public class CastTest {
         assertEquals((byte) 1, ((Struct) transformed.value()).get("boolean"));
         assertEquals(42, ((Struct) transformed.value()).get("string"));
         assertNull(((Struct) transformed.value()).get("optional"));
+        xform.close();
     }
 
     @SuppressWarnings("unchecked")
@@ -379,6 +407,7 @@ public class CastTest {
         assertEquals(true, ((Map<String, Object>) transformed.value()).get("float64"));
         assertEquals((byte) 1, ((Map<String, Object>) transformed.value()).get("boolean"));
         assertEquals(42, ((Map<String, Object>) transformed.value()).get("string"));
+        xform.close();
     }
 
 }

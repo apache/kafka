@@ -87,16 +87,17 @@ public class KafkaProducerTest {
 
         final int oldInitCount = MockMetricsReporter.INIT_COUNT.get();
         final int oldCloseCount = MockMetricsReporter.CLOSE_COUNT.get();
+        KafkaProducer<byte[], byte[]> producer = null;
         try {
-            KafkaProducer<byte[], byte[]> producer = new KafkaProducer<byte[], byte[]>(
-                    props, new ByteArraySerializer(), new ByteArraySerializer());
+            producer = new KafkaProducer<>(props, new ByteArraySerializer(), new ByteArraySerializer());
+            fail("should have caught an exception and returned");
         } catch (KafkaException e) {
             assertEquals(oldInitCount + 1, MockMetricsReporter.INIT_COUNT.get());
             assertEquals(oldCloseCount + 1, MockMetricsReporter.CLOSE_COUNT.get());
             assertEquals("Failed to construct kafka producer", e.getMessage());
-            return;
+        } finally {
+            if (producer != null) producer.close();
         }
-        fail("should have caught an exception and returned");
     }
 
     @Test
@@ -395,9 +396,9 @@ public class KafkaProducerTest {
 
         //ensure headers can be mutated pre send.
         record.headers().add(new RecordHeader("test", "header2".getBytes()));
-        
+
         producer.send(record, null);
-        
+
         //ensure headers are closed and cannot be mutated post send
         try {
             record.headers().add(new RecordHeader("test", "test".getBytes()));
@@ -405,7 +406,7 @@ public class KafkaProducerTest {
         } catch (IllegalStateException ise) {
             //expected
         }
-        
+
         //ensure existing headers are not changed, and last header for key is still original value
         assertTrue(Arrays.equals(record.headers().lastHeader("test").value(), "header2".getBytes()));
 

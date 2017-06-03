@@ -39,6 +39,7 @@ public class ExtractFieldTest {
 
         assertNull(transformedRecord.keySchema());
         assertEquals(42, transformedRecord.key());
+        xform.close();
     }
 
     @Test
@@ -53,6 +54,7 @@ public class ExtractFieldTest {
 
         assertEquals(Schema.INT32_SCHEMA, transformedRecord.keySchema());
         assertEquals(42, transformedRecord.key());
+        xform.close();
     }
 
 }

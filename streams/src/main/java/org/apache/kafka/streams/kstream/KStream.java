@@ -53,7 +53,6 @@ import org.apache.kafka.streams.processor.TopologyBuilder;
  * @see KGroupedStream
  * @see KStreamBuilder#stream(String...)
  */
-@SuppressWarnings("unused")
 @InterfaceStability.Evolving
 public interface KStream<K, V> {
 

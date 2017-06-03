@@ -42,6 +42,7 @@ public class FlattenTest {
         final Flatten<SourceRecord> xform = new Flatten.Value<>();
         xform.configure(Collections.<String, String>emptyMap());
         xform.apply(new SourceRecord(null, null, "topic", 0, Schema.INT32_SCHEMA, 42));
+        xform.close();
     }
 
     @Test(expected = DataException.class)
@@ -49,6 +50,7 @@ public class FlattenTest {
         final Flatten<SourceRecord> xform = new Flatten.Value<>();
         xform.configure(Collections.<String, String>emptyMap());
         xform.apply(new SourceRecord(null, null, "topic", 0, null, 42));
+        xform.close();
     }
 
     @Test
@@ -109,6 +111,7 @@ public class FlattenTest {
         assertEquals(true, transformedStruct.getBoolean("A.B.boolean"));
         assertEquals("stringy", transformedStruct.getString("A.B.string"));
         assertArrayEquals("bytes".getBytes(), transformedStruct.getBytes("A.B.bytes"));
+        xform.close();
     }
 
     @Test
@@ -147,6 +150,7 @@ public class FlattenTest {
         assertEquals(true, transformedMap.get("A#B#boolean"));
         assertEquals("stringy", transformedMap.get("A#B#string"));
         assertArrayEquals("bytes".getBytes(), (byte[]) transformedMap.get("A#B#bytes"));
+        xform.close();
     }
 
     @Test
@@ -175,6 +179,7 @@ public class FlattenTest {
         assertEquals(Schema.Type.STRUCT, transformed.valueSchema().type());
         Struct transformedStruct = (Struct) transformed.value();
         assertNull(transformedStruct.get("B.opt_int32"));
+        xform.close();
     }
 
     @Test
@@ -196,6 +201,7 @@ public class FlattenTest {
         Map<String, Object> transformedMap = (Map<String, Object>) transformed.value();
 
         assertNull(transformedMap.get("B.opt_int32"));
+        xform.close();
     }
 
     @Test
@@ -211,6 +217,7 @@ public class FlattenTest {
         assertTrue(transformed.key() instanceof Map);
         Map<String, Object> transformedMap = (Map<String, Object>) transformed.key();
         assertEquals(12, transformedMap.get("A.B"));
+        xform.close();
     }
 
     @Test(expected = DataException.class)
@@ -219,6 +226,7 @@ public class FlattenTest {
         xform.configure(Collections.<String, String>emptyMap());
         Object value = Collections.singletonMap("foo", Arrays.asList("bar", "baz"));
         xform.apply(new SourceRecord(null, null, "topic", 0, null, value));
+        xform.close();
     }
 
     @Test
@@ -253,5 +261,6 @@ public class FlattenTest {
         // the parent didn't specify the default explicitly, we should still be using the field's normal default
         Schema transformedOptFieldSchema = SchemaBuilder.string().optional().defaultValue("child_default").build();
         assertEquals(transformedOptFieldSchema, transformedSchema.field("opt_field").schema());
+        xform.close();
     }
 }

@@ -372,8 +372,10 @@ public class ClientCompatibilityTest {
             new ClientCompatibilityTestDeserializer(testConfig.expectClusterId);
         final KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(consumerProps, deserializer, deserializer);
         final List<PartitionInfo> partitionInfos = consumer.partitionsFor(testConfig.topic);
-        if (partitionInfos.size() < 1)
+        if (partitionInfos.size() < 1) {
+            consumer.close();
             throw new RuntimeException("Expected at least one partition for topic " + testConfig.topic);
+        }
         final Map<TopicPartition, Long> timestampsToSearch = new HashMap<>();
         final LinkedList<TopicPartition> topicPartitions = new LinkedList<>();
         for (PartitionInfo partitionInfo : partitionInfos) {
@@ -449,14 +451,17 @@ public class ClientCompatibilityTest {
             compareArrays(message1, next);
             log.debug("Found first message...");
         } catch (RuntimeException e) {
+            consumer.close();
             throw new RuntimeException("The first message in this topic was not ours. Please use a new topic when " +
                     "running this program.");
         }
         try {
             next = iter.next();
-            if (testConfig.expectRecordTooLargeException)
+            if (testConfig.expectRecordTooLargeException) {
+                consumer.close();
                 throw new RuntimeException("Expected to get a RecordTooLargeException when reading a record " +
                         "bigger than " + ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG);
+            }
             try {
                 compareArrays(message2, next);
             } catch (RuntimeException e) {

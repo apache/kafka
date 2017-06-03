@@ -53,7 +53,6 @@ public class MockProducerTest {
 
 
     @Test
-    @SuppressWarnings("unchecked")
     public void testAutoCompleteMock() throws Exception {
         Future<RecordMetadata> metadata = producer.send(record1);
         assertTrue("Send should be immediately complete", metadata.isDone());
@@ -77,6 +76,7 @@ public class MockProducerTest {
         assertEquals("Partition should be correct", 1, metadata.get().partition());
         producer.clear();
         assertEquals("Clear should erase our history", 0, producer.history().size());
+        producer.close();
     }
 
     @Test
@@ -98,12 +98,13 @@ public class MockProducerTest {
             assertEquals(e, err.getCause());
         }
         assertFalse("No more requests to complete", producer.completeNext());
-        
+
         Future<RecordMetadata> md3 = producer.send(record1);
         Future<RecordMetadata> md4 = producer.send(record2);
         assertTrue("Requests should not be completed.", !md3.isDone() && !md4.isDone());
         producer.flush();
         assertTrue("Requests should be completed.", md3.isDone() && md4.isDone());
+        producer.close();
     }
 
     @Test
@@ -327,6 +328,7 @@ public class MockProducerTest {
 
         assertTrue(md1.isDone());
         assertTrue(md2.isDone());
+        producer.close();
     }
 
     @Test
@@ -355,6 +357,7 @@ public class MockProducerTest {
 
         producer.abortTransaction();
         assertTrue(md1.isDone());
+        producer.close();
     }
 
     @Test
@@ -640,6 +643,7 @@ public class MockProducerTest {
         MockProducer<byte[], byte[]> producer = new MockProducer<>(false, new MockSerializer(), new MockSerializer());
         producer.send(record1);
         assertFalse(producer.flushed());
+        producer.close();
     }
 
     @Test
@@ -648,6 +652,7 @@ public class MockProducerTest {
         producer.send(record1);
         producer.flush();
         assertTrue(producer.flushed());
+        producer.close();
     }
 
     private boolean isError(Future<?> future) {

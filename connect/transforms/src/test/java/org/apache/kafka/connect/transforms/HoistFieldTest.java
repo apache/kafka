@@ -38,6 +38,7 @@ public class HoistFieldTest {
 
         assertNull(transformedRecord.keySchema());
         assertEquals(Collections.singletonMap("magic", 42), transformedRecord.key());
+        xform.close();
     }
 
     @Test
@@ -51,6 +52,7 @@ public class HoistFieldTest {
         assertEquals(Schema.Type.STRUCT, transformedRecord.keySchema().type());
         assertEquals(record.keySchema(),  transformedRecord.keySchema().field("magic").schema());
         assertEquals(42, ((Struct) transformedRecord.key()).get("magic"));
+        xform.close();
     }
 
 }

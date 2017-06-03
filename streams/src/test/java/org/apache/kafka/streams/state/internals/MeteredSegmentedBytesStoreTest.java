@@ -46,7 +46,6 @@ public class MeteredSegmentedBytesStoreTest {
     private final Set<String> latencyRecorded = new HashSet<>();
     private final Set<String> throughputRecorded = new HashSet<>();
 
-    @SuppressWarnings("unchecked")
     @Before
     public void setUp() throws Exception {
         final Metrics metrics = new Metrics();

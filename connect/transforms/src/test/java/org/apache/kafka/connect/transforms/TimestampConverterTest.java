@@ -77,6 +77,7 @@ public class TimestampConverterTest {
     public void testConfigNoTargetType() {
         TimestampConverter<SourceRecord> xform = new TimestampConverter.Value<>();
         xform.configure(Collections.<String, String>emptyMap());
+        xform.close();
     }
 
     @Test(expected = ConfigException.class)
@@ -89,6 +90,7 @@ public class TimestampConverterTest {
     public void testConfigMissingFormat() {
         TimestampConverter<SourceRecord> xform = new TimestampConverter.Value<>();
         xform.configure(Collections.singletonMap(TimestampConverter.TARGET_TYPE_CONFIG, "string"));
+        xform.close();
     }
 
     @Test(expected = ConfigException.class)
@@ -98,6 +100,7 @@ public class TimestampConverterTest {
         config.put(TimestampConverter.TARGET_TYPE_CONFIG, "string");
         config.put(TimestampConverter.FORMAT_CONFIG, "bad-format");
         xform.configure(config);
+        xform.close();
     }
 
 
@@ -111,6 +114,7 @@ public class TimestampConverterTest {
 
         assertNull(transformed.valueSchema());
         assertEquals(DATE_PLUS_TIME.getTime(), transformed.value());
+        xform.close();
     }
 
     @Test
@@ -121,6 +125,7 @@ public class TimestampConverterTest {
 
         assertNull(transformed.valueSchema());
         assertEquals(DATE.getTime(), transformed.value());
+        xform.close();
     }
 
     @Test
@@ -131,6 +136,7 @@ public class TimestampConverterTest {
 
         assertNull(transformed.valueSchema());
         assertEquals(TIME.getTime(), transformed.value());
+        xform.close();
     }
 
     @Test
@@ -141,6 +147,7 @@ public class TimestampConverterTest {
 
         assertNull(transformed.valueSchema());
         assertEquals(DATE_PLUS_TIME_UNIX, transformed.value());
+        xform.close();
     }
 
     @Test
@@ -154,6 +161,7 @@ public class TimestampConverterTest {
 
         assertNull(transformed.valueSchema());
         assertEquals(DATE_PLUS_TIME_STRING, transformed.value());
+        xform.close();
     }
 
 
@@ -168,6 +176,7 @@ public class TimestampConverterTest {
         assertNull(transformed.valueSchema());
         // No change expected since the source type is coarser-grained
         assertEquals(DATE.getTime(), transformed.value());
+        xform.close();
     }
 
     @Test
@@ -179,6 +188,7 @@ public class TimestampConverterTest {
         assertNull(transformed.valueSchema());
         // No change expected since the source type is coarser-grained
         assertEquals(TIME.getTime(), transformed.value());
+        xform.close();
     }
 
     @Test
@@ -189,6 +199,7 @@ public class TimestampConverterTest {
 
         assertNull(transformed.valueSchema());
         assertEquals(DATE_PLUS_TIME.getTime(), transformed.value());
+        xform.close();
     }
 
     @Test
@@ -202,6 +213,7 @@ public class TimestampConverterTest {
 
         assertNull(transformed.valueSchema());
         assertEquals(DATE_PLUS_TIME.getTime(), transformed.value());
+        xform.close();
     }
 
 
@@ -215,6 +227,7 @@ public class TimestampConverterTest {
 
         assertEquals(Timestamp.SCHEMA, transformed.valueSchema());
         assertEquals(DATE_PLUS_TIME.getTime(), transformed.value());
+        xform.close();
     }
 
     @Test
@@ -225,6 +238,7 @@ public class TimestampConverterTest {
 
         assertEquals(Date.SCHEMA, transformed.valueSchema());
         assertEquals(DATE.getTime(), transformed.value());
+        xform.close();
     }
 
     @Test
@@ -235,6 +249,7 @@ public class TimestampConverterTest {
 
         assertEquals(Time.SCHEMA, transformed.valueSchema());
         assertEquals(TIME.getTime(), transformed.value());
+        xform.close();
     }
 
     @Test
@@ -245,6 +260,7 @@ public class TimestampConverterTest {
 
         assertEquals(Schema.INT64_SCHEMA, transformed.valueSchema());
         assertEquals(DATE_PLUS_TIME_UNIX, transformed.value());
+        xform.close();
     }
 
     @Test
@@ -258,6 +274,7 @@ public class TimestampConverterTest {
 
         assertEquals(Schema.STRING_SCHEMA, transformed.valueSchema());
         assertEquals(DATE_PLUS_TIME_STRING, transformed.value());
+        xform.close();
     }
 
 
@@ -272,6 +289,7 @@ public class TimestampConverterTest {
         assertEquals(Timestamp.SCHEMA, transformed.valueSchema());
         // No change expected since the source type is coarser-grained
         assertEquals(DATE.getTime(), transformed.value());
+        xform.close();
     }
 
     @Test
@@ -283,6 +301,7 @@ public class TimestampConverterTest {
         assertEquals(Timestamp.SCHEMA, transformed.valueSchema());
         // No change expected since the source type is coarser-grained
         assertEquals(TIME.getTime(), transformed.value());
+        xform.close();
     }
 
     @Test
@@ -293,6 +312,7 @@ public class TimestampConverterTest {
 
         assertEquals(Timestamp.SCHEMA, transformed.valueSchema());
         assertEquals(DATE_PLUS_TIME.getTime(), transformed.value());
+        xform.close();
     }
 
     @Test
@@ -306,6 +326,7 @@ public class TimestampConverterTest {
 
         assertEquals(Timestamp.SCHEMA, transformed.valueSchema());
         assertEquals(DATE_PLUS_TIME.getTime(), transformed.value());
+        xform.close();
     }
 
 
@@ -324,6 +345,7 @@ public class TimestampConverterTest {
 
         assertNull(transformed.valueSchema());
         assertEquals(Collections.singletonMap("ts", DATE.getTime()), transformed.value());
+        xform.close();
     }
 
     @Test
@@ -352,6 +374,7 @@ public class TimestampConverterTest {
         assertEquals(expectedSchema, transformed.valueSchema());
         assertEquals(DATE_PLUS_TIME.getTime(), ((Struct) transformed.value()).get("ts"));
         assertEquals("test", ((Struct) transformed.value()).get("other"));
+        xform.close();
     }
 
 
@@ -365,6 +388,7 @@ public class TimestampConverterTest {
 
         assertNull(transformed.keySchema());
         assertEquals(DATE_PLUS_TIME.getTime(), transformed.key());
+        xform.close();
     }
 
 }

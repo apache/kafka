@@ -40,6 +40,7 @@ public class InsertFieldTest {
         xform.apply(new SourceRecord(null, null,
                 "", 0,
                 Schema.INT32_SCHEMA, 42));
+        xform.close();
     }
 
     @Test
@@ -83,6 +84,7 @@ public class InsertFieldTest {
         final SourceRecord transformedRecord2 = xform.apply(
                 new SourceRecord(null, null, "test", 1, simpleStructSchema, new Struct(simpleStructSchema)));
         assertSame(transformedRecord.valueSchema(), transformedRecord2.valueSchema());
+        xform.close();
     }
 
     @Test
@@ -107,6 +109,7 @@ public class InsertFieldTest {
         assertEquals(0, ((Map) transformedRecord.value()).get("partition_field"));
         assertEquals(null, ((Map) transformedRecord.value()).get("timestamp_field"));
         assertEquals("my-instance-id", ((Map) transformedRecord.value()).get("instance_id"));
+        xform.close();
     }
 
 }

@@ -49,6 +49,7 @@ public class ValueToKeyTest {
 
         assertNull(transformedRecord.keySchema());
         assertEquals(expectedKey, transformedRecord.key());
+        xform.close();
     }
 
     @Test
@@ -81,6 +82,7 @@ public class ValueToKeyTest {
 
         assertEquals(expectedKeySchema, transformedRecord.keySchema());
         assertEquals(expectedKey, transformedRecord.key());
+        xform.close();
     }
 
 }

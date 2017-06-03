@@ -39,7 +39,6 @@ public class StoreChangeLoggerTest {
 
     private final MockProcessorContext context = new MockProcessorContext(StateSerdes.withBuiltinTypes(topic, Integer.class, String.class),
             new RecordCollectorImpl(null, "StoreChangeLoggerTest") {
-                @SuppressWarnings("unchecked")
                 @Override
                 public <K1, V1> void send(final String topic,
                                           final K1 key,
@@ -71,7 +70,6 @@ public class StoreChangeLoggerTest {
         context.close();
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void testAddRemove() throws Exception {
         context.setTime(1);

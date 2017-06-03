@@ -53,6 +53,7 @@ public class ReplaceFieldTest {
         assertEquals(42, updatedValue.get("xyz"));
         assertEquals(true, updatedValue.get("bar"));
         assertEquals("etc", updatedValue.get("etc"));
+        xform.close();
     }
 
     @Test
@@ -86,6 +87,7 @@ public class ReplaceFieldTest {
         assertEquals(2, updatedValue.schema().fields().size());
         assertEquals(new Integer(42), updatedValue.getInt32("xyz"));
         assertEquals(true, updatedValue.getBoolean("bar"));
+        xform.close();
     }
 
 }

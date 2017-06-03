@@ -128,6 +128,7 @@ public class AssignmentInfo {
             if (version < 0 || version > CURRENT_VERSION) {
                 TaskAssignmentException ex = new TaskAssignmentException("Unknown assignment data version: " + version);
                 log.error(ex.getMessage(), ex);
+                in.close();
                 throw ex;
             }
 
