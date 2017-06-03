@@ -115,7 +115,7 @@
     <li> <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-82+-+Add+Record+Headers">KIP-82</a>: FetchResponse v5 introduces an array of <code>header</code> in the message protocol, containing <code>key</code> field and <code>value</code> field.</li>
 </ul>
 
-<h5><a id="upgrade_11_exactly_once_semantics" href="#upgrade_11_exactly_once_semantics">Notes on the new message format in 0.11.0</a></h5>
+<h5><a id="upgrade_11_exactly_once_semantics" href="#upgrade_11_exactly_once_semantics">Notes on Exactly Once Semantics</a></h5>
 <p>Kafka 0.11.0 includes support for idempotent and transactional capabilities in the producer. Idempotent delivery
   ensures that messages are delivered exactly once to a particular topic partition during the lifetime of a single producer.
   Transactional delivery allows producers to send data to multiple partitions such that either all messages are successfully
