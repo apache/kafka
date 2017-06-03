@@ -692,6 +692,10 @@ class ZkUtils(val zkClient: ZkClient,
     zkClient.exists(path)
   }
 
+  def isTopicMarkedForDeletion(topic: String): Boolean = {
+    pathExists(getDeleteTopicPath(topic))
+  }
+
   def getCluster(): Cluster = {
     val cluster = new Cluster
     val nodes = getChildrenParentMayNotExist(BrokerIdsPath)

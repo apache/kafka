@@ -187,4 +187,41 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
     }
     checkReplicaDistribution(assignment, rackInfo, rackInfo.size, alteredNumPartitions, replicationFactor)
   }
+
+  @Test
+  def testDescribeAndListTopicsMarkedForDeletion() {
+    val brokers = List(0)
+    val topic = "testtopic"
+    val markedForDeletionDescribe = "MarkedForDeletion"
+    val markedForDeletionList = "marked for deletion"
+    TestUtils.createBrokersInZk(zkUtils, brokers)
+
+    val createOpts = new TopicCommandOptions(Array("--partitions", "1", "--replication-factor", "1", "--topic", topic))
+    TopicCommand.createTopic(zkUtils, createOpts)
+
+    // delete the broker first, so when we attempt to delete the topic it gets into "marked for deletion"
+    TestUtils.deleteBrokersInZk(zkUtils, brokers)
+    TopicCommand.deleteTopic(zkUtils, new TopicCommandOptions(Array("--topic", topic)))
+
+    // Test describe topics
+    def describeTopicsWithConfig() {
+      TopicCommand.describeTopic(zkUtils, new TopicCommandOptions(Array("--describe")))
+    }
+    val outputWithConfig = TestUtils.grabConsoleOutput(describeTopicsWithConfig)
+    assertTrue(outputWithConfig.contains(topic) && outputWithConfig.contains(markedForDeletionDescribe))
+
+    def describeTopicsNoConfig() {
+      TopicCommand.describeTopic(zkUtils, new TopicCommandOptions(Array("--describe", "--unavailable-partitions")))
+    }
+    val outputNoConfig = TestUtils.grabConsoleOutput(describeTopicsNoConfig)
+    assertTrue(outputNoConfig.contains(topic) && outputNoConfig.contains(markedForDeletionDescribe))
+
+    // Test list topics
+    def listTopics() {
+      TopicCommand.listTopics(zkUtils, new TopicCommandOptions(Array("--list")))
+    }
+    val output = TestUtils.grabConsoleOutput(listTopics)
+    assertTrue(output.contains(topic) && output.contains(markedForDeletionList))
+  }
+
 }
