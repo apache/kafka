@@ -116,12 +116,18 @@ public class MemoryRecords extends AbstractRecords {
 
     /**
      * Filter the records into the provided ByteBuffer.
-     * @param partition The partition that is filtered (used only for logging)
-     * @param filter The filter function
-     * @param destinationBuffer The byte buffer to write the filtered records to
-     * @param maxRecordBatchSize The maximum record batch size. Note this is not a hard limit: if a batch
-     *                           exceeds this after filtering, we log a warning, but the batch will still be
-     *                           created.
+     *
+     * @param partition                   The partition that is filtered (used only for logging)
+     * @param filter                      The filter function
+     * @param destinationBuffer           The byte buffer to write the filtered records to
+     * @param maxRecordBatchSize          The maximum record batch size. Note this is not a hard limit: if a batch
+     *                                    exceeds this after filtering, we log a warning, but the batch will still be
+     *                                    created.
+     * @param decompressionBufferSupplier The supplier of ByteBuffer(s) used for decompression if supported. For small
+     *                                    record batches, allocating a potentially large buffer (64 KB for LZ4) will
+     *                                    dominate the cost of decompressing and iterating over the records in the
+     *                                    batch. As such, a supplier that reuses buffers will have a significant
+     *                                    performance impact.
      * @return A FilterResult with a summary of the output (for metrics) and potentially an overflow buffer
      */
     public FilterResult filterTo(TopicPartition partition, RecordFilter filter, ByteBuffer destinationBuffer,
