@@ -193,7 +193,7 @@
         </p>
 
         <p>
-        It is important to understand that Kafka Streams is not a resource manager, but a library that “runs” anywhere its stream processing application runs.
+        It is important to understand that Kafka Streams is not a resource manager, but a library that "runs" anywhere its stream processing application runs.
         Multiple instances of the application are executed either on the same machine, or spread across multiple machines and tasks can be distributed automatically
         by the library to those running application instances. The assignment of partitions to tasks never changes; if an application instance fails, all its assigned
         tasks will be automatically restarted on other instances and continue to consume from the same stream partitions.
@@ -421,7 +421,7 @@ builder.addSource("SOURCE", "src-topic")
         that keep recently arrived records to use in stateful processing operations such as windowed joins or aggregation.
         To take advantage of these states, users can define a state store by implementing the <code>StateStore</code> interface (the Kafka Streams library also has a few extended interfaces such as <code>KeyValueStore</code>);
         in practice, though, users usually do not need to customize such a state store from scratch but can simply use the <code>Stores</code> factory to define a state store by specifying whether it should be persistent, log-backed, etc.
-        In the following example, a persistent key-value store named “Counts” with key type <code>String</code> and value type <code>Long</code> is created.
+        In the following example, a persistent key-value store named "Counts" with key type <code>String</code> and value type <code>Long</code> is created.
         </p>
 
 <pre>
@@ -482,8 +482,8 @@ builder.addSource("SOURCE", "src-topic")
 
         The <b>stream-table duality</b> describes the close relationship between streams and tables.
         <ul>
-        <li><b>Stream as Table</b>: A stream can be considered a changelog of a table, where each data record in the stream captures a state change of the table. A stream is thus a table in disguise, and it can be easily turned into a “real” table by replaying the changelog from beginning to end to reconstruct the table. Similarly, in a more general analogy, aggregating data records in a stream – such as computing the total number of pageviews by user from a stream of pageview events – will return a table (here with the key and the value being the user and its corresponding pageview count, respectively).</li>
-        <li><b>Table as Stream</b>: A table can be considered a snapshot, at a point in time, of the latest value for each key in a stream (a stream's data records are key-value pairs). A table is thus a stream in disguise, and it can be easily turned into a “real” stream by iterating over each key-value entry in the table.</li>
+        <li><b>Stream as Table</b>: A stream can be considered a changelog of a table, where each data record in the stream captures a state change of the table. A stream is thus a table in disguise, and it can be easily turned into a "real" table by replaying the changelog from beginning to end to reconstruct the table. Similarly, in a more general analogy, aggregating data records in a stream – such as computing the total number of pageviews by user from a stream of pageview events – will return a table (here with the key and the value being the user and its corresponding pageview count, respectively).</li>
+        <li><b>Table as Stream</b>: A table can be considered a snapshot, at a point in time, of the latest value for each key in a stream (a stream's data records are key-value pairs). A table is thus a stream in disguise, and it can be easily turned into a "real" stream by iterating over each key-value entry in the table.</li>
         </ul>
 
         <p>
@@ -555,8 +555,8 @@ GlobalKTable&lt;String, GenericRecord&gt; source2 = builder.globalTable("topic4"
         </p>
 
         <p>
-        Late-arriving records are always possible in real-time data streams. However, it depends on the effective <a href="#streams_time">time semantics</a> how late records are handled. Using processing-time, the semantics are “when the data is being processed”,
-        which means that the notion of late records is not applicable as, by definition, no record can be late. Hence, late-arriving records only really can be considered as such (i.e. as arriving “late”) for event-time or ingestion-time semantics. In both cases,
+        Late-arriving records are always possible in real-time data streams. However, it depends on the effective <a href="#streams_time">time semantics</a> how late records are handled. Using processing-time, the semantics are "when the data is being processed",
+        which means that the notion of late records is not applicable as, by definition, no record can be late. Hence, late-arriving records only really can be considered as such (i.e. as arriving "late") for event-time or ingestion-time semantics. In both cases,
         Kafka Streams is able to properly handle late-arriving records.
         </p>
 
