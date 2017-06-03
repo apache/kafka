@@ -67,7 +67,7 @@ import static org.junit.Assert.fail;
 /**
  * A unit test for KafkaAdminClient.
  *
- * See KafkaAdminClientIntegrationTest for an integration test of the KafkaAdminClient.
+ * See AdminClientIntegrationTest for an integration test.
  */
 public class KafkaAdminClientTest {
     @Rule
