@@ -77,7 +77,8 @@ public interface AlterConfigPolicy extends Configurable, AutoCloseable {
      * Clients will receive the POLICY_VIOLATION error code along with the exception's message. Note that validation
      * failure only affects the relevant resource, other resources in the request will still be processed.
      *
-     * @param requestMetadata the alter configs request parameters for the provided resource.
+     * @param requestMetadata the alter configs request parameters for the provided resource (topic is the only resource
+     *                        type whose configs can be updated currently).
      * @throws PolicyViolationException if the request parameters do not satisfy this policy.
      */
     void validate(RequestMetadata requestMetadata) throws PolicyViolationException;
