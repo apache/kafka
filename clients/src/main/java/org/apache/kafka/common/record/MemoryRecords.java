@@ -18,6 +18,7 @@ package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
+import org.apache.kafka.common.utils.CloseableIterator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -115,21 +116,28 @@ public class MemoryRecords extends AbstractRecords {
 
     /**
      * Filter the records into the provided ByteBuffer.
-     * @param partition The partition that is filtered (used only for logging)
-     * @param filter The filter function
-     * @param destinationBuffer The byte buffer to write the filtered records to
-     * @param maxRecordBatchSize The maximum record batch size. Note this is not a hard limit: if a batch
-     *                           exceeds this after filtering, we log a warning, but the batch will still be
-     *                           created.
+     *
+     * @param partition                   The partition that is filtered (used only for logging)
+     * @param filter                      The filter function
+     * @param destinationBuffer           The byte buffer to write the filtered records to
+     * @param maxRecordBatchSize          The maximum record batch size. Note this is not a hard limit: if a batch
+     *                                    exceeds this after filtering, we log a warning, but the batch will still be
+     *                                    created.
+     * @param decompressionBufferSupplier The supplier of ByteBuffer(s) used for decompression if supported. For small
+     *                                    record batches, allocating a potentially large buffer (64 KB for LZ4) will
+     *                                    dominate the cost of decompressing and iterating over the records in the
+     *                                    batch. As such, a supplier that reuses buffers will have a significant
+     *                                    performance impact.
      * @return A FilterResult with a summary of the output (for metrics) and potentially an overflow buffer
      */
     public FilterResult filterTo(TopicPartition partition, RecordFilter filter, ByteBuffer destinationBuffer,
-                                 int maxRecordBatchSize) {
-        return filterTo(partition, batches(), filter, destinationBuffer, maxRecordBatchSize);
+                                 int maxRecordBatchSize, BufferSupplier decompressionBufferSupplier) {
+        return filterTo(partition, batches(), filter, destinationBuffer, maxRecordBatchSize, decompressionBufferSupplier);
     }
 
     private static FilterResult filterTo(TopicPartition partition, Iterable<MutableRecordBatch> batches,
-                                         RecordFilter filter, ByteBuffer destinationBuffer, int maxRecordBatchSize) {
+                                         RecordFilter filter, ByteBuffer destinationBuffer, int maxRecordBatchSize,
+                                         BufferSupplier decompressionBufferSupplier) {
         long maxTimestamp = RecordBatch.NO_TIMESTAMP;
         long maxOffset = -1L;
         long shallowOffsetOfMaxTimestamp = -1L;
@@ -155,21 +163,24 @@ public class MemoryRecords extends AbstractRecords {
             boolean writeOriginalBatch = true;
             List<Record> retainedRecords = new ArrayList<>();
 
-            for (Record record : batch) {
-                messagesRead += 1;
+            try (final CloseableIterator<Record> iterator = batch.streamingIterator(decompressionBufferSupplier)) {
+                while (iterator.hasNext()) {
+                    Record record = iterator.next();
+                    messagesRead += 1;
 
-                if (filter.shouldRetain(batch, record)) {
-                    // Check for log corruption due to KAFKA-4298. If we find it, make sure that we overwrite
-                    // the corrupted batch with correct data.
-                    if (!record.hasMagic(batchMagic))
+                    if (filter.shouldRetain(batch, record)) {
+                        // Check for log corruption due to KAFKA-4298. If we find it, make sure that we overwrite
+                        // the corrupted batch with correct data.
+                        if (!record.hasMagic(batchMagic))
+                            writeOriginalBatch = false;
+
+                        if (record.offset() > maxOffset)
+                            maxOffset = record.offset();
+
+                        retainedRecords.add(record);
+                    } else {
                         writeOriginalBatch = false;
-
-                    if (record.offset() > maxOffset)
-                        maxOffset = record.offset();
-
-                    retainedRecords.add(record);
-                } else {
-                    writeOriginalBatch = false;
+                    }
                 }
             }
 
