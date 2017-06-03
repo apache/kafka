@@ -119,6 +119,18 @@ public class ProducerRecord<K, V> {
     }
     
     /**
+     * Creates a record to be sent to Kafka with a specific timestamp
+     *
+     * @param topic The topic the record will be appended to
+     * @param timestamp The timestamp of the record
+     * @param key The key that will be included in the record
+     * @param value The record contents
+     */
+    public ProducerRecord(String topic, Long timestamp, K key, V value) {
+        this(topic, null, timestamp, key, value);
+    }
+
+    /**
      * Create a record to be sent to Kafka
      * 
      * @param topic The topic the record will be appended to
@@ -129,6 +141,17 @@ public class ProducerRecord<K, V> {
         this(topic, null, null, key, value, null);
     }
     
+    /**
+     * Create a record with no key and a timestamp
+     *
+     * @param topic The topic the record will be appended to
+     * @param timestamp The timestamp of the record
+     * @param value The record contents
+     */
+    public ProducerRecord(String topic, Long timestamp, V value) {
+        this(topic, null, timestamp, null, value);
+    }
+
     /**
      * Create a record with no key
      * 
