@@ -77,11 +77,13 @@ class ClientCompatibilityFeaturesTest(Test):
                "--offsets-for-times-supported %s "
                "--cluster-id-supported %s "
                "--expect-record-too-large-exception %s "
+               "--num-cluster-nodes %d "
                "--topic %s " % (self.zk.path.script("kafka-run-class.sh", node),
                                self.kafka.bootstrap_servers(),
                                features["offsets-for-times-supported"],
                                features["cluster-id-supported"],
                                features["expect-record-too-large-exception"],
+                               len(self.kafka.nodes),
                                self.topics.keys()[0]))
         results_dir = TestContext.results_dir(self.test_context, 0)
         os.makedirs(results_dir)
