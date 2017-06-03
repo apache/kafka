@@ -319,13 +319,12 @@
         </p>
 
         <p>
-        The <code>Processor</code> interface provides two main API methods:
-        <code>process</code> and <code>punctuate</code>. The <code>process</code> method is performed on each
-        of the received record; and the <code>punctuate</code> method is performed periodically based on elapsed time.
-        In addition, the processor can maintain the current <code>ProcessorContext</code> instance variable initialized in the
-        <code>init</code> method, and use the context to schedule the punctuation period (<code>context().schedule</code>), to
-        forward the modified / new key-value pair to downstream processors (<code>context().forward</code>), to commit the current
-        processing progress (<code>context().commit</code>), etc.
+        The <code>Processor</code> interface provides one main API method, the <code>process</code> method,
+        which is performed on each of the received records.
+        In addition, the processor can maintain the current <code>ProcessorContext</code> instance variable initialized in the <code>init</code> method
+        and use the context to schedule a periodically called punctuation function (<code>context().schedule</code>),
+        to forward the modified / new key-value pair to downstream processors (<code>context().forward</code>),
+        to commit the current processing progress (<code>context().commit</code>), etc.
         </p>
 
         <p>
@@ -344,7 +343,7 @@ public class MyProcessor implements Processor&lt;String, String&gt; {
         this.context = context;
 
         // call this processor's punctuate() method every 1000 milliseconds.
-        this.context.schedule(1000);
+        this.context.schedule(1000, PunctuationType.STREAM_TIME, this::punctuate);
 
         // retrieve the key-value store named "Counts"
         this.kvStore = (KeyValueStore&lt;String, Long&gt;) context.getStateStore("Counts");
