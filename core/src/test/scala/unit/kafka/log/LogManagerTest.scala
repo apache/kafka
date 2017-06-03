@@ -21,10 +21,12 @@ import java.io._
 import java.util.Properties
 
 import kafka.common._
+import kafka.server.FetchDataInfo
 import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.OffsetOutOfRangeException
+import org.apache.kafka.common.requests.IsolationLevel
 import org.apache.kafka.common.utils.Utils
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
@@ -301,7 +303,6 @@ class LogManagerTest {
       }
     }
   }
-
 
   private def createLogManager(logDirs: Array[File] = Array(this.logDir)): LogManager = {
     TestUtils.createLogManager(

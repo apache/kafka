@@ -742,7 +742,8 @@ class LogTest {
       assertNull("Key should be null", actual.key)
       assertEquals("Values not equal", ByteBuffer.wrap(values(i)), actual.value)
     }
-    assertEquals("Reading beyond the last message returns nothing.", 0, log.read(values.length, 100, None).records.batches.asScala.size)
+    assertEquals("Reading beyond the last message returns nothing.", 0,
+      log.read(values.length, 100, None).records.batches.asScala.size)
   }
 
   /**
@@ -867,7 +868,8 @@ class LogTest {
       brokerTopicStats = brokerTopicStats, time = time)
     log.appendAsLeader(TestUtils.singletonRecords(value = "42".getBytes), leaderEpoch = 0)
 
-    assertEquals("Reading at the log end offset should produce 0 byte read.", 0, log.read(1025, 1000).records.sizeInBytes)
+    assertEquals("Reading at the log end offset should produce 0 byte read.", 0,
+      log.read(1025, 1000).records.sizeInBytes)
 
     try {
       log.read(0, 1000)
@@ -883,7 +885,8 @@ class LogTest {
       case _: OffsetOutOfRangeException => // This is good.
     }
 
-    assertEquals("Reading from below the specified maxOffset should produce 0 byte read.", 0, log.read(1025, 1000, Some(1024)).records.sizeInBytes)
+    assertEquals("Reading from below the specified maxOffset should produce 0 byte read.", 0,
+      log.read(1025, 1000, Some(1024)).records.sizeInBytes)
   }
 
   /**
@@ -917,7 +920,8 @@ class LogTest {
       assertEquals(s"Timestamps not equal at offset $offset", expected.timestamp, actual.timestamp)
       offset = head.lastOffset + 1
     }
-    val lastRead = log.read(startOffset = numMessages, maxLength = 1024*1024, maxOffset = Some(numMessages + 1)).records
+    val lastRead = log.read(startOffset = numMessages, maxLength = 1024*1024,
+      maxOffset = Some(numMessages + 1)).records
     assertEquals("Should be no more messages", 0, lastRead.records.asScala.size)
 
     // check that rolling the log forced a flushed the log--the flush is asyn so retry in case of failure
@@ -1152,7 +1156,7 @@ class LogTest {
     val messages = (0 until numMessages).map { i =>
       MemoryRecords.withRecords(100 + i, CompressionType.NONE, 0, new SimpleRecord(time.milliseconds + i, i.toString.getBytes()))
     }
-    messages.foreach(log.appendAsFollower(_))
+    messages.foreach(log.appendAsFollower)
     val timeIndexEntries = log.logSegments.foldLeft(0) { (entries, segment) => entries + segment.timeIndex.entries }
     assertEquals(s"There should be ${numMessages - 1} time index entries", numMessages - 1, timeIndexEntries)
     assertEquals(s"The last time index entry should have timestamp ${time.milliseconds + numMessages - 1}",
@@ -1226,11 +1230,10 @@ class LogTest {
     log = new Log(logDir, config, logStartOffset = 0L, recoveryPoint = numMessages + 1, scheduler = time.scheduler,
       brokerTopicStats = brokerTopicStats, time = time)
     val segArray = log.logSegments.toArray
-    for (i <- 0 until segArray.size - 1) {
+    for (i <- segArray.indices) {
       assertEquals("The time index should be empty", 0, segArray(i).timeIndex.entries)
       assertEquals("The time index file size should be 0", 0, segArray(i).timeIndex.file.length)
     }
-
   }
 
   /**
@@ -2597,7 +2600,7 @@ class LogTest {
     assertEquals(None, log.firstUnstableOffset.map(_.messageOffset))
 
     // now check that a fetch includes the aborted transaction
-    val fetchDataInfo = log.read(0L, 2048, isolationLevel = IsolationLevel.READ_COMMITTED)
+    val fetchDataInfo = log.readWithIsolation(0L, 2048, isolationLevel = IsolationLevel.READ_COMMITTED)
     assertEquals(1, fetchDataInfo.abortedTransactions.size)
 
     assertTrue(fetchDataInfo.abortedTransactions.isDefined)

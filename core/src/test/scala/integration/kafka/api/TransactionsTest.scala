@@ -24,7 +24,7 @@ import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer.{ConsumerConfig, ConsumerRecord, KafkaConsumer, OffsetAndMetadata}
-import org.apache.kafka.clients.producer.KafkaProducer
+import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.ProducerFencedException
 import org.apache.kafka.common.protocol.SecurityProtocol
@@ -49,7 +49,7 @@ class TransactionsTest extends KafkaServerTestHarness {
   val nonTransactionalConsumers = Buffer[KafkaConsumer[Array[Byte], Array[Byte]]]()
 
   override def generateConfigs: Seq[KafkaConfig] = {
-    TestUtils.createBrokerConfigs(numServers, zkConnect, true).map(KafkaConfig.fromProps(_, serverProps()))
+    TestUtils.createBrokerConfigs(numServers, zkConnect).map(KafkaConfig.fromProps(_, serverProps()))
   }
 
   @Before
@@ -109,6 +109,30 @@ class TransactionsTest extends KafkaServerTestHarness {
     allRecords.foreach { record =>
       assertTrue(expectedValues.contains(TestUtils.recordValueAsString(record)))
     }
+  }
+
+  @Test
+  def testReadCommittedConsumerShouldNotSeeUndecidedData(): Unit = {
+    val producer = transactionalProducers.head
+    val readCommittedConsumer = transactionalConsumers.head
+    val readUncommittedConsumer = nonTransactionalConsumers.head
+
+    producer.initTransactions()
+    producer.beginTransaction()
+    producer.send(new ProducerRecord(topic1, "a".getBytes, "1".getBytes))
+    producer.send(new ProducerRecord(topic1, "b".getBytes, "2".getBytes))
+    producer.send(new ProducerRecord(topic2, "c".getBytes, "3".getBytes))
+    producer.send(new ProducerRecord(topic2, "d".getBytes, "4".getBytes))
+    producer.flush()
+
+    // ensure the records are visible to the read uncommitted consumer
+    readUncommittedConsumer.subscribe(Set(topic1, topic2).asJava)
+    pollUntilExactlyNumRecords(readUncommittedConsumer, 4)
+    readUncommittedConsumer.unsubscribe()
+
+    readCommittedConsumer.subscribe(Set(topic1, topic2).asJava)
+    val records = readCommittedConsumer.poll(2000)
+    assertTrue(records.isEmpty)
   }
 
   @Test
@@ -354,6 +378,7 @@ class TransactionsTest extends KafkaServerTestHarness {
     serverProps.put(KafkaConfig.ControlledShutdownEnableProp, true.toString)
     serverProps.put(KafkaConfig.UncleanLeaderElectionEnableProp, false.toString)
     serverProps.put(KafkaConfig.AutoLeaderRebalanceEnableProp, false.toString)
+    serverProps.put(KafkaConfig.GroupInitialRebalanceDelayMsProp, "0")
     serverProps
   }
 
