@@ -42,23 +42,24 @@
         </ul>
     </li>
     <li> Upgrade the brokers one at a time: shut down the broker, update the code, and restart it. </li>
-    <li> Once the entire cluster is upgraded, bump the protocol version by editing inter.broker.protocol.version and setting it to 0.11.0, but
-      do not change log.message.format.version yet. </li>
+    <li> Once the entire cluster is upgraded, bump the protocol version by editing <code>inter.broker.protocol.version</code> and setting it to 0.11.0, but
+      do not change <code>log.message.format.version</code> yet. </li>
     <li> Restart the brokers one by one for the new protocol version to take effect. </li>
     <li> Once all (or most) consumers have been upgraded to 0.11.0 or later, then change log.message.format.version to 0.11.0 on each
       broker and restart them one by one. Note that the older Scala consumer does not support the new message format, so to avoid
-      the performance cost of down-conversion, the new Java consumer must be used.</li>
+      the performance cost of down-conversion (or to take advantage of <a href="#upgrade_11_exactly_once_semantics">exactly once semantics</a>),
+      the new Java consumer must be used.</li>
 </ol>
 
 <p><b>Additional Upgrade Notes:</b></p>
 
 <ol>
-  <li>If you are willing to accept downtime, you can simply take all the brokers down, update the code and start all of them. They will start
+  <li>If you are willing to accept downtime, you can simply take all the brokers down, update the code and start them back up. They will start
     with the new protocol by default.</li>
-  <li>Bumping the protocol version and restarting can be done any time after the brokers were upgraded. It does not have to be immediately after.
+  <li>Bumping the protocol version and restarting can be done any time after the brokers are upgraded. It does not have to be immediately after.
     Similarly for the message format version.</li>
-  <li>It is also possible to enable the 0.11.0 message format on individual topics prior
-    to updating the global setting using the topic admin tool (<code>bin/kafka-topics.sh</code>)</li>
+  <li>It is also possible to enable the 0.11.0 message format on individual topics using the topic admin tool (<code>bin/kafka-topics.sh</code>)
+    prior to updating the global setting <code>log.message.format.version</code>.</li>
   <li>If  you are upgrading from a version prior to 0.10.0, it is NOT necessary to first update the message format to 0.10.0
     before you switch to 0.11.0.</li>
 </ol>
@@ -118,19 +119,19 @@
 <p>Kafka 0.11.0 includes support for idempotent and transactional capabilities in the producer. Idempotent delivery
   ensures that messages are delivered exactly once to a particular topic partition during the lifetime of a single producer.
   Transactional delivery allows producers to send data to multiple partitions such that either all messages are successfully
-  delivered, or none of them are. Together, these capabilities enable "exactly once semantics" (or EoS) in Kafka. More details on these
+  delivered, or none of them are. Together, these capabilities enable "exactly once semantics" in Kafka. More details on these
   features are available in the user guide, but below we add a few specific notes on enabling them in an upgraded cluster.
-  Note that enabling EoS is not required and there is very little impact on the broker's behavior if unused.</p>
+  Note that enabling EoS is not required and there is no impact on the broker's behavior if unused.</p>
 
 <ol>
-  <li>Only the new Java producer and consumer support EoS.</li>
+  <li>Only the new Java producer and consumer support exactly once semantics.</li>
   <li>These features depend crucially on the <a href="#upgrade_11_message_format">0.11.0 message format</a>. Attempting to use them
-    on an older format will generally result in unsupported version errors.</li>
+    on an older format will result in unsupported version errors.</li>
   <li>Transaction state is stored in a new internal topic <code>__transaction_state</code>. This topic is not created until the
     the first attempt to use a transactional request API. Similar to the consumer offsets topic, there are several settings
     to control the topic's configuration. For example, <code>transaction.state.log.min.isr</code> controls the minimum ISR for
     this topic. See the configuration section in the user guide for a full list of options.</li>
-  <li>For secure clusters, the transactional APIs require new ACls which can be turned on with the <code>bin/kafka-acls.sh</code>.
+  <li>For secure clusters, the transactional APIs require new ACLs which can be turned on with the <code>bin/kafka-acls.sh</code>.
     tool.</li>
   <li>EoS in Kafka introduces new request APIs and modifies several existing ones. See
     <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-98+-+Exactly+Once+Delivery+and+Transactional+Messaging#KIP-98-ExactlyOnceDeliveryandTransactionalMessaging-RPCProtocolSummary">KIP-98</a>
@@ -145,14 +146,16 @@
   Although the new format contains more information to make these improvements possible, we have made the batch format much
   more efficient. As long as the number of messages per batch is more than 2, you can expect lower overall overhead. For smaller
   batches, however, there may be a small performance impact. See <a href="bit.ly/kafka-eos-perf">here</a> for the results of our
-  own performance testing.
+  initial performance analysis of the new message format. You can also find more detail on the message format in the
+  <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-98+-+Exactly+Once+Delivery+and+Transactional+Messaging#KIP-98-ExactlyOnceDeliveryandTransactionalMessaging-MessageFormat">KIP-98</a> proposal.
 </p>
-<p>Most of the discussion of the performance impact of <a href="#upgrade_10_performance_impact">upgrading to the 0.10.0 message format</a>
-  remains pertinent for the 0.11.0 upgrade. In order to avoid the cost of down-conversion, you should ensure that consumer applications
+<p>Most of the discussion on the performance impact of <a href="#upgrade_10_performance_impact">upgrading to the 0.10.0 message format</a>
+  remains pertinent to the 0.11.0 upgrade. This mainly affects clusters that are not secured with TLS since "zero-copy" transfer
+  is already not possible. In order to avoid the cost of down-conversion, you should ensure that consumer applications
   are upgraded to the latest 0.11.0 client. Significantly, since the old consumer has been deprecated in 0.11.0.0, it does not support
   the new message format. You must upgrade to use the new consumer to use the new message format without the cost of down-conversion.
   Note that 0.11.0 consumers support backwards compability with brokers 0.10.0 brokers and upward, so it is possible to upgrade the
-  clients first before the brokers.
+  clients first before the brokers. 
 </p>
 
 <h4><a id="upgrade_10_2_0" href="#upgrade_10_2_0">Upgrading from 0.8.x, 0.9.x, 0.10.0.x or 0.10.1.x to 0.10.2.0</a></h4>
