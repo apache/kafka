@@ -108,7 +108,10 @@ object ConsoleConsumer extends Logging {
     Runtime.getRuntime.addShutdownHook(new Thread() {
       override def run() {
         consumer.stop()
-
+        // if we generated a random group id (as none specified explicitly) then avoid polluting zookeeper with persistent group data, this is a hack
+        if (!conf.groupIdPassed && conf.options.has(conf.zkConnectOpt))
+          ZkUtils.maybeDeletePath(conf.options.valueOf(conf.zkConnectOpt), "/consumers/" + conf.consumerProps.get("group.id"))
+        
         shutdownLatch.await()
 
         if (conf.enableSystestEventsLogging) {
