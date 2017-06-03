@@ -72,6 +72,10 @@ class InterBrokerSendThread(name: String,
       case e: FatalExitError => throw e
       case t: Throwable =>
         error(s"unhandled exception caught in InterBrokerSendThread", t)
+        // rethrow any unhandled exceptions as FatalExitError so the JVM will be terminated
+        // as we will be in an unknown state with potentially some requests dropped and not
+        // being able to make progress. Known and expected Errors should have been appropriately
+        // dealt with already.
         throw new FatalExitError()
     }
   }
