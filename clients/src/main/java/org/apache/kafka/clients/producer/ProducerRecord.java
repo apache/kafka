@@ -19,6 +19,7 @@ package org.apache.kafka.clients.producer;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
+import org.apache.kafka.common.internals.Topic;
 
 /**
  * A key/value pair to be sent to Kafka. This consists of a topic name to which the record is being sent, an optional
@@ -69,6 +70,7 @@ public class ProducerRecord<K, V> {
         if (timestamp != null && timestamp < 0)
             throw new IllegalArgumentException(
                     String.format("Invalid timestamp: %d. Timestamp should always be non-negative or null.", timestamp));
+        Topic.validate(topic);
         if (partition != null && partition < 0)
             throw new IllegalArgumentException(
                     String.format("Invalid partition: %d. Partition number should always be non-negative or null.", partition));
