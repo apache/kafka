@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.producer;
 
+import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
@@ -63,14 +64,20 @@ public class ProducerRecord<K, V> {
      * @param key The key that will be included in the record
      * @param value The record contents
      * @param headers the headers that will be included in the record
+     * @throws IllegalArgumentException is thrown if topic name is null or invalid
+     * @throws IllegalArgumentException is thrown if timestamp or partition is negative
      */
     public ProducerRecord(String topic, Integer partition, Long timestamp, K key, V value, Iterable<Header> headers) {
         if (topic == null)
             throw new IllegalArgumentException("Topic cannot be null.");
+        try {
+            Topic.validate(topic);
+        } catch (InvalidTopicException e) {
+            throw new IllegalArgumentException(e.getMessage());
+        }
         if (timestamp != null && timestamp < 0)
             throw new IllegalArgumentException(
                     String.format("Invalid timestamp: %d. Timestamp should always be non-negative or null.", timestamp));
-        Topic.validate(topic);
         if (partition != null && partition < 0)
             throw new IllegalArgumentException(
                     String.format("Invalid partition: %d. Partition number should always be non-negative or null.", partition));
