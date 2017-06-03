@@ -64,8 +64,7 @@ public class ProducerRecord<K, V> {
      * @param key The key that will be included in the record
      * @param value The record contents
      * @param headers the headers that will be included in the record
-     * @throws IllegalArgumentException is thrown if topic name is null or invalid
-     * @throws IllegalArgumentException is thrown if timestamp or partition is negative
+     * @throws IllegalArgumentException if topic name is null or invalid, if timestamp or partition is negative
      */
     public ProducerRecord(String topic, Integer partition, Long timestamp, K key, V value, Iterable<Header> headers) {
         if (topic == null)
