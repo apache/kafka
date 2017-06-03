@@ -281,6 +281,8 @@ public class KafkaAdminClient extends AdminClient {
         ApiVersions apiVersions = new ApiVersions();
 
         try {
+            // Since we only request node information, it's safe to pass true for allowAutoTopicCreation (and it
+            // simplifies communication with older brokers)
             metadata = new Metadata(config.getLong(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG),
                     config.getLong(AdminClientConfig.METADATA_MAX_AGE_CONFIG), true);
             List<MetricsReporter> reporters = config.getConfiguredInstances(AdminClientConfig.METRIC_REPORTER_CLASSES_CONFIG,
@@ -1222,6 +1224,8 @@ public class KafkaAdminClient extends AdminClient {
 
             @Override
             AbstractRequest.Builder createRequest(int timeoutMs) {
+                // Since this only requests node information, it's safe to pass true for allowAutoTopicCreation (and it
+                // simplifies communication with older brokers)
                 return new MetadataRequest.Builder(Collections.<String>emptyList(), true);
             }
 
