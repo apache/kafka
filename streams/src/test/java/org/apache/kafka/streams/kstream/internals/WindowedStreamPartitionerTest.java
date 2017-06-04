@@ -29,6 +29,8 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.kstream.WindowedDeserializer;
+import org.apache.kafka.streams.kstream.WindowedSerializer;
 import org.junit.Test;
 
 import java.util.Arrays;
