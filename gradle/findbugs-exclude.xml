@@ -165,6 +165,7 @@ For a detailed description of findbugs bug categories, see http://findbugs.sourc
         <Or>
             <Package name="org.apache.kafka.jmh.cache.generated"/>
             <Package name="org.apache.kafka.jmh.record.generated"/>
+            <Package name="org.apache.kafka.jmh.producer.generated"/>
         </Or>
     </Match>
 
