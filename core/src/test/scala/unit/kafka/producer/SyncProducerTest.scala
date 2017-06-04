@@ -55,18 +55,18 @@ class SyncProducerTest extends KafkaServerTestHarness {
     val props = TestUtils.getSyncProducerConfig(boundPort(server))
 
     val producer = new SyncProducer(new SyncProducerConfig(props))
-    
+
     val firstStart = Time.SYSTEM.milliseconds
     var response = producer.send(produceRequest("test", 0,
       new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = new Message(messageBytes)), acks = 1))
     assertNotNull(response)
-    assertTrue((Time.SYSTEM.milliseconds - firstStart) < 6000)
+    assertTrue((Time.SYSTEM.milliseconds - firstStart) < 12000)
 
     val secondStart = Time.SYSTEM.milliseconds
     response = producer.send(produceRequest("test", 0,
       new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = new Message(messageBytes)), acks = 1))
     assertNotNull(response)
-    assertTrue((Time.SYSTEM.milliseconds - secondStart) < 6000)
+    assertTrue((Time.SYSTEM.milliseconds - secondStart) < 12000)
 
     response = producer.send(produceRequest("test", 0,
       new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = new Message(messageBytes)), acks = 1))

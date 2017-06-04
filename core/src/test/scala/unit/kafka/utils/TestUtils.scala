@@ -648,7 +648,7 @@ object TestUtils extends Logging {
     val props = new Properties()
     props.put("host", "localhost")
     props.put("port", port.toString)
-    props.put("request.timeout.ms", "5000")
+    props.put("request.timeout.ms", "10000")
     props.put("request.required.acks", "1")
     props.put("serializer.class", classOf[StringEncoder].getName)
     props
