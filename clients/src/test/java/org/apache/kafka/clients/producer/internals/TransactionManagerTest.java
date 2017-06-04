@@ -122,6 +122,204 @@ public class TransactionManagerTest {
         client.setNode(brokerNode);
     }
 
+    @Test(expected = IllegalStateException.class)
+    public void testFailIfUnreadyForSendNoProducerId() {
+        transactionManager.failIfUnreadyForSend();
+    }
+
+    @Test(expected = IllegalStateException.class)
+    public void testFailIfUnreadyForSendNoOngoingTransaction() {
+        long pid = 13131L;
+        short epoch = 1;
+        doInitTransactions(pid, epoch);
+        transactionManager.failIfUnreadyForSend();
+    }
+
+    @Test(expected = IllegalStateException.class)
+    public void testFailIfUnreadyForSendAfterAbortableError() {
+        long pid = 13131L;
+        short epoch = 1;
+        doInitTransactions(pid, epoch);
+        transactionManager.beginTransaction();
+        transactionManager.transitionToAbortableError(new KafkaException());
+        transactionManager.failIfUnreadyForSend();
+    }
+
+    @Test(expected = IllegalStateException.class)
+    public void testFailIfUnreadyForSendAfterFatalError() {
+        long pid = 13131L;
+        short epoch = 1;
+        doInitTransactions(pid, epoch);
+        transactionManager.transitionToFatalError(new KafkaException());
+        transactionManager.failIfUnreadyForSend();
+    }
+
+    @Test
+    public void testHasOngoingTransactionSuccessfulAbort() {
+        long pid = 13131L;
+        short epoch = 1;
+        TopicPartition partition = new TopicPartition("foo", 0);
+
+        assertFalse(transactionManager.hasOngoingTransaction());
+        doInitTransactions(pid, epoch);
+        assertFalse(transactionManager.hasOngoingTransaction());
+
+        transactionManager.beginTransaction();
+        assertTrue(transactionManager.hasOngoingTransaction());
+
+        transactionManager.maybeAddPartitionToTransaction(partition);
+        assertTrue(transactionManager.hasOngoingTransaction());
+
+        prepareAddPartitionsToTxn(partition, Errors.NONE);
+        sender.run(time.milliseconds());
+
+        transactionManager.beginAbortingTransaction();
+        assertTrue(transactionManager.hasOngoingTransaction());
+
+        prepareEndTxnResponse(Errors.NONE, TransactionResult.ABORT, pid, epoch);
+        sender.run(time.milliseconds());
+        assertFalse(transactionManager.hasOngoingTransaction());
+    }
+
+    @Test
+    public void testHasOngoingTransactionSuccessfulCommit() {
+        long pid = 13131L;
+        short epoch = 1;
+        TopicPartition partition = new TopicPartition("foo", 0);
+
+        assertFalse(transactionManager.hasOngoingTransaction());
+        doInitTransactions(pid, epoch);
+        assertFalse(transactionManager.hasOngoingTransaction());
+
+        transactionManager.beginTransaction();
+        assertTrue(transactionManager.hasOngoingTransaction());
+
+        transactionManager.maybeAddPartitionToTransaction(partition);
+        assertTrue(transactionManager.hasOngoingTransaction());
+
+        prepareAddPartitionsToTxn(partition, Errors.NONE);
+        sender.run(time.milliseconds());
+
+        transactionManager.beginCommittingTransaction();
+        assertTrue(transactionManager.hasOngoingTransaction());
+
+        prepareEndTxnResponse(Errors.NONE, TransactionResult.COMMIT, pid, epoch);
+        sender.run(time.milliseconds());
+        assertFalse(transactionManager.hasOngoingTransaction());
+    }
+
+    @Test
+    public void testHasOngoingTransactionAbortableError() {
+        long pid = 13131L;
+        short epoch = 1;
+        TopicPartition partition = new TopicPartition("foo", 0);
+
+        assertFalse(transactionManager.hasOngoingTransaction());
+        doInitTransactions(pid, epoch);
+        assertFalse(transactionManager.hasOngoingTransaction());
+
+        transactionManager.beginTransaction();
+        assertTrue(transactionManager.hasOngoingTransaction());
+
+        transactionManager.maybeAddPartitionToTransaction(partition);
+        assertTrue(transactionManager.hasOngoingTransaction());
+
+        prepareAddPartitionsToTxn(partition, Errors.NONE);
+        sender.run(time.milliseconds());
+
+        transactionManager.transitionToAbortableError(new KafkaException());
+        assertTrue(transactionManager.hasOngoingTransaction());
+
+        transactionManager.beginAbortingTransaction();
+        assertTrue(transactionManager.hasOngoingTransaction());
+
+        prepareEndTxnResponse(Errors.NONE, TransactionResult.ABORT, pid, epoch);
+        sender.run(time.milliseconds());
+        assertFalse(transactionManager.hasOngoingTransaction());
+    }
+
+    @Test
+    public void testHasOngoingTransactionFatalError() {
+        long pid = 13131L;
+        short epoch = 1;
+        TopicPartition partition = new TopicPartition("foo", 0);
+
+        assertFalse(transactionManager.hasOngoingTransaction());
+        doInitTransactions(pid, epoch);
+        assertFalse(transactionManager.hasOngoingTransaction());
+
+        transactionManager.beginTransaction();
+        assertTrue(transactionManager.hasOngoingTransaction());
+
+        transactionManager.maybeAddPartitionToTransaction(partition);
+        assertTrue(transactionManager.hasOngoingTransaction());
+
+        prepareAddPartitionsToTxn(partition, Errors.NONE);
+        sender.run(time.milliseconds());
+
+        transactionManager.transitionToFatalError(new KafkaException());
+        assertFalse(transactionManager.hasOngoingTransaction());
+    }
+
+    @Test
+    public void testMaybeAddPartitionTransaction() {
+        long pid = 13131L;
+        short epoch = 1;
+        TopicPartition partition = new TopicPartition("foo", 0);
+        doInitTransactions(pid, epoch);
+        transactionManager.beginTransaction();
+
+        transactionManager.maybeAddPartitionToTransaction(partition);
+        assertTrue(transactionManager.hasPartitionsToAdd());
+        assertFalse(transactionManager.isPartitionAdded(partition));
+        assertTrue(transactionManager.isPartitionPendingAdd(partition));
+
+        prepareAddPartitionsToTxn(partition, Errors.NONE);
+        sender.run(time.milliseconds());
+
+        assertFalse(transactionManager.hasPartitionsToAdd());
+        assertTrue(transactionManager.isPartitionAdded(partition));
+        assertFalse(transactionManager.isPartitionPendingAdd(partition));
+
+        // adding the partition again should not have any effect
+        transactionManager.maybeAddPartitionToTransaction(partition);
+        assertFalse(transactionManager.hasPartitionsToAdd());
+        assertTrue(transactionManager.isPartitionAdded(partition));
+        assertFalse(transactionManager.isPartitionPendingAdd(partition));
+    }
+
+    @Test(expected = IllegalStateException.class)
+    public void testMaybeAddPartitionTransactionBeforeInitTransactions() {
+        transactionManager.maybeAddPartitionToTransaction(new TopicPartition("foo", 0));
+    }
+
+    @Test(expected = IllegalStateException.class)
+    public void testMaybeAddPartitionTransactionBeforeBeginTransaction() {
+        long pid = 13131L;
+        short epoch = 1;
+        doInitTransactions(pid, epoch);
+        transactionManager.maybeAddPartitionToTransaction(new TopicPartition("foo", 0));
+    }
+
+    @Test(expected = IllegalStateException.class)
+    public void testMaybeAddPartitionTransactionAfterAbortableError() {
+        long pid = 13131L;
+        short epoch = 1;
+        doInitTransactions(pid, epoch);
+        transactionManager.beginTransaction();
+        transactionManager.transitionToAbortableError(new KafkaException());
+        transactionManager.maybeAddPartitionToTransaction(new TopicPartition("foo", 0));
+    }
+
+    @Test(expected = IllegalStateException.class)
+    public void testMaybeAddPartitionTransactionAfterFatalError() {
+        long pid = 13131L;
+        short epoch = 1;
+        doInitTransactions(pid, epoch);
+        transactionManager.transitionToFatalError(new KafkaException());
+        transactionManager.maybeAddPartitionToTransaction(new TopicPartition("foo", 0));
+    }
+
     @Test
     public void testEnsurePartitionAddedWithPendingPartitionAfterAbortableError() {
         final long pid = 13131L;
@@ -319,7 +517,7 @@ public class TransactionManagerTest {
         prepareEndTxnResponse(Errors.NONE, TransactionResult.COMMIT, pid, epoch);
         sender.run(time.milliseconds());  // commit.
 
-        assertFalse(transactionManager.isInTransaction());
+        assertFalse(transactionManager.hasOngoingTransaction());
         assertFalse(transactionManager.isCompletingTransaction());
         assertFalse(transactionManager.transactionContainsPartition(tp0));
     }
@@ -616,12 +814,12 @@ public class TransactionManagerTest {
 
         prepareEndTxnResponse(Errors.NONE, TransactionResult.COMMIT, pid, epoch);
         assertFalse(commitResult.isCompleted());
-        assertTrue(transactionManager.isInTransaction());
+        assertTrue(transactionManager.hasOngoingTransaction());
         assertTrue(transactionManager.isCompletingTransaction());
 
         sender.run(time.milliseconds());
         assertTrue(commitResult.isCompleted());
-        assertFalse(transactionManager.isInTransaction());
+        assertFalse(transactionManager.hasOngoingTransaction());
     }
 
     @Test

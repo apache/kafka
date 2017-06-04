@@ -205,7 +205,7 @@ public class TransactionManager {
     }
 
     public synchronized TransactionalRequestResult sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets,
-                                                                           String consumerGroupId) {
+                                                                            String consumerGroupId) {
         ensureTransactional();
         maybeFailWithError();
         if (currentState != State.IN_TRANSACTION)
@@ -220,8 +220,8 @@ public class TransactionManager {
     }
 
     public synchronized void maybeAddPartitionToTransaction(TopicPartition topicPartition) {
-        if (!isInTransaction())
-            throw new IllegalArgumentException("Cannot add partitions to a transaction in state " + currentState);
+        if (currentState != State.IN_TRANSACTION)
+            throw new IllegalStateException("Cannot add partitions to a transaction in state " + currentState);
 
         if (partitionsInTransaction.contains(topicPartition))
             return;
@@ -229,14 +229,27 @@ public class TransactionManager {
         newPartitionsInTransaction.add(topicPartition);
     }
 
-    public RuntimeException lastError() {
+    RuntimeException lastError() {
         return lastError;
     }
 
-    public synchronized boolean ensurePartitionAdded(TopicPartition tp) {
+    public synchronized void failIfUnreadyForSend() {
+        if (hasError())
+            throw new IllegalStateException("Cannot perform send because at least one previous transactional or " +
+                    "idempotent request has failed with errors.", lastError);
+
+        if (isTransactional() && !hasProducerId())
+            throw new IllegalStateException("Cannot perform a 'send' before completing a call to initTransactions " +
+                    "when transactions are enabled.");
+
+        if (currentState != State.IN_TRANSACTION)
+            throw new IllegalStateException("Cannot call send while a commit or abort is in progress.");
+    }
+
+    synchronized boolean ensurePartitionAdded(TopicPartition tp) {
         if (hasFatalError())
             return false;
-        if (isInTransaction()) {
+        if (hasOngoingTransaction()) {
             if (partitionsInTransaction.contains(tp))
                 return true;
 
@@ -265,23 +278,24 @@ public class TransactionManager {
         return transactionalId != null;
     }
 
-    public synchronized boolean hasPartitionsToAdd() {
+    synchronized boolean hasPartitionsToAdd() {
         return !newPartitionsInTransaction.isEmpty() || !pendingPartitionsInTransaction.isEmpty();
     }
 
-    public synchronized boolean isCompletingTransaction() {
+    synchronized boolean isCompletingTransaction() {
         return currentState == State.COMMITTING_TRANSACTION || currentState == State.ABORTING_TRANSACTION;
     }
 
-    public synchronized boolean hasError() {
+    synchronized boolean hasError() {
         return currentState == State.ABORTABLE_ERROR || currentState == State.FATAL_ERROR;
     }
 
-    public synchronized boolean isAborting() {
+    synchronized boolean isAborting() {
         return currentState == State.ABORTING_TRANSACTION;
     }
 
-    synchronized boolean isInTransaction() {
+    synchronized boolean hasOngoingTransaction() {
+        // transactions are considered ongoing once started until completion or a fatal error
         return currentState == State.IN_TRANSACTION || isCompletingTransaction() || hasAbortableError();
     }
 
@@ -291,6 +305,14 @@ public class TransactionManager {
 
     synchronized void transitionToFatalError(RuntimeException exception) {
         transitionTo(State.FATAL_ERROR, exception);
+    }
+
+    synchronized boolean isPartitionAdded(TopicPartition partition) {
+        return partitionsInTransaction.contains(partition);
+    }
+
+    synchronized boolean isPartitionPendingAdd(TopicPartition partition) {
+        return newPartitionsInTransaction.contains(partition) || pendingPartitionsInTransaction.contains(partition);
     }
 
     /**
@@ -439,12 +461,12 @@ public class TransactionManager {
 
     // visible for testing
     synchronized boolean transactionContainsPartition(TopicPartition topicPartition) {
-        return isInTransaction() && partitionsInTransaction.contains(topicPartition);
+        return hasOngoingTransaction() && partitionsInTransaction.contains(topicPartition);
     }
 
     // visible for testing
     synchronized boolean hasPendingOffsetCommits() {
-        return isInTransaction() && !pendingTxnOffsetCommits.isEmpty();
+        return hasOngoingTransaction() && !pendingTxnOffsetCommits.isEmpty();
     }
 
     // visible for testing
@@ -470,8 +492,7 @@ public class TransactionManager {
         }
 
         if (lastError != null)
-            log.error("{}Transition from state {} to error state {}", logPrefix, currentState,
-                    target, lastError);
+            log.debug("{}Transition from state {} to error state {}", logPrefix, currentState, target, lastError);
         else
             log.debug("{}Transition from state {} to {}", logPrefix, currentState, target);
 
