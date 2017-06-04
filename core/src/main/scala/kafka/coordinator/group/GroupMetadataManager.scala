@@ -484,7 +484,7 @@ class GroupMetadataManager(brokerId: Int,
         val removedGroups = mutable.Set[String]()
 
         while (currOffset < highWaterMark && !shuttingDown.get()) {
-          val fetchDataInfo = log.readWithIsolation(currOffset, config.loadBufferSize, maxOffset = None,
+          val fetchDataInfo = log.read(currOffset, config.loadBufferSize, maxOffset = None,
             minOneMessage = true, isolationLevel = IsolationLevel.READ_UNCOMMITTED)
           val memRecords = fetchDataInfo.records match {
             case records: MemoryRecords => records

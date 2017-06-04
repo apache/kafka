@@ -100,7 +100,7 @@ object StressTestLog {
     @volatile var offset = 0
     override def work() {
       try {
-        log.readWithIsolation(offset, 1024, Some(offset+1), isolationLevel = IsolationLevel.READ_UNCOMMITTED).records match {
+        log.read(offset, 1024, Some(offset+1), isolationLevel = IsolationLevel.READ_UNCOMMITTED).records match {
           case read: FileRecords if read.sizeInBytes > 0 => {
             val first = read.batches.iterator.next()
             require(first.lastOffset == offset, "We should either read nothing or the message we asked for.")

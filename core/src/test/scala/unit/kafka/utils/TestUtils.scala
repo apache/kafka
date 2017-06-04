@@ -1330,7 +1330,7 @@ object TestUtils extends Logging {
     waitUntilTrue(() => {
       records ++= consumer.poll(50).asScala
       records.size >= numMessages
-    }, s"Consumed ${records.size} records until timeout instead of the expected $numMessages records", waitTime)
+    }, s"Could not consume $numMessages records before timing out", waitTime)
     assertEquals("Consumed more records than expected", numMessages, records.size)
     records
   }

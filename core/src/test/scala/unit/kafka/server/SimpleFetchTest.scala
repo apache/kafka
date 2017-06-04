@@ -80,7 +80,7 @@ class SimpleFetchTest {
     EasyMock.expect(log.logEndOffset).andReturn(leaderLEO).anyTimes()
     EasyMock.expect(log.dir).andReturn(TestUtils.tempDir()).anyTimes()
     EasyMock.expect(log.logEndOffsetMetadata).andReturn(new LogOffsetMetadata(leaderLEO)).anyTimes()
-    EasyMock.expect(log.readWithIsolation(
+    EasyMock.expect(log.read(
       startOffset = 0,
       maxLength = fetchSize,
       maxOffset = Some(partitionHW),
@@ -90,7 +90,7 @@ class SimpleFetchTest {
         new LogOffsetMetadata(0L, 0L, 0),
         MemoryRecords.withRecords(CompressionType.NONE, recordToHW)
       )).anyTimes()
-    EasyMock.expect(log.readWithIsolation(
+    EasyMock.expect(log.read(
       startOffset = 0,
       maxLength = fetchSize,
       maxOffset = None,

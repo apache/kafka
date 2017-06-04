@@ -157,7 +157,7 @@ class ReplicaManagerQuotasTest {
     expect(log.logEndOffsetMetadata).andReturn(new LogOffsetMetadata(20L)).anyTimes()
 
     //if we ask for len 1 return a message
-    expect(log.readWithIsolation(anyObject(), geq(1), anyObject(), anyObject(),
+    expect(log.read(anyObject(), geq(1), anyObject(), anyObject(),
       EasyMock.eq(IsolationLevel.READ_UNCOMMITTED))).andReturn(
       FetchDataInfo(
         new LogOffsetMetadata(0L, 0L, 0),
@@ -165,7 +165,7 @@ class ReplicaManagerQuotasTest {
       )).anyTimes()
 
     //if we ask for len = 0, return 0 messages
-    expect(log.readWithIsolation(anyObject(), EasyMock.eq(0), anyObject(), anyObject(),
+    expect(log.read(anyObject(), EasyMock.eq(0), anyObject(), anyObject(),
       EasyMock.eq(IsolationLevel.READ_UNCOMMITTED))).andReturn(
       FetchDataInfo(
         new LogOffsetMetadata(0L, 0L, 0),
