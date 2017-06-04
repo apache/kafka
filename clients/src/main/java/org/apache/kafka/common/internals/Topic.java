@@ -21,7 +21,6 @@ import org.apache.kafka.common.utils.Utils;
 
 import java.util.Collections;
 import java.util.Set;
-import java.util.regex.Pattern;
 
 public class Topic {
 
@@ -33,7 +32,6 @@ public class Topic {
             Utils.mkSet(GROUP_METADATA_TOPIC_NAME, TRANSACTION_STATE_TOPIC_NAME));
 
     private static final int MAX_NAME_LENGTH = 249;
-    private static final Pattern LEGAL_CHARS_PATTERN = Pattern.compile(LEGAL_CHARS + "+");
 
     public static void validate(String topic) {
         if (topic.isEmpty())
@@ -77,6 +75,15 @@ public class Topic {
      * Valid characters for Kafka topics are the ASCII alphanumerics, '.', '_', and '-'
      */
     static boolean containsValidPattern(String topic) {
-        return LEGAL_CHARS_PATTERN.matcher(topic).matches();
+        for (int i = 0; i < topic.length(); ++i) {
+            char c = topic.charAt(i);
+
+            // We don't use Character.isLetterOrDigit(c) because it's slower
+            boolean validChar = (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z') || c == '.' ||
+                    c == '_' || c == '-';
+            if (!validChar)
+                return false;
+        }
+        return true;
     }
 }
