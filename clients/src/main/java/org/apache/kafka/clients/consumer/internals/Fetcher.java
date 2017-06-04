@@ -222,9 +222,8 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                                 long fetchOffset = request.fetchData().get(partition).fetchOffset;
                                 FetchResponse.PartitionData fetchData = entry.getValue();
 
-                                log.debug("Fetch at offset {} for partition {} returned fetch data {}", fetchOffset,
-                                        partition, fetchData);
-
+                                log.debug("Fetch {} at offset {} for partition {} returned fetch data {}",
+                                        isolationLevel, fetchOffset, partition, fetchData);
                                 completedFetches.add(new CompletedFetch(partition, fetchOffset, fetchData, metricAggregator,
                                         resp.requestHeader().apiVersion()));
                             }
