@@ -832,7 +832,7 @@ object TestUtils extends Logging {
   /**
    * Wait until the given condition is true or throw an exception if the given wait time elapses.
    */
-  def waitUntilTrue(condition: () => Boolean, msg: String,
+  def waitUntilTrue(condition: () => Boolean, msg: => String,
                     waitTime: Long = JTestUtils.DEFAULT_MAX_WAIT_MS, pause: Long = 100L): Boolean = {
     val startTime = System.currentTimeMillis()
     while (true) {
@@ -1330,7 +1330,7 @@ object TestUtils extends Logging {
     waitUntilTrue(() => {
       records ++= consumer.poll(50).asScala
       records.size >= numMessages
-    }, s"Could not consume $numMessages records before timing out", waitTime)
+    }, s"Consumed ${records.size} records until timeout instead of the expected $numMessages records", waitTime)
     assertEquals("Consumed more records than expected", numMessages, records.size)
     records
   }
