@@ -24,6 +24,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kafka.log.LogConfig
 import kafka.utils.{MockScheduler, MockTime, TestUtils, ZkUtils}
 import TestUtils.createBroker
+import kafka.utils.timer.MockTimer
 import org.I0Itec.zkclient.ZkClient
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
@@ -165,26 +166,12 @@ class ReplicaManagerTest {
       rm.becomeLeaderOrFollower(0, leaderAndIsrRequest1, (_, _) => {})
       rm.getLeaderReplicaIfLocal(new TopicPartition(topic, 0))
 
-      // Append a message.
-      rm.appendRecords(
-        timeout = 1000,
-        requiredAcks = -1,
-        internalTopicsAllowed = false,
-        isFromClient = true,
-        entriesPerPartition = Map(new TopicPartition(topic, 0) -> MemoryRecords.withRecords(CompressionType.NONE,
-          new SimpleRecord("first message".getBytes()))),
-        responseCallback = produceCallback)
+      val records = MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("first message".getBytes()))
+      appendRecords(rm, Map(new TopicPartition(topic, 0) -> records), produceCallback)
 
       // Fetch some messages
-      rm.fetchMessages(
-        timeout = 1000,
-        replicaId = -1,
-        fetchMinBytes = 100000,
-        fetchMaxBytes = Int.MaxValue,
-        hardMaxBytesLimit = false,
-        fetchInfos = Seq(new TopicPartition(topic, 0) -> new PartitionData(0, 0, 100000)),
-        responseCallback = fetchCallback,
-        isolationLevel = IsolationLevel.READ_UNCOMMITTED)
+      fetchAsConsumer(rm, Seq(new TopicPartition(topic, 0) -> new PartitionData(0, 0, 100000)), fetchCallback,
+        minBytes = 100000)
 
       // Make this replica the follower
       val leaderAndIsrRequest2 = new LeaderAndIsrRequest.Builder(0, 0,
@@ -214,23 +201,32 @@ class ReplicaManagerTest {
     EasyMock.expect(metadataCache.isBrokerAlive(EasyMock.eq(0))).andReturn(true).anyTimes()
     EasyMock.expect(metadataCache.isBrokerAlive(EasyMock.eq(1))).andReturn(true).anyTimes()
     EasyMock.replay(metadataCache)
-    val rm = new ReplicaManager(config, metrics, time, zkUtils, new MockScheduler(time), mockLogMgr,
+
+    val timer = new MockTimer
+    val mockProducePurgatory = new DelayedOperationPurgatory[DelayedProduce](
+      purgatoryName = "Produce", timer, reaperEnabled = false)
+    val mockFetchPurgatory = new DelayedOperationPurgatory[DelayedFetch](
+      purgatoryName = "Fetch", timer, reaperEnabled = false)
+    val mockDeleteRecordsPurgatory = new DelayedOperationPurgatory[DelayedDeleteRecords](
+      purgatoryName = "DeleteRecords", timer, reaperEnabled = false)
+
+    val replicaManager = new ReplicaManager(config, metrics, time, zkUtils, new MockScheduler(time), mockLogMgr,
       new AtomicBoolean(false), QuotaFactory.instantiate(config, metrics, time).follower, new BrokerTopicStats,
-      metadataCache, Option(this.getClass.getName))
+      metadataCache, mockProducePurgatory, mockFetchPurgatory, mockDeleteRecordsPurgatory, Option(this.getClass.getName))
 
     try {
       val brokerList: java.util.List[Integer] = Seq[Integer](0, 1).asJava
       val brokerSet: java.util.Set[Integer] = Set[Integer](0, 1).asJava
 
-      val partition = rm.getOrCreatePartition(new TopicPartition(topic, 0))
+      val partition = replicaManager.getOrCreatePartition(new TopicPartition(topic, 0))
       partition.getOrCreateReplica(0)
 
       // Make this replica the leader.
       val leaderAndIsrRequest1 = new LeaderAndIsrRequest.Builder(0, 0,
         collection.immutable.Map(new TopicPartition(topic, 0) -> new PartitionState(0, 0, 0, brokerList, 0, brokerSet)).asJava,
         Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
-      rm.becomeLeaderOrFollower(0, leaderAndIsrRequest1, (_, _) => {})
-      rm.getLeaderReplicaIfLocal(new TopicPartition(topic, 0))
+      replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest1, (_, _) => {})
+      replicaManager.getLeaderReplicaIfLocal(new TopicPartition(topic, 0))
 
       def produceCallback(responseStatus: Map[TopicPartition, PartitionResponse]) =
         responseStatus.values.foreach { status =>
@@ -245,13 +241,7 @@ class ReplicaManagerTest {
       for (sequence <- 0 until numRecords) {
         val records = MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId, epoch, sequence,
           new SimpleRecord(s"message $sequence".getBytes))
-        rm.appendRecords(
-          timeout = 1000,
-          requiredAcks = -1,
-          internalTopicsAllowed = false,
-          isFromClient = true,
-          entriesPerPartition = Map(new TopicPartition(topic, 0) -> records),
-          responseCallback = produceCallback)
+        appendRecords(replicaManager, Map(new TopicPartition(topic, 0) -> records), produceCallback)
       }
 
       var fetchCallbackFired = false
@@ -263,26 +253,22 @@ class ReplicaManagerTest {
         fetchCallbackFired = true
       }
 
-      def fetchMessages(fetchInfos: Seq[(TopicPartition, PartitionData)],
-                        isolationLevel: IsolationLevel = IsolationLevel.READ_UNCOMMITTED): Unit = {
-        rm.fetchMessages(
-          timeout = 1000,
-          replicaId = 1,
-          fetchMinBytes = 0,
-          fetchMaxBytes = Int.MaxValue,
-          hardMaxBytesLimit = false,
-          fetchInfos = fetchInfos,
-          responseCallback = fetchCallback,
-          isolationLevel = isolationLevel)
-      }
-
       // fetch as follower to advance the high watermark
-      fetchMessages(fetchInfos = Seq(new TopicPartition(topic, 0) -> new PartitionData(numRecords, 0, 100000)),
-        isolationLevel = IsolationLevel.READ_UNCOMMITTED)
+      fetchAsFollower(replicaManager, Seq(new TopicPartition(topic, 0) -> new PartitionData(numRecords, 0, 100000)),
+        fetchCallback, isolationLevel = IsolationLevel.READ_UNCOMMITTED)
 
       // fetch should return empty since LSO should be stuck at 0
-      fetchMessages(fetchInfos = Seq(new TopicPartition(topic, 0) -> new PartitionData(0, 0, 100000)),
-        isolationLevel = IsolationLevel.READ_COMMITTED)
+      fetchAsConsumer(replicaManager, Seq(new TopicPartition(topic, 0) -> new PartitionData(0, 0, 100000)),
+        fetchCallback, isolationLevel = IsolationLevel.READ_COMMITTED)
+      assertTrue(fetchCallbackFired)
+      assertEquals(Errors.NONE, fetchError)
+      assertTrue(fetchedRecords.batches.asScala.isEmpty)
+      fetchCallbackFired = false
+
+      // delayed fetch should timeout and return nothing
+      fetchAsConsumer(replicaManager, Seq(new TopicPartition(topic, 0) -> new PartitionData(0, 0, 100000)),
+        fetchCallback, isolationLevel = IsolationLevel.READ_COMMITTED, minBytes = 1000)
+      timer.advanceClock(1001)
 
       assertTrue(fetchCallbackFired)
       assertEquals(Errors.NONE, fetchError)
@@ -292,18 +278,13 @@ class ReplicaManagerTest {
       // now commit the transaction
       val endTxnMarker = new EndTransactionMarker(ControlRecordType.COMMIT, 0)
       val commitRecordBatch = MemoryRecords.withEndTransactionMarker(producerId, epoch, endTxnMarker)
-      rm.appendRecords(
-        timeout = 1000,
-        requiredAcks = -1,
-        internalTopicsAllowed = false,
-        isFromClient = false,
-        entriesPerPartition = Map(new TopicPartition(topic, 0) -> commitRecordBatch),
-        responseCallback = produceCallback)
+      appendRecords(replicaManager, Map(new TopicPartition(topic, 0) -> commitRecordBatch), produceCallback,
+        isFromClient = false)
 
       // the LSO has advanced, but the appended commit marker has not been replicated, so
       // none of the data from the transaction should be visible yet
-      fetchMessages(fetchInfos = Seq(new TopicPartition(topic, 0) -> new PartitionData(0, 0, 100000)),
-        isolationLevel = IsolationLevel.READ_COMMITTED)
+      fetchAsConsumer(replicaManager, Seq(new TopicPartition(topic, 0) -> new PartitionData(0, 0, 100000)),
+        fetchCallback, isolationLevel = IsolationLevel.READ_COMMITTED)
 
       assertTrue(fetchCallbackFired)
       assertEquals(Errors.NONE, fetchError)
@@ -311,18 +292,18 @@ class ReplicaManagerTest {
       fetchCallbackFired = false
 
       // fetch as follower to advance the high watermark
-      fetchMessages(fetchInfos = Seq(new TopicPartition(topic, 0) -> new PartitionData(numRecords + 1, 0, 100000)),
-        isolationLevel = IsolationLevel.READ_UNCOMMITTED)
+      fetchAsFollower(replicaManager, Seq(new TopicPartition(topic, 0) -> new PartitionData(numRecords + 1, 0, 100000)),
+        fetchCallback, isolationLevel = IsolationLevel.READ_UNCOMMITTED)
 
       // now all of the records should be fetchable
-      fetchMessages(fetchInfos = Seq(new TopicPartition(topic, 0) -> new PartitionData(0, 0, 100000)),
-        isolationLevel = IsolationLevel.READ_COMMITTED)
+      fetchAsConsumer(replicaManager, Seq(new TopicPartition(topic, 0) -> new PartitionData(0, 0, 100000)),
+        fetchCallback, isolationLevel = IsolationLevel.READ_COMMITTED)
 
       assertTrue(fetchCallbackFired)
       assertEquals(Errors.NONE, fetchError)
       assertEquals(numRecords + 1, fetchedRecords.batches.asScala.size)
     } finally {
-      rm.shutdown(checkpointHW = false)
+      replicaManager.shutdown(checkpointHW = false)
     }
   }
 
@@ -349,10 +330,10 @@ class ReplicaManagerTest {
     try {
       val brokerList: java.util.List[Integer] = Seq[Integer](0, 1, 2).asJava
       val brokerSet: java.util.Set[Integer] = Set[Integer](0, 1, 2).asJava
-      
+
       val partition = rm.getOrCreatePartition(new TopicPartition(topic, 0))
       partition.getOrCreateReplica(0)
-      
+
       // Make this replica the leader.
       val leaderAndIsrRequest1 = new LeaderAndIsrRequest.Builder(0, 0,
         collection.immutable.Map(new TopicPartition(topic, 0) -> new PartitionState(0, 0, 0, brokerList, 0, brokerSet)).asJava,
@@ -361,17 +342,13 @@ class ReplicaManagerTest {
       rm.getLeaderReplicaIfLocal(new TopicPartition(topic, 0))
 
       def produceCallback(responseStatus: Map[TopicPartition, PartitionResponse]) = {}
-      
+
       // Append a couple of messages.
-      for(i <- 1 to 2)
-        rm.appendRecords(
-          timeout = 1000,
-          requiredAcks = -1,
-          internalTopicsAllowed = false,
-          isFromClient = true,
-          entriesPerPartition = Map(new TopicPartition(topic, 0) -> TestUtils.singletonRecords("message %d".format(i).getBytes)),
-          responseCallback = produceCallback)
-      
+      for(i <- 1 to 2) {
+        val records = TestUtils.singletonRecords(s"message $i".getBytes)
+        appendRecords(rm, Map(new TopicPartition(topic, 0) -> records), produceCallback)
+      }
+
       var fetchCallbackFired = false
       var fetchError = Errors.NONE
       var fetchedRecords: Records = null
@@ -380,35 +357,16 @@ class ReplicaManagerTest {
         fetchedRecords = responseStatus.map(_._2).head.records
         fetchCallbackFired = true
       }
-      
+
       // Fetch a message above the high watermark as a follower
-      rm.fetchMessages(
-        timeout = 1000,
-        replicaId = 1,
-        fetchMinBytes = 0,
-        fetchMaxBytes = Int.MaxValue,
-        hardMaxBytesLimit = false,
-        fetchInfos = Seq(new TopicPartition(topic, 0) -> new PartitionData(1, 0, 100000)),
-        responseCallback = fetchCallback,
-        isolationLevel = IsolationLevel.READ_UNCOMMITTED)
-        
-      
+      fetchAsFollower(rm, Seq(new TopicPartition(topic, 0) -> new PartitionData(1, 0, 100000)), fetchCallback)
       assertTrue(fetchCallbackFired)
       assertEquals("Should not give an exception", Errors.NONE, fetchError)
       assertTrue("Should return some data", fetchedRecords.batches.iterator.hasNext)
       fetchCallbackFired = false
-      
+
       // Fetch a message above the high watermark as a consumer
-      rm.fetchMessages(
-        timeout = 1000,
-        replicaId = -1,
-        fetchMinBytes = 0,
-        fetchMaxBytes = Int.MaxValue,
-        hardMaxBytesLimit = false,
-        fetchInfos = Seq(new TopicPartition(topic, 0) -> new PartitionData(1, 0, 100000)),
-        responseCallback = fetchCallback,
-        isolationLevel = IsolationLevel.READ_UNCOMMITTED)
-          
+      fetchAsConsumer(rm, Seq(new TopicPartition(topic, 0) -> new PartitionData(1, 0, 100000)), fetchCallback)
       assertTrue(fetchCallbackFired)
       assertEquals("Should not give an exception", Errors.NONE, fetchError)
       assertEquals("Should return empty response", MemoryRecords.EMPTY, fetchedRecords)
@@ -416,4 +374,51 @@ class ReplicaManagerTest {
       rm.shutdown(checkpointHW = false)
     }
   }
+
+  private def appendRecords(replicaManager: ReplicaManager,
+                            entriesPerPartition: Map[TopicPartition, MemoryRecords],
+                            responseCallback: Map[TopicPartition, PartitionResponse] => Unit,
+                            isFromClient: Boolean = true): Unit = {
+    replicaManager.appendRecords(
+      timeout = 1000,
+      requiredAcks = -1,
+      internalTopicsAllowed = false,
+      isFromClient = isFromClient,
+      entriesPerPartition = entriesPerPartition,
+      responseCallback = responseCallback)
+  }
+
+  private def fetchAsConsumer(replicaManager: ReplicaManager,
+                              fetchInfos: Seq[(TopicPartition, PartitionData)],
+                              fetchCallback: Seq[(TopicPartition, FetchPartitionData)] => Unit,
+                              minBytes: Int = 0,
+                              isolationLevel: IsolationLevel = IsolationLevel.READ_UNCOMMITTED): Unit = {
+    fetchMessages(replicaManager, replicaId = -1, fetchInfos, fetchCallback, minBytes, isolationLevel)
+  }
+
+  private def fetchAsFollower(replicaManager: ReplicaManager,
+                              fetchInfos: Seq[(TopicPartition, PartitionData)],
+                              fetchCallback: Seq[(TopicPartition, FetchPartitionData)] => Unit,
+                              minBytes: Int = 0,
+                              isolationLevel: IsolationLevel = IsolationLevel.READ_UNCOMMITTED): Unit = {
+    fetchMessages(replicaManager, replicaId = 1, fetchInfos, fetchCallback, minBytes, isolationLevel)
+  }
+
+  private def fetchMessages(replicaManager: ReplicaManager,
+                            replicaId: Int,
+                            fetchInfos: Seq[(TopicPartition, PartitionData)],
+                            fetchCallback: Seq[(TopicPartition, FetchPartitionData)] => Unit,
+                            minBytes: Int,
+                            isolationLevel: IsolationLevel): Unit = {
+    replicaManager.fetchMessages(
+      timeout = 1000,
+      replicaId = replicaId,
+      fetchMinBytes = minBytes,
+      fetchMaxBytes = Int.MaxValue,
+      hardMaxBytesLimit = false,
+      fetchInfos = fetchInfos,
+      responseCallback = fetchCallback,
+      isolationLevel = isolationLevel)
+  }
+
 }
