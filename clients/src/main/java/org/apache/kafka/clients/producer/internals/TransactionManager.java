@@ -246,12 +246,10 @@ public class TransactionManager {
             throw new IllegalStateException("Cannot call send while a commit or abort is in progress.");
     }
 
-    synchronized boolean canSendToPartition(TopicPartition tp) {
+    synchronized boolean sendToPartitionAllowed(TopicPartition tp) {
         if (hasFatalError())
             return false;
-        if (hasOngoingTransaction())
-            return partitionsInTransaction.contains(tp);
-        return true;
+        return !isTransactional() || partitionsInTransaction.contains(tp);
     }
 
     public String transactionalId() {
