@@ -212,6 +212,7 @@ public class TransactionManager {
             throw new KafkaException("Cannot send offsets to transaction either because the producer is not in an " +
                     "active transaction");
 
+        log.debug("{}Begin adding offsets {} for consumer group {} to transaction", logPrefix, offsets, consumerGroupId);
         AddOffsetsToTxnRequest.Builder builder = new AddOffsetsToTxnRequest.Builder(transactionalId,
                 producerIdAndEpoch.producerId, producerIdAndEpoch.epoch, consumerGroupId);
         AddOffsetsToTxnHandler handler = new AddOffsetsToTxnHandler(builder, offsets);
@@ -226,6 +227,7 @@ public class TransactionManager {
         if (partitionsInTransaction.contains(topicPartition))
             return;
 
+        log.debug("{}Begin adding new partition {} to transaction", logPrefix, topicPartition);
         newPartitionsInTransaction.add(topicPartition);
     }
 
@@ -749,6 +751,7 @@ public class TransactionManager {
                 abortableError(new KafkaException("Could not add partitions to transaction due to partition level errors"));
             } else {
                 Set<TopicPartition> addedPartitions = errors.keySet();
+                log.debug("{}Successfully added partitions {} to transaction", logPrefix, addedPartitions);
                 partitionsInTransaction.addAll(addedPartitions);
                 pendingPartitionsInTransaction.removeAll(addedPartitions);
                 transactionStarted = true;
@@ -886,6 +889,9 @@ public class TransactionManager {
             Errors error = addOffsetsToTxnResponse.error();
 
             if (error == Errors.NONE) {
+                log.debug("{}Successfully added partition for consumer group {} to transaction", logPrefix,
+                        builder.consumerGroupId());
+
                 // note the result is not completed until the TxnOffsetCommit returns
                 pendingRequests.add(txnOffsetCommitHandler(result, offsets, builder.consumerGroupId()));
                 transactionStarted = true;
@@ -946,6 +952,8 @@ public class TransactionManager {
                 TopicPartition topicPartition = entry.getKey();
                 Errors error = entry.getValue();
                 if (error == Errors.NONE) {
+                    log.debug("{}Successfully added offsets {} from consumer group {} to transaction.", logPrefix,
+                            builder.offsets(), builder.consumerGroupId());
                     pendingTxnOffsetCommits.remove(topicPartition);
                 } else if (error == Errors.COORDINATOR_NOT_AVAILABLE
                         || error == Errors.NOT_COORDINATOR

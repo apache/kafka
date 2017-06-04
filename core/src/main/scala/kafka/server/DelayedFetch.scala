@@ -153,8 +153,7 @@ class DelayedFetch(delayMs: Long,
       hardMaxBytesLimit = fetchMetadata.hardMaxBytesLimit,
       readPartitionInfo = fetchMetadata.fetchPartitionStatus.map { case (tp, status) => tp -> status.fetchInfo },
       quota = quota,
-      isolationLevel = isolationLevel
-    )
+      isolationLevel = isolationLevel)
 
     val fetchPartitionData = logReadResults.map { case (tp, result) =>
       tp -> FetchPartitionData(result.error, result.hw, result.leaderLogStartOffset, result.info.records)

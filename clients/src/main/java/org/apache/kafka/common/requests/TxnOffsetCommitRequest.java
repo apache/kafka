@@ -59,6 +59,10 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
             return consumerGroupId;
         }
 
+        public Map<TopicPartition, CommittedOffset> offsets() {
+            return offsets;
+        }
+
         @Override
         public TxnOffsetCommitRequest build(short version) {
             return new TxnOffsetCommitRequest(version, transactionalId, consumerGroupId, producerId, producerEpoch, offsets);
