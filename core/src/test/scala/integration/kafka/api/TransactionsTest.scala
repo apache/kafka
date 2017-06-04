@@ -113,26 +113,41 @@ class TransactionsTest extends KafkaServerTestHarness {
 
   @Test
   def testReadCommittedConsumerShouldNotSeeUndecidedData(): Unit = {
-    val producer = transactionalProducers.head
+    val producer1 = transactionalProducers.head
+    val producer2 = TestUtils.createTransactionalProducer("other", servers)
     val readCommittedConsumer = transactionalConsumers.head
     val readUncommittedConsumer = nonTransactionalConsumers.head
 
-    producer.initTransactions()
-    producer.beginTransaction()
-    producer.send(new ProducerRecord(topic1, "a".getBytes, "1".getBytes))
-    producer.send(new ProducerRecord(topic1, "b".getBytes, "2".getBytes))
-    producer.send(new ProducerRecord(topic2, "c".getBytes, "3".getBytes))
-    producer.send(new ProducerRecord(topic2, "d".getBytes, "4".getBytes))
-    producer.flush()
+    producer1.initTransactions()
+    producer2.initTransactions()
+
+    producer1.beginTransaction()
+    producer2.beginTransaction()
+    producer2.send(new ProducerRecord(topic1, "x".getBytes, "1".getBytes))
+    producer2.send(new ProducerRecord(topic2, "x".getBytes, "1".getBytes))
+    producer2.flush()
+
+    producer1.send(new ProducerRecord(topic1, "a".getBytes, "1".getBytes))
+    producer1.send(new ProducerRecord(topic1, "b".getBytes, "2".getBytes))
+    producer1.send(new ProducerRecord(topic2, "c".getBytes, "3".getBytes))
+    producer1.send(new ProducerRecord(topic2, "d".getBytes, "4".getBytes))
+    producer1.flush()
+
+    producer2.send(new ProducerRecord(topic1, "x".getBytes, "2".getBytes))
+    producer2.send(new ProducerRecord(topic2, "x".getBytes, "2".getBytes))
+    producer2.commitTransaction()
 
     // ensure the records are visible to the read uncommitted consumer
     readUncommittedConsumer.subscribe(Set(topic1, topic2).asJava)
-    pollUntilExactlyNumRecords(readUncommittedConsumer, 4)
+    pollUntilExactlyNumRecords(readUncommittedConsumer, 8)
     readUncommittedConsumer.unsubscribe()
 
     readCommittedConsumer.subscribe(Set(topic1, topic2).asJava)
-    val records = readCommittedConsumer.poll(2000)
-    assertTrue(records.isEmpty)
+    val records = pollUntilExactlyNumRecords(readCommittedConsumer, 2)
+    records.foreach { record =>
+      assertEquals("x", new String(record.key))
+      assertEquals("1", new String(record.value))
+    }
   }
 
   @Test
@@ -403,8 +418,10 @@ class TransactionsTest extends KafkaServerTestHarness {
     val records = new ArrayBuffer[ConsumerRecord[Array[Byte], Array[Byte]]]()
     TestUtils.waitUntilTrue(() => {
       records ++= consumer.poll(50).asScala
-      records.size == numRecords
-    }, s"Consumed ${records.size} records until timeout, but expected $numRecords records.")
+      records.size >= numRecords
+    }, s"Failed to consume $numRecords records before timeout")
+    assertEquals(s"Expected to consume only $numRecords records, but instead consumed ${records.size}",
+      numRecords, records.size)
     records
   }
 
