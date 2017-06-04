@@ -469,7 +469,7 @@ public final class RecordAccumulator {
                                         ProducerIdAndEpoch producerIdAndEpoch = null;
                                         boolean isTransactional = false;
                                         if (transactionManager != null) {
-                                            if (!transactionManager.ensurePartitionAdded(tp))
+                                            if (!transactionManager.canSendToPartition(tp))
                                                 break;
 
                                             producerIdAndEpoch = transactionManager.producerIdAndEpoch();

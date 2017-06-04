@@ -331,7 +331,7 @@ public class TransactionManagerTest {
         transactionManager.maybeAddPartitionToTransaction(tp0);
         transactionManager.transitionToAbortableError(new KafkaException());
 
-        assertFalse(transactionManager.ensurePartitionAdded(tp0));
+        assertFalse(transactionManager.canSendToPartition(tp0));
         assertTrue(transactionManager.hasAbortableError());
     }
 
@@ -347,7 +347,7 @@ public class TransactionManagerTest {
         sender.run(time.milliseconds());
         transactionManager.transitionToAbortableError(new KafkaException());
 
-        assertFalse(transactionManager.ensurePartitionAdded(tp0));
+        assertFalse(transactionManager.canSendToPartition(tp0));
         assertTrue(transactionManager.hasAbortableError());
     }
 
@@ -362,7 +362,7 @@ public class TransactionManagerTest {
         transactionManager.maybeAddPartitionToTransaction(tp0);
         transactionManager.transitionToFatalError(new KafkaException());
 
-        assertFalse(transactionManager.ensurePartitionAdded(tp0));
+        assertFalse(transactionManager.canSendToPartition(tp0));
         assertTrue(transactionManager.hasFatalError());
     }
 
@@ -378,7 +378,7 @@ public class TransactionManagerTest {
         sender.run(time.milliseconds());
         transactionManager.transitionToFatalError(new KafkaException());
 
-        assertFalse(transactionManager.ensurePartitionAdded(tp0));
+        assertFalse(transactionManager.canSendToPartition(tp0));
         assertTrue(transactionManager.hasFatalError());
     }
 
@@ -397,7 +397,7 @@ public class TransactionManagerTest {
         assertFalse(transactionManager.hasPartitionsToAdd());
         transactionManager.transitionToAbortableError(new KafkaException());
 
-        assertTrue(transactionManager.ensurePartitionAdded(tp0));
+        assertTrue(transactionManager.canSendToPartition(tp0));
         assertTrue(transactionManager.hasAbortableError());
     }
 
@@ -415,7 +415,7 @@ public class TransactionManagerTest {
         assertFalse(transactionManager.hasPartitionsToAdd());
         transactionManager.transitionToFatalError(new KafkaException());
 
-        assertFalse(transactionManager.ensurePartitionAdded(tp0));
+        assertFalse(transactionManager.canSendToPartition(tp0));
         assertTrue(transactionManager.hasFatalError());
     }
 
@@ -423,12 +423,9 @@ public class TransactionManagerTest {
     public void testEnsurePartitionAddedWithUnaddedPartition() {
         final long pid = 13131L;
         final short epoch = 1;
-
         doInitTransactions(pid, epoch);
-
         transactionManager.beginTransaction();
-        assertFalse(transactionManager.ensurePartitionAdded(tp0));
-        assertTrue(transactionManager.hasFatalError());
+        assertFalse(transactionManager.canSendToPartition(tp0));
     }
 
     @Test(expected = IllegalStateException.class)
@@ -473,11 +470,11 @@ public class TransactionManagerTest {
 
         prepareProduceResponse(Errors.NONE, pid, epoch);
         assertFalse(transactionManager.transactionContainsPartition(tp0));
-        assertFalse(transactionManager.ensurePartitionAdded(tp0));
+        assertFalse(transactionManager.canSendToPartition(tp0));
         sender.run(time.milliseconds());  // send addPartitions.
         // Check that only addPartitions was sent.
         assertTrue(transactionManager.transactionContainsPartition(tp0));
-        assertTrue(transactionManager.ensurePartitionAdded(tp0));
+        assertTrue(transactionManager.canSendToPartition(tp0));
         assertFalse(responseFuture.isDone());
 
         sender.run(time.milliseconds());  // send produce request.
@@ -1217,8 +1214,8 @@ public class TransactionManagerTest {
         accumulator.append(tp1, time.milliseconds(), "key".getBytes(),
                 "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT);
 
-        assertFalse(transactionManager.ensurePartitionAdded(tp0));
-        assertFalse(transactionManager.ensurePartitionAdded(tp1));
+        assertFalse(transactionManager.canSendToPartition(tp0));
+        assertFalse(transactionManager.canSendToPartition(tp1));
 
         Node node1 = new Node(0, "localhost", 1111);
         Node node2 = new Node(1, "localhost", 1112);
@@ -1258,7 +1255,7 @@ public class TransactionManagerTest {
         sender.run(time.milliseconds());  // Send AddPartitions, should be in abortable state.
 
         assertTrue(transactionManager.hasAbortableError());
-        assertTrue(transactionManager.ensurePartitionAdded(tp1));
+        assertTrue(transactionManager.canSendToPartition(tp1));
 
         // Try to drain a message destined for tp1, it should get drained.
         Node node1 = new Node(1, "localhost", 1112);
@@ -1300,7 +1297,6 @@ public class TransactionManagerTest {
         // We shouldn't drain batches which haven't been added to the transaction yet.
         assertTrue(drainedBatches.containsKey(node1.id()));
         assertTrue(drainedBatches.get(node1.id()).isEmpty());
-        assertTrue(transactionManager.hasFatalError());
     }
 
     private void verifyAddPartitionsFailsWithPartitionLevelError(final Errors error) throws InterruptedException {

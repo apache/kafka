@@ -223,7 +223,7 @@ public class TransactionManager {
         if (currentState != State.IN_TRANSACTION)
             throw new IllegalStateException("Cannot add partitions to a transaction in state " + currentState);
 
-        if (partitionsInTransaction.contains(topicPartition))
+        if (partitionsInTransaction.contains(topicPartition) || pendingPartitionsInTransaction.contains(topicPartition))
             return;
 
         newPartitionsInTransaction.add(topicPartition);
@@ -246,23 +246,11 @@ public class TransactionManager {
             throw new IllegalStateException("Cannot call send while a commit or abort is in progress.");
     }
 
-    synchronized boolean ensurePartitionAdded(TopicPartition tp) {
+    synchronized boolean canSendToPartition(TopicPartition tp) {
         if (hasFatalError())
             return false;
-        if (hasOngoingTransaction()) {
-            if (partitionsInTransaction.contains(tp))
-                return true;
-
-            // We should enter this branch in an error state because if this partition is already in the transaction,
-            // there is a chance that the corresponding batch is in retry. So we must let it completely flush.
-            if (!pendingPartitionsInTransaction.contains(tp) && !newPartitionsInTransaction.contains(tp)) {
-                transitionToFatalError(new IllegalStateException("Attempted to dequeue a record batch to send " +
-                        "for partition " + tp + ", which would never be added to the transaction."));
-                return false;
-            }
-
-            return false;
-        }
+        if (hasOngoingTransaction())
+            return partitionsInTransaction.contains(tp);
         return true;
     }
 
