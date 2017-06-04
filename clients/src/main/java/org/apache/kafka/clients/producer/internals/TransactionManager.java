@@ -238,12 +238,14 @@ public class TransactionManager {
             throw new IllegalStateException("Cannot perform send because at least one previous transactional or " +
                     "idempotent request has failed with errors.", lastError);
 
-        if (isTransactional() && !hasProducerId())
-            throw new IllegalStateException("Cannot perform a 'send' before completing a call to initTransactions " +
-                    "when transactions are enabled.");
+        if (isTransactional()) {
+            if (!hasProducerId())
+                throw new IllegalStateException("Cannot perform a 'send' before completing a call to initTransactions " +
+                        "when transactions are enabled.");
 
-        if (currentState != State.IN_TRANSACTION)
-            throw new IllegalStateException("Cannot call send while a commit or abort is in progress.");
+            if (currentState != State.IN_TRANSACTION)
+                throw new IllegalStateException("Cannot call send in state " + currentState);
+        }
     }
 
     synchronized boolean sendToPartitionAllowed(TopicPartition tp) {
