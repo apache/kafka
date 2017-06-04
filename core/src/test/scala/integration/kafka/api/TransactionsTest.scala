@@ -55,7 +55,7 @@ class TransactionsTest extends KafkaServerTestHarness {
   @Before
   override def setUp(): Unit = {
     super.setUp()
-    val numPartitions = 3
+    val numPartitions = 1
     val topicConfig = new Properties()
     topicConfig.put(KafkaConfig.MinInSyncReplicasProp, 2.toString)
     TestUtils.createTopic(zkUtils, topic1, numPartitions, numServers, servers, topicConfig)
@@ -142,11 +142,19 @@ class TransactionsTest extends KafkaServerTestHarness {
     pollUntilExactlyNumRecords(readUncommittedConsumer, 8)
     readUncommittedConsumer.unsubscribe()
 
+    // we should only see the first two records which come before the undecided second transaction
     readCommittedConsumer.subscribe(Set(topic1, topic2).asJava)
     val records = pollUntilExactlyNumRecords(readCommittedConsumer, 2)
     records.foreach { record =>
       assertEquals("x", new String(record.key))
       assertEquals("1", new String(record.value))
+    }
+
+    // even if we seek to the end, we should not be able to see the undecided data
+    assertEquals(2, readCommittedConsumer.assignment.size)
+    readCommittedConsumer.seekToEnd(readCommittedConsumer.assignment)
+    readCommittedConsumer.assignment.asScala.foreach { tp =>
+      assertEquals(1L, readCommittedConsumer.position(tp))
     }
   }
 
