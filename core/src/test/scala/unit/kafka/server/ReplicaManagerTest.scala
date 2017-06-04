@@ -268,7 +268,7 @@ class ReplicaManagerTest {
       // delayed fetch should timeout and return nothing
       fetchAsConsumer(replicaManager, Seq(new TopicPartition(topic, 0) -> new PartitionData(0, 0, 100000)),
         fetchCallback, isolationLevel = IsolationLevel.READ_COMMITTED, minBytes = 1000)
-      timer.advanceClock(1000)
+      timer.advanceClock(1001)
 
       assertTrue(fetchCallbackFired)
       assertEquals(Errors.NONE, fetchError)

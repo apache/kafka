@@ -38,7 +38,7 @@ class MockTimer extends Timer {
     var executed = false
     val now = time.milliseconds
 
-    while (taskQueue.nonEmpty && now >= taskQueue.head.expirationMs) {
+    while (taskQueue.nonEmpty && now > taskQueue.head.expirationMs) {
       val taskEntry = taskQueue.dequeue()
       if (!taskEntry.cancelled) {
         val task = taskEntry.timerTask
