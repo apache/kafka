@@ -133,7 +133,7 @@ public class TransactionManagerTest {
         idempotentTransactionManager.failIfUnreadyForSend();
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test(expected = KafkaException.class)
     public void testFailIfUnreadyForSendIdempotentProducerFatalError() {
         TransactionManager idempotentTransactionManager = new TransactionManager();
         idempotentTransactionManager.transitionToFatalError(new KafkaException());
@@ -148,7 +148,7 @@ public class TransactionManagerTest {
         transactionManager.failIfUnreadyForSend();
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test(expected = KafkaException.class)
     public void testFailIfUnreadyForSendAfterAbortableError() {
         long pid = 13131L;
         short epoch = 1;
@@ -158,7 +158,7 @@ public class TransactionManagerTest {
         transactionManager.failIfUnreadyForSend();
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test(expected = KafkaException.class)
     public void testFailIfUnreadyForSendAfterFatalError() {
         long pid = 13131L;
         short epoch = 1;
