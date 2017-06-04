@@ -122,6 +122,117 @@ public class TransactionManagerTest {
         client.setNode(brokerNode);
     }
 
+    @Test
+    public void testEnsurePartitionAddedWithPendingPartitionAfterAbortableError() {
+        final long pid = 13131L;
+        final short epoch = 1;
+
+        doInitTransactions(pid, epoch);
+
+        transactionManager.beginTransaction();
+        transactionManager.maybeAddPartitionToTransaction(tp0);
+        transactionManager.transitionToAbortableError(new KafkaException());
+
+        assertFalse(transactionManager.ensurePartitionAdded(tp0));
+        assertTrue(transactionManager.hasAbortableError());
+    }
+
+    @Test
+    public void testEnsurePartitionAddedWithInFlightPartitionAddAfterAbortableError() {
+        final long pid = 13131L;
+        final short epoch = 1;
+
+        doInitTransactions(pid, epoch);
+
+        transactionManager.beginTransaction();
+        transactionManager.maybeAddPartitionToTransaction(tp0);
+        sender.run(time.milliseconds());
+        transactionManager.transitionToAbortableError(new KafkaException());
+
+        assertFalse(transactionManager.ensurePartitionAdded(tp0));
+        assertTrue(transactionManager.hasAbortableError());
+    }
+
+    @Test
+    public void testEnsurePartitionAddedWithPendingPartitionAfterFatalError() {
+        final long pid = 13131L;
+        final short epoch = 1;
+
+        doInitTransactions(pid, epoch);
+
+        transactionManager.beginTransaction();
+        transactionManager.maybeAddPartitionToTransaction(tp0);
+        transactionManager.transitionToFatalError(new KafkaException());
+
+        assertFalse(transactionManager.ensurePartitionAdded(tp0));
+        assertTrue(transactionManager.hasFatalError());
+    }
+
+    @Test
+    public void testEnsurePartitionAddedWithInFlightPartitionAddAfterFatalError() {
+        final long pid = 13131L;
+        final short epoch = 1;
+
+        doInitTransactions(pid, epoch);
+
+        transactionManager.beginTransaction();
+        transactionManager.maybeAddPartitionToTransaction(tp0);
+        sender.run(time.milliseconds());
+        transactionManager.transitionToFatalError(new KafkaException());
+
+        assertFalse(transactionManager.ensurePartitionAdded(tp0));
+        assertTrue(transactionManager.hasFatalError());
+    }
+
+    @Test
+    public void testEnsurePartitionAddedWithAddedPartitionAfterAbortableError() {
+        final long pid = 13131L;
+        final short epoch = 1;
+
+        doInitTransactions(pid, epoch);
+
+        transactionManager.beginTransaction();
+
+        transactionManager.maybeAddPartitionToTransaction(tp0);
+        prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, epoch, pid);
+        sender.run(time.milliseconds());
+        assertFalse(transactionManager.hasPartitionsToAdd());
+        transactionManager.transitionToAbortableError(new KafkaException());
+
+        assertTrue(transactionManager.ensurePartitionAdded(tp0));
+        assertTrue(transactionManager.hasAbortableError());
+    }
+
+    @Test
+    public void testEnsurePartitionAddedWithAddedPartitionAfterFatalError() {
+        final long pid = 13131L;
+        final short epoch = 1;
+
+        doInitTransactions(pid, epoch);
+
+        transactionManager.beginTransaction();
+        transactionManager.maybeAddPartitionToTransaction(tp0);
+        prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, epoch, pid);
+        sender.run(time.milliseconds());
+        assertFalse(transactionManager.hasPartitionsToAdd());
+        transactionManager.transitionToFatalError(new KafkaException());
+
+        assertFalse(transactionManager.ensurePartitionAdded(tp0));
+        assertTrue(transactionManager.hasFatalError());
+    }
+
+    @Test
+    public void testEnsurePartitionAddedWithUnaddedPartition() {
+        final long pid = 13131L;
+        final short epoch = 1;
+
+        doInitTransactions(pid, epoch);
+
+        transactionManager.beginTransaction();
+        assertFalse(transactionManager.ensurePartitionAdded(tp0));
+        assertTrue(transactionManager.hasFatalError());
+    }
+
     @Test(expected = IllegalStateException.class)
     public void testInvalidSequenceIncrement() {
         TransactionManager transactionManager = new TransactionManager();
@@ -148,8 +259,6 @@ public class TransactionManagerTest {
 
     @Test
     public void testBasicTransaction() throws InterruptedException {
-        // This is called from the initTransactions method in the producer as the first order of business.
-        // It finds the coordinator and then gets a PID.
         final long pid = 13131L;
         final short epoch = 1;
 

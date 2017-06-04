@@ -236,15 +236,19 @@ public class TransactionManager {
     public synchronized boolean ensurePartitionAdded(TopicPartition tp) {
         if (hasFatalError())
             return false;
-        if (isInTransaction() || hasAbortableError()) {
+        if (isInTransaction()) {
+            if (partitionsInTransaction.contains(tp))
+                return true;
+
             // We should enter this branch in an error state because if this partition is already in the transaction,
             // there is a chance that the corresponding batch is in retry. So we must let it completely flush.
-            if (!(partitionsInTransaction.contains(tp) || isPartitionPending(tp))) {
+            if (!pendingPartitionsInTransaction.contains(tp) && !newPartitionsInTransaction.contains(tp)) {
                 transitionToFatalError(new IllegalStateException("Attempted to dequeue a record batch to send " +
                         "for partition " + tp + ", which would never be added to the transaction."));
                 return false;
             }
-            return partitionsInTransaction.contains(tp);
+
+            return false;
         }
         return true;
     }
@@ -278,7 +282,7 @@ public class TransactionManager {
     }
 
     synchronized boolean isInTransaction() {
-        return currentState == State.IN_TRANSACTION || isCompletingTransaction();
+        return currentState == State.IN_TRANSACTION || isCompletingTransaction() || hasAbortableError();
     }
 
     synchronized void transitionToAbortableError(RuntimeException exception) {
@@ -446,10 +450,6 @@ public class TransactionManager {
     // visible for testing
     synchronized boolean isReady() {
         return isTransactional() && currentState == State.READY;
-    }
-
-    private synchronized boolean isPartitionPending(TopicPartition tp) {
-        return isInTransaction() && (pendingPartitionsInTransaction.contains(tp) || newPartitionsInTransaction.contains(tp));
     }
 
     private void transitionTo(State target) {
