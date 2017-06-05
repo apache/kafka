@@ -94,7 +94,7 @@ case class LogReadResult(info: FetchDataInfo,
 }
 
 case class FetchPartitionData(error: Errors = Errors.NONE, hw: Long = -1L, logStartOffset: Long, records: Records,
-                              abortedTransactions: Option[List[AbortedTransaction]] = None)
+                              abortedTransactions: Option[List[AbortedTransaction]])
 
 object LogReadResult {
   val UnknownLogReadResult = LogReadResult(info = FetchDataInfo(LogOffsetMetadata.UnknownOffsetMetadata, MemoryRecords.EMPTY),

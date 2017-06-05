@@ -32,6 +32,7 @@ import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.{IsolationLevel, LeaderAndIsrRequest, PartitionState}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
+import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
 import org.apache.kafka.common.{Node, TopicPartition}
 import org.easymock.EasyMock
 import org.junit.Assert.{assertEquals, assertTrue}
@@ -188,31 +189,8 @@ class ReplicaManagerTest {
 
   @Test
   def testReadCommittedFetchLimitedAtLSO(): Unit = {
-    val props = TestUtils.createBrokerConfig(1, TestUtils.MockZkConnect)
-    props.put("log.dir", TestUtils.tempRelativeDir("data").getAbsolutePath)
-    props.put("broker.id", Int.box(0))
-    val config = KafkaConfig.fromProps(props)
-    val logProps = new Properties()
-    logProps.put(LogConfig.MessageTimestampDifferenceMaxMsProp, Long.MaxValue.toString)
-    val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)).toArray, LogConfig(logProps))
-    val aliveBrokers = Seq(createBroker(0, "host0", 0), createBroker(1, "host1", 1))
-    val metadataCache = EasyMock.createMock(classOf[MetadataCache])
-    EasyMock.expect(metadataCache.getAliveBrokers).andReturn(aliveBrokers).anyTimes()
-    EasyMock.expect(metadataCache.isBrokerAlive(EasyMock.eq(0))).andReturn(true).anyTimes()
-    EasyMock.expect(metadataCache.isBrokerAlive(EasyMock.eq(1))).andReturn(true).anyTimes()
-    EasyMock.replay(metadataCache)
-
     val timer = new MockTimer
-    val mockProducePurgatory = new DelayedOperationPurgatory[DelayedProduce](
-      purgatoryName = "Produce", timer, reaperEnabled = false)
-    val mockFetchPurgatory = new DelayedOperationPurgatory[DelayedFetch](
-      purgatoryName = "Fetch", timer, reaperEnabled = false)
-    val mockDeleteRecordsPurgatory = new DelayedOperationPurgatory[DelayedDeleteRecords](
-      purgatoryName = "DeleteRecords", timer, reaperEnabled = false)
-
-    val replicaManager = new ReplicaManager(config, metrics, time, zkUtils, new MockScheduler(time), mockLogMgr,
-      new AtomicBoolean(false), QuotaFactory.instantiate(config, metrics, time).follower, new BrokerTopicStats,
-      metadataCache, mockProducePurgatory, mockFetchPurgatory, mockDeleteRecordsPurgatory, Option(this.getClass.getName))
+    val replicaManager = setupReplicaManagerWithMockedPurgatories(timer)
 
     try {
       val brokerList: java.util.List[Integer] = Seq[Integer](0, 1).asJava
@@ -302,6 +280,77 @@ class ReplicaManagerTest {
       assertTrue(fetchCallbackFired)
       assertEquals(Errors.NONE, fetchError)
       assertEquals(numRecords + 1, fetchedRecords.batches.asScala.size)
+    } finally {
+      replicaManager.shutdown(checkpointHW = false)
+    }
+  }
+
+  @Test
+  def testDelayedFetchIncludesAbortedTransactions(): Unit = {
+    val timer = new MockTimer
+    val replicaManager = setupReplicaManagerWithMockedPurgatories(timer)
+
+    try {
+      val brokerList: java.util.List[Integer] = Seq[Integer](0, 1).asJava
+      val brokerSet: java.util.Set[Integer] = Set[Integer](0, 1).asJava
+
+      val partition = replicaManager.getOrCreatePartition(new TopicPartition(topic, 0))
+      partition.getOrCreateReplica(0)
+
+      // Make this replica the leader.
+      val leaderAndIsrRequest1 = new LeaderAndIsrRequest.Builder(0, 0,
+        collection.immutable.Map(new TopicPartition(topic, 0) -> new PartitionState(0, 0, 0, brokerList, 0, brokerSet)).asJava,
+        Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
+      replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest1, (_, _) => {})
+      replicaManager.getLeaderReplicaIfLocal(new TopicPartition(topic, 0))
+
+      def produceCallback(responseStatus: Map[TopicPartition, PartitionResponse]) =
+        responseStatus.values.foreach { status =>
+          assertEquals(Errors.NONE, status.error)
+        }
+
+      val producerId = 234L
+      val epoch = 5.toShort
+
+      // write a few batches as part of a transaction
+      val numRecords = 3
+      for (sequence <- 0 until numRecords) {
+        val records = MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId, epoch, sequence,
+          new SimpleRecord(s"message $sequence".getBytes))
+        appendRecords(replicaManager, Map(new TopicPartition(topic, 0) -> records), produceCallback)
+      }
+
+      // now abort the transaction
+      val endTxnMarker = new EndTransactionMarker(ControlRecordType.ABORT, 0)
+      val abortRecordBatch = MemoryRecords.withEndTransactionMarker(producerId, epoch, endTxnMarker)
+      appendRecords(replicaManager, Map(new TopicPartition(topic, 0) -> abortRecordBatch), produceCallback,
+        isFromClient = false)
+
+      // fetch as follower to advance the high watermark
+      fetchAsFollower(replicaManager, Seq(new TopicPartition(topic, 0) -> new PartitionData(numRecords + 1, 0, 100000)),
+        responseState => (), isolationLevel = IsolationLevel.READ_UNCOMMITTED)
+
+      var fetchDataOpt: Option[FetchPartitionData] = None
+      def fetchCallback(responseStatus: Seq[(TopicPartition, FetchPartitionData)]) = {
+        fetchDataOpt = Some(responseStatus.map(_._2).head)
+      }
+
+      // delayed fetch should timeout and return the aborted transaction
+      fetchAsConsumer(replicaManager, Seq(new TopicPartition(topic, 0) -> new PartitionData(0, 0, 100000)),
+        fetchCallback, isolationLevel = IsolationLevel.READ_COMMITTED, minBytes = 10000)
+      timer.advanceClock(1001)
+
+      assertTrue(fetchDataOpt.isDefined)
+
+      val fetchData = fetchDataOpt.get
+      assertEquals(Errors.NONE, fetchData.error)
+      assertEquals(numRecords + 1, fetchData.records.records.asScala.size)
+      assertTrue(fetchData.abortedTransactions.isDefined)
+      assertEquals(1, fetchData.abortedTransactions.get.size)
+
+      val abortedTransaction = fetchData.abortedTransactions.get.head
+      assertEquals(0L, abortedTransaction.firstOffset)
+      assertEquals(producerId, abortedTransaction.producerId)
     } finally {
       replicaManager.shutdown(checkpointHW = false)
     }
@@ -419,6 +468,34 @@ class ReplicaManagerTest {
       fetchInfos = fetchInfos,
       responseCallback = fetchCallback,
       isolationLevel = isolationLevel)
+  }
+
+
+  private def setupReplicaManagerWithMockedPurgatories(timer: MockTimer): ReplicaManager = {
+    val props = TestUtils.createBrokerConfig(1, TestUtils.MockZkConnect)
+    props.put("log.dir", TestUtils.tempRelativeDir("data").getAbsolutePath)
+    props.put("broker.id", Int.box(0))
+    val config = KafkaConfig.fromProps(props)
+    val logProps = new Properties()
+    logProps.put(LogConfig.MessageTimestampDifferenceMaxMsProp, Long.MaxValue.toString)
+    val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)).toArray, LogConfig(logProps))
+    val aliveBrokers = Seq(createBroker(0, "host0", 0), createBroker(1, "host1", 1))
+    val metadataCache = EasyMock.createMock(classOf[MetadataCache])
+    EasyMock.expect(metadataCache.getAliveBrokers).andReturn(aliveBrokers).anyTimes()
+    EasyMock.expect(metadataCache.isBrokerAlive(EasyMock.eq(0))).andReturn(true).anyTimes()
+    EasyMock.expect(metadataCache.isBrokerAlive(EasyMock.eq(1))).andReturn(true).anyTimes()
+    EasyMock.replay(metadataCache)
+
+    val mockProducePurgatory = new DelayedOperationPurgatory[DelayedProduce](
+      purgatoryName = "Produce", timer, reaperEnabled = false)
+    val mockFetchPurgatory = new DelayedOperationPurgatory[DelayedFetch](
+      purgatoryName = "Fetch", timer, reaperEnabled = false)
+    val mockDeleteRecordsPurgatory = new DelayedOperationPurgatory[DelayedDeleteRecords](
+      purgatoryName = "DeleteRecords", timer, reaperEnabled = false)
+
+    new ReplicaManager(config, metrics, time, zkUtils, new MockScheduler(time), mockLogMgr,
+      new AtomicBoolean(false), QuotaFactory.instantiate(config, metrics, time).follower, new BrokerTopicStats,
+      metadataCache, mockProducePurgatory, mockFetchPurgatory, mockDeleteRecordsPurgatory, Option(this.getClass.getName))
   }
 
 }

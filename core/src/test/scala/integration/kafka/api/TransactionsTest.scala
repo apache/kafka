@@ -160,6 +160,50 @@ class TransactionsTest extends KafkaServerTestHarness {
   }
 
   @Test
+  def testDelayedFetchIncludesAbortedTransaction(): Unit = {
+    val producer1 = transactionalProducers.head
+    val producer2 = createTransactionalProducer("other")
+
+    producer1.initTransactions()
+    producer2.initTransactions()
+
+    producer1.beginTransaction()
+    producer2.beginTransaction()
+    producer2.send(new ProducerRecord(topic1, 0, "x".getBytes, "1".getBytes))
+    producer2.flush()
+
+    producer1.send(new ProducerRecord(topic1, 0, "y".getBytes, "1".getBytes))
+    producer1.send(new ProducerRecord(topic1, 0, "y".getBytes, "2".getBytes))
+    producer1.flush()
+
+    producer2.send(new ProducerRecord(topic1, 0, "x".getBytes, "2".getBytes))
+    producer2.flush()
+
+    producer1.abortTransaction()
+    producer2.commitTransaction()
+
+    // ensure that the consumer's fetch will sit in purgatory
+    val consumerProps = new Properties()
+    consumerProps.put(ConsumerConfig.FETCH_MIN_BYTES_CONFIG, "100000")
+    consumerProps.put(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG, "100")
+    val readCommittedConsumer = createReadCommittedConsumer(props = consumerProps)
+
+    readCommittedConsumer.assign(Set(new TopicPartition(topic1, 0)).asJava)
+    val records = consumeRecords(readCommittedConsumer, numMessages = 2)
+    assertEquals(2, records.size)
+
+    val first = records.head
+    assertEquals("x", new String(first.key))
+    assertEquals("1", new String(first.value))
+    assertEquals(0L, first.offset)
+
+    val second = records.last
+    assertEquals("x", new String(second.key))
+    assertEquals("2", new String(second.value))
+    assertEquals(3L, second.offset)
+  }
+
+  @Test
   def testSendOffsets() = {
     // The basic plan for the test is as follows:
     //  1. Seed topic1 with 1000 unique, numbered, messages.
@@ -406,8 +450,8 @@ class TransactionsTest extends KafkaServerTestHarness {
     serverProps
   }
 
-  private def createReadCommittedConsumer(group: String = "group", maxPollRecords: Int = 500) = {
-    val props = new Properties()
+  private def createReadCommittedConsumer(group: String = "group", maxPollRecords: Int = 500,
+                                          props: Properties = new Properties) = {
     props.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed")
     props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
     props.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, maxPollRecords.toString)
