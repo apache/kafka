@@ -396,6 +396,7 @@ public class KafkaConsumerTest {
         consumer.poll(0);
 
         assertTrue(heartbeatReceived.get());
+        consumer.close(0, TimeUnit.MILLISECONDS);
     }
 
     @Test
@@ -437,6 +438,7 @@ public class KafkaConsumerTest {
         consumer.poll(0);
 
         assertTrue(heartbeatReceived.get());
+        consumer.close(0, TimeUnit.MILLISECONDS);
     }
 
     @Test
@@ -470,6 +472,7 @@ public class KafkaConsumerTest {
         ConsumerRecords<String, String> records = consumer.poll(0);
         assertEquals(5, records.count());
         assertEquals(55L, consumer.position(tp0));
+        consumer.close(0, TimeUnit.MILLISECONDS);
     }
 
     @Test
@@ -520,6 +523,7 @@ public class KafkaConsumerTest {
         offsets.put(tp1, offset2);
         client.prepareResponseFrom(offsetResponse(offsets, Errors.NONE), coordinator);
         assertEquals(offset2, consumer.committed(tp1).offset());
+        consumer.close(0, TimeUnit.MILLISECONDS);
     }
 
     @Test
@@ -565,6 +569,7 @@ public class KafkaConsumerTest {
         consumer.poll(0);
 
         assertTrue(commitReceived.get());
+        consumer.close(0, TimeUnit.MILLISECONDS);
     }
 
     @Test
@@ -603,6 +608,7 @@ public class KafkaConsumerTest {
         consumer.poll(0);
         assertEquals(singleton(topic), consumer.subscription());
         assertEquals(singleton(tp0), consumer.assignment());
+        consumer.close(0, TimeUnit.MILLISECONDS);
     }
 
     @Test
@@ -622,7 +628,7 @@ public class KafkaConsumerTest {
         topicMetadata.put(topic, 1);
         topicMetadata.put(otherTopic, 1);
 
-        Cluster cluster = TestUtils.clusterWith(1, topicMetadata);
+        Cluster cluster = TestUtils.clusterWith(1, new HashMap<>(topicMetadata));
         Metadata metadata = createMetadata();
         Node node = cluster.nodes().get(0);
 
@@ -638,18 +644,22 @@ public class KafkaConsumerTest {
         consumer.subscribe(Pattern.compile(topic), getConsumerRebalanceListener(consumer));
 
         client.prepareMetadataUpdate(cluster, Collections.<String>emptySet());
+        metadata.update(cluster, Collections.<String>emptySet(), time.milliseconds());
 
         consumer.poll(0);
         assertEquals(singleton(topic), consumer.subscription());
 
         consumer.subscribe(Pattern.compile(otherTopic), getConsumerRebalanceListener(consumer));
 
+        cluster = TestUtils.clusterWith(1, new HashMap<>(topicMetadata));
         client.prepareMetadataUpdate(cluster, Collections.<String>emptySet());
+        metadata.update(cluster, Collections.<String>emptySet(), time.milliseconds());
 
         prepareRebalance(client, node, singleton(otherTopic), assignor, singletonList(otherTopicPartition), coordinator);
         consumer.poll(0);
 
         assertEquals(singleton(otherTopic), consumer.subscription());
+        consumer.close(0, TimeUnit.MILLISECONDS);
     }
 
     @Test
@@ -746,6 +756,7 @@ public class KafkaConsumerTest {
             // clear interrupted state again since this thread may be reused by JUnit
             Thread.interrupted();
         }
+        consumer.close(0, TimeUnit.MILLISECONDS);
     }
 
     @Test
@@ -783,6 +794,7 @@ public class KafkaConsumerTest {
 
         ConsumerRecords<String, String> records = consumer.poll(0);
         assertEquals(0, records.count());
+        consumer.close(0, TimeUnit.MILLISECONDS);
     }
 
     /**
@@ -1327,6 +1339,7 @@ public class KafkaConsumerTest {
         Thread.sleep(heartbeatIntervalMs);
         final ConsumerRecords<String, String> records = consumer.poll(0);
         assertFalse(records.isEmpty());
+        consumer.close(0, TimeUnit.MILLISECONDS);
     }
 
     private void consumerCloseTest(final long closeTimeoutMs,
