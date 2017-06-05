@@ -275,7 +275,7 @@ public class TransactionManagerTest {
     }
 
     @Test
-    public void testMaybeAddPartitionTransaction() {
+    public void testMaybeAddPartitionToTransaction() {
         long pid = 13131L;
         short epoch = 1;
         TopicPartition partition = new TopicPartition("foo", 0);
@@ -302,12 +302,12 @@ public class TransactionManagerTest {
     }
 
     @Test(expected = IllegalStateException.class)
-    public void testMaybeAddPartitionTransactionBeforeInitTransactions() {
+    public void testMaybeAddPartitionToTransactionBeforeInitTransactions() {
         transactionManager.maybeAddPartitionToTransaction(new TopicPartition("foo", 0));
     }
 
     @Test(expected = IllegalStateException.class)
-    public void testMaybeAddPartitionTransactionBeforeBeginTransaction() {
+    public void testMaybeAddPartitionToTransactionBeforeBeginTransaction() {
         long pid = 13131L;
         short epoch = 1;
         doInitTransactions(pid, epoch);
@@ -315,7 +315,7 @@ public class TransactionManagerTest {
     }
 
     @Test(expected = IllegalStateException.class)
-    public void testMaybeAddPartitionTransactionAfterAbortableError() {
+    public void testMaybeAddPartitionToTransactionAfterAbortableError() {
         long pid = 13131L;
         short epoch = 1;
         doInitTransactions(pid, epoch);
@@ -325,7 +325,7 @@ public class TransactionManagerTest {
     }
 
     @Test(expected = IllegalStateException.class)
-    public void testMaybeAddPartitionTransactionAfterFatalError() {
+    public void testMaybeAddPartitionToTransactionAfterFatalError() {
         long pid = 13131L;
         short epoch = 1;
         doInitTransactions(pid, epoch);
@@ -334,7 +334,7 @@ public class TransactionManagerTest {
     }
 
     @Test
-    public void testsendToPartitionAllowedWithPendingPartitionAfterAbortableError() {
+    public void testSendToPartitionAllowedWithPendingPartitionAfterAbortableError() {
         final long pid = 13131L;
         final short epoch = 1;
 
@@ -349,7 +349,7 @@ public class TransactionManagerTest {
     }
 
     @Test
-    public void testsendToPartitionAllowedWithInFlightPartitionAddAfterAbortableError() {
+    public void testSendToPartitionAllowedWithInFlightPartitionAddAfterAbortableError() {
         final long pid = 13131L;
         final short epoch = 1;
 
@@ -357,6 +357,8 @@ public class TransactionManagerTest {
 
         transactionManager.beginTransaction();
         transactionManager.maybeAddPartitionToTransaction(tp0);
+
+        // Send the AddPartitionsToTxn request and leave it in-flight
         sender.run(time.milliseconds());
         transactionManager.transitionToAbortableError(new KafkaException());
 
@@ -365,7 +367,7 @@ public class TransactionManagerTest {
     }
 
     @Test
-    public void testsendToPartitionAllowedWithPendingPartitionAfterFatalError() {
+    public void testSendToPartitionAllowedWithPendingPartitionAfterFatalError() {
         final long pid = 13131L;
         final short epoch = 1;
 
@@ -380,7 +382,7 @@ public class TransactionManagerTest {
     }
 
     @Test
-    public void testsendToPartitionAllowedWithInFlightPartitionAddAfterFatalError() {
+    public void testSendToPartitionAllowedWithInFlightPartitionAddAfterFatalError() {
         final long pid = 13131L;
         final short epoch = 1;
 
@@ -388,6 +390,8 @@ public class TransactionManagerTest {
 
         transactionManager.beginTransaction();
         transactionManager.maybeAddPartitionToTransaction(tp0);
+
+        // Send the AddPartitionsToTxn request and leave it in-flight
         sender.run(time.milliseconds());
         transactionManager.transitionToFatalError(new KafkaException());
 

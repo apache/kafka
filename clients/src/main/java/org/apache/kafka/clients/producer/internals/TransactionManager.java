@@ -295,10 +295,12 @@ public class TransactionManager {
         transitionTo(State.FATAL_ERROR, exception);
     }
 
+    // visible for testing
     synchronized boolean isPartitionAdded(TopicPartition partition) {
         return partitionsInTransaction.contains(partition);
     }
 
+    // visible for testing
     synchronized boolean isPartitionPendingAdd(TopicPartition partition) {
         return newPartitionsInTransaction.contains(partition) || pendingPartitionsInTransaction.contains(partition);
     }
