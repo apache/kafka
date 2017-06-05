@@ -50,8 +50,8 @@ public class BufferPool {
     private final ReentrantLock lock;
     private final Deque<ByteBuffer> free;
     private final Deque<Condition> waiters;
-    /** Poolable + non-poolable memory. */
-    private long availableMemory;
+    /** Total available memory is the sum of nonPooledAvailableMemory and the number of byte buffers in free * poolablSize.  */
+    private long nonPooledAvailableMemory;
     private final Metrics metrics;
     private final Time time;
     private final Sensor waitTime;
@@ -71,7 +71,7 @@ public class BufferPool {
         this.free = new ArrayDeque<>();
         this.waiters = new ArrayDeque<>();
         this.totalMemory = memory;
-        this.availableMemory = memory;
+        this.nonPooledAvailableMemory = memory;
         this.metrics = metrics;
         this.time = time;
         this.waitTime = this.metrics.sensor(WAIT_TIME_SENSOR_NAME);
@@ -109,11 +109,11 @@ public class BufferPool {
             // now check if the request is immediately satisfiable with the
             // memory on hand or if we need to block
             int freeListSize = freeSize() * this.poolableSize;
-            if (this.availableMemory + freeListSize >= size) {
+            if (this.nonPooledAvailableMemory + freeListSize >= size) {
                 // we have enough unallocated or pooled memory to immediately
                 // satisfy the request, but need to allocate the buffer
                 freeUp(size);
-                this.availableMemory -= size;
+                this.nonPooledAvailableMemory -= size;
             } else {
                 // we are out of memory and will have to block
                 int accumulated = 0;
@@ -151,8 +151,8 @@ public class BufferPool {
                             // we'll need to allocate memory, but we may only get
                             // part of what we need on this iteration
                             freeUp(size - accumulated);
-                            int got = (int) Math.min(size - accumulated, this.availableMemory);
-                            this.availableMemory -= got;
+                            int got = (int) Math.min(size - accumulated, this.nonPooledAvailableMemory);
+                            this.nonPooledAvailableMemory -= got;
                             accumulated += got;
                         }
                     }
@@ -160,7 +160,7 @@ public class BufferPool {
                     accumulated = 0;
                 } finally {
                     // When this loop was not able to successfully terminate don't loose available memory
-                    this.availableMemory += accumulated;
+                    this.nonPooledAvailableMemory += accumulated;
                     this.waiters.remove(moreMemory);
                 }
             }
@@ -168,7 +168,7 @@ public class BufferPool {
             // signal any additional waiters if there is more memory left
             // over for them
             try {
-                if (!(this.availableMemory == 0 && this.free.isEmpty()) && !this.waiters.isEmpty())
+                if (!(this.nonPooledAvailableMemory == 0 && this.free.isEmpty()) && !this.waiters.isEmpty())
                     this.waiters.peekFirst().signal();
             } finally {
                 // Another finally... otherwise find bugs complains
@@ -196,7 +196,7 @@ public class BufferPool {
             if (error) {
                 this.lock.lock();
                 try {
-                    this.availableMemory += size;
+                    this.nonPooledAvailableMemory += size;
                     if (!this.waiters.isEmpty())
                         this.waiters.peekFirst().signal();
                 } finally {
@@ -216,8 +216,8 @@ public class BufferPool {
      * buffers (if needed)
      */
     private void freeUp(int size) {
-        while (!this.free.isEmpty() && this.availableMemory < size)
-            this.availableMemory += this.free.pollLast().capacity();
+        while (!this.free.isEmpty() && this.nonPooledAvailableMemory < size)
+            this.nonPooledAvailableMemory += this.free.pollLast().capacity();
     }
 
     /**
@@ -235,7 +235,7 @@ public class BufferPool {
                 buffer.clear();
                 this.free.add(buffer);
             } else {
-                this.availableMemory += size;
+                this.nonPooledAvailableMemory += size;
             }
             Condition moreMem = this.waiters.peekFirst();
             if (moreMem != null)
@@ -255,7 +255,7 @@ public class BufferPool {
     public long availableMemory() {
         lock.lock();
         try {
-            return this.availableMemory + freeSize() * (long) this.poolableSize;
+            return this.nonPooledAvailableMemory + freeSize() * (long) this.poolableSize;
         } finally {
             lock.unlock();
         }
@@ -272,7 +272,7 @@ public class BufferPool {
     public long unallocatedMemory() {
         lock.lock();
         try {
-            return this.availableMemory;
+            return this.nonPooledAvailableMemory;
         } finally {
             lock.unlock();
         }
