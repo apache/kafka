@@ -61,6 +61,8 @@ public class NetworkClientTest {
 
     private final NetworkClient clientWithNoVersionDiscovery = createNetworkClientWithNoVersionDiscovery();
 
+    private final NetworkClient clientWithOneInFlightRequest = createNetworkClientWithOneInFlightRequest();
+
     private NetworkClient createNetworkClient() {
         return new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
                 reconnectBackoffMsTest, reconnectBackoffMaxTest,
@@ -77,6 +79,11 @@ public class NetworkClientTest {
         return new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
                 reconnectBackoffMsTest, reconnectBackoffMaxTest,
                 64 * 1024, 64 * 1024, requestTimeoutMs, time, false, new ApiVersions());
+    }
+
+    private NetworkClient createNetworkClientWithOneInFlightRequest() {
+        return new NetworkClient(selector, metadata, "mock", 1, reconnectBackoffMsTest,
+                64 * 1024, 64 * 1024, requestTimeoutMs, time, true, new ApiVersions());
     }
 
     @Before
@@ -129,6 +136,78 @@ public class NetworkClientTest {
         assertFalse(client.hasInFlightRequests(node.idString()));
         assertFalse(client.hasInFlightRequests());
         assertFalse("Connection should not be ready after close", client.isReady(node, 0));
+    }
+
+    @Test
+    public void testMultipleInFlightRequests() {
+        checkMultipleInFlightRequests(client);
+    }
+
+    @Test(expected = IllegalStateException.class)
+    public void testTooManyInFlightRequests() {
+        checkMultipleInFlightRequests(clientWithOneInFlightRequest);
+    }
+
+    private void checkMultipleInFlightRequests(NetworkClient client) {
+        awaitReady(client, node);
+        // Send request 1
+        ProduceRequest.Builder builder = new ProduceRequest.Builder(RecordBatch.CURRENT_MAGIC_VALUE, (short) 1, 1000,
+                Collections.<TopicPartition, MemoryRecords>emptyMap());
+        TestCallbackHandler handler1 = new TestCallbackHandler();
+        ClientRequest request1 = client.newClientRequest(
+                node.idString(), builder, time.milliseconds(), true, handler1);
+        client.send(request1, time.milliseconds());
+        client.poll(1, time.milliseconds());
+        assertEquals("There should be 1 in-flight request after 1 send", 1, client.inFlightRequestCount());
+
+        // Send request 2
+        builder = new ProduceRequest.Builder(RecordBatch.CURRENT_MAGIC_VALUE, (short) 1, 1000,
+                Collections.<TopicPartition, MemoryRecords>emptyMap());
+        TestCallbackHandler handler2 = new TestCallbackHandler();
+        ClientRequest request2 = client.newClientRequest(
+                node.idString(), builder, time.milliseconds(), true, handler2);
+        client.send(request2, time.milliseconds());
+        client.poll(1, time.milliseconds());
+        assertEquals("There should be 2 in-flight request after 2 sends", 2, client.inFlightRequestCount());
+
+        // Complete request 1
+        ResponseHeader respHeader = new ResponseHeader(request1.correlationId());
+        Struct resp = new Struct(ApiKeys.PRODUCE.responseSchema(ApiKeys.PRODUCE.latestVersion()));
+        resp.set("responses", new Object[0]);
+        Struct responseHeaderStruct = respHeader.toStruct();
+        int size = responseHeaderStruct.sizeOf() + resp.sizeOf();
+        ByteBuffer buffer = ByteBuffer.allocate(size);
+        responseHeaderStruct.writeTo(buffer);
+        resp.writeTo(buffer);
+        buffer.flip();
+        selector.completeReceive(new NetworkReceive(node.idString(), buffer));
+        List<ClientResponse> responses = client.poll(1, time.milliseconds());
+        selector.clear();
+        assertEquals(1, responses.size());
+        assertTrue("The handler should have executed.", handler1.executed);
+        assertTrue("Should have a response body.", handler1.response.hasResponse());
+        assertEquals("Should be correlated to the original request",
+                request1.correlationId(), handler1.response.requestHeader().correlationId());
+        assertEquals("There should be 1 in-flight request after 1 send completed", 1, client.inFlightRequestCount());
+
+        // Complete request 2
+        respHeader = new ResponseHeader(request2.correlationId());
+        resp = new Struct(ApiKeys.PRODUCE.responseSchema(ApiKeys.PRODUCE.latestVersion()));
+        resp.set("responses", new Object[0]);
+        responseHeaderStruct = respHeader.toStruct();
+        size = responseHeaderStruct.sizeOf() + resp.sizeOf();
+        buffer = ByteBuffer.allocate(size);
+        responseHeaderStruct.writeTo(buffer);
+        resp.writeTo(buffer);
+        buffer.flip();
+        selector.completeReceive(new NetworkReceive(node.idString(), buffer));
+        responses = client.poll(1, time.milliseconds());
+        assertEquals(1, responses.size());
+        assertTrue("The handler should have executed.", handler2.executed);
+        assertTrue("Should have a response body.", handler2.response.hasResponse());
+        assertEquals("Should be correlated to the original request",
+                request2.correlationId(), handler2.response.requestHeader().correlationId());
+        assertEquals("There should be no in-flight requests after 2 sends completed", 0, client.inFlightRequestCount());
     }
 
     private void checkSimpleRequestResponse(NetworkClient networkClient) {
