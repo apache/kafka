@@ -20,12 +20,13 @@ import kafka.server.{DelayedOperationPurgatory, KafkaConfig, MetadataCache}
 import kafka.utils.timer.MockTimer
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.NetworkClient
+import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.requests.{TransactionResult, WriteTxnMarkersRequest}
 import org.apache.kafka.common.utils.{MockTime, Utils}
 import org.apache.kafka.common.{Node, TopicPartition}
 import org.easymock.EasyMock
 import org.junit.Assert._
-import org.junit.Test
+import org.junit.{After, Test}
 
 import scala.collection.mutable
 
@@ -59,15 +60,22 @@ class TransactionMarkerChannelManagerTest {
     reaperEnabled = false)
   private val time = new MockTime
 
+  private val metrics = new Metrics()
   private val channelManager = new TransactionMarkerChannelManager(
     KafkaConfig.fromProps(TestUtils.createBrokerConfig(1, "localhost:2181")),
     metadataCache,
     networkClient,
     txnStateManager,
     txnMarkerPurgatory,
-    time)
+    time,
+    metrics)
 
   private val senderThread = channelManager.senderThread
+
+  @After
+  def after(): Unit = {
+    metrics.close()
+  }
 
   private def mockCache(): Unit = {
     EasyMock.expect(txnStateManager.partitionFor(transactionalId1))
