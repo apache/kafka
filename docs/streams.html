@@ -850,7 +850,39 @@ $ java -cp path-to-app-fatjar.jar com.example.MyStreamsApp
             <li> added overloads for <code>#globalKTable()</code> that allow to define a <code>TimestampExtractor</code> per global table </li>
         </ul>
 
-        <h3><a id="streams_api_changes_01021" href="#streams_api_changes_01021">Stream API changes in 0.10.2.1</a></h3>
+        <p>
+        Deprecated methods in <code>KTable</code>
+        </p>
+        <ul>
+            <li><code>void foreach(final ForeachAction&lt;? super K, ? super V&gt; action)</code></li>
+            <li><code>void print()</code></li>
+            <li><code>void print(final String streamName)</code></li>
+            <li><code>void print(final Serde&lt;K&gt; keySerde, final Serde&lt;V&gt; valSerde)</code></li>
+            <li><code>void print(final Serde&lt;K&gt; keySerde, final Serde&lt;V&gt; valSerde, final String streamName)</code></li>
+            <li><code>void writeAsText(final String filePath)</code></li>
+            <li><code>void writeAsText(final String filePath, final Serde&lt;K&gt; keySerde, final Serde&lt;V&gt; valSerde)</code></li>
+            <li><code>void writeAsText(final String filePath, final String streamName)</code></li>
+            <li><code>void writeAsText(final String filePath, final String streamName, final Serde&lt;K&gt; keySerde, final Serde&lt;V&gt; valSerde)</code></li>
+        </ul>
+
+        <p>
+           These methods have been deprecated in favor of using the Interactive Queries API.
+        </p>
+        <p>
+           If you want to query the current content of the state store backing the KTable, use the following approach:
+             <ul>
+               <li> Make a call to <code>KafkaStreams.store(final String storeName, final QueryableStoreType&lt;T&gt; queryableStoreType)</code> followed by a call to <code>ReadOnlyKeyValueStore.all()</code> to iterate over the keys of a <code>KTable</code>.
+               </li>
+            </ul>
+        </p>
+        <p>
+           If you want to view the changelog stream of the  <code>KTable</code> then you could do something along the lines of the following:
+         <ul>
+           <li> Call <code>KTable.toStream()</code> then call <code>KStream#print()</code>.</li>
+        </ul>
+        </p>
+
+        <h3><a id="streams_api_changes_01021" href="#streams_api_changes_01021">Notable changes in 0.10.2.1</a></h3>
 
         <p>
         Parameter updates in <code>StreamsConfig</code>:
