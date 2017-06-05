@@ -34,7 +34,8 @@ import java.io.IOException
  /**
  * Helper functions common to clients (producer, consumer, or admin)
  */
-object ClientUtils extends Logging{
+@deprecated("This class has been deprecated and will be removed in a future release.", "0.11.0.0")
+object ClientUtils extends Logging {
 
   /**
    * Used by the producer to send a metadata request since it has access to the ProducerConfig

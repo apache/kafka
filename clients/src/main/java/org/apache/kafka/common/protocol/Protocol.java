@@ -68,6 +68,16 @@ public class Protocol {
     /* The v3 metadata request is the same as v1 and v2. An additional field for throttle time has been added to the v3 metadata response */
     public static final Schema METADATA_REQUEST_V3 = METADATA_REQUEST_V2;
 
+    /* The v4 metadata request has an additional field for allowing auto topic creation. The response is the same as v3. */
+    public static final Schema METADATA_REQUEST_V4 = new Schema(new Field("topics",
+                                                                          ArrayOf.nullable(STRING),
+                                                                         "An array of topics to fetch metadata for. If the topics array is null fetch metadata for all topics."),
+                                                                new Field("allow_auto_topic_creation",
+                                                                          BOOLEAN,
+                                                                          "If this and the broker config 'auto.create.topics.enable' are true, " +
+                                                                          "topics that don't exist will be created by the broker. " +
+                                                                          "Otherwise, no topics will be created by the broker."));
+
     public static final Schema METADATA_BROKER_V0 = new Schema(new Field("node_id", INT32, "The broker id."),
                                                    new Field("host", STRING, "The hostname of the broker."),
                                                    new Field("port", INT32,
@@ -142,8 +152,10 @@ public class Protocol {
              "The broker id of the controller broker."),
          new Field("topic_metadata", new ArrayOf(TOPIC_METADATA_V1)));
 
-    public static final Schema[] METADATA_REQUEST = {METADATA_REQUEST_V0, METADATA_REQUEST_V1, METADATA_REQUEST_V2, METADATA_REQUEST_V3};
-    public static final Schema[] METADATA_RESPONSE = {METADATA_RESPONSE_V0, METADATA_RESPONSE_V1, METADATA_RESPONSE_V2, METADATA_RESPONSE_V3};
+    public static final Schema METADATA_RESPONSE_V4 = METADATA_RESPONSE_V3;
+
+    public static final Schema[] METADATA_REQUEST = {METADATA_REQUEST_V0, METADATA_REQUEST_V1, METADATA_REQUEST_V2, METADATA_REQUEST_V3, METADATA_REQUEST_V4};
+    public static final Schema[] METADATA_RESPONSE = {METADATA_RESPONSE_V0, METADATA_RESPONSE_V1, METADATA_RESPONSE_V2, METADATA_RESPONSE_V3, METADATA_RESPONSE_V4};
 
     /* Produce api */
 
@@ -1181,8 +1193,8 @@ public class Protocol {
             new Field("api_versions", new ArrayOf(API_VERSIONS_V0), "API versions supported by the broker."),
             newThrottleTimeField());
 
-    public static final Schema[] API_VERSIONS_REQUEST = new Schema[]{API_VERSIONS_REQUEST_V0, API_VERSIONS_REQUEST_V1};
-    public static final Schema[] API_VERSIONS_RESPONSE = new Schema[]{API_VERSIONS_RESPONSE_V0, API_VERSIONS_RESPONSE_V1};
+    public static final Schema[] API_VERSIONS_REQUEST = {API_VERSIONS_REQUEST_V0, API_VERSIONS_REQUEST_V1};
+    public static final Schema[] API_VERSIONS_RESPONSE = {API_VERSIONS_RESPONSE_V0, API_VERSIONS_RESPONSE_V1};
 
     /* Admin requests common */
     public static final Schema CONFIG_ENTRY = new Schema(new Field("config_name", STRING, "Configuration name"),
@@ -1636,8 +1648,8 @@ public class Protocol {
             new ArrayOf(DESCRIBE_ACLS_RESOURCE),
             "The resources and their associated ACLs."));
 
-    public static final Schema[] DESCRIBE_ACLS_REQUEST = new Schema[] {DESCRIBE_ACLS_REQUEST_V0};
-    public static final Schema[] DESCRIBE_ACLS_RESPONSE  = new Schema[] {DESCRIBE_ACLS_RESPONSE_V0};
+    public static final Schema[] DESCRIBE_ACLS_REQUEST = {DESCRIBE_ACLS_REQUEST_V0};
+    public static final Schema[] DESCRIBE_ACLS_RESPONSE  = {DESCRIBE_ACLS_RESPONSE_V0};
 
     public static final Schema CREATE_ACLS_REQUEST_V0 = new Schema(
         new Field("creations",
@@ -1658,8 +1670,8 @@ public class Protocol {
                 new Field("error_message", NULLABLE_STRING, "The error message.")
             ))));
 
-    public static final Schema[] CREATE_ACLS_REQUEST = new Schema[] {CREATE_ACLS_REQUEST_V0};
-    public static final Schema[] CREATE_ACLS_RESPONSE = new Schema[] {CREATE_ACLS_RESPONSE_V0};
+    public static final Schema[] CREATE_ACLS_REQUEST = {CREATE_ACLS_REQUEST_V0};
+    public static final Schema[] CREATE_ACLS_RESPONSE = {CREATE_ACLS_RESPONSE_V0};
 
     public static final Schema DELETE_ACLS_REQUEST_V0 = new Schema(
         new Field("filters",
@@ -1691,8 +1703,8 @@ public class Protocol {
                 new Field("error_message", NULLABLE_STRING, "The error message."),
                 new Field("matching_acls", new ArrayOf(MATCHING_ACL), "The matching ACLs")))));
 
-    public static final Schema[] DELETE_ACLS_REQUEST = new Schema[] {DELETE_ACLS_REQUEST_V0};
-    public static final Schema[] DELETE_ACLS_RESPONSE = new Schema[] {DELETE_ACLS_RESPONSE_V0};
+    public static final Schema[] DELETE_ACLS_REQUEST = {DELETE_ACLS_REQUEST_V0};
+    public static final Schema[] DELETE_ACLS_RESPONSE = {DELETE_ACLS_RESPONSE_V0};
 
     /* an array of all requests and responses with all schema versions; a null value in the inner array means that the
      * particular version is not supported */

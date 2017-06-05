@@ -17,23 +17,29 @@
 
 package kafka.consumer
 
+import java.util
 import java.util.{Collections, Properties}
 import java.util.regex.Pattern
 
 import kafka.api.OffsetRequest
 import kafka.common.StreamEndException
 import kafka.message.Message
+import org.apache.kafka.clients.consumer.{ConsumerRecord, OffsetAndMetadata}
 import org.apache.kafka.clients.consumer.internals.NoOpConsumerRebalanceListener
 import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.header.Headers
 import org.apache.kafka.common.header.internals.RecordHeaders
 
+import scala.collection.mutable.HashMap
+
 /**
  * A base consumer used to abstract both old and new consumer
  * this class should be removed (along with BaseProducer)
  * once we deprecate old consumer
  */
+@deprecated("This trait has been deprecated and will be removed in a future release. " +
+            "Please use org.apache.kafka.clients.consumer.KafkaConsumer instead.", "0.11.0.0")
 trait BaseConsumer {
   def receive(): BaseConsumerRecord
   def stop()
@@ -41,6 +47,8 @@ trait BaseConsumer {
   def commit()
 }
 
+@deprecated("This class has been deprecated and will be removed in a future release. " +
+            "Please use org.apache.kafka.clients.consumer.ConsumerRecord instead.", "0.11.0.0")
 case class BaseConsumerRecord(topic: String,
                               partition: Int,
                               offset: Long,
@@ -50,12 +58,19 @@ case class BaseConsumerRecord(topic: String,
                               value: Array[Byte],
                               headers: Headers = new RecordHeaders())
 
+@deprecated("This class has been deprecated and will be removed in a future release. " +
+            "Please use org.apache.kafka.clients.consumer.KafkaConsumer instead.", "0.11.0.0")
 class NewShinyConsumer(topic: Option[String], partitionId: Option[Int], offset: Option[Long], whitelist: Option[String], consumerProps: Properties, val timeoutMs: Long = Long.MaxValue) extends BaseConsumer {
   import org.apache.kafka.clients.consumer.KafkaConsumer
 
   val consumer = new KafkaConsumer[Array[Byte], Array[Byte]](consumerProps)
+  val offsets = new HashMap[TopicPartition, Long]()
+
   consumerInit()
-  var recordIter = consumer.poll(0).iterator
+  private var currentPartition: TopicPartition = null
+  private var polledRecords = consumer.poll(0)
+  private var partitionIter = polledRecords.partitions.iterator
+  private var recordIter: util.Iterator[ConsumerRecord[Array[Byte], Array[Byte]]] = null
 
   def consumerInit() {
     (topic, partitionId, offset, whitelist) match {
@@ -87,21 +102,30 @@ class NewShinyConsumer(topic: Option[String], partitionId: Option[Int], offset: 
   }
 
   override def receive(): BaseConsumerRecord = {
-    if (!recordIter.hasNext) {
-      recordIter = consumer.poll(timeoutMs).iterator
-      if (!recordIter.hasNext)
-        throw new ConsumerTimeoutException
+    if (recordIter == null || !recordIter.hasNext) {
+      if (!partitionIter.hasNext) {
+        polledRecords = consumer.poll(timeoutMs)
+        partitionIter = polledRecords.partitions.iterator
+
+        if (!partitionIter.hasNext)
+          throw new ConsumerTimeoutException
+      }
+
+      currentPartition = partitionIter.next
+      recordIter = polledRecords.records(currentPartition).iterator
     }
 
     val record = recordIter.next
+    offsets.put(currentPartition, record.offset + 1)
+
     BaseConsumerRecord(record.topic,
-                       record.partition,
-                       record.offset,
-                       record.timestamp,
-                       record.timestampType,
-                       record.key,
-                       record.value,
-                       record.headers)
+      record.partition,
+      record.offset,
+      record.timestamp,
+      record.timestampType,
+      record.key,
+      record.value,
+      record.headers)
   }
 
   override def stop() {
@@ -113,10 +137,14 @@ class NewShinyConsumer(topic: Option[String], partitionId: Option[Int], offset: 
   }
 
   override def commit() {
-    this.consumer.commitSync()
+    import scala.collection.JavaConverters._
+    consumer.commitSync(offsets.map { case (tp, offset) =>  (tp, new OffsetAndMetadata(offset))}.asJava)
+    offsets.clear()
   }
 }
 
+@deprecated("This class has been deprecated and will be removed in a future release. " +
+            "Please use org.apache.kafka.clients.consumer.KafkaConsumer instead.", "0.11.0.0")
 class OldConsumer(topicFilter: TopicFilter, consumerProps: Properties) extends BaseConsumer {
   import kafka.serializer.DefaultDecoder
 

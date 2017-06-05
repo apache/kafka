@@ -52,38 +52,25 @@ class SyncProducerTest extends KafkaServerTestHarness {
   @Test
   def testReachableServer() {
     val server = servers.head
-
     val props = TestUtils.getSyncProducerConfig(boundPort(server))
 
-
     val producer = new SyncProducer(new SyncProducerConfig(props))
+
     val firstStart = Time.SYSTEM.milliseconds
-    try {
-      val response = producer.send(produceRequest("test", 0,
-        new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = new Message(messageBytes)), acks = 1))
-      assertNotNull(response)
-    } catch {
-      case e: Exception => fail("Unexpected failure sending message to broker. " + e.getMessage)
-    }
-    val firstEnd = Time.SYSTEM.milliseconds
-    assertTrue((firstEnd-firstStart) < 2000)
+    var response = producer.send(produceRequest("test", 0,
+      new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = new Message(messageBytes)), acks = 1))
+    assertNotNull(response)
+    assertTrue((Time.SYSTEM.milliseconds - firstStart) < 12000)
+
     val secondStart = Time.SYSTEM.milliseconds
-    try {
-      val response = producer.send(produceRequest("test", 0,
-        new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = new Message(messageBytes)), acks = 1))
-      assertNotNull(response)
-    } catch {
-      case e: Exception => fail("Unexpected failure sending message to broker. " + e.getMessage)
-    }
-    val secondEnd = Time.SYSTEM.milliseconds
-    assertTrue((secondEnd-secondStart) < 2000)
-    try {
-      val response = producer.send(produceRequest("test", 0,
-        new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = new Message(messageBytes)), acks = 1))
-      assertNotNull(response)
-    } catch {
-      case e: Exception => fail("Unexpected failure sending message to broker. " + e.getMessage)
-    }
+    response = producer.send(produceRequest("test", 0,
+      new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = new Message(messageBytes)), acks = 1))
+    assertNotNull(response)
+    assertTrue((Time.SYSTEM.milliseconds - secondStart) < 12000)
+
+    response = producer.send(produceRequest("test", 0,
+      new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = new Message(messageBytes)), acks = 1))
+    assertNotNull(response)
   }
 
   @Test

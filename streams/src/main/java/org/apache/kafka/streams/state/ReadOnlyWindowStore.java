@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.state;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.kstream.Windowed;
 
@@ -27,7 +26,6 @@ import org.apache.kafka.streams.kstream.Windowed;
  * @param <K> Type of keys
  * @param <V> Type of values
  */
-@InterfaceStability.Unstable
 public interface ReadOnlyWindowStore<K, V> {
 
     /**

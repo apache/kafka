@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.state;
 
 
-import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.streams.kstream.Windowed;
 
 /**
@@ -28,7 +27,6 @@ import org.apache.kafka.streams.kstream.Windowed;
  * @param <K> the key type
  * @param <AGG> the aggregated value type
  */
-@InterfaceStability.Unstable
 public interface ReadOnlySessionStore<K, AGG> {
 
     /**

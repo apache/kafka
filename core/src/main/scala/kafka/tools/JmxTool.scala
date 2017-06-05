@@ -41,7 +41,7 @@ object JmxTool extends Logging {
 
   def main(args: Array[String]) {
     // Parse command line
-    val parser = new OptionParser
+    val parser = new OptionParser(false)
     val objectNameOpt =
       parser.accepts("object-name", "A JMX object name to use as a query. This can contain wild cards, and this option " +
         "can be given multiple times to specify more than one query. If no objects are specified " +

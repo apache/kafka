@@ -130,7 +130,7 @@ class TransactionStateManager(brokerId: Int,
               txnMetadata.txnLastUpdateTimestamp <= now - config.transactionalIdExpirationMs
             }.map { case (transactionalId, txnMetadata) =>
               val txnMetadataTransition = txnMetadata synchronized {
-                txnMetadata.prepareDead
+                txnMetadata.prepareDead()
               }
               TransactionalIdCoordinatorEpochAndMetadata(transactionalId, entry.coordinatorEpoch, txnMetadataTransition)
             }
@@ -197,6 +197,11 @@ class TransactionStateManager(brokerId: Int,
     }, delay = config.removeExpiredTransactionalIdsIntervalMs, period = config.removeExpiredTransactionalIdsIntervalMs)
   }
 
+  def getTransactionState(transactionalId: String) = getAndMaybeAddTransactionState(transactionalId, None)
+
+  def putTransactionStateIfNotExists(transactionalId: String, txnMetadata: TransactionMetadata) =
+    getAndMaybeAddTransactionState(transactionalId, Some(txnMetadata))
+
   /**
    * Get the transaction metadata associated with the given transactional id, or an error if
    * the coordinator does not own the transaction partition or is still loading it; if not found
@@ -204,40 +209,41 @@ class TransactionStateManager(brokerId: Int,
    *
    * This function is covered by the state read lock
    */
-  def getAndMaybeAddTransactionState(transactionalId: String,
-                                     createdTxnMetadata: Option[TransactionMetadata] = None): Either[Errors, Option[CoordinatorEpochAndTxnMetadata]]
-  = inReadLock(stateLock) {
-    val partitionId = partitionFor(transactionalId)
+  private def getAndMaybeAddTransactionState(transactionalId: String,
+                                             createdTxnMetadata: Option[TransactionMetadata]): Either[Errors, Option[CoordinatorEpochAndTxnMetadata]] = {
+    inReadLock(stateLock) {
+      val partitionId = partitionFor(transactionalId)
 
-    if (loadingPartitions.exists(_.txnPartitionId == partitionId))
-      return Left(Errors.COORDINATOR_LOAD_IN_PROGRESS)
+      if (loadingPartitions.exists(_.txnPartitionId == partitionId))
+        return Left(Errors.COORDINATOR_LOAD_IN_PROGRESS)
 
-    if (leavingPartitions.exists(_.txnPartitionId == partitionId))
-      Right(Errors.NOT_COORDINATOR)
+      if (leavingPartitions.exists(_.txnPartitionId == partitionId))
+        Right(Errors.NOT_COORDINATOR)
 
-    transactionMetadataCache.get(partitionId) match {
-      case Some(cacheEntry) =>
-        cacheEntry.metadataPerTransactionalId.get(transactionalId) match {
-          case null =>
-            createdTxnMetadata match {
-              case None =>
-                Right(None)
+      transactionMetadataCache.get(partitionId) match {
+        case Some(cacheEntry) =>
+          cacheEntry.metadataPerTransactionalId.get(transactionalId) match {
+            case null =>
+              createdTxnMetadata match {
+                case None =>
+                  Right(None)
 
-              case Some(txnMetadata) =>
-                val currentTxnMetadata = cacheEntry.metadataPerTransactionalId.putIfNotExists(transactionalId, txnMetadata)
-                if (currentTxnMetadata != null) {
-                  Right(Some(CoordinatorEpochAndTxnMetadata(cacheEntry.coordinatorEpoch, currentTxnMetadata)))
-                } else {
-                  Right(Some(CoordinatorEpochAndTxnMetadata(cacheEntry.coordinatorEpoch, txnMetadata)))
-                }
-            }
+                case Some(txnMetadata) =>
+                  val currentTxnMetadata = cacheEntry.metadataPerTransactionalId.putIfNotExists(transactionalId, txnMetadata)
+                  if (currentTxnMetadata != null) {
+                    Right(Some(CoordinatorEpochAndTxnMetadata(cacheEntry.coordinatorEpoch, currentTxnMetadata)))
+                  } else {
+                    Right(Some(CoordinatorEpochAndTxnMetadata(cacheEntry.coordinatorEpoch, txnMetadata)))
+                  }
+              }
 
-          case currentTxnMetadata =>
-            Right(Some(CoordinatorEpochAndTxnMetadata(cacheEntry.coordinatorEpoch, currentTxnMetadata)))
-        }
+            case currentTxnMetadata =>
+              Right(Some(CoordinatorEpochAndTxnMetadata(cacheEntry.coordinatorEpoch, currentTxnMetadata)))
+          }
 
-      case None =>
-        Left(Errors.NOT_COORDINATOR)
+        case None =>
+          Left(Errors.NOT_COORDINATOR)
+      }
     }
   }
 
@@ -439,7 +445,6 @@ class TransactionStateManager(brokerId: Int,
       throw new KafkaException(s"Transaction topic number of partitions has changed from $transactionTopicPartitionCount to $curTransactionTopicPartitionCount")
   }
 
-  // TODO: check broker message format and error if < V2
   def appendTransactionToLog(transactionalId: String,
                              coordinatorEpoch: Int,
                              newMetadata: TxnTransitMetadata,
@@ -507,7 +512,7 @@ class TransactionStateManager(brokerId: Int,
       if (responseError == Errors.NONE) {
         // now try to update the cache: we need to update the status in-place instead of
         // overwriting the whole object to ensure synchronization
-        getAndMaybeAddTransactionState(transactionalId) match {
+        getTransactionState(transactionalId) match {
 
           case Left(err) =>
             responseCallback(err)
@@ -521,11 +526,9 @@ class TransactionStateManager(brokerId: Int,
                 // in this case directly return NOT_COORDINATOR to client and let it to re-discover the transaction coordinator
                 info(s"Updating $transactionalId's transaction state to $newMetadata with coordinator epoch $coordinatorEpoch for $transactionalId failed after the transaction message " +
                   s"has been appended to the log. The cached coordinator epoch has changed to ${epochAndMetadata.coordinatorEpoch}")
-
                 responseError = Errors.NOT_COORDINATOR
               } else {
                 metadata.completeTransitionTo(newMetadata)
-
                 debug(s"Updating $transactionalId's transaction state to $newMetadata with coordinator epoch $coordinatorEpoch for $transactionalId succeeded")
               }
             }
@@ -535,9 +538,30 @@ class TransactionStateManager(brokerId: Int,
             // return NOT_COORDINATOR to let the client re-discover the transaction coordinator
             info(s"Updating $transactionalId's transaction state (txn topic partition ${partitionFor(transactionalId)}) to $newMetadata with coordinator epoch $coordinatorEpoch for $transactionalId " +
               s"failed after the transaction message has been appended to the log since the corresponding metadata does not exist in the cache anymore")
-
             responseError = Errors.NOT_COORDINATOR
         }
+      } else {
+        // Reset the pending state when returning an error, since there is no active transaction for the transactional id at this point.
+        getTransactionState(transactionalId) match {
+          case Right(Some(epochAndTxnMetadata)) =>
+            val metadata = epochAndTxnMetadata.transactionMetadata
+            metadata synchronized {
+              if (epochAndTxnMetadata.coordinatorEpoch == coordinatorEpoch) {
+                debug(s"TransactionalId ${metadata.transactionalId}, resetting pending state since we are returning error $responseError")
+                metadata.pendingState = None
+              } else {
+                info(s"TransactionalId ${metadata.transactionalId} coordinator epoch changed from " +
+                  s"${epochAndTxnMetadata.coordinatorEpoch} to $coordinatorEpoch after append to log returned $responseError")
+              }
+            }
+          case Right(None) =>
+            // Do nothing here, since we want to return the original append error to the user.
+            info(s"Found no metadata TransactionalId $transactionalId after append to log returned error $responseError")
+          case Left(error) =>
+            // Do nothing here, since we want to return the original append error to the user.
+            info(s"Retrieving metadata for transactionalId $transactionalId returned $error after append to the log returned error $responseError")
+        }
+
       }
 
       responseCallback(responseError)
@@ -549,7 +573,7 @@ class TransactionStateManager(brokerId: Int,
       // returns and before appendRecords() is called, since otherwise entries with a high coordinator epoch could have
       // been appended to the log in between these two events, and therefore appendRecords() would append entries with
       // an old coordinator epoch that can still be successfully replicated on followers and make the log in a bad state.
-      getAndMaybeAddTransactionState(transactionalId) match {
+      getTransactionState(transactionalId) match {
         case Left(err) =>
           responseCallback(err)
 

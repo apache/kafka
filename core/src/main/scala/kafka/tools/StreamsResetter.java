@@ -137,7 +137,8 @@ public class StreamsResetter {
     }
 
     private void parseArguments(final String[] args) throws IOException {
-        final OptionParser optionParser = new OptionParser();
+
+        final OptionParser optionParser = new OptionParser(false);
         applicationIdOption = optionParser.accepts("application-id", "The Kafka Streams application ID (application.id).")
             .withRequiredArg()
             .ofType(String.class)

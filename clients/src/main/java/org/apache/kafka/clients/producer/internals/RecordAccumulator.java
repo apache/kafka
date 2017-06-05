@@ -238,10 +238,7 @@ public final class RecordAccumulator {
             throw new UnsupportedVersionException("Attempting to use idempotence with a broker which does not " +
                     "support the required message format (v2). The broker must be version 0.11 or later.");
         }
-        boolean isTransactional = false;
-        if (transactionManager != null)
-            isTransactional = transactionManager.isInTransaction();
-        return MemoryRecords.builder(buffer, maxUsableMagic, compression, TimestampType.CREATE_TIME, 0L, isTransactional);
+        return MemoryRecords.builder(buffer, maxUsableMagic, compression, TimestampType.CREATE_TIME, 0L);
     }
 
     /**
@@ -470,11 +467,17 @@ public final class RecordAccumulator {
                                         break;
                                     } else {
                                         ProducerIdAndEpoch producerIdAndEpoch = null;
+                                        boolean isTransactional = false;
                                         if (transactionManager != null) {
+                                            if (!transactionManager.ensurePartitionAdded(tp))
+                                                break;
+
                                             producerIdAndEpoch = transactionManager.producerIdAndEpoch();
                                             if (!producerIdAndEpoch.isValid())
                                                 // we cannot send the batch until we have refreshed the producer id
                                                 break;
+
+                                            isTransactional = transactionManager.isInTransaction();
                                         }
 
                                         ProducerBatch batch = deque.pollFirst();
@@ -485,10 +488,10 @@ public final class RecordAccumulator {
                                             // the producer id and sequence here, this attempt will also be accepted,
                                             // causing a duplicate.
                                             int sequenceNumber = transactionManager.sequenceNumber(batch.topicPartition);
-                                            log.debug("Dest: {} : producerId: {}, epoch: {}, Assigning sequence for {}: {}",
-                                                    node, producerIdAndEpoch.producerId, producerIdAndEpoch.epoch,
-                                                    batch.topicPartition, sequenceNumber);
-                                            batch.setProducerState(producerIdAndEpoch, sequenceNumber);
+                                            log.debug("Assigning sequence number {} from producer {} to dequeued " +
+                                                            "batch from partition {} bound for {}.",
+                                                    sequenceNumber, producerIdAndEpoch, batch.topicPartition, node);
+                                            batch.setProducerState(producerIdAndEpoch, sequenceNumber, isTransactional);
                                         }
                                         batch.close();
                                         size += batch.sizeInBytes();
@@ -531,7 +534,7 @@ public final class RecordAccumulator {
      */
     public void deallocate(ProducerBatch batch) {
         incomplete.remove(batch);
-        // Only deallocate the batch if it is not a split batch because split batch are allocated aside the
+        // Only deallocate the batch if it is not a split batch because split batch are allocated outside the
         // buffer pool.
         if (!batch.isSplitBatch())
             free.deallocate(batch.buffer(), batch.initialCapacity());
@@ -621,13 +624,30 @@ public final class RecordAccumulator {
     void abortBatches(final RuntimeException reason) {
         for (ProducerBatch batch : incomplete.all()) {
             Deque<ProducerBatch> dq = getDeque(batch.topicPartition);
-            // Close the batch before aborting
             synchronized (dq) {
                 batch.abort();
                 dq.remove(batch);
             }
             batch.done(-1L, RecordBatch.NO_TIMESTAMP, reason);
             deallocate(batch);
+        }
+    }
+
+    void abortUnclosedBatches(RuntimeException reason) {
+        for (ProducerBatch batch : incomplete.all()) {
+            Deque<ProducerBatch> dq = getDeque(batch.topicPartition);
+            boolean aborted = false;
+            synchronized (dq) {
+                if (!batch.isClosed()) {
+                    aborted = true;
+                    batch.abort();
+                    dq.remove(batch);
+                }
+            }
+            if (aborted) {
+                batch.done(-1L, RecordBatch.NO_TIMESTAMP, reason);
+                deallocate(batch);
+            }
         }
     }
 

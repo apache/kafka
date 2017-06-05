@@ -30,6 +30,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * @deprecated since 0.11.0.0. This class will be removed in a future release.
+ */
+@Deprecated
 public class SimpleConsumerDemo {
 
     private static void printMessages(ByteBufferMessageSet messageSet) throws UnsupportedEncodingException {

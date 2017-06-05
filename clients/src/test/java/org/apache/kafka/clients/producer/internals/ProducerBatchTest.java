@@ -28,7 +28,11 @@ import org.junit.Test;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
+import java.util.Deque;
 
+import static org.apache.kafka.common.record.RecordBatch.MAGIC_VALUE_V0;
+import static org.apache.kafka.common.record.RecordBatch.MAGIC_VALUE_V1;
+import static org.apache.kafka.common.record.RecordBatch.MAGIC_VALUE_V2;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -52,9 +56,9 @@ public class ProducerBatchTest {
 
     @Test
     public void testAppendedChecksumMagicV0AndV1() {
-        for (byte magic : Arrays.asList(RecordBatch.MAGIC_VALUE_V0, RecordBatch.MAGIC_VALUE_V1)) {
+        for (byte magic : Arrays.asList(MAGIC_VALUE_V0, MAGIC_VALUE_V1)) {
             MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(128), magic,
-                    CompressionType.NONE, TimestampType.CREATE_TIME, 128);
+                    CompressionType.NONE, TimestampType.CREATE_TIME, 0L);
             ProducerBatch batch = new ProducerBatch(new TopicPartition("topic", 1), builder, now);
             byte[] key = "hi".getBytes();
             byte[] value = "there".getBytes();
@@ -64,6 +68,41 @@ public class ProducerBatchTest {
             byte attributes = LegacyRecord.computeAttributes(magic, CompressionType.NONE, TimestampType.CREATE_TIME);
             long expectedChecksum = LegacyRecord.computeChecksum(magic, attributes, now, key, value);
             assertEquals(expectedChecksum, future.checksumOrNull().longValue());
+        }
+    }
+
+    @Test
+    public void testSplitPreservesMagicAndCompressionType() {
+        for (byte magic : Arrays.asList(MAGIC_VALUE_V0, MAGIC_VALUE_V1, MAGIC_VALUE_V2)) {
+            for (CompressionType compressionType : CompressionType.values()) {
+                if (compressionType == CompressionType.NONE && magic < MAGIC_VALUE_V2)
+                    continue;
+
+                MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), magic,
+                        compressionType, TimestampType.CREATE_TIME, 0L);
+
+                ProducerBatch batch = new ProducerBatch(new TopicPartition("topic", 1), builder, now);
+                while (true) {
+                    FutureRecordMetadata future = batch.tryAppend(now, "hi".getBytes(), "there".getBytes(),
+                            Record.EMPTY_HEADERS, null, now);
+                    if (future == null)
+                        break;
+                }
+
+                Deque<ProducerBatch> batches = batch.split(512);
+                assertTrue(batches.size() >= 2);
+
+                for (ProducerBatch splitProducerBatch : batches) {
+                    assertEquals(magic, splitProducerBatch.magic());
+                    assertTrue(splitProducerBatch.isSplitBatch());
+
+                    for (RecordBatch splitBatch : splitProducerBatch.records().batches()) {
+                        assertEquals(magic, splitBatch.magic());
+                        assertEquals(0L, splitBatch.baseOffset());
+                        assertEquals(compressionType, splitBatch.compressionType());
+                    }
+                }
+            }
         }
     }
 

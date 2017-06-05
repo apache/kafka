@@ -16,9 +16,6 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
-import java.util.ArrayDeque;
-import java.util.Deque;
-import java.util.Iterator;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.TopicPartition;
@@ -28,23 +25,26 @@ import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.record.AbstractRecords;
 import org.apache.kafka.common.record.CompressionRatioEstimator;
 import org.apache.kafka.common.record.CompressionType;
+import org.apache.kafka.common.record.MemoryRecords;
+import org.apache.kafka.common.record.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.MutableRecordBatch;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.RecordBatch;
-import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.MemoryRecordsBuilder;
-import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.requests.ProduceResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
+import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
+import static org.apache.kafka.common.record.RecordBatch.MAGIC_VALUE_V2;
 import static org.apache.kafka.common.record.RecordBatch.NO_TIMESTAMP;
 
 
@@ -119,9 +119,9 @@ public final class ProducerBatch {
     }
 
     /**
-     +     * This method is only used by {@link #split(int)} when splitting a large batch to smaller ones.
-     +     * @return true if the record has been successfully appended, false otherwise.
-     +     */
+     * This method is only used by {@link #split(int)} when splitting a large batch to smaller ones.
+     * @return true if the record has been successfully appended, false otherwise.
+     */
     private boolean tryAppendForSplit(long timestamp, ByteBuffer key, ByteBuffer value, Header[] headers, Thunk thunk) {
         if (!recordsBuilder.hasRoomFor(timestamp, key, value)) {
             return false;
@@ -181,33 +181,38 @@ public final class ProducerBatch {
     public Deque<ProducerBatch> split(int splitBatchSize) {
         Deque<ProducerBatch> batches = new ArrayDeque<>();
         MemoryRecords memoryRecords = recordsBuilder.build();
+
         Iterator<MutableRecordBatch> recordBatchIter = memoryRecords.batches().iterator();
         if (!recordBatchIter.hasNext())
             throw new IllegalStateException("Cannot split an empty producer batch.");
+
         RecordBatch recordBatch = recordBatchIter.next();
+        if (recordBatch.magic() < MAGIC_VALUE_V2 && !recordBatch.isCompressed())
+            throw new IllegalArgumentException("Batch splitting cannot be used with non-compressed messages " +
+                    "with version v0 and v1");
+
         if (recordBatchIter.hasNext())
-            throw new IllegalStateException("A producer batch should only have one record batch.");
+            throw new IllegalArgumentException("A producer batch should only have one record batch.");
 
         Iterator<Thunk> thunkIter = thunks.iterator();
         // We always allocate batch size because we are already splitting a big batch.
         // And we also Retain the create time of the original batch.
         ProducerBatch batch = null;
+
         for (Record record : recordBatch) {
             assert thunkIter.hasNext();
             Thunk thunk = thunkIter.next();
-            if (batch == null) {
-                batch = createBatchOffAccumulatorForRecord(this.topicPartition, this.recordsBuilder.compressionType(),
-                                                           record, splitBatchSize, this.createdMs);
-            }
+            if (batch == null)
+                batch = createBatchOffAccumulatorForRecord(record, splitBatchSize);
 
             // A newly created batch can always host the first message.
             if (!batch.tryAppendForSplit(record.timestamp(), record.key(), record.value(), record.headers(), thunk)) {
                 batches.add(batch);
-                batch = createBatchOffAccumulatorForRecord(this.topicPartition, this.recordsBuilder.compressionType(),
-                                                           record, splitBatchSize, this.createdMs);
+                batch = createBatchOffAccumulatorForRecord(record, splitBatchSize);
                 batch.tryAppendForSplit(record.timestamp(), record.key(), record.value(), record.headers(), thunk);
             }
         }
+
         // Close the last batch and add it to the batch list after split.
         if (batch != null)
             batches.add(batch);
@@ -217,30 +222,21 @@ public final class ProducerBatch {
         return batches;
     }
 
-    private ProducerBatch createBatchOffAccumulatorForRecord(TopicPartition tp,
-                                                             CompressionType compressionType,
-                                                             Record record,
-                                                             int batchSize,
-                                                             long createdMs) {
-        int initialSize = Math.max(Records.LOG_OVERHEAD + AbstractRecords.sizeInBytesUpperBound(magic(),
-                                                                                                record.key(),
-                                                                                                record.value(),
-                                                                                                record.headers()),
-                                   batchSize);
-        return createBatchOffAccumulator(tp, compressionType, initialSize, createdMs);
+    private ProducerBatch createBatchOffAccumulatorForRecord(Record record, int batchSize) {
+        int initialSize = Math.max(AbstractRecords.sizeInBytesUpperBound(magic(),
+                record.key(), record.value(), record.headers()), batchSize);
+        ByteBuffer buffer = ByteBuffer.allocate(initialSize);
+
+        // Note that we intentionally do not set producer state (producerId, epoch, sequence, and isTransactional)
+        // for the newly created batch. This will be set when the batch is dequeued for sending (which is consistent
+        // with how normal batches are handled).
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic(), recordsBuilder.compressionType(),
+                TimestampType.CREATE_TIME, 0L);
+        return new ProducerBatch(topicPartition, builder, this.createdMs, true);
     }
 
-    // package private for testing purpose.
-    static ProducerBatch createBatchOffAccumulator(TopicPartition tp,
-                                                   CompressionType compressionType,
-                                                   int batchSize,
-                                                   long createdMs) {
-        ByteBuffer buffer = ByteBuffer.allocate(batchSize);
-        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer,
-                                                             compressionType,
-                                                             TimestampType.CREATE_TIME,
-                                                             batchSize);
-        return new ProducerBatch(tp, builder, createdMs, true);
+    public boolean isCompressed() {
+        return recordsBuilder.compressionType() != CompressionType.NONE;
     }
 
     /**
@@ -350,8 +346,9 @@ public final class ProducerBatch {
         return recordsBuilder.isFull();
     }
 
-    public void setProducerState(ProducerIdAndEpoch producerIdAndEpoch, int baseSequence) {
-        recordsBuilder.setProducerState(producerIdAndEpoch.producerId, producerIdAndEpoch.epoch, baseSequence);
+    public void setProducerState(ProducerIdAndEpoch producerIdAndEpoch, int baseSequence, boolean isTransactional) {
+        recordsBuilder.setProducerState(producerIdAndEpoch.producerId, producerIdAndEpoch.epoch,
+                baseSequence, isTransactional);
     }
 
     /**

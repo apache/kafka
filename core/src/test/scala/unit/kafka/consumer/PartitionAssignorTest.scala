@@ -28,6 +28,7 @@ import kafka.consumer.PartitionAssignorTest.Scenario
 import kafka.consumer.PartitionAssignorTest.WildcardSubscriptionInfo
 import org.junit.Test
 
+@deprecated("This test has been deprecated and will be removed in a future release.", "0.11.0.0")
 class PartitionAssignorTest extends Logging {
 
   @Test
@@ -42,7 +43,7 @@ class PartitionAssignorTest extends Logging {
       val topicPartitionCounts = Map((1 to topicCount).map(topic => {
         ("topic-" + topic, PartitionAssignorTest.MinPartitionCount.max(TestUtils.random.nextInt(PartitionAssignorTest.MaxPartitionCount)))
       }):_*)
-      
+
       val subscriptions = Map((1 to consumerCount).map { consumer =>
         val streamCount = 1.max(TestUtils.random.nextInt(PartitionAssignorTest.MaxStreamCount + 1))
         ("g1c" + consumer, WildcardSubscriptionInfo(streamCount, ".*", isWhitelist = true))

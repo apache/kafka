@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.kstream;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 
 import java.util.Map;
@@ -63,7 +62,6 @@ import java.util.Map;
  * @see KStream#outerJoin(KStream, ValueJoiner, JoinWindows)
  * @see TimestampExtractor
  */
-@InterfaceStability.Unstable
 public final class JoinWindows extends Windows<Window> {
 
     /** Maximum time difference for tuples that are before the join tuple. */

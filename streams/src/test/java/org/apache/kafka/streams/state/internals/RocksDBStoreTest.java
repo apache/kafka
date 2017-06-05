@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Utils;
@@ -24,35 +23,64 @@ import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.test.MockProcessorContext;
 import org.apache.kafka.test.NoOpRecordCollector;
+import static org.junit.Assert.assertTrue;
+import java.io.File;
+import java.util.HashMap;
+import java.util.Map;
+import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.processor.internals.RecordCollector;
+import org.apache.kafka.streams.state.RocksDBConfigSetter;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
-
-import java.io.File;
 import java.io.IOException;
+import org.rocksdb.Options;
 
 public class RocksDBStoreTest {
+    private final File tempDir = TestUtils.tempDirectory();
 
-    private RocksDBStore<String, Long> rocksDBStore;
+    private RocksDBStore<String, String> subject;
     private MockProcessorContext context;
     private File dir;
 
     @Before
-    public void before() {
-        rocksDBStore = new RocksDBStore<String, Long>("rocksdb-store", Serdes.String(), Serdes.Long());
+    public void setUp() throws Exception {
+        subject = new RocksDBStore<>("test", Serdes.String(), Serdes.String());
         dir = TestUtils.tempDirectory();
         context = new MockProcessorContext(dir,
             Serdes.String(),
-            Serdes.Long(),
+            Serdes.String(),
             new NoOpRecordCollector(),
             new ThreadCache("testCache", 0, new MockStreamsMetrics(new Metrics())));
-
     }
 
     @After
-    public void close() {
-        rocksDBStore.close();
+    public void tearDown() throws Exception {
+        subject.close();
+    }
+
+    @Test
+    public void canSpecifyConfigSetterAsClass() throws Exception {
+        final Map<String, Object> configs = new HashMap<>();
+        configs.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, MockRocksDbConfigSetter.class);
+        MockRocksDbConfigSetter.called = false;
+        subject.openDB(new ConfigurableProcessorContext(tempDir, Serdes.String(), Serdes.String(),
+                null, null, configs));
+
+        assertTrue(MockRocksDbConfigSetter.called);
+    }
+
+    @Test
+    public void canSpecifyConfigSetterAsString() throws Exception {
+        final Map<String, Object> configs = new HashMap<>();
+        configs.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, MockRocksDbConfigSetter.class.getName());
+        MockRocksDbConfigSetter.called = false;
+        subject.openDB(new ConfigurableProcessorContext(tempDir, Serdes.String(), Serdes.String(),
+                null, null, configs));
+
+        assertTrue(MockRocksDbConfigSetter.called);
     }
 
     @Test(expected = ProcessorStateException.class)
@@ -65,15 +93,43 @@ public class RocksDBStoreTest {
             new ThreadCache("testCache", 0, new MockStreamsMetrics(new Metrics())));
         tmpDir.setReadOnly();
 
-        rocksDBStore.openDB(tmpContext);
+        subject.openDB(tmpContext);
     }
 
     @Test(expected = ProcessorStateException.class)
     public void shouldThrowProcessorStateExeptionOnPutDeletedDir() throws IOException {
-        rocksDBStore.init(context, rocksDBStore);
+        subject.init(context, subject);
         Utils.delete(dir);
-        rocksDBStore.put("anyKey", 2L);
-        rocksDBStore.flush();
+        subject.put("anyKey", "anyValue");
+        subject.flush();
     }
 
+    public static class MockRocksDbConfigSetter implements RocksDBConfigSetter {
+        static boolean called;
+
+        @Override
+        public void setConfig(final String storeName, final Options options, final Map<String, Object> configs) {
+            called = true;
+        }
+    }
+
+
+    private static class ConfigurableProcessorContext extends MockProcessorContext {
+        final Map<String, Object> configs;
+
+        ConfigurableProcessorContext(final File stateDir,
+                                     final Serde<?> keySerde,
+                                     final Serde<?> valSerde,
+                                     final RecordCollector collector,
+                                     final ThreadCache cache,
+                                     final Map<String, Object> configs) {
+            super(stateDir, keySerde, valSerde, collector, cache);
+            this.configs = configs;
+        }
+
+        @Override
+        public Map<String, Object> appConfigs() {
+            return configs;
+        }
+    }
 }

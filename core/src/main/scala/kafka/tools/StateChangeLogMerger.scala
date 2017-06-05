@@ -60,7 +60,7 @@ object StateChangeLogMerger extends Logging {
   def main(args: Array[String]) {
 
     // Parse input arguments.
-    val parser = new OptionParser
+    val parser = new OptionParser(false)
     val filesOpt = parser.accepts("logs", "Comma separated list of state change logs or a regex for the log file names")
                               .withRequiredArg
                               .describedAs("file1,file2,...")

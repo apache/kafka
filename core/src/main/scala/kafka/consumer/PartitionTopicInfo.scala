@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -22,6 +22,7 @@ import java.util.concurrent.atomic._
 import kafka.message._
 import kafka.utils.Logging
 
+@deprecated("This class has been deprecated and will be removed in a future release.", "0.11.0.0")
 class PartitionTopicInfo(val topic: String,
                          val partitionId: Int,
                          private val chunkQueue: BlockingQueue[FetchedDataChunk],
@@ -66,11 +67,12 @@ class PartitionTopicInfo(val topic: String,
       chunkQueue.put(new FetchedDataChunk(messages, this, fetchedOffset.get))
     }
   }
-  
+
   override def toString: String = topic + ":" + partitionId.toString + ": fetched offset = " + fetchedOffset.get +
     ": consumed offset = " + consumedOffset.get
 }
 
+@deprecated("This object has been deprecated and will be removed in a future release.", "0.11.0.0")
 object PartitionTopicInfo {
   val InvalidOffset = -1L
 
