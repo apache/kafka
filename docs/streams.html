@@ -866,14 +866,20 @@ $ java -cp path-to-app-fatjar.jar com.example.MyStreamsApp
         </ul>
 
         <p>
-             These methods have been deprecated in favor of using the Interactive Queries API.
-             To get the equivalent functionality there are two recommended approaches.
-         <ol>
-           <li> Make a call to <code>KafkaStreams.store(final String storeName, final QueryableStoreType&lt;T&gt; queryableStoreType)</code>
-                followed by a call to <code>ReadOnlyKeyValueStore.all()</code> to iterate over the keys of a <code>KTable</code></li>
-
-            <li>The other approach is to call <code>KTable.toStream()</code> to get corresponding changelog stream and access it via <code>KStream#print()</code> for example.</li>
-        </ol>
+           These methods have been deprecated in favor of using the Interactive Queries API.
+        </p>
+        <p>
+           If you want to query the current content of the state store backing the KTable, use the following approach:
+             <ul>
+               <li> Make a call to <code>KafkaStreams.store(final String storeName, final QueryableStoreType&lt;T&gt; queryableStoreType)</code> followed by a call to <code>ReadOnlyKeyValueStore.all()</code> to iterate over the keys of a <code>KTable</code>.
+               </li>
+            </ul>
+        </p>
+        <p>
+           If you want to view the changelog stream of the  <code>KTable</code> then you could do something along the lines of the following:
+         <ul>
+           <li> Call <code>KTable.toStream()</code> then call <code>KStream#print()</code>.</li>
+        </ul>
         </p>
 
         <h3><a id="streams_api_changes_01021" href="#streams_api_changes_01021">Notable changes in 0.10.2.1</a></h3>
