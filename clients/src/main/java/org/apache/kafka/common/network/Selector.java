@@ -692,6 +692,11 @@ public class Selector implements Selectable, AutoCloseable {
         this.sensors.recordBytesReceived(channel.id(), networkReceive.payload().limit());
     }
 
+    // only for testing
+    public Set<SelectionKey> keys() {
+        return new HashSet<>(nioSelector.keys());
+    }
+
     private class SelectorMetrics {
         private final Metrics metrics;
         private final String metricGrpPrefix;
