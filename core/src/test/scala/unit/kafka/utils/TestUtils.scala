@@ -239,6 +239,10 @@ object TestUtils extends Logging {
     props.put(KafkaConfig.LogCleanerDedupeBufferSizeProp, "2097152")
     props.put(KafkaConfig.LogMessageTimestampDifferenceMaxMsProp, Long.MaxValue.toString)
     props.put(KafkaConfig.OffsetsTopicReplicationFactorProp, "1")
+    if (!props.containsKey(KafkaConfig.OffsetsTopicPartitionsProp))
+      props.put(KafkaConfig.OffsetsTopicPartitionsProp, "5")
+    if (!props.containsKey(KafkaConfig.GroupInitialRebalanceDelayMsProp))
+      props.put(KafkaConfig.GroupInitialRebalanceDelayMsProp, "0")
     rack.foreach(props.put(KafkaConfig.RackProp, _))
 
     if (protocolAndPorts.exists { case (protocol, _) => usesSslTransportLayer(protocol) })
