@@ -26,7 +26,7 @@ import org.apache.kafka.common.utils.{MockTime, Utils}
 import org.apache.kafka.common.{Node, TopicPartition}
 import org.easymock.EasyMock
 import org.junit.Assert._
-import org.junit.Test
+import org.junit.{After, Test}
 
 import scala.collection.mutable
 
@@ -71,6 +71,11 @@ class TransactionMarkerChannelManagerTest {
     metrics)
 
   private val senderThread = channelManager.senderThread
+
+  @After
+  def after(): Unit = {
+    metrics.close()
+  }
 
   private def mockCache(): Unit = {
     EasyMock.expect(txnStateManager.partitionFor(transactionalId1))
