@@ -15,9 +15,8 @@ package kafka.api
 import java.nio.ByteBuffer
 import java.util
 import java.util.concurrent.ExecutionException
-import java.util.{ArrayList, Collections, Properties}
-import java.util.concurrent.ExecutionException
 import java.util.regex.Pattern
+import java.util.{ArrayList, Collections, Properties}
 
 import kafka.admin.AdminUtils
 import kafka.common.TopicAndPartition
@@ -26,10 +25,6 @@ import kafka.network.SocketServer
 import kafka.security.auth._
 import kafka.server.{BaseRequestTest, KafkaConfig}
 import kafka.utils.TestUtils
-import kafka.admin.AdminUtils
-import kafka.log.LogConfig
-import kafka.network.SocketServer
-import org.apache.kafka.clients.consumer.OffsetAndMetadata
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable
@@ -37,31 +32,23 @@ import scala.collection.mutable.Buffer
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.consumer.internals.NoOpConsumerRebalanceListener
 import org.apache.kafka.clients.producer._
-import org.apache.kafka.common.{KafkaException, Node, TopicPartition}
+import org.apache.kafka.common.{KafkaException, Node, TopicPartition, requests}
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic.GROUP_METADATA_TOPIC_NAME
-import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.acl.{AccessControlEntry, AccessControlEntryFilter, AclBinding, AclBindingFilter, AclOperation, AclPermissionType}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors, SecurityProtocol}
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, RecordBatch, SimpleRecord}
-import org.apache.kafka.common.requests
 import org.apache.kafka.common.requests.CreateAclsRequest.AclCreation
 import org.apache.kafka.common.requests.CreateTopicsRequest.TopicDetails
-import org.apache.kafka.common.requests.{ Resource => RResource, ResourceType => RResourceType, _ }
+import org.apache.kafka.common.requests.{Resource => RResource, ResourceType => RResourceType, _}
 import org.apache.kafka.common.resource.{ResourceFilter, Resource => AdminResource, ResourceType => AdminResourceType}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 
 import org.junit.{After, Assert, Before, Test}
 import org.junit.Assert._
-import org.junit.rules.ExpectedException
-import org.junit.Rule
-import org.hamcrest.{Description, TypeSafeMatcher}
-
 
 class AuthorizerIntegrationTest extends BaseRequestTest {
-  val exception = ExpectedException.none();
-  @Rule def expectedExceptionDef = exception
 
   override def numBrokers: Int = 1
   val brokerId: Integer = 0
@@ -499,31 +486,36 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
 
   @Test
   def testConsumeWithNoAccess(): Unit = {
-    exception.expect(classOf[ApiException])
-    exception.expectCause(new ExceptionCauseMatcher(
-                classOf[GroupAuthorizationException], Some(s"Not authorized to access group: $group")))
-    addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Write)), topicResource)
-    sendRecords(1, tp)
-    removeAllAcls()
-    this.consumers.head.assign(List(tp).asJava)
-    consumeRecords(this.consumers.head)
+    try {
+      addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Write)), topicResource)
+      sendRecords(1, tp)
+      removeAllAcls()
+      this.consumers.head.assign(List(tp).asJava)
+      consumeRecords(this.consumers.head)
+    } catch {
+      case e: GroupAuthorizationException =>
+        val suppressed = e.getSuppressed
+        assertTrue(suppressed != null && suppressed.length == 1)
+        assertEquals(classOf[KafkaException], suppressed.head.getClass)
+    }
   }
 
   @Test
   def testSimpleConsumeWithOffsetLookupAndNoGroupAccess(): Unit = {
-    exception.expect(classOf[ApiException])
-    exception.expectCause(new ExceptionCauseMatcher(
-                classOf[GroupAuthorizationException], Some(s"Not authorized to access group: $group")))
-
     addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Write)), topicResource)
     sendRecords(1, tp)
     removeAllAcls()
 
     addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Read)), topicResource)
-    // note this still depends on group access because we haven't set offsets explicitly, which means
-    // they will first be fetched from the consumer coordinator (which requires group access)
-    this.consumers.head.assign(List(tp).asJava)
-    consumeRecords(this.consumers.head)
+    try {
+      // note this still depends on group access because we haven't set offsets explicitly, which means
+      // they will first be fetched from the consumer coordinator (which requires group access)
+      this.consumers.head.assign(List(tp).asJava)
+      consumeRecords(this.consumers.head)
+      Assert.fail("should have thrown exception")
+    } catch {
+      case e: GroupAuthorizationException => assertEquals(group, e.groupId())
+    }
   }
 
   @Test
@@ -756,11 +748,8 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     consumeRecords(this.consumers.head, topic = newTopic, part = 0)
   }
 
-  @Test
+  @Test(expected = classOf[AuthorizationException])
   def testCommitWithNoAccess() {
-    exception.expect(classOf[ApiException])
-    exception.expectCause(new ExceptionCauseMatcher(
-                classOf[GroupAuthorizationException], Some(s"Not authorized to access group: $group")))
     this.consumers.head.commitSync(Map(tp -> new OffsetAndMetadata(5)).asJava)
   }
 
@@ -770,31 +759,22 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     this.consumers.head.commitSync(Map(tp -> new OffsetAndMetadata(5)).asJava)
   }
 
-  @Test
+  @Test(expected = classOf[TopicAuthorizationException])
   def testCommitWithTopicWrite() {
-    exception.expect(classOf[ApiException])
-    exception.expectCause(new ExceptionCauseMatcher(
-                classOf[TopicAuthorizationException], Some("Not authorized to access topics: [topic]")))
     addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Read)), groupResource)
     addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Write)), topicResource)
     this.consumers.head.commitSync(Map(tp -> new OffsetAndMetadata(5)).asJava)
   }
 
-  @Test
+  @Test(expected = classOf[TopicAuthorizationException])
   def testCommitWithTopicDescribe() {
-    exception.expect(classOf[ApiException])
-    exception.expectCause(new ExceptionCauseMatcher(
-                classOf[TopicAuthorizationException], Some("Not authorized to access topics: [topic]")))
     addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Read)), groupResource)
     addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Describe)), topicResource)
     this.consumers.head.commitSync(Map(tp -> new OffsetAndMetadata(5)).asJava)
   }
 
-  @Test
+  @Test(expected = classOf[GroupAuthorizationException])
   def testCommitWithNoGroupAccess() {
-    exception.expect(classOf[ApiException])
-    exception.expectCause(new ExceptionCauseMatcher(
-                classOf[GroupAuthorizationException], Some(s"Not authorized to access group: $group")))
     addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Read)), topicResource)
     this.consumers.head.commitSync(Map(tp -> new OffsetAndMetadata(5)).asJava)
   }
@@ -806,20 +786,14 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     this.consumers.head.commitSync(Map(tp -> new OffsetAndMetadata(5)).asJava)
   }
 
-  @Test
+  @Test(expected = classOf[AuthorizationException])
   def testOffsetFetchWithNoAccess() {
-    exception.expect(classOf[ApiException])
-    exception.expectCause(new ExceptionCauseMatcher(
-                classOf[GroupAuthorizationException], Some(s"Not authorized to access group: $group")))
     this.consumers.head.assign(List(tp).asJava)
     this.consumers.head.position(tp)
   }
 
-  @Test
+  @Test(expected = classOf[GroupAuthorizationException])
   def testOffsetFetchWithNoGroupAccess() {
-    exception.expect(classOf[ApiException])
-    exception.expectCause(new ExceptionCauseMatcher(
-                classOf[GroupAuthorizationException], Some(s"Not authorized to access group: $group")))
     addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Read)), topicResource)
     this.consumers.head.assign(List(tp).asJava)
     this.consumers.head.position(tp)

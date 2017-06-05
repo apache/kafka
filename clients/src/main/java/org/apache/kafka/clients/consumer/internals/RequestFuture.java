@@ -36,7 +36,8 @@ import java.util.concurrent.atomic.AtomicReference;
  *         ClientResponse response = future.value();
  *         // Handle response
  *     } else {
- *         throw new ApiException("api call failed.", future.exception());
+ *         future.exception().addSuppressed(new KafkaException(...))
+ *         throw future.exception();
  *     }
  * </pre>
  *

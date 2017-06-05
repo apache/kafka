@@ -21,9 +21,9 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
-import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
 import org.apache.kafka.common.errors.IllegalGenerationException;
+import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.RebalanceInProgressException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
@@ -60,7 +60,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
-import org.apache.kafka.common.errors.InterruptException;
 
 /**
  * AbstractCoordinator implements group management for a single group member by interacting with
@@ -223,8 +222,10 @@ public abstract class AbstractCoordinator implements Closeable {
 
                     log.debug("Coordinator discovery failed for group {}, refreshing metadata", groupId);
                     client.awaitMetadataUpdate(remainingMs);
-                } else
-                    throw new ApiException("Coordinator lookup failed.", future.exception());
+                } else {
+                    future.exception().addSuppressed(new KafkaException("An error occurred in the broker when looking up the group coordinator."));
+                    throw future.exception();
+                }
             } else if (coordinator != null && client.connectionFailed(coordinator)) {
                 // we found the coordinator, but the connection has failed, so mark
                 // it dead and backoff before retrying discovery
@@ -369,8 +370,10 @@ public abstract class AbstractCoordinator implements Closeable {
                         exception instanceof RebalanceInProgressException ||
                         exception instanceof IllegalGenerationException)
                     continue;
-                else if (!future.isRetriable())
-                    throw new ApiException("Joining group failed.", exception);
+                else if (!future.isRetriable()) {
+                    future.exception().addSuppressed(new KafkaException("An error occurred in the broker when joining the group."));
+                    throw future.exception();
+                }
                 time.sleep(retryBackoffMs);
             }
         }
