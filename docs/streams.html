@@ -825,18 +825,32 @@ $ java -cp path-to-app-fatjar.jar com.example.MyStreamsApp
         See <a href="#streams_api_changes_0101">below</a> a complete list of 0.10.1 API changes that allow you to advance your application and/or simplify your code base, including the usage of new features.
         </p>
 
-        <h3><a id="streams_api_changes_0110" href="#streams_api_changes_0110">Notable changes in 0.11.0.0</a></h3>
+        <h3><a id="streams_api_changes_0110" href="#streams_api_changes_0110">Streams API changes in 0.11.0.0</a></h3>
 
-        <p>
-        Parameter updates in <code>StreamsConfig</code>:
-        </p>
+        <p> Updates in <code>StreamsConfig</code>: </p>
         <ul>
-          <li> <code>timestamp.extractor</code> was deprecated and replaced by <code>default.timestamp.extractor</code>
-          <li> <code>key.serde</code> was deprecated and replaced by <code>default.key.serde</code>
-          <li> <code>value.serde</code> was deprecated and replaced by <code>default.value.serde</code>
+          <li> configuration parameter <code>key.serde</code> was deprecated and replaced by <code>default.key.serde</code>
+          <li> configuration parameter <code>value.serde</code> was deprecated and replaced by <code>default.value.serde</code>
+          <li> configuration parameter <code>timestamp.extractor</code> was deprecated and replaced by <code>default.timestamp.extractor</code>
+          <li> method <code>#keySerde()</code> was deprecated and replaced by <code>#defaultKeySerde()</code>
+          <li> method <code>#valueSerde()</code> was deprecated and replaced by <code>#defaultValueSerde()</code>
+          <li> new method <code>#defaultTimestampExtractor()</code> was added </code>
         </ul>
 
-        <h3><a id="streams_api_changes_01021" href="#streams_api_changes_01021">Notable changes in 0.10.2.1</a></h3>
+        <p> New methods in <code>TopologyBuilder</code>: </p>
+        <ul>
+            <li> added overloads for <code>#addSource()</code> that allow to define a <code>TimestampExtractor</code> per source node </li>
+            <li> added overloads for <code>#addGlobalStore()</code> that allow to define a <code>TimestampExtractor</code> per source node associated with the global store </li>
+        </ul>
+
+        <p> New methods in <code>KStreamBuilder</code>: </p>
+        <ul>
+            <li> added overloads for <code>#stream()</code> that allow to define a <code>TimestampExtractor</code> per input stream </li>
+            <li> added overloads for <code>#table()</code> that allow to define a <code>TimestampExtractor</code> per input table </li>
+            <li> added overloads for <code>#globalKTable()</code> that allow to define a <code>TimestampExtractor</code> per global table </li>
+        </ul>
+
+        <h3><a id="streams_api_changes_01021" href="#streams_api_changes_01021">Stream API changes in 0.10.2.1</a></h3>
 
         <p>
         Parameter updates in <code>StreamsConfig</code>:
