@@ -356,6 +356,8 @@ public class Sender implements Runnable {
             } catch (IOException e) {
                 log.debug("{}Disconnect from {} while trying to send request {}. Going " +
                         "to back off and retry", transactionManager.logPrefix, targetNode, requestBuilder);
+                if (nextRequestHandler.needsCoordinator())
+                    transactionManager.lookupCoordinator(nextRequestHandler);
             }
 
             time.sleep(retryBackoffMs);

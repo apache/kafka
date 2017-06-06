@@ -610,6 +610,8 @@ public class TransactionManager {
                 clearInFlightRequestCorrelationId();
                 if (response.wasDisconnected()) {
                     log.trace("{}Disconnected from {}. Will retry.", logPrefix, response.destination());
+                    if (this.needsCoordinator())
+                        lookupCoordinator(this.coordinatorType(), this.coordinatorKey());
                     reenqueue();
                 } else if (response.versionMismatch() != null) {
                     fatalError(response.versionMismatch());
