@@ -537,6 +537,7 @@ public abstract class AbstractCoordinator implements Closeable {
             if (error == Errors.NONE) {
                 sensors.syncLatency.record(response.requestLatencyMs());
                 future.complete(syncResponse.memberAssignment());
+                AbstractCoordinator.this.rejoinNeeded = false;
             } else {
                 requestRejoin();
 
