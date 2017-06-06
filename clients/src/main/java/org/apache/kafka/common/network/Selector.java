@@ -198,7 +198,17 @@ public class Selector implements Selectable, AutoCloseable {
             throw e;
         }
         SelectionKey key = socketChannel.register(nioSelector, SelectionKey.OP_CONNECT);
-        KafkaChannel channel = channelBuilder.buildChannel(id, key, maxReceiveSize);
+        KafkaChannel channel;
+        try {
+            channel = channelBuilder.buildChannel(id, key, maxReceiveSize);
+        } catch (Exception e) {
+            try {
+                socketChannel.close();
+            } finally {
+                key.cancel();
+            }
+            throw new IOException("Channel could not be created for socket " + socketChannel, e);
+        }
         key.attach(channel);
         this.channels.put(id, channel);
 
@@ -680,6 +690,11 @@ public class Selector implements Selectable, AutoCloseable {
         NetworkReceive networkReceive = stagedDeque.poll();
         this.completedReceives.add(networkReceive);
         this.sensors.recordBytesReceived(channel.id(), networkReceive.payload().limit());
+    }
+
+    // only for testing
+    public Set<SelectionKey> keys() {
+        return new HashSet<>(nioSelector.keys());
     }
 
     private class SelectorMetrics {
