@@ -282,11 +282,6 @@ public class TransactionManager {
         return currentState == State.ABORTING_TRANSACTION;
     }
 
-    synchronized boolean hasOngoingTransaction() {
-        // transactions are considered ongoing once started until completion or a fatal error
-        return currentState == State.IN_TRANSACTION || isCompletingTransaction() || hasAbortableError();
-    }
-
     synchronized void transitionToAbortableError(RuntimeException exception) {
         transitionTo(State.ABORTABLE_ERROR, exception);
     }
@@ -451,12 +446,18 @@ public class TransactionManager {
 
     // visible for testing
     synchronized boolean transactionContainsPartition(TopicPartition topicPartition) {
-        return hasOngoingTransaction() && partitionsInTransaction.contains(topicPartition);
+        return partitionsInTransaction.contains(topicPartition);
     }
 
     // visible for testing
     synchronized boolean hasPendingOffsetCommits() {
-        return hasOngoingTransaction() && !pendingTxnOffsetCommits.isEmpty();
+        return !pendingTxnOffsetCommits.isEmpty();
+    }
+
+    // visible for testing
+    synchronized boolean hasOngoingTransaction() {
+        // transactions are considered ongoing once started until completion or a fatal error
+        return currentState == State.IN_TRANSACTION || isCompletingTransaction() || hasAbortableError();
     }
 
     // visible for testing

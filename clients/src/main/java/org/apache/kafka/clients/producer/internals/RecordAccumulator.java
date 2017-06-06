@@ -477,7 +477,7 @@ public final class RecordAccumulator {
                                                 // we cannot send the batch until we have refreshed the producer id
                                                 break;
 
-                                            isTransactional = transactionManager.hasOngoingTransaction();
+                                            isTransactional = transactionManager.isTransactional();
                                         }
 
                                         ProducerBatch batch = deque.pollFirst();
