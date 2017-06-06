@@ -469,7 +469,7 @@ public final class RecordAccumulator {
                                         ProducerIdAndEpoch producerIdAndEpoch = null;
                                         boolean isTransactional = false;
                                         if (transactionManager != null) {
-                                            if (!transactionManager.ensurePartitionAdded(tp))
+                                            if (!transactionManager.sendToPartitionAllowed(tp))
                                                 break;
 
                                             producerIdAndEpoch = transactionManager.producerIdAndEpoch();
@@ -477,7 +477,7 @@ public final class RecordAccumulator {
                                                 // we cannot send the batch until we have refreshed the producer id
                                                 break;
 
-                                            isTransactional = transactionManager.isInTransaction();
+                                            isTransactional = transactionManager.isTransactional();
                                         }
 
                                         ProducerBatch batch = deque.pollFirst();
