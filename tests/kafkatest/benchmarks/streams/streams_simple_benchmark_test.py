@@ -48,7 +48,6 @@ class StreamsSimpleBenchmarkTest(Test):
         # SETUP PHASE
         #############
         self.zk = ZookeeperService(self.test_context, num_nodes=1)
-        self.zk.log_level = "INFO"
         self.zk.start()
         self.kafka = KafkaService(self.test_context, num_nodes=scale, zk=self.zk, version=DEV_BRANCH, topics={
             'simpleBenchmarkSourceTopic' : { 'partitions': scale, 'replication-factor': self.replication },
