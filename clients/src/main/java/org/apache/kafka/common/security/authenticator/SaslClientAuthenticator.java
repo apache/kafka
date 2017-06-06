@@ -19,6 +19,7 @@ package org.apache.kafka.common.security.authenticator;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.IllegalSaslStateException;
 import org.apache.kafka.common.errors.UnsupportedSaslMechanismException;
@@ -52,7 +53,9 @@ import java.security.Principal;
 import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
 import java.util.Arrays;
+import java.util.Iterator;
 import java.util.Map;
+import java.util.Set;
 
 public class SaslClientAuthenticator implements Authenticator {
 
@@ -106,13 +109,14 @@ public class SaslClientAuthenticator implements Authenticator {
 
             setSaslState(handshakeRequestEnable ? SaslState.SEND_HANDSHAKE_REQUEST : SaslState.INITIAL);
 
-            // determine client principal from subject.
-            if (!subject.getPrincipals().isEmpty()) {
-                Principal clientPrincipal = subject.getPrincipals().iterator().next();
-                this.clientPrincipalName = clientPrincipal.getName();
-            } else {
-                clientPrincipalName = null;
-            }
+            // determine client principal from subject for Kerberos to use as authorization id for the SaslClient.
+            // For other mechanisms, the authenticated principal (username for PLAIN and SCRAM) is used as
+            // authorization id. Hence the principal is not specified for creating the SaslClient.
+            if (mechanism.equals(SaslConfigs.GSSAPI_MECHANISM))
+                this.clientPrincipalName = firstPrincipal(subject);
+            else
+                this.clientPrincipalName = null;
+
             callbackHandler = new SaslClientCallbackHandler();
             callbackHandler.configure(configs, Mode.CLIENT, subject, mechanism);
 
@@ -335,6 +339,23 @@ public class SaslClientAuthenticator implements Authenticator {
             default:
                 throw new AuthenticationException(String.format("Unknown error code %s, client mechanism is %s, enabled mechanisms are %s",
                     response.error(), mechanism, response.enabledMechanisms()));
+        }
+    }
+
+    /**
+     * Returns the first Principal from Subject.
+     * @throws KafkaException if there are no Principals in the Subject.
+     *     During Kerberos re-login, principal is reset on Subject. An exception is
+     *     thrown so that the connection is retried after any configured backoff.
+     */
+    static final String firstPrincipal(Subject subject) {
+        Set<Principal> principals = subject.getPrincipals();
+        synchronized (principals) {
+            Iterator<Principal> iterator = principals.iterator();
+            if (iterator.hasNext())
+                return iterator.next().getName();
+            else
+                throw new KafkaException("Principal could not be determined from Subject, this may be a transient failure due to Kerberos re-login");
         }
     }
 }
