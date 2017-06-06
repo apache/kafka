@@ -74,7 +74,7 @@
             After the first step, each machine in the cluster has a public-private key pair, and a certificate to identify the machine. The certificate, however, is unsigned, which means that an attacker can create such a certificate to pretend to be any machine.<p>
             Therefore, it is important to prevent forged certificates by signing them for each machine in the cluster. A certificate authority (CA) is responsible for signing certificates. CA works likes a government that issues passports—the government stamps (signs) each passport so that the passport becomes difficult to forge. Other governments verify the stamps to ensure the passport is authentic. Similarly, the CA signs the certificates, and the cryptography guarantees that a signed certificate is computationally difficult to forge. Thus, as long as the CA is a genuine and trusted authority, the clients have high assurance that they are connecting to the authentic machines.
             <pre class="brush: bash;">
-            openssl req <b>-new</b> -x509 -keyout ca-key -out ca-cert -days 365</pre>
+            openssl req -new -x509 -keyout ca-key -out ca-cert -days 365</pre>
 
             The generated CA is simply a public-private key pair and certificate, and it is intended to sign other certificates.<br>
 
@@ -84,7 +84,7 @@
 
             <b>Note:</b> If you configure the Kafka brokers to require client authentication by setting ssl.client.auth to be "requested" or "required" on the <a href="#config_broker">Kafka brokers config</a> then you must provide a truststore for the Kafka brokers as well and it should have all the CA certificates that clients' keys were signed by.
             <pre class="brush: bash;">
-            keytool -keystore server.truststore.jks -alias CARoot <b>-import</b> -file ca-cert</pre>
+            keytool -keystore server.truststore.jks -alias CARoot -import -file ca-cert</pre>
 
             In contrast to the keystore in step 1 that stores each machine's own identity, the truststore of a client stores all the certificates that the client should trust. Importing a certificate into one's truststore also means trusting all certificates that are signed by that certificate. As the analogy above, trusting the government (CA) also means trusting all passports (certificates) that it has issued. This attribute is called the chain of trust, and it is particularly useful when deploying SSL on a large Kafka cluster. You can sign all certificates in the cluster with a single CA, and have all machines share the same truststore that trusts the CA. That way all machines can authenticate all other machines.</li>
 
@@ -384,7 +384,7 @@
         -Djava.security.auth.login.config=/etc/kafka/kafka_server_jaas.conf</pre>
             </li>
             <li>Make sure the keytabs configured in the JAAS file are readable by the operating system user who is starting kafka broker.</li>
-            <li>Configure SASL port and SASL mechanisms in server.properties as described <a href="#security_sasl_brokerconfig">here</a>.</pre> For example:
+            <li>Configure SASL port and SASL mechanisms in server.properties as described <a href="#security_sasl_brokerconfig">here</a>. For example:
             <pre>    listeners=SASL_PLAINTEXT://host.name:port
         security.inter.broker.protocol=SASL_PLAINTEXT
         sasl.mechanism.inter.broker.protocol=GSSAPI
@@ -422,7 +422,6 @@
                    as described <a href="#security_client_staticjaas">here</a>. Clients use the login section named
                    <tt>KafkaClient</tt>. This option allows only one user for all client connections from a JVM.</li>
                 <li>Make sure the keytabs configured in the JAAS configuration are readable by the operating system user who is starting kafka client.</li>
-                </li>
                 <li>Optionally pass the krb5 file locations as JVM parameters to each client JVM (see <a href="https://docs.oracle.com/javase/8/docs/technotes/guides/security/jgss/tutorials/KerberosReq.html">here</a> for more details):
                 <pre>    -Djava.security.krb5.conf=/etc/kafka/krb5.conf</pre></li>
                 <li>Configure the following properties in producer.properties or consumer.properties:
@@ -458,7 +457,7 @@
                 those from other brokers using these properties.</li>
             <li>Pass the JAAS config file location as JVM parameter to each Kafka broker:
                 <pre>    -Djava.security.auth.login.config=/etc/kafka/kafka_server_jaas.conf</pre></li>
-            <li>Configure SASL port and SASL mechanisms in server.properties as described <a href="#security_sasl_brokerconfig">here</a>.</pre> For example:
+            <li>Configure SASL port and SASL mechanisms in server.properties as described <a href="#security_sasl_brokerconfig">here</a>. For example:
                 <pre>    listeners=SASL_SSL://host.name:port
         security.inter.broker.protocol=SASL_SSL
         sasl.mechanism.inter.broker.protocol=PLAIN
@@ -539,22 +538,22 @@
         credentials will be used to authenticate new connections.</p>
         <p>Create SCRAM credentials for user <i>alice</i> with password <i>alice-secret</i>:
         <pre class="brush: bash;">
-    bin/kafka-configs.sh --zookeeper localhost:2181 --alter --add-config 'SCRAM-SHA-256=[iterations=8192,password=alice-secret],SCRAM-SHA-512=[password=alice-secret]' --entity-type users --entity-name alice
+    > bin/kafka-configs.sh --zookeeper localhost:2181 --alter --add-config 'SCRAM-SHA-256=[iterations=8192,password=alice-secret],SCRAM-SHA-512=[password=alice-secret]' --entity-type users --entity-name alice
         </pre>
         <p>The default iteration count of 4096 is used if iterations are not specified. A random salt is created
         and the SCRAM identity consisting of salt, iterations, StoredKey and ServerKey are stored in Zookeeper.
         See <a href="https://tools.ietf.org/html/rfc5802">RFC 5802</a> for details on SCRAM identity and the individual fields.
         <p>The following examples also require a user <i>admin</i> for inter-broker communication which can be created using:
         <pre class="brush: bash;">
-    bin/kafka-configs.sh --zookeeper localhost:2181 --alter --add-config 'SCRAM-SHA-256=[password=admin-secret],SCRAM-SHA-512=[password=admin-secret]' --entity-type users --entity-name admin
+    > bin/kafka-configs.sh --zookeeper localhost:2181 --alter --add-config 'SCRAM-SHA-256=[password=admin-secret],SCRAM-SHA-512=[password=admin-secret]' --entity-type users --entity-name admin
         </pre>
         <p>Existing credentials may be listed using the <i>--describe</i> option:
         <pre class="brush: bash;">
-   bin/kafka-configs.sh --zookeeper localhost:2181 --describe --entity-type users --entity-name alice
+    > bin/kafka-configs.sh --zookeeper localhost:2181 --describe --entity-type users --entity-name alice
         </pre>
         <p>Credentials may be deleted for one or more SCRAM mechanisms using the <i>--delete</i> option:
         <pre class="brush: bash;">
-   bin/kafka-configs.sh --zookeeper localhost:2181 --alter --delete-config 'SCRAM-SHA-512' --entity-type users --entity-name alice
+    > bin/kafka-configs.sh --zookeeper localhost:2181 --alter --delete-config 'SCRAM-SHA-512' --entity-type users --entity-name alice
         </pre>
         </li>
         <li><h5><a id="security_sasl_scram_brokerconfig" href="#security_sasl_scram_brokerconfig">Configuring Kafka Brokers</a></h5>
@@ -599,7 +598,6 @@
                 <p>JAAS configuration for clients may alternatively be specified as a JVM parameter similar to brokers
                 as described <a href="#security_client_staticjaas">here</a>. Clients use the login section named
                 <tt>KafkaClient</tt>. This option allows only one user for all client connections from a JVM.</p></li>
-            </li>
             <li>Configure the following properties in producer.properties or consumer.properties:
                 <pre>
     security.protocol=SASL_SSL
