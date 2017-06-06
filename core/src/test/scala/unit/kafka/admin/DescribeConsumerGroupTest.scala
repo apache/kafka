@@ -190,7 +190,7 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
     // Wait for an offset commit before shutting down the group executor.
     TestUtils.waitUntilTrue(() => {
       val (_, assignments) = consumerGroupService.describeGroup()
-      !assignments.toSeq.flatMap(_.filter(_.group == group)).isEmpty
+      assignments.exists(_.exists(_.group == group))
     }, "Expected to find group in assignments after initial offset commit")
 
     // stop the consumer so the group has no active member anymore
