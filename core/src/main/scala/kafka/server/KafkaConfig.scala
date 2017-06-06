@@ -179,7 +179,7 @@ object Defaults {
   /** ********* Transaction Configuration ***********/
   val TransactionalIdExpirationMsDefault = 604800000
 
-  val DeleteTopicEnable = false
+  val DeleteTopicEnable = true
 
   val CompressionType = "producer"
 
