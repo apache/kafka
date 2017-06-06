@@ -70,8 +70,9 @@ class BrokerCompressionTest(messageCompression: String, brokerCompression: Strin
     }
     else
       assertEquals("Compression at offset 0 should produce " + messageCompressionCode.name, messageCompressionCode.codec, readBatch(0).compressionType.id)
-  }
 
+    log.close()
+  }
 }
 
 object BrokerCompressionTest {

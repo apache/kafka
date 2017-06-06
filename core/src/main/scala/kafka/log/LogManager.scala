@@ -67,7 +67,9 @@ class LogManager(val logDirs: Array[File],
   private val logsToBeDeleted = new LinkedBlockingQueue[Log]()
 
   createAndValidateLogDirs(logDirs)
-  private val dirLocks = lockLogDirs(logDirs)
+  // public, so we can access this from kafka.server.HighwatermarkPersistenceTest
+  val dirLocks = lockLogDirs(logDirs)
+
   private val recoveryPointCheckpoints = logDirs.map(dir => (dir, new OffsetCheckpointFile(new File(dir, RecoveryPointCheckpointFile)))).toMap
   private val logStartOffsetCheckpoints = logDirs.map(dir => (dir, new OffsetCheckpointFile(new File(dir, LogStartOffsetCheckpointFile)))).toMap
   loadLogs()

@@ -106,6 +106,10 @@ class LogOffsetTest extends ZooKeeperTestHarness {
     val consumerOffsets =
       simpleConsumer.getOffsetsBefore(offsetRequest).partitionErrorAndOffsets(topicAndPartition).offsets
     assertEquals(Seq(20L, 18L, 16L, 14L, 12L, 10L, 8L, 6L, 4L, 3L), consumerOffsets)
+
+    // On Windows we need background physical deletes of segment files to occur so that further cleanup can
+    // occur w/o error.
+    Thread.sleep(log.config.fileDeleteDelayMs + 5000)
   }
 
   @Test

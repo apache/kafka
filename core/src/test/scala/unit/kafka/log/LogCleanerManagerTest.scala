@@ -61,6 +61,8 @@ class LogCleanerManagerTest extends JUnitSuite with Logging {
 
     val readyToDelete = cleanerManager.deletableLogs().size
     assertEquals("should have 0 logs ready to be deleted", 0, readyToDelete)
+
+    log.close()
   }
 
   /**
@@ -74,6 +76,8 @@ class LogCleanerManagerTest extends JUnitSuite with Logging {
 
     val readyToDelete = cleanerManager.deletableLogs().size
     assertEquals("should have 1 logs ready to be deleted", 1, readyToDelete)
+
+    log.close()
   }
 
   /**
@@ -88,6 +92,8 @@ class LogCleanerManagerTest extends JUnitSuite with Logging {
 
     val readyToDelete = cleanerManager.deletableLogs().size
     assertEquals("should have 1 logs ready to be deleted", 0, readyToDelete)
+
+    log.close()
   }
 
   /**
@@ -108,6 +114,8 @@ class LogCleanerManagerTest extends JUnitSuite with Logging {
     val cleanableOffsets = LogCleanerManager.cleanableOffsets(log, topicPartition, lastClean, time.milliseconds)
     assertEquals("The first cleanable offset starts at the beginning of the log.", 0L, cleanableOffsets._1)
     assertEquals("The first uncleanable offset begins with the active segment.", log.activeSegment.baseOffset, cleanableOffsets._2)
+
+    log.close()
   }
 
   /**
@@ -139,6 +147,8 @@ class LogCleanerManagerTest extends JUnitSuite with Logging {
     val cleanableOffsets = LogCleanerManager.cleanableOffsets(log, topicPartition, lastClean, time.milliseconds)
     assertEquals("The first cleanable offset starts at the beginning of the log.", 0L, cleanableOffsets._1)
     assertEquals("The first uncleanable offset begins with the second block of log entries.", activeSegAtT0.baseOffset, cleanableOffsets._2)
+
+    log.close()
   }
 
   /**
@@ -165,6 +175,8 @@ class LogCleanerManagerTest extends JUnitSuite with Logging {
     val cleanableOffsets = LogCleanerManager.cleanableOffsets(log, topicPartition, lastClean, time.milliseconds)
     assertEquals("The first cleanable offset starts at the beginning of the log.", 0L, cleanableOffsets._1)
     assertEquals("The first uncleanable offset begins with active segment.", log.activeSegment.baseOffset, cleanableOffsets._2)
+
+    log.close()
   }
 
   @Test
@@ -213,6 +225,8 @@ class LogCleanerManagerTest extends JUnitSuite with Logging {
       Map(topicPartition -> 0L), time.milliseconds())
     assertEquals(0L, cleanableOffsets._1)
     assertEquals(4L, cleanableOffsets._2)
+
+    log.close()
   }
 
   private def createCleanerManager(log: Log): LogCleanerManager = {
