@@ -1428,7 +1428,11 @@ class Log(@volatile var dir: File,
    * @throws KafkaStorageException if the file can't be renamed and still exists
    */
   private def asyncDeleteSegment(segment: LogSegment) {
-    segment.changeFileSuffixes("", Log.DeletedFileSuffix)
+    val deletedFileSuffix = new StringBuilder(".")
+      .append(java.util.UUID.randomUUID.toString.replaceAll("-",""))
+      .append(DeletedFileSuffix)
+      .toString()
+    segment.changeFileSuffixes("", deletedFileSuffix)
     def deleteSeg() {
       info("Deleting segment %d from log %s.".format(segment.baseOffset, name))
       segment.delete()
