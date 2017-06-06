@@ -255,10 +255,7 @@ public class TransactionalMessageCopier {
 
         try {
             while (0 < remainingMessages.get()) {
-                if ((((double) numMessagesProcessed.get() / maxMessages) * 100) % 10 == 0) {
-                    // print status for every 10% we progress.
-                    System.out.println(statusAsJson(numMessagesProcessed.get(), remainingMessages.get(), transactionalId));
-                }
+                System.out.println(statusAsJson(numMessagesProcessed.get(), remainingMessages.get(), transactionalId));
                 if (isShuttingDown.get())
                     break;
                 int messagesInCurrentTransaction = 0;

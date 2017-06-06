@@ -158,7 +158,6 @@ class TransactionsTest(Test):
                                    new_consumer=True,
                                    message_validator=is_int,
                                    from_beginning=True,
-                                   consumer_timeout_ms=15000,
                                    isolation_level="read_committed")
         consumer.start()
         # ensure that the consumer is up.
@@ -171,10 +170,11 @@ class TransactionsTest(Test):
     def drain_consumer(self, consumer):
         # wait until the consumer closes, which will be 15 seconds after
         # receiving the last message.
-        wait_until(lambda: consumer.alive(consumer.nodes[0]) == False,
+        wait_until(lambda: len(consumer.messages_consumed[1]) >= self.num_seed_messages,
                    timeout_sec=60,
-                   err_msg="Consumer failed to consume %d messages in %ds" %\
-                   (self.num_seed_messages, 60))
+                   err_msg="Consumer consumed only %d out of %d messages in %ds" %\
+                   (len(consumer.messages_consumed[1]), self.num_seed_messages, 60))
+        consumer.stop()
         return consumer.messages_consumed[1]
 
     def copy_messages_transactionally(self, failure_mode, bounce_target):
@@ -208,8 +208,8 @@ class TransactionsTest(Test):
         return self.drain_consumer(concurrent_consumer)
 
     @cluster(num_nodes=9)
-    @matrix(failure_mode=["clean_bounce", "hard_bounce"],
-            bounce_target=["clients", "brokers"])
+    @matrix(failure_mode=["hard_bounce", "clean_bounce"],
+            bounce_target=["brokers", "clients"])
     def test_transactions(self, failure_mode, bounce_target):
         security_protocol = 'PLAINTEXT'
         self.kafka.security_protocol = security_protocol
