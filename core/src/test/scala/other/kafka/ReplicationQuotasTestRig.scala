@@ -187,11 +187,6 @@ object ReplicationQuotasTestRig {
       println(s"Worst case duration is ${config.targetBytesPerBrokerMB * 1000 * 1000/ config.throttle}")
     }
 
-    private def waitForOffsetsToMatch(offset: Int, partitionId: Int, broker: KafkaServer, topic: String): Boolean = waitUntilTrue(() => {
-      offset == broker.getLogManager.getLog(new TopicPartition(topic, partitionId))
-        .map(_.logEndOffset).getOrElse(0)
-    }, s"Offsets did not match for partition $partitionId on broker ${broker.config.brokerId}", 60000)
-
     def waitForReassignmentToComplete() {
       waitUntilTrue(() => {
         printRateMetrics()
