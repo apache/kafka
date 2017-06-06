@@ -852,11 +852,13 @@ object TestUtils extends Logging {
   }
 
   /**
-    * Wait until the given predicate is true or the provided wait time elapses. Return the last value returned by
-    * `compute` and a boolean indicating whether `predicate` succeeded for that value. This method is useful in cases
-    * where `waitUntilTrue` makes it awkward to produce good error messages.
+    * Invoke `compute` until `predicate` is true or `waitTime` elapses.
+    *
+    * Return the last `compute` result and a boolean indicating whether `predicate` succeeded for that value.
+    *
+    * This method is useful in cases where `waitUntilTrue` makes it awkward to provide good error messages.
     */
-  def waitAndGet[T](compute: => T, waitTime: Long = JTestUtils.DEFAULT_MAX_WAIT_MS, pause: Long = 100L)(
+  def computeUntilTrue[T](compute: => T, waitTime: Long = JTestUtils.DEFAULT_MAX_WAIT_MS, pause: Long = 100L)(
                     predicate: T => Boolean): (T, Boolean) = {
     val startTime = System.currentTimeMillis()
     while (true) {

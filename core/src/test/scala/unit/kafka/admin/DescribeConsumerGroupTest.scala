@@ -189,7 +189,7 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
     // stop the consumer so the group has no active member anymore
     consumerGroupExecutor.shutdown()
 
-    val (result, succeeded) = TestUtils.waitAndGet(consumerGroupService.describeGroup()) { case (state, assignments) =>
+    val (result, succeeded) = TestUtils.computeUntilTrue(consumerGroupService.describeGroup()) { case (state, assignments) =>
       val testGroupAssignments = assignments.toSeq.flatMap(_.filter(_.group == group))
       def assignment = testGroupAssignments.head
       state == Some("Empty") &&
