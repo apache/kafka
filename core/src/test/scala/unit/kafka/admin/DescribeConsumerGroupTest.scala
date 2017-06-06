@@ -50,7 +50,10 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
   val props = new Properties
 
   // configure the servers and clients
-  override def generateConfigs() = TestUtils.createBrokerConfigs(1, zkConnect, enableControlledShutdown = false).map(KafkaConfig.fromProps(_, overridingProps))
+  override def generateConfigs() = TestUtils.createBrokerConfigs(1, zkConnect, enableControlledShutdown = false).map { config =>
+    config.setProperty(KafkaConfig.OffsetsTopicPartitionsProp, "5")
+    KafkaConfig.fromProps(config, overridingProps)
+  }
 
   @Before
   override def setUp() {
