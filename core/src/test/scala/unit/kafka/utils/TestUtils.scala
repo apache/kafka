@@ -22,7 +22,7 @@ import java.nio._
 import java.nio.channels._
 import java.nio.charset.{Charset, StandardCharsets}
 import java.security.cert.X509Certificate
-import java.util.{ArrayList, Collections, Properties}
+import java.util.{Collections, Properties}
 import java.util.concurrent.{Callable, Executors, TimeUnit}
 import javax.net.ssl.X509TrustManager
 
@@ -838,13 +838,35 @@ object TestUtils extends Logging {
    * Wait until the given condition is true or throw an exception if the given wait time elapses.
    */
   def waitUntilTrue(condition: () => Boolean, msg: => String,
-                    waitTime: Long = JTestUtils.DEFAULT_MAX_WAIT_MS, pause: Long = 100L): Boolean = {
+                    waitTime: Long = JTestUtils.DEFAULT_MAX_WAIT_MS, pause: Long = 100L): Unit = {
     val startTime = System.currentTimeMillis()
     while (true) {
       if (condition())
-        return true
+        return
       if (System.currentTimeMillis() > startTime + waitTime)
         fail(msg)
+      Thread.sleep(waitTime.min(pause))
+    }
+    // should never hit here
+    throw new RuntimeException("unexpected error")
+  }
+
+  /**
+    * Invoke `compute` until `predicate` is true or `waitTime` elapses.
+    *
+    * Return the last `compute` result and a boolean indicating whether `predicate` succeeded for that value.
+    *
+    * This method is useful in cases where `waitUntilTrue` makes it awkward to provide good error messages.
+    */
+  def computeUntilTrue[T](compute: => T, waitTime: Long = JTestUtils.DEFAULT_MAX_WAIT_MS, pause: Long = 100L)(
+                    predicate: T => Boolean): (T, Boolean) = {
+    val startTime = System.currentTimeMillis()
+    while (true) {
+      val result = compute
+      if (predicate(result))
+        return result -> true
+      if (System.currentTimeMillis() > startTime + waitTime)
+        return result -> false
       Thread.sleep(waitTime.min(pause))
     }
     // should never hit here
