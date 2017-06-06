@@ -189,15 +189,18 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
     // stop the consumer so the group has no active member anymore
     consumerGroupExecutor.shutdown()
 
-    TestUtils.waitUntilTrue(() => {
-        val (state, assignments) = consumerGroupService.describeGroup()
-        state == Some("Empty") &&
-        assignments.isDefined &&
-        assignments.get.count(_.group == group) == 1 &&
-        assignments.get.filter(_.group == group).head.consumerId.exists(_.trim == ConsumerGroupCommand.MISSING_COLUMN_VALUE) && // the member should be gone
-        assignments.get.filter(_.group == group).head.clientId.exists(_.trim == ConsumerGroupCommand.MISSING_COLUMN_VALUE) &&
-        assignments.get.filter(_.group == group).head.host.exists(_.trim == ConsumerGroupCommand.MISSING_COLUMN_VALUE)
-    }, "Expected no active member in describe group results.")
+    val (result, succeeded) = TestUtils.waitAndGet(consumerGroupService.describeGroup()) { case (state, assignments) =>
+      val testGroupAssignments = assignments.toSeq.flatMap(_.filter(_.group == group))
+      def assignment = testGroupAssignments.head
+      state == Some("Empty") &&
+        testGroupAssignments.size == 1 &&
+        assignment.consumerId.exists(_.trim == ConsumerGroupCommand.MISSING_COLUMN_VALUE) && // the member should be gone
+        assignment.clientId.exists(_.trim == ConsumerGroupCommand.MISSING_COLUMN_VALUE) &&
+        assignment.host.exists(_.trim == ConsumerGroupCommand.MISSING_COLUMN_VALUE)
+    }
+    val (state, assignments) = result
+    assertTrue(s"Expected no active member in describe group results, state: $state, assignments: $assignments",
+      succeeded)
   }
 
   @Test
