@@ -868,8 +868,14 @@ class Log(@volatile var dir: File,
     // We create the local variables to avoid race conditions with updates to the log.
     val currentNextOffsetMetadata = nextOffsetMetadata
     val next = currentNextOffsetMetadata.messageOffset
-    if(startOffset == next)
-      return FetchDataInfo(currentNextOffsetMetadata, MemoryRecords.EMPTY)
+    if(startOffset == next) {
+      val abortedTransactions = if (isolationLevel == IsolationLevel.READ_COMMITTED)
+        Some(List.empty[AbortedTransaction])
+      else
+        None
+      return FetchDataInfo(currentNextOffsetMetadata, MemoryRecords.EMPTY, firstEntryIncomplete = false,
+        abortedTransactions = abortedTransactions)
+    }
 
     var segmentEntry = segments.floorEntry(startOffset)
 

@@ -533,7 +533,8 @@ class KafkaApis(val requestChannel: RequestChannel,
       val partitionData = {
         responsePartitionData.map { case (tp, data) =>
           val abortedTransactions = data.abortedTransactions.map(_.asJava).orNull
-          tp -> new FetchResponse.PartitionData(data.error, data.hw, FetchResponse.INVALID_LAST_STABLE_OFFSET,
+          val lastStableOffset = data.lastStableOffset.getOrElse(FetchResponse.INVALID_LAST_STABLE_OFFSET)
+          tp -> new FetchResponse.PartitionData(data.error, data.highWatermark, lastStableOffset,
             data.logStartOffset, abortedTransactions, data.records)
         }
       }
