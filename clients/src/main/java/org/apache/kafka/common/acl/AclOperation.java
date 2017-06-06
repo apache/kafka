@@ -22,6 +22,24 @@ import java.util.Locale;
 
 /**
  * Represents an operation which an ACL grants or denies permission to perform.
+ *
+ * Some operations imply other operations.
+ *
+ * ALLOW ALL implies ALLOW everything
+ * DENY ALL implies DENY everything
+ *
+ * ALLOW READ implies ALLOW DESCRIBE
+ * ALLOW WRITE implies ALLOW DESCRIBE
+ * ALLOW DELETE implies ALLOW DESCRIBE
+ *
+ * ALLOW ALTER implies ALLOW DESCRIBE
+ * DENY DESCRIBE implies DENY ALTER
+ *
+ * ALLOW ALTER_CONFIGS implies ALLOW DESCRIBE_CONFIGS
+ * DENY DESCRIBE_CONFIGS implies DENY ALTER_CONFIGS
+ *
+ * ALLOW ALTER_CONFIGS on kafka-cluster implies ALLOW ALTER_CONFIGS on all topics.
+ * DENY DESCRIBE_CONFIGS on kafka-cluster implies DENY DESCRIBE_CONFIGS on all topics.
  */
 public enum AclOperation {
     /**

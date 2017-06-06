@@ -19,6 +19,7 @@ package kafka.security.auth
 import kafka.common.KafkaException
 import org.junit.{Test, Assert}
 import org.scalatest.junit.JUnitSuite
+import org.apache.kafka.common.resource.{ResourceType => JResourceType}
 
 class ResourceTypeTest extends JUnitSuite {
 
@@ -35,4 +36,22 @@ class ResourceTypeTest extends JUnitSuite {
     }
   }
 
+  /**
+    * Test round trip conversions between org.apache.kafka.common.acl.ResourceType and
+    * kafka.security.auth.ResourceType.
+    */
+  @Test
+  def testJavaConversions(): Unit = {
+    JResourceType.values().foreach {
+      jResourceType => jResourceType match {
+        case JResourceType.UNKNOWN => {}
+        case JResourceType.ANY => {}
+        case default => {
+          val resourceType = ResourceType.fromJava(jResourceType)
+          val jResourceType2 = resourceType.toJava
+          Assert.assertEquals(jResourceType, jResourceType2)
+        }
+      }
+    }
+  }
 }

@@ -14,25 +14,30 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package kafka.security.auth
 
-import kafka.common.{KafkaException}
-import org.junit.{Test, Assert}
+import org.apache.kafka.common.acl.AclOperation
+import org.junit.{Assert, Test}
 import org.scalatest.junit.JUnitSuite
 
 class OperationTest extends JUnitSuite {
-
+  /**
+    * Test round trip conversions between org.apache.kafka.common.acl.AclOperation and
+    * kafka.security.auth.Operation.
+    */
   @Test
-  def testFromString(): Unit = {
-    val op = Operation.fromString("READ")
-    Assert.assertEquals(Read, op)
-
-    try {
-      Operation.fromString("badName")
-      fail("Expected exception on invalid operation name.")
-    } catch {
-      case _: KafkaException => // expected
+  def testJavaConversions(): Unit = {
+    AclOperation.values().foreach {
+      aclOp => aclOp match {
+        case AclOperation.UNKNOWN => {}
+        case AclOperation.ANY => {}
+        case default => {
+          val op = Operation.fromJava(aclOp)
+          val aclOp2 = op.toJava
+          Assert.assertEquals(aclOp, aclOp2)
+        }
+      }
     }
   }
-
 }

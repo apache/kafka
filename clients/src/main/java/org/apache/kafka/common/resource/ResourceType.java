@@ -53,7 +53,12 @@ public enum ResourceType {
     /**
      * A broker.
      */
-    BROKER((byte) 5);
+    BROKER((byte) 5),
+
+    /**
+     * A transactional ID.
+     */
+    TRANSACTIONAL_ID((byte) 6);
 
     private final static HashMap<Byte, ResourceType> CODE_TO_VALUE = new HashMap<>();
 

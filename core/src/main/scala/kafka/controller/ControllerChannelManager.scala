@@ -244,7 +244,7 @@ class RequestSendThread(val controllerId: Int,
         val response = clientResponse.responseBody
 
         stateChangeLogger.trace("Controller %d epoch %d received response %s for a request sent to broker %s"
-          .format(controllerId, controllerContext.epoch, response.toString, brokerNode.toString))
+          .format(controllerId, controllerContext.epoch, response.toString(), brokerNode.toString))
 
         if (callback != null) {
           callback(response)

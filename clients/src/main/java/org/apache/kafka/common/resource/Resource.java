@@ -26,6 +26,16 @@ public class Resource {
     private final ResourceType resourceType;
     private final String name;
 
+    /**
+     * The name of the CLUSTER resource.
+     */
+    public final static String CLUSTER_NAME = "kafka-cluster";
+
+    /**
+     * A resource representing the whole cluster.
+     */
+    public final static Resource CLUSTER = new Resource(ResourceType.CLUSTER, CLUSTER_NAME);
+
     public Resource(ResourceType resourceType, String name) {
         Objects.requireNonNull(resourceType);
         this.resourceType = resourceType;

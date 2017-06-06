@@ -46,13 +46,7 @@ object PermissionType {
     pType.getOrElse(throw new KafkaException(permissionType + " not a valid permissionType name. The valid names are " + values.mkString(",")))
   }
 
-  def fromJava(permissionType: AclPermissionType): Try[PermissionType] = {
-    try {
-      Success(fromString(permissionType.toString))
-    } catch {
-      case throwable: Throwable => Failure(throwable)
-    }
-  }
+  def fromJava(permissionType: AclPermissionType): PermissionType = fromString(permissionType.toString)
 
   def values: Seq[PermissionType] = List(Allow, Deny)
 }
