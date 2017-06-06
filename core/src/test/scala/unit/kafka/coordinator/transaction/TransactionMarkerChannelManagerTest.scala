@@ -60,22 +60,15 @@ class TransactionMarkerChannelManagerTest {
     reaperEnabled = false)
   private val time = new MockTime
 
-  private val metrics = new Metrics()
   private val channelManager = new TransactionMarkerChannelManager(
     KafkaConfig.fromProps(TestUtils.createBrokerConfig(1, "localhost:2181")),
     metadataCache,
     networkClient,
     txnStateManager,
     txnMarkerPurgatory,
-    time,
-    metrics)
+    time)
 
   private val senderThread = channelManager.senderThread
-
-  @After
-  def after(): Unit = {
-    metrics.close()
-  }
 
   private def mockCache(): Unit = {
     EasyMock.expect(txnStateManager.partitionFor(transactionalId1))
