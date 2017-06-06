@@ -16,14 +16,14 @@ import java.io.IOException
 import java.nio.ByteBuffer
 import java.util.{Collections, Properties}
 import java.util.concurrent.atomic.AtomicInteger
-import java.util.concurrent.{ConcurrentLinkedQueue, TimeUnit, Future}
+import java.util.concurrent.{ConcurrentLinkedQueue, Future, TimeUnit}
+
 import kafka.admin.AdminClient.DeleteRecordsResult
 import kafka.common.KafkaException
 import kafka.coordinator.group.GroupOverview
 import kafka.utils.Logging
-
 import org.apache.kafka.clients._
-import org.apache.kafka.clients.consumer.internals.{RequestFutureAdapter, ConsumerNetworkClient, ConsumerProtocol, RequestFuture}
+import org.apache.kafka.clients.consumer.internals.{ConsumerNetworkClient, ConsumerProtocol, RequestFuture, RequestFutureAdapter}
 import org.apache.kafka.common.config.ConfigDef.{Importance, Type}
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef}
 import org.apache.kafka.common.errors.TimeoutException
@@ -38,7 +38,7 @@ import org.apache.kafka.common.utils.{KafkaThread, Time, Utils}
 import org.apache.kafka.common.{Cluster, Node, TopicPartition}
 
 import scala.collection.JavaConverters._
-import scala.util.Try
+import scala.util.{Failure, Success, Try}
 
 /**
   * A Scala administrative client for Kafka which supports managing and inspecting topics, brokers,
@@ -104,20 +104,32 @@ class AdminClient(val time: Time,
   }
 
   def findCoordinator(groupId: String, timeoutMs: Long = 0): Node = {
-    val startTime = time.milliseconds
-    val requestBuilder = new FindCoordinatorRequest.Builder(org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType.GROUP, groupId)
-    var response = sendAnyNode(ApiKeys.FIND_COORDINATOR, requestBuilder).asInstanceOf[FindCoordinatorResponse]
+    val requestBuilder = new FindCoordinatorRequest.Builder(FindCoordinatorRequest.CoordinatorType.GROUP, groupId)
 
-    while (response.error == Errors.COORDINATOR_NOT_AVAILABLE && time.milliseconds - startTime < timeoutMs) {
+    def sendRequest: Try[FindCoordinatorResponse] =
+      Try(sendAnyNode(ApiKeys.FIND_COORDINATOR, requestBuilder).asInstanceOf[FindCoordinatorResponse])
+
+    val startTime = time.milliseconds
+    var response = sendRequest
+
+    while ((response.isFailure || response.get.error == Errors.COORDINATOR_NOT_AVAILABLE) &&
+      (time.milliseconds - startTime < timeoutMs)) {
+
       Thread.sleep(retryBackoffMs)
-      response = sendAnyNode(ApiKeys.FIND_COORDINATOR, requestBuilder).asInstanceOf[FindCoordinatorResponse]
+      response = sendRequest
     }
 
-    if (response.error == Errors.COORDINATOR_NOT_AVAILABLE)
-      throw new TimeoutException("The consumer group command timed out while waiting for group to initialize: ", response.error.exception)
+    def timeoutException(cause: Throwable) =
+      throw new TimeoutException("The consumer group command timed out while waiting for group to initialize: ", cause)
 
-    response.error.maybeThrow()
-    response.node
+    response match {
+      case Failure(exception) => throw timeoutException(exception)
+      case Success(response) =>
+        if (response.error == Errors.COORDINATOR_NOT_AVAILABLE)
+          throw timeoutException(response.error.exception)
+        response.error.maybeThrow()
+        response.node
+    }
   }
 
   def listGroups(node: Node): List[GroupOverview] = {
