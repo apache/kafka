@@ -87,8 +87,7 @@ object TransactionMarkerChannelManager {
       networkClient,
       txnStateManager,
       txnMarkerPurgatory,
-      time,
-      metrics
+      time
     )
   }
 
