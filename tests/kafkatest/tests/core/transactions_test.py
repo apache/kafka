@@ -163,13 +163,18 @@ class TransactionsTest(Test):
         # ensure that the consumer is up.
         wait_until(lambda: (len(consumer.messages_consumed[1]) > 0) == True,
                    timeout_sec=60,
-                   err_msg="Consumer failed to consume any messages for for %ds" %\
+                   err_msg="Consumer failed to consume any messages for %ds" %\
                    60)
         return consumer
 
     def drain_consumer(self, consumer):
-        # wait until the consumer closes, which will be 15 seconds after
-        # receiving the last message.
+        # wait until we read at least the expected number of messages.
+        # This is a safe check because both failure modes will be caught:
+        #  1. If we have 'num_seed_messages' but there are duplicates, then
+        #     this is checked for later.
+        #
+        #  2. If we never reach 'num_seed_messages', then this will cause the
+        #     test to fail.
         wait_until(lambda: len(consumer.messages_consumed[1]) >= self.num_seed_messages,
                    timeout_sec=60,
                    err_msg="Consumer consumed only %d out of %d messages in %ds" %\
