@@ -45,8 +45,8 @@ class TransactionsTest(Test):
         # Test parameters
         self.num_input_partitions = 2
         self.num_output_partitions = 3
-        self.num_seed_messages = 20000
-        self.transaction_size = 500
+        self.num_seed_messages = 100000
+        self.transaction_size = 750
         self.first_transactional_id = "my-first-transactional-id"
         self.second_transactional_id = "my-second-transactional-id"
         self.consumer_group = "transactions-test-consumer-group"
@@ -158,18 +158,18 @@ class TransactionsTest(Test):
                                    new_consumer=True,
                                    message_validator=is_int,
                                    from_beginning=True,
-                                   consumer_timeout_ms=5000,
+                                   consumer_timeout_ms=15000,
                                    isolation_level="read_committed")
         consumer.start()
         # ensure that the consumer is up.
-        wait_until(lambda: consumer.alive(consumer.nodes[0]) == True,
+        wait_until(lambda: (len(consumer.messages_consumed[1]) > 0) == True,
                    timeout_sec=60,
-                   err_msg="Consumer failed to start for %ds" %\
+                   err_msg="Consumer failed to consume any messages for for %ds" %\
                    60)
         return consumer
 
     def drain_consumer(self, consumer):
-        # wait until the consumer closes, which will be 5 seconds after
+        # wait until the consumer closes, which will be 15 seconds after
         # receiving the last message.
         wait_until(lambda: consumer.alive(consumer.nodes[0]) == False,
                    timeout_sec=60,
