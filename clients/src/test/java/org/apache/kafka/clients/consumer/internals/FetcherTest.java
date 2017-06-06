@@ -1131,7 +1131,6 @@ public class FetcherTest {
         client.close();
     }
 
-
     /*
      * Send multiple requests. Verify that the client side quota metrics have the right values
      */
@@ -1163,6 +1162,7 @@ public class FetcherTest {
             builder.appendWithOffset(v, RecordBatch.NO_TIMESTAMP, "key".getBytes(), ("value-" + v).getBytes());
         fetchRecords(tp1, builder.build(), Errors.NONE, 200L, 0);
         assertEquals(197, recordsFetchLagMax.value(), EPSILON);
+        assertEquals(197, partitionLag.value(), EPSILON);
 
         // verify de-registration of partition lag
         subscriptions.unsubscribe();
@@ -1201,6 +1201,7 @@ public class FetcherTest {
             builder.appendWithOffset(v, RecordBatch.NO_TIMESTAMP, "key".getBytes(), ("value-" + v).getBytes());
         fetchRecords(tp1, builder.build(), Errors.NONE, 200L, 150L, 0);
         assertEquals(147, recordsFetchLagMax.value(), EPSILON);
+        assertEquals(147, partitionLag.value(), EPSILON);
 
         // verify de-registration of partition lag
         subscriptions.unsubscribe();
