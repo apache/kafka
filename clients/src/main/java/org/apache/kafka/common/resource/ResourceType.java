@@ -51,14 +51,9 @@ public enum ResourceType {
     CLUSTER((byte) 4),
 
     /**
-     * A broker.
-     */
-    BROKER((byte) 5),
-
-    /**
      * A transactional ID.
      */
-    TRANSACTIONAL_ID((byte) 6);
+    TRANSACTIONAL_ID((byte) 5);
 
     private final static HashMap<Byte, ResourceType> CODE_TO_VALUE = new HashMap<>();
 

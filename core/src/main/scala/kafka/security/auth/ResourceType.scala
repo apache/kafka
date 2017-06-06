@@ -43,12 +43,6 @@ case object Cluster extends ResourceType {
   val toJava = JResourceType.CLUSTER
 }
 
-case object Broker extends ResourceType {
-  val name = "Broker"
-  val error = Errors.CLUSTER_AUTHORIZATION_FAILED // Same exception as Cluster, for now.
-  val toJava = JResourceType.BROKER
-}
-
 case object TransactionalId extends ResourceType {
   val name = "TransactionalId"
   val error = Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED
@@ -62,7 +56,7 @@ object ResourceType {
     rType.getOrElse(throw new KafkaException(resourceType + " not a valid resourceType name. The valid names are " + values.mkString(",")))
   }
 
-  def values: Seq[ResourceType] = List(Topic, Group, Cluster, Broker, TransactionalId)
+  def values: Seq[ResourceType] = List(Topic, Group, Cluster, TransactionalId)
 
   def fromJava(operation: JResourceType): ResourceType = fromString(operation.toString.replaceAll("_", ""))
 }

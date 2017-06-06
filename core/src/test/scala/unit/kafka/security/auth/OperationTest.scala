@@ -30,8 +30,7 @@ class OperationTest extends JUnitSuite {
   def testJavaConversions(): Unit = {
     AclOperation.values().foreach {
       aclOp => aclOp match {
-        case AclOperation.UNKNOWN => {}
-        case AclOperation.ANY => {}
+        case AclOperation.UNKNOWN | AclOperation.ANY =>
         case default => {
           val op = Operation.fromJava(aclOp)
           val aclOp2 = op.toJava

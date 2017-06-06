@@ -14,7 +14,6 @@ package kafka.api
 
 import java.io.File
 
-import kafka.admin.AclCommand
 import kafka.security.auth.{All, Allow, Alter, AlterConfigs, Authorizer, ClusterAction, Create, Delete, Deny, Describe, Operation, PermissionType, SimpleAclAuthorizer, Topic, Acl => AuthAcl, Resource => AuthResource}
 import org.apache.kafka.common.protocol.SecurityProtocol
 import kafka.server.KafkaConfig
@@ -40,7 +39,7 @@ class SaslSslAdminClientIntegrationTest extends AdminClientIntegrationTest with 
   override def configureSecurityBeforeServersStart() {
     val authorizer = CoreUtils.createObject[Authorizer](classOf[SimpleAclAuthorizer].getName())
     authorizer.configure(this.configs.head.originals())
-    authorizer.addAcls(Set(new AuthAcl(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "*"), Allow,
+    authorizer.addAcls(Set(new AuthAcl(AuthAcl.WildCardPrincipal, Allow,
                             AuthAcl.WildCardHost, All)), new AuthResource(Topic, "*"))
     authorizer.addAcls(Set(clusterAcl(Allow, Create),
                            clusterAcl(Allow, Delete),
@@ -66,7 +65,7 @@ class SaslSslAdminClientIntegrationTest extends AdminClientIntegrationTest with 
     val authorizer = servers.head.apis.authorizer.get
     val prevAcls = authorizer.getAcls(AuthResource.ClusterResource)
     authorizer.addAcls(acls, AuthResource.ClusterResource)
-    TestUtils.waitAndVerifyAcls(prevAcls  ++ acls, authorizer, AuthResource.ClusterResource)
+    TestUtils.waitAndVerifyAcls(prevAcls ++ acls, authorizer, AuthResource.ClusterResource)
   }
 
   private def removeClusterAcl(permissionType: PermissionType, operation: Operation): Unit = {
@@ -89,6 +88,8 @@ class SaslSslAdminClientIntegrationTest extends AdminClientIntegrationTest with 
     new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.READ, AclPermissionType.ALLOW));
   val ACL_UNKNOWN = new AclBinding(new Resource(ResourceType.TOPIC, "mytopic3"),
     new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.UNKNOWN, AclPermissionType.ALLOW));
+  val fooAcl = new AclBinding(new Resource(ResourceType.TOPIC, "foobar"),
+    new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.READ, AclPermissionType.ALLOW))
 
   @Test
   override def testAclOperations(): Unit = {
@@ -151,11 +152,7 @@ class SaslSslAdminClientIntegrationTest extends AdminClientIntegrationTest with 
     assertFutureExceptionTypeEquals(results.results().get(emptyResourceNameAcl), classOf[InvalidRequestException])
   }
 
-  val FOO_ACL = new AclBinding(new Resource(ResourceType.TOPIC, "foobar"),
-    new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.READ, AclPermissionType.ALLOW))
-  val FOO_ACL_FILTER = FOO_ACL.toFilter
-
-  private def verifyCauseIsClusterAuth(e: Exception): Unit = {
+  private def verifyCauseIsClusterAuth(e: Throwable): Unit = {
     if (!e.getCause.isInstanceOf[ClusterAuthorizationException]) {
       throw e.getCause
     }
@@ -163,53 +160,48 @@ class SaslSslAdminClientIntegrationTest extends AdminClientIntegrationTest with 
 
   private def testAclCreateGetDelete(expectAuth: Boolean): Unit = {
     TestUtils.waitUntilTrue(() => {
-      val result = client.createAcls(List(FOO_ACL).asJava, new CreateAclsOptions())
+      val result = client.createAcls(List(fooAcl).asJava, new CreateAclsOptions())
       if (expectAuth) {
         Try(result.all().get) match {
-          case Failure(e: Exception) => {
+          case Failure(e) =>
             verifyCauseIsClusterAuth(e)
             false
-          }
           case Success(_) => true
         }
       } else {
         Try(result.all().get) match {
-          case Failure(e: Exception) => {
+          case Failure(e) =>
             verifyCauseIsClusterAuth(e)
             true
-          }
           case Success(_) => false
         }
       }
     }, "timed out waiting for createAcls to " + (if (expectAuth) "succeed" else "fail"))
     if (expectAuth) {
-      waitForDescribeAcls(client, FOO_ACL_FILTER, Set(FOO_ACL))
+      waitForDescribeAcls(client, fooAcl.toFilter, Set(fooAcl))
     }
     TestUtils.waitUntilTrue(() => {
-      val result = client.deleteAcls(List(FOO_ACL.toFilter).asJava, new DeleteAclsOptions())
+      val result = client.deleteAcls(List(fooAcl.toFilter).asJava, new DeleteAclsOptions())
       if (expectAuth) {
         Try(result.all().get) match {
-          case Failure(e: Exception) => {
+          case Failure(e) =>
             verifyCauseIsClusterAuth(e)
             false
-          }
           case Success(_) => true
         }
       } else {
         Try(result.all().get) match {
-          case Failure(e: Exception) => {
+          case Failure(e) =>
             verifyCauseIsClusterAuth(e)
             true
-          }
-          case Success(removed) => {
-            assertEquals(Set(FOO_ACL), result.results.get(FOO_ACL_FILTER).get.acls.asScala.map(result => result.acl()).toSet)
+          case Success(removed) =>
+            assertEquals(Set(fooAcl), result.results.get(fooAcl.toFilter).get.acls.asScala.map(result => result.acl()).toSet)
             true
-          }
         }
       }
     }, "timed out waiting for deleteAcls to " + (if (expectAuth) "succeed" else "fail"))
     if (expectAuth) {
-      waitForDescribeAcls(client, FOO_ACL_FILTER, Set())
+      waitForDescribeAcls(client, fooAcl.toFilter, Set())
     }
   }
 
@@ -220,18 +212,16 @@ class SaslSslAdminClientIntegrationTest extends AdminClientIntegrationTest with 
       val results = client.describeAcls(userAcl.toFilter)
       if (expectAuth) {
         Try(results.all().get) match {
-          case Failure(e: Exception) => {
+          case Failure(e) =>
             verifyCauseIsClusterAuth(e)
             false
-          }
           case Success(acls) => Set(userAcl).equals(acls.asScala.toSet)
         }
       } else {
         Try(results.all().get) match {
-          case Failure(e: Exception) => {
+          case Failure(e) =>
             verifyCauseIsClusterAuth(e)
             true
-          }
           case Success(_) => false
         }
       }

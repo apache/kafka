@@ -1858,12 +1858,11 @@ class KafkaApis(val requestChannel: RequestChannel,
                 if (resource.name.isEmpty)
                   throw new InvalidRequestException("Invalid empty resource name")
                 auth.addAcls(immutable.Set(acl), resource)
-                if (logger.isDebugEnabled) {
-                  logger.debug("added acl " + acl + " to " + resource)
-                }
+                if (logger.isDebugEnabled)
+                  logger.debug(s"Added acl $acl to $resource")
               } catch {
                 case throwable : Throwable => if (logger.isDebugEnabled) {
-                    logger.debug("failed to add acl " + acl + " to " + resource, throwable)
+                    logger.debug(s"Failed to add acl $acl to $resource", throwable)
                   }
                   errors.put(i, throwable)
               }
