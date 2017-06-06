@@ -205,7 +205,7 @@ public class TransactionManager {
     }
 
     public synchronized TransactionalRequestResult sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets,
-                                                                           String consumerGroupId) {
+                                                                            String consumerGroupId) {
         ensureTransactional();
         maybeFailWithError();
         if (currentState != State.IN_TRANSACTION)
@@ -221,34 +221,39 @@ public class TransactionManager {
     }
 
     public synchronized void maybeAddPartitionToTransaction(TopicPartition topicPartition) {
-        if (!isInTransaction())
-            throw new IllegalArgumentException("Cannot add partitions to a transaction in state " + currentState);
+        if (currentState != State.IN_TRANSACTION)
+            throw new IllegalStateException("Cannot add partitions to a transaction in state " + currentState);
 
-        if (partitionsInTransaction.contains(topicPartition))
+        if (partitionsInTransaction.contains(topicPartition) || pendingPartitionsInTransaction.contains(topicPartition))
             return;
 
         log.debug("{}Begin adding new partition {} to transaction", logPrefix, topicPartition);
         newPartitionsInTransaction.add(topicPartition);
     }
 
-    public RuntimeException lastError() {
+    RuntimeException lastError() {
         return lastError;
     }
 
-    public synchronized boolean ensurePartitionAdded(TopicPartition tp) {
+    public synchronized void failIfUnreadyForSend() {
+        if (hasError())
+            throw new KafkaException("Cannot perform send because at least one previous transactional or " +
+                    "idempotent request has failed with errors.", lastError);
+
+        if (isTransactional()) {
+            if (!hasProducerId())
+                throw new IllegalStateException("Cannot perform a 'send' before completing a call to initTransactions " +
+                        "when transactions are enabled.");
+
+            if (currentState != State.IN_TRANSACTION)
+                throw new IllegalStateException("Cannot call send in state " + currentState);
+        }
+    }
+
+    synchronized boolean sendToPartitionAllowed(TopicPartition tp) {
         if (hasFatalError())
             return false;
-        if (isInTransaction() || hasAbortableError()) {
-            // We should enter this branch in an error state because if this partition is already in the transaction,
-            // there is a chance that the corresponding batch is in retry. So we must let it completely flush.
-            if (!(partitionsInTransaction.contains(tp) || isPartitionPending(tp))) {
-                transitionToFatalError(new IllegalStateException("Attempted to dequeue a record batch to send " +
-                        "for partition " + tp + ", which would never be added to the transaction."));
-                return false;
-            }
-            return partitionsInTransaction.contains(tp);
-        }
-        return true;
+        return !isTransactional() || partitionsInTransaction.contains(tp);
     }
 
     public String transactionalId() {
@@ -263,24 +268,20 @@ public class TransactionManager {
         return transactionalId != null;
     }
 
-    public synchronized boolean hasPartitionsToAdd() {
+    synchronized boolean hasPartitionsToAdd() {
         return !newPartitionsInTransaction.isEmpty() || !pendingPartitionsInTransaction.isEmpty();
     }
 
-    public synchronized boolean isCompletingTransaction() {
+    synchronized boolean isCompletingTransaction() {
         return currentState == State.COMMITTING_TRANSACTION || currentState == State.ABORTING_TRANSACTION;
     }
 
-    public synchronized boolean hasError() {
+    synchronized boolean hasError() {
         return currentState == State.ABORTABLE_ERROR || currentState == State.FATAL_ERROR;
     }
 
-    public synchronized boolean isAborting() {
+    synchronized boolean isAborting() {
         return currentState == State.ABORTING_TRANSACTION;
-    }
-
-    synchronized boolean isInTransaction() {
-        return currentState == State.IN_TRANSACTION || isCompletingTransaction();
     }
 
     synchronized void transitionToAbortableError(RuntimeException exception) {
@@ -289,6 +290,16 @@ public class TransactionManager {
 
     synchronized void transitionToFatalError(RuntimeException exception) {
         transitionTo(State.FATAL_ERROR, exception);
+    }
+
+    // visible for testing
+    synchronized boolean isPartitionAdded(TopicPartition partition) {
+        return partitionsInTransaction.contains(partition);
+    }
+
+    // visible for testing
+    synchronized boolean isPartitionPendingAdd(TopicPartition partition) {
+        return newPartitionsInTransaction.contains(partition) || pendingPartitionsInTransaction.contains(partition);
     }
 
     /**
@@ -437,21 +448,23 @@ public class TransactionManager {
 
     // visible for testing
     synchronized boolean transactionContainsPartition(TopicPartition topicPartition) {
-        return isInTransaction() && partitionsInTransaction.contains(topicPartition);
+        return partitionsInTransaction.contains(topicPartition);
     }
 
     // visible for testing
     synchronized boolean hasPendingOffsetCommits() {
-        return isInTransaction() && !pendingTxnOffsetCommits.isEmpty();
+        return !pendingTxnOffsetCommits.isEmpty();
+    }
+
+    // visible for testing
+    synchronized boolean hasOngoingTransaction() {
+        // transactions are considered ongoing once started until completion or a fatal error
+        return currentState == State.IN_TRANSACTION || isCompletingTransaction() || hasAbortableError();
     }
 
     // visible for testing
     synchronized boolean isReady() {
         return isTransactional() && currentState == State.READY;
-    }
-
-    private synchronized boolean isPartitionPending(TopicPartition tp) {
-        return isInTransaction() && (pendingPartitionsInTransaction.contains(tp) || newPartitionsInTransaction.contains(tp));
     }
 
     private void transitionTo(State target) {
@@ -472,8 +485,7 @@ public class TransactionManager {
         }
 
         if (lastError != null)
-            log.error("{}Transition from state {} to error state {}", logPrefix, currentState,
-                    target, lastError);
+            log.debug("{}Transition from state {} to error state {}", logPrefix, currentState, target, lastError);
         else
             log.debug("{}Transition from state {} to {}", logPrefix, currentState, target);
 

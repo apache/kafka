@@ -608,7 +608,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      */
     private Future<RecordMetadata> doSend(ProducerRecord<K, V> record, Callback callback) {
         if (transactionManager != null)
-            ensureProperTransactionalState();
+            transactionManager.failIfUnreadyForSend();
 
         TopicPartition tp = null;
         try {
@@ -689,20 +689,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 this.interceptors.onSendError(record, tp, e);
             throw e;
         }
-    }
-
-    private void ensureProperTransactionalState() {
-        if (transactionManager.isTransactional() && !transactionManager.hasProducerId())
-            throw new IllegalStateException("Cannot perform a 'send' before completing a call to initTransactions " +
-                    "when transactions are enabled.");
-
-        if (transactionManager.hasError()) {
-            Exception lastError = transactionManager.lastError();
-            throw new KafkaException("Cannot perform send because at least one previous transactional or " +
-                    "idempotent request has failed with errors.", lastError);
-        }
-        if (transactionManager.isCompletingTransaction())
-            throw new IllegalStateException("Cannot call send while a commit or abort is in progress.");
     }
 
     private void setReadOnly(Headers headers) {
