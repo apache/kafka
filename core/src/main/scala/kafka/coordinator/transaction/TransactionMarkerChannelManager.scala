@@ -293,7 +293,7 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
 
   private def tryAppendToLog(txnLogAppend: TxnLogAppend) = {
     // try to append to the transaction log
-    def retryAppendCallback(error: Errors): Unit =
+    def appendCallback(error: Errors): Unit =
       error match {
         case Errors.NONE =>
           trace(s"Completed transaction for ${txnLogAppend.transactionalId} with coordinator epoch ${txnLogAppend.coordinatorEpoch}, final state: state after commit: ${txnLogAppend.txnMetadata.state}")
@@ -311,7 +311,7 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
           throw new IllegalStateException(s"Unexpected error ${errors.exceptionName} while appending to transaction log for ${txnLogAppend.transactionalId}")
       }
 
-    txnStateManager.appendTransactionToLog(txnLogAppend.transactionalId, txnLogAppend.coordinatorEpoch, txnLogAppend.newMetadata, retryAppendCallback)
+    txnStateManager.appendTransactionToLog(txnLogAppend.transactionalId, txnLogAppend.coordinatorEpoch, txnLogAppend.newMetadata, appendCallback)
   }
 
   def addTxnMarkersToBrokerQueue(transactionalId: String, producerId: Long, producerEpoch: Short,
