@@ -176,9 +176,9 @@ class TransactionsTest(Test):
         #  2. If we never reach 'num_seed_messages', then this will cause the
         #     test to fail.
         wait_until(lambda: len(consumer.messages_consumed[1]) >= self.num_seed_messages,
-                   timeout_sec=60,
+                   timeout_sec=90,
                    err_msg="Consumer consumed only %d out of %d messages in %ds" %\
-                   (len(consumer.messages_consumed[1]), self.num_seed_messages, 60))
+                   (len(consumer.messages_consumed[1]), self.num_seed_messages, 90))
         consumer.stop()
         return consumer.messages_consumed[1]
 
