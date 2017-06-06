@@ -186,6 +186,13 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
       state == Some("Stable")
     }, "Expected the group to initially become stable.")
 
+    // Group assignments in describeGroup rely on finding committed consumer offsets.
+    // Wait for an offset commit before shutting down the group executor.
+    TestUtils.waitUntilTrue(() => {
+      val (_, assignments) = consumerGroupService.describeGroup()
+      assignments.exists(_.exists(_.group == group))
+    }, "Expected to find group in assignments after initial offset commit")
+
     // stop the consumer so the group has no active member anymore
     consumerGroupExecutor.shutdown()
 
