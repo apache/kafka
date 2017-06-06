@@ -628,12 +628,13 @@ public class KafkaConsumerTest {
         topicMetadata.put(topic, 1);
         topicMetadata.put(otherTopic, 1);
 
-        Cluster cluster = TestUtils.clusterWith(1, new HashMap<>(topicMetadata));
+        Cluster cluster = TestUtils.clusterWith(1, topicMetadata);
         Metadata metadata = createMetadata();
         Node node = cluster.nodes().get(0);
 
         MockClient client = new MockClient(time, metadata);
         client.setNode(node);
+        client.cluster(cluster);
 
         metadata.update(cluster, Collections.<String>emptySet(), time.milliseconds());
 
@@ -644,16 +645,11 @@ public class KafkaConsumerTest {
         consumer.subscribe(Pattern.compile(topic), getConsumerRebalanceListener(consumer));
 
         client.prepareMetadataUpdate(cluster, Collections.<String>emptySet());
-        metadata.update(cluster, Collections.<String>emptySet(), time.milliseconds());
 
         consumer.poll(0);
         assertEquals(singleton(topic), consumer.subscription());
 
         consumer.subscribe(Pattern.compile(otherTopic), getConsumerRebalanceListener(consumer));
-
-        cluster = TestUtils.clusterWith(1, new HashMap<>(topicMetadata));
-        client.prepareMetadataUpdate(cluster, Collections.<String>emptySet());
-        metadata.update(cluster, Collections.<String>emptySet(), time.milliseconds());
 
         prepareRebalance(client, node, singleton(otherTopic), assignor, singletonList(otherTopicPartition), coordinator);
         consumer.poll(0);

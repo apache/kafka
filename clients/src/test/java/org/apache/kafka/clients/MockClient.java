@@ -18,6 +18,7 @@ package org.apache.kafka.clients;
 
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.utils.Time;
@@ -65,6 +66,7 @@ public class MockClient implements KafkaClient {
     private final Time time;
     private final Metadata metadata;
     private Set<String> unavailableTopics;
+    private Cluster cluster;
     private Node node = null;
     private final Set<String> ready = new HashSet<>();
     private final Map<Node, Long> blackedOut = new HashMap<>();
@@ -170,6 +172,8 @@ public class MockClient implements KafkaClient {
 
         if (metadata != null && metadata.updateRequested()) {
             MetadataUpdate metadataUpdate = metadataUpdates.poll();
+            if (cluster != null)
+                metadata.update(cloneCluster(cluster), this.unavailableTopics, time.milliseconds());
             if (metadataUpdate == null)
                 metadata.update(metadata.fetch(), this.unavailableTopics, time.milliseconds());
             else {
@@ -301,6 +305,21 @@ public class MockClient implements KafkaClient {
 
     public void setNode(Node node) {
         this.node = node;
+    }
+
+    public void cluster(Cluster cluster) {
+        this.cluster = cloneCluster(cluster);
+    }
+
+    private Cluster cloneCluster(Cluster cluster) {
+        Set<PartitionInfo> partitions = new HashSet<>();
+        for (String topic : cluster.topics())
+            partitions.addAll(cluster.partitionsForTopic(topic));
+        return new Cluster(cluster.clusterResource().clusterId(),
+                new ArrayList<>(cluster.nodes()),
+                partitions,
+                new HashSet<>(cluster.unauthorizedTopics()),
+                new HashSet<>(cluster.internalTopics()));
     }
 
     @Override
