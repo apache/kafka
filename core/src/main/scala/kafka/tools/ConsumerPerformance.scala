@@ -70,7 +70,7 @@ object ConsumerPerformance {
       consumer.subscribe(Collections.singletonList(config.topic))
       startMs = System.currentTimeMillis
       consume(consumer, List(config.topic), config.numMessages, 1000,
-        config, totalMessagesRead, totalBytesRead, joinGroupTimeInMs, fetchTimeInMs)
+        config, totalMessagesRead, totalBytesRead, joinGroupTimeInMs)
       endMs = System.currentTimeMillis
 
       if (config.printMetrics) {
@@ -101,6 +101,7 @@ object ConsumerPerformance {
       consumerConnector.shutdown()
     }
     val elapsedSecs = (endMs - startMs) / 1000.0
+    fetchTimeInMs.set((endMs - startMs) - fetchTimeInMs.get)
     if (!config.showDetailedStats) {
       val totalMBRead = (totalBytesRead.get * 1.0) / (1024 * 1024)
       println(s"%s, %s, %.4f, %.4f, %d, %.4f${if (!config.useOldConsumer) ", %s" else ""}".format(
@@ -119,14 +120,12 @@ object ConsumerPerformance {
 
   }
 
-  def consume(consumer: KafkaConsumer[Array[Byte], Array[Byte]], topics: List[String], count: Long, timeout: Long, config: ConsumerPerfConfig, totalMessagesRead: AtomicLong, totalBytesRead: AtomicLong, joinTime: AtomicLong, fetchTime: AtomicLong) {
+  def consume(consumer: KafkaConsumer[Array[Byte], Array[Byte]], topics: List[String], count: Long, timeout: Long, config: ConsumerPerfConfig, totalMessagesRead: AtomicLong, totalBytesRead: AtomicLong, joinTime: AtomicLong) {
     var bytesRead = 0L
     var messagesRead = 0L
     var lastBytesRead = 0L
     var lastMessagesRead = 0L
     var joinStart = 0L
-    var totalRebalanceTimeExceptTheFirst = 0L
-    var isFirstRebalance = true
 
     // Wait for group join, metadata fetch, etc
     val joinTimeout = 10000
@@ -134,13 +133,7 @@ object ConsumerPerformance {
     consumer.subscribe(topics.asJava, new ConsumerRebalanceListener {
       def onPartitionsAssigned(partitions: util.Collection[TopicPartition]) {
         isAssigned.set(true)
-        val time = System.currentTimeMillis - joinStart
-        joinTime.addAndGet(time)
-        if (isFirstRebalance) {
-          isFirstRebalance = false
-        } else {
-          totalRebalanceTimeExceptTheFirst += time
-        }
+        joinTime.addAndGet(System.currentTimeMillis - joinStart)
       }
       def onPartitionsRevoked(partitions: util.Collection[TopicPartition]) {
         isAssigned.set(false)
@@ -185,7 +178,6 @@ object ConsumerPerformance {
 
     totalMessagesRead.set(messagesRead)
     totalBytesRead.set(bytesRead)
-    fetchTime.set(System.currentTimeMillis - startMs - totalRebalanceTimeExceptTheFirst)
   }
 
   def printProgressMessage(id: Int, bytesRead: Long, lastBytesRead: Long, messagesRead: Long, lastMessagesRead: Long,
