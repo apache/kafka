@@ -374,7 +374,6 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
             return;
         }
 
-        flushInternal();
         open = false;
         closeOpenIterators();
         options.close();
