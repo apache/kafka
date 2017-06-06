@@ -368,7 +368,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
       .records.batches().asScala.toSeq.last
   }
 
-  private def awaitISR(tp: TopicPartition): Boolean = {
+  private def awaitISR(tp: TopicPartition): Unit = {
     TestUtils.waitUntilTrue(() => {
       leader.replicaManager.getReplicaOrException(tp).partition.inSyncReplicas.map(_.brokerId).size == 2
     }, "")

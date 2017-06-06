@@ -219,7 +219,7 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
     new ReplicaFetcherBlockingSend(endPoint, from.config, new Metrics(), new SystemTime(), 42, "TestFetcher")
   }
 
-  private def waitForEpochChangeTo(topic: String, partition: Int, epoch: Int): Boolean = {
+  private def waitForEpochChangeTo(topic: String, partition: Int, epoch: Int): Unit = {
     TestUtils.waitUntilTrue(() => {
       brokers(0).metadataCache.getPartitionInfo(topic, partition) match {
         case Some(m) => m.leaderIsrAndControllerEpoch.leaderAndIsr.leaderEpoch == epoch

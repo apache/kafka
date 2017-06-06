@@ -208,13 +208,13 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
       throttledTook < expectedDuration * 1000 * 1.5)
   }
 
-  def addData(msgCount: Int, msg: Array[Byte]): Boolean = {
+  def addData(msgCount: Int, msg: Array[Byte]): Unit = {
     producer = createNewProducer(getBrokerListStrFromServers(brokers), retries = 5, acks = 0)
     (0 until msgCount).map(_ => producer.send(new ProducerRecord(topic, msg))).foreach(_.get)
     waitForOffsetsToMatch(msgCount, 0, 100)
   }
 
-  private def waitForOffsetsToMatch(offset: Int, partitionId: Int, brokerId: Int): Boolean = {
+  private def waitForOffsetsToMatch(offset: Int, partitionId: Int, brokerId: Int): Unit = {
     waitUntilTrue(() => {
       offset == brokerFor(brokerId).getLogManager.getLog(new TopicPartition(topic, partitionId))
         .map(_.logEndOffset).getOrElse(0)
