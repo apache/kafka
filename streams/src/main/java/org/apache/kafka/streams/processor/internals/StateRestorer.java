@@ -17,7 +17,12 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.processor.BatchingStateRestoreCallback;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
+import org.apache.kafka.streams.processor.StateRestoreListener;
+
+import java.util.Collection;
 
 public class StateRestorer {
     static final int NO_CHECKPOINT = -1;
@@ -27,9 +32,11 @@ public class StateRestorer {
     private final boolean persistent;
     private final TopicPartition partition;
     private final StateRestoreCallback stateRestoreCallback;
+    private StateRestoreListener stateRestoreListener;
 
     private long restoredOffset;
     private long startingOffset;
+    private boolean restoreStarted;
 
     StateRestorer(final TopicPartition partition,
                   final StateRestoreCallback stateRestoreCallback,
@@ -51,12 +58,47 @@ public class StateRestorer {
         return checkpoint == null ? NO_CHECKPOINT : checkpoint;
     }
 
-    void restore(final byte[] key, final byte[] value) {
-        stateRestoreCallback.restore(key, value);
+    void maybeNotifyRestoreStarted() {
+        if (!restoreStarted && stateRestoreListener != null) {
+            stateRestoreListener.onRestoreStart(partition, startingOffset);
+            restoreStarted = true;
+        }
+    }
+
+    void restoreDone() {
+        if (stateRestoreListener != null) {
+            stateRestoreListener.onRestoreEnd(partition, restoredOffset, restoredNumRecords());
+            restoreStarted = false;
+        }
+    }
+
+    void restoreBatchCompleted(long currentRestoredOffset, int numRestored) {
+        if (stateRestoreListener != null) {
+            stateRestoreListener.onBatchRestored(partition, currentRestoredOffset, numRestored);
+        }
+
+    }
+
+    void restore(final Collection<KeyValue<byte[], byte[]>> records) {
+        if (isBulkRestore()) {
+            ((BatchingStateRestoreCallback) stateRestoreCallback).restoreAll(records);
+        } else {
+            for (KeyValue<byte[], byte[]> record : records) {
+                stateRestoreCallback.restore(record.key, record.value);
+            }
+        }
     }
 
     boolean isPersistent() {
         return persistent;
+    }
+
+    private boolean isBulkRestore() {
+        return stateRestoreCallback instanceof BatchingStateRestoreCallback;
+    }
+
+    void setStateRestoreListener(StateRestoreListener stateRestoreListener) {
+        this.stateRestoreListener = stateRestoreListener;
     }
 
     void setRestoredOffset(final long restoredOffset) {

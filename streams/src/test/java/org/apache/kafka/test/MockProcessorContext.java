@@ -24,6 +24,7 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsMetrics;
+import org.apache.kafka.streams.processor.BatchingStateRestoreCallback;
 import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
@@ -40,6 +41,7 @@ import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
 import java.io.File;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -281,9 +283,20 @@ public class MockProcessorContext implements InternalProcessorContext, RecordCol
     }
 
     public void restore(final String storeName, final Iterable<KeyValue<byte[], byte[]>> changeLog) {
+
         final StateRestoreCallback restoreCallback = restoreFuncs.get(storeName);
-        for (final KeyValue<byte[], byte[]> entry : changeLog) {
-            restoreCallback.restore(entry.key, entry.value);
+        if (restoreCallback instanceof BatchingStateRestoreCallback) {
+            List<KeyValue<byte[], byte[]>> records = new ArrayList<>();
+            for (KeyValue<byte[], byte[]> keyValue : changeLog) {
+                records.add(keyValue);
+            }
+            ((BatchingStateRestoreCallback) restoreCallback).restoreAll(records);
+
+        } else {
+
+            for (final KeyValue<byte[], byte[]> entry : changeLog) {
+                restoreCallback.restore(entry.key, entry.value);
+            }
         }
     }
 

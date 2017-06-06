@@ -17,8 +17,11 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.test.MockRestoreCallback;
 import org.junit.Test;
+
+import java.util.Arrays;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -32,7 +35,7 @@ public class StateRestorerTest {
 
     @Test
     public void shouldCallRestoreOnRestoreCallback() throws Exception {
-        restorer.restore(new byte[0], new byte[0]);
+        restorer.restore(Arrays.asList(KeyValue.pair(new byte[0], new byte[0])));
         assertThat(callback.restored.size(), equalTo(1));
     }
 

@@ -24,8 +24,8 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
+import org.apache.kafka.streams.processor.AbstractBatchingRestoreCallback;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -47,6 +47,7 @@ import org.rocksdb.WriteOptions;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -173,10 +174,10 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
         // value getter should always read directly from rocksDB
         // since it is only for values that are already flushed
-        context.register(root, false, new StateRestoreCallback() {
+        context.register(root, false, new AbstractBatchingRestoreCallback() {
             @Override
-            public void restore(byte[] key, byte[] value) {
-                putInternal(key, value);
+            public void restoreAll(Collection<KeyValue<byte[], byte[]>> records) {
+                restoreAllInternal(records);
             }
         });
 
@@ -256,6 +257,17 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
             put(key, value);
         }
         return originalValue;
+    }
+
+    private void restoreAllInternal(Collection<KeyValue<byte[], byte[]>> records) {
+        try (WriteBatch batch = new WriteBatch()) {
+            for (KeyValue<byte[], byte[]> record : records) {
+                batch.put(record.key, record.value);
+            }
+            db.write(wOptions, batch);
+        } catch (RocksDBException e) {
+            throw new ProcessorStateException("Error restoring batch to store " + this.name, e);
+        }
     }
 
     private void putInternal(byte[] rawKey, byte[] rawValue) {

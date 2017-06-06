@@ -36,6 +36,7 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.processor.Processor;
+import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TopologyBuilder;
@@ -143,6 +144,7 @@ public class KafkaStreams {
     private final String logPrefix;
     private final StreamsMetadataState streamsMetadataState;
     private final StreamsConfig config;
+    private StateRestoreListener stateRestoreListener;
     private final StateDirectory stateDirectory;
 
     // container states
@@ -774,6 +776,19 @@ public class KafkaStreams {
             } else {
                 throw new IllegalStateException("Can only set UncaughtExceptionHandler in CREATED state.");
             }
+        }
+    }
+
+    /**
+     * Set the listener invoked at the beginning, end of batch updates and the conclusion of
+     * restoring a {@link StateStore} for each internal threads assignments.
+     *
+     * @param stateRestoreListener listener for all internal threads capturing state store
+     *                             restoration status.
+     */
+    public void setStateRestoreListener(final StateRestoreListener stateRestoreListener) {
+        for (StreamThread thread : threads) {
+            thread.setStateRestoreListener(stateRestoreListener);
         }
     }
 

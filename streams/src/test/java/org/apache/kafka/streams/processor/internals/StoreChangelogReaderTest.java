@@ -27,7 +27,9 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.test.MockRestoreCallback;
+import org.apache.kafka.test.MockStateRestoreListener;
 import org.hamcrest.CoreMatchers;
 import org.junit.Test;
 
@@ -43,7 +45,8 @@ public class StoreChangelogReaderTest {
 
     private final MockRestoreCallback callback = new MockRestoreCallback();
     private MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
-    private StoreChangelogReader changelogReader = new StoreChangelogReader(consumer, new MockTime(), 0);
+    private StateRestoreListener stateRestoreListener = new MockStateRestoreListener();
+    private StoreChangelogReader changelogReader = new StoreChangelogReader(consumer, new MockTime(), 0, stateRestoreListener);
     private final TopicPartition topicPartition = new TopicPartition("topic", 0);
     private final PartitionInfo partitionInfo = new PartitionInfo(topicPartition.topic(), 0, null, null, null);
 
@@ -56,7 +59,8 @@ public class StoreChangelogReaderTest {
                 throw new TimeoutException("KABOOM!");
             }
         };
-        final StoreChangelogReader changelogReader = new StoreChangelogReader(consumer, new MockTime(), 0);
+        final StoreChangelogReader changelogReader = new StoreChangelogReader(consumer, new
+            MockTime(), 0, stateRestoreListener);
         try {
             changelogReader.validatePartitionExists(topicPartition, "store");
             fail("Should have thrown streams exception");
@@ -80,7 +84,8 @@ public class StoreChangelogReaderTest {
             }
         };
 
-        final StoreChangelogReader changelogReader = new StoreChangelogReader(consumer, new MockTime(), 10);
+        final StoreChangelogReader changelogReader = new StoreChangelogReader(consumer, new
+            MockTime(), 10, stateRestoreListener);
         changelogReader.validatePartitionExists(topicPartition, "store");
     }
 
@@ -93,7 +98,8 @@ public class StoreChangelogReaderTest {
                 throw new TimeoutException("KABOOM!");
             }
         };
-        final StoreChangelogReader changelogReader = new StoreChangelogReader(consumer, new MockTime(), 5);
+        final StoreChangelogReader changelogReader = new StoreChangelogReader(consumer, new
+            MockTime(), 5, stateRestoreListener);
         try {
             changelogReader.validatePartitionExists(topicPartition, "store");
             fail("Should have thrown streams exception");
@@ -119,7 +125,7 @@ public class StoreChangelogReaderTest {
         };
 
         consumer.updatePartitions(topicPartition.topic(), Collections.singletonList(partitionInfo));
-        final StoreChangelogReader changelogReader = new StoreChangelogReader(consumer, Time.SYSTEM, 5000);
+        final StoreChangelogReader changelogReader = new StoreChangelogReader(consumer, Time.SYSTEM, 5000, stateRestoreListener);
         changelogReader.validatePartitionExists(topicPartition, "store");
     }
 
