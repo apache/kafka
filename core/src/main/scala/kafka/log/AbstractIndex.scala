@@ -22,6 +22,7 @@ import java.nio.{ByteBuffer, MappedByteBuffer}
 import java.nio.channels.FileChannel
 import java.util.concurrent.locks.{Lock, ReentrantLock}
 
+import kafka.common.KafkaStorageException
 import kafka.log.IndexSearchType.IndexSearchEntity
 import kafka.utils.CoreUtils.inLock
 import kafka.utils.{CoreUtils, Logging}
@@ -174,6 +175,29 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
       mmap = null
     }
     file.delete()
+  }
+
+  /**
+    * Resets back to a sane state after corruption is noticed, to prepare for overall segment recovery.  Deletes the
+    * corrupted file, creates a new and empty one, and maps the latter.
+    */
+  def resetToSane(): Unit = {
+    inLock(lock) {
+      CoreUtils.swallow(forceUnmap())
+
+      val deleted = file.delete()
+      if(!deleted && file.exists)
+        throw new KafkaStorageException("Delete of index " + file.getAbsolutePath + " failed.")
+
+      val raf = new RandomAccessFile(file, "rw")
+      try {
+        raf.setLength(roundDownToExactMultiple(maxIndexSize, entrySize))
+        val len = raf.length()
+        mmap = raf.getChannel.map(FileChannel.MapMode.READ_WRITE, 0, len)
+      } finally {
+        CoreUtils.swallow(raf.close())
+      }
+    }
   }
 
   /**
