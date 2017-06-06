@@ -18,7 +18,6 @@ package org.apache.kafka.clients;
 
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
-import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.utils.Time;
@@ -173,7 +172,7 @@ public class MockClient implements KafkaClient {
         if (metadata != null && metadata.updateRequested()) {
             MetadataUpdate metadataUpdate = metadataUpdates.poll();
             if (cluster != null)
-                metadata.update(cloneCluster(cluster), this.unavailableTopics, time.milliseconds());
+                metadata.update(cluster, this.unavailableTopics, time.milliseconds());
             if (metadataUpdate == null)
                 metadata.update(metadata.fetch(), this.unavailableTopics, time.milliseconds());
             else {
@@ -308,18 +307,7 @@ public class MockClient implements KafkaClient {
     }
 
     public void cluster(Cluster cluster) {
-        this.cluster = cloneCluster(cluster);
-    }
-
-    private Cluster cloneCluster(Cluster cluster) {
-        Set<PartitionInfo> partitions = new HashSet<>();
-        for (String topic : cluster.topics())
-            partitions.addAll(cluster.partitionsForTopic(topic));
-        return new Cluster(cluster.clusterResource().clusterId(),
-                new ArrayList<>(cluster.nodes()),
-                partitions,
-                new HashSet<>(cluster.unauthorizedTopics()),
-                new HashSet<>(cluster.internalTopics()));
+        this.cluster = cluster;
     }
 
     @Override
