@@ -356,7 +356,7 @@ public class KafkaProducerTest {
         }
         Assert.assertTrue("Topic should still exist in metadata", metadata.containsTopic(topic));
     }
-    
+
     @PrepareOnlyThisForTest(Metadata.class)
     @Test
     public void testHeaders() throws Exception {
@@ -370,8 +370,6 @@ public class KafkaProducerTest {
         MemberModifier.field(KafkaProducer.class, "metadata").set(producer, metadata);
 
         String topic = "topic";
-        Collection<Node> nodes = Collections.singletonList(new Node(0, "host1", 1000));
-
         final Cluster cluster = new Cluster(
                 "dummy",
                 Collections.singletonList(new Node(0, "host1", 1000)),
@@ -437,7 +435,7 @@ public class KafkaProducerTest {
             assertEquals(Sensor.RecordingLevel.DEBUG, producer.metrics.config().recordLevel());
         }
     }
-    
+
     @PrepareOnlyThisForTest(Metadata.class)
     @Test
     public void testInterceptorPartitionSetOnTooLargeRecord() throws Exception {
@@ -446,7 +444,7 @@ public class KafkaProducerTest {
         props.setProperty(ProducerConfig.MAX_REQUEST_SIZE_CONFIG, "1");
         String topic = "topic";
         ProducerRecord<String, String> record = new ProducerRecord<>(topic, "value");
-        
+
         KafkaProducer<String, String> producer = new KafkaProducer<>(props, new StringSerializer(),
                 new StringSerializer());
         Metadata metadata = PowerMock.createNiceMock(Metadata.class);
@@ -458,20 +456,18 @@ public class KafkaProducerTest {
             Collections.<String>emptySet(),
             Collections.<String>emptySet());
         EasyMock.expect(metadata.fetch()).andReturn(cluster).once();
-        
+
         // Mock interceptors field
         ProducerInterceptors interceptors = PowerMock.createMock(ProducerInterceptors.class);
         EasyMock.expect(interceptors.onSend(record)).andReturn(record);
         interceptors.onSendError(EasyMock.eq(record), EasyMock.<TopicPartition>notNull(), EasyMock.<Exception>notNull());
         EasyMock.expectLastCall();
         MemberModifier.field(KafkaProducer.class, "interceptors").set(producer, interceptors);
-        
+
         PowerMock.replay(metadata);
         EasyMock.replay(interceptors);
         producer.send(record);
-        
-        EasyMock.verify(interceptors);
-        
-    }
 
+        EasyMock.verify(interceptors);
+    }
 }
