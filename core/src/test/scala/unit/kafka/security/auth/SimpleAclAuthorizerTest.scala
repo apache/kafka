@@ -17,7 +17,7 @@
 package kafka.security.auth
 
 import java.net.InetAddress
-import java.util.{UUID}
+import java.util.UUID
 
 import kafka.network.RequestChannel.Session
 import kafka.security.auth.Acl.WildCardHost
@@ -349,6 +349,62 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
 
     TestUtils.waitAndVerifyAcls(expectedAcls, simpleAclAuthorizer, commonResource)
     TestUtils.waitAndVerifyAcls(expectedAcls, simpleAclAuthorizer2, commonResource)
+  }
+
+  /**
+    * Test ACL inheritance, as described in #{org.apache.kafka.common.acl.AclOperation}
+    */
+  @Test
+  def testAclInheritance(): Unit = {
+    testImplicationsOfAllow(All, Set(Read, Write, Create, Delete, Alter, Describe,
+      ClusterAction, DescribeConfigs, AlterConfigs, IdempotentWrite))
+    testImplicationsOfDeny(All, Set(Read, Write, Create, Delete, Alter, Describe,
+      ClusterAction, DescribeConfigs, AlterConfigs, IdempotentWrite))
+    testImplicationsOfAllow(Read, Set(Describe))
+    testImplicationsOfAllow(Write, Set(Describe))
+    testImplicationsOfAllow(Delete, Set(Describe))
+    testImplicationsOfAllow(Alter, Set(Describe))
+    testImplicationsOfDeny(Describe, Set(Alter))
+    testImplicationsOfAllow(AlterConfigs, Set(DescribeConfigs))
+    testImplicationsOfDeny(DescribeConfigs, Set(AlterConfigs))
+  }
+
+  private def testImplicationsOfAllow(parentOp: Operation, allowedOps: Set[Operation]): Unit = {
+    val user1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, username)
+    val host1 = InetAddress.getByName("192.168.3.1")
+    val host1Session = new Session(user1, host1)
+    val acl = new Acl(user1, Allow, WildCardHost, parentOp)
+    simpleAclAuthorizer.addAcls(Set(acl), Resource.ClusterResource)
+    Operation.values.foreach {
+      case op => {
+        val authorized = simpleAclAuthorizer.authorize(host1Session , op, Resource.ClusterResource)
+        if (allowedOps.contains(op) || (op == parentOp)) {
+          assertTrue(s"ALLOW $parentOp should imply ALLOW $op", authorized)
+        } else {
+          assertFalse(s"ALLOW $parentOp should not imply ALLOW $op", authorized)
+        }
+      }
+    }
+    simpleAclAuthorizer.removeAcls(Set(acl), Resource.ClusterResource)
+  }
+
+  private def testImplicationsOfDeny(parentOp: Operation, deniedOps: Set[Operation]): Unit = {
+    val user1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, username)
+    val host1 = InetAddress.getByName("192.168.3.1")
+    val host1Session = new Session(user1, host1)
+    val acls = Set(new Acl(user1, Deny, WildCardHost, parentOp), new Acl(user1, Allow, WildCardHost, All))
+    simpleAclAuthorizer.addAcls(acls, Resource.ClusterResource)
+    Operation.values.foreach {
+      case op => {
+        val authorized = simpleAclAuthorizer.authorize(host1Session , op, Resource.ClusterResource)
+        if (deniedOps.contains(op) || (op == parentOp)) {
+          assertFalse(s"DENY $parentOp should imply DENY $op", authorized)
+        } else {
+          assertTrue(s"DENY $parentOp should not imply DENY $op", authorized)
+        }
+      }
+    }
+    simpleAclAuthorizer.removeAcls(acls, Resource.ClusterResource)
   }
 
   @Test
