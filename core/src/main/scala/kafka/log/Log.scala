@@ -89,7 +89,15 @@ case class LogAppendInfo(var firstOffset: Long,
  *                   COMMIT/ABORT control record which indicates the transaction's completion.
  * @param isAborted Whether or not the transaction was aborted
  */
-case class CompletedTxn(producerId: Long, firstOffset: Long, lastOffset: Long, isAborted: Boolean)
+case class CompletedTxn(producerId: Long, firstOffset: Long, lastOffset: Long, isAborted: Boolean) {
+  override def toString: String = {
+    "CompletedTxn(" +
+      s"producerId=$producerId, " +
+      s"firstOffset=$firstOffset, " +
+      s"lastOffset=$lastOffset, " +
+      s"isAborted=$isAborted)"
+  }
+}
 
 /**
  * An append-only log for storing messages.
@@ -631,7 +639,6 @@ class Log(@volatile var dir: File,
 
         // update the producer state
         for ((producerId, producerAppendInfo) <- updatedProducers) {
-          trace(s"Updating producer $producerId state: ${producerAppendInfo.lastEntry}")
           producerAppendInfo.maybeCacheTxnFirstOffsetMetadata(logOffsetMetadata)
           producerStateManager.update(producerAppendInfo)
         }
