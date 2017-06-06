@@ -98,6 +98,17 @@ class Partition(val topic: String,
     tags
   )
 
+  newGauge("LastStableOffsetLag",
+    new Gauge[Long] {
+      def value = {
+        leaderReplicaIfLocal.map { replica =>
+          replica.highWatermark.messageOffset - replica.lastStableOffset.messageOffset
+        }.getOrElse(0)
+      }
+    },
+    tags
+  )
+
   private def isLeaderReplicaLocal: Boolean = leaderReplicaIfLocal.isDefined
 
   def isUnderReplicated: Boolean =
