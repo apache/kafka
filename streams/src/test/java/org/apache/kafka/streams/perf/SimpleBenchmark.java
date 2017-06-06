@@ -106,6 +106,7 @@ public class SimpleBenchmark {
     private static long processedBytes = 0;
     private static final int VALUE_SIZE = 100;
     private static final long POLL_MS = 500L;
+    private static final long COMMIT_INTERVAL_MS = 30000L;
     private static final int MAX_POLL_RECORDS = 1000;
     private static final int SOCKET_SIZE_BYTES = 1 * 1024 * 1024;
 
@@ -218,6 +219,7 @@ public class SimpleBenchmark {
         props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.ByteArray().getClass());
         props.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, MAX_POLL_RECORDS);
         props.put(StreamsConfig.POLL_MS_CONFIG, POLL_MS);
+        props.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, COMMIT_INTERVAL_MS);
         return props;
     }
 
