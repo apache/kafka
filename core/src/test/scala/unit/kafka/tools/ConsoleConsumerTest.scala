@@ -25,9 +25,8 @@ import kafka.utils.TestUtils
 import org.easymock.EasyMock
 import org.junit.Assert._
 import org.junit.Test
-import org.scalatest.junit.JUnitSuite
 
-class ConsoleConsumerTest extends JUnitSuite {
+class ConsoleConsumerTest {
 
   @Test
   def shouldLimitReadsToMaxMessageLimit() {
@@ -160,7 +159,8 @@ class ConsoleConsumerTest extends JUnitSuite {
       "--topic", "test",
       "--partition", "0",
       "--offset", "LatEst",
-      "--new-consumer") //new
+      "--new-consumer", //new
+      "--property", "print.value=false")
 
     //When
     val config = new ConsoleConsumer.ConsumerConfig(args)
@@ -172,6 +172,7 @@ class ConsoleConsumerTest extends JUnitSuite {
     assertEquals(0, config.partitionArg.get)
     assertEquals(-1, config.offsetArg)
     assertEquals(false, config.fromBeginning)
+    assertEquals(false, config.formatter.asInstanceOf[DefaultMessageFormatter].printValue)
   }
 
   @Test

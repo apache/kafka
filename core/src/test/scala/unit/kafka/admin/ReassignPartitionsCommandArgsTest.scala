@@ -16,8 +16,7 @@
   */
 package kafka.admin
 
-import kafka.utils.CommandLineUtils
-import kafka.utils.CommandLineUtils.ExitPolicy
+import kafka.utils.Exit
 import org.junit.Assert.assertTrue
 import org.junit.{After, Before, Test}
 import org.scalatest.junit.JUnitSuite
@@ -26,14 +25,12 @@ class ReassignPartitionsCommandArgsTest extends JUnitSuite {
 
   @Before
   def setUp() {
-    CommandLineUtils.exitPolicy(new ExitPolicy {
-      override def exit(msg: String): Nothing = throw new IllegalArgumentException(msg)
-    })
+    Exit.setExitProcedure((_, message) => throw new IllegalArgumentException(message.orNull))
   }
 
   @After
   def tearDown() {
-    CommandLineUtils.exitPolicy(CommandLineUtils.DEFAULT_EXIT_POLICY)
+    Exit.resetExitProcedure()
   }
 
   /**

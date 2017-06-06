@@ -14,15 +14,20 @@
 # limitations under the License.
 
 from ducktape.tests.test import Test
+from ducktape.mark.resource import cluster
+from ducktape.utils.util import wait_until
+from ducktape.mark import parametrize, matrix
+from ducktape.cluster.remoteaccount import RemoteCommandError
 
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.kafka import KafkaService
 from kafkatest.services.connect import ConnectStandaloneService
 from kafkatest.services.console_consumer import ConsoleConsumer
 from kafkatest.services.security.security_config import SecurityConfig
-from ducktape.utils.util import wait_until
-from ducktape.mark import parametrize, matrix
-import hashlib, subprocess, json
+
+import hashlib
+import json
+
 
 class ConnectStandaloneFileTest(Test):
     """
@@ -58,10 +63,13 @@ class ConnectStandaloneFileTest(Test):
 
         self.zk = ZookeeperService(test_context, self.num_zk)
 
+    @cluster(num_nodes=5)
     @parametrize(converter="org.apache.kafka.connect.json.JsonConverter", schemas=True)
     @parametrize(converter="org.apache.kafka.connect.json.JsonConverter", schemas=False)
     @parametrize(converter="org.apache.kafka.connect.storage.StringConverter", schemas=None)
-    @matrix(security_protocol=[SecurityConfig.PLAINTEXT, SecurityConfig.SASL_SSL])
+    @parametrize(security_protocol=SecurityConfig.PLAINTEXT)
+    @cluster(num_nodes=6)
+    @parametrize(security_protocol=SecurityConfig.SASL_SSL)
     def test_file_source_and_sink(self, converter="org.apache.kafka.connect.json.JsonConverter", schemas=True, security_protocol='PLAINTEXT'):
         """
         Validates basic end-to-end functionality of Connect standalone using the file source and sink converters. Includes
@@ -84,7 +92,6 @@ class ConnectStandaloneFileTest(Test):
         self.sink = ConnectStandaloneService(self.test_context, self.kafka, [self.OUTPUT_FILE, self.OFFSETS_FILE])
         self.consumer_validator = ConsoleConsumer(self.test_context, 1, self.kafka, self.TOPIC,
                                                   consumer_timeout_ms=1000)
-
 
         self.zk.start()
         self.kafka.start()
@@ -118,5 +125,5 @@ class ConnectStandaloneFileTest(Test):
         try:
             output_hash = list(self.sink.node.account.ssh_capture("md5sum " + self.OUTPUT_FILE))[0].strip().split()[0]
             return output_hash == hashlib.md5(value).hexdigest()
-        except subprocess.CalledProcessError:
+        except RemoteCommandError:
             return False

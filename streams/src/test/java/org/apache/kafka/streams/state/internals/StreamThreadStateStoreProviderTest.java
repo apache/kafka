@@ -1,16 +1,18 @@
-/**
- * Licensed to the Apache Software Foundation (ASF) under one or more contributor license
- * agreements.  See the NOTICE file distributed with this work for additional information regarding
- * copyright ownership. The ASF licenses this file to You under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance with the License.  You may obtain a
- * copy of the License at
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software distributed under the License
- * is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
- * or implied. See the License for the specific language governing permissions and limitations under
- * the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 package org.apache.kafka.streams.state.internals;
 
@@ -18,16 +20,17 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.utils.SystemTime;
+import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TopologyBuilder;
+import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.StateDirectory;
+import org.apache.kafka.streams.processor.internals.StoreChangelogReader;
 import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.StreamsMetadataState;
@@ -57,18 +60,18 @@ import static org.junit.Assert.assertEquals;
 
 public class StreamThreadStateStoreProviderTest {
 
-    private StreamThread thread;
     private StreamTask taskOne;
     private StreamTask taskTwo;
     private StreamThreadStateStoreProvider provider;
     private StateDirectory stateDirectory;
     private File stateDir;
     private boolean storesAvailable;
+    private final String topicName = "topic";
 
     @Before
     public void before() throws IOException {
         final TopologyBuilder builder = new TopologyBuilder();
-        builder.addSource("the-source", "the-source");
+        builder.addSource("the-source", topicName);
         builder.addProcessor("the-processor", new MockProcessorSupplier(), "the-source");
         builder.addStateStore(Stores.create("kv-store")
                                   .withStringKeys()
@@ -97,7 +100,7 @@ public class StreamThreadStateStoreProviderTest {
         builder.setApplicationId(applicationId);
         final ProcessorTopology topology = builder.build(null);
         final Map<TaskId, StreamTask> tasks = new HashMap<>();
-        stateDirectory = new StateDirectory(applicationId, stateConfigDir);
+        stateDirectory = new StateDirectory(applicationId, stateConfigDir, new MockTime());
         taskOne = createStreamsTask(applicationId, streamsConfig, clientSupplier, topology,
                                     new TaskId(0, 0));
         tasks.put(new TaskId(0, 0),
@@ -108,32 +111,39 @@ public class StreamThreadStateStoreProviderTest {
                   taskTwo);
 
         storesAvailable = true;
-        thread = new StreamThread(builder, streamsConfig, clientSupplier,
-                                  applicationId,
-                                  "clientId", UUID.randomUUID(), new Metrics(),
-                                  new SystemTime(), new StreamsMetadataState(builder)) {
-            @Override
-            public Map<TaskId, StreamTask> tasks() {
-                return tasks;
-            }
+        provider = new StreamThreadStateStoreProvider(
+            new StreamThread(
+                builder,
+                streamsConfig,
+                clientSupplier,
+                applicationId,
+                "clientId",
+                UUID.randomUUID(),
+                new Metrics(),
+                Time.SYSTEM,
+                new StreamsMetadataState(builder, StreamsMetadataState.UNKNOWN_HOST),
+                0) {
 
-            @Override
-            public boolean isInitialized() {
-                return storesAvailable;
-            }
-        };
-        provider = new StreamThreadStateStoreProvider(thread);
+                @Override
+                public Map<TaskId, StreamTask> tasks() {
+                    return tasks;
+                }
 
+                @Override
+                public boolean isInitialized() {
+                    return storesAvailable;
+                }
+            });
     }
 
     @After
-    public void cleanUp() {
+    public void cleanUp() throws IOException {
         Utils.delete(stateDir);
     }
     
     @Test
     public void shouldFindKeyValueStores() throws Exception {
-        List<ReadOnlyKeyValueStore<String, String>> kvStores =
+        final List<ReadOnlyKeyValueStore<String, String>> kvStores =
             provider.stores("kv-store", QueryableStoreTypes.<String, String>keyValueStore());
         assertEquals(2, kvStores.size());
     }
@@ -182,16 +192,22 @@ public class StreamThreadStateStoreProviderTest {
                                          final MockClientSupplier clientSupplier,
                                          final ProcessorTopology topology,
                                          final TaskId taskId) {
-        return new StreamTask(taskId, applicationId, Collections
-            .singletonList(new TopicPartition("topic", taskId.partition)), topology,
-                              clientSupplier.consumer,
-                              clientSupplier.producer,
-                              clientSupplier.restoreConsumer,
-                              streamsConfig, new TheStreamMetrics(), stateDirectory, null) {
-            @Override
-            protected void initializeOffsetLimits() {
+        return new StreamTask(
+            taskId,
+            applicationId,
+            Collections.singletonList(new TopicPartition(topicName, taskId.partition)),
+            topology,
+            clientSupplier.consumer,
+            new StoreChangelogReader(clientSupplier.restoreConsumer, Time.SYSTEM, 5000),
+            streamsConfig,
+            new MockStreamsMetrics(new Metrics()),
+            stateDirectory,
+            null,
+            new MockTime(),
+            clientSupplier.getProducer(new HashMap<String, Object>())) {
 
-            }
+            @Override
+            protected void updateOffsetLimits() {}
         };
     }
 
@@ -220,21 +236,5 @@ public class StreamThreadStateStoreProviderTest {
             .updateBeginningOffsets(offsets);
         clientSupplier.restoreConsumer
             .updateEndOffsets(offsets);
-    }
-
-    private static class TheStreamMetrics implements StreamsMetrics {
-
-        @Override
-        public Sensor addLatencySensor(final String scopeName,
-                                       final String entityName,
-                                       final String operationName,
-                                       final String... tags) {
-            return null;
-        }
-
-        @Override
-        public void recordLatency(final Sensor sensor, final long startNs, final long endNs) {
-
-        }
     }
 }

@@ -21,7 +21,6 @@ import java.util.Properties
 
 import kafka.admin.AdminUtils
 import kafka.admin.AdminUtils._
-import kafka.common._
 import kafka.log.LogConfig._
 import kafka.server.KafkaConfig.fromProps
 import kafka.server.QuotaType._
@@ -29,6 +28,7 @@ import kafka.utils.TestUtils._
 import kafka.utils.CoreUtils._
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
+import org.apache.kafka.common.TopicPartition
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
 import scala.collection.JavaConverters._
@@ -42,7 +42,6 @@ import scala.collection.JavaConverters._
   *
   * Anything over 100MB/s tends to fail as this is the non-throttled replication rate
   */
-
 class ReplicationQuotasTest extends ZooKeeperTestHarness {
   def percentError(percent: Int, value: Long): Long = Math.round(value * percent / 100)
 
@@ -51,15 +50,10 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
   val topic = "topic1"
   var producer: KafkaProducer[Array[Byte], Array[Byte]] = null
 
-  @Before
-  override def setUp() {
-    super.setUp()
-  }
-
   @After
   override def tearDown() {
-    brokers.par.foreach(_.shutdown())
     producer.close()
+    shutdownServers(brokers)
     super.tearDown()
   }
 
@@ -172,7 +166,7 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
     assertTrue(s"Expected ${rate} > $rateLowerBound", rate > rateLowerBound)
   }
 
-  def tp(partition: Int): TopicAndPartition = new TopicAndPartition(topic, partition)
+  def tp(partition: Int): TopicPartition = new TopicPartition(topic, partition)
 
   @Test
   def shouldThrottleOldSegments(): Unit = {
@@ -202,6 +196,7 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
     val start = System.currentTimeMillis()
 
     //Start the new broker (and hence start replicating)
+    debug("Starting new broker")
     brokers = brokers :+ createServer(fromProps(createBrokerConfig(101, zkConnect)))
     waitForOffsetsToMatch(msgCount, 0, 101)
 
@@ -213,15 +208,15 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
       throttledTook < expectedDuration * 1000 * 1.5)
   }
 
-  def addData(msgCount: Int, msg: Array[Byte]): Boolean = {
+  def addData(msgCount: Int, msg: Array[Byte]): Unit = {
     producer = createNewProducer(getBrokerListStrFromServers(brokers), retries = 5, acks = 0)
     (0 until msgCount).map(_ => producer.send(new ProducerRecord(topic, msg))).foreach(_.get)
     waitForOffsetsToMatch(msgCount, 0, 100)
   }
 
-  private def waitForOffsetsToMatch(offset: Int, partitionId: Int, brokerId: Int): Boolean = {
+  private def waitForOffsetsToMatch(offset: Int, partitionId: Int, brokerId: Int): Unit = {
     waitUntilTrue(() => {
-      offset == brokerFor(brokerId).getLogManager.getLog(TopicAndPartition(topic, partitionId))
+      offset == brokerFor(brokerId).getLogManager.getLog(new TopicPartition(topic, partitionId))
         .map(_.logEndOffset).getOrElse(0)
     }, s"Offsets did not match for partition $partitionId on broker $brokerId", 60000)
   }

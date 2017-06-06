@@ -17,7 +17,7 @@
 
 package kafka.api
 
-import kafka.message.Message
+import org.apache.kafka.common.record.RecordBatch
 
 /**
  * This class contains the different Kafka versions.
@@ -26,7 +26,7 @@ import kafka.message.Message
  *
  * Note that the ID we initialize for each version is important.
  * We consider a version newer than another, if it has a higher ID (to avoid depending on lexicographic order)
- * 
+ *
  * Since the api protocol may change more than once within the same release and to facilitate people deploying code from
  * trunk, we have the concept of internal versions (first introduced during the 0.10.0 development cycle). For example,
  * the first time we introduce a version change in a release, say 0.10.0, we will add a config value "0.10.0-IV0" and a
@@ -59,8 +59,17 @@ object ApiVersion {
     "0.10.1-IV1" -> KAFKA_0_10_1_IV1,
     // introduced ListOffsetRequest v1 in KIP-79
     "0.10.1-IV2" -> KAFKA_0_10_1_IV2,
-    "0.10.1" -> KAFKA_0_10_1_IV2
-
+    "0.10.1" -> KAFKA_0_10_1_IV2,
+    // introduced UpdateMetadataRequest v3 in KIP-103
+    "0.10.2-IV0" -> KAFKA_0_10_2_IV0,
+    "0.10.2" -> KAFKA_0_10_2_IV0,
+    // KIP-98 (idempotent and transactional producer support)
+    "0.11.0-IV0" -> KAFKA_0_11_0_IV0,
+    // introduced DeleteRecordsRequest v0 and FetchRequest v4 in KIP-107
+    "0.11.0-IV1" -> KAFKA_0_11_0_IV1,
+    // Introduced leader epoch fetches to the replica fetcher via KIP-101
+    "0.11.0-IV2" -> KAFKA_0_11_0_IV2,
+    "0.11.0" -> KAFKA_0_11_0_IV2
   )
 
   private val versionPattern = "\\.".r
@@ -87,54 +96,78 @@ sealed trait ApiVersion extends Ordered[ApiVersion] {
 // Keep the IDs in order of versions
 case object KAFKA_0_8_0 extends ApiVersion {
   val version: String = "0.8.0.X"
-  val messageFormatVersion: Byte = Message.MagicValue_V0
+  val messageFormatVersion: Byte = RecordBatch.MAGIC_VALUE_V0
   val id: Int = 0
 }
 
 case object KAFKA_0_8_1 extends ApiVersion {
   val version: String = "0.8.1.X"
-  val messageFormatVersion: Byte = Message.MagicValue_V0
+  val messageFormatVersion: Byte = RecordBatch.MAGIC_VALUE_V0
   val id: Int = 1
 }
 
 case object KAFKA_0_8_2 extends ApiVersion {
   val version: String = "0.8.2.X"
-  val messageFormatVersion: Byte = Message.MagicValue_V0
+  val messageFormatVersion: Byte = RecordBatch.MAGIC_VALUE_V0
   val id: Int = 2
 }
 
 case object KAFKA_0_9_0 extends ApiVersion {
   val version: String = "0.9.0.X"
-  val messageFormatVersion: Byte = Message.MagicValue_V0
+  val messageFormatVersion: Byte = RecordBatch.MAGIC_VALUE_V0
   val id: Int = 3
 }
 
 case object KAFKA_0_10_0_IV0 extends ApiVersion {
   val version: String = "0.10.0-IV0"
-  val messageFormatVersion: Byte = Message.MagicValue_V1
+  val messageFormatVersion: Byte = RecordBatch.MAGIC_VALUE_V1
   val id: Int = 4
 }
 
 case object KAFKA_0_10_0_IV1 extends ApiVersion {
   val version: String = "0.10.0-IV1"
-  val messageFormatVersion: Byte = Message.MagicValue_V1
+  val messageFormatVersion: Byte = RecordBatch.MAGIC_VALUE_V1
   val id: Int = 5
 }
 
 case object KAFKA_0_10_1_IV0 extends ApiVersion {
   val version: String = "0.10.1-IV0"
-  val messageFormatVersion: Byte = Message.MagicValue_V1
+  val messageFormatVersion: Byte = RecordBatch.MAGIC_VALUE_V1
   val id: Int = 6
 }
 
 case object KAFKA_0_10_1_IV1 extends ApiVersion {
   val version: String = "0.10.1-IV1"
-  val messageFormatVersion: Byte = Message.MagicValue_V1
+  val messageFormatVersion: Byte = RecordBatch.MAGIC_VALUE_V1
   val id: Int = 7
 }
 
 case object KAFKA_0_10_1_IV2 extends ApiVersion {
   val version: String = "0.10.1-IV2"
-  val messageFormatVersion: Byte = Message.MagicValue_V1
+  val messageFormatVersion: Byte = RecordBatch.MAGIC_VALUE_V1
   val id: Int = 8
+}
+
+case object KAFKA_0_10_2_IV0 extends ApiVersion {
+  val version: String = "0.10.2-IV0"
+  val messageFormatVersion: Byte = RecordBatch.MAGIC_VALUE_V1
+  val id: Int = 9
+}
+
+case object KAFKA_0_11_0_IV0 extends ApiVersion {
+  val version: String = "0.11.0-IV0"
+  val messageFormatVersion: Byte = RecordBatch.MAGIC_VALUE_V2
+  val id: Int = 10
+}
+
+case object KAFKA_0_11_0_IV1 extends ApiVersion {
+  val version: String = "0.11.0-IV1"
+  val messageFormatVersion: Byte = RecordBatch.MAGIC_VALUE_V2
+  val id: Int = 11
+}
+
+case object KAFKA_0_11_0_IV2 extends ApiVersion {
+  val version: String = "0.11.0-IV2"
+  val messageFormatVersion: Byte = RecordBatch.MAGIC_VALUE_V2
+  val id: Int = 12
 }

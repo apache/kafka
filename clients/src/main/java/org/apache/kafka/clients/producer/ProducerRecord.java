@@ -1,16 +1,24 @@
-/**
- * Licensed to the Apache Software Foundation (ASF) under one or more contributor license agreements. See the NOTICE
- * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
- * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
- * License. You may obtain a copy of the License at
- * 
- * http://www.apache.org/licenses/LICENSE-2.0
- * 
- * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
- * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
- * specific language governing permissions and limitations under the License.
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 package org.apache.kafka.clients.producer;
+
+import org.apache.kafka.common.header.Header;
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 
 /**
  * A key/value pair to be sent to Kafka. This consists of a topic name to which the record is being sent, an optional
@@ -40,6 +48,7 @@ public class ProducerRecord<K, V> {
 
     private final String topic;
     private final Integer partition;
+    private final Headers headers;
     private final K key;
     private final V value;
     private final Long timestamp;
@@ -52,8 +61,9 @@ public class ProducerRecord<K, V> {
      * @param timestamp The timestamp of the record
      * @param key The key that will be included in the record
      * @param value The record contents
+     * @param headers the headers that will be included in the record
      */
-    public ProducerRecord(String topic, Integer partition, Long timestamp, K key, V value) {
+    public ProducerRecord(String topic, Integer partition, Long timestamp, K key, V value, Iterable<Header> headers) {
         if (topic == null)
             throw new IllegalArgumentException("Topic cannot be null.");
         if (timestamp != null && timestamp < 0)
@@ -67,6 +77,20 @@ public class ProducerRecord<K, V> {
         this.key = key;
         this.value = value;
         this.timestamp = timestamp;
+        this.headers = new RecordHeaders(headers);
+    }
+
+    /**
+     * Creates a record with a specified timestamp to be sent to a specified topic and partition
+     *
+     * @param topic The topic the record will be appended to
+     * @param partition The partition to which the record should be sent
+     * @param timestamp The timestamp of the record
+     * @param key The key that will be included in the record
+     * @param value The record contents
+     */
+    public ProducerRecord(String topic, Integer partition, Long timestamp, K key, V value) {
+        this(topic, partition, timestamp, key, value, null);
     }
 
     /**
@@ -76,11 +100,24 @@ public class ProducerRecord<K, V> {
      * @param partition The partition to which the record should be sent
      * @param key The key that will be included in the record
      * @param value The record contents
+     * @param headers The headers that will be included in the record
+     */
+    public ProducerRecord(String topic, Integer partition, K key, V value,  Iterable<Header> headers) {
+        this(topic, partition, null, key, value, headers);
+    }
+    
+    /**
+     * Creates a record to be sent to a specified topic and partition
+     *
+     * @param topic The topic the record will be appended to
+     * @param partition The partition to which the record should be sent
+     * @param key The key that will be included in the record
+     * @param value The record contents
      */
     public ProducerRecord(String topic, Integer partition, K key, V value) {
-        this(topic, partition, null, key, value);
+        this(topic, partition, null, key, value, null);
     }
-
+    
     /**
      * Create a record to be sent to Kafka
      * 
@@ -89,9 +126,9 @@ public class ProducerRecord<K, V> {
      * @param value The record contents
      */
     public ProducerRecord(String topic, K key, V value) {
-        this(topic, null, null, key, value);
+        this(topic, null, null, key, value, null);
     }
-
+    
     /**
      * Create a record with no key
      * 
@@ -99,7 +136,7 @@ public class ProducerRecord<K, V> {
      * @param value The record contents
      */
     public ProducerRecord(String topic, V value) {
-        this(topic, null, null, null, value);
+        this(topic, null, null, null, value, null);
     }
 
     /**
@@ -107,6 +144,13 @@ public class ProducerRecord<K, V> {
      */
     public String topic() {
         return topic;
+    }
+
+    /**
+     * @return The headers
+     */
+    public Headers headers() {
+        return headers;
     }
 
     /**
@@ -139,10 +183,11 @@ public class ProducerRecord<K, V> {
 
     @Override
     public String toString() {
+        String headers = this.headers == null ? "null" : this.headers.toString();
         String key = this.key == null ? "null" : this.key.toString();
         String value = this.value == null ? "null" : this.value.toString();
         String timestamp = this.timestamp == null ? "null" : this.timestamp.toString();
-        return "ProducerRecord(topic=" + topic + ", partition=" + partition + ", key=" + key + ", value=" + value +
+        return "ProducerRecord(topic=" + topic + ", partition=" + partition + ", headers=" + headers + ", key=" + key + ", value=" + value +
             ", timestamp=" + timestamp + ")";
     }
 
@@ -161,6 +206,8 @@ public class ProducerRecord<K, V> {
             return false;
         else if (topic != null ? !topic.equals(that.topic) : that.topic != null) 
             return false;
+        else if (headers != null ? !headers.equals(that.headers) : that.headers != null)
+            return false;
         else if (value != null ? !value.equals(that.value) : that.value != null) 
             return false;
         else if (timestamp != null ? !timestamp.equals(that.timestamp) : that.timestamp != null)
@@ -173,6 +220,7 @@ public class ProducerRecord<K, V> {
     public int hashCode() {
         int result = topic != null ? topic.hashCode() : 0;
         result = 31 * result + (partition != null ? partition.hashCode() : 0);
+        result = 31 * result + (headers != null ? headers.hashCode() : 0);
         result = 31 * result + (key != null ? key.hashCode() : 0);
         result = 31 * result + (value != null ? value.hashCode() : 0);
         result = 31 * result + (timestamp != null ? timestamp.hashCode() : 0);

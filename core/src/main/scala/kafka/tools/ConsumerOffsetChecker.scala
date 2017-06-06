@@ -32,7 +32,9 @@ import kafka.client.ClientUtils
 import kafka.network.BlockingChannel
 import kafka.api.PartitionOffsetRequestInfo
 import org.I0Itec.zkclient.exception.ZkNoNodeException
+import org.apache.kafka.common.network.ListenerName
 
+@deprecated("This class has been deprecated and will be removed in a future release.", "0.11.0.0")
 object ConsumerOffsetChecker extends Logging {
 
   private val consumerMap: mutable.Map[Int, Option[SimpleConsumer]] = mutable.Map()
@@ -42,7 +44,7 @@ object ConsumerOffsetChecker extends Logging {
   private def getConsumer(zkUtils: ZkUtils, bid: Int): Option[SimpleConsumer] = {
     try {
       zkUtils.getBrokerInfo(bid)
-        .map(_.getBrokerEndPoint(SecurityProtocol.PLAINTEXT))
+        .map(_.getBrokerEndPoint(ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)))
         .map(endPoint => new SimpleConsumer(endPoint.host, endPoint.port, 10000, 100000, "ConsumerOffsetChecker"))
         .orElse(throw new BrokerNotAvailableException("Broker id %d does not exist".format(bid)))
     } catch {
@@ -53,36 +55,36 @@ object ConsumerOffsetChecker extends Logging {
   }
 
   private def processPartition(zkUtils: ZkUtils,
-                               group: String, topic: String, pid: Int) {
-    val topicPartition = TopicAndPartition(topic, pid)
+                               group: String, topic: String, producerId: Int) {
+    val topicPartition = TopicAndPartition(topic, producerId)
     val offsetOpt = offsetMap.get(topicPartition)
     val groupDirs = new ZKGroupTopicDirs(group, topic)
-    val owner = zkUtils.readDataMaybeNull(groupDirs.consumerOwnerDir + "/%s".format(pid))._1
-    zkUtils.getLeaderForPartition(topic, pid) match {
+    val owner = zkUtils.readDataMaybeNull(groupDirs.consumerOwnerDir + "/%s".format(producerId))._1
+    zkUtils.getLeaderForPartition(topic, producerId) match {
       case Some(bid) =>
         val consumerOpt = consumerMap.getOrElseUpdate(bid, getConsumer(zkUtils, bid))
         consumerOpt match {
           case Some(consumer) =>
-            val topicAndPartition = TopicAndPartition(topic, pid)
+            val topicAndPartition = TopicAndPartition(topic, producerId)
             val request =
               OffsetRequest(immutable.Map(topicAndPartition -> PartitionOffsetRequestInfo(OffsetRequest.LatestTime, 1)))
             val logSize = consumer.getOffsetsBefore(request).partitionErrorAndOffsets(topicAndPartition).offsets.head
 
             val lagString = offsetOpt.map(o => if (o == -1) "unknown" else (logSize - o).toString)
-            println("%-15s %-30s %-3s %-15s %-15s %-15s %s".format(group, topic, pid, offsetOpt.getOrElse("unknown"), logSize, lagString.getOrElse("unknown"),
+            println("%-15s %-30s %-3s %-15s %-15s %-15s %s".format(group, topic, producerId, offsetOpt.getOrElse("unknown"), logSize, lagString.getOrElse("unknown"),
                                                                    owner match {case Some(ownerStr) => ownerStr case None => "none"}))
           case None => // ignore
         }
       case None =>
-        println("No broker for partition %s - %s".format(topic, pid))
+        println("No broker for partition %s - %s".format(topic, producerId))
     }
   }
 
   private def processTopic(zkUtils: ZkUtils, group: String, topic: String) {
     topicPidMap.get(topic) match {
-      case Some(pids) =>
-        pids.sorted.foreach {
-          pid => processPartition(zkUtils, group, topic, pid)
+      case Some(producerIds) =>
+        producerIds.sorted.foreach {
+          producerId => processPartition(zkUtils, group, topic, producerId)
         }
       case None => // ignore
     }
@@ -101,7 +103,7 @@ object ConsumerOffsetChecker extends Logging {
   def main(args: Array[String]) {
     warn("WARNING: ConsumerOffsetChecker is deprecated and will be dropped in releases following 0.9.0. Use ConsumerGroupCommand instead.")
 
-    val parser = new OptionParser()
+    val parser = new OptionParser(false)
 
     val zkConnectOpt = parser.accepts("zookeeper", "ZooKeeper connect string.").
             withRequiredArg().defaultsTo("localhost:2181").ofType(classOf[String])
@@ -125,7 +127,7 @@ object ConsumerOffsetChecker extends Logging {
 
     if (options.has("help")) {
        parser.printHelpOn(System.out)
-       System.exit(0)
+       Exit.exit(0)
     }
 
     CommandLineUtils.checkRequiredArgs(parser, options, groupOpt, zkConnectOpt)
@@ -155,7 +157,7 @@ object ConsumerOffsetChecker extends Logging {
 
       topicPidMap = immutable.Map(zkUtils.getPartitionsForTopics(topicList).toSeq:_*)
       val topicPartitions = topicPidMap.flatMap { case(topic, partitionSeq) => partitionSeq.map(TopicAndPartition(topic, _)) }.toSeq
-      val channel = ClientUtils.channelToOffsetManager(group, zkUtils, channelSocketTimeoutMs, channelRetryBackoffMs)
+      channel = ClientUtils.channelToOffsetManager(group, zkUtils, channelSocketTimeoutMs, channelRetryBackoffMs)
 
       debug("Sending offset fetch request to coordinator %s:%d.".format(channel.host, channel.port))
       channel.send(OffsetFetchRequest(group, topicPartitions))
@@ -178,13 +180,14 @@ object ConsumerOffsetChecker extends Logging {
                 throw z
           }
         }
-        else if (offsetAndMetadata.error == Errors.NONE.code)
+        else if (offsetAndMetadata.error == Errors.NONE)
           offsetMap.put(topicAndPartition, offsetAndMetadata.offset)
         else {
-          println("Could not fetch offset for %s due to %s.".format(topicAndPartition, Errors.forCode(offsetAndMetadata.error).exception))
+          println("Could not fetch offset for %s due to %s.".format(topicAndPartition, offsetAndMetadata.error.exception))
         }
       }
       channel.disconnect()
+      channel = null
 
       println("%-15s %-30s %-3s %-15s %-15s %-15s %s".format("Group", "Topic", "Pid", "Offset", "logSize", "Lag", "Owner"))
       topicList.sorted.foreach {

@@ -1,0 +1,322 @@
+<!--
+   Licensed to the Apache Software Foundation (ASF) under one or more
+   contributor license agreements.  See the NOTICE file distributed with
+   this work for additional information regarding copyright ownership.
+   The ASF licenses this file to You under the Apache License, Version 2.0
+   (the "License"); you may not use this file except in compliance with
+   the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+-->
+
+<!-- Findbugs filtering.
+
+Findbugs is a static code analysis tool run as part of the "check" phase of the build.
+This file dictates which categories of bugs and individual false positives that we supress.
+
+For a detailed description of findbugs bug categories, see http://findbugs.sourceforge.net/bugDescriptions.html
+-->
+<FindBugsFilter>
+    <Match>
+        <!-- Disable warnings about mutable objects and the use of public fields.
+            EI_EXPOSE_REP: May expose internal representation by returning reference to mutable object
+            EI_EXPOSE_REP2: May expose internal representation by incorporating reference to mutable object
+            MS_PKGPROTECT: Field should be package protected -->
+        <Bug pattern="EI_EXPOSE_REP,EI_EXPOSE_REP2,MS_PKGPROTECT"/>
+    </Match>
+
+    <Match>
+        <!-- Disable warnings about System.exit, until we decide to stop using it.
+            DM_EXIT: Method invokes System.exit -->
+        <Bug pattern="DM_EXIT"/>
+    </Match>
+
+    <Match>
+        <!-- Disable warnings about the lack of equals() when compareTo() is implemented.
+            EQ_COMPARETO_USE_OBJECT_EQUALS: This class defines a compareTo method but no equals() method -->
+        <Bug pattern="EQ_COMPARETO_USE_OBJECT_EQUALS"/>
+    </Match>
+
+    <Match>
+        <!-- Findbugs tends to work a little bit better with Java than with Scala.  We suppress
+             some categories of bug reports when using Scala, since findbugs generates huge
+             numbers of false positives in some of these categories when examining Scala code.
+
+            NP_LOAD_OF_KNOWN_NULL_VALUE: The variable referenced at this point is known to be null
+            due to an earlier check against null.
+            NP_NULL_PARAM_DEREF: Method call passes null for non-null parameter.
+            NP_NULL_ON_SOME_PATH: Possible null pointer dereference
+            SE_BAD_FIELD: Non-transient non-serializable instance field in serializable class.
+            DM_STRING_CTOR: Method invokes inefficient new String(String) constructor.
+            DM_NEW_FOR_GETCLASS: Method allocates an object, only to get the class object.
+            ST_WRITE_TO_STATIC_FROM_INSTANCE_METHOD: Write to static field from instance method.
+            DM_NUMBER_CTOR: Method invokes inefficient Number constructor; use static valueOf instead.
+            RCN_REDUNDANT_NULLCHECK_WOULD_HAVE_BEEN_A_NPE: Nullcheck of value previously dereferenced.
+            RCN_REDUNDANT_NULLCHECK_OF_NONNULL_VALUE: Redundant nullcheck of value known to be non-null.
+            RCN_REDUNDANT_NULLCHECK_OF_NULL_VALUE: Redundant nullcheck of value known to be null.
+            RV_RETURN_VALUE_IGNORED_NO_SIDE_EFFECT: Return value of method without side effect is ignored.
+            NM_CLASS_NAMING_CONVENTION: Class names should start with an upper case letter.
+            NM_METHOD_NAMING_CONVENTION: Method names should start with a lower case letter.
+            EC_NULL_ARG: Call to equals(null)
+            NP_ALWAYS_NULL: Null pointer dereference
+            MS_CANNOT_BE_FINAL: Field isn't final and can't be protected from malicious code -->
+        <Source name="~.*\.scala" />
+        <Or>
+            <Bug pattern="NP_LOAD_OF_KNOWN_NULL_VALUE"/>
+            <Bug pattern="NP_NULL_ON_SOME_PATH"/>
+            <Bug pattern="NP_NULL_PARAM_DEREF"/>
+            <Bug pattern="SE_BAD_FIELD"/>
+            <Bug pattern="DM_STRING_CTOR"/>
+            <Bug pattern="DM_NEW_FOR_GETCLASS"/>
+            <Bug pattern="ST_WRITE_TO_STATIC_FROM_INSTANCE_METHOD"/>
+            <Bug pattern="DM_NUMBER_CTOR"/>
+            <Bug pattern="RCN_REDUNDANT_NULLCHECK_WOULD_HAVE_BEEN_A_NPE"/>
+            <Bug pattern="RCN_REDUNDANT_NULLCHECK_OF_NONNULL_VALUE"/>
+            <Bug pattern="RCN_REDUNDANT_NULLCHECK_OF_NULL_VALUE"/>
+            <Bug pattern="RV_RETURN_VALUE_IGNORED_NO_SIDE_EFFECT"/>
+            <Bug pattern="NM_CLASS_NAMING_CONVENTION"/>
+            <Bug pattern="NM_METHOD_NAMING_CONVENTION"/>
+            <Bug pattern="EC_NULL_ARG"/>
+            <Bug pattern="NP_ALWAYS_NULL"/>
+            <Bug pattern="MS_CANNOT_BE_FINAL"/>
+        </Or>
+    </Match>
+
+    <Match>
+        <!-- Add a suppression for KAFKA-4897: LogCleaner#cleanSegments should not ignore failures to delete files.
+            TODO: remove this suppression when KAFKA-4897 is fixed. -->
+        <Package name="kafka.log"/>
+        <Source name="LogCleaner.scala"/>
+        <Bug pattern="RV_RETURN_VALUE_IGNORED,RV_RETURN_VALUE_IGNORED_BAD_PRACTICE"/>
+    </Match>
+
+    <Match>
+        <!-- Add a suppression for ignoring the return value of CountDownLatch#await. -->
+        <Class name="kafka.log.Cleaner"/>
+        <Method name="cleanOrSleep"/>
+        <Bug pattern="RV_RETURN_VALUE_IGNORED_BAD_PRACTICE"/>
+    </Match>
+
+    <Match>
+        <!-- Add a suppression for having the thread start in the constructor of the old, deprecated consumer. -->
+        <Class name="kafka.producer.Producer"/>
+        <Bug pattern="SC_START_IN_CTOR"/>
+    </Match>
+
+    <Match>
+        <!-- Add a suppression for the equals() method of NetworkClientBlockingOps. -->
+        <Class name="kafka.utils.NetworkClientBlockingOps"/>
+        <Bug pattern="EQ_UNUSUAL"/>
+    </Match>
+
+    <Match>
+        <!-- Add a suppression for auto-generated calls to instanceof in kafka.utils.Json -->
+        <Source name="Json.scala"/>
+        <Package name="kafka.utils"/>
+        <Bug pattern="BC_VACUOUS_INSTANCEOF"/>
+    </Match>
+
+    <Match>
+        <!-- Add a suppression for a false locking warning. -->
+        <Package name="kafka.consumer"/>
+        <Source name="ZookeeperConsumerConnector.scala"/>
+        <Bug pattern="UL_UNRELEASED_LOCK_EXCEPTION_PATH"/>
+    </Match>
+
+    <Match>
+        <!-- Suppress a warning about some static initializers in Schema using instances of a
+             subclass. -->
+        <Or>
+            <Class name="org.apache.kafka.connect.data.Schema"/>
+            <Class name="org.apache.kafka.connect.data.SchemaBuilder"/>
+        </Or>
+        <Bug pattern="IC_SUPERCLASS_USES_SUBCLASS_DURING_INITIALIZATION"/>
+    </Match>
+
+    <Match>
+        <!-- Suppress warnings about unread protected fields in some public classes.
+             Although these are not read in Kafka Connect code, they are part of the API. -->
+        <Or>
+            <Class name="org.apache.kafka.connect.connector.Connector"/>
+            <Class name="org.apache.kafka.connect.sink.SinkTask"/>
+            <Class name="org.apache.kafka.connect.source.SourceTask"/>
+        </Or>
+        <Bug pattern="URF_UNREAD_PUBLIC_OR_PROTECTED_FIELD"/>
+    </Match>
+
+    <Match>
+        <!-- Suppress warnings about converting an integer number of
+             milliseconds to a java.util.Date object.  We do this intentionally in
+             org.apache.kafka.connect.data.Time. -->
+        <Class name="org.apache.kafka.connect.data.Time"/>
+        <Method name="toLogical"/>
+        <Bug pattern="ICAST_INT_2_LONG_AS_INSTANT"/>
+    </Match>
+
+    <Match>
+        <!-- Suppress some minor warnings about machine-generated code for
+             benchmarking. -->
+        <Or>
+            <Package name="org.apache.kafka.jmh.cache.generated"/>
+            <Package name="org.apache.kafka.jmh.common.generated"/>
+            <Package name="org.apache.kafka.jmh.record.generated"/>
+            <Package name="org.apache.kafka.jmh.producer.generated"/>
+        </Or>
+    </Match>
+
+    <Match>
+        <!-- Suppress warnings about ignoring the return value of await.
+             This is done intentionally because we use other clues to determine
+             if the wait was cut short. -->
+        <Class name="org.apache.kafka.connect.runtime.WorkerSourceTask"/>
+        <Method name="execute"/>
+        <Bug pattern="RV_RETURN_VALUE_IGNORED"/>
+    </Match>
+
+    <Match>
+        <!-- Suppress a warning about ignoring the return value of await.
+             This is done intentionally because we use other clues to determine
+             if the wait was cut short. -->
+        <Package name="kafka.log"/>
+        <Source name="LogCleanerManager.scala"/>
+        <Bug pattern="RV_RETURN_VALUE_IGNORED,RV_RETURN_VALUE_IGNORED_BAD_PRACTICE"/>
+    </Match>
+
+    <Match>
+        <!-- Suppress some warnings about intentional switch statement fallthrough. -->
+        <Class name="org.apache.kafka.connect.runtime.WorkerConnector"/>
+        <Or>
+            <Method name="doStart"/>
+            <Method name="pause"/>
+        </Or>
+        <Bug pattern="SF_SWITCH_FALLTHROUGH"/>
+    </Match>
+
+    <Match>
+        <!-- Suppress some inconsistent synchronization warnings.  TODO: fix these.  See
+             KAFKA-4994. -->
+        <Class name="org.apache.kafka.connect.storage.OffsetStorageWriter"/>
+        <Bug pattern="IS2_INCONSISTENT_SYNC"/>
+    </Match>
+
+    <Match>
+        <!-- Suppress a warning about intentional switch statement fallthrough. -->
+        <Class name="org.apache.kafka.common.security.authenticator.SaslClientAuthenticator"/>
+        <Method name="authenticate"/>
+        <Bug pattern="SF_SWITCH_FALLTHROUGH"/>
+    </Match>
+
+    <Match>
+        <!-- Suppress a spurious warning about a missing default case. -->
+        <Or>
+            <Class name="org.apache.kafka.common.utils.Crc32"/>
+            <Class name="org.apache.kafka.common.utils.PureJavaCrc32C"/>
+        </Or>
+        <Method name="update"/>
+        <Bug pattern="SF_SWITCH_NO_DEFAULT"/>
+    </Match>
+
+    <Match>
+        <!-- Suppress a warning about intentional missing default cases and fallthroughs. -->
+        <Class name="org.apache.kafka.common.utils.Utils"/>
+        <Method name="murmur2"/>
+        <Or>
+            <Bug pattern="SF_SWITCH_NO_DEFAULT"/>
+            <Bug pattern="SF_SWITCH_FALLTHROUGH"/>
+        </Or>
+    </Match>
+
+    <Match>
+        <!-- Suppress a spurious warning about locks not being released on all paths.
+             This happens because there is an 'if' statement that checks if we have the lock before
+             releasing it. -->
+        <Class name="org.apache.kafka.clients.producer.internals.BufferPool"/>
+        <Method name="allocate"/>
+        <Bug pattern="UL_UNRELEASED_LOCK"/>
+    </Match>
+
+    <Match>
+        <!-- Suppress warnings about synchronizing on the UnsentRequests
+             ConcurrentHashMap.  This is done deliberately. -->
+        <Package name="org.apache.kafka.clients.consumer.internals"/>
+        <Source name="ConsumerNetworkClient.java"/>
+        <Bug pattern="JLM_JSR166_UTILCONCURRENT_MONITORENTER"/>
+    </Match>
+
+    <Match>
+        <!-- Suppress inconsistent synchronization warnings about KerberosLogin#login.
+             See KAFKA-4991 for details. -->
+        <Class name="org.apache.kafka.common.security.kerberos.KerberosLogin"/>
+        <Bug pattern="IS2_INCONSISTENT_SYNC"/>
+    </Match>
+
+    <Match>
+        <!-- Suppress inconsistent synchronization warnings about
+             AbstractCoordinator#coordinator.  See KAFKA-4992 for details.-->
+        <Class name="org.apache.kafka.clients.consumer.internals.AbstractCoordinator"/>
+        <Bug pattern="IS2_INCONSISTENT_SYNC"/>
+    </Match>
+
+    <Match>
+        <!-- Suppress warnings about implementing compareTo but not equals. -->
+        <Class name="org.apache.kafka.streams.processor.internals.Stamped"/>
+        <Bug pattern="EQ_COMPARETO_USE_OBJECT_EQUALS"/>
+    </Match>
+
+    <Match>
+        <!-- TODO: fix this (see KAFKA-4996) -->
+        <Or>
+            <Package name="org.apache.kafka.streams.state.internals"/>
+            <Package name="org.apache.kafka.streams.processor.internals"/>
+            <Package name="org.apache.kafka.streams.processor"/>
+            <Package name="org.apache.kafka.streams"/>
+        </Or>
+        <Bug pattern="IS2_INCONSISTENT_SYNC"/>
+    </Match>
+
+    <Match>
+        <!-- Ignore a warning about synchronizing on an AtomicBoolean -->
+        <Package name="kafka.metrics"/>
+        <Source name="KafkaMetricsReporter.scala"/>
+        <Method name="startReporters"/>
+        <Bug pattern="JLM_JSR166_UTILCONCURRENT_MONITORENTER"/>
+    </Match>
+
+    <Match>
+        <!-- Ignore spurious warning about imbalanced synchronization on a cached Exception. Some accesses of the
+             variable must occur in synchronized blocks, while some need not, because of the nature of the producer.
+             This seems to throw the static checker off. -->
+        <Package name="org.apache.kafka.clients.producer" />
+        <Source name="TransactionState.java" />
+        <Bug pattern="IS2_INCONSISTENT_SYNC" />
+    </Match>
+
+    <Match>
+        <!-- Ignore a spurious warning about the types used in
+             AdminClient#deleteRecordsBefore -->
+        <Package name="kafka.admin"/>
+        <Source name="AdminClient.scala"/>
+        <Bug pattern="GC_UNRELATED_TYPES"/>
+    </Match>
+
+    <Match>
+        <!-- Suppress a spurious warning about an unreleased lock. -->
+        <Class name="kafka.utils.timer.SystemTimer"/>
+        <Method name="add"/>
+        <Bug pattern="UL_UNRELEASED_LOCK_EXCEPTION_PATH"/>
+    </Match>
+
+    <Match>
+        <!-- Suppress a warning about an intentional infinite loop. -->
+        <Package name="kafka.utils"/>
+        <Source name="Throttler.scala"/>
+        <Method name="main"/>
+        <Bug pattern="IL_INFINITE_LOOP"/>
+    </Match>
+</FindBugsFilter>

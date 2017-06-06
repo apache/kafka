@@ -15,13 +15,14 @@
 
 from ducktape.mark import matrix
 from ducktape.mark import parametrize
+from ducktape.mark.resource import cluster
 from ducktape.services.service import Service
 from ducktape.tests.test import Test
 
 from kafkatest.services.kafka import KafkaService
 from kafkatest.services.performance import ProducerPerformanceService, EndToEndLatencyService, ConsumerPerformanceService, throughput, latency, compute_aggregate_throughput
 from kafkatest.services.zookeeper import ZookeeperService
-from kafkatest.version import TRUNK, KafkaVersion
+from kafkatest.version import DEV_BRANCH, KafkaVersion
 
 TOPIC_REP_ONE = "topic-replication-factor-one"
 TOPIC_REP_THREE = "topic-replication-factor-three"
@@ -63,14 +64,16 @@ class Benchmark(Test):
         self.kafka.log_level = "INFO"  # We don't DEBUG logging here
         self.kafka.start()
 
+    @cluster(num_nodes=5)
     @parametrize(acks=1, topic=TOPIC_REP_ONE)
     @parametrize(acks=1, topic=TOPIC_REP_THREE)
     @parametrize(acks=-1, topic=TOPIC_REP_THREE)
-    @parametrize(acks=1, topic=TOPIC_REP_THREE, num_producers=3)
     @matrix(acks=[1], topic=[TOPIC_REP_THREE], message_size=[10, 100, 1000, 10000, 100000], compression_type=["none", "snappy"], security_protocol=['PLAINTEXT', 'SSL'])
+    @cluster(num_nodes=7)
+    @parametrize(acks=1, topic=TOPIC_REP_THREE, num_producers=3)
     def test_producer_throughput(self, acks, topic, num_producers=1, message_size=DEFAULT_RECORD_SIZE,
-                                 compression_type="none", security_protocol='PLAINTEXT', client_version=str(TRUNK),
-                                 broker_version=str(TRUNK)):
+                                 compression_type="none", security_protocol='PLAINTEXT', client_version=str(DEV_BRANCH),
+                                 broker_version=str(DEV_BRANCH)):
         """
         Setup: 1 node zk + 3 node kafka cluster
         Produce ~128MB worth of messages to a topic with 6 partitions. Required acks, topic replication factor,
@@ -97,11 +100,12 @@ class Benchmark(Test):
         self.producer.run()
         return compute_aggregate_throughput(self.producer)
 
+    @cluster(num_nodes=5)
     @parametrize(security_protocol='SSL', interbroker_security_protocol='PLAINTEXT')
     @matrix(security_protocol=['PLAINTEXT', 'SSL'], compression_type=["none", "snappy"])
     def test_long_term_producer_throughput(self, compression_type="none", security_protocol='PLAINTEXT',
-                                           interbroker_security_protocol=None, client_version=str(TRUNK),
-                                           broker_version=str(TRUNK)):
+                                           interbroker_security_protocol=None, client_version=str(DEV_BRANCH),
+                                           broker_version=str(DEV_BRANCH)):
         """
         Setup: 1 node zk + 3 node kafka cluster
         Produce 10e6 100 byte messages to a topic with 6 partitions, replication-factor 3, and acks=1.
@@ -152,11 +156,14 @@ class Benchmark(Test):
         self.logger.info("\n".join(summary))
         return data
 
+    @cluster(num_nodes=5)
     @parametrize(security_protocol='SSL', interbroker_security_protocol='PLAINTEXT')
-    @matrix(security_protocol=['PLAINTEXT', 'SSL', 'SASL_PLAINTEXT', 'SASL_SSL'], compression_type=["none", "snappy"])
+    @matrix(security_protocol=['PLAINTEXT', 'SSL'], compression_type=["none", "snappy"])
+    @cluster(num_nodes=6)
+    @matrix(security_protocol=['SASL_PLAINTEXT', 'SASL_SSL'], compression_type=["none", "snappy"])
     def test_end_to_end_latency(self, compression_type="none", security_protocol="PLAINTEXT",
-                                interbroker_security_protocol=None, client_version=str(TRUNK),
-                                broker_version=str(TRUNK)):
+                                interbroker_security_protocol=None, client_version=str(DEV_BRANCH),
+                                broker_version=str(DEV_BRANCH)):
         """
         Setup: 1 node zk + 3 node kafka cluster
         Produce (acks = 1) and consume 10e3 messages to a topic with 6 partitions and replication-factor 3,
@@ -181,12 +188,13 @@ class Benchmark(Test):
         self.perf.run()
         return latency(self.perf.results[0]['latency_50th_ms'],  self.perf.results[0]['latency_99th_ms'], self.perf.results[0]['latency_999th_ms'])
 
+    @cluster(num_nodes=6)
     @parametrize(security_protocol='PLAINTEXT', new_consumer=False)
     @parametrize(security_protocol='SSL', interbroker_security_protocol='PLAINTEXT')
     @matrix(security_protocol=['PLAINTEXT', 'SSL'], compression_type=["none", "snappy"])
     def test_producer_and_consumer(self, compression_type="none", security_protocol="PLAINTEXT",
                                    interbroker_security_protocol=None, new_consumer=True,
-                                   client_version=str(TRUNK), broker_version=str(TRUNK)):
+                                   client_version=str(DEV_BRANCH), broker_version=str(DEV_BRANCH)):
         """
         Setup: 1 node zk + 3 node kafka cluster
         Concurrently produce and consume 10e6 messages with a single producer and a single consumer,
@@ -229,12 +237,13 @@ class Benchmark(Test):
         self.logger.info("\n".join(summary))
         return data
 
+    @cluster(num_nodes=6)
     @parametrize(security_protocol='PLAINTEXT', new_consumer=False)
     @parametrize(security_protocol='SSL', interbroker_security_protocol='PLAINTEXT')
     @matrix(security_protocol=['PLAINTEXT', 'SSL'], compression_type=["none", "snappy"])
     def test_consumer_throughput(self, compression_type="none", security_protocol="PLAINTEXT",
                                  interbroker_security_protocol=None, new_consumer=True, num_consumers=1,
-                                 client_version=str(TRUNK), broker_version=str(TRUNK)):
+                                 client_version=str(DEV_BRANCH), broker_version=str(DEV_BRANCH)):
         """
         Consume 10e6 100-byte messages with 1 or more consumers from a topic with 6 partitions
         (using new consumer iff new_consumer == True), and report throughput.

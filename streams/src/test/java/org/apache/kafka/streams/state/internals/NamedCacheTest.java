@@ -1,24 +1,25 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -26,20 +27,26 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
 
 public class NamedCacheTest {
 
     private NamedCache cache;
+    private MockStreamsMetrics streamMetrics;
 
     @Before
     public void setUp() throws Exception {
-        cache = new NamedCache("name");
+        streamMetrics = new MockStreamsMetrics(new Metrics());
+        cache = new NamedCache("name", streamMetrics);
     }
 
     @Test
@@ -63,6 +70,30 @@ public class NamedCacheTest {
             assertEquals(cache.misses(), 0);
             assertEquals(cache.overwrites(), 0);
         }
+    }
+
+    @Test
+    public void testMetrics() throws Exception {
+        final String scope = "record-cache";
+        final String entityName = cache.name();
+        final String opName = "hitRatio";
+        final String tagKey = "record-cache-id";
+        final String tagValue = cache.name();
+        final String groupName = "stream-" + scope + "-metrics";
+        final Map<String, String> metricTags = new LinkedHashMap<>();
+        metricTags.put(tagKey, tagValue);
+
+        assertNotNull(streamMetrics.registry().getSensor(entityName + "-" + opName));
+        assertNotNull(streamMetrics.registry().metrics().get(streamMetrics.registry().metricName(entityName +
+            "-" + opName + "-avg", groupName, "The current count of " + entityName + " " + opName +
+            " operation.", metricTags)));
+        assertNotNull(streamMetrics.registry().metrics().get(streamMetrics.registry().metricName(entityName +
+            "-" + opName + "-min", groupName, "The current count of " + entityName + " " + opName +
+            " operation.", metricTags)));
+        assertNotNull(streamMetrics.registry().metrics().get(streamMetrics.registry().metricName(entityName +
+            "-" + opName + "-max", groupName, "The current count of " + entityName + " " + opName +
+            " operation.", metricTags)));
+
     }
 
     @Test
@@ -196,5 +227,86 @@ public class NamedCacheTest {
     public void shouldThrowIllegalStateExceptionWhenTryingToOverwriteDirtyEntryWithCleanEntry() throws Exception {
         cache.put(Bytes.wrap(new byte[]{0}), new LRUCacheEntry(new byte[]{10}, true, 0, 0, 0, ""));
         cache.put(Bytes.wrap(new byte[]{0}), new LRUCacheEntry(new byte[]{10}, false, 0, 0, 0, ""));
+    }
+
+    @Test
+    public void shouldRemoveDeletedValuesOnFlush() throws Exception {
+        cache.setListener(new ThreadCache.DirtyEntryFlushListener() {
+            @Override
+            public void apply(final List<ThreadCache.DirtyEntry> dirty) {
+                // no-op
+            }
+        });
+        cache.put(Bytes.wrap(new byte[]{0}), new LRUCacheEntry(null, true, 0, 0, 0, ""));
+        cache.put(Bytes.wrap(new byte[]{1}), new LRUCacheEntry(new byte[]{20}, true, 0, 0, 0, ""));
+        cache.flush();
+        assertEquals(1, cache.size());
+        assertNotNull(cache.get(Bytes.wrap(new byte[]{1})));
+    }
+
+    @Test
+    public void shouldBeReentrantAndNotBreakLRU() throws Exception {
+        final LRUCacheEntry dirty = new LRUCacheEntry(new byte[]{3}, true, 0, 0, 0, "");
+        final LRUCacheEntry clean = new LRUCacheEntry(new byte[]{3});
+        cache.put(Bytes.wrap(new byte[]{0}), dirty);
+        cache.put(Bytes.wrap(new byte[]{1}), clean);
+        cache.put(Bytes.wrap(new byte[]{2}), clean);
+        assertEquals(3 * cache.head().size(), cache.sizeInBytes());
+        cache.setListener(new ThreadCache.DirtyEntryFlushListener() {
+            @Override
+            public void apply(final List<ThreadCache.DirtyEntry> dirty) {
+                cache.put(Bytes.wrap(new byte[]{3}), clean);
+                // evict key 1
+                cache.evict();
+                // evict key 2
+                cache.evict();
+            }
+        });
+
+        assertEquals(3 * cache.head().size(), cache.sizeInBytes());
+        // Evict key 0
+        cache.evict();
+        final Bytes entryFour = Bytes.wrap(new byte[]{4});
+        cache.put(entryFour, dirty);
+
+        // check that the LRU is still correct
+        final NamedCache.LRUNode head = cache.head();
+        final NamedCache.LRUNode tail = cache.tail();
+        assertEquals(2, cache.size());
+        assertEquals(2 * head.size(), cache.sizeInBytes());
+        // dirty should be the newest
+        assertEquals(entryFour, head.key());
+        assertEquals(Bytes.wrap(new byte[] {3}), tail.key());
+        assertSame(tail, head.next());
+        assertNull(head.previous());
+        assertSame(head, tail.previous());
+        assertNull(tail.next());
+
+        // evict key 3
+        cache.evict();
+        assertSame(cache.head(), cache.tail());
+        assertEquals(entryFour, cache.head().key());
+        assertNull(cache.head().next());
+        assertNull(cache.head().previous());
+    }
+
+    @Test
+    public void shouldNotThrowIllegalArgumentAfterEvictingDirtyRecordAndThenPuttingNewRecordWithSameKey() throws Exception {
+        final LRUCacheEntry dirty = new LRUCacheEntry(new byte[]{3}, true, 0, 0, 0, "");
+        final LRUCacheEntry clean = new LRUCacheEntry(new byte[]{3});
+        final Bytes key = Bytes.wrap(new byte[] {3});
+        cache.setListener(new ThreadCache.DirtyEntryFlushListener() {
+            @Override
+            public void apply(final List<ThreadCache.DirtyEntry> dirty) {
+                cache.put(key, clean);
+            }
+        });
+        cache.put(key, dirty);
+        cache.evict();
+    }
+
+    @Test
+    public void shouldReturnNullIfKeyIsNull() throws Exception {
+        assertNull(cache.get(null));
     }
 }

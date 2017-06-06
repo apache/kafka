@@ -14,6 +14,7 @@
 # limitations under the License.
 
 from ducktape.mark import parametrize
+from ducktape.mark.resource import cluster
 from ducktape.utils.util import wait_until
 
 from kafkatest.services.zookeeper import ZookeeperService
@@ -23,6 +24,7 @@ from kafkatest.services.console_consumer import ConsoleConsumer
 from kafkatest.tests.produce_consume_validate import ProduceConsumeValidateTest
 from kafkatest.utils import is_int
 import random
+
 
 class ReassignPartitionsTest(ProduceConsumeValidateTest):
     """
@@ -86,6 +88,7 @@ class ReassignPartitionsTest(ProduceConsumeValidateTest):
         # Wait until finished or timeout
         wait_until(lambda: self.kafka.verify_reassign_partitions(partition_info), timeout_sec=self.timeout_sec, backoff_sec=.5)
 
+    @cluster(num_nodes=7)
     @parametrize(security_protocol="PLAINTEXT", bounce_brokers=True)
     @parametrize(security_protocol="PLAINTEXT", bounce_brokers=False)
     def test_reassign_partitions(self, bounce_brokers, security_protocol):

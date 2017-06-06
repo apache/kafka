@@ -17,7 +17,10 @@
 
 package kafka.server
 
-import kafka.message.MessageSet
+import org.apache.kafka.common.record.Records
+import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
 
-case class FetchDataInfo(fetchOffsetMetadata: LogOffsetMetadata, messageSet: MessageSet,
-                         firstMessageSetIncomplete: Boolean = false)
+case class FetchDataInfo(fetchOffsetMetadata: LogOffsetMetadata,
+                         records: Records,
+                         firstEntryIncomplete: Boolean = false,
+                         abortedTransactions: Option[List[AbortedTransaction]] = None)

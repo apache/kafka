@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -154,6 +154,8 @@ public class SslFactory implements Configurable {
         if (cipherSuites != null) sslEngine.setEnabledCipherSuites(cipherSuites);
         if (enabledProtocols != null) sslEngine.setEnabledProtocols(enabledProtocols);
 
+        // SSLParameters#setEndpointIdentificationAlgorithm enables endpoint validation
+        // only in client mode. Hence, validation is enabled only for clients.
         if (mode == Mode.SERVER) {
             sslEngine.setUseClientMode(false);
             if (needClientAuth)
@@ -191,14 +193,12 @@ public class SslFactory implements Configurable {
     private void createTruststore(String type, String path, Password password) {
         if (path == null && password != null) {
             throw new KafkaException("SSL trust store is not specified, but trust store password is specified.");
-        } else if (path != null && password == null) {
-            throw new KafkaException("SSL trust store is specified, but trust store password is not specified.");
-        } else if (path != null && password != null) {
+        } else if (path != null) {
             this.truststore = new SecurityStore(type, path, password);
         }
     }
 
-    private class SecurityStore {
+    private static class SecurityStore {
         private final String type;
         private final String path;
         private final Password password;
@@ -214,7 +214,9 @@ public class SslFactory implements Configurable {
             try {
                 KeyStore ks = KeyStore.getInstance(type);
                 in = new FileInputStream(path);
-                ks.load(in, password.value().toCharArray());
+                // If a password is not set access to the truststore is still available, but integrity checking is disabled.
+                char[] passwordChars = password != null ? password.value().toCharArray() : null;
+                ks.load(in, passwordChars);
                 return ks;
             } finally {
                 if (in != null) in.close();

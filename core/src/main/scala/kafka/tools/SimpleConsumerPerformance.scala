@@ -19,21 +19,26 @@ package kafka.tools
 
 import java.net.URI
 import java.text.SimpleDateFormat
-import kafka.api.{PartitionOffsetRequestInfo, FetchRequestBuilder, OffsetRequest}
+
+import kafka.api.{FetchRequestBuilder, OffsetRequest, PartitionOffsetRequestInfo}
 import kafka.consumer.SimpleConsumer
 import kafka.utils._
 import org.apache.log4j.Logger
 import kafka.common.TopicAndPartition
+import org.apache.kafka.common.utils.Time
 
 
 /**
  * Performance test for the simple consumer
  */
+@deprecated("This class has been deprecated and will be removed in a future release.", "0.11.0.0")
 object SimpleConsumerPerformance {
 
   private val logger = Logger.getLogger(getClass())
 
   def main(args: Array[String]) {
+    logger.warn("WARNING: SimpleConsumerPerformance is deprecated and will be dropped in a future release following 0.11.0.0.")
+
     val config = new ConsumerPerfConfig(args)
     logger.info("Starting SimpleConsumer...")
 
@@ -96,7 +101,7 @@ object SimpleConsumerPerformance {
             (totalBytesRead*1.0)/(1024*1024), totalMBRead/elapsed,
             totalMessagesRead, (totalMessagesRead-lastMessagesRead)/elapsed))
         }
-        lastReportTime = SystemTime.milliseconds
+        lastReportTime = Time.SYSTEM.milliseconds
         lastBytesRead = totalBytesRead
         lastMessagesRead = totalMessagesRead
         consumedInterval = 0
@@ -111,7 +116,7 @@ object SimpleConsumerPerformance {
         config.dateFormat.format(reportTime), config.fetchSize, totalMBRead, totalMBRead/elapsed,
         totalMessagesRead, totalMessagesRead/elapsed))
     }
-    System.exit(0)
+    Exit.exit(0)
   }
 
   class ConsumerPerfConfig(args: Array[String]) extends PerfConfig(args) {

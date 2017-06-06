@@ -2,6 +2,7 @@ dist
 *classes
 target/
 build/
+build_eclipse/
 .gradle/
 lib_managed/
 src_managed/
@@ -21,7 +22,6 @@ TAGS
 *.iml
 .project
 .settings
-.gradle
 kafka.ipr
 kafka.iws
 .vagrant
@@ -33,6 +33,8 @@ config/server-*
 config/zookeeper-*
 core/data/*
 gradle/wrapper/*
+gradlew
+gradlew.bat
 
 results
 tests/results
@@ -42,3 +44,5 @@ tests/venv
 .cache
 
 docs/generated/
+
+.release-settings.json

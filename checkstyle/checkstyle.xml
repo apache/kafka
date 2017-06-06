@@ -24,8 +24,8 @@
   <module name="FileTabCharacter"/>
 
   <!-- header -->
-  <module name="RegexpHeader">
-    <property name="header" value="/\*\*\nLicensed to the Apache.*"/>
+  <module name="Header">
+    <property name="headerFile" value="checkstyle/java.header" />
   </module>
 
   <module name="TreeWalker">
@@ -57,10 +57,13 @@
     <module name="LocalFinalVariableName"/>
     <module name="MemberName"/>
     <module name="ClassTypeParameterName">
-      <property name="format" value="^[A-Z0-9]*$"/>
+      <property name="format" value="^[A-Z][a-zA-Z0-9]*$$"/>
     </module>
     <module name="MethodTypeParameterName">
-      <property name="format" value="^[A-Z0-9]*$"/>
+      <property name="format" value="^[A-Z][a-zA-Z0-9]*$$"/>
+    </module>
+    <module name="InterfaceTypeParameterName">
+      <property name="format" value="^[A-Z][a-zA-Z0-9]*$$"/>
     </module>
     <module name="PackageName"/>
     <module name="ParameterName"/>
@@ -93,5 +96,41 @@
       <property name="illegalPattern" value="true"/>
       <property name="ignoreComments" value="true"/>
     </module>
+
+    <!-- code quality -->
+    <module name="MethodLength"/>
+    <module name="ParameterNumber">
+      <!-- default is 8 -->
+      <property name="max" value="13"/>
+    </module>
+    <module name="ClassDataAbstractionCoupling">
+      <!-- default is 7 -->
+      <property name="max" value="20"/>
+    </module>
+    <module name="BooleanExpressionComplexity">
+      <!-- default is 3 -->
+      <property name="max" value="5"/>
+    </module>
+
+    <module name="ClassFanOutComplexity">
+      <!-- default is 20 -->
+      <property name="max" value="40"/>
+    </module>
+    <module name="CyclomaticComplexity">
+      <!-- default is 10-->
+      <property name="max" value="16"/>
+    </module>
+    <module name="JavaNCSS">
+      <!-- default is 50 -->
+      <property name="methodMaximum" value="100"/>
+    </module>
+    <module name="NPathComplexity">
+      <!-- default is 200 -->
+      <property name="max" value="500"/>
+    </module>
+  </module>
+
+  <module name="SuppressionFilter">
+    <property name="file" value="checkstyle/suppressions.xml"/>
   </module>
 </module>

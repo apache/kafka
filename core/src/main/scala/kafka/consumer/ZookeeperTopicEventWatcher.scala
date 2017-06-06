@@ -22,6 +22,7 @@ import kafka.utils.{ZkUtils, Logging}
 import org.I0Itec.zkclient.{IZkStateListener, IZkChildListener}
 import org.apache.zookeeper.Watcher.Event.KeeperState
 
+@deprecated("This class has been deprecated and will be removed in a future release.", "0.11.0.0")
 class ZookeeperTopicEventWatcher(val zkUtils: ZkUtils,
     val eventHandler: TopicEventHandler[String]) extends Logging {
 
@@ -59,7 +60,7 @@ class ZookeeperTopicEventWatcher(val zkUtils: ZkUtils,
 
   class ZkTopicEventListener extends IZkChildListener {
 
-    @throws(classOf[Exception])
+    @throws[Exception]
     def handleChildChange(parent: String, children: java.util.List[String]) {
       lock.synchronized {
         try {
@@ -81,10 +82,10 @@ class ZookeeperTopicEventWatcher(val zkUtils: ZkUtils,
   class ZkSessionExpireListener(val topicEventListener: ZkTopicEventListener)
     extends IZkStateListener {
 
-    @throws(classOf[Exception])
+    @throws[Exception]
     def handleStateChanged(state: KeeperState) { }
 
-    @throws(classOf[Exception])
+    @throws[Exception]
     def handleNewSession() {
       lock.synchronized {
         if (zkUtils != null) {

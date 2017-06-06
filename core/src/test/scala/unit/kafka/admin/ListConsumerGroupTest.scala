@@ -35,7 +35,7 @@ class ListConsumerGroupTest extends KafkaServerTestHarness {
 
   val overridingProps = new Properties()
   val topic = "foo"
-  val topicFilter = new Whitelist(topic)
+  val topicFilter = Whitelist(topic)
   val group = "test.group"
   val props = new Properties
 
@@ -55,7 +55,11 @@ class ListConsumerGroupTest extends KafkaServerTestHarness {
   def testListGroupWithNoExistingGroup() {
     val opts = new ConsumerGroupCommandOptions(Array("--zookeeper", zkConnect))
     val consumerGroupCommand = new ZkConsumerGroupService(opts)
-    assert(consumerGroupCommand.listGroups().isEmpty)
+    try {
+      assert(consumerGroupCommand.listGroups().isEmpty)
+    } finally {
+      consumerGroupCommand.close()
+    }
   }
 
   @Test
