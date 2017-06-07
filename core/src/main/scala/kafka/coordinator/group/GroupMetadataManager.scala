@@ -437,10 +437,10 @@ class GroupMetadataManager(brokerId: Int,
    */
   def loadGroupsForPartition(offsetsPartition: Int, onGroupLoaded: GroupMetadata => Unit) {
     val topicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, offsetsPartition)
+    info(s"Scheduling loading of offsets and group metadata from $topicPartition")
+    scheduler.schedule(topicPartition.toString, doLoadGroupsAndOffsets)
 
     def doLoadGroupsAndOffsets() {
-      info(s"Loading offsets and group metadata from $topicPartition")
-
       inLock(partitionLock) {
         if (loadingPartitions.contains(offsetsPartition)) {
           info(s"Offset load from $topicPartition already in progress.")
@@ -451,7 +451,9 @@ class GroupMetadataManager(brokerId: Int,
       }
 
       try {
+        val startMs = time.milliseconds()
         loadGroupsAndOffsets(topicPartition, onGroupLoaded)
+        info(s"Finished loading offsets and group metadata from $topicPartition in ${time.milliseconds() - startMs} milliseconds.")
       } catch {
         case t: Throwable => error(s"Error loading offsets from $topicPartition", t)
       } finally {
@@ -461,14 +463,11 @@ class GroupMetadataManager(brokerId: Int,
         }
       }
     }
-
-    scheduler.schedule(topicPartition.toString, doLoadGroupsAndOffsets _)
   }
 
   private[group] def loadGroupsAndOffsets(topicPartition: TopicPartition, onGroupLoaded: GroupMetadata => Unit) {
     def highWaterMark = replicaManager.getLogEndOffset(topicPartition).getOrElse(-1L)
 
-    val startMs = time.milliseconds()
     replicaManager.getLog(topicPartition) match {
       case None =>
         warn(s"Attempted to load offsets and group metadata from $topicPartition, but found no log")
@@ -577,7 +576,7 @@ class GroupMetadataManager(brokerId: Int,
           loadedGroups.values.foreach { group =>
             val offsets = groupOffsets.getOrElse(group.groupId, Map.empty[TopicPartition, CommitRecordMetadataAndOffset])
             val pendingOffsets = pendingGroupOffsets.getOrElse(group.groupId, Map.empty[Long, mutable.Map[TopicPartition, CommitRecordMetadataAndOffset]])
-            trace(s"Loaded group metadata $group with offsets $offsets and pending offsets $pendingOffsets")
+            debug(s"Loaded group metadata $group with offsets $offsets and pending offsets $pendingOffsets")
             loadGroup(group, offsets, pendingOffsets)
             onGroupLoaded(group)
           }
@@ -588,7 +587,7 @@ class GroupMetadataManager(brokerId: Int,
             val group = new GroupMetadata(groupId)
             val offsets = emptyGroupOffsets.getOrElse(groupId, Map.empty[TopicPartition, CommitRecordMetadataAndOffset])
             val pendingOffsets = pendingEmptyGroupOffsets.getOrElse(groupId, Map.empty[Long, mutable.Map[TopicPartition, CommitRecordMetadataAndOffset]])
-            trace(s"Loaded group metadata $group with offsets $offsets and pending offsets $pendingOffsets")
+            debug(s"Loaded group metadata $group with offsets $offsets and pending offsets $pendingOffsets")
             loadGroup(group, offsets, pendingOffsets)
             onGroupLoaded(group)
           }
@@ -601,10 +600,6 @@ class GroupMetadataManager(brokerId: Int,
               throw new IllegalStateException(s"Unexpected unload of active group $groupId while " +
                 s"loading partition $topicPartition")
           }
-
-          if (!shuttingDown.get())
-            info("Finished loading offsets from %s in %d milliseconds."
-              .format(topicPartition, time.milliseconds() - startMs))
         }
     }
   }
@@ -641,7 +636,8 @@ class GroupMetadataManager(brokerId: Int,
   def removeGroupsForPartition(offsetsPartition: Int,
                                onGroupUnloaded: GroupMetadata => Unit) {
     val topicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, offsetsPartition)
-    scheduler.schedule(topicPartition.toString, removeGroupsAndOffsets _)
+    info(s"Scheduling unloading of offsets and group metadata from $topicPartition")
+    scheduler.schedule(topicPartition.toString, removeGroupsAndOffsets)
 
     def removeGroupsAndOffsets() {
       var numOffsetsRemoved = 0
@@ -663,11 +659,8 @@ class GroupMetadataManager(brokerId: Int,
         }
       }
 
-      if (numOffsetsRemoved > 0)
-        info(s"Removed $numOffsetsRemoved cached offsets for $topicPartition on follower transition.")
-
-      if (numGroupsRemoved > 0)
-        info(s"Removed $numGroupsRemoved cached groups for $topicPartition on follower transition.")
+      info(s"Finished unloading $topicPartition. Removed $numOffsetsRemoved cached offsets " +
+        s"and $numGroupsRemoved cached groups.")
     }
   }
 
