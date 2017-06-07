@@ -505,22 +505,25 @@ public class NetworkClient implements KafkaClient {
     }
 
     public static AbstractResponse parseResponse(ByteBuffer responseBuffer, RequestHeader requestHeader) {
-        return parseResponseMaybeUpdateThrottleTimeMetrics(responseBuffer, requestHeader, null, 0, null);
+        return createResponse(parseStructMaybeUpdateThrottleTimeMetrics(responseBuffer, requestHeader,
+                null, 0), requestHeader);
     }
 
-    private static AbstractResponse parseResponseMaybeUpdateThrottleTimeMetrics(ByteBuffer responseBuffer, RequestHeader requestHeader,
-            Sensor throttleTimeSensor, long now, StringBuffer structStringBuffer) {
+    private static Struct parseStructMaybeUpdateThrottleTimeMetrics(ByteBuffer responseBuffer, RequestHeader requestHeader,
+                                                                    Sensor throttleTimeSensor, long now) {
         ResponseHeader responseHeader = ResponseHeader.parse(responseBuffer);
         // Always expect the response version id to be the same as the request version id
         ApiKeys apiKey = ApiKeys.forId(requestHeader.apiKey());
         Struct responseBody = apiKey.parseResponse(requestHeader.apiVersion(), responseBuffer);
-        if (structStringBuffer != null) {
-            structStringBuffer.append(responseBody.toString());
-        }
         correlate(requestHeader, responseHeader);
         if (throttleTimeSensor != null && responseBody.hasField(AbstractResponse.THROTTLE_TIME_KEY_NAME))
             throttleTimeSensor.record(responseBody.getInt(AbstractResponse.THROTTLE_TIME_KEY_NAME), now);
-        return AbstractResponse.getResponse(apiKey, responseBody);
+        return responseBody;
+    }
+
+    private static AbstractResponse createResponse(Struct responseStruct, RequestHeader requestHeader) {
+        ApiKeys apiKey = ApiKeys.forId(requestHeader.apiKey());
+        return AbstractResponse.getResponse(apiKey, responseStruct);
     }
 
     /**
@@ -607,13 +610,13 @@ public class NetworkClient implements KafkaClient {
         for (NetworkReceive receive : this.selector.completedReceives()) {
             String source = receive.source();
             InFlightRequest req = inFlightRequests.completeNext(source);
-            StringBuffer structStringBuffer = log.isTraceEnabled() ? new StringBuffer() : null;
-            AbstractResponse body = parseResponseMaybeUpdateThrottleTimeMetrics(receive.payload(), req.header,
-                throttleTimeSensor, now, structStringBuffer);
+            Struct responseStruct = parseStructMaybeUpdateThrottleTimeMetrics(receive.payload(), req.header,
+                throttleTimeSensor, now);
             if (log.isTraceEnabled()) {
                 log.trace("Completed receive from node {}, for key {}, received {}", req.destination,
-                    req.header.apiKey(), structStringBuffer.toString());
+                    req.header.apiKey(), responseStruct.toString());
             }
+            AbstractResponse body = createResponse(responseStruct, req.header);
             if (req.isInternalRequest && body instanceof MetadataResponse)
                 metadataUpdater.handleCompletedMetadataResponse(req.header, now, (MetadataResponse) body);
             else if (req.isInternalRequest && body instanceof ApiVersionsResponse)

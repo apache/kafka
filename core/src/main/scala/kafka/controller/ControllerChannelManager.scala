@@ -237,14 +237,15 @@ class RequestSendThread(val controllerId: Int,
         }
       }
       if (clientResponse != null) {
-        val api = ApiKeys.forId(clientResponse.requestHeader.apiKey)
+        val requestHeader = clientResponse.requestHeader
+        val api = ApiKeys.forId(requestHeader.apiKey)
         if (api != ApiKeys.LEADER_AND_ISR && api != ApiKeys.STOP_REPLICA && api != ApiKeys.UPDATE_METADATA_KEY)
           throw new KafkaException(s"Unexpected apiKey received: $apiKey")
 
         val response = clientResponse.responseBody
 
         stateChangeLogger.trace("Controller %d epoch %d received response %s for a request sent to broker %s"
-          .format(controllerId, controllerContext.epoch, response.toString(), brokerNode.toString))
+          .format(controllerId, controllerContext.epoch, response.toString(requestHeader.apiVersion), brokerNode.toString))
 
         if (callback != null) {
           callback(response)
