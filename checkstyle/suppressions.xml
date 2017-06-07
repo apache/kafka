@@ -10,13 +10,13 @@
     <suppress checks="ClassFanOutComplexity"
               files="(Fetcher|Sender|SenderTest|ConsumerCoordinator|KafkaConsumer|KafkaProducer|SaslServerAuthenticator|Utils|TransactionManagerTest|KafkaAdminClient|NetworkClient).java"/>
     <suppress checks="ClassFanOutComplexity"
-              files=".*/protocol/Errors.java"/>
+              files=".*[\\/]protocol[\\/]Errors.java"/>
     <suppress checks="ClassFanOutComplexity"
-              files=".*/common/utils/Utils.java"/>
+              files=".*[\\/]common[\\/]utils[\\/]Utils.java"/>
     <suppress checks="ClassFanOutComplexity"
-              files=".*/requests/AbstractRequest.java"/>
+              files=".*[\\/]requests[\\/]AbstractRequest.java"/>
     <suppress checks="ClassFanOutComplexity"
-              files=".*/requests/AbstractResponse.java"/>
+              files=".*[\\/]requests[\\/]AbstractResponse.java"/>
 
     <suppress checks="MethodLength"
               files="KerberosLogin.java|RequestResponseTest.java"/>
@@ -37,7 +37,7 @@
     <suppress checks="ClassDataAbstractionCoupling"
               files="(KafkaConsumer|ConsumerCoordinator|Fetcher|KafkaProducer|AbstractRequest|AbstractResponse|TransactionManager|KafkaAdminClient).java"/>
     <suppress checks="ClassDataAbstractionCoupling"
-              files=".*/protocol/Errors.java"/>
+              files=".*[\\/]protocol[\\/]Errors.java"/>
 
     <suppress checks="BooleanExpressionComplexity"
               files="(Utils|Topic|KafkaLZ4BlockOutputStream|AclData).java"/>
@@ -157,9 +157,9 @@
               files="KStreamWindowAggregateTest.java"/>
 
     <suppress checks="ClassDataAbstractionCoupling"
-              files=".*/streams/.*/Test.java"/>
+              files=".*[\\/]streams[\\/].*[\\/]Test.java"/>
     <suppress checks="ClassDataAbstractionCoupling"
-              files=".*/streams/.*test/.*.java"/>
+              files=".*[\\/]streams[\\/].*test[\\/].*.java"/>
 
     <suppress checks="BooleanExpressionComplexity"
               files="SmokeTestDriver.java"/>
