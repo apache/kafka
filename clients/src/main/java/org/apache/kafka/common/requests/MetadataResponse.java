@@ -372,6 +372,15 @@ public class MetadataResponse extends AbstractResponse {
             return isr;
         }
 
+        @Override
+        public String toString() {
+            return "(type=PartitionMetadata," +
+                    ", error=" + error +
+                    ", partition=" + partition +
+                    ", leader=" + leader +
+                    ", replicas=" + replicas +
+                    ", isr=" + isr + ')';
+        }
     }
 
     @Override

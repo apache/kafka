@@ -258,7 +258,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   private def createUpdateMetadataRequest = {
-    val partitionState = Map(tp -> new PartitionState(Int.MaxValue, brokerId, Int.MaxValue, List(brokerId).asJava, 2, Set(brokerId).asJava)).asJava
+    val partitionState = Map(tp -> new PartitionState(Int.MaxValue, brokerId, Int.MaxValue, List(brokerId).asJava, 2, Seq(brokerId).asJava)).asJava
     val securityProtocol = SecurityProtocol.PLAINTEXT
     val brokers = Set(new requests.UpdateMetadataRequest.Broker(brokerId,
       Seq(new requests.UpdateMetadataRequest.EndPoint("localhost", 0, securityProtocol,
@@ -294,7 +294,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
 
   private def createLeaderAndIsrRequest = {
     new requests.LeaderAndIsrRequest.Builder(brokerId, Int.MaxValue,
-      Map(tp -> new PartitionState(Int.MaxValue, brokerId, Int.MaxValue, List(brokerId).asJava, 2, Set(brokerId).asJava)).asJava,
+      Map(tp -> new PartitionState(Int.MaxValue, brokerId, Int.MaxValue, List(brokerId).asJava, 2, Seq(brokerId).asJava)).asJava,
       Set(new Node(brokerId, "localhost", 0)).asJava).build()
   }
 
