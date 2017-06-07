@@ -1340,8 +1340,25 @@ All the following metrics have a recording level of ``debug``:
       </tr>
       
     </tbody>
-</table>
+ </table>
 
+  <h5><a id="kafka_streams_cache_monitoring" href="#kafka_streams_cache_monitoring">Record Cache Metrics</a></h5>
+All the following metrics have a recording level of ``debug``:
+
+  <table class="data-table">
+      <tbody>
+      <tr>
+        <th>Metric/Attribute name</th>
+        <th>Description</th>
+        <th>Mbean name</th>
+      </tr>
+      <tr>
+        <td>hitRatio-[avg | min | max]</td>
+        <td>The cache hit ratio defined as the ratio of cache read hits over the total cache read requests. </td>
+        <td>kafka.streams:type=stream-record-cache-metrics, record-cache-id=([-.\w]+)</td>
+      </tr>
+    </tbody>
+ </table>
 
   <h4><a id="others_monitoring" href="#others_monitoring">Others</a></h4>
 
