@@ -45,6 +45,8 @@ import org.apache.kafka.common.resource.ResourceType;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.Timeout;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -57,6 +59,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicLong;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
@@ -70,6 +73,8 @@ import static org.junit.Assert.fail;
  * See AdminClientIntegrationTest for an integration test.
  */
 public class KafkaAdminClientTest {
+    private static final Logger log = LoggerFactory.getLogger(KafkaAdminClientTest.class);
+
     @Rule
     final public Timeout globalTimeout = Timeout.millis(120000);
 
@@ -345,4 +350,39 @@ public class KafkaAdminClientTest {
         assertEquals("There are unexpected extra elements in the collection.",
             elements.length, collection.size());
     }
+
+    public static KafkaAdminClient createInternal(AdminClientConfig config, KafkaAdminClient.TimeoutProcessorFactory timeoutProcessorFactory) {
+        return KafkaAdminClient.createInternal(config, timeoutProcessorFactory);
+    }
+
+    public static final class FailureInjectingTimeoutProcessor extends KafkaAdminClient.TimeoutProcessor {
+        private final AtomicLong expiryCounter;
+
+        public FailureInjectingTimeoutProcessor(long now, AtomicLong expiryCounter) {
+            super(now);
+            this.expiryCounter = expiryCounter;
+        }
+
+        boolean callHasExpired(KafkaAdminClient.Call call) {
+            long count = expiryCounter.getAndIncrement();
+            if ((count % 10) == 0) {
+                log.debug("count={}.  injecting failure", count);
+                return true;
+            } else {
+                boolean ret = super.callHasExpired(call);
+                log.debug("count={}.  timeout = {}", count, ret);
+                return ret;
+            }
+        }
+    }
+
+    public static class FailureInjectingTimeoutProcessorFactory extends KafkaAdminClient.TimeoutProcessorFactory {
+        @Override
+        public KafkaAdminClient.TimeoutProcessor create(long now) {
+            return new FailureInjectingTimeoutProcessor(now, expiryCounter);
+        }
+
+        final AtomicLong expiryCounter = new AtomicLong(0);
+    }
+
 }

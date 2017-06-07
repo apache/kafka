@@ -227,7 +227,37 @@ public class NetworkClient implements KafkaClient {
     }
 
     /**
+     * Diconnects the connection to a particular node, if there is one.
+     * Any pending ClientRequests for this connection will receive disconnections.
+     *
+     * @param nodeId The id of the node
+     */
+    @Override
+    public void disconnect(String nodeId) {
+        selector.close(nodeId);
+        List<ApiKeys> requestTypes = new ArrayList<>();
+        long now = time.milliseconds();
+        for (InFlightRequest request : inFlightRequests.clearAll(nodeId)) {
+            if (request.isInternalRequest && request.header.apiKey() == ApiKeys.METADATA.id)
+                metadataUpdater.handleDisconnection(request.destination);
+            else {
+                requestTypes.add(ApiKeys.forId(request.header.apiKey()));
+                abortedSends.add(new ClientResponse(request.header,
+                        request.callback, request.destination, request.createdTimeMs, now,
+                        true, null, null));
+            }
+        }
+        connectionStates.remove(nodeId);
+        if (log.isDebugEnabled()) {
+            log.debug("Manually disconnected from {}.  Removed requests: {}.", nodeId,
+                Utils.join(requestTypes, ", "));
+        }
+    }
+
+    /**
      * Closes the connection to a particular node (if there is one).
+     * All requests on the connection will be cleared.  ClientRequest callbacks will not be invoked
+     * for the cleared requests, nor will they be returned from poll().
      *
      * @param nodeId The id of the node
      */

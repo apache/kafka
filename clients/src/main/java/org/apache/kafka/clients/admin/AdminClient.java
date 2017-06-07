@@ -44,7 +44,7 @@ public abstract class AdminClient implements AutoCloseable {
      * @return The new KafkaAdminClient.
      */
     public static AdminClient create(Properties props) {
-        return KafkaAdminClient.createInternal(new AdminClientConfig(props));
+        return KafkaAdminClient.createInternal(new AdminClientConfig(props), null);
     }
 
     /**
@@ -54,7 +54,7 @@ public abstract class AdminClient implements AutoCloseable {
      * @return The new KafkaAdminClient.
      */
     public static AdminClient create(Map<String, Object> conf) {
-        return KafkaAdminClient.createInternal(new AdminClientConfig(conf));
+        return KafkaAdminClient.createInternal(new AdminClientConfig(conf), null);
     }
 
     /**
@@ -106,7 +106,7 @@ public abstract class AdminClient implements AutoCloseable {
                                                     CreateTopicsOptions options);
 
     /**
-     * Similar to #{@link AdminClient#deleteTopics(Collection<String>, DeleteTopicsOptions),
+     * Similar to #{@link AdminClient#deleteTopics(Collection<String>, DeleteTopicsOptions)},
      * but uses the default options.
      *
      * @param topics            The topic names to delete.
@@ -213,7 +213,7 @@ public abstract class AdminClient implements AutoCloseable {
     public abstract ApiVersionsResult apiVersions(Collection<Node> nodes, ApiVersionsOptions options);
 
     /**
-     * Similar to #{@link AdminClient#describeAcls(AclBindingFilter, DescribeAclsOptions),
+     * Similar to #{@link AdminClient#describeAcls(AclBindingFilter, DescribeAclsOptions)},
      * but uses the default options.
      *
      * @param filter            The filter to use.
@@ -236,7 +236,7 @@ public abstract class AdminClient implements AutoCloseable {
     public abstract DescribeAclsResult describeAcls(AclBindingFilter filter, DescribeAclsOptions options);
 
     /**
-     * Similar to #{@link AdminClient#createAcls(Collection<AclBinding>, CreateAclsOptions),
+     * Similar to #{@link AdminClient#createAcls(Collection<AclBinding>, CreateAclsOptions)},
      * but uses the default options.
      *
      * @param acls              The ACLs to create
@@ -259,7 +259,7 @@ public abstract class AdminClient implements AutoCloseable {
     public abstract CreateAclsResult createAcls(Collection<AclBinding> acls, CreateAclsOptions options);
 
     /**
-     * Similar to #{@link AdminClient#deleteAcls(Collection<AclBinding>, DeleteAclsOptions),
+     * Similar to #{@link AdminClient#deleteAcls(Collection<AclBinding>, DeleteAclsOptions)},
      * but uses the default options.
      *
      * @param filters           The filters to use.
@@ -334,5 +334,4 @@ public abstract class AdminClient implements AutoCloseable {
      * @return                The AlterConfigsResult
      */
     public abstract AlterConfigsResult alterConfigs(Map<ConfigResource, Config> configs, AlterConfigsOptions options);
-
 }
