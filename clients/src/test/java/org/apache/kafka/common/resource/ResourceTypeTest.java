@@ -41,7 +41,7 @@ public class ResourceTypeTest {
         new AclResourceTypeTestInfo(ResourceType.TOPIC, 2, "topic", false),
         new AclResourceTypeTestInfo(ResourceType.GROUP, 3, "group", false),
         new AclResourceTypeTestInfo(ResourceType.CLUSTER, 4, "cluster", false),
-        new AclResourceTypeTestInfo(ResourceType.BROKER, 5, "broker", false)
+        new AclResourceTypeTestInfo(ResourceType.TRANSACTIONAL_ID, 5, "transactional_id", false)
     };
 
     @Test
@@ -54,6 +54,7 @@ public class ResourceTypeTest {
 
     @Test
     public void testCode() throws Exception {
+        assertEquals(ResourceType.values().length, INFOS.length);
         for (AclResourceTypeTestInfo info : INFOS) {
             assertEquals(info.resourceType + " was supposed to have code == " + info.code,
                 info.code, info.resourceType.code());

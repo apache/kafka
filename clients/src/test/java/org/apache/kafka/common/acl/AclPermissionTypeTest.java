@@ -53,6 +53,7 @@ public class AclPermissionTypeTest {
 
     @Test
     public void testCode() throws Exception {
+        assertEquals(AclPermissionType.values().length, INFOS.length);
         for (AclPermissionTypeTestInfo info : INFOS) {
             assertEquals(info.ty + " was supposed to have code == " + info.code,
                 info.code, info.ty.code());

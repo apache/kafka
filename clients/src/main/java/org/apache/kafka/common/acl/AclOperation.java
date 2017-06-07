@@ -22,6 +22,19 @@ import java.util.Locale;
 
 /**
  * Represents an operation which an ACL grants or denies permission to perform.
+ *
+ * Some operations imply other operations.
+ *
+ * ALLOW ALL implies ALLOW everything
+ * DENY ALL implies DENY everything
+ *
+ * ALLOW READ implies ALLOW DESCRIBE
+ * ALLOW WRITE implies ALLOW DESCRIBE
+ * ALLOW DELETE implies ALLOW DESCRIBE
+ *
+ * ALLOW ALTER implies ALLOW DESCRIBE
+ *
+ * ALLOW ALTER_CONFIGS implies ALLOW DESCRIBE_CONFIGS
  */
 public enum AclOperation {
     /**
