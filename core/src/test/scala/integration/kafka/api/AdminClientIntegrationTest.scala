@@ -20,6 +20,7 @@ import java.util
 import java.util.{Collections, Properties}
 import java.util.concurrent.{ExecutionException, TimeUnit}
 
+import org.apache.kafka.clients.admin.KafkaAdminClientTest
 import org.apache.kafka.common.utils.{Time, Utils}
 import kafka.integration.KafkaServerTestHarness
 import kafka.log.LogConfig
@@ -343,6 +344,24 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
     }
     cfgs.foreach(_.putAll(serverConfig))
     cfgs.map(KafkaConfig.fromProps)
+  }
+
+  /**
+    * Test injecting timeouts for calls that are in flight.
+    */
+  @Test
+  def testCallInFlightTimeouts(): Unit = {
+    val config = createConfig()
+    config.put(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "100000000")
+    val factory = new KafkaAdminClientTest.FailureInjectingTimeoutProcessorFactory()
+    val client = KafkaAdminClientTest.createInternal(new AdminClientConfig(config), factory)
+    val future = client.createTopics(Seq("mytopic", "mytopic2").map(new NewTopic(_, 1, 1)).asJava,
+        new CreateTopicsOptions().validateOnly(true))
+    val future2 = client.createTopics(Seq("mytopic3", "mytopic4").map(new NewTopic(_, 1, 1)).asJava,
+        new CreateTopicsOptions().validateOnly(true))
+    future.all().get
+    future2.all().get
+    client.close()
   }
 }
 

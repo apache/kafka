@@ -65,6 +65,7 @@ public class MockClient implements KafkaClient {
     private final Time time;
     private final Metadata metadata;
     private Set<String> unavailableTopics;
+    private Cluster cluster;
     private Node node = null;
     private final Set<String> ready = new HashSet<>();
     private final Map<Node, Long> blackedOut = new HashMap<>();
@@ -126,6 +127,7 @@ public class MockClient implements KafkaClient {
         return isBlackedOut(node);
     }
 
+    @Override
     public void disconnect(String node) {
         long now = time.milliseconds();
         Iterator<ClientRequest> iter = requests.iterator();
@@ -170,6 +172,8 @@ public class MockClient implements KafkaClient {
 
         if (metadata != null && metadata.updateRequested()) {
             MetadataUpdate metadataUpdate = metadataUpdates.poll();
+            if (cluster != null)
+                metadata.update(cluster, this.unavailableTopics, time.milliseconds());
             if (metadataUpdate == null)
                 metadata.update(metadata.fetch(), this.unavailableTopics, time.milliseconds());
             else {
@@ -301,6 +305,10 @@ public class MockClient implements KafkaClient {
 
     public void setNode(Node node) {
         this.node = node;
+    }
+
+    public void cluster(Cluster cluster) {
+        this.cluster = cluster;
     }
 
     @Override

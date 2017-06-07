@@ -124,12 +124,13 @@ class SimpleFetchTest {
     val followerReplica= new Replica(configs(1).brokerId, partition, time)
     val leo = new LogOffsetMetadata(followerLEO, 0L, followerLEO.toInt)
     followerReplica.updateLogReadResult(new LogReadResult(info = FetchDataInfo(leo, MemoryRecords.EMPTY),
-                                                          hw = leo.messageOffset,
+                                                          highWatermark = leo.messageOffset,
                                                           leaderLogStartOffset = 0L,
                                                           leaderLogEndOffset = leo.messageOffset,
                                                           followerLogStartOffset = 0L,
                                                           fetchTimeMs = time.milliseconds,
-                                                          readSize = -1))
+                                                          readSize = -1,
+                                                          lastStableOffset = None))
 
     // add both of them to ISR
     val allReplicas = List(leaderReplica, followerReplica)

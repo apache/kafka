@@ -180,6 +180,11 @@ public class KafkaAdminClient extends AdminClient {
     private final AtomicLong hardShutdownTimeMs = new AtomicLong(INVALID_SHUTDOWN_TIME);
 
     /**
+     * A factory which creates TimeoutProcessors for the RPC thread.
+     */
+    private final TimeoutProcessorFactory timeoutProcessorFactory;
+
+    /**
      * Get or create a list value from a map.
      *
      * @param map   The map to get or create the element from.
@@ -270,7 +275,7 @@ public class KafkaAdminClient extends AdminClient {
         return throwable.getClass().getSimpleName();
     }
 
-    static KafkaAdminClient createInternal(AdminClientConfig config) {
+    static KafkaAdminClient createInternal(AdminClientConfig config, TimeoutProcessorFactory timeoutProcessorFactory) {
         Metadata metadata = null;
         Metrics metrics = null;
         NetworkClient networkClient = null;
@@ -312,7 +317,8 @@ public class KafkaAdminClient extends AdminClient {
                 true,
                 apiVersions);
             channelBuilder = null;
-            return new KafkaAdminClient(config, clientId, time, metadata, metrics, networkClient);
+            return new KafkaAdminClient(config, clientId, time, metadata, metrics, networkClient,
+                timeoutProcessorFactory);
         } catch (Throwable exc) {
             closeQuietly(metrics, "Metrics");
             closeQuietly(networkClient, "NetworkClient");
@@ -329,7 +335,7 @@ public class KafkaAdminClient extends AdminClient {
 
         try {
             metrics = new Metrics(new MetricConfig(), new LinkedList<MetricsReporter>(), time);
-            return new KafkaAdminClient(config, clientId, time, metadata, metrics, client);
+            return new KafkaAdminClient(config, clientId, time, metadata, metrics, client, null);
         } catch (Throwable exc) {
             closeQuietly(metrics, "Metrics");
             throw new KafkaException("Failed create new KafkaAdminClient", exc);
@@ -337,7 +343,7 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     private KafkaAdminClient(AdminClientConfig config, String clientId, Time time, Metadata metadata,
-                     Metrics metrics, KafkaClient client) {
+                     Metrics metrics, KafkaClient client, TimeoutProcessorFactory timeoutProcessorFactory) {
         this.defaultTimeoutMs = config.getInt(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG);
         this.clientId = clientId;
         this.time = time;
@@ -350,6 +356,8 @@ public class KafkaAdminClient extends AdminClient {
         this.runnable = new AdminClientRunnable();
         String threadName = "kafka-admin-client-thread" + (clientId.length() > 0 ? " | " + clientId : "");
         this.thread = new KafkaThread(threadName, runnable, false);
+        this.timeoutProcessorFactory = (timeoutProcessorFactory == null) ?
+            new TimeoutProcessorFactory() : timeoutProcessorFactory;
         config.logUnused();
         log.debug("Created Kafka admin client {}", this.clientId);
         thread.start();
@@ -449,7 +457,7 @@ public class KafkaAdminClient extends AdminClient {
         }
     }
 
-    private abstract class Call {
+    abstract class Call {
         private final String callName;
         private final long deadlineMs;
         private final NodeProvider nodeProvider;
@@ -557,6 +565,79 @@ public class KafkaAdminClient extends AdminClient {
         }
     }
 
+    static class TimeoutProcessorFactory {
+        TimeoutProcessor create(long now) {
+            return new TimeoutProcessor(now);
+        }
+    }
+
+    static class TimeoutProcessor {
+        /**
+         * The current time in milliseconds.
+         */
+        private final long now;
+
+        /**
+         * The number of milliseconds until the next timeout.
+         */
+        private int nextTimeoutMs;
+
+        /**
+         * Create a new timeout processor.
+         *
+         * @param now           The current time in milliseconds since the epoch.
+         */
+        TimeoutProcessor(long now) {
+            this.now = now;
+            this.nextTimeoutMs = Integer.MAX_VALUE;
+        }
+
+        /**
+         * Check for calls which have timed out.
+         * Timed out calls will be removed and failed.
+         * The remaining milliseconds until the next timeout will be updated.
+         *
+         * @param calls         The collection of calls.
+         *
+         * @return              The number of calls which were timed out.
+         */
+        int handleTimeouts(Collection<Call> calls, String msg) {
+            int numTimedOut = 0;
+            for (Iterator<Call> iter = calls.iterator(); iter.hasNext(); ) {
+                Call call = iter.next();
+                int remainingMs = calcTimeoutMsRemainingAsInt(now, call.deadlineMs);
+                if (remainingMs < 0) {
+                    call.fail(now, new TimeoutException(msg));
+                    iter.remove();
+                    numTimedOut++;
+                } else {
+                    nextTimeoutMs = Math.min(nextTimeoutMs, remainingMs);
+                }
+            }
+            return numTimedOut;
+        }
+
+        /**
+         * Check whether a call should be timed out.
+         * The remaining milliseconds until the next timeout will be updated.
+         *
+         * @param call      The call.
+         *
+         * @return          True if the call should be timed out.
+         */
+        boolean callHasExpired(Call call) {
+            int remainingMs = calcTimeoutMsRemainingAsInt(now, call.deadlineMs);
+            if (remainingMs < 0)
+                return true;
+            nextTimeoutMs = Math.min(nextTimeoutMs, remainingMs);
+            return false;
+        }
+
+        int nextTimeoutMs() {
+            return nextTimeoutMs;
+        }
+    }
+
     private final class AdminClientRunnable implements Runnable {
         /**
          * Pending calls.  Protected by the object monitor.
@@ -590,73 +671,6 @@ public class KafkaAdminClient extends AdminClient {
                 log.trace("{}: metadata is now ready.", clientId);
             }
             return null;
-        }
-
-        private class TimeoutProcessor {
-            /**
-             * The current time in milliseconds.
-             */
-            private final long now;
-
-            /**
-             * The number of milliseconds until the next timeout.
-             */
-            private int nextTimeoutMs;
-
-            /**
-             * Create a new timeout processor.
-             *
-             * @param now           The current time in milliseconds since the epoch.
-             */
-            TimeoutProcessor(long now) {
-                this.now = now;
-                this.nextTimeoutMs = Integer.MAX_VALUE;
-            }
-
-            /**
-             * Check for calls which have timed out.
-             * Timed out calls will be removed and failed.
-             * The remaining milliseconds until the next timeout will be updated.
-             *
-             * @param calls         The collection of calls.
-             *
-             * @return              The number of calls which were timed out.
-             */
-            int handleTimeouts(Collection<Call> calls, String msg) {
-                int numTimedOut = 0;
-                for (Iterator<Call> iter = calls.iterator(); iter.hasNext(); ) {
-                    Call call = iter.next();
-                    int remainingMs = calcTimeoutMsRemainingAsInt(now, call.deadlineMs);
-                    if (remainingMs < 0) {
-                        call.fail(now, new TimeoutException(msg));
-                        iter.remove();
-                        numTimedOut++;
-                    } else {
-                        nextTimeoutMs = Math.min(nextTimeoutMs, remainingMs);
-                    }
-                }
-                return numTimedOut;
-            }
-
-            /**
-             * Check whether a call should be timed out.
-             * The remaining milliseconds until the next timeout will be updated.
-             *
-             * @param call      The call.
-             *
-             * @return          True if the call should be timed out.
-             */
-            boolean callHasExpired(Call call) {
-                int remainingMs = calcTimeoutMsRemainingAsInt(now, call.deadlineMs);
-                if (remainingMs < 0)
-                    return true;
-                nextTimeoutMs = Math.min(nextTimeoutMs, remainingMs);
-                return false;
-            }
-
-            int nextTimeoutMs() {
-                return nextTimeoutMs;
-            }
         }
 
         /**
@@ -800,7 +814,7 @@ public class KafkaAdminClient extends AdminClient {
                 Call call = contexts.get(0);
                 if (processor.callHasExpired(call)) {
                     log.debug("{}: Closing connection to {} to time out {}", clientId, nodeId, call);
-                    client.close(nodeId);
+                    client.disconnect(nodeId);
                     numTimedOut++;
                     // We don't remove anything from the callsInFlight data structure.  Because the connection
                     // has been closed, the calls should be returned by the next client#poll(),
@@ -829,8 +843,9 @@ public class KafkaAdminClient extends AdminClient {
                     // If the server returns information about a correlation ID we didn't use yet,
                     // an internal server error has occurred.  Close the connection and log an error message.
                     log.error("Internal server error on {}: server returned information about unknown " +
-                        "correlation ID {}", response.destination(), correlationId);
-                    client.close(response.destination());
+                        "correlation ID {}.  requestHeader = {}", response.destination(), correlationId,
+                        response.requestHeader());
+                    client.disconnect(response.destination());
                     continue;
                 }
 
@@ -908,7 +923,7 @@ public class KafkaAdminClient extends AdminClient {
                     break;
 
                 // Handle timeouts.
-                TimeoutProcessor timeoutProcessor = new TimeoutProcessor(now);
+                TimeoutProcessor timeoutProcessor = timeoutProcessorFactory.create(now);
                 timeoutNewCalls(timeoutProcessor);
                 timeoutCallsToSend(timeoutProcessor, callsToSend);
                 timeoutCallsInFlight(timeoutProcessor, callsInFlight);

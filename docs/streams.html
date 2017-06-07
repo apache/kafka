@@ -306,7 +306,7 @@
         The following example <code>Processor</code> implementation defines a simple word-count algorithm:
         </p>
 
-<pre>
+<pre class="brush: java;">
 public class MyProcessor implements Processor&lt;String, String&gt; {
     private ProcessorContext context;
     private KeyValueStore&lt;String, Long&gt; kvStore;
@@ -380,7 +380,7 @@ public class MyProcessor implements Processor&lt;String, String&gt; {
         by connecting these processors together:
         </p>
 
-<pre>
+<pre class="brush: java;">
 TopologyBuilder builder = new TopologyBuilder();
 
 builder.addSource("SOURCE", "src-topic")
@@ -424,7 +424,7 @@ builder.addSource("SOURCE", "src-topic")
         In the following example, a persistent key-value store named “Counts” with key type <code>String</code> and value type <code>Long</code> is created.
         </p>
 
-<pre>
+<pre class="brush: java;">
 StateStoreSupplier countStore = Stores.create("Counts")
     .withKeys(Serdes.String())
     .withValues(Serdes.Long())
@@ -438,7 +438,7 @@ StateStoreSupplier countStore = Stores.create("Counts")
         state store with the existing processor nodes through <code>TopologyBuilder.connectProcessorAndStateStores</code>.
         </p>
 
-<pre>
+<pre class="brush: java;">
 TopologyBuilder builder = new TopologyBuilder();
 
 builder.addSource("SOURCE", "src-topic")
@@ -526,7 +526,7 @@ builder.addSource("SOURCE", "src-topic")
         from a single topic).
         </p>
 
-<pre>
+<pre class="brush: java;">
 KStreamBuilder builder = new KStreamBuilder();
 
 KStream&lt;String, GenericRecord&gt; source1 = builder.stream("topic1", "topic2");
@@ -606,7 +606,7 @@ GlobalKTable&lt;String, GenericRecord&gt; source2 = builder.globalTable("topic4"
 
         </p>
 
-<pre>
+<pre class="brush: java;">
 // written in Java 8+, using lambda expressions
 KStream&lt;String, GenericRecord&gt; mapped = source1.mapValue(record -> record.get("category"));
 </pre>
@@ -620,7 +620,7 @@ KStream&lt;String, GenericRecord&gt; mapped = source1.mapValue(record -> record.
         based on them.
         </p>
 
-<pre>
+<pre class="brush: java;">
 // written in Java 8+, using lambda expressions
 KTable&lt;Windowed&lt;String&gt;, Long&gt; counts = source1.groupByKey().aggregate(
     () -> 0L,  // initial value
@@ -641,7 +641,7 @@ KStream&lt;String, String&gt; joined = source1.leftJoin(source2,
         <code>KStream.to</code> and <code>KTable.to</code>.
         </p>
 
-<pre>
+<pre class="brush: java;">
 joined.to("topic4");
 </pre>
 
@@ -649,7 +649,7 @@ joined.to("topic4");
         to a topic via <code>to</code> above, one option is to construct a new stream that reads from the output topic;
         Kafka Streams provides a convenience method called <code>through</code>:
 
-<pre>
+<pre class="brush: java;">
 // equivalent to
 //
 // joined.to("topic4");
@@ -658,7 +658,7 @@ KStream&lt;String, String&gt; materialized = joined.through("topic4");
 </pre>
         <br>
 
-        <h3><a id="streams_execute" href="#streams_execute">Application Configuration and Execution</a></h3>
+        <h3><a id="streams_configure_execute" href="#streams_configure_execute">Application Configuration and Execution</a></h3>
 
         <p>
         Besides defining the topology, developers will also need to configure their applications
@@ -677,7 +677,7 @@ KStream&lt;String, String&gt; materialized = joined.through("topic4");
         set the necessary parameters, and construct a <code>StreamsConfig</code> instance from the <code>Properties</code> instance.
         </p>
 
-<pre>
+<pre class="brush: java;">
 import java.util.Properties;
 import org.apache.kafka.streams.StreamsConfig;
 
@@ -693,6 +693,7 @@ settings.put(... , ...);
 StreamsConfig config = new StreamsConfig(settings);
 </pre>
 
+        <h4><a id="streams_client_config" href="#streams_clients_config">Producer and Consumer Configuration</a></h4>
         <p>
         Apart from Kafka Streams' own configuration parameters you can also specify parameters for the Kafka consumers and producers that are used internally,
         depending on the needs of your application. Similar to the Streams settings you define any such consumer and/or producer settings via <code>StreamsConfig</code>.
@@ -701,7 +702,7 @@ StreamsConfig config = new StreamsConfig(settings);
         If you want to set different values for consumer and producer for such a parameter, you can prefix the parameter name with <code>consumer.</code> or <code>producer.</code>:
         </p>
 
-<pre>
+<pre class="brush: java;">
 Properties settings = new Properties();
 // Example of a "normal" setting for Kafka Streams
 settings.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "kafka-broker-01:9092");
@@ -720,6 +721,24 @@ settings.put(StreamsConfig.consumerPrefix(ConsumerConfig.RECEIVE_BUFFER_CONFIG),
 settings.put(StremasConfig.producerConfig(ProducerConfig.RECEIVE_BUFFER_CONFIG), 64 * 1024);
 </pre>
 
+        <h4><a id="streams_broker_config" href="#streams_broker_config">Broker Configuration</a></h4>
+        <p>
+            Introduced in 0.11.0 is a new broker config that is particularly relevant to Kafka Streams applications, <code>group.initial.rebalance.delay.ms</code>.
+            This config specifies the time, in milliseconds, that the <code>GroupCoordinator</code> will delay the initial consumer rebalance.
+            The rebalance will be further delayed by the value of <code>group.initial.rebalance.delay.ms</code> as each new member joins the consumer group, up to a maximum of the value set by <code>max.poll.interval.ms</code>.
+            The net benefit is that this should reduce the overall startup time for Kafka Streams applications with more than one thread.
+            The default value for <code>group.initial.rebalance.delay.ms</code> is 3 seconds.
+        </p>
+        <p>
+            In practice this means that if you are starting up your Kafka Streams app from a cold start, then when the first member joins the group there will be at least a 3 second delay before it is assigned any tasks.
+            If any other members join the group within the initial 3 seconds, then there will be a further 3 second delay.
+            Once no new members have joined the group within the 3 second delay, or <code>max.poll.interval.ms</code> is reached, then the group rebalance can complete and all current members will be assigned tasks.
+            The benefit of this approach, particularly for Kafka Streams applications, is that we can now delay the assignment and re-assignment of potentially expensive tasks as new members join.
+            So we can avoid the situation where one instance is assigned all tasks, begins restoring/processing, only to shortly after be rebalanced, and then have to start again with half of the tasks and so on.
+        </p>
+
+
+        <h4><a id="streams_execute" href="#streams_execute">Executing Your Kafka Streams Application</a></h4>
         <p>
         You can call Kafka Streams from anywhere in your application code.
         Very commonly though you would do so within the <code>main()</code> method of your application, or some variant thereof.
@@ -731,7 +750,7 @@ settings.put(StremasConfig.producerConfig(ProducerConfig.RECEIVE_BUFFER_CONFIG),
         that is used to define a topology; The second argument is an instance of <code>StreamsConfig</code> mentioned above.
         </p>
 
-<pre>
+<pre class="brush: java;">
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
@@ -759,7 +778,7 @@ KafkaStreams streams = new KafkaStreams(builder, config);
         At this point, internal structures have been initialized, but the processing is not started yet. You have to explicitly start the Kafka Streams thread by calling the <code>start()</code> method:
         </p>
 
-<pre>
+<pre class="brush: java;">
 // Start the Kafka Streams instance
 streams.start();
 </pre>
@@ -768,7 +787,7 @@ streams.start();
         To catch any unexpected exceptions, you may set an <code>java.lang.Thread.UncaughtExceptionHandler</code> before you start the application. This handler is called whenever a stream thread is terminated by an unexpected exception:
         </p>
 
-<pre>
+<pre class="brush: java;">
 streams.setUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
     public uncaughtException(Thread t, throwable e) {
         // here you should examine the exception and perform an appropriate action!
@@ -780,7 +799,7 @@ streams.setUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
         To stop the application instance call the <code>close()</code> method:
         </p>
 
-<pre>
+<pre class="brush: java;">
 // Stop the Kafka Streams instance
 streams.close();
 </pre>
@@ -788,7 +807,7 @@ streams.close();
         Now it's time to execute your application that uses the Kafka Streams library, which can be run just like any other Java application – there is no special magic or requirement on the side of Kafka Streams.
         For example, you can package your Java application as a fat jar file and then start the application via:
 
-<pre>
+<pre class="brush: bash;">
 # Start the application in class `com.example.MyStreamsApp`
 # from the fat jar named `path-to-app-fatjar.jar`.
 $ java -cp path-to-app-fatjar.jar com.example.MyStreamsApp
@@ -829,12 +848,12 @@ $ java -cp path-to-app-fatjar.jar com.example.MyStreamsApp
 
         <p> Updates in <code>StreamsConfig</code>: </p>
         <ul>
-          <li> configuration parameter <code>key.serde</code> was deprecated and replaced by <code>default.key.serde</code>
-          <li> configuration parameter <code>value.serde</code> was deprecated and replaced by <code>default.value.serde</code>
-          <li> configuration parameter <code>timestamp.extractor</code> was deprecated and replaced by <code>default.timestamp.extractor</code>
-          <li> method <code>#keySerde()</code> was deprecated and replaced by <code>#defaultKeySerde()</code>
-          <li> method <code>#valueSerde()</code> was deprecated and replaced by <code>#defaultValueSerde()</code>
-          <li> new method <code>#defaultTimestampExtractor()</code> was added </code>
+          <li> configuration parameter <code>key.serde</code> was deprecated and replaced by <code>default.key.serde</code> </li>
+          <li> configuration parameter <code>value.serde</code> was deprecated and replaced by <code>default.value.serde</code> </li>
+          <li> configuration parameter <code>timestamp.extractor</code> was deprecated and replaced by <code>default.timestamp.extractor</code> </li>
+          <li> method <code>#keySerde()</code> was deprecated and replaced by <code>#defaultKeySerde()</code> </li>
+          <li> method <code>#valueSerde()</code> was deprecated and replaced by <code>#defaultValueSerde()</code> </li>
+          <li> new method <code>#defaultTimestampExtractor()</code> was added </li>
         </ul>
 
         <p> New methods in <code>TopologyBuilder</code>: </p>
@@ -850,13 +869,38 @@ $ java -cp path-to-app-fatjar.jar com.example.MyStreamsApp
             <li> added overloads for <code>#globalKTable()</code> that allow to define a <code>TimestampExtractor</code> per global table </li>
         </ul>
 
-        <h3><a id="streams_api_changes_01021" href="#streams_api_changes_01021">Stream API changes in 0.10.2.1</a></h3>
+        <p> Deprecated methods in <code>KTable</code>: </p>
+        <ul>
+            <li> <code>void foreach(final ForeachAction&lt;? super K, ? super V&gt; action)</code> </li>
+            <li> <code>void print()</code> </li>
+            <li> <code>void print(final String streamName)</code> </li>
+            <li> <code>void print(final Serde&lt;K&gt; keySerde, final Serde&lt;V&gt; valSerde)</code> </li>
+            <li> <code>void print(final Serde&lt;K&gt; keySerde, final Serde&lt;V&gt; valSerde, final String streamName)</code> </li>
+            <li> <code>void writeAsText(final String filePath)</code> </li>
+            <li> <code>void writeAsText(final String filePath, final String streamName)</code> </li>
+            <li> <code>void writeAsText(final String filePath, final Serde&lt;K&gt; keySerde, final Serde&lt;V&gt; valSerde)</code> </li>
+            <li> <code>void writeAsText(final String filePath, final String streamName, final Serde&lt;K&gt; keySerde, final Serde&lt;V&gt; valSerde)</code> </li>
+        </ul>
+
+        <p>
+           The above methods have been deprecated in favor of using the Interactive Queries API.
+           If you want to query the current content of the state store backing the KTable, use the following approach:
+        </p>
+        <ul>
+            <li> Make a call to <code>KafkaStreams.store(final String storeName, final QueryableStoreType&lt;T&gt; queryableStoreType)</code> </li>
+            <li> Then make a call to <code>ReadOnlyKeyValueStore.all()</code> to iterate over the keys of a <code>KTable</code>. </li>
+        </ul>
+        <p>
+           If you want to view the changelog stream of the  <code>KTable</code> then you could call <code>KTable.toStream().print()</code>.
+        </p>
+
+        <h3><a id="streams_api_changes_01021" href="#streams_api_changes_01021">Notable changes in 0.10.2.1</a></h3>
 
         <p>
         Parameter updates in <code>StreamsConfig</code>:
         </p>
         <ul>
-          <li> of particular importance to improve the resiliency of a Kafka Streams application are two changes to default parameters of producer <code>retries</code> and consumer <code>max.poll.interval.ms</code> </li>
+          <li> The default config values of embedded producer's <code>retries</code> and consumer's <code>max.poll.interval.ms</code> have been changed to improve the resiliency of a Kafka Streams application </li>
         </ul>
 
         <h3><a id="streams_api_changes_0102" href="#streams_api_changes_0102">Streams API changes in 0.10.2.0</a></h3>

@@ -571,7 +571,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                         "position to {}", position, partitionRecords.partition, nextOffset);
                 subscriptions.position(partitionRecords.partition, nextOffset);
 
-                Long partitionLag = subscriptions.partitionLag(partitionRecords.partition);
+                Long partitionLag = subscriptions.partitionLag(partitionRecords.partition, isolationLevel);
                 if (partitionLag != null)
                     this.sensors.recordPartitionLag(partitionRecords.partition, partitionLag);
 
@@ -854,6 +854,11 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                 if (partition.highWatermark >= 0) {
                     log.trace("Updating high watermark for partition {} to {}", tp, partition.highWatermark);
                     subscriptions.updateHighWatermark(tp, partition.highWatermark);
+                }
+
+                if (partition.lastStableOffset >= 0) {
+                    log.trace("Updating last stable offset for partition {} to {}", tp, partition.lastStableOffset);
+                    subscriptions.updateLastStableOffset(tp, partition.lastStableOffset);
                 }
             } else if (error == Errors.NOT_LEADER_FOR_PARTITION) {
                 log.debug("Error in fetch for partition {}: {}", tp, error.exceptionName());

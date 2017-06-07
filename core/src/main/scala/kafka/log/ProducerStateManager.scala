@@ -38,6 +38,13 @@ class CorruptSnapshotException(msg: String) extends KafkaException(msg)
 
 private[log] case class TxnMetadata(producerId: Long, var firstOffset: LogOffsetMetadata, var lastOffset: Option[Long] = None) {
   def this(producerId: Long, firstOffset: Long) = this(producerId, LogOffsetMetadata(firstOffset))
+
+  override def toString: String = {
+    "TxnMetadata(" +
+      s"producerId=$producerId, " +
+      s"firstOffset=$firstOffset, " +
+      s"lastOffset=$lastOffset)"
+  }
 }
 
 private[log] object ProducerIdEntry {
@@ -55,6 +62,16 @@ private[log] case class ProducerIdEntry(producerId: Long, producerEpoch: Short, 
     batch.producerEpoch == producerEpoch &&
       batch.baseSequence == firstSeq &&
       batch.lastSequence == lastSeq
+  }
+
+  override def toString: String = {
+    "ProducerIdEntry(" +
+      s"producerId=$producerId, " +
+      s"producerEpoch=$producerEpoch, " +
+      s"firstSequence=$firstSeq, " +
+      s"lastSequence=$lastSeq, " +
+      s"currentTxnFirstOffset=$currentTxnFirstOffset, " +
+      s"coordinatorEpoch=$coordinatorEpoch)"
   }
 }
 
@@ -220,6 +237,16 @@ private[log] class ProducerAppendInfo(val producerId: Long,
     }
   }
 
+  override def toString: String = {
+    "ProducerAppendInfo(" +
+      s"producerId=$producerId, " +
+      s"producerEpoch=$producerEpoch, " +
+      s"firstSequence=$firstSeq, " +
+      s"lastSequence=$lastSeq, " +
+      s"currentTxnFirstOffset=$currentTxnFirstOffset, " +
+      s"coordinatorEpoch=$coordinatorEpoch, " +
+      s"startedTransactions=$transactions)"
+  }
 }
 
 object ProducerStateManager {
@@ -480,6 +507,8 @@ class ProducerStateManager(val topicPartition: TopicPartition,
   def update(appendInfo: ProducerAppendInfo): Unit = {
     if (appendInfo.producerId == RecordBatch.NO_PRODUCER_ID)
       throw new IllegalArgumentException(s"Invalid producer id ${appendInfo.producerId} passed to update")
+
+    trace(s"Updated producer ${appendInfo.producerId} state to $appendInfo")
 
     val entry = appendInfo.lastEntry
     producers.put(appendInfo.producerId, entry)

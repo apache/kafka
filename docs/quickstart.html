@@ -27,9 +27,9 @@ Since Kafka console scripts are different for Unix-based and Windows platforms, 
 
 <a href="https://www.apache.org/dyn/closer.cgi?path=/kafka/0.10.2.0/kafka_2.11-0.10.2.0.tgz" title="Kafka downloads">Download</a> the 0.10.2.0 release and un-tar it.
 
-<pre>
-&gt; <b>tar -xzf kafka_2.11-0.10.2.0.tgz</b>
-&gt; <b>cd kafka_2.11-0.10.2.0</b>
+<pre class="brush: bash;">
+&gt; tar -xzf kafka_2.11-0.10.2.0.tgz
+&gt; cd kafka_2.11-0.10.2.0
 </pre>
 
 <h4><a id="quickstart_startserver" href="#quickstart_startserver">Step 2: Start the server</a></h4>
@@ -38,15 +38,15 @@ Since Kafka console scripts are different for Unix-based and Windows platforms, 
 Kafka uses ZooKeeper so you need to first start a ZooKeeper server if you don't already have one. You can use the convenience script packaged with kafka to get a quick-and-dirty single-node ZooKeeper instance.
 </p>
 
-<pre>
-&gt; <b>bin/zookeeper-server-start.sh config/zookeeper.properties</b>
+<pre class="brush: bash;">
+&gt; bin/zookeeper-server-start.sh config/zookeeper.properties
 [2013-04-22 15:01:37,495] INFO Reading configuration from: config/zookeeper.properties (org.apache.zookeeper.server.quorum.QuorumPeerConfig)
 ...
 </pre>
 
 <p>Now start the Kafka server:</p>
-<pre>
-&gt; <b>bin/kafka-server-start.sh config/server.properties</b>
+<pre class="brush: bash;">
+&gt; bin/kafka-server-start.sh config/server.properties
 [2013-04-22 15:01:47,028] INFO Verifying properties (kafka.utils.VerifiableProperties)
 [2013-04-22 15:01:47,051] INFO Property socket.send.buffer.bytes is overridden to 1048576 (kafka.utils.VerifiableProperties)
 ...
@@ -55,13 +55,13 @@ Kafka uses ZooKeeper so you need to first start a ZooKeeper server if you don't 
 <h4><a id="quickstart_createtopic" href="#quickstart_createtopic">Step 3: Create a topic</a></h4>
 
 <p>Let's create a topic named "test" with a single partition and only one replica:</p>
-<pre>
-&gt; <b>bin/kafka-topics.sh --create --zookeeper localhost:2181 --replication-factor 1 --partitions 1 --topic test</b>
+<pre class="brush: bash;">
+&gt; bin/kafka-topics.sh --create --zookeeper localhost:2181 --replication-factor 1 --partitions 1 --topic test
 </pre>
 
 <p>We can now see that topic if we run the list topic command:</p>
-<pre>
-&gt; <b>bin/kafka-topics.sh --list --zookeeper localhost:2181</b>
+<pre class="brush: bash;">
+&gt; bin/kafka-topics.sh --list --zookeeper localhost:2181
 test
 </pre>
 <p>Alternatively, instead of manually creating topics you can also configure your brokers to auto-create topics when a non-existent topic is published to.</p>
@@ -72,18 +72,18 @@ test
 <p>
 Run the producer and then type a few messages into the console to send to the server.</p>
 
-<pre>
-&gt; <b>bin/kafka-console-producer.sh --broker-list localhost:9092 --topic test</b>
-<b>This is a message</b>
-<b>This is another message</b>
+<pre class="brush: bash;">
+&gt; bin/kafka-console-producer.sh --broker-list localhost:9092 --topic test
+This is a message
+This is another message
 </pre>
 
 <h4><a id="quickstart_consume" href="#quickstart_consume">Step 5: Start a consumer</a></h4>
 
 <p>Kafka also has a command line consumer that will dump out messages to standard output.</p>
 
-<pre>
-&gt; <b>bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic test --from-beginning</b>
+<pre class="brush: bash;">
+&gt; bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic test --from-beginning
 This is a message
 This is another message
 </pre>
@@ -100,15 +100,15 @@ All of the command line tools have additional options; running the command with 
 <p>
 First we make a config file for each of the brokers (on Windows use the <code>copy</code> command instead):
 </p>
-<pre>
-&gt; <b>cp config/server.properties config/server-1.properties</b>
-&gt; <b>cp config/server.properties config/server-2.properties</b>
+<pre class="brush: bash;">
+&gt; cp config/server.properties config/server-1.properties
+&gt; cp config/server.properties config/server-2.properties
 </pre>
 
 <p>
 Now edit these new files and set the following properties:
 </p>
-<pre>
+<pre class="brush: text;">
 
 config/server-1.properties:
     broker.id=1
@@ -124,21 +124,21 @@ config/server-2.properties:
 <p>
 We already have Zookeeper and our single node started, so we just need to start the two new nodes:
 </p>
-<pre>
-&gt; <b>bin/kafka-server-start.sh config/server-1.properties &amp;</b>
+<pre class="brush: bash;">
+&gt; bin/kafka-server-start.sh config/server-1.properties &amp;
 ...
-&gt; <b>bin/kafka-server-start.sh config/server-2.properties &amp;</b>
+&gt; bin/kafka-server-start.sh config/server-2.properties &amp;
 ...
 </pre>
 
 <p>Now create a new topic with a replication factor of three:</p>
-<pre>
-&gt; <b>bin/kafka-topics.sh --create --zookeeper localhost:2181 --replication-factor 3 --partitions 1 --topic my-replicated-topic</b>
+<pre class="brush: bash;">
+&gt; bin/kafka-topics.sh --create --zookeeper localhost:2181 --replication-factor 3 --partitions 1 --topic my-replicated-topic
 </pre>
 
 <p>Okay but now that we have a cluster how can we know which broker is doing what? To see that run the "describe topics" command:</p>
-<pre>
-&gt; <b>bin/kafka-topics.sh --describe --zookeeper localhost:2181 --topic my-replicated-topic</b>
+<pre class="brush: bash;">
+&gt; bin/kafka-topics.sh --describe --zookeeper localhost:2181 --topic my-replicated-topic
 Topic:my-replicated-topic	PartitionCount:1	ReplicationFactor:3	Configs:
 	Topic: my-replicated-topic	Partition: 0	Leader: 1	Replicas: 1,2,0	Isr: 1,2,0
 </pre>
@@ -152,8 +152,8 @@ Topic:my-replicated-topic	PartitionCount:1	ReplicationFactor:3	Configs:
 <p>
 We can run the same command on the original topic we created to see where it is:
 </p>
-<pre>
-&gt; <b>bin/kafka-topics.sh --describe --zookeeper localhost:2181 --topic test</b>
+<pre class="brush: bash;">
+&gt; bin/kafka-topics.sh --describe --zookeeper localhost:2181 --topic test
 Topic:test	PartitionCount:1	ReplicationFactor:1	Configs:
 	Topic: test	Partition: 0	Leader: 0	Replicas: 0	Isr: 0
 </pre>
@@ -161,50 +161,50 @@ Topic:test	PartitionCount:1	ReplicationFactor:1	Configs:
 <p>
 Let's publish a few messages to our new topic:
 </p>
-<pre>
-&gt; <b>bin/kafka-console-producer.sh --broker-list localhost:9092 --topic my-replicated-topic</b>
-...
-<b>my test message 1</b>
-<b>my test message 2</b>
-<b>^C</b>
-</pre>
-<p>Now let's consume these messages:</p>
-<pre>
-&gt; <b>bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --from-beginning --topic my-replicated-topic</b>
+<pre class="brush: bash;">
+&gt; bin/kafka-console-producer.sh --broker-list localhost:9092 --topic my-replicated-topic
 ...
 my test message 1
 my test message 2
-<b>^C</b>
+^C
+</pre>
+<p>Now let's consume these messages:</p>
+<pre class="brush: bash;">
+&gt; bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --from-beginning --topic my-replicated-topic
+...
+my test message 1
+my test message 2
+^C
 </pre>
 
 <p>Now let's test out fault-tolerance. Broker 1 was acting as the leader so let's kill it:</p>
-<pre>
-&gt; <b>ps aux | grep server-1.properties</b>
-<i>7564</i> ttys002    0:15.91 /System/Library/Frameworks/JavaVM.framework/Versions/1.8/Home/bin/java...
-&gt; <b>kill -9 7564</b>
+<pre class="brush: bash;">
+&gt; ps aux | grep server-1.properties
+7564 ttys002    0:15.91 /System/Library/Frameworks/JavaVM.framework/Versions/1.8/Home/bin/java...
+&gt; kill -9 7564
 </pre>
 
 On Windows use:
-<pre>
-&gt; <b>wmic process get processid,caption,commandline | find "java.exe" | find "server-1.properties"</b>
-java.exe    java  -Xmx1G -Xms1G -server -XX:+UseG1GC ... build\libs\kafka_2.11-0.10.2.0.jar"  kafka.Kafka config\server-1.properties    <i>644</i>
-&gt; <b>taskkill /pid 644 /f</b>
+<pre class="brush: bash;">
+&gt; wmic process get processid,caption,commandline | find "java.exe" | find "server-1.properties"
+java.exe    java  -Xmx1G -Xms1G -server -XX:+UseG1GC ... build\libs\kafka_2.11-0.10.2.0.jar"  kafka.Kafka config\server-1.properties    644
+&gt; taskkill /pid 644 /f
 </pre>
 
 <p>Leadership has switched to one of the slaves and node 1 is no longer in the in-sync replica set:</p>
 
-<pre>
-&gt; <b>bin/kafka-topics.sh --describe --zookeeper localhost:2181 --topic my-replicated-topic</b>
+<pre class="brush: bash;">
+&gt; bin/kafka-topics.sh --describe --zookeeper localhost:2181 --topic my-replicated-topic
 Topic:my-replicated-topic	PartitionCount:1	ReplicationFactor:3	Configs:
 	Topic: my-replicated-topic	Partition: 0	Leader: 2	Replicas: 1,2,0	Isr: 2,0
 </pre>
 <p>But the messages are still available for consumption even though the leader that took the writes originally is down:</p>
-<pre>
-&gt; <b>bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --from-beginning --topic my-replicated-topic</b>
+<pre class="brush: bash;">
+&gt; bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --from-beginning --topic my-replicated-topic
 ...
 my test message 1
 my test message 2
-<b>^C</b>
+^C
 </pre>
 
 
@@ -221,8 +221,8 @@ Kafka topic to a file.</p>
 
 <p>First, we'll start by creating some seed data to test with:</p>
 
-<pre>
-&gt; <b>echo -e "foo\nbar" > test.txt</b>
+<pre class="brush: bash;">
+&gt; echo -e "foo\nbar" > test.txt
 </pre>
 
 <p>Next, we'll start two connectors running in <i>standalone</i> mode, which means they run in a single, local, dedicated
@@ -231,8 +231,8 @@ process, containing common configuration such as the Kafka brokers to connect to
 The remaining configuration files each specify a connector to create. These files include a unique connector name, the connector
 class to instantiate, and any other configuration required by the connector.</p>
 
-<pre>
-&gt; <b>bin/connect-standalone.sh config/connect-standalone.properties config/connect-file-source.properties config/connect-file-sink.properties</b>
+<pre class="brush: bash;">
+&gt; bin/connect-standalone.sh config/connect-standalone.properties config/connect-file-source.properties config/connect-file-sink.properties
 </pre>
 
 <p>
@@ -250,8 +250,8 @@ by examining the contents of the output file:
 </p>
 
 
-<pre>
-&gt; <b>cat test.sink.txt</b>
+<pre class="brush: bash;">
+&gt; cat test.sink.txt
 foo
 bar
 </pre>
@@ -262,8 +262,8 @@ data in the topic (or use custom consumer code to process it):
 </p>
 
 
-<pre>
-&gt; <b>bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic connect-test --from-beginning</b>
+<pre class="brush: bash;">
+&gt; bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic connect-test --from-beginning
 {"schema":{"type":"string","optional":false},"payload":"foo"}
 {"schema":{"type":"string","optional":false},"payload":"bar"}
 ...
@@ -271,8 +271,8 @@ data in the topic (or use custom consumer code to process it):
 
 <p>The connectors continue to process data, so we can add data to the file and see it move through the pipeline:</p>
 
-<pre>
-&gt; <b>echo "Another line" >> test.txt</b>
+<pre class="brush: bash;">
+&gt; echo "Another line" >> test.txt
 </pre>
 
 <p>You should see the line appear in the console consumer output and in the sink file.</p>
@@ -284,7 +284,7 @@ Kafka Streams is a client library of Kafka for real-time stream processing and a
 This quickstart example will demonstrate how to run a streaming application coded in this library. Here is the gist
 of the <code><a href="https://github.com/apache/kafka/blob/{{dotVersion}}/streams/examples/src/main/java/org/apache/kafka/streams/examples/wordcount/WordCountDemo.java">WordCountDemo</a></code> example code (converted to use Java 8 lambda expressions for easy reading).
 </p>
-<pre>
+<pre class="brush: bash;">
 // Serializers/deserializers (serde) for String and Long types
 final Serde&lt;String&gt; stringSerde = Serdes.String();
 final Serde&lt;Long&gt; longSerde = Serdes.Long();
@@ -333,14 +333,14 @@ As the first step, we will prepare input data to a Kafka topic, which will subse
 
 -->
 
-<pre>
-&gt; <b>echo -e "all streams lead to kafka\nhello kafka streams\njoin kafka summit" > file-input.txt</b>
+<pre class="brush: bash;">
+&gt; echo -e "all streams lead to kafka\nhello kafka streams\njoin kafka summit" > file-input.txt
 </pre>
 Or on Windows:
-<pre>
-&gt; <b>echo all streams lead to kafka> file-input.txt</b>
-&gt; <b>echo hello kafka streams>> file-input.txt</b>
-&gt; <b>echo|set /p=join kafka summit>> file-input.txt</b>
+<pre class="brush: bash;">
+&gt; echo all streams lead to kafka> file-input.txt
+&gt; echo hello kafka streams>> file-input.txt
+&gt; echo|set /p=join kafka summit>> file-input.txt
 </pre>
 
 <p>
@@ -349,25 +349,25 @@ which reads the data from STDIN line-by-line, and publishes each line as a separ
 stream data will likely be flowing continuously into Kafka where the application will be up and running):
 </p>
 
-<pre>
-&gt; <b>bin/kafka-topics.sh --create \</b>
-            <b>--zookeeper localhost:2181 \</b>
-            <b>--replication-factor 1 \</b>
-            <b>--partitions 1 \</b>
-            <b>--topic streams-file-input</b>
+<pre class="brush: bash;">
+&gt; bin/kafka-topics.sh --create \
+    --zookeeper localhost:2181 \
+    --replication-factor 1 \
+    --partitions 1 \
+    --topic streams-file-input
 </pre>
 
 
-<pre>
-&gt; <b>bin/kafka-console-producer.sh --broker-list localhost:9092 --topic streams-file-input < file-input.txt</b>
+<pre class="brush: bash;">
+&gt; bin/kafka-console-producer.sh --broker-list localhost:9092 --topic streams-file-input < file-input.txt
 </pre>
 
 <p>
 We can now run the WordCount demo application to process the input data:
 </p>
 
-<pre>
-&gt; <b>bin/kafka-run-class.sh org.apache.kafka.streams.examples.wordcount.WordCountDemo</b>
+<pre class="brush: bash;">
+&gt; bin/kafka-run-class.sh org.apache.kafka.streams.examples.wordcount.WordCountDemo
 </pre>
 
 <p>
@@ -380,22 +380,22 @@ The demo will run for a few seconds and then, unlike typical stream processing a
 We can now inspect the output of the WordCount demo application by reading from its output topic:
 </p>
 
-<pre>
-&gt; <b>bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 \</b>
-            <b>--topic streams-wordcount-output \</b>
-            <b>--from-beginning \</b>
-            <b>--formatter kafka.tools.DefaultMessageFormatter \</b>
-            <b>--property print.key=true \</b>
-            <b>--property print.value=true \</b>
-            <b>--property key.deserializer=org.apache.kafka.common.serialization.StringDeserializer \</b>
-            <b>--property value.deserializer=org.apache.kafka.common.serialization.LongDeserializer</b>
+<pre class="brush: bash;">
+&gt; bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 \
+    --topic streams-wordcount-output \
+    --from-beginning \
+    --formatter kafka.tools.DefaultMessageFormatter \
+    --property print.key=true \
+    --property print.value=true \
+    --property key.deserializer=org.apache.kafka.common.serialization.StringDeserializer \
+    --property value.deserializer=org.apache.kafka.common.serialization.LongDeserializer
 </pre>
 
 <p>
 with the following output data being printed to the console:
 </p>
 
-<pre>
+<pre class="brush: bash;">
 all     1
 lead    1
 to      1

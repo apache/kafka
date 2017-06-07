@@ -394,7 +394,6 @@ public class RecordAccumulatorTest {
         accum.abortIncompleteBatches();
         assertEquals(numExceptionReceivedInCallback.get(), 100);
         assertFalse(accum.hasUnsent());
-
     }
 
     @Test
