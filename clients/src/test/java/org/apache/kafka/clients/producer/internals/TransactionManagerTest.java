@@ -1404,11 +1404,11 @@ public class TransactionManagerTest {
         prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, epoch, pid);
 
         assertFalse(transactionManager.transactionContainsPartition(tp0));
-        assertFalse(transactionManager.sendToPartitionAllowed(tp0));
+        assertFalse(transactionManager.isSendToPartitionAllowed(tp0));
         sender.run(time.milliseconds());  // send addPartitions.
         // Check that only addPartitions was sent.
         assertTrue(transactionManager.transactionContainsPartition(tp0));
-        assertTrue(transactionManager.sendToPartitionAllowed(tp0));
+        assertTrue(transactionManager.isSendToPartitionAllowed(tp0));
         assertFalse(responseFuture.isDone());
 
         // Sleep 10 seconds to make sure that the batches in the queue would be expired if they can't be drained.
@@ -1450,11 +1450,11 @@ public class TransactionManagerTest {
         prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, epoch, pid);
 
         assertFalse(transactionManager.transactionContainsPartition(tp0));
-        assertFalse(transactionManager.sendToPartitionAllowed(tp0));
+        assertFalse(transactionManager.isSendToPartitionAllowed(tp0));
         sender.run(time.milliseconds());  // send addPartitions.
         // Check that only addPartitions was sent.
         assertTrue(transactionManager.transactionContainsPartition(tp0));
-        assertTrue(transactionManager.sendToPartitionAllowed(tp0));
+        assertTrue(transactionManager.isSendToPartitionAllowed(tp0));
         assertFalse(responseFuture.isDone());
 
         TransactionalRequestResult commitResult = transactionManager.beginCommittingTransaction();
