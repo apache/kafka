@@ -1005,5 +1005,4 @@ public class TransactionManager {
                 reenqueue();
         }
     }
-
 }

@@ -264,7 +264,6 @@ public final class ProducerBatch {
      *     <li> the batch is in retry AND request timeout has elapsed after the backoff period ended.
      * </ol>
      * This methods closes this batch and sets {@code expiryErrorMessage} if the batch has timed out.
-     * {@link #expirationDone()} must be invoked to complete the produce future and invoke callbacks.
      */
     boolean maybeExpire(int requestTimeoutMs, long retryBackoffMs, long now, long lingerMs, boolean isFull) {
         if (!this.inRetry() && isFull && requestTimeoutMs < (now - this.lastAppendTime))
@@ -276,20 +275,19 @@ public final class ProducerBatch {
 
         boolean expired = expiryErrorMessage != null;
         if (expired)
-            close();
+            abort();
         return expired;
     }
 
     /**
-     * Completes the produce future with timeout exception and invokes callbacks.
-     * This method should be invoked only if {@link #maybeExpire(int, long, long, long, boolean)}
-     * returned true.
+     * If {@link #maybeExpire(int, long, long, long, boolean)} returned true, the sender will fail the batch with
+     * the exception returned by this method.
+     * @return An exception indicating the batch expired.
      */
-    void expirationDone() {
+    TimeoutException timeoutException() {
         if (expiryErrorMessage == null)
             throw new IllegalStateException("Batch has not expired");
-        this.done(-1L, NO_TIMESTAMP,
-                  new TimeoutException("Expiring " + recordCount + " record(s) for " + topicPartition + ": " + expiryErrorMessage));
+        return new TimeoutException("Expiring " + recordCount + " record(s) for " + topicPartition + ": " + expiryErrorMessage);
     }
 
     int attempts() {
