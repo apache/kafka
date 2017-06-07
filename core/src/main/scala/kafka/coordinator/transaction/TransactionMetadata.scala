@@ -323,7 +323,6 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
           }
 
         case CompleteAbort | CompleteCommit => // from write markers
-          debug(s"Transaction for $transactionalId begin transit to $toState at ${transitMetadata.txnStartTimestamp}")
           if (!validProducerEpoch(transitMetadata) ||
             txnTimeoutMs != transitMetadata.txnTimeoutMs ||
             transitMetadata.txnStartTimestamp == -1) {
