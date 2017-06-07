@@ -237,14 +237,16 @@ class SaslSslAdminClientIntegrationTest extends AdminClientIntegrationTest with 
     testAclGet(true)
     testAclCreateGetDelete(false)
 
-    // Test that we cannot do anything with ACLs when Describe is denied.
+    // Test that we cannot do anything with ACLs when Describe and Alter are denied.
     removeClusterAcl(Deny, Alter)
     addClusterAcl(Deny, Describe)
+    addClusterAcl(Deny, Alter)
     testAclGet(false)
     testAclCreateGetDelete(false)
 
     // Test that we can create, delete, and get ACLs with the default ACLs.
     removeClusterAcl(Deny, Describe)
+    removeClusterAcl(Deny, Alter)
     testAclGet(true)
     testAclCreateGetDelete(true)
 
