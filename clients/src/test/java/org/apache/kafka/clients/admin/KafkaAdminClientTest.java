@@ -59,7 +59,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
-import java.util.concurrent.atomic.AtomicLong;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
@@ -356,6 +355,9 @@ public class KafkaAdminClientTest {
     }
 
     public static class FailureInjectingTimeoutProcessorFactory extends KafkaAdminClient.TimeoutProcessorFactory {
+
+        private int numTries = 0;
+
         @Override
         public KafkaAdminClient.TimeoutProcessor create(long now) {
             return new FailureInjectingTimeoutProcessor(now);
@@ -363,10 +365,8 @@ public class KafkaAdminClientTest {
 
         synchronized boolean shouldInjectFailure() {
             numTries++;
-            return (numTries == 3);
+            return numTries == 3;
         }
-
-        private int numTries = 0;
 
         public final class FailureInjectingTimeoutProcessor extends KafkaAdminClient.TimeoutProcessor {
             public FailureInjectingTimeoutProcessor(long now) {
