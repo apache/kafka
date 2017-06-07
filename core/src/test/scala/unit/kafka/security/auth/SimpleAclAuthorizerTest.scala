@@ -364,9 +364,9 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
     testImplicationsOfAllow(Write, Set(Describe))
     testImplicationsOfAllow(Delete, Set(Describe))
     testImplicationsOfAllow(Alter, Set(Describe))
-    testImplicationsOfDeny(Describe, Set(Alter))
+    testImplicationsOfDeny(Describe, Set())
     testImplicationsOfAllow(AlterConfigs, Set(DescribeConfigs))
-    testImplicationsOfDeny(DescribeConfigs, Set(AlterConfigs))
+    testImplicationsOfDeny(DescribeConfigs, Set())
   }
 
   private def testImplicationsOfAllow(parentOp: Operation, allowedOps: Set[Operation]): Unit = {

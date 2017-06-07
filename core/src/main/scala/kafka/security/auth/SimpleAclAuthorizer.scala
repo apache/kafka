@@ -125,14 +125,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
     val acls = getAcls(resource) ++ getAcls(new Resource(resource.resourceType, Resource.WildCardResource))
 
     // Check if there is any Deny acl match that would disallow this operation.
-    // If Describe is forbidden, Alter is forbidden as well.
-    // See #{org.apache.kafka.common.acl.AclOperation} for more details about ACL inheritance.
-    val denyOps = operation match {
-      case Alter => Set[Operation](Alter, Describe)
-      case AlterConfigs => Set[Operation](AlterConfigs, DescribeConfigs)
-      case _ => Set[Operation](operation)
-    }
-    val denyMatch = denyOps.exists(operation => aclMatch(operation, resource, principal, host, Deny, acls))
+    val denyMatch = aclMatch(operation, resource, principal, host, Deny, acls)
 
     // Check if there are any Allow ACLs which would allow this operation.
     // Allowing read, write, delete, or alter implies allowing describe.
