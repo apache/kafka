@@ -37,15 +37,20 @@ public class InternalTopicManager {
     public static final Long WINDOW_CHANGE_LOG_ADDITIONAL_RETENTION_DEFAULT = TimeUnit.MILLISECONDS.convert(1, TimeUnit.DAYS);
     private static final int MAX_TOPIC_READY_TRY = 5;
     private final Time time;
+    private final Integer minInsyncReplicas;
     private final long windowChangeLogAdditionalRetention;
 
     private final int replicationFactor;
     private final StreamsKafkaClient streamsKafkaClient;
 
-    public InternalTopicManager(final StreamsKafkaClient streamsKafkaClient, final int replicationFactor,
-                                final long windowChangeLogAdditionalRetention, final Time time) {
+    public InternalTopicManager(final StreamsKafkaClient streamsKafkaClient,
+                                int replicationFactor,
+                                final Integer minInsyncReplicas,
+                                final long windowChangeLogAdditionalRetention,
+                                final Time time) {
         this.streamsKafkaClient = streamsKafkaClient;
         this.replicationFactor = replicationFactor;
+        this.minInsyncReplicas = minInsyncReplicas;
         this.windowChangeLogAdditionalRetention = windowChangeLogAdditionalRetention;
         this.time = time;
     }
@@ -63,13 +68,14 @@ public class InternalTopicManager {
                 final MetadataResponse metadata = streamsKafkaClient.fetchMetadata();
                 final Map<String, Integer> existingTopicPartitions = fetchExistingPartitionCountByTopic(metadata);
                 final Map<InternalTopicConfig, Integer> topicsToBeCreated = validateTopicPartitions(topics, existingTopicPartitions);
+
                 if (metadata.brokers().size() < replicationFactor) {
                     throw new StreamsException("Found only " + metadata.brokers().size() + " brokers, " +
                         " but replication factor is " + replicationFactor + "." +
                         " Decrease replication factor for internal topics via StreamsConfig parameter \"replication.factor\""  +
                         " or add more brokers to your cluster.");
                 }
-                streamsKafkaClient.createTopics(topicsToBeCreated, replicationFactor, windowChangeLogAdditionalRetention, metadata);
+                streamsKafkaClient.createTopics(topicsToBeCreated, replicationFactor, windowChangeLogAdditionalRetention, metadata,  minInsyncReplicas);
                 return;
             } catch (StreamsException ex) {
                 log.warn("Could not create internal topics: " + ex.getMessage() + " Retry #" + i);

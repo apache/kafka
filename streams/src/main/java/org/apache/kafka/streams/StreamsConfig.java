@@ -266,6 +266,10 @@ public class StreamsConfig extends AbstractConfig {
     public static final String ZOOKEEPER_CONNECT_CONFIG = "zookeeper.connect";
     private static final String ZOOKEEPER_CONNECT_DOC = "Zookeeper connect string for Kafka topics management.";
 
+    /** {@code replication.factor} */
+    public static final String MIN_IN_SYNC_REPLICAS_CONFIG = "min.insync.replicas";
+    private static final String MIN_IN_SYNC_REPLICAS_DOC = "The minimum number of insync replicas for change log topics and repartition topics created by the stream processing application.";
+
     static {
         CONFIG = new ConfigDef()
 
@@ -289,6 +293,11 @@ public class StreamsConfig extends AbstractConfig {
                     "/tmp/kafka-streams",
                     Importance.HIGH,
                     STATE_DIR_DOC)
+            .define(MIN_IN_SYNC_REPLICAS_CONFIG,
+                    Type.INT,
+                    null,
+                    Importance.HIGH,
+                    MIN_IN_SYNC_REPLICAS_DOC)
 
             // MEDIUM
 
@@ -577,6 +586,32 @@ public class StreamsConfig extends AbstractConfig {
             log.debug("Using " + COMMIT_INTERVAL_MS_CONFIG + " default value of "
                 + EOS_DEFAULT_COMMIT_INTERVAL_MS + " as exactly once is enabled.");
             configUpdates.put(COMMIT_INTERVAL_MS_CONFIG, EOS_DEFAULT_COMMIT_INTERVAL_MS);
+        }
+
+        Integer minInsyncReplicas = (Integer) parsedValues.get(MIN_IN_SYNC_REPLICAS_CONFIG);
+        Integer replicationFactor = parsedValues.containsKey(REPLICATION_FACTOR_CONFIG)
+                ? (Integer) parsedValues.get(REPLICATION_FACTOR_CONFIG)
+                : 1;
+
+        if (replicationFactor < 1) {
+            log.debug("Setting {} to 1 as it must be a positive integer", REPLICATION_FACTOR_CONFIG);
+            replicationFactor = 1;
+            configUpdates.put(REPLICATION_FACTOR_CONFIG, replicationFactor);
+        }
+
+        if (minInsyncReplicas != null && minInsyncReplicas < 1) {
+            log.debug("Setting {} to 1 as it must be a positive integer", MIN_IN_SYNC_REPLICAS_CONFIG);
+            minInsyncReplicas = 1;
+            configUpdates.put(MIN_IN_SYNC_REPLICAS_CONFIG, minInsyncReplicas);
+        }
+
+        if (minInsyncReplicas != null && replicationFactor < minInsyncReplicas) {
+            log.debug("Overriding {} to value of {} as the value of {} can't be less than {}",
+                      MIN_IN_SYNC_REPLICAS_CONFIG,
+                      REPLICATION_FACTOR_CONFIG,
+                      REPLICATION_FACTOR_CONFIG,
+                      MIN_IN_SYNC_REPLICAS_CONFIG);
+            configUpdates.put(MIN_IN_SYNC_REPLICAS_CONFIG, replicationFactor);
         }
 
         return configUpdates;
