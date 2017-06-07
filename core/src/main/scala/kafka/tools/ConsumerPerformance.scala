@@ -101,7 +101,7 @@ object ConsumerPerformance {
       consumerConnector.shutdown()
     }
     val elapsedSecs = (endMs - startMs) / 1000.0
-    fetchTimeInMs.set((endMs - startMs) - fetchTimeInMs.get)
+    fetchTimeInMs.set((endMs - startMs) - joinGroupTimeInMs.get)
     if (!config.showDetailedStats) {
       val totalMBRead = (totalBytesRead.get * 1.0) / (1024 * 1024)
       println(s"%s, %s, %.4f, %.4f, %d, %.4f${if (!config.useOldConsumer) ", %s" else ""}".format(
