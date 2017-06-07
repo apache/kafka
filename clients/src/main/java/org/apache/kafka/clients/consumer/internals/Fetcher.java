@@ -180,7 +180,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener {
             final FetchRequest.Builder request = fetchEntry.getValue();
             final Node fetchTarget = fetchEntry.getKey();
 
-            log.debug("Sending fetch for partitions {} to broker {}", request.fetchData().keySet(), fetchTarget);
+            log.debug("Sending fetch for partitions {} to broker {}", request.fetchData(), fetchTarget);
             client.send(fetchTarget, request)
                     .addListener(new RequestFutureListener<ClientResponse>() {
                         @Override
@@ -524,7 +524,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener {
                 List<ConsumerRecord<K, V>> partRecords = partitionRecords.drainRecords(maxRecords);
                 if (!partRecords.isEmpty()) {
                     long nextOffset = partRecords.get(partRecords.size() - 1).offset() + 1;
-                    log.trace("Returning fetched records at offset {} for assigned partition {} and update " +
+                    log.debug("Returning fetched records at offset {} for assigned partition {} and update " +
                             "position to {}", position, partitionRecords.partition, nextOffset);
 
                     subscriptions.position(partitionRecords.partition, nextOffset);
