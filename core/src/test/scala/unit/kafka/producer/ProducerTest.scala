@@ -179,14 +179,14 @@ class ProducerTest extends ZooKeeperTestHarness with Logging{
     // Message 1
     assertTrue(ByteBuffer.wrap("test1".getBytes).equals(messageSet.head.message.payload))
     assertTrue(ByteBuffer.wrap("test".getBytes).equals(messageSet.head.message.key))
-    assertTrue(messageSet.head.message.timestamp >= startTime && messageSet.head.message.timestamp < endTime)
+    assertTrue(messageSet.head.message.timestamp >= startTime && messageSet.head.message.timestamp <= endTime)
     assertEquals(TimestampType.CREATE_TIME, messageSet.head.message.timestampType)
     assertEquals(Message.MagicValue_V1, messageSet.head.message.magic)
 
     // Message 2
     assertTrue(ByteBuffer.wrap("test2".getBytes).equals(messageSet(1).message.payload))
     assertTrue(ByteBuffer.wrap("test".getBytes).equals(messageSet(1).message.key))
-    assertTrue(messageSet(1).message.timestamp >= startTime && messageSet(1).message.timestamp < endTime)
+    assertTrue(messageSet(1).message.timestamp >= startTime && messageSet(1).message.timestamp <= endTime)
     assertEquals(TimestampType.CREATE_TIME, messageSet(1).message.timestampType)
     assertEquals(Message.MagicValue_V1, messageSet(1).message.magic)
     producer1.close()
@@ -267,7 +267,7 @@ class ProducerTest extends ZooKeeperTestHarness with Logging{
       val message = messageSet1.next.message
       assertTrue(ByteBuffer.wrap("test1".getBytes).equals(message.payload))
       assertTrue(ByteBuffer.wrap("test".getBytes).equals(message.key))
-      assertTrue(message.timestamp >= startTime && message.timestamp < endTime)
+      assertTrue(message.timestamp >= startTime && message.timestamp <= endTime)
       assertEquals(TimestampType.CREATE_TIME, message.timestampType)
       assertEquals(Message.MagicValue_V1, message.magic)
       assertFalse("Message set should have another message", messageSet1.hasNext)
