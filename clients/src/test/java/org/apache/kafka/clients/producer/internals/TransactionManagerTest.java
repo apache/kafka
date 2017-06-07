@@ -28,6 +28,7 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.OutOfOrderSequenceException;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.TransactionalIdAuthorizationException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
@@ -1359,6 +1360,143 @@ public class TransactionManagerTest {
         assertTrue(drainedBatches.containsKey(node1.id()));
         assertEquals(1, drainedBatches.get(node1.id()).size());
         assertTrue(transactionManager.hasAbortableError());
+    }
+
+    @Test
+    public void testRaiseErrorWhenNoPartitionsPendingOnDrain() throws InterruptedException {
+        final long pid = 13131L;
+        final short epoch = 1;
+        doInitTransactions(pid, epoch);
+        transactionManager.beginTransaction();
+        // Don't execute transactionManager.maybeAddPartitionToTransaction(tp0). This should result in an error on drain.
+        accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
+                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT);
+        Node node1 = new Node(0, "localhost", 1111);
+        PartitionInfo part1 = new PartitionInfo(topic, 0, node1, null, null);
+
+        Cluster cluster = new Cluster(null, Arrays.asList(node1), Arrays.asList(part1),
+                Collections.<String>emptySet(), Collections.<String>emptySet());
+        Set<Node> nodes = new HashSet<>();
+        nodes.add(node1);
+        Map<Integer, List<ProducerBatch>> drainedBatches = accumulator.drain(cluster, nodes, Integer.MAX_VALUE,
+                time.milliseconds());
+
+        // We shouldn't drain batches which haven't been added to the transaction yet.
+        assertTrue(drainedBatches.containsKey(node1.id()));
+        assertTrue(drainedBatches.get(node1.id()).isEmpty());
+    }
+
+    @Test
+    public void testTransitionToAbortableErrorOnBatchExpiry() throws InterruptedException, ExecutionException {
+        final long pid = 13131L;
+        final short epoch = 1;
+
+        doInitTransactions(pid, epoch);
+
+        transactionManager.beginTransaction();
+        transactionManager.maybeAddPartitionToTransaction(tp0);
+
+        Future<RecordMetadata> responseFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
+                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
+
+        assertFalse(responseFuture.isDone());
+
+        prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, epoch, pid);
+
+        assertFalse(transactionManager.transactionContainsPartition(tp0));
+        assertFalse(transactionManager.sendToPartitionAllowed(tp0));
+        sender.run(time.milliseconds());  // send addPartitions.
+        // Check that only addPartitions was sent.
+        assertTrue(transactionManager.transactionContainsPartition(tp0));
+        assertTrue(transactionManager.sendToPartitionAllowed(tp0));
+        assertFalse(responseFuture.isDone());
+
+        // Sleep 10 seconds to make sure that the batches in the queue would be expired if they can't be drained.
+        time.sleep(10000);
+        // Disconnect the target node for the pending produce request. This will ensure that sender will try to
+        // expire the batch.
+        Node clusterNode = this.cluster.nodes().get(0);
+        client.disconnect(clusterNode.idString());
+        client.blackout(clusterNode, 100);
+
+        sender.run(time.milliseconds());  // We should try to flush the produce, but expire it instead without sending anything.
+        assertTrue(responseFuture.isDone());
+
+        try {
+            // make sure the produce was expired.
+            responseFuture.get();
+            fail("Expected to get a TimeoutException since the queued ProducerBatch should have been expired");
+        } catch (ExecutionException e) {
+            assertTrue(e.getCause() instanceof  TimeoutException);
+        }
+        assertTrue(transactionManager.hasAbortableError());
+    }
+
+    @Test
+    public void testDropCommitOnBatchExpiry() throws InterruptedException, ExecutionException {
+        final long pid = 13131L;
+        final short epoch = 1;
+
+        doInitTransactions(pid, epoch);
+
+        transactionManager.beginTransaction();
+        transactionManager.maybeAddPartitionToTransaction(tp0);
+
+        Future<RecordMetadata> responseFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
+                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
+
+        assertFalse(responseFuture.isDone());
+
+        prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, epoch, pid);
+
+        assertFalse(transactionManager.transactionContainsPartition(tp0));
+        assertFalse(transactionManager.sendToPartitionAllowed(tp0));
+        sender.run(time.milliseconds());  // send addPartitions.
+        // Check that only addPartitions was sent.
+        assertTrue(transactionManager.transactionContainsPartition(tp0));
+        assertTrue(transactionManager.sendToPartitionAllowed(tp0));
+        assertFalse(responseFuture.isDone());
+
+        TransactionalRequestResult commitResult = transactionManager.beginCommittingTransaction();
+
+        // Sleep 10 seconds to make sure that the batches in the queue would be expired if they can't be drained.
+        time.sleep(10000);
+        // Disconnect the target node for the pending produce request. This will ensure that sender will try to
+        // expire the batch.
+        Node clusterNode = this.cluster.nodes().get(0);
+        client.disconnect(clusterNode.idString());
+        client.blackout(clusterNode, 100);
+
+        sender.run(time.milliseconds());  // We should try to flush the produce, but expire it instead without sending anything.
+        assertTrue(responseFuture.isDone());
+
+        try {
+            // make sure the produce was expired.
+            responseFuture.get();
+            fail("Expected to get a TimeoutException since the queued ProducerBatch should have been expired");
+        } catch (ExecutionException e) {
+            assertTrue(e.getCause() instanceof  TimeoutException);
+        }
+        sender.run(time.milliseconds());  // the commit shouldn't be completed without being sent since the produce request failed.
+
+        assertTrue(commitResult.isCompleted());
+        assertFalse(commitResult.isSuccessful());  // the commit shouldn't succeed since the produce request failed.
+
+        assertTrue(transactionManager.hasAbortableError());
+        assertTrue(transactionManager.hasOngoingTransaction());
+        assertFalse(transactionManager.isCompletingTransaction());
+        assertTrue(transactionManager.transactionContainsPartition(tp0));
+
+        TransactionalRequestResult abortResult = transactionManager.beginAbortingTransaction();
+
+        prepareEndTxnResponse(Errors.NONE, TransactionResult.ABORT, pid, epoch);
+
+        sender.run(time.milliseconds());  // send the abort.
+
+        assertTrue(abortResult.isCompleted());
+        assertTrue(abortResult.isSuccessful());
+        assertFalse(transactionManager.hasOngoingTransaction());
+        assertFalse(transactionManager.transactionContainsPartition(tp0));
     }
 
     private void verifyAddPartitionsFailsWithPartitionLevelError(final Errors error) throws InterruptedException {
