@@ -127,6 +127,7 @@ public class MockClient implements KafkaClient {
         return isBlackedOut(node);
     }
 
+    @Override
     public void disconnect(String node) {
         long now = time.milliseconds();
         Iterator<ClientRequest> iter = requests.iterator();
