@@ -266,7 +266,7 @@ public class StreamsConfig extends AbstractConfig {
     public static final String ZOOKEEPER_CONNECT_CONFIG = "zookeeper.connect";
     private static final String ZOOKEEPER_CONNECT_DOC = "Zookeeper connect string for Kafka topics management.";
 
-    /** {@code replication.factor} */
+    /** {@code min.insync.replicas} */
     public static final String MIN_IN_SYNC_REPLICAS_CONFIG = "min.insync.replicas";
     private static final String MIN_IN_SYNC_REPLICAS_DOC = "The minimum number of insync replicas for change log topics and repartition topics created by the stream processing application.";
 
