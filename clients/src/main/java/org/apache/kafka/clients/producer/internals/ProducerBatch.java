@@ -275,7 +275,7 @@ public final class ProducerBatch {
 
         boolean expired = expiryErrorMessage != null;
         if (expired)
-            close();
+            abort();
         return expired;
     }
 
@@ -284,7 +284,7 @@ public final class ProducerBatch {
      * the exception returned by this method.
      * @return An exception indicating the batch expired.
      */
-    RuntimeException timeoutException() {
+    TimeoutException timeoutException() {
         if (expiryErrorMessage == null)
             throw new IllegalStateException("Batch has not expired");
         return new TimeoutException("Expiring " + recordCount + " record(s) for " + topicPartition + ": " + expiryErrorMessage);
