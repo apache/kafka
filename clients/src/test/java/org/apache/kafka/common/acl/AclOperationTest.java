@@ -61,6 +61,7 @@ public class AclOperationTest {
 
     @Test
     public void testCode() throws Exception {
+        assertEquals(AclOperation.values().length, INFOS.length);
         for (AclOperationTestInfo info : INFOS) {
             assertEquals(info.operation + " was supposed to have code == " + info.code,
                 info.code, info.operation.code());
