@@ -165,7 +165,7 @@ public class AdminClientConfig extends AbstractConfig {
         return CommonClientConfigs.postProcessReconnectBackoffConfigs(this, parsedValues);
     }
 
-    AdminClientConfig(Map<?, ?> props) {
+    public AdminClientConfig(Map<?, ?> props) {
         super(CONFIG, props);
     }
 
