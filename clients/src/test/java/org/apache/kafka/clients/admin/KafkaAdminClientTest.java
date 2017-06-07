@@ -59,7 +59,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
-import java.util.concurrent.atomic.AtomicLong;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
@@ -363,7 +362,7 @@ public class KafkaAdminClientTest {
 
         synchronized boolean shouldInjectFailure() {
             numTries++;
-            return (numTries == 3);
+            return numTries == 3;
         }
 
         private int numTries = 0;
