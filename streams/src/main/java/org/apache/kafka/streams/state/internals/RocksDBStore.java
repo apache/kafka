@@ -477,7 +477,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
             iter.seek(serdes.rawKey(from));
             this.rawToKey = serdes.rawKey(to);
             if (this.rawToKey == null) {
-                throw new NullPointerException("RocksDBRangeIterator: ToKey is null");
+                throw new NullPointerException("RocksDBRangeIterator: RawToKey is null for key " + to);
             }
         }
 
