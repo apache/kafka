@@ -551,7 +551,76 @@ public class TransactionManagerTest {
     }
 
     @Test
-    public void testCoordinatorLost() {
+    public void testLookupCoordinatorOnDisconnectAfterSend() {
+        // This is called from the initTransactions method in the producer as the first order of business.
+        // It finds the coordinator and then gets a PID.
+        final long pid = 13131L;
+        final short epoch = 1;
+        TransactionalRequestResult initPidResult = transactionManager.initializeTransactions();
+        prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.TRANSACTION, transactionalId);
+        sender.run(time.milliseconds());  // find coordinator
+        sender.run(time.milliseconds());
+        assertEquals(brokerNode, transactionManager.coordinator(CoordinatorType.TRANSACTION));
+        prepareInitPidResponse(Errors.NONE, true, pid, epoch);
+        // send pid to coordinator, should get disconnected before receiving the response, and resend the
+        // FindCoordinator and InitPid requests.
+        sender.run(time.milliseconds());
+
+        assertEquals(null, transactionManager.coordinator(CoordinatorType.TRANSACTION));
+        assertFalse(initPidResult.isCompleted());
+        assertFalse(transactionManager.hasProducerId());
+
+        prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.TRANSACTION, transactionalId);
+        sender.run(time.milliseconds());
+        assertEquals(brokerNode, transactionManager.coordinator(CoordinatorType.TRANSACTION));
+        assertFalse(initPidResult.isCompleted());
+        prepareInitPidResponse(Errors.NONE, false, pid, epoch);
+        sender.run(time.milliseconds());  // get pid and epoch
+
+        assertTrue(initPidResult.isCompleted()); // The future should only return after the second round of retries succeed.
+        assertTrue(transactionManager.hasProducerId());
+        assertEquals(pid, transactionManager.producerIdAndEpoch().producerId);
+        assertEquals(epoch, transactionManager.producerIdAndEpoch().epoch);
+    }
+
+    @Test
+    public void testLookupCoordinatorOnDisconnectBeforeSend() {
+        // This is called from the initTransactions method in the producer as the first order of business.
+        // It finds the coordinator and then gets a PID.
+        final long pid = 13131L;
+        final short epoch = 1;
+        TransactionalRequestResult initPidResult = transactionManager.initializeTransactions();
+        prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.TRANSACTION, transactionalId);
+        sender.run(time.milliseconds());  // one loop to realize we need a coordinator.
+        sender.run(time.milliseconds());  // next loop to find coordintor.
+        assertEquals(brokerNode, transactionManager.coordinator(CoordinatorType.TRANSACTION));
+
+        client.disconnect(brokerNode.idString());
+        client.blackout(brokerNode, 100);
+        // send pid to coordinator. Should get disconnected before the send and resend the FindCoordinator
+        // and InitPid requests.
+        sender.run(time.milliseconds());
+        time.sleep(110);  // waiting for the blackout period for the node to expire.
+
+        assertEquals(null, transactionManager.coordinator(CoordinatorType.TRANSACTION));
+        assertFalse(initPidResult.isCompleted());
+        assertFalse(transactionManager.hasProducerId());
+
+        prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.TRANSACTION, transactionalId);
+        sender.run(time.milliseconds());
+        assertEquals(brokerNode, transactionManager.coordinator(CoordinatorType.TRANSACTION));
+        assertFalse(initPidResult.isCompleted());
+        prepareInitPidResponse(Errors.NONE, false, pid, epoch);
+        sender.run(time.milliseconds());  // get pid and epoch
+
+        assertTrue(initPidResult.isCompleted()); // The future should only return after the second round of retries succeed.
+        assertTrue(transactionManager.hasProducerId());
+        assertEquals(pid, transactionManager.producerIdAndEpoch().producerId);
+        assertEquals(epoch, transactionManager.producerIdAndEpoch().epoch);
+    }
+
+    @Test
+    public void testLookupCoordinatorOnNotCoordinatorError() {
         // This is called from the initTransactions method in the producer as the first order of business.
         // It finds the coordinator and then gets a PID.
         final long pid = 13131L;

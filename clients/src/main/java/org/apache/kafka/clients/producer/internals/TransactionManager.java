@@ -397,7 +397,6 @@ public class TransactionManager {
             nextRequestHandler = pendingRequests.poll();
         }
 
-
         if (nextRequestHandler != null)
             log.trace("{}Request {} dequeued for sending", logPrefix, nextRequestHandler.requestBuilder());
 
@@ -610,7 +609,9 @@ public class TransactionManager {
             } else {
                 clearInFlightRequestCorrelationId();
                 if (response.wasDisconnected()) {
-                    log.trace("{}Disconnected from {}. Will retry.", logPrefix, response.destination());
+                    log.debug("{}Disconnected from {}. Will retry.", logPrefix, response.destination());
+                    if (this.needsCoordinator())
+                        lookupCoordinator(this.coordinatorType(), this.coordinatorKey());
                     reenqueue();
                 } else if (response.versionMismatch() != null) {
                     fatalError(response.versionMismatch());
