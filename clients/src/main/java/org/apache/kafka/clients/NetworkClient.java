@@ -238,9 +238,11 @@ public class NetworkClient implements KafkaClient {
         List<ApiKeys> requestTypes = new ArrayList<>();
         long now = time.milliseconds();
         for (InFlightRequest request : inFlightRequests.clearAll(nodeId)) {
-            if (request.isInternalRequest && request.header.apiKey() == ApiKeys.METADATA.id)
-                metadataUpdater.handleDisconnection(request.destination);
-            else {
+            if (request.isInternalRequest) {
+                if (request.header.apiKey() == ApiKeys.METADATA.id) {
+                    metadataUpdater.handleDisconnection(request.destination);
+                }
+            } else {
                 requestTypes.add(ApiKeys.forId(request.header.apiKey()));
                 abortedSends.add(new ClientResponse(request.header,
                         request.callback, request.destination, request.createdTimeMs, now,
@@ -416,6 +418,15 @@ public class NetworkClient implements KafkaClient {
      */
     @Override
     public List<ClientResponse> poll(long timeout, long now) {
+        if (!abortedSends.isEmpty()) {
+            // If there are aborted sends because of unsupported version exceptions or disconnects,
+            // handle them immediately without waiting for Selector#poll.
+            List<ClientResponse> responses = new ArrayList<>();
+            handleAbortedSends(responses);
+            completeResponses(responses);
+            return responses;
+        }
+
         long metadataTimeout = metadataUpdater.maybeUpdate(now);
         try {
             this.selector.poll(Utils.min(timeout, metadataTimeout, requestTimeoutMs));
@@ -426,15 +437,18 @@ public class NetworkClient implements KafkaClient {
         // process completed actions
         long updatedNow = this.time.milliseconds();
         List<ClientResponse> responses = new ArrayList<>();
-        handleAbortedSends(responses);
         handleCompletedSends(responses, updatedNow);
         handleCompletedReceives(responses, updatedNow);
         handleDisconnections(responses, updatedNow);
         handleConnections();
         handleInitiateApiVersionRequests(updatedNow);
         handleTimedOutRequests(responses, updatedNow);
+        completeResponses(responses);
 
-        // invoke callbacks
+        return responses;
+    }
+
+    private void completeResponses(List<ClientResponse> responses) {
         for (ClientResponse response : responses) {
             try {
                 response.onComplete();
@@ -442,8 +456,6 @@ public class NetworkClient implements KafkaClient {
                 log.error("Uncaught error in request completion:", e);
             }
         }
-
-        return responses;
     }
 
     /**

@@ -355,34 +355,36 @@ public class KafkaAdminClientTest {
         return KafkaAdminClient.createInternal(config, timeoutProcessorFactory);
     }
 
-    public static final class FailureInjectingTimeoutProcessor extends KafkaAdminClient.TimeoutProcessor {
-        private final AtomicLong expiryCounter;
-
-        public FailureInjectingTimeoutProcessor(long now, AtomicLong expiryCounter) {
-            super(now);
-            this.expiryCounter = expiryCounter;
-        }
-
-        boolean callHasExpired(KafkaAdminClient.Call call) {
-            long count = expiryCounter.getAndIncrement();
-            if ((count % 10) == 0) {
-                log.debug("count={}.  injecting failure", count);
-                return true;
-            } else {
-                boolean ret = super.callHasExpired(call);
-                log.debug("count={}.  timeout = {}", count, ret);
-                return ret;
-            }
-        }
-    }
-
     public static class FailureInjectingTimeoutProcessorFactory extends KafkaAdminClient.TimeoutProcessorFactory {
         @Override
         public KafkaAdminClient.TimeoutProcessor create(long now) {
-            return new FailureInjectingTimeoutProcessor(now, expiryCounter);
+            return new FailureInjectingTimeoutProcessor(now);
         }
 
-        final AtomicLong expiryCounter = new AtomicLong(0);
+        synchronized boolean shouldInjectFailure() {
+            numTries++;
+            return (numTries == 3);
+        }
+
+        private int numTries = 0;
+
+        public final class FailureInjectingTimeoutProcessor extends KafkaAdminClient.TimeoutProcessor {
+            public FailureInjectingTimeoutProcessor(long now) {
+                super(now);
+            }
+
+            boolean callHasExpired(KafkaAdminClient.Call call) {
+                if (shouldInjectFailure()) {
+                    log.debug("Injecting timeout for {}.", call);
+                    return true;
+                } else {
+                    boolean ret = super.callHasExpired(call);
+                    log.debug("callHasExpired({}) = {}", call, ret);
+                    return ret;
+                }
+            }
+        }
+
     }
 
 }
