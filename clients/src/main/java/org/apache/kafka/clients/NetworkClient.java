@@ -227,7 +227,7 @@ public class NetworkClient implements KafkaClient {
     }
 
     /**
-     * Diconnects the connection to a particular node, if there is one.
+     * Disconnects the connection to a particular node, if there is one.
      * Any pending ClientRequests for this connection will receive disconnections.
      *
      * @param nodeId The id of the node
