@@ -843,7 +843,8 @@ public class KafkaAdminClient extends AdminClient {
                     // If the server returns information about a correlation ID we didn't use yet,
                     // an internal server error has occurred.  Close the connection and log an error message.
                     log.error("Internal server error on {}: server returned information about unknown " +
-                        "correlation ID {}", response.destination(), correlationId);
+                        "correlation ID {}.  requestHeader = {}", response.destination(), correlationId,
+                        response.requestHeader());
                     client.disconnect(response.destination());
                     continue;
                 }
