@@ -589,6 +589,13 @@ project(':core') {
     standardOutput = new File(generatedDocsDir, "protocol_messages.html").newOutputStream()
   }
 
+  task genAdminClientConfigDocs(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    main = 'org.apache.kafka.clients.admin.AdminClientConfig'
+    if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
+    standardOutput = new File(generatedDocsDir, "admin_client_config.html").newOutputStream()
+  }
+
   task genProducerConfigDocs(type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     main = 'org.apache.kafka.clients.producer.ProducerConfig'
@@ -625,8 +632,9 @@ project(':core') {
   }
 
   task siteDocsTar(dependsOn: ['genProtocolErrorDocs', 'genProtocolApiKeyDocs', 'genProtocolMessageDocs',
-                               'genProducerConfigDocs', 'genConsumerConfigDocs', 'genKafkaConfigDocs',
-                               'genTopicConfigDocs', ':connect:runtime:genConnectConfigDocs', ':connect:runtime:genConnectTransformationDocs',
+                               'genAdminClientConfigDocs', 'genProducerConfigDocs', 'genConsumerConfigDocs',
+                               'genKafkaConfigDocs', 'genTopicConfigDocs',
+                               ':connect:runtime:genConnectConfigDocs', ':connect:runtime:genConnectTransformationDocs',
                                ':streams:genStreamsConfigDocs', 'genConsumerMetricsDocs'], type: Tar) {
     classifier = 'site-docs'
     compression = Compression.GZIP
@@ -767,13 +775,17 @@ project(':clients') {
   }
 
   javadoc {
+    include "**/org/apache/kafka/clients/admin/*"
     include "**/org/apache/kafka/clients/consumer/*"
     include "**/org/apache/kafka/clients/producer/*"
     include "**/org/apache/kafka/common/*"
+    include "**/org/apache/kafka/common/acl/*"
     include "**/org/apache/kafka/common/errors/*"
     include "**/org/apache/kafka/common/header/*"
+    include "**/org/apache/kafka/common/resource/*"
     include "**/org/apache/kafka/common/serialization/*"
     include "**/org/apache/kafka/common/config/*"
+    include "**/org/apache/kafka/server/policy/*"
   }
 }
 
