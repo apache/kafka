@@ -502,11 +502,8 @@ public class SimpleBenchmark {
         KStream<String, ProjectedEvent> filteredEvents = kEvents.peek(new ForeachAction<String, ProjectedEvent>() {
             @Override
             public void apply(String key, ProjectedEvent value) {
-                int tmpRecords = processedRecords.getAndIncrement();
-                if (tmpRecords % 1000000 == 0) {
-                    System.out.println("Processed " + tmpRecords + " records");
-                }
-                if (tmpRecords >= numRecords) {
+                processedRecords.getAndIncrement();
+                if (processedRecords.get() == numRecords ) {
                     latch.countDown();
                 }
             }
