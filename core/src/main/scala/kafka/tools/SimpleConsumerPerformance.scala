@@ -23,9 +23,9 @@ import java.text.SimpleDateFormat
 import kafka.api.{FetchRequestBuilder, OffsetRequest, PartitionOffsetRequestInfo}
 import kafka.consumer.SimpleConsumer
 import kafka.utils._
-import org.apache.log4j.Logger
 import kafka.common.TopicAndPartition
 import org.apache.kafka.common.utils.Time
+import org.slf4j.LoggerFactory
 
 
 /**
@@ -34,7 +34,7 @@ import org.apache.kafka.common.utils.Time
 @deprecated("This class has been deprecated and will be removed in a future release.", "0.11.0.0")
 object SimpleConsumerPerformance {
 
-  private val logger = Logger.getLogger(getClass())
+  private val logger = LoggerFactory.getLogger(getClass())
 
   def main(args: Array[String]) {
     logger.warn("WARNING: SimpleConsumerPerformance is deprecated and will be dropped in a future release following 0.11.0.0.")

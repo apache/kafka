@@ -29,7 +29,7 @@ import kafka.zk.{AclChangeNotificationSequenceZNode, AclChangeNotificationZNode,
 import kafka.zookeeper.ZooKeeperClient
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.SecurityUtils
-import org.apache.log4j.Logger
+import org.slf4j.LoggerFactory
 
 import scala.collection.JavaConverters._
 import scala.util.Random
@@ -51,7 +51,7 @@ object SimpleAclAuthorizer {
 }
 
 class SimpleAclAuthorizer extends Authorizer with Logging {
-  private val authorizerLogger = Logger.getLogger("kafka.authorizer.logger")
+  private val authorizerLogger = LoggerFactory.getLogger("kafka.authorizer.logger")
   private var superUsers = Set.empty[KafkaPrincipal]
   private var shouldAllowEveryoneIfNoAclIsFound = false
   private var zkClient: KafkaZkClient = null

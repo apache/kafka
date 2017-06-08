@@ -17,16 +17,35 @@
 
 package kafka.utils
 
-import org.apache.log4j.Logger
+import org.slf4j.{LoggerFactory, MarkerFactory}
+
+import scala.util.{Failure, Success, Try}
+
+object Log4jControllerRegistration {
+  private val logger = LoggerFactory.getLogger(this.getClass.getName)
+
+  val FatalMarker = MarkerFactory.getMarker("FATAL")
+
+  val instance = Try {
+    val log4jController = Class.forName("kafka.utils.Log4jController").asInstanceOf[Class[Object]]
+    val instance = log4jController.newInstance()
+    CoreUtils.registerMBean(instance, "kafka:type=kafka.Log4jController")
+    instance
+  }
+
+  instance match {
+    case Success(v) => logger.info("Registered kafka:type=kafka.Log4jController MBean")
+    case Failure(v) => logger.info("Couldn't register kafka:type=kafka.Log4jController MBean")
+  }
+}
 
 trait Logging {
-  val loggerName = this.getClass.getName
-  lazy val logger = Logger.getLogger(loggerName)
+  def loggerName = this.getClass.getName
+  lazy val logger = LoggerFactory.getLogger(loggerName)
 
   protected var logIdent: String = null
 
-  // Force initialization to register Log4jControllerMBean
-  private val log4jController = Log4jController
+  Log4jControllerRegistration
 
   protected def msgWithLogIdent(msg: String) =
     if (logIdent == null) msg else logIdent + msg
@@ -111,12 +130,12 @@ trait Logging {
   }
 
   def fatal(msg: => String): Unit = {
-    logger.fatal(msgWithLogIdent(msg))
+    logger.error(Log4jControllerRegistration.FatalMarker, msgWithLogIdent(msg))
   }
   def fatal(e: => Throwable): Any = {
-    logger.fatal(logIdent,e)
-  }	
+    logger.error(Log4jControllerRegistration.FatalMarker, logIdent, e)
+  }
   def fatal(msg: => String, e: => Throwable) = {
-    logger.fatal(msgWithLogIdent(msg),e)
+    logger.error(Log4jControllerRegistration.FatalMarker, msgWithLogIdent(msg), e)
   }
 }

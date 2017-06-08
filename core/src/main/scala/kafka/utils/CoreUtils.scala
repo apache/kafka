@@ -77,7 +77,7 @@ object CoreUtils extends Logging {
    * @param log The log method to use for logging. E.g. logger.warn
    * @param action The action to execute
    */
-  def swallow(log: (Object, Throwable) => Unit, action: => Unit) {
+  def swallow(log: (String, Throwable) => Unit, action: => Unit) {
     try {
       action
     } catch {

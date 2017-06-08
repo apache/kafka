@@ -31,13 +31,13 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.{Sanitizer, Time}
-import org.apache.log4j.Logger
+import org.slf4j.LoggerFactory
 
 import scala.collection.mutable
 import scala.reflect.ClassTag
 
 object RequestChannel extends Logging {
-  private val requestLogger = Logger.getLogger("kafka.request.logger")
+  private val requestLogger = LoggerFactory.getLogger("kafka.request.logger")
 
   def isRequestLoggingEnabled: Boolean = requestLogger.isDebugEnabled
 
@@ -325,9 +325,11 @@ class RequestChannel(val numProcessors: Int, val queueSize: Int) extends KafkaMe
   }
 
   def sendShutdownRequest(): Unit = requestQueue.put(ShutdownRequest)
+
 }
 
 object RequestMetrics {
+  val metricsMap = new scala.collection.mutable.HashMap[String, RequestMetrics]
   val consumerFetchMetricName = ApiKeys.FETCH.name + "Consumer"
   val followFetchMetricName = ApiKeys.FETCH.name + "Follower"
 

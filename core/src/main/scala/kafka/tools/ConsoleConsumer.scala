@@ -35,7 +35,7 @@ import org.apache.kafka.common.errors.{AuthenticationException, WakeupException}
 import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.serialization.Deserializer
 import org.apache.kafka.common.utils.Utils
-import org.apache.log4j.Logger
+import org.slf4j.LoggerFactory
 
 import scala.collection.JavaConverters._
 
@@ -570,7 +570,7 @@ class DefaultMessageFormatter extends MessageFormatter {
 
 class LoggingMessageFormatter extends MessageFormatter   {
   private val defaultWriter: DefaultMessageFormatter = new DefaultMessageFormatter
-  val logger = Logger.getLogger(getClass().getName)
+  val logger = LoggerFactory.getLogger(getClass().getName)
 
   override def init(props: Properties): Unit = defaultWriter.init(props)
 
