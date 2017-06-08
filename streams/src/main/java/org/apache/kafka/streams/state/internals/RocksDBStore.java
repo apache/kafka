@@ -24,7 +24,6 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
-import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
@@ -72,7 +71,6 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
     private static final int TTL_NOT_USED = -1;
 
-    // TODO: these values should be configurable
     private static final CompressionType COMPRESSION_TYPE = CompressionType.NO_COMPRESSION;
     private static final CompactionStyle COMPACTION_STYLE = CompactionStyle.UNIVERSAL;
     private static final long WRITE_BUFFER_SIZE = 16 * 1024 * 1024L;
@@ -164,7 +162,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         try {
             this.db = openDB(this.dbDir, this.options, TTL_SECONDS);
         } catch (IOException e) {
-            throw new StreamsException(e);
+            throw new ProcessorStateException(e);
         }
     }
 
@@ -305,6 +303,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     @Override
     public synchronized KeyValueIterator<K, V> range(K from, K to) {
         validateStoreOpen();
+
         // query rocksdb
         final RocksDBRangeIterator rocksDBRangeIterator = new RocksDBRangeIterator(name, db.newIterator(), serdes, from, to);
         openIterators.add(rocksDBRangeIterator);
@@ -477,6 +476,9 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
             super(storeName, iter, serdes);
             iter.seek(serdes.rawKey(from));
             this.rawToKey = serdes.rawKey(to);
+            if (this.rawToKey == null) {
+                throw new NullPointerException("RocksDBRangeIterator: RawToKey is null for key " + to);
+            }
         }
 
         @Override

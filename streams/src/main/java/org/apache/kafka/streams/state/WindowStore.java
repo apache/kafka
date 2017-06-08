@@ -29,11 +29,17 @@ public interface WindowStore<K, V> extends StateStore, ReadOnlyWindowStore<K, V>
     /**
      * Put a key-value pair with the current wall-clock time as the timestamp
      * into the corresponding window
+     * @param key The key to associate the value to
+     * @param value The value, it can be null
+     * @throws NullPointerException If null is used for key.
      */
     void put(K key, V value);
 
     /**
      * Put a key-value pair with the given timestamp into the corresponding window
+     * @param key The key to associate the value to
+     * @param value The value, it can be null
+     * @throws NullPointerException If null is used for key.
      */
     void put(K key, V value, long timestamp);
 }

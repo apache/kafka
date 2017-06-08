@@ -25,6 +25,7 @@ import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import java.util.Iterator;
 import java.util.List;
 import java.util.NoSuchElementException;
+import java.util.Objects;
 
 /**
  * A wrapper over the underlying {@link ReadOnlyKeyValueStore}s found in a {@link
@@ -47,8 +48,10 @@ public class CompositeReadOnlyKeyValueStore<K, V> implements ReadOnlyKeyValueSto
         this.storeName = storeName;
     }
 
+
     @Override
     public V get(final K key) {
+        Objects.requireNonNull(key);
         final List<ReadOnlyKeyValueStore<K, V>> stores = storeProvider.stores(storeName, storeType);
         for (ReadOnlyKeyValueStore<K, V> store : stores) {
             try {
@@ -66,6 +69,8 @@ public class CompositeReadOnlyKeyValueStore<K, V> implements ReadOnlyKeyValueSto
 
     @Override
     public KeyValueIterator<K, V> range(final K from, final K to) {
+        Objects.requireNonNull(from);
+        Objects.requireNonNull(to);
         final NextIteratorFunction<K, V> nextIteratorFunction = new NextIteratorFunction<K, V>() {
             @Override
             public KeyValueIterator<K, V> apply(final ReadOnlyKeyValueStore<K, V> store) {
