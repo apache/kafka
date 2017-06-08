@@ -506,7 +506,7 @@ public class SimpleBenchmark {
                 if (processedRecords.get() % 1000000 == 0) {
                     System.out.println("Processed " + processedRecords.get());
                 }
-                if (processedRecords.get() == numRecords ) {
+                if (processedRecords.get() >= numRecords ) {
                     latch.countDown();
                 }
             }
