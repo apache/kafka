@@ -311,13 +311,7 @@ public class KerberosLogin extends AbstractLogin {
     }
 
     private static String getServiceName(Map<String, ?> configs, JaasContext jaasContext) {
-        String jaasServiceName = null;
-        try {
-            jaasServiceName = jaasContext.configEntryOption(JaasUtils.SERVICE_NAME, null);
-        } catch (IOException e) {
-            log.warn("Jaas configuration not found", e);
-        }
-
+        String jaasServiceName = jaasContext.configEntryOption(JaasUtils.SERVICE_NAME, null);
         String configServiceName = (String) configs.get(SaslConfigs.SASL_KERBEROS_SERVICE_NAME);
         if (jaasServiceName != null && configServiceName != null && !jaasServiceName.equals(configServiceName)) {
             String message = String.format("Conflicting serviceName values found in JAAS and Kafka configs " +
