@@ -154,13 +154,13 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
     val topic0Partition1 = topic0.partitions.get(1)
     assertEquals(2, topic0Partition1.leader.id)
     assertEquals(1, topic0Partition1.partition)
-    assertEquals(Seq(2, 0), topic0Partition1.isr.asScala)
+    assertEquals(Seq(2, 0), topic0Partition1.isr.asScala.map(_.id))
     assertEquals(Seq(2, 0), topic0Partition1.replicas.asScala.map(_.id))
 
     val topic1 = topicToDescription.get("mytopic2")
-    assertEquals(false, topic0.internal)
-    assertEquals("mytopic", topic0.name)
-    assertEquals(3, topic0.partitions.size)
+    assertEquals(false, topic1.internal)
+    assertEquals("mytopic2", topic1.name)
+    assertEquals(3, topic1.partitions.size)
     for (partitionId <- 0 until 3) {
       val partition = topic1.partitions.get(partitionId)
       assertEquals(partitionId, partition.partition)
