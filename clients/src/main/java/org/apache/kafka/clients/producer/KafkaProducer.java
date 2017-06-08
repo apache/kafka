@@ -608,7 +608,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      */
     private Future<RecordMetadata> doSend(ProducerRecord<K, V> record, Callback callback) {
         if (transactionManager != null)
-            transactionManager.failIfUnreadyForSend();
+            transactionManager.failIfNotReadyForSend();
 
         TopicPartition tp = null;
         try {

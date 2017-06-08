@@ -56,7 +56,7 @@ public class CachingWindowStoreTest {
     private MockProcessorContext context;
     private RocksDBSegmentedBytesStore underlying;
     private CachingWindowStore<String, String> cachingStore;
-    private CachingKeyValueStoreTest.CacheFlushListenerStub<Windowed<String>> cacheListener;
+    private CachingKeyValueStoreTest.CacheFlushListenerStub<Windowed<String>, String> cacheListener;
     private ThreadCache cache;
     private String topic;
     private WindowKeySchema keySchema;
@@ -259,6 +259,31 @@ public class CachingWindowStoreTest {
             toList(cachingStore.fetch("a", "aa", 0, Long.MAX_VALUE)),
             equalTo(Utils.mkList(windowedPair("a", "0001", 0), windowedPair("a", "0003", 1), windowedPair("aa", "0002", 0), windowedPair("aa", "0004", 1), windowedPair("a", "0005", 60000L)))
         );
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerExceptionOnPutNullKey() throws Exception {
+        cachingStore.put(null, "anyValue");
+    }
+
+    @Test
+    public void shouldNotThrowNullPointerExceptionOnPutNullValue() throws Exception {
+        cachingStore.put("a", null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerExceptionOnFetchNullKey() throws Exception {
+        cachingStore.fetch(null, 1L, 2L);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerExceptionOnRangeNullFromKey() throws Exception {
+        cachingStore.fetch(null, "anyTo", 1L, 2L);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerExceptionOnRangeNullToKey() throws Exception {
+        cachingStore.fetch("anyFrom", null, 1L, 2L);
     }
 
     private static <K, V> KeyValue<Windowed<K>, V> windowedPair(K key, V value, long timestamp) {

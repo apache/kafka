@@ -45,6 +45,8 @@ import org.apache.kafka.common.resource.ResourceType;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.Timeout;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -70,6 +72,8 @@ import static org.junit.Assert.fail;
  * See AdminClientIntegrationTest for an integration test.
  */
 public class KafkaAdminClientTest {
+    private static final Logger log = LoggerFactory.getLogger(KafkaAdminClientTest.class);
+
     @Rule
     final public Timeout globalTimeout = Timeout.millis(120000);
 
@@ -345,4 +349,42 @@ public class KafkaAdminClientTest {
         assertEquals("There are unexpected extra elements in the collection.",
             elements.length, collection.size());
     }
+
+    public static KafkaAdminClient createInternal(AdminClientConfig config, KafkaAdminClient.TimeoutProcessorFactory timeoutProcessorFactory) {
+        return KafkaAdminClient.createInternal(config, timeoutProcessorFactory);
+    }
+
+    public static class FailureInjectingTimeoutProcessorFactory extends KafkaAdminClient.TimeoutProcessorFactory {
+
+        private int numTries = 0;
+        
+        @Override
+        public KafkaAdminClient.TimeoutProcessor create(long now) {
+            return new FailureInjectingTimeoutProcessor(now);
+        }
+
+        synchronized boolean shouldInjectFailure() {
+            numTries++;
+            return numTries == 3;
+        }
+
+        public final class FailureInjectingTimeoutProcessor extends KafkaAdminClient.TimeoutProcessor {
+            public FailureInjectingTimeoutProcessor(long now) {
+                super(now);
+            }
+
+            boolean callHasExpired(KafkaAdminClient.Call call) {
+                if (shouldInjectFailure()) {
+                    log.debug("Injecting timeout for {}.", call);
+                    return true;
+                } else {
+                    boolean ret = super.callHasExpired(call);
+                    log.debug("callHasExpired({}) = {}", call, ret);
+                    return ret;
+                }
+            }
+        }
+
+    }
+
 }

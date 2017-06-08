@@ -417,7 +417,7 @@
     <p>
     Let's discuss a concrete example of such a stream. Say we have a topic containing user email addresses; every time a user updates their email address we send a message to this topic using their user id as the
     primary key. Now say we send the following messages over some time period for a user with id 123, each message corresponding to a change in email address (messages for other ids are omitted):
-    <pre>
+    <pre class="brush: text;">
         123 => bill@microsoft.com
                 .
                 .
@@ -510,11 +510,11 @@
 
     The log cleaner is enabled by default. This will start the pool of cleaner threads. 
     To enable log cleaning on a particular topic you can add the log-specific property
-    <pre>  log.cleanup.policy=compact</pre>
+    <pre class="brush: text;">  log.cleanup.policy=compact</pre>
     This can be done either at topic creation time or using the alter topic command.
     <p>
     The log cleaner can be configured to retain a minimum amount of the uncompacted "head" of the log. This is enabled by setting the compaction time lag.
-    <pre>  log.cleaner.min.compaction.lag.ms</pre>
+    <pre class="brush: text;">  log.cleaner.min.compaction.lag.ms</pre>
 
     This can be used to prevent messages newer than a minimum message age from being subject to compaction. If not set, all log segments are eligible for compaction except for the last segment, i.e. the one currently
     being written to. The active segment will not be compacted even if all of its messages are older than the minimum compaction time lag.

@@ -263,12 +263,10 @@ public final class RecordAccumulator {
     }
 
     /**
-     * Abort the batches that have been sitting in RecordAccumulator for more than the configured requestTimeout
-     * due to metadata being unavailable
+     * Get a list of batches which have been sitting in the accumulator too long and need to be expired.
      */
-    public List<ProducerBatch> abortExpiredBatches(int requestTimeout, long now) {
+    public List<ProducerBatch> expiredBatches(int requestTimeout, long now) {
         List<ProducerBatch> expiredBatches = new ArrayList<>();
-        int count = 0;
         for (Map.Entry<TopicPartition, Deque<ProducerBatch>> entry : this.batches.entrySet()) {
             Deque<ProducerBatch> dq = entry.getValue();
             TopicPartition tp = entry.getKey();
@@ -290,7 +288,6 @@ public final class RecordAccumulator {
                         // callbacks are invoked.
                         if (batch.maybeExpire(requestTimeout, retryBackoffMs, now, this.lingerMs, isFull)) {
                             expiredBatches.add(batch);
-                            count++;
                             batchIterator.remove();
                         } else {
                             // Stop at the first batch that has not expired.
@@ -300,14 +297,6 @@ public final class RecordAccumulator {
                 }
             }
         }
-        if (!expiredBatches.isEmpty()) {
-            log.trace("Expired {} batches in accumulator", count);
-            for (ProducerBatch batch : expiredBatches) {
-                batch.expirationDone();
-                deallocate(batch);
-            }
-        }
-
         return expiredBatches;
     }
 
@@ -469,7 +458,7 @@ public final class RecordAccumulator {
                                         ProducerIdAndEpoch producerIdAndEpoch = null;
                                         boolean isTransactional = false;
                                         if (transactionManager != null) {
-                                            if (!transactionManager.sendToPartitionAllowed(tp))
+                                            if (!transactionManager.isSendToPartitionAllowed(tp))
                                                 break;
 
                                             producerIdAndEpoch = transactionManager.producerIdAndEpoch();

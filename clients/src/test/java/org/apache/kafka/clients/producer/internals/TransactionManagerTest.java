@@ -28,6 +28,7 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.OutOfOrderSequenceException;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.TransactionalIdAuthorizationException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
@@ -123,48 +124,48 @@ public class TransactionManagerTest {
     }
 
     @Test(expected = IllegalStateException.class)
-    public void testFailIfUnreadyForSendNoProducerId() {
-        transactionManager.failIfUnreadyForSend();
+    public void testFailIfNotReadyForSendNoProducerId() {
+        transactionManager.failIfNotReadyForSend();
     }
 
     @Test
-    public void testFailIfUnreadyForSendIdempotentProducer() {
+    public void testFailIfNotReadyForSendIdempotentProducer() {
         TransactionManager idempotentTransactionManager = new TransactionManager();
-        idempotentTransactionManager.failIfUnreadyForSend();
+        idempotentTransactionManager.failIfNotReadyForSend();
     }
 
     @Test(expected = KafkaException.class)
-    public void testFailIfUnreadyForSendIdempotentProducerFatalError() {
+    public void testFailIfNotReadyForSendIdempotentProducerFatalError() {
         TransactionManager idempotentTransactionManager = new TransactionManager();
         idempotentTransactionManager.transitionToFatalError(new KafkaException());
-        idempotentTransactionManager.failIfUnreadyForSend();
+        idempotentTransactionManager.failIfNotReadyForSend();
     }
 
     @Test(expected = IllegalStateException.class)
-    public void testFailIfUnreadyForSendNoOngoingTransaction() {
+    public void testFailIfNotReadyForSendNoOngoingTransaction() {
         long pid = 13131L;
         short epoch = 1;
         doInitTransactions(pid, epoch);
-        transactionManager.failIfUnreadyForSend();
+        transactionManager.failIfNotReadyForSend();
     }
 
     @Test(expected = KafkaException.class)
-    public void testFailIfUnreadyForSendAfterAbortableError() {
+    public void testFailIfNotReadyForSendAfterAbortableError() {
         long pid = 13131L;
         short epoch = 1;
         doInitTransactions(pid, epoch);
         transactionManager.beginTransaction();
         transactionManager.transitionToAbortableError(new KafkaException());
-        transactionManager.failIfUnreadyForSend();
+        transactionManager.failIfNotReadyForSend();
     }
 
     @Test(expected = KafkaException.class)
-    public void testFailIfUnreadyForSendAfterFatalError() {
+    public void testFailIfNotReadyForSendAfterFatalError() {
         long pid = 13131L;
         short epoch = 1;
         doInitTransactions(pid, epoch);
         transactionManager.transitionToFatalError(new KafkaException());
-        transactionManager.failIfUnreadyForSend();
+        transactionManager.failIfNotReadyForSend();
     }
 
     @Test
@@ -334,7 +335,7 @@ public class TransactionManagerTest {
     }
 
     @Test
-    public void testSendToPartitionAllowedWithPendingPartitionAfterAbortableError() {
+    public void testIsSendToPartitionAllowedWithPendingPartitionAfterAbortableError() {
         final long pid = 13131L;
         final short epoch = 1;
 
@@ -344,12 +345,12 @@ public class TransactionManagerTest {
         transactionManager.maybeAddPartitionToTransaction(tp0);
         transactionManager.transitionToAbortableError(new KafkaException());
 
-        assertFalse(transactionManager.sendToPartitionAllowed(tp0));
+        assertFalse(transactionManager.isSendToPartitionAllowed(tp0));
         assertTrue(transactionManager.hasAbortableError());
     }
 
     @Test
-    public void testSendToPartitionAllowedWithInFlightPartitionAddAfterAbortableError() {
+    public void testIsSendToPartitionAllowedWithInFlightPartitionAddAfterAbortableError() {
         final long pid = 13131L;
         final short epoch = 1;
 
@@ -362,12 +363,12 @@ public class TransactionManagerTest {
         sender.run(time.milliseconds());
         transactionManager.transitionToAbortableError(new KafkaException());
 
-        assertFalse(transactionManager.sendToPartitionAllowed(tp0));
+        assertFalse(transactionManager.isSendToPartitionAllowed(tp0));
         assertTrue(transactionManager.hasAbortableError());
     }
 
     @Test
-    public void testSendToPartitionAllowedWithPendingPartitionAfterFatalError() {
+    public void testIsSendToPartitionAllowedWithPendingPartitionAfterFatalError() {
         final long pid = 13131L;
         final short epoch = 1;
 
@@ -377,12 +378,12 @@ public class TransactionManagerTest {
         transactionManager.maybeAddPartitionToTransaction(tp0);
         transactionManager.transitionToFatalError(new KafkaException());
 
-        assertFalse(transactionManager.sendToPartitionAllowed(tp0));
+        assertFalse(transactionManager.isSendToPartitionAllowed(tp0));
         assertTrue(transactionManager.hasFatalError());
     }
 
     @Test
-    public void testSendToPartitionAllowedWithInFlightPartitionAddAfterFatalError() {
+    public void testIsSendToPartitionAllowedWithInFlightPartitionAddAfterFatalError() {
         final long pid = 13131L;
         final short epoch = 1;
 
@@ -395,12 +396,12 @@ public class TransactionManagerTest {
         sender.run(time.milliseconds());
         transactionManager.transitionToFatalError(new KafkaException());
 
-        assertFalse(transactionManager.sendToPartitionAllowed(tp0));
+        assertFalse(transactionManager.isSendToPartitionAllowed(tp0));
         assertTrue(transactionManager.hasFatalError());
     }
 
     @Test
-    public void testSendToPartitionAllowedWithAddedPartitionAfterAbortableError() {
+    public void testIsSendToPartitionAllowedWithAddedPartitionAfterAbortableError() {
         final long pid = 13131L;
         final short epoch = 1;
 
@@ -414,12 +415,12 @@ public class TransactionManagerTest {
         assertFalse(transactionManager.hasPartitionsToAdd());
         transactionManager.transitionToAbortableError(new KafkaException());
 
-        assertTrue(transactionManager.sendToPartitionAllowed(tp0));
+        assertTrue(transactionManager.isSendToPartitionAllowed(tp0));
         assertTrue(transactionManager.hasAbortableError());
     }
 
     @Test
-    public void testSendToPartitionAllowedWithAddedPartitionAfterFatalError() {
+    public void testIsSendToPartitionAllowedWithAddedPartitionAfterFatalError() {
         final long pid = 13131L;
         final short epoch = 1;
 
@@ -432,17 +433,17 @@ public class TransactionManagerTest {
         assertFalse(transactionManager.hasPartitionsToAdd());
         transactionManager.transitionToFatalError(new KafkaException());
 
-        assertFalse(transactionManager.sendToPartitionAllowed(tp0));
+        assertFalse(transactionManager.isSendToPartitionAllowed(tp0));
         assertTrue(transactionManager.hasFatalError());
     }
 
     @Test
-    public void testSendToPartitionAllowedWithUnaddedPartition() {
+    public void testIsSendToPartitionAllowedWithPartitionNotAdded() {
         final long pid = 13131L;
         final short epoch = 1;
         doInitTransactions(pid, epoch);
         transactionManager.beginTransaction();
-        assertFalse(transactionManager.sendToPartitionAllowed(tp0));
+        assertFalse(transactionManager.isSendToPartitionAllowed(tp0));
     }
 
     @Test(expected = IllegalStateException.class)
@@ -487,11 +488,11 @@ public class TransactionManagerTest {
 
         prepareProduceResponse(Errors.NONE, pid, epoch);
         assertFalse(transactionManager.transactionContainsPartition(tp0));
-        assertFalse(transactionManager.sendToPartitionAllowed(tp0));
+        assertFalse(transactionManager.isSendToPartitionAllowed(tp0));
         sender.run(time.milliseconds());  // send addPartitions.
         // Check that only addPartitions was sent.
         assertTrue(transactionManager.transactionContainsPartition(tp0));
-        assertTrue(transactionManager.sendToPartitionAllowed(tp0));
+        assertTrue(transactionManager.isSendToPartitionAllowed(tp0));
         assertFalse(responseFuture.isDone());
 
         sender.run(time.milliseconds());  // send produce request.
@@ -1300,8 +1301,8 @@ public class TransactionManagerTest {
         accumulator.append(tp1, time.milliseconds(), "key".getBytes(),
                 "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT);
 
-        assertFalse(transactionManager.sendToPartitionAllowed(tp0));
-        assertFalse(transactionManager.sendToPartitionAllowed(tp1));
+        assertFalse(transactionManager.isSendToPartitionAllowed(tp0));
+        assertFalse(transactionManager.isSendToPartitionAllowed(tp1));
 
         Node node1 = new Node(0, "localhost", 1111);
         Node node2 = new Node(1, "localhost", 1112);
@@ -1341,7 +1342,7 @@ public class TransactionManagerTest {
         sender.run(time.milliseconds());  // Send AddPartitions, should be in abortable state.
 
         assertTrue(transactionManager.hasAbortableError());
-        assertTrue(transactionManager.sendToPartitionAllowed(tp1));
+        assertTrue(transactionManager.isSendToPartitionAllowed(tp1));
 
         // Try to drain a message destined for tp1, it should get drained.
         Node node1 = new Node(1, "localhost", 1112);
@@ -1383,6 +1384,119 @@ public class TransactionManagerTest {
         // We shouldn't drain batches which haven't been added to the transaction yet.
         assertTrue(drainedBatches.containsKey(node1.id()));
         assertTrue(drainedBatches.get(node1.id()).isEmpty());
+    }
+
+    @Test
+    public void testTransitionToAbortableErrorOnBatchExpiry() throws InterruptedException, ExecutionException {
+        final long pid = 13131L;
+        final short epoch = 1;
+
+        doInitTransactions(pid, epoch);
+
+        transactionManager.beginTransaction();
+        transactionManager.maybeAddPartitionToTransaction(tp0);
+
+        Future<RecordMetadata> responseFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
+                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
+
+        assertFalse(responseFuture.isDone());
+
+        prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, epoch, pid);
+
+        assertFalse(transactionManager.transactionContainsPartition(tp0));
+        assertFalse(transactionManager.isSendToPartitionAllowed(tp0));
+        sender.run(time.milliseconds());  // send addPartitions.
+        // Check that only addPartitions was sent.
+        assertTrue(transactionManager.transactionContainsPartition(tp0));
+        assertTrue(transactionManager.isSendToPartitionAllowed(tp0));
+        assertFalse(responseFuture.isDone());
+
+        // Sleep 10 seconds to make sure that the batches in the queue would be expired if they can't be drained.
+        time.sleep(10000);
+        // Disconnect the target node for the pending produce request. This will ensure that sender will try to
+        // expire the batch.
+        Node clusterNode = this.cluster.nodes().get(0);
+        client.disconnect(clusterNode.idString());
+        client.blackout(clusterNode, 100);
+
+        sender.run(time.milliseconds());  // We should try to flush the produce, but expire it instead without sending anything.
+        assertTrue(responseFuture.isDone());
+
+        try {
+            // make sure the produce was expired.
+            responseFuture.get();
+            fail("Expected to get a TimeoutException since the queued ProducerBatch should have been expired");
+        } catch (ExecutionException e) {
+            assertTrue(e.getCause() instanceof  TimeoutException);
+        }
+        assertTrue(transactionManager.hasAbortableError());
+    }
+
+    @Test
+    public void testDropCommitOnBatchExpiry() throws InterruptedException, ExecutionException {
+        final long pid = 13131L;
+        final short epoch = 1;
+
+        doInitTransactions(pid, epoch);
+
+        transactionManager.beginTransaction();
+        transactionManager.maybeAddPartitionToTransaction(tp0);
+
+        Future<RecordMetadata> responseFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
+                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
+
+        assertFalse(responseFuture.isDone());
+
+        prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, epoch, pid);
+
+        assertFalse(transactionManager.transactionContainsPartition(tp0));
+        assertFalse(transactionManager.isSendToPartitionAllowed(tp0));
+        sender.run(time.milliseconds());  // send addPartitions.
+        // Check that only addPartitions was sent.
+        assertTrue(transactionManager.transactionContainsPartition(tp0));
+        assertTrue(transactionManager.isSendToPartitionAllowed(tp0));
+        assertFalse(responseFuture.isDone());
+
+        TransactionalRequestResult commitResult = transactionManager.beginCommittingTransaction();
+
+        // Sleep 10 seconds to make sure that the batches in the queue would be expired if they can't be drained.
+        time.sleep(10000);
+        // Disconnect the target node for the pending produce request. This will ensure that sender will try to
+        // expire the batch.
+        Node clusterNode = this.cluster.nodes().get(0);
+        client.disconnect(clusterNode.idString());
+        client.blackout(clusterNode, 100);
+
+        sender.run(time.milliseconds());  // We should try to flush the produce, but expire it instead without sending anything.
+        assertTrue(responseFuture.isDone());
+
+        try {
+            // make sure the produce was expired.
+            responseFuture.get();
+            fail("Expected to get a TimeoutException since the queued ProducerBatch should have been expired");
+        } catch (ExecutionException e) {
+            assertTrue(e.getCause() instanceof  TimeoutException);
+        }
+        sender.run(time.milliseconds());  // the commit shouldn't be completed without being sent since the produce request failed.
+
+        assertTrue(commitResult.isCompleted());
+        assertFalse(commitResult.isSuccessful());  // the commit shouldn't succeed since the produce request failed.
+
+        assertTrue(transactionManager.hasAbortableError());
+        assertTrue(transactionManager.hasOngoingTransaction());
+        assertFalse(transactionManager.isCompletingTransaction());
+        assertTrue(transactionManager.transactionContainsPartition(tp0));
+
+        TransactionalRequestResult abortResult = transactionManager.beginAbortingTransaction();
+
+        prepareEndTxnResponse(Errors.NONE, TransactionResult.ABORT, pid, epoch);
+
+        sender.run(time.milliseconds());  // send the abort.
+
+        assertTrue(abortResult.isCompleted());
+        assertTrue(abortResult.isSuccessful());
+        assertFalse(transactionManager.hasOngoingTransaction());
+        assertFalse(transactionManager.transactionContainsPartition(tp0));
     }
 
     private void verifyAddPartitionsFailsWithPartitionLevelError(final Errors error) throws InterruptedException {
