@@ -15,7 +15,7 @@
 
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.kafka import KafkaService
-from kafkatest.services.console_consumer import ConsoleConsumer
+from kafkatest.services.verifiable_consumer import VerifiableConsumer
 from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.services.transactional_message_copier import TransactionalMessageCopier
 from kafkatest.utils import is_int
@@ -150,18 +150,16 @@ class TransactionsTest(Test):
         return copiers
 
     def start_consumer(self, topic_to_read, group_id):
-        consumer = ConsoleConsumer(context=self.test_context,
-                                   num_nodes=1,
-                                   kafka=self.kafka,
-                                   topic=topic_to_read,
-                                   group_id=group_id,
-                                   new_consumer=True,
-                                   message_validator=is_int,
-                                   from_beginning=True,
-                                   isolation_level="read_committed")
+        consumer = VerifiableConsumer(context=self.test_context,
+                                      num_nodes=1,
+                                      kafka=self.kafka,
+                                      topic=topic_to_read,
+                                      group_id=group_id,
+                                      isolation_level="read_committed",
+                                      collect_records=True)
         consumer.start()
         # ensure that the consumer is up.
-        wait_until(lambda: (len(consumer.messages_consumed[1]) > 0) == True,
+        wait_until(lambda: consumer.total_consumed() > 0 == True,
                    timeout_sec=60,
                    err_msg="Consumer failed to consume any messages for %ds" %\
                    60)
@@ -175,12 +173,12 @@ class TransactionsTest(Test):
         #
         #  2. If we never reach 'num_seed_messages', then this will cause the
         #     test to fail.
-        wait_until(lambda: len(consumer.messages_consumed[1]) >= self.num_seed_messages,
+        wait_until(lambda: consumer.total_consumed() >= self.num_seed_messages,
                    timeout_sec=90,
                    err_msg="Consumer consumed only %d out of %d messages in %ds" %\
-                   (len(consumer.messages_consumed[1]), self.num_seed_messages, 90))
+                   (consumer.total_consumed(), self.num_seed_messages, 90))
         consumer.stop()
-        return consumer.messages_consumed[1]
+        return consumer.records().values()
 
     def copy_messages_transactionally(self, failure_mode, bounce_target):
         """Copies messages transactionally from the seeded input topic to the
