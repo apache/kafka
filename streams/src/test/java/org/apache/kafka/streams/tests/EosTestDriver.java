@@ -46,6 +46,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.NoSuchElementException;
 import java.util.Properties;
 import java.util.Random;
 import java.util.Set;
@@ -293,7 +294,7 @@ public class EosTestDriver extends SmokeTestUtil {
                         throw new RuntimeException("Result verification failed for " + receivedRecord + " expected <" + expectedKey + "," + expectedValue + "> but was <" + receivedKey + "," + receivedValue + ">");
                     }
                 }
-            } catch (final NullPointerException e) {
+            } catch (final NullPointerException | NoSuchElementException e) {
                 return false;
             }
         }
