@@ -314,7 +314,7 @@ public class KerberosLogin extends AbstractLogin {
         String jaasServiceName = null;
         try {
             jaasServiceName = jaasContext.configEntryOption(JaasUtils.SERVICE_NAME, null);
-        } catch (IOException ex) {
+        } catch (IOException e) {
             log.warn("Jaas configuration not found", e);
         }
 
