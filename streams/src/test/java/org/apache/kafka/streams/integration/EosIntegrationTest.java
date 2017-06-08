@@ -81,7 +81,7 @@ public class EosIntegrationTest {
     private final String storeName = "store";
 
     private final Map<Integer, Integer> maxPartitionNumberSeen = Collections.synchronizedMap(new HashMap<Integer, Integer>());
-    private boolean injectError = false;
+    private volatile boolean injectError = false;
     private AtomicInteger commitRequested;
     private Throwable uncaughtException;
 
