@@ -143,7 +143,7 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
   private val txnLogAppendRetryQueue = new LinkedBlockingQueue[TxnLogAppend]()
 
   newGauge(
-    "TransactionMarkerUnknownBrokerQueueSize",
+    "UnknownDestinationQueueSize",
     new Gauge[Int] {
       def value: Int = markersQueueForUnknownBroker.totalNumMarkers
     },
@@ -151,7 +151,7 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
   )
 
   newGauge(
-    "TransactionLogAppendRetryQueueSize",
+    "CompleteTxnLogAppendQueueSize",
     new Gauge[Int] {
       def value: Int = txnLogAppendRetryQueue.size
     },
