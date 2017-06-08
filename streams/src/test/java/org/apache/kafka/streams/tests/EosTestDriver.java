@@ -261,15 +261,15 @@ public class EosTestDriver extends SmokeTestUtil {
         }
 
         for (final Map.Entry<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> partitionRecords : receivedRecords.entrySet()) {
-            final TopicPartition partition = partitionRecords.getKey();
+            final TopicPartition tp = partitionRecords.getKey();
             final int numberOfReceivedRecords = partitionRecords.getValue().size();
-            final Long committed = committedOffsets.get(partition);
+            final Long committed = committedOffsets.get(new TopicPartition("data", tp.partition()));
             if (committed != null) {
                 if (numberOfReceivedRecords < committed) {
                     return false;
                 }
             } else if (numberOfReceivedRecords > 0) {
-                throw new RuntimeException("Result verification failed for partition " + partition
+                throw new RuntimeException("Result verification failed for partition " + tp
                     + ". No offset was committed but we received " + numberOfReceivedRecords + " records.");
             }
         }
@@ -309,7 +309,7 @@ public class EosTestDriver extends SmokeTestUtil {
 
         for (final Map.Entry<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> partitionRecords : topicRecords.entrySet()) {
             final TopicPartition tp = partitionRecords.getKey();
-            final Long committed = committedOffsets.get(tp);
+            final Long committed = committedOffsets.get(new TopicPartition("data", tp.partition()));
             truncatedTopicRecords.put(tp, partitionRecords.getValue().subList(0, committed != null ? committed.intValue() : 0));
         }
 
