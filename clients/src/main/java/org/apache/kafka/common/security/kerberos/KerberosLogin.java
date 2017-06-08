@@ -33,11 +33,16 @@ import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.security.AccessController;
+import java.util.Comparator;
+
 import java.util.Date;
 import java.util.List;
 import java.util.Random;
 import java.util.Set;
 import java.util.Map;
+import java.util.SortedSet;
+import java.util.TreeSet;
 
 /**
  * This class is responsible for refreshing Kerberos credentials for
@@ -93,6 +98,30 @@ public class KerberosLogin extends AbstractLogin {
      */
     @Override
     public LoginContext login() throws LoginException {
+        Subject existingSubject = Subject.getSubject(AccessController.getContext());
+        if (existingSubject != null) {
+            // Found a subject in the threads access control context. Check if it has a valid Kerberos ticket
+            SortedSet<KerberosTicket> tickets = new TreeSet<>(new Comparator<KerberosTicket>() {
+                @Override
+                public int compare(KerberosTicket ticket1, KerberosTicket ticket2) {
+                    return Long.compare(ticket1.getEndTime().getTime(), ticket2.getEndTime().getTime());
+                }
+            });
+            for (KerberosTicket ticket : existingSubject.getPrivateCredentials(KerberosTicket.class)) {
+                // Filter out Kerberos TGTs
+                KerberosPrincipal principal = ticket.getServer();
+                String principalName = "krbtgt/" + principal.getRealm() + "@" + principal.getRealm();
+                if (principalName.equals(principal.getName())) {
+                    tickets.add(ticket);
+                }
+            }
+            if (!tickets.isEmpty() && tickets.last().isCurrent()) {
+                log.debug("Found Subject with a valid Kerberos ticket");
+                subject = existingSubject;
+                // Note that it is the responsibility of the application to renew ticket and update the subject
+                return loginContext;
+            }
+        }
 
         this.lastLogin = currentElapsedTime();
         loginContext = super.login();
@@ -282,7 +311,13 @@ public class KerberosLogin extends AbstractLogin {
     }
 
     private static String getServiceName(Map<String, ?> configs, JaasContext jaasContext) {
-        String jaasServiceName = jaasContext.configEntryOption(JaasUtils.SERVICE_NAME, null);
+        String jaasServiceName = null;
+        try {
+            jaasServiceName = jaasContext.configEntryOption(JaasUtils.SERVICE_NAME, null);
+        } catch (IOException ex) {
+            log.warn("Jaas configuration not found", e);
+        }
+
         String configServiceName = (String) configs.get(SaslConfigs.SASL_KERBEROS_SERVICE_NAME);
         if (jaasServiceName != null && configServiceName != null && !jaasServiceName.equals(configServiceName)) {
             String message = String.format("Conflicting serviceName values found in JAAS and Kafka configs " +
