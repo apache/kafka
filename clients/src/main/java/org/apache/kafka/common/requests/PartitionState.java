@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.utils.Utils;
+
 import java.util.List;
 
 public class PartitionState {
@@ -40,8 +42,8 @@ public class PartitionState {
         return "PartitionState(controllerEpoch=" + controllerEpoch +
                 ", leader=" + leader +
                 ", leaderEpoch=" + leaderEpoch +
-                ", isr=" + isr +
+                ", isr=" + Utils.join(isr, ",") +
                 ", zkVersion=" + zkVersion +
-                ", replicas=" + replicas + ")";
+                ", replicas=" + Utils.join(replicas, ",") + ")";
     }
 }

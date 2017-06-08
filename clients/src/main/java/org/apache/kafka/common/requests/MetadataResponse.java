@@ -23,6 +23,7 @@ import org.apache.kafka.common.errors.InvalidMetadataException;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -378,8 +379,8 @@ public class MetadataResponse extends AbstractResponse {
                     ", error=" + error +
                     ", partition=" + partition +
                     ", leader=" + leader +
-                    ", replicas=" + replicas +
-                    ", isr=" + isr + ')';
+                    ", replicas=" + Utils.join(replicas, ",") +
+                    ", isr=" + Utils.join(isr, ",") + ')';
         }
     }
 

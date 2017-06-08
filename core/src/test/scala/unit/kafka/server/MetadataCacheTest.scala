@@ -89,7 +89,6 @@ class MetadataCacheTest {
         val partitionMetadatas = topicMetadata.partitionMetadata.asScala.sortBy(_.partition)
         assertEquals(s"Unexpected partition count for topic $topic", topicPartitionStates.size, partitionMetadatas.size)
 
-        println("partitionMetadatas " + partitionMetadatas)
         partitionMetadatas.zipWithIndex.foreach { case (partitionMetadata, partitionId) =>
           assertEquals(Errors.NONE, partitionMetadata.error)
           assertEquals(partitionId, partitionMetadata.partition)
