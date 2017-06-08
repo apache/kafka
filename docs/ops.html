@@ -27,7 +27,7 @@
   You have the option of either adding topics manually or having them be created automatically when data is first published to a non-existent topic. If topics are auto-created then you may want to tune the default <a href="#topic-config">topic configurations</a> used for auto-created topics.
   <p>
   Topics are added and modified using the topic tool:
-  <pre>
+  <pre class="brush: bash;">
   &gt; bin/kafka-topics.sh --zookeeper zk_host:port/chroot --create --topic my_topic_name
         --partitions 20 --replication-factor 3 --config x=y
   </pre>
@@ -44,26 +44,26 @@
   You can change the configuration or partitioning of a topic using the same topic tool.
   <p>
   To add partitions you can do
-  <pre>
+  <pre class="brush: bash;">
   &gt; bin/kafka-topics.sh --zookeeper zk_host:port/chroot --alter --topic my_topic_name
         --partitions 40
   </pre>
   Be aware that one use case for partitions is to semantically partition data, and adding partitions doesn't change the partitioning of existing data so this may disturb consumers if they rely on that partition. That is if data is partitioned by <code>hash(key) % number_of_partitions</code> then this partitioning will potentially be shuffled by adding partitions but Kafka will not attempt to automatically redistribute data in any way.
   <p>
   To add configs:
-  <pre>
+  <pre class="brush: bash;">
   &gt; bin/kafka-topics.sh --zookeeper zk_host:port/chroot --alter --topic my_topic_name --config x=y
   </pre>
   To remove a config:
-  <pre>
+  <pre class="brush: bash;">
   &gt; bin/kafka-topics.sh --zookeeper zk_host:port/chroot --alter --topic my_topic_name --delete-config x
   </pre>
   And finally deleting a topic:
-  <pre>
+  <pre class="brush: bash;">
   &gt; bin/kafka-topics.sh --zookeeper zk_host:port/chroot --delete --topic my_topic_name
   </pre>
   Topic deletion option is disabled by default. To enable it set the server config
-    <pre>delete.topic.enable=true</pre>
+    <pre class="brush: text;">delete.topic.enable=true</pre>
   <p>
   Kafka does not currently support reducing the number of partitions for a topic.
   <p>
@@ -80,7 +80,7 @@
   </ol>
 
   Syncing the logs will happen automatically whenever the server is stopped other than by a hard kill, but the controlled leadership migration requires using a special setting:
-  <pre>
+  <pre class="brush: text;">
       controlled.shutdown.enable=true
   </pre>
   Note that controlled shutdown will only succeed if <i>all</i> the partitions hosted on the broker have replicas (i.e. the replication factor is greater than 1 <i>and</i> at least one of these replicas is alive). This is generally what you want since shutting down the last replica would make that topic partition unavailable.
@@ -90,12 +90,12 @@
   Whenever a broker stops or crashes leadership for that broker's partitions transfers to other replicas. This means that by default when the broker is restarted it will only be a follower for all its partitions, meaning it will not be used for client reads and writes.
   <p>
   To avoid this imbalance, Kafka has a notion of preferred replicas. If the list of replicas for a partition is 1,5,9 then node 1 is preferred as the leader to either node 5 or 9 because it is earlier in the replica list. You can have the Kafka cluster try to restore leadership to the restored replicas by running the command:
-  <pre>
+  <pre class="brush: bash;">
   &gt; bin/kafka-preferred-replica-election.sh --zookeeper zk_host:port/chroot
   </pre>
 
   Since running this command can be tedious you can also configure Kafka to do this automatically by setting the following configuration:
-  <pre>
+  <pre class="brush: text;">
       auto.leader.rebalance.enable=true
   </pre>
 
@@ -103,7 +103,7 @@
   The rack awareness feature spreads replicas of the same partition across different racks. This extends the guarantees Kafka provides for broker-failure to cover rack-failure, limiting the risk of data loss should all the brokers on a rack fail at once. The feature can also be applied to other broker groupings such as availability zones in EC2.
   <p></p>
   You can specify that a broker belongs to a particular rack by adding a property to the broker config:
-  <pre>   broker.rack=my-rack-id</pre>
+  <pre class="brush: text;">   broker.rack=my-rack-id</pre>
   When a topic is <a href="#basic_ops_add_topic">created</a>, <a href="#basic_ops_modify_topic">modified</a> or replicas are <a href="#basic_ops_cluster_expansion">redistributed</a>, the rack constraint will be honoured, ensuring replicas span as many racks as they can (a partition will span min(#racks, replication-factor) different racks).
   <p></p>
   The algorithm used to assign replicas to brokers ensures that the number of leaders per broker will be constant, regardless of how brokers are distributed across racks. This ensures balanced throughput.
@@ -123,7 +123,7 @@
   The source and destination clusters are completely independent entities: they can have different numbers of partitions and the offsets will not be the same. For this reason the mirror cluster is not really intended as a fault-tolerance mechanism (as the consumer position will be different); for that we recommend using normal in-cluster replication. The mirror maker process will, however, retain and use the message key for partitioning so order is preserved on a per-key basis.
   <p>
   Here is an example showing how to mirror a single topic (named <i>my-topic</i>) from an input cluster:
-  <pre>
+  <pre class="brush: bash;">
   &gt; bin/kafka-mirror-maker.sh
         --consumer.config consumer.properties
         --producer.config producer.properties --whitelist my-topic
@@ -139,7 +139,7 @@
 
   <h4><a id="basic_ops_consumer_lag" href="#basic_ops_consumer_lag">Checking consumer position</a></h4>
   Sometimes it's useful to see the position of your consumers. We have a tool that will show the position of all consumers in a consumer group as well as how far behind the end of the log they are. To run this tool on a consumer group named <i>my-group</i> consuming a topic named <i>my-topic</i> would look like this:
-  <pre>
+  <pre class="brush: bash;">
   &gt; bin/kafka-run-class.sh kafka.tools.ConsumerOffsetChecker --zookeeper localhost:2181 --group test
   Group           Topic                          Pid Offset          logSize         Lag             Owner
   my-group        my-topic                       0   0               0               0               test_jkreps-mn-1394154511599-60744496-0
@@ -157,7 +157,7 @@
 
   For example, to list all consumer groups across all topics:
 
-  <pre>
+  <pre class="brush: bash;">
   &gt; bin/kafka-consumer-groups.sh --bootstrap-server broker1:9092 --list
 
   test-consumer-group
@@ -165,7 +165,7 @@
 
   To view offsets as in the previous example with the ConsumerOffsetChecker, we "describe" the consumer group like this:
 
-  <pre>
+  <pre class="brush: bash;">
   &gt; bin/kafka-consumer-groups.sh --bootstrap-server broker1:9092 --describe --group test-consumer-group
 
   TOPIC                          PARTITION  CURRENT-OFFSET  LOG-END-OFFSET  LAG        CONSUMER-ID                                       HOST                           CLIENT-ID
@@ -175,7 +175,7 @@
   If you are using the old high-level consumer and storing the group metadata in ZooKeeper (i.e. <code>offsets.storage=zookeeper</code>), pass
   <code>--zookeeper</code> instead of <code>bootstrap-server</code>:
 
-  <pre>
+  <pre class="brush: bash;">
   &gt; bin/kafka-consumer-groups.sh --zookeeper localhost:2181 --list
   </pre>
 
@@ -199,7 +199,7 @@
   For instance, the following example will move all partitions for topics foo1,foo2 to the new set of brokers 5,6. At the end of this move, all partitions for topics foo1 and foo2 will <i>only</i> exist on brokers 5,6.
   <p>
   Since the tool accepts the input list of topics as a json file, you first need to identify the topics you want to move and create the json file as follows:
-  <pre>
+  <pre class="brush: bash;">
   > cat topics-to-move.json
   {"topics": [{"topic": "foo1"},
               {"topic": "foo2"}],
@@ -207,7 +207,7 @@
   }
   </pre>
   Once the json file is ready, use the partition reassignment tool to generate a candidate assignment:
-  <pre>
+  <pre class="brush: bash;">
   > bin/kafka-reassign-partitions.sh --zookeeper localhost:2181 --topics-to-move-json-file topics-to-move.json --broker-list "5,6" --generate
   Current partition replica assignment
 
@@ -233,7 +233,7 @@
   </pre>
   <p>
   The tool generates a candidate assignment that will move all partitions from topics foo1,foo2 to brokers 5,6. Note, however, that at this point, the partition movement has not started, it merely tells you the current assignment and the proposed new assignment. The current assignment should be saved in case you want to rollback to it. The new assignment should be saved in a json file (e.g. expand-cluster-reassignment.json) to be input to the tool with the --execute option as follows:
-  <pre>
+  <pre class="brush: bash;">
   > bin/kafka-reassign-partitions.sh --zookeeper localhost:2181 --reassignment-json-file expand-cluster-reassignment.json --execute
   Current partition replica assignment
 
@@ -259,7 +259,7 @@
   </pre>
   <p>
   Finally, the --verify option can be used with the tool to check the status of the partition reassignment. Note that the same expand-cluster-reassignment.json (used with the --execute option) should be used with the --verify option:
-  <pre>
+  <pre class="brush: bash;">
   > bin/kafka-reassign-partitions.sh --zookeeper localhost:2181 --reassignment-json-file expand-cluster-reassignment.json --verify
   Status of partition reassignment:
   Reassignment of partition [foo1,0] completed successfully
@@ -276,12 +276,12 @@
   For instance, the following example moves partition 0 of topic foo1 to brokers 5,6 and partition 1 of topic foo2 to brokers 2,3:
   <p>
   The first step is to hand craft the custom reassignment plan in a json file:
-  <pre>
+  <pre class="brush: bash;">
   > cat custom-reassignment.json
   {"version":1,"partitions":[{"topic":"foo1","partition":0,"replicas":[5,6]},{"topic":"foo2","partition":1,"replicas":[2,3]}]}
   </pre>
   Then, use the json file with the --execute option to start the reassignment process:
-  <pre>
+  <pre class="brush: bash;">
   > bin/kafka-reassign-partitions.sh --zookeeper localhost:2181 --reassignment-json-file custom-reassignment.json --execute
   Current partition replica assignment
 
@@ -299,8 +299,8 @@
   </pre>
   <p>
   The --verify option can be used with the tool to check the status of the partition reassignment. Note that the same expand-cluster-reassignment.json (used with the --execute option) should be used with the --verify option:
-  <pre>
-  bin/kafka-reassign-partitions.sh --zookeeper localhost:2181 --reassignment-json-file custom-reassignment.json --verify
+  <pre class="brush: bash;">
+  > bin/kafka-reassign-partitions.sh --zookeeper localhost:2181 --reassignment-json-file custom-reassignment.json --verify
   Status of partition reassignment:
   Reassignment of partition [foo1,0] completed successfully
   Reassignment of partition [foo2,1] completed successfully
@@ -315,13 +315,13 @@
   For instance, the following example increases the replication factor of partition 0 of topic foo from 1 to 3. Before increasing the replication factor, the partition's only replica existed on broker 5. As part of increasing the replication factor, we will add more replicas on brokers 6 and 7.
   <p>
   The first step is to hand craft the custom reassignment plan in a json file:
-  <pre>
+  <pre class="brush: bash;">
   > cat increase-replication-factor.json
   {"version":1,
   "partitions":[{"topic":"foo","partition":0,"replicas":[5,6,7]}]}
   </pre>
   Then, use the json file with the --execute option to start the reassignment process:
-  <pre>
+  <pre class="brush: bash;">
   > bin/kafka-reassign-partitions.sh --zookeeper localhost:2181 --reassignment-json-file increase-replication-factor.json --execute
   Current partition replica assignment
 
@@ -335,13 +335,13 @@
   </pre>
   <p>
   The --verify option can be used with the tool to check the status of the partition reassignment. Note that the same increase-replication-factor.json (used with the --execute option) should be used with the --verify option:
-  <pre>
-  bin/kafka-reassign-partitions.sh --zookeeper localhost:2181 --reassignment-json-file increase-replication-factor.json --verify
+  <pre class="brush: bash;">
+  > bin/kafka-reassign-partitions.sh --zookeeper localhost:2181 --reassignment-json-file increase-replication-factor.json --verify
   Status of partition reassignment:
   Reassignment of partition [foo,0] completed successfully
   </pre>
   You can also verify the increase in replication factor with the kafka-topics tool:
-  <pre>
+  <pre class="brush: bash;">
   > bin/kafka-topics.sh --zookeeper localhost:2181 --topic foo --describe
   Topic:foo	PartitionCount:1	ReplicationFactor:3	Configs:
     Topic: foo	Partition: 0	Leader: 5	Replicas: 5,6,7	Isr: 5,6,7
@@ -353,13 +353,13 @@
   There are two interfaces that can be used to engage a throttle. The simplest, and safest, is to apply a throttle when invoking the kafka-reassign-partitions.sh, but kafka-configs.sh can also be used to view and alter the throttle values directly.
   <p></p>
   So for example, if you were to execute a rebalance, with the below command, it would move partitions at no more than 50MB/s.
-  <pre>$ bin/kafka-reassign-partitions.sh --zookeeper myhost:2181--execute --reassignment-json-file bigger-cluster.json —throttle 50000000</pre>
+  <pre class="brush: bash;">$ bin/kafka-reassign-partitions.sh --zookeeper myhost:2181--execute --reassignment-json-file bigger-cluster.json —throttle 50000000</pre>
   When you execute this script you will see the throttle engage:
-  <pre>
+  <pre class="brush: bash;">
   The throttle limit was set to 50000000 B/s
   Successfully started reassignment of partitions.</pre>
   <p>Should you wish to alter the throttle, during a rebalance, say to increase the throughput so it completes quicker, you can do this by re-running the execute command passing the same reassignment-json-file:</p>
-  <pre>$ bin/kafka-reassign-partitions.sh --zookeeper localhost:2181  --execute --reassignment-json-file bigger-cluster.json --throttle 700000000
+  <pre class="brush: bash;">$ bin/kafka-reassign-partitions.sh --zookeeper localhost:2181  --execute --reassignment-json-file bigger-cluster.json --throttle 700000000
   There is an existing assignment running.
   The throttle limit was set to 700000000 B/s</pre>
 
@@ -369,7 +369,8 @@
       the --verify option. Failure to do so could cause regular replication traffic to be throttled. </p>
   <p>When the --verify option is executed, and the reassignment has completed, the script will confirm that the throttle was removed:</p>
 
-  <pre>$ bin/kafka-reassign-partitions.sh --zookeeper localhost:2181  --verify --reassignment-json-file bigger-cluster.json
+  <pre class="brush: bash;">
+  > bin/kafka-reassign-partitions.sh --zookeeper localhost:2181  --verify --reassignment-json-file bigger-cluster.json
   Status of partition reassignment:
   Reassignment of partition [my-topic,1] completed successfully
   Reassignment of partition [mytopic,0] completed successfully
@@ -379,19 +380,20 @@
       configuration used to manage the throttling process. The throttle value itself. This is configured, at a broker
       level, using the dynamic properties: </p>
 
-  <pre>leader.replication.throttled.rate
+  <pre class="brush: text;">leader.replication.throttled.rate
   follower.replication.throttled.rate</pre>
 
   <p>There is also an enumerated set of throttled replicas: </p>
 
-  <pre>leader.replication.throttled.replicas
+  <pre class="brush: text;">leader.replication.throttled.replicas
   follower.replication.throttled.replicas</pre>
 
   <p>Which are configured per topic. All four config values are automatically assigned by kafka-reassign-partitions.sh
       (discussed below). </p>
   <p>To view the throttle limit configuration:</p>
 
-  <pre>$ bin/kafka-configs.sh --describe --zookeeper localhost:2181 --entity-type brokers
+  <pre class="brush: bash;">
+  > bin/kafka-configs.sh --describe --zookeeper localhost:2181 --entity-type brokers
   Configs for brokers '2' are leader.replication.throttled.rate=700000000,follower.replication.throttled.rate=700000000
   Configs for brokers '1' are leader.replication.throttled.rate=700000000,follower.replication.throttled.rate=700000000</pre>
 
@@ -400,7 +402,8 @@
 
   <p>To view the list of throttled replicas:</p>
 
-  <pre>$ bin/kafka-configs.sh --describe --zookeeper localhost:2181 --entity-type topics
+  <pre class="brush: bash;">
+  > bin/kafka-configs.sh --describe --zookeeper localhost:2181 --entity-type topics
   Configs for topic 'my-topic' are leader.replication.throttled.replicas=1:102,0:101,
       follower.replication.throttled.replicas=1:101,0:102</pre>
 
@@ -448,19 +451,19 @@
   It is possible to set custom quotas for each (user, client-id), user or client-id group.
   <p>
   Configure custom quota for (user=user1, client-id=clientA):
-  <pre>
+  <pre class="brush: bash;">
   > bin/kafka-configs.sh  --zookeeper localhost:2181 --alter --add-config 'producer_byte_rate=1024,consumer_byte_rate=2048,request_percentage=200' --entity-type users --entity-name user1 --entity-type clients --entity-name clientA
   Updated config for entity: user-principal 'user1', client-id 'clientA'.
   </pre>
 
   Configure custom quota for user=user1:
-  <pre>
+  <pre class="brush: bash;">
   > bin/kafka-configs.sh  --zookeeper localhost:2181 --alter --add-config 'producer_byte_rate=1024,consumer_byte_rate=2048,request_percentage=200' --entity-type users --entity-name user1
   Updated config for entity: user-principal 'user1'.
   </pre>
 
   Configure custom quota for client-id=clientA:
-  <pre>
+  <pre class="brush: bash;">
   > bin/kafka-configs.sh  --zookeeper localhost:2181 --alter --add-config 'producer_byte_rate=1024,consumer_byte_rate=2048,request_percentage=200' --entity-type clients --entity-name clientA
   Updated config for entity: client-id 'clientA'.
   </pre>
@@ -468,53 +471,53 @@
   It is possible to set default quotas for each (user, client-id), user or client-id group by specifying <i>--entity-default</i> option instead of <i>--entity-name</i>.
   <p>
   Configure default client-id quota for user=userA:
-  <pre>
+  <pre class="brush: bash;">
   > bin/kafka-configs.sh  --zookeeper localhost:2181 --alter --add-config 'producer_byte_rate=1024,consumer_byte_rate=2048,request_percentage=200' --entity-type users --entity-name user1 --entity-type clients --entity-default
   Updated config for entity: user-principal 'user1', default client-id.
   </pre>
 
   Configure default quota for user:
-  <pre>
+  <pre class="brush: bash;">
   > bin/kafka-configs.sh  --zookeeper localhost:2181 --alter --add-config 'producer_byte_rate=1024,consumer_byte_rate=2048,request_percentage=200' --entity-type users --entity-default
   Updated config for entity: default user-principal.
   </pre>
 
   Configure default quota for client-id:
-  <pre>
+  <pre class="brush: bash;">
   > bin/kafka-configs.sh  --zookeeper localhost:2181 --alter --add-config 'producer_byte_rate=1024,consumer_byte_rate=2048,request_percentage=200' --entity-type clients --entity-default
   Updated config for entity: default client-id.
   </pre>
 
   Here's how to describe the quota for a given (user, client-id):
-  <pre>
+  <pre class="brush: bash;">
   > bin/kafka-configs.sh  --zookeeper localhost:2181 --describe --entity-type users --entity-name user1 --entity-type clients --entity-name clientA
   Configs for user-principal 'user1', client-id 'clientA' are producer_byte_rate=1024,consumer_byte_rate=2048,request_percentage=200
   </pre>
   Describe quota for a given user:
-  <pre>
+  <pre class="brush: bash;">
   > bin/kafka-configs.sh  --zookeeper localhost:2181 --describe --entity-type users --entity-name user1
   Configs for user-principal 'user1' are producer_byte_rate=1024,consumer_byte_rate=2048,request_percentage=200
   </pre>
   Describe quota for a given client-id:
-  <pre>
+  <pre class="brush: bash;">
   > bin/kafka-configs.sh  --zookeeper localhost:2181 --describe --entity-type clients --entity-name clientA
   Configs for client-id 'clientA' are producer_byte_rate=1024,consumer_byte_rate=2048,request_percentage=200
   </pre>
   If entity name is not specified, all entities of the specified type are described. For example, describe all users:
-  <pre>
+  <pre class="brush: bash;">
   > bin/kafka-configs.sh  --zookeeper localhost:2181 --describe --entity-type users
   Configs for user-principal 'user1' are producer_byte_rate=1024,consumer_byte_rate=2048,request_percentage=200
   Configs for default user-principal are producer_byte_rate=1024,consumer_byte_rate=2048,request_percentage=200
   </pre>
   Similarly for (user, client):
-  <pre>
+  <pre class="brush: bash;">
   > bin/kafka-configs.sh  --zookeeper localhost:2181 --describe --entity-type users --entity-type clients
   Configs for user-principal 'user1', default client-id are producer_byte_rate=1024,consumer_byte_rate=2048,request_percentage=200
   Configs for user-principal 'user1', client-id 'clientA' are producer_byte_rate=1024,consumer_byte_rate=2048,request_percentage=200
   </pre>
   <p>
   It is possible to set default quotas that apply to all client-ids by setting these configs on the brokers. These properties are applied only if quota overrides or defaults are not configured in Zookeeper. By default, each client-id receives an unlimited quota. The following sets the default quota per producer and consumer client-id to 10MB/sec.
-  <pre>
+  <pre class="brush: text;">
     quota.producer.default=10485760
     quota.consumer.default=10485760
   </pre>
@@ -556,7 +559,7 @@
   <p>
   <h4><a id="prodconfig" href="#prodconfig">A Production Server Config</a></h4>
   Here is an example production server configuration:
-  <pre>
+  <pre class="brush: text;">
   # ZooKeeper
   zookeeper.connect=[list of ZooKeeper servers]
 
@@ -582,7 +585,7 @@
   LinkedIn is currently running JDK 1.8 u5 (looking to upgrade to a newer version) with the G1 collector. If you decide to use the G1 collector (the current default) and you are still on JDK 1.7, make sure you are on u51 or newer. LinkedIn tried out u21 in testing, but they had a number of problems with the GC implementation in that version.
 
   LinkedIn's tuning looks like this:
-  <pre>
+  <pre class="brush: text;">
   -Xmx6g -Xms6g -XX:MetaspaceSize=96m -XX:+UseG1GC
   -XX:MaxGCPauseMillis=20 -XX:InitiatingHeapOccupancyPercent=35 -XX:G1HeapRegionSize=16M
   -XX:MinMetaspaceFreeRatio=50 -XX:MaxMetaspaceFreeRatio=80
@@ -648,9 +651,7 @@
   When Pdflush cannot keep up with the rate of data being written it will eventually cause the writing process to block incurring latency in the writes to slow down the accumulation of data.
   <p>
   You can see the current state of OS memory usage by doing
-  <pre>
-    &gt; cat /proc/meminfo
-  </pre>
+  <pre class="brush: bash;"> &gt; cat /proc/meminfo </pre>
   The meaning of these values are described in the link above.
   <p>
   Using pagecache has several advantages over an in-process cache for storing data that will be written out to disk:
@@ -1339,8 +1340,25 @@ All the following metrics have a recording level of ``debug``:
       </tr>
       
     </tbody>
-</table>
+ </table>
 
+  <h5><a id="kafka_streams_cache_monitoring" href="#kafka_streams_cache_monitoring">Record Cache Metrics</a></h5>
+All the following metrics have a recording level of ``debug``:
+
+  <table class="data-table">
+      <tbody>
+      <tr>
+        <th>Metric/Attribute name</th>
+        <th>Description</th>
+        <th>Mbean name</th>
+      </tr>
+      <tr>
+        <td>hitRatio-[avg | min | max]</td>
+        <td>The cache hit ratio defined as the ratio of cache read hits over the total cache read requests. </td>
+        <td>kafka.streams:type=stream-record-cache-metrics, record-cache-id=([-.\w]+)</td>
+      </tr>
+    </tbody>
+ </table>
 
   <h4><a id="others_monitoring" href="#others_monitoring">Others</a></h4>
 

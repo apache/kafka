@@ -20,6 +20,7 @@ import java.util
 import java.util.{Collections, Properties}
 import java.util.concurrent.{ExecutionException, TimeUnit}
 
+import org.apache.kafka.clients.admin.KafkaAdminClientTest
 import org.apache.kafka.common.utils.{Time, Utils}
 import kafka.integration.KafkaServerTestHarness
 import kafka.log.LogConfig
@@ -122,7 +123,10 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
   def testCreateDeleteTopics(): Unit = {
     client = AdminClient.create(createConfig())
     val topics = Seq("mytopic", "mytopic2")
-    val newTopics = topics.map(new NewTopic(_, 1, 1))
+    val newTopics = Seq(
+      new NewTopic("mytopic", Map((0: Integer) -> Seq[Integer](1, 2).asJava, (1: Integer) -> Seq[Integer](2, 0).asJava).asJava),
+      new NewTopic("mytopic2", 3, 3)
+    )
     client.createTopics(newTopics.asJava, new CreateTopicsOptions().validateOnly(true)).all.get()
     waitForTopics(client, List(), topics)
 
@@ -134,8 +138,43 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
     assertFutureExceptionTypeEquals(results.get("mytopic"), classOf[TopicExistsException])
     assertTrue(results.containsKey("mytopic2"))
     assertFutureExceptionTypeEquals(results.get("mytopic2"), classOf[TopicExistsException])
-    val topicsFromDescribe = client.describeTopics(topics.asJava).all.get().asScala.keys
-    assertEquals(topics.toSet, topicsFromDescribe)
+
+    val topicToDescription = client.describeTopics(topics.asJava).all.get()
+    assertEquals(topics.toSet, topicToDescription.keySet.asScala)
+
+    val topic0 = topicToDescription.get("mytopic")
+    assertEquals(false, topic0.internal)
+    assertEquals("mytopic", topic0.name)
+    assertEquals(2, topic0.partitions.size)
+    val topic0Partition0 = topic0.partitions.get(0)
+    assertEquals(1, topic0Partition0.leader.id)
+    assertEquals(0, topic0Partition0.partition)
+    assertEquals(Seq(1, 2), topic0Partition0.isr.asScala.map(_.id))
+    assertEquals(Seq(1, 2), topic0Partition0.replicas.asScala.map(_.id))
+    val topic0Partition1 = topic0.partitions.get(1)
+    assertEquals(2, topic0Partition1.leader.id)
+    assertEquals(1, topic0Partition1.partition)
+    assertEquals(Seq(2, 0), topic0Partition1.isr.asScala.map(_.id))
+    assertEquals(Seq(2, 0), topic0Partition1.replicas.asScala.map(_.id))
+
+    val topic1 = topicToDescription.get("mytopic2")
+    assertEquals(false, topic1.internal)
+    assertEquals("mytopic2", topic1.name)
+    assertEquals(3, topic1.partitions.size)
+    for (partitionId <- 0 until 3) {
+      val partition = topic1.partitions.get(partitionId)
+      assertEquals(partitionId, partition.partition)
+      assertEquals(3, partition.replicas.size)
+      partition.replicas.asScala.foreach { replica =>
+        assertTrue(replica.id >= 0)
+        assertTrue(replica.id < brokerCount)
+      }
+      assertEquals("No duplicate replica ids", partition.replicas.size, partition.replicas.asScala.map(_.id).distinct.size)
+
+      assertEquals(3, partition.isr.size)
+      assertEquals(partition.replicas, partition.isr)
+      assertTrue(partition.replicas.contains(partition.leader))
+    }
 
     client.deleteTopics(topics.asJava).all.get()
     waitForTopics(client, List(), topics)
@@ -343,6 +382,24 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
     }
     cfgs.foreach(_.putAll(serverConfig))
     cfgs.map(KafkaConfig.fromProps)
+  }
+
+  /**
+    * Test injecting timeouts for calls that are in flight.
+    */
+  @Test
+  def testCallInFlightTimeouts(): Unit = {
+    val config = createConfig()
+    config.put(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "100000000")
+    val factory = new KafkaAdminClientTest.FailureInjectingTimeoutProcessorFactory()
+    val client = KafkaAdminClientTest.createInternal(new AdminClientConfig(config), factory)
+    val future = client.createTopics(Seq("mytopic", "mytopic2").map(new NewTopic(_, 1, 1)).asJava,
+        new CreateTopicsOptions().validateOnly(true))
+    val future2 = client.createTopics(Seq("mytopic3", "mytopic4").map(new NewTopic(_, 1, 1)).asJava,
+        new CreateTopicsOptions().validateOnly(true))
+    future.all().get
+    future2.all().get
+    client.close()
   }
 }
 

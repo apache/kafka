@@ -29,10 +29,12 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
@@ -180,6 +182,16 @@ public class TransactionalMessageCopier {
         return positions;
     }
 
+    private static void resetToLastCommittedPositions(KafkaConsumer<String, String> consumer) {
+        for (TopicPartition topicPartition : consumer.assignment()) {
+            OffsetAndMetadata offsetAndMetadata = consumer.committed(topicPartition);
+            if (offsetAndMetadata != null)
+                consumer.seek(topicPartition, offsetAndMetadata.offset());
+            else
+                consumer.seekToBeginning(Collections.singletonList(topicPartition));
+        }
+    }
+
     private static long messagesRemaining(KafkaConsumer<String, String> consumer, TopicPartition partition) {
         long currentPosition = consumer.position(partition);
         Map<TopicPartition, Long> endOffsets = consumer.endOffsets(Arrays.asList(partition));
@@ -235,11 +247,9 @@ public class TransactionalMessageCopier {
 
         producer.initTransactions();
 
-
         final AtomicBoolean isShuttingDown = new AtomicBoolean(false);
         final AtomicLong remainingMessages = new AtomicLong(maxMessages);
         final AtomicLong numMessagesProcessed = new AtomicLong(0);
-        int exitCode = 0;
         Runtime.getRuntime().addShutdownHook(new Thread() {
             @Override
             public void run() {
@@ -255,26 +265,27 @@ public class TransactionalMessageCopier {
 
         try {
             while (0 < remainingMessages.get()) {
-                if ((((double) numMessagesProcessed.get() / maxMessages) * 100) % 10 == 0) {
-                    // print status for every 10% we progress.
-                    System.out.println(statusAsJson(numMessagesProcessed.get(), remainingMessages.get(), transactionalId));
-                }
+                System.out.println(statusAsJson(numMessagesProcessed.get(), remainingMessages.get(), transactionalId));
                 if (isShuttingDown.get())
                     break;
                 int messagesInCurrentTransaction = 0;
                 long numMessagesForNextTransaction = Math.min(numMessagesPerTransaction, remainingMessages.get());
-                producer.beginTransaction();
-
-                while (messagesInCurrentTransaction < numMessagesForNextTransaction) {
-                    ConsumerRecords<String, String> records = consumer.poll(200L);
-                    for (ConsumerRecord<String, String> record : records) {
-                        producer.send(producerRecordFromConsumerRecord(outputTopic, record));
-                        messagesInCurrentTransaction++;
+                try {
+                    producer.beginTransaction();
+                    while (messagesInCurrentTransaction < numMessagesForNextTransaction) {
+                        ConsumerRecords<String, String> records = consumer.poll(200L);
+                        for (ConsumerRecord<String, String> record : records) {
+                            producer.send(producerRecordFromConsumerRecord(outputTopic, record));
+                            messagesInCurrentTransaction++;
+                        }
                     }
+                    producer.sendOffsetsToTransaction(consumerPositions(consumer), consumerGroup);
+                    producer.commitTransaction();
+                    remainingMessages.set(maxMessages - numMessagesProcessed.addAndGet(messagesInCurrentTransaction));
+                } catch (KafkaException e) {
+                    producer.abortTransaction();
+                    resetToLastCommittedPositions(consumer);
                 }
-                producer.sendOffsetsToTransaction(consumerPositions(consumer), consumerGroup);
-                producer.commitTransaction();
-                remainingMessages.set(maxMessages - numMessagesProcessed.addAndGet(messagesInCurrentTransaction));
             }
         } finally {
             producer.close();
@@ -282,6 +293,6 @@ public class TransactionalMessageCopier {
                 consumer.close();
             }
         }
-        System.exit(exitCode);
+        System.exit(0);
     }
 }

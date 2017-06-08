@@ -798,11 +798,11 @@ public class RequestResponseTest {
         List<Integer> isr = asList(1, 2);
         List<Integer> replicas = asList(1, 2, 3, 4);
         partitionStates.put(new TopicPartition("topic5", 105),
-                new PartitionState(0, 2, 1, new ArrayList<>(isr), 2, new HashSet<>(replicas)));
+                new PartitionState(0, 2, 1, new ArrayList<>(isr), 2, replicas));
         partitionStates.put(new TopicPartition("topic5", 1),
-                new PartitionState(1, 1, 1, new ArrayList<>(isr), 2, new HashSet<>(replicas)));
+                new PartitionState(1, 1, 1, new ArrayList<>(isr), 2, replicas));
         partitionStates.put(new TopicPartition("topic20", 1),
-                new PartitionState(1, 0, 1, new ArrayList<>(isr), 2, new HashSet<>(replicas)));
+                new PartitionState(1, 0, 1, new ArrayList<>(isr), 2, replicas));
 
         Set<Node> leaders = Utils.mkSet(
                 new Node(0, "test0", 1223),
@@ -823,11 +823,11 @@ public class RequestResponseTest {
         List<Integer> isr = asList(1, 2);
         List<Integer> replicas = asList(1, 2, 3, 4);
         partitionStates.put(new TopicPartition("topic5", 105),
-                new PartitionState(0, 2, 1, new ArrayList<>(isr), 2, new HashSet<>(replicas)));
+                new PartitionState(0, 2, 1, new ArrayList<>(isr), 2, replicas));
         partitionStates.put(new TopicPartition("topic5", 1),
-                new PartitionState(1, 1, 1, new ArrayList<>(isr), 2, new HashSet<>(replicas)));
+                new PartitionState(1, 1, 1, new ArrayList<>(isr), 2, replicas));
         partitionStates.put(new TopicPartition("topic20", 1),
-                new PartitionState(1, 0, 1, new ArrayList<>(isr), 2, new HashSet<>(replicas)));
+                new PartitionState(1, 0, 1, new ArrayList<>(isr), 2, replicas));
 
         SecurityProtocol plaintext = SecurityProtocol.PLAINTEXT;
         List<UpdateMetadataRequest.EndPoint> endPoints1 = new ArrayList<>();

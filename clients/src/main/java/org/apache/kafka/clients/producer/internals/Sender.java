@@ -66,6 +66,8 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.kafka.common.record.RecordBatch.NO_TIMESTAMP;
+
 /**
  * The background thread that handles the sending of produce requests to the Kafka cluster. This thread makes metadata
  * requests to renew its view of the cluster and then sends produce requests to the appropriate nodes.
@@ -257,13 +259,16 @@ public class Sender implements Runnable {
             }
         }
 
-        List<ProducerBatch> expiredBatches = this.accumulator.abortExpiredBatches(this.requestTimeout, now);
+        List<ProducerBatch> expiredBatches = this.accumulator.expiredBatches(this.requestTimeout, now);
 
         boolean needsTransactionStateReset = false;
         // Reset the producer id if an expired batch has previously been sent to the broker. Also update the metrics
         // for expired batches. see the documentation of @TransactionState.resetProducerId to understand why
         // we need to reset the producer id here.
+        if (!expiredBatches.isEmpty())
+            log.trace("Expired {} batches in accumulator", expiredBatches.size());
         for (ProducerBatch expiredBatch : expiredBatches) {
+            failBatch(expiredBatch, -1, NO_TIMESTAMP, expiredBatch.timeoutException());
             if (transactionManager != null && expiredBatch.inRetry()) {
                 needsTransactionStateReset = true;
             }
@@ -356,6 +361,11 @@ public class Sender implements Runnable {
             } catch (IOException e) {
                 log.debug("{}Disconnect from {} while trying to send request {}. Going " +
                         "to back off and retry", transactionManager.logPrefix, targetNode, requestBuilder);
+                if (nextRequestHandler.needsCoordinator()) {
+                    // We break here so that we pick up the FindCoordinator request immediately.
+                    transactionManager.lookupCoordinator(nextRequestHandler);
+                    break;
+                }
             }
 
             time.sleep(retryBackoffMs);
@@ -568,13 +578,17 @@ public class Sender implements Runnable {
     }
 
     private void failBatch(ProducerBatch batch, ProduceResponse.PartitionResponse response, RuntimeException exception) {
+        failBatch(batch, response.baseOffset, response.logAppendTime, exception);
+    }
+
+    private void failBatch(ProducerBatch batch, long baseOffset, long logAppendTime, RuntimeException exception) {
         if (transactionManager != null) {
             if (exception instanceof OutOfOrderSequenceException
                     && !transactionManager.isTransactional()
                     && transactionManager.hasProducerId(batch.producerId())) {
                 log.error("The broker received an out of order sequence number for topic-partition " +
                                 "{} at offset {}. This indicates data loss on the broker, and should be investigated.",
-                        batch.topicPartition, response.baseOffset);
+                        batch.topicPartition, baseOffset);
 
                 // Reset the transaction state since we have hit an irrecoverable exception and cannot make any guarantees
                 // about the previously committed message. Note that this will discard the producer id and sequence
@@ -588,8 +602,7 @@ public class Sender implements Runnable {
                 transactionManager.transitionToAbortableError(exception);
             }
         }
-
-        batch.done(response.baseOffset, response.logAppendTime, exception);
+        batch.done(baseOffset, logAppendTime, exception);
         this.accumulator.deallocate(batch);
     }
 

@@ -19,6 +19,7 @@ package kafka.server
 
 import java.util.Properties
 
+import kafka.network.SocketServer
 import kafka.utils.TestUtils
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
@@ -160,6 +161,33 @@ class MetadataRequestTest extends BaseRequestTest {
     assertEquals("V1 Response should have 2 (all) topics", 2, metadataResponseV1.topicMetadata.size())
   }
 
+  /**
+    * Preferred replica should be the first item in the replicas list
+    */
+  @Test
+  def testPreferredReplica(): Unit = {
+    val replicaAssignment = Map(0 -> Seq(1, 2, 0), 1 -> Seq(2, 0, 1))
+    TestUtils.createTopic(zkUtils, "t1", replicaAssignment, servers)
+    // Call controller and one different broker to ensure that metadata propagation works correctly
+    val responses = Seq(
+      sendMetadataRequest(new MetadataRequest.Builder(Seq("t1").asJava, true).build(), Some(controllerSocketServer)),
+      sendMetadataRequest(new MetadataRequest.Builder(Seq("t1").asJava, true).build(), Some(notControllerSocketServer))
+    )
+    responses.foreach { response =>
+      assertEquals(1, response.topicMetadata.size)
+      val topicMetadata = response.topicMetadata.iterator.next()
+      assertEquals(Errors.NONE, topicMetadata.error)
+      assertEquals("t1", topicMetadata.topic)
+      assertEquals(Set(0, 1), topicMetadata.partitionMetadata.asScala.map(_.partition).toSet)
+      topicMetadata.partitionMetadata.asScala.foreach { partitionMetadata =>
+        val assignment = replicaAssignment(partitionMetadata.partition)
+        assertEquals(assignment, partitionMetadata.replicas.asScala.map(_.id))
+        assertEquals(assignment, partitionMetadata.isr.asScala.map(_.id))
+        assertEquals(assignment.head, partitionMetadata.leader.id)
+      }
+    }
+  }
+
   @Test
   def testReplicaDownResponse() {
     val replicaDownTopic = "replicaDown"
@@ -207,8 +235,8 @@ class MetadataRequestTest extends BaseRequestTest {
     assertEquals(s"Response should have $replicaCount replicas", replicaCount, v1PartitionMetadata.replicas.size)
   }
 
-  private def sendMetadataRequest(request: MetadataRequest): MetadataResponse = {
-    val response = connectAndSend(request, ApiKeys.METADATA)
+  private def sendMetadataRequest(request: MetadataRequest, destination: Option[SocketServer] = None): MetadataResponse = {
+    val response = connectAndSend(request, ApiKeys.METADATA, destination = destination.getOrElse(anySocketServer))
     MetadataResponse.parse(response, request.version)
   }
 }

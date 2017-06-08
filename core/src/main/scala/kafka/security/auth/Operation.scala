@@ -81,13 +81,7 @@ object Operation {
     op.getOrElse(throw new KafkaException(operation + " not a valid operation name. The valid names are " + values.mkString(",")))
   }
 
-  def fromJava(operation: AclOperation): Try[Operation] = {
-    try {
-      Success(fromString(operation.toString))
-    } catch {
-      case throwable: Throwable => Failure(throwable)
-    }
-  }
+  def fromJava(operation: AclOperation): Operation = fromString(operation.toString.replaceAll("_", ""))
 
   def values: Seq[Operation] = List(Read, Write, Create, Delete, Alter, Describe, ClusterAction, AlterConfigs,
      DescribeConfigs, IdempotentWrite, All)

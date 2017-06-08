@@ -60,6 +60,10 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.singleton;
@@ -530,6 +534,102 @@ public class WorkerSinkTaskTest {
 
         sinkTaskContext.getValue().requestCommit();
         workerTask.iteration(); // iter 3 -- commit
+
+        PowerMock.verifyAll();
+    }
+
+    // Test that the commitTimeoutMs timestamp is correctly computed and checked in WorkerSinkTask.iteration()
+    // when there is a long running commit in process. See KAFKA-4942 for more information.
+    @Test
+    public void testLongRunningCommitWithoutTimeout() throws Exception {
+        expectInitializeTask();
+
+        // iter 1
+        expectPollInitialAssignment();
+
+        // iter 2
+        expectConsumerPoll(1);
+        expectConversionAndTransformation(1);
+        sinkTask.put(EasyMock.<Collection<SinkRecord>>anyObject());
+        EasyMock.expectLastCall();
+
+        final Map<TopicPartition, OffsetAndMetadata> workerStartingOffsets = new HashMap<>();
+        workerStartingOffsets.put(TOPIC_PARTITION, new OffsetAndMetadata(FIRST_OFFSET));
+        workerStartingOffsets.put(TOPIC_PARTITION2, new OffsetAndMetadata(FIRST_OFFSET));
+
+        final Map<TopicPartition, OffsetAndMetadata> workerCurrentOffsets = new HashMap<>();
+        workerCurrentOffsets.put(TOPIC_PARTITION, new OffsetAndMetadata(FIRST_OFFSET + 1));
+        workerCurrentOffsets.put(TOPIC_PARTITION2, new OffsetAndMetadata(FIRST_OFFSET));
+
+        // iter 3 - note that we return the current offset to indicate they should be committed
+        sinkTask.preCommit(workerCurrentOffsets);
+        EasyMock.expectLastCall().andReturn(workerCurrentOffsets);
+
+        // We need to delay the result of trying to commit offsets to Kafka via the consumer.commitAsync
+        // method. We do this so that we can test that we do not erroneously mark a commit as timed out
+        // while it is still running and under time. To fake this for tests we have the commit run in a
+        // separate thread and wait for a latch which we control back in the main thread.
+        final ExecutorService executor = Executors.newSingleThreadExecutor();
+        final CountDownLatch latch = new CountDownLatch(1);
+
+        consumer.commitAsync(EasyMock.eq(workerCurrentOffsets), EasyMock.<OffsetCommitCallback>anyObject());
+        EasyMock.expectLastCall().andAnswer(new IAnswer<Void>() {
+            @SuppressWarnings("unchecked")
+            @Override
+            public Void answer() throws Throwable {
+                // Grab the arguments passed to the consumer.commitAsync method
+                final Object[] args = EasyMock.getCurrentArguments();
+                final Map<TopicPartition, OffsetAndMetadata> offsets = (Map<TopicPartition, OffsetAndMetadata>) args[0];
+                final OffsetCommitCallback callback = (OffsetCommitCallback) args[1];
+
+                executor.execute(new Runnable() {
+                    @Override
+                    public void run() {
+                        try {
+                            latch.await();
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                        }
+
+                        callback.onComplete(offsets, null);
+                    }
+                });
+
+                return null;
+            }
+        });
+
+        // no actual consumer.commit() triggered
+        expectConsumerPoll(0);
+
+        sinkTask.put(EasyMock.<Collection<SinkRecord>>anyObject());
+        EasyMock.expectLastCall();
+
+        PowerMock.replayAll();
+
+        workerTask.initialize(TASK_CONFIG);
+        workerTask.initializeAndStart();
+        workerTask.iteration(); // iter 1 -- initial assignment
+
+        assertEquals(workerStartingOffsets, Whitebox.<Map<TopicPartition, OffsetAndMetadata>>getInternalState(workerTask, "currentOffsets"));
+        assertEquals(workerStartingOffsets, Whitebox.<Map<TopicPartition, OffsetAndMetadata>>getInternalState(workerTask, "lastCommittedOffsets"));
+
+        time.sleep(WorkerConfig.OFFSET_COMMIT_TIMEOUT_MS_DEFAULT);
+        workerTask.iteration(); // iter 2 -- deliver 2 records
+
+        sinkTaskContext.getValue().requestCommit();
+        workerTask.iteration(); // iter 3 -- commit in progress
+
+        // Make sure the "committing" flag didn't immediately get flipped back to false due to an incorrect timeout
+        assertTrue("Expected worker to be in the process of committing offsets", workerTask.isCommitting());
+
+        // Let the async commit finish and wait for it to end
+        latch.countDown();
+        executor.shutdown();
+        executor.awaitTermination(30, TimeUnit.SECONDS);
+
+        assertEquals(workerCurrentOffsets, Whitebox.<Map<TopicPartition, OffsetAndMetadata>>getInternalState(workerTask, "currentOffsets"));
+        assertEquals(workerCurrentOffsets, Whitebox.<Map<TopicPartition, OffsetAndMetadata>>getInternalState(workerTask, "lastCommittedOffsets"));
 
         PowerMock.verifyAll();
     }

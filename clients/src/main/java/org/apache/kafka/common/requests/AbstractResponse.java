@@ -125,4 +125,7 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
         }
     }
 
+    public String toString(short version) {
+        return toStruct(version).toString();
+    }
 }

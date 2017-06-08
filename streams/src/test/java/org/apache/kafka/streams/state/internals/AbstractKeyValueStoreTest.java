@@ -26,6 +26,8 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.util.Collections;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.fail;
@@ -216,6 +218,56 @@ public abstract class AbstractKeyValueStoreTest {
         assertEquals(false, driver.flushedEntryRemoved(4));
     }
 
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerExceptionOnPutNullKey() throws Exception {
+        store.put(null, "anyValue");
+    }
+
+    @Test
+    public void shouldNotThrowNullPointerExceptionOnPutNullValue() throws Exception {
+        store.put(1, null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerExceptionOnPutIfAbsentNullKey() throws Exception {
+        store.putIfAbsent(null, "anyValue");
+    }
+
+    @Test
+    public void shouldNotThrowNullPointerExceptionOnPutIfAbsentNullValue() throws Exception {
+        store.putIfAbsent(1, null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerExceptionOnPutAllNullKey() throws Exception {
+        store.putAll(Collections.singletonList(new KeyValue<Integer, String>(null, "anyValue")));
+    }
+
+    @Test
+    public void shouldNotThrowNullPointerExceptionOnPutAllNullKey() throws Exception {
+        store.putAll(Collections.singletonList(new KeyValue<Integer, String>(1, null)));
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerExceptionOnDeleteNullKey() throws Exception {
+        store.delete(null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerExceptionOnGetNullKey() throws Exception {
+        store.get(null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerExceptionOnRangeNullFromKey() throws Exception {
+        store.range(null, 2);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerExceptionOnRangeNullToKey() throws Exception {
+        store.range(2, null);
+    }
+
     @Test
     public void testSize() {
         assertEquals("A newly created store should have no entries", 0, store.approximateNumEntries());
@@ -225,6 +277,7 @@ public abstract class AbstractKeyValueStoreTest {
         store.put(2, "two");
         store.put(4, "four");
         store.put(5, "five");
+        store.flush();
         assertEquals(5, store.approximateNumEntries());
     }
 }

@@ -16,32 +16,46 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import static org.junit.Assert.assertTrue;
-
-import java.io.File;
-import java.util.HashMap;
-import java.util.Map;
-
-import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.streams.errors.ProcessorStateException;
+import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.state.RocksDBConfigSetter;
 import org.apache.kafka.test.MockProcessorContext;
+import org.apache.kafka.test.NoOpRecordCollector;
 import org.apache.kafka.test.TestUtils;
+
+import static org.junit.Assert.assertTrue;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+
+import java.io.File;
+import java.util.HashMap;
+import java.util.Map;
+import java.io.IOException;
 import org.rocksdb.Options;
 
 public class RocksDBStoreTest {
     private final File tempDir = TestUtils.tempDirectory();
 
     private RocksDBStore<String, String> subject;
+    private MockProcessorContext context;
+    private File dir;
 
     @Before
     public void setUp() throws Exception {
         subject = new RocksDBStore<>("test", Serdes.String(), Serdes.String());
+        dir = TestUtils.tempDirectory();
+        context = new MockProcessorContext(dir,
+            Serdes.String(),
+            Serdes.String(),
+            new NoOpRecordCollector(),
+            new ThreadCache("testCache", 0, new MockStreamsMetrics(new Metrics())));
     }
 
     @After
@@ -71,6 +85,26 @@ public class RocksDBStoreTest {
         assertTrue(MockRocksDbConfigSetter.called);
     }
 
+    @Test(expected = ProcessorStateException.class)
+    public void shouldThrowProcessorStateExceptionOnOpeningReadOnlyDir() throws IOException {
+        final File tmpDir = TestUtils.tempDirectory();
+        MockProcessorContext tmpContext = new MockProcessorContext(tmpDir,
+            Serdes.String(),
+            Serdes.Long(),
+            new NoOpRecordCollector(),
+            new ThreadCache("testCache", 0, new MockStreamsMetrics(new Metrics())));
+        tmpDir.setReadOnly();
+
+        subject.openDB(tmpContext);
+    }
+
+    @Test(expected = ProcessorStateException.class)
+    public void shouldThrowProcessorStateExeptionOnPutDeletedDir() throws IOException {
+        subject.init(context, subject);
+        Utils.delete(dir);
+        subject.put("anyKey", "anyValue");
+        subject.flush();
+    }
 
     public static class MockRocksDbConfigSetter implements RocksDBConfigSetter {
         static boolean called;

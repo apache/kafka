@@ -237,14 +237,15 @@ class RequestSendThread(val controllerId: Int,
         }
       }
       if (clientResponse != null) {
-        val api = ApiKeys.forId(clientResponse.requestHeader.apiKey)
+        val requestHeader = clientResponse.requestHeader
+        val api = ApiKeys.forId(requestHeader.apiKey)
         if (api != ApiKeys.LEADER_AND_ISR && api != ApiKeys.STOP_REPLICA && api != ApiKeys.UPDATE_METADATA_KEY)
           throw new KafkaException(s"Unexpected apiKey received: $apiKey")
 
         val response = clientResponse.responseBody
 
         stateChangeLogger.trace("Controller %d epoch %d received response %s for a request sent to broker %s"
-          .format(controllerId, controllerContext.epoch, response.toString, brokerNode.toString))
+          .format(controllerId, controllerContext.epoch, response.toString(requestHeader.apiVersion), brokerNode.toString))
 
         if (callback != null) {
           callback(response)
@@ -315,7 +316,7 @@ class ControllerBrokerRequestBatch(controller: KafkaController) extends  Logging
 
     brokerIds.filter(_ >= 0).foreach { brokerId =>
       val result = leaderAndIsrRequestMap.getOrElseUpdate(brokerId, mutable.Map.empty)
-      result.put(topicPartition, PartitionStateInfo(leaderIsrAndControllerEpoch, replicas.toSet))
+      result.put(topicPartition, PartitionStateInfo(leaderIsrAndControllerEpoch, replicas))
     }
 
     addUpdateMetadataRequestForBrokers(controllerContext.liveOrShuttingDownBrokerIds.toSeq,
@@ -344,7 +345,7 @@ class ControllerBrokerRequestBatch(controller: KafkaController) extends  Logging
       val leaderIsrAndControllerEpochOpt = controllerContext.partitionLeadershipInfo.get(partition)
       leaderIsrAndControllerEpochOpt match {
         case Some(l @ LeaderIsrAndControllerEpoch(leaderAndIsr, controllerEpoch)) =>
-          val replicas = controllerContext.partitionReplicaAssignment(partition).toSet
+          val replicas = controllerContext.partitionReplicaAssignment(partition)
 
           val leaderIsrAndControllerEpoch = if (beingDeleted) {
             val leaderDuringDelete = LeaderAndIsr.duringDelete(leaderAndIsr.isr)

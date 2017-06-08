@@ -533,7 +533,8 @@ class KafkaApis(val requestChannel: RequestChannel,
       val partitionData = {
         responsePartitionData.map { case (tp, data) =>
           val abortedTransactions = data.abortedTransactions.map(_.asJava).orNull
-          tp -> new FetchResponse.PartitionData(data.error, data.hw, FetchResponse.INVALID_LAST_STABLE_OFFSET,
+          val lastStableOffset = data.lastStableOffset.getOrElse(FetchResponse.INVALID_LAST_STABLE_OFFSET)
+          tp -> new FetchResponse.PartitionData(data.error, data.highWatermark, lastStableOffset,
             data.logStartOffset, abortedTransactions, data.records)
         }
       }
@@ -1746,7 +1747,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleDescribeAcls(request: RequestChannel.Request): Unit = {
-    authorizeClusterAction(request)
+    authorizeClusterDescribe(request)
     val describeAclsRequest = request.body[DescribeAclsRequest]
     authorizer match {
       case None =>
@@ -1785,15 +1786,13 @@ class KafkaApis(val requestChannel: RequestChannel,
       case AdminResourceType.ANY => return Failure(new InvalidRequestException("Invalid ANY resource type"))
       case _ => {}
     }
-    var resourceType: ResourceType = null
-    try {
-      resourceType = ResourceType.fromString(filter.resourceFilter().resourceType().toString)
+    val resourceType: ResourceType = try {
+      ResourceType.fromJava(filter.resourceFilter.resourceType)
     } catch {
       case throwable: Throwable => return Failure(new InvalidRequestException("Invalid resource type"))
     }
-    var principal: KafkaPrincipal = null
-    try {
-      principal = KafkaPrincipal.fromString(filter.entryFilter().principal())
+    val principal: KafkaPrincipal = try {
+      KafkaPrincipal.fromString(filter.entryFilter.principal)
     } catch {
       case throwable: Throwable => return Failure(new InvalidRequestException("Invalid principal"))
     }
@@ -1802,18 +1801,20 @@ class KafkaApis(val requestChannel: RequestChannel,
       case AclOperation.ANY => return Failure(new InvalidRequestException("Invalid ANY operation type"))
       case _ => {}
     }
-    val operation = Operation.fromJava(filter.entryFilter().operation()) match {
-      case Failure(throwable) => return Failure(new InvalidRequestException(throwable.getMessage))
-      case Success(op) => op
+    val operation: Operation = try {
+      Operation.fromJava(filter.entryFilter.operation)
+    } catch {
+      case throwable: Throwable => return Failure(new InvalidRequestException(throwable.getMessage))
     }
     filter.entryFilter().permissionType() match {
       case AclPermissionType.UNKNOWN => new InvalidRequestException("Invalid UNKNOWN permission type")
       case AclPermissionType.ANY => new InvalidRequestException("Invalid ANY permission type")
       case _ => {}
     }
-    val permissionType = PermissionType.fromJava(filter.entryFilter.permissionType) match {
-      case Failure(throwable) => return Failure(new InvalidRequestException(throwable.getMessage))
-      case Success(perm) => perm
+    val permissionType: PermissionType = try {
+      PermissionType.fromJava(filter.entryFilter.permissionType)
+    } catch {
+      case throwable: Throwable => return Failure(new InvalidRequestException(throwable.getMessage))
     }
     return Success((Resource(resourceType, filter.resourceFilter().name()), Acl(principal, permissionType,
                    filter.entryFilter().host(), operation)))
@@ -1836,7 +1837,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleCreateAcls(request: RequestChannel.Request): Unit = {
-    authorizeClusterAction(request)
+    authorizeClusterAlter(request)
     val createAclsRequest = request.body[CreateAclsRequest]
     authorizer match {
       case None =>
@@ -1845,7 +1846,6 @@ class KafkaApis(val requestChannel: RequestChannel,
             new SecurityDisabledException("No Authorizer is configured on the broker.")))
       case Some(auth) =>
         val errors = mutable.HashMap[Int, Throwable]()
-        val creations = ListBuffer[(Resource, Acl)]()
         for (i <- 0 until createAclsRequest.aclCreations.size) {
           val result = toScala(createAclsRequest.aclCreations.get(i).acl.toFilter)
           result match {
@@ -1858,8 +1858,13 @@ class KafkaApis(val requestChannel: RequestChannel,
                 if (resource.name.isEmpty)
                   throw new InvalidRequestException("Invalid empty resource name")
                 auth.addAcls(immutable.Set(acl), resource)
+                if (logger.isDebugEnabled)
+                  logger.debug(s"Added acl $acl to $resource")
               } catch {
-                case throwable : Throwable => errors.put(i, throwable)
+                case throwable : Throwable => if (logger.isDebugEnabled) {
+                    logger.debug(s"Failed to add acl $acl to $resource", throwable)
+                  }
+                  errors.put(i, throwable)
               }
           }
         }
@@ -1876,7 +1881,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleDeleteAcls(request: RequestChannel.Request): Unit = {
-    authorizeClusterAction(request)
+    authorizeClusterAlter(request)
     val deleteAclsRequest = request.body[DeleteAclsRequest]
     authorizer match {
       case None =>
@@ -1996,8 +2001,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case RResourceType.BROKER =>
           authorize(request.session, AlterConfigs, Resource.ClusterResource)
         case RResourceType.TOPIC =>
-          authorize(request.session, AlterConfigs, new Resource(Topic, resource.name)) ||
-            authorize(request.session, AlterConfigs, Resource.ClusterResource)
+          authorize(request.session, AlterConfigs, new Resource(Topic, resource.name))
         case rt => throw new InvalidRequestException(s"Unexpected resource type $rt")
       }
     }
@@ -2029,8 +2033,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       resource.`type` match {
         case RResourceType.BROKER => authorize(request.session, DescribeConfigs, Resource.ClusterResource)
         case RResourceType.TOPIC =>
-          authorize(request.session, DescribeConfigs, new Resource(Topic, resource.name)) ||
-            authorize(request.session, DescribeConfigs, Resource.ClusterResource)
+          authorize(request.session, DescribeConfigs, new Resource(Topic, resource.name))
         case rt => throw new InvalidRequestException(s"Unexpected resource type $rt for resource ${resource.name}")
       }
     }
@@ -2048,6 +2051,16 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   def authorizeClusterAction(request: RequestChannel.Request): Unit = {
     if (!authorize(request.session, ClusterAction, Resource.ClusterResource))
+      throw new ClusterAuthorizationException(s"Request $request is not authorized.")
+  }
+
+  def authorizeClusterAlter(request: RequestChannel.Request): Unit = {
+    if (!authorize(request.session, Alter, Resource.ClusterResource))
+      throw new ClusterAuthorizationException(s"Request $request is not authorized.")
+  }
+
+  def authorizeClusterDescribe(request: RequestChannel.Request): Unit = {
+    if (!authorize(request.session, Describe, Resource.ClusterResource))
       throw new ClusterAuthorizationException(s"Request $request is not authorized.")
   }
 
