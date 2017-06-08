@@ -25,18 +25,26 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
+import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
+import org.apache.kafka.streams.kstream.KeyValueMapper;
+import org.apache.kafka.streams.kstream.Predicate;
+import org.apache.kafka.streams.kstream.TimeWindows;
+import org.apache.kafka.streams.kstream.ValueMapper;
+import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.ValueJoiner;
@@ -47,10 +55,15 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.TestUtils;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.Properties;
 import java.util.Random;
@@ -272,6 +285,167 @@ public class SimpleBenchmark {
             .count("tmpStoreName").foreach(new CountDownAction(latch));
 
         return new KafkaStreams(builder, streamConfig);
+    }
+
+
+    static public class ProjectedEvent {
+        public String eventType;
+        public String adID;
+        public long eventTime;
+    }
+
+    static public class CampaignAd {
+        public String adID;
+        public String campaignID;
+    }
+
+    // Note: these are also in the streams example package, eventuall use 1 file
+    private class JsonPOJOSerializer<T> implements Serializer<T> {
+        private final ObjectMapper objectMapper = new ObjectMapper();
+
+        /**
+         * Default constructor needed by Kafka
+         */
+        public JsonPOJOSerializer() {
+        }
+
+        @Override
+        public void configure(Map<String, ?> props, boolean isKey) {
+        }
+
+        @Override
+        public byte[] serialize(String topic, T data) {
+            if (data == null)
+                return null;
+
+            try {
+                return objectMapper.writeValueAsBytes(data);
+            } catch (Exception e) {
+                throw new SerializationException("Error serializing JSON message", e);
+            }
+        }
+
+        @Override
+        public void close() {
+        }
+
+    }
+
+    // Note: these are also in the streams example package, eventuall use 1 file
+    private class JsonPOJODeserializer<T> implements Deserializer<T> {
+        private ObjectMapper objectMapper = new ObjectMapper();
+
+        private Class<T> tClass;
+
+        /**
+         * Default constructor needed by Kafka
+         */
+        public JsonPOJODeserializer() {
+        }
+
+        @SuppressWarnings("unchecked")
+        @Override
+        public void configure(Map<String, ?> props, boolean isKey) {
+            tClass = (Class<T>) props.get("JsonPOJOClass");
+        }
+
+        @Override
+        public T deserialize(String topic, byte[] bytes) {
+            if (bytes == null)
+                return null;
+
+            T data;
+            try {
+                data = objectMapper.readValue(bytes, tClass);
+            } catch (Exception e) {
+                throw new SerializationException(e);
+            }
+
+            return data;
+        }
+
+        @Override
+        public void close() {
+
+        }
+    }
+
+    private KafkaStreams createYahooBenchmarkStreams(final Properties streamConfig, final String campaignsTopic, final String eventsTopic) {
+        final KStreamBuilder builder = new KStreamBuilder();
+        final KStream<String, ProjectedEvent> kEvents = builder.stream(eventsTopic);
+        final KTable<String, String> kCampaigns = builder.table(campaignsTopic, "campaign-state");
+
+        Map<String, Object> serdeProps = new HashMap<>();
+        final Serializer<ProjectedEvent> ProjectedEventSerializer = new JsonPOJOSerializer<>();
+        serdeProps.put("JsonPOJOClass", ProjectedEvent.class);
+        ProjectedEventSerializer.configure(serdeProps, false);
+        final Deserializer<ProjectedEvent> ProjectedEventDeserializer = new JsonPOJODeserializer<>();
+        serdeProps.put("JsonPOJOClass", ProjectedEvent.class);
+        ProjectedEventDeserializer.configure(serdeProps, false);
+
+        KStream<String, ProjectedEvent> filteredEvents = kEvents.filter(new Predicate<String, ProjectedEvent>() {
+            @Override
+            public boolean test(final String key, final ProjectedEvent value) {
+                return value.eventType.equals("view");
+            }
+        }).mapValues(new ValueMapper<ProjectedEvent, ProjectedEvent>() {
+            @Override
+            public ProjectedEvent apply(ProjectedEvent value) {
+                ProjectedEvent event = new ProjectedEvent();
+                event.adID = value.adID;
+                event.eventTime = value.eventTime;
+                return event;
+            }
+        });
+
+        KTable<String, CampaignAd> deserCampaigns = kCampaigns.mapValues(new ValueMapper<String, CampaignAd>() {
+            @Override
+            public CampaignAd apply(String value) {
+                try {
+                    Map<String, String> campMap = new ObjectMapper().readValue(value, Map.class);
+                    CampaignAd cAdd = new CampaignAd();
+                    cAdd.adID = campMap.get("adID");
+                    cAdd.campaignID = campMap.get("campaignID");
+                    return cAdd;
+                } catch (IOException e) {
+                    System.exit(1);
+                }
+                return null;
+            }
+        });
+
+        KStream<String, String> joined = filteredEvents.join(deserCampaigns, new ValueJoiner<ProjectedEvent, CampaignAd, String>() {
+            @Override
+            public String apply(ProjectedEvent value1, CampaignAd value2) {
+                return value2.campaignID;
+            }
+        }, Serdes.String(), Serdes.serdeFrom(ProjectedEventSerializer, ProjectedEventDeserializer));
+
+
+        KStream<String, String> keyedByCampaign = joined.selectKey(new KeyValueMapper<String, String, String>() {
+            @Override
+            public String apply(String key, String value) {
+                return value;
+            }
+        });
+        KTable<Windowed<String>, Long> counts = keyedByCampaign.groupByKey()
+            .count(TimeWindows.of(10 * 1000), "time-windows");
+
+        return new KafkaStreams(builder, streamConfig);
+    }
+
+    public void yahooBenchmark(final String campaignsTopic, final String eventsTopic) throws Exception {
+
+        if (maybeSetupPhase(campaignsTopic, "simple-benchmark-produce-campaigns", false)) {
+            maybeSetupPhase(eventsTopic, "simple-benchmark-produce-campaigns", false);
+            return;
+        }
+
+        CountDownLatch latch = new CountDownLatch(1);
+        Properties props = setStreamProperties("simple-benchmark-yahoo");
+
+        final KafkaStreams streams = createYahooBenchmarkStreams(props, campaignsTopic, eventsTopic);
+        runGenericBenchmark(streams, "Streams Yahoo Performance [records/latency/rec-sec/MB-sec counted]: ", latch);
     }
 
     /**
