@@ -90,7 +90,6 @@ class ConsumerEventHandler(object):
                 "Consumed from an unexpected offset (%d, %d) for partition %s" % \
                 (self.position[tp], min_offset, str(tp))
             self.position[tp] = max_offset + 1
-
         self.total_consumed += event["count"]
 
     def handle_partitions_revoked(self, event):
@@ -234,6 +233,7 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
                         handler.handle_offsets_committed(event, node, self.logger)
                         self._update_global_committed(event)
                     elif name == "records_consumed":
+                        self.logger.debug("%s: got records consumed : %s" % (str(node.account), event))
                         handler.handle_records_consumed(event)
                         self._update_global_position(event, node)
                     elif name == "partitions_revoked":

@@ -156,7 +156,8 @@ class TransactionsTest(Test):
                                       topic=topic_to_read,
                                       group_id=group_id,
                                       isolation_level="read_committed",
-                                      collect_records=True)
+                                      collect_records=True,
+                                      log_level="DEBUG")
         consumer.start()
         # ensure that the consumer is up.
         wait_until(lambda: consumer.total_consumed() > 0 == True,
