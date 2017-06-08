@@ -503,6 +503,9 @@ public class SimpleBenchmark {
             @Override
             public void apply(String key, ProjectedEvent value) {
                 processedRecords.getAndIncrement();
+                if (processedRecords.get() % 1000000 == 0) {
+                    System.out.println("Processed " + processedRecords.get());
+                }
                 if (processedRecords.get() == numRecords ) {
                     latch.countDown();
                 }
@@ -570,6 +573,7 @@ public class SimpleBenchmark {
 
         CountDownLatch latch = new CountDownLatch(1);
         Properties props = setStreamProperties("simple-benchmark-yahoo" + new Random().nextInt());
+        props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, Runtime.getRuntime().availableProcessors());
         //props.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
         //props.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000L);
 
