@@ -35,7 +35,7 @@ class StreamsSimpleBenchmarkTest(Test):
 
 
     @cluster(num_nodes=9)
-    @matrix(test=["produce", "consume", "count", "processstream", "processstreamwithsink", "processstreamwithstatestore", "processstreamwithcachedstatestore", "kstreamktablejoin", "kstreamkstreamjoin", "ktablektablejoin"], scale=[1, 3])
+    @matrix(test=["produce", "consume", "count", "processstream", "processstreamwithsink", "processstreamwithstatestore", "processstreamwithcachedstatestore", "kstreamktablejoin", "kstreamkstreamjoin", "ktablektablejoin", "yahoo"], scale=[1, 3])
     def test_simple_benchmark(self, test, scale):
         """
         Run simple Kafka Streams benchmark
@@ -58,7 +58,9 @@ class StreamsSimpleBenchmarkTest(Test):
             'joinSourceTopic1KStreamKTable' : { 'partitions': scale, 'replication-factor': self.replication },
             'joinSourceTopic2KStreamKTable' : { 'partitions': scale, 'replication-factor': self.replication },
             'joinSourceTopic1KTableKTable' : { 'partitions': scale, 'replication-factor': self.replication },
-            'joinSourceTopic2KTableKTable' : { 'partitions': scale, 'replication-factor': self.replication }
+            'joinSourceTopic2KTableKTable' : { 'partitions': scale, 'replication-factor': self.replication },
+            'yahooCampaigns' : { 'partitions': scale, 'replication-factor': self.replication },
+            'yahooEvents' : { 'partitions': scale, 'replication-factor': self.replication }
         })
         self.kafka.log_level = "INFO"
         self.kafka.start()

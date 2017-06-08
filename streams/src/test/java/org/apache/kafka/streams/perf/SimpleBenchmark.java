@@ -60,17 +60,16 @@ import org.apache.kafka.test.TestUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.File;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.Properties;
 import java.util.Random;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Class that provides support for a series of benchmarks. It is usually driven by
@@ -100,6 +99,8 @@ public class SimpleBenchmark {
     private static final String COUNT_TOPIC = "countTopic";
     private static final String JOIN_TOPIC_1_PREFIX = "joinSourceTopic1";
     private static final String JOIN_TOPIC_2_PREFIX = "joinSourceTopic2";
+    private static final String YAHOO_CAMPAIGNS_TOPIC = "yahooCampaigns";
+    private static final String YAHOO_EVENTS_TOPIC = "yahooEvents";
     private static final ValueJoiner VALUE_JOINER = new ValueJoiner<byte[], byte[], byte[]>() {
         @Override
         public byte[] apply(final byte[] value1, final byte[] value2) {
@@ -118,7 +119,7 @@ public class SimpleBenchmark {
     };
 
     private static int numRecords;
-    private static int processedRecords = 0;
+    private final AtomicInteger processedRecords = new AtomicInteger(0);
     private static long processedBytes = 0;
     private static final int VALUE_SIZE = 100;
     private static final long POLL_MS = 500L;
@@ -192,7 +193,7 @@ public class SimpleBenchmark {
                 kTableKTableJoin(JOIN_TOPIC_1_PREFIX + "KTableKTable", JOIN_TOPIC_2_PREFIX + "KTableKTable");
                 break;
             case "yahoo":
-                yahooBenchmark("campaigns", "events");
+                yahooBenchmark(YAHOO_CAMPAIGNS_TOPIC, YAHOO_EVENTS_TOPIC);
                 break;
             default:
                 throw new Exception("Unknown test name " + testName);
@@ -204,7 +205,7 @@ public class SimpleBenchmark {
         String kafka = args.length > 0 ? args[0] : "localhost:9092";
         String stateDirStr = args.length > 1 ? args[1] : TestUtils.tempDirectory().getAbsolutePath();
         numRecords = args.length > 2 ? Integer.parseInt(args[2]) : 10000000;
-        boolean loadPhase = true; //args.length > 3 ? Boolean.parseBoolean(args[3]) : false;
+        boolean loadPhase = false; //args.length > 3 ? Boolean.parseBoolean(args[3]) : false;
         String testName = "yahoo"; //args.length > 4 ? args[4].toLowerCase(Locale.ROOT) : ALL_TESTS;
 
         final File stateDir = new File(stateDirStr);
@@ -263,7 +264,7 @@ public class SimpleBenchmark {
 
     private boolean maybeSetupPhase(final String topic, final String clientId,
                                     final boolean skipIfAllTests) throws Exception {
-        processedRecords = 0;
+        processedRecords.set(0);
         processedBytes = 0;
         // initialize topics
         if (loadPhase) {
@@ -288,7 +289,7 @@ public class SimpleBenchmark {
                                              final boolean skipIfAllTests,
                                              final int numCampaigns, final int adsPerCampaign,
                                              final String[] ads) throws Exception {
-        processedRecords = 0;
+        processedRecords.set(0);
         processedBytes = 0;
         // initialize topics
         if (loadPhase) {
@@ -301,7 +302,7 @@ public class SimpleBenchmark {
             }
             System.out.println("Initializing topic " + topic);
 
-            processedRecords = 0;
+            processedRecords.set(0);
             processedBytes = 0;
             Properties props = new Properties();
             props.put(ProducerConfig.CLIENT_ID_CONFIG, clientId);
@@ -319,7 +320,7 @@ public class SimpleBenchmark {
                     producer.send(new ProducerRecord<>(topic, adId, concat));
                     ads[arrayIndex] = adId;
                     arrayIndex++;
-                    processedRecords++;
+                    processedRecords.getAndIncrement();
                     processedBytes += campaignID.length() + Integer.SIZE;
                 }
             }
@@ -332,7 +333,7 @@ public class SimpleBenchmark {
     private boolean maybeSetupPhaseEvents(final String topic, final String clientId,
                                           final boolean skipIfAllTests, final int numRecords,
                                           final String[] ads) throws Exception {
-        processedRecords = 0;
+        processedRecords.set(0);
         processedBytes = 0;
         String[] eventTypes = new String[]{"view", "click", "purchase"};
         Random rand = new Random();
@@ -347,7 +348,7 @@ public class SimpleBenchmark {
             }
             System.out.println("Initializing topic " + topic);
 
-            processedRecords = 0;
+            processedRecords.set(0);
             processedBytes = 0;
             Properties props = new Properties();
             props.put(ProducerConfig.CLIENT_ID_CONFIG, clientId);
@@ -372,7 +373,7 @@ public class SimpleBenchmark {
                 event.eventTime = System.currentTimeMillis();
                 byte[] value = ProjectedEventSerializer.serialize(topic, event);
                 producer.send(new ProducerRecord<>(topic, event.adID, value));
-                processedRecords++;
+                processedRecords.getAndIncrement();
                 processedBytes += value.length + event.adID.length();
             }
             producer.close();
@@ -479,15 +480,9 @@ public class SimpleBenchmark {
         }
     }
 
-    private class Stats {
-        public int numProcessed;
-        Stats() {
-            numProcessed = 0;
-        }
-    }
+
     private KafkaStreams createYahooBenchmarkStreams(final Properties streamConfig, final String campaignsTopic, final String eventsTopic,
                                                      final CountDownLatch latch, final int numRecords) {
-        final Stats stats = new Stats();
         Map<String, Object> serdeProps = new HashMap<>();
         final Serializer<ProjectedEvent> ProjectedEventSerializer = new JsonPOJOSerializer<>();
         serdeProps.put("JsonPOJOClass", ProjectedEvent.class);
@@ -506,12 +501,11 @@ public class SimpleBenchmark {
         KStream<String, ProjectedEvent> filteredEvents = kEvents.peek(new ForeachAction<String, ProjectedEvent>() {
             @Override
             public void apply(String key, ProjectedEvent value) {
-                processedRecords++;
-                stats.numProcessed++;
-                if (processedRecords % 100000 == 0) {
-                    System.out.println("Processed " + stats.numProcessed + " records");
+                int tmpRecords = processedRecords.getAndIncrement();
+                if (tmpRecords % 1000000 == 0) {
+                    System.out.println("Processed " + tmpRecords + " records");
                 }
-                if (stats.numProcessed == numRecords) {
+                if (tmpRecords >= numRecords) {
                     latch.countDown();
                 }
             }
@@ -578,7 +572,8 @@ public class SimpleBenchmark {
 
         CountDownLatch latch = new CountDownLatch(1);
         Properties props = setStreamProperties("simple-benchmark-yahoo" + new Random().nextInt());
-        props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 1);
+        //props.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
+        //props.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000L);
 
         final KafkaStreams streams = createYahooBenchmarkStreams(props, campaignsTopic, eventsTopic, latch, numRecords);
         runGenericBenchmark(streams, "Streams Yahoo Performance [records/latency/rec-sec/MB-sec counted]: ", latch);
@@ -663,9 +658,9 @@ public class SimpleBenchmark {
 
     private void printResults(final String nameOfBenchmark, final long latency) {
         System.out.println(nameOfBenchmark +
-            processedRecords + "/" +
+            processedRecords.get() + "/" +
             latency + "/" +
-            recordsPerSec(latency, processedRecords) + "/" +
+            recordsPerSec(latency, processedRecords.get()) + "/" +
             megabytesPerSec(latency, processedBytes));
     }
 
@@ -787,7 +782,7 @@ public class SimpleBenchmark {
     private void produce(String topic, int valueSizeBytes, String clientId, int numRecords, boolean sequential,
                          int upperRange, boolean printStats) throws Exception {
 
-        processedRecords = 0;
+        processedRecords.set(0);
         processedBytes = 0;
         if (sequential) {
             if (upperRange < numRecords) throw new Exception("UpperRange must be >= numRecords");
@@ -814,7 +809,7 @@ public class SimpleBenchmark {
             producer.send(new ProducerRecord<>(topic, key, value));
             if (sequential) key++;
             else key = rand.nextInt(upperRange);
-            processedRecords++;
+            processedRecords.getAndIncrement();
             processedBytes += value.length + Integer.SIZE;
         }
         producer.close();
@@ -846,20 +841,20 @@ public class SimpleBenchmark {
         while (true) {
             ConsumerRecords<Integer, byte[]> records = consumer.poll(POLL_MS);
             if (records.isEmpty()) {
-                if (processedRecords == numRecords)
+                if (processedRecords.get() == numRecords)
                     break;
             } else {
                 for (ConsumerRecord<Integer, byte[]> record : records) {
-                    processedRecords++;
+                    processedRecords.getAndIncrement();
                     processedBytes += record.value().length + Integer.SIZE;
                     Integer recKey = record.key();
                     if (key == null || key < recKey)
                         key = recKey;
-                    if (processedRecords == numRecords)
+                    if (processedRecords.get() == numRecords)
                         break;
                 }
             }
-            if (processedRecords == numRecords)
+            if (processedRecords.get() == numRecords)
                 break;
         }
 
@@ -887,9 +882,9 @@ public class SimpleBenchmark {
 
                     @Override
                     public void process(Integer key, byte[] value) {
-                        processedRecords++;
+                        processedRecords.getAndIncrement();
                         processedBytes += value.length + Integer.SIZE;
-                        if (processedRecords == numRecords) {
+                        if (processedRecords.get() == numRecords) {
                             latch.countDown();
                         }
                     }
@@ -926,9 +921,9 @@ public class SimpleBenchmark {
 
                     @Override
                     public void process(Integer key, byte[] value) {
-                        processedRecords++;
+                        processedRecords.getAndIncrement();
                         processedBytes += value.length + Integer.SIZE;
-                        if (processedRecords == numRecords) {
+                        if (processedRecords.get() == numRecords) {
                             latch.countDown();
                         }
                     }
@@ -954,7 +949,7 @@ public class SimpleBenchmark {
         }
         @Override
         public void apply(Integer key, V value) {
-            processedRecords++;
+            processedRecords.getAndIncrement();
             if (value instanceof byte[]) {
                 processedBytes += ((byte[]) value).length + Integer.SIZE;
             } else if (value instanceof Long) {
@@ -962,7 +957,7 @@ public class SimpleBenchmark {
             } else {
                 System.err.println("Unknown value type in CountDownAction");
             }
-            if (processedRecords == numRecords) {
+            if (processedRecords.get() == numRecords) {
                 this.latch.countDown();
             }
         }
@@ -1034,9 +1029,9 @@ public class SimpleBenchmark {
                     @Override
                     public void process(Integer key, byte[] value) {
                         store.put(key, value);
-                        processedRecords++;
+                        processedRecords.getAndIncrement();
                         processedBytes += value.length + Integer.SIZE;
-                        if (processedRecords == numRecords) {
+                        if (processedRecords.get() == numRecords) {
                             latch.countDown();
                         }
                     }
