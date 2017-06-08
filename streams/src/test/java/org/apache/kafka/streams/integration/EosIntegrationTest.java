@@ -45,7 +45,6 @@ import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Before;
 import org.junit.ClassRule;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
@@ -574,7 +573,6 @@ public class EosIntegrationTest {
         );
     }
 
-    @Ignore
     @Test
     public void shouldNotViolateEosIfOneTaskFailsWithState() throws Exception {
         // this test updates a store with 10 + 5 + 5 records per partition (running with 2 partitions)
