@@ -145,7 +145,7 @@ class LeaderElectionTest extends ZooKeeperTestHarness {
       val partitionStates = Map(
         new TopicPartition(topic, partitionId) -> new PartitionState(2, brokerId2, LeaderAndIsr.initialLeaderEpoch,
           Seq(brokerId1, brokerId2).map(Integer.valueOf).asJava, LeaderAndIsr.initialZKVersion,
-          Set(0, 1).map(Integer.valueOf).asJava)
+          Seq(0, 1).map(Integer.valueOf).asJava)
       )
       val requestBuilder = new LeaderAndIsrRequest.Builder(
           controllerId, staleControllerEpoch, partitionStates.asJava, nodes.toSet.asJava)
