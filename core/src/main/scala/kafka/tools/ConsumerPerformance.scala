@@ -58,9 +58,10 @@ object ConsumerPerformance {
     val fetchTimeInMs = new AtomicLong(0)
 
     if (!config.hideHeader) {
-      if (!config.showDetailedStats)
-        println(s"start.time, end.time, data.consumed.in.MB, MB.sec, data.consumed.in.nMsg, nMsg.sec${if (!config.useOldConsumer) ", total.rebalance.time.ms, fetch.time.ms" else ""}")
-      else
+      if (!config.showDetailedStats) {
+        if (config.useOldConsumer)
+          println("start.time, end.time, data.consumed.in.MB, MB.sec, data.consumed.in.nMsg, nMsg.sec")
+      } else
         println("time, data.consumed.in.MB, MB.sec, data.consumed.in.nMsg, nMsg.sec")
     }
 
@@ -104,14 +105,23 @@ object ConsumerPerformance {
     fetchTimeInMs.set((endMs - startMs) - joinGroupTimeInMs.get)
     if (!config.showDetailedStats) {
       val totalMBRead = (totalBytesRead.get * 1.0) / (1024 * 1024)
-      println(s"%s, %s, %.4f, %.4f, %d, %.4f${if (!config.useOldConsumer) ", %s" else ""}".format(
-        config.dateFormat.format(startMs),
-        config.dateFormat.format(endMs),
-        totalMBRead,
-        totalMBRead / elapsedSecs,
-        totalMessagesRead.get,
-        totalMessagesRead.get / elapsedSecs,
-        if (!config.useOldConsumer) joinGroupTimeInMs.get.toString + ", " + fetchTimeInMs.get.toString else ""))
+      if (config.useOldConsumer) {
+        println(s"%s, %s, %.4f, %.4f, %d, %.4f${if (!config.useOldConsumer) ", %s" else ""}".format(
+          config.dateFormat.format(startMs), config.dateFormat.format(endMs), totalMBRead,
+          totalMBRead / elapsedSecs, totalMessagesRead.get, totalMessagesRead.get / elapsedSecs))
+      } else {
+        println("---- performance test result ----")
+        println(s"Start time:${"\t" * 5}" + config.dateFormat.format(startMs))
+        println(s"End time:${"\t" * 5}" + config.dateFormat.format(startMs))
+        println(s"Total time:${"\t" * 5}%.4fs [%dms(rebalance time) + %dms(fetch time)]".format(
+          elapsedSecs, joinGroupTimeInMs.get, fetchTimeInMs.get))
+        println(s"Total MB read:${"\t" * 4}%.4f".format(totalMBRead))
+        println(s"Total throughput(MB/s):${"\t" * 2}%.4f".format(totalMBRead / elapsedSecs))
+        println(s"Fetch throughput(MB/s):${"\t" * 2}%.4f".format(totalMBRead / (fetchTimeInMs.get / 1000.0)))
+        println(s"Total messages read:${"\t" * 2}%d".format(totalMessagesRead.get))
+        println(s"Total message rate(msg/s):${"\t"}%.4f".format(totalMessagesRead.get / elapsedSecs))
+        println(s"Fetch message rate(msg/s):\t%.4f".format(totalMessagesRead.get / (fetchTimeInMs.get / 1000.0)))
+      }
     }
 
     if (metrics != null) {
