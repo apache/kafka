@@ -197,6 +197,10 @@
       <allow pkg="org.I0Itec.zkclient" />
     </subpackage>
 
+    <subpackage name="test">
+      <allow pkg="kafka.admin" />
+    </subpackage>
+
     <subpackage name="state">
       <allow pkg="org.rocksdb" />
     </subpackage>
