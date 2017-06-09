@@ -215,7 +215,6 @@ class TransactionStateManager(brokerId: Int,
    * Get the transaction metadata associated with the given transactional id, or an error if
    * the coordinator does not own the transaction partition or is still loading it; if not found
    * either return None or create a new metadata and added to the cache
-
    *
    * This function is covered by the state read lock
    */
