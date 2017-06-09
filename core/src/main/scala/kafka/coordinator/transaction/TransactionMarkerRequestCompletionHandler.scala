@@ -58,6 +58,9 @@ class TransactionMarkerRequestCompletionHandler(brokerId: Int,
 
             txnMarkerChannelManager.removeMarkersForTxnId(transactionalId)
 
+          case Left(unexpectedError) =>
+            throw new IllegalStateException(s"Unhandled error $unexpectedError when fetching current transaction state")
+
           case Right(None) =>
             throw new IllegalStateException(s"The coordinator still owns the transaction partition for $transactionalId, but there is " +
               s"no metadata in the cache; this is not expected")
@@ -107,6 +110,9 @@ class TransactionMarkerRequestCompletionHandler(brokerId: Int,
               s"cancel sending transaction markers $txnMarker to the brokers")
 
             txnMarkerChannelManager.removeMarkersForTxnId(transactionalId)
+
+          case Left(unexpectedError) =>
+            throw new IllegalStateException(s"Unhandled error $unexpectedError when fetching current transaction state")
 
           case Right(None) =>
             throw new IllegalStateException(s"The coordinator still owns the transaction partition for $transactionalId, but there is " +

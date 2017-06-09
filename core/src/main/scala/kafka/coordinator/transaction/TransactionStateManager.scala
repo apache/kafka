@@ -26,7 +26,6 @@ import kafka.common.KafkaException
 import kafka.log.LogConfig
 import kafka.message.UncompressedCodec
 import kafka.server.Defaults
-import kafka.utils.CoreUtils.inLock
 import kafka.server.ReplicaManager
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils.{Logging, Pool, Scheduler, ZkUtils}
@@ -221,36 +220,31 @@ class TransactionStateManager(brokerId: Int,
                                              createdTxnMetadata: Option[TransactionMetadata]): Either[Errors, Option[CoordinatorEpochAndTxnMetadata]] = {
     inReadLock(stateLock) {
       val partitionId = partitionFor(transactionalId)
-
       if (loadingPartitions.exists(_.txnPartitionId == partitionId))
-        return Left(Errors.COORDINATOR_LOAD_IN_PROGRESS)
-
-      if (leavingPartitions.exists(_.txnPartitionId == partitionId))
-        return Left(Errors.NOT_COORDINATOR)
-
-      transactionMetadataCache.get(partitionId) match {
-        case Some(cacheEntry) =>
-          cacheEntry.metadataPerTransactionalId.get(transactionalId) match {
-            case null =>
-              createdTxnMetadata match {
-                case None =>
-                  Right(None)
-
-                case Some(txnMetadata) =>
+        Left(Errors.COORDINATOR_LOAD_IN_PROGRESS)
+      else if (leavingPartitions.exists(_.txnPartitionId == partitionId))
+        Left(Errors.NOT_COORDINATOR)
+      else {
+        transactionMetadataCache.get(partitionId) match {
+          case Some(cacheEntry) =>
+            cacheEntry.metadataPerTransactionalId.get(transactionalId) match {
+              case null =>
+                Right(createdTxnMetadata.map { txnMetadata =>
                   val currentTxnMetadata = cacheEntry.metadataPerTransactionalId.putIfNotExists(transactionalId, txnMetadata)
                   if (currentTxnMetadata != null) {
-                    Right(Some(CoordinatorEpochAndTxnMetadata(cacheEntry.coordinatorEpoch, currentTxnMetadata)))
+                    CoordinatorEpochAndTxnMetadata(cacheEntry.coordinatorEpoch, currentTxnMetadata)
                   } else {
-                    Right(Some(CoordinatorEpochAndTxnMetadata(cacheEntry.coordinatorEpoch, txnMetadata)))
+                    CoordinatorEpochAndTxnMetadata(cacheEntry.coordinatorEpoch, txnMetadata)
                   }
-              }
+                })
 
-            case currentTxnMetadata =>
-              Right(Some(CoordinatorEpochAndTxnMetadata(cacheEntry.coordinatorEpoch, currentTxnMetadata)))
-          }
+              case currentTxnMetadata =>
+                Right(Some(CoordinatorEpochAndTxnMetadata(cacheEntry.coordinatorEpoch, currentTxnMetadata)))
+            }
 
-        case None =>
-          Left(Errors.NOT_COORDINATOR)
+          case None =>
+            Left(Errors.NOT_COORDINATOR)
+        }
       }
     }
   }

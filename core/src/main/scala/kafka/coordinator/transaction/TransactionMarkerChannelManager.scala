@@ -258,6 +258,9 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
               info(s"I am loading the transaction partition that contains $transactionalId while my current coordinator epoch is $coordinatorEpoch; " +
                 s"so cancel appending $newMetadata to transaction log since the loading process will continue the remaining work")
 
+            case Left(unexpectedError) =>
+              throw new IllegalStateException(s"Unhandled error $unexpectedError when fetching current transaction state")
+
             case Right(Some(epochAndMetadata)) =>
               if (epochAndMetadata.coordinatorEpoch == coordinatorEpoch) {
                 debug(s"Sending $transactionalId's transaction markers for $txnMetadata with coordinator epoch $coordinatorEpoch succeeded, trying to append complete transaction log now")
