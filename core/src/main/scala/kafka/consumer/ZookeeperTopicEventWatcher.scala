@@ -34,17 +34,15 @@ class ZookeeperTopicEventWatcher(val zkUtils: ZkUtils,
     val topicEventListener = new ZkTopicEventListener()
     zkUtils.makeSurePersistentPathExists(ZkUtils.BrokerTopicsPath)
 
-    zkUtils.zkClient.subscribeStateChanges(
-      new ZkSessionExpireListener(topicEventListener))
+    zkUtils.subscribeStateChanges(new ZkSessionExpireListener(topicEventListener))
 
-    val topics = zkUtils.zkClient.subscribeChildChanges(
-      ZkUtils.BrokerTopicsPath, topicEventListener)
+    val topics = zkUtils.subscribeChildChanges(ZkUtils.BrokerTopicsPath, topicEventListener)
 
     // call to bootstrap topic list
     topicEventListener.handleChildChange(ZkUtils.BrokerTopicsPath, topics)
   }
 
-  private def stopWatchingTopicEvents() { zkUtils.zkClient.unsubscribeAll() }
+  private def stopWatchingTopicEvents() { zkUtils.unsubscribeAll() }
 
   def shutdown() {
     lock.synchronized {
@@ -90,7 +88,7 @@ class ZookeeperTopicEventWatcher(val zkUtils: ZkUtils,
       lock.synchronized {
         if (zkUtils != null) {
           info("ZK expired: resubscribing topic event listener to topic registry")
-          zkUtils.zkClient.subscribeChildChanges(ZkUtils.BrokerTopicsPath, topicEventListener)
+          zkUtils.subscribeChildChanges(ZkUtils.BrokerTopicsPath, topicEventListener)
         }
       }
     }
