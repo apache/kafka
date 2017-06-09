@@ -53,9 +53,16 @@ public class YahooBenchmark {
     private final String eventsTopic;
 
     static public class ProjectedEvent {
+        /* main fields */
         public String eventType;
         public String adID;
+
+        /* other fields */
         public long eventTime;
+        public String userID;
+        public String pageID;
+        public String addType;
+        public String ipAddress;
     }
 
     static public class CampaignAd {
@@ -106,7 +113,7 @@ public class YahooBenchmark {
                     ads[arrayIndex] = adId;
                     arrayIndex++;
                     parent.processedRecords.getAndIncrement();
-                    parent.processedBytes += campaignID.length() + Integer.SIZE;
+                    parent.processedBytes += concat.length() + adId.length();
                 }
             }
             return true;
@@ -145,18 +152,22 @@ public class YahooBenchmark {
 
             long startTime = System.currentTimeMillis();
 
-            SimpleBenchmark.ProjectedEvent event = new SimpleBenchmark.ProjectedEvent();
+            ProjectedEvent event = new ProjectedEvent();
+            event.userID = UUID.randomUUID().toString(); // not used
+            event.pageID = UUID.randomUUID().toString(); // not used
+            event.addType = "banner78";  // not used
+            event.ipAddress = "1.2.3.4"; // not used
 
             Map<String, Object> serdeProps = new HashMap<>();
-            final Serializer<SimpleBenchmark.ProjectedEvent> ProjectedEventSerializer = new JsonPOJOSerializer<>();
-            serdeProps.put("JsonPOJOClass", SimpleBenchmark.ProjectedEvent.class);
-            ProjectedEventSerializer.configure(serdeProps, false);
+            final Serializer<ProjectedEvent> projectedEventSerializer = new JsonPOJOSerializer<>();
+            serdeProps.put("JsonPOJOClass", ProjectedEvent.class);
+            projectedEventSerializer.configure(serdeProps, false);
 
             for (int i = 0; i < numRecords; i++) {
                 event.eventType = eventTypes[rand.nextInt(eventTypes.length - 1)];
                 event.adID = ads[rand.nextInt(ads.length - 1)];
                 event.eventTime = System.currentTimeMillis();
-                byte[] value = ProjectedEventSerializer.serialize(topic, event);
+                byte[] value = projectedEventSerializer.serialize(topic, event);
                 producer.send(new ProducerRecord<>(topic, event.adID, value));
                 parent.processedRecords.getAndIncrement();
                 parent.processedBytes += value.length + event.adID.length();
@@ -270,40 +281,40 @@ public class YahooBenchmark {
     private KafkaStreams createYahooBenchmarkStreams(final Properties streamConfig, final String campaignsTopic, final String eventsTopic,
                                                      final CountDownLatch latch, final int numRecords) {
         Map<String, Object> serdeProps = new HashMap<>();
-        final Serializer<SimpleBenchmark.ProjectedEvent> ProjectedEventSerializer = new JsonPOJOSerializer<>();
-        serdeProps.put("JsonPOJOClass", SimpleBenchmark.ProjectedEvent.class);
-        ProjectedEventSerializer.configure(serdeProps, false);
-        final Deserializer<SimpleBenchmark.ProjectedEvent> ProjectedEventDeserializer = new JsonPOJODeserializer<>();
-        serdeProps.put("JsonPOJOClass", SimpleBenchmark.ProjectedEvent.class);
-        ProjectedEventDeserializer.configure(serdeProps, false);
+        final Serializer<ProjectedEvent> projectedEventSerializer = new JsonPOJOSerializer<>();
+        serdeProps.put("JsonPOJOClass", ProjectedEvent.class);
+        projectedEventSerializer.configure(serdeProps, false);
+        final Deserializer<ProjectedEvent> projectedEventDeserializer = new JsonPOJODeserializer<>();
+        serdeProps.put("JsonPOJOClass", ProjectedEvent.class);
+        projectedEventDeserializer.configure(serdeProps, false);
 
         final KStreamBuilder builder = new KStreamBuilder();
-        final KStream<String, SimpleBenchmark.ProjectedEvent> kEvents = builder.stream(Serdes.String(),
-            Serdes.serdeFrom(ProjectedEventSerializer, ProjectedEventDeserializer), eventsTopic);
+        final KStream<String, ProjectedEvent> kEvents = builder.stream(Serdes.String(),
+            Serdes.serdeFrom(projectedEventSerializer, projectedEventDeserializer), eventsTopic);
         final KTable<String, String> kCampaigns = builder.table(Serdes.String(), Serdes.String(),
             campaignsTopic, "campaign-state");
 
 
-        KStream<String, SimpleBenchmark.ProjectedEvent> filteredEvents = kEvents.peek(new ForeachAction<String, SimpleBenchmark.ProjectedEvent>() {
+        KStream<String, ProjectedEvent> filteredEvents = kEvents.peek(new ForeachAction<String, ProjectedEvent>() {
             @Override
-            public void apply(String key, SimpleBenchmark.ProjectedEvent value) {
+            public void apply(String key, ProjectedEvent value) {
                 parent.processedRecords.getAndIncrement();
                 if (parent.processedRecords.get() % 1000000 == 0) {
                     System.out.println("Processed " + parent.processedRecords.get());
                 }
-                if (parent.processedRecords.get() >= numRecords ) {
+                if (parent.processedRecords.get() >= numRecords) {
                     latch.countDown();
                 }
             }
-        }).filter(new Predicate<String, SimpleBenchmark.ProjectedEvent>() {
+        }).filter(new Predicate<String, ProjectedEvent>() {
             @Override
-            public boolean test(final String key, final SimpleBenchmark.ProjectedEvent value) {
+            public boolean test(final String key, final ProjectedEvent value) {
                 return value.eventType.equals("view");
             }
-        }).mapValues(new ValueMapper<SimpleBenchmark.ProjectedEvent, SimpleBenchmark.ProjectedEvent>() {
+        }).mapValues(new ValueMapper<ProjectedEvent, ProjectedEvent>() {
             @Override
-            public SimpleBenchmark.ProjectedEvent apply(SimpleBenchmark.ProjectedEvent value) {
-                SimpleBenchmark.ProjectedEvent event = new SimpleBenchmark.ProjectedEvent();
+            public ProjectedEvent apply(ProjectedEvent value) {
+                ProjectedEvent event = new ProjectedEvent();
                 event.adID = value.adID;
                 event.eventTime = value.eventTime;
                 event.eventType = value.eventType;
@@ -312,23 +323,23 @@ public class YahooBenchmark {
         });
 
 
-        KTable<String, SimpleBenchmark.CampaignAd> deserCampaigns = kCampaigns.mapValues(new ValueMapper<String, SimpleBenchmark.CampaignAd>() {
+        KTable<String, CampaignAd> deserCampaigns = kCampaigns.mapValues(new ValueMapper<String, CampaignAd>() {
             @Override
-            public SimpleBenchmark.CampaignAd apply(String value) {
+            public CampaignAd apply(String value) {
                 String[] parts = value.split(":");
-                SimpleBenchmark.CampaignAd cAdd = new SimpleBenchmark.CampaignAd();
+                CampaignAd cAdd = new CampaignAd();
                 cAdd.adID = parts[0];
                 cAdd.campaignID = parts[1];
                 return cAdd;
             }
         });
 
-        KStream<String, String> joined = filteredEvents.join(deserCampaigns, new ValueJoiner<SimpleBenchmark.ProjectedEvent, SimpleBenchmark.CampaignAd, String>() {
+        KStream<String, String> joined = filteredEvents.join(deserCampaigns, new ValueJoiner<ProjectedEvent, CampaignAd, String>() {
             @Override
-            public String apply(SimpleBenchmark.ProjectedEvent value1, SimpleBenchmark.CampaignAd value2) {
+            public String apply(ProjectedEvent value1, CampaignAd value2) {
                 return value2.campaignID;
             }
-        }, Serdes.String(), Serdes.serdeFrom(ProjectedEventSerializer, ProjectedEventDeserializer));
+        }, Serdes.String(), Serdes.serdeFrom(projectedEventSerializer, projectedEventDeserializer));
 
 
         KStream<String, String> keyedByCampaign = joined.selectKey(new KeyValueMapper<String, String, String>() {
