@@ -71,7 +71,11 @@ public class EosIntegrationTest {
     private static final int MAX_WAIT_TIME_MS = 60 * 1000;
 
     @ClassRule
-    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
+    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS, new Properties() {
+        {
+            put("auto.create.topics.enable", false);
+        }
+    });
 
     private static String applicationId;
     private final static String CONSUMER_GROUP_ID = "readCommitted";
