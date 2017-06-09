@@ -1429,7 +1429,10 @@ public class StreamThread extends Thread {
         try {
             task.close(false);
         } catch (final Exception f) {
-            log.warn("{} Failed to close zombie task: ", logPrefix, f);
+            if (!log.isDebugEnabled() && !log.isTraceEnabled()) {
+                log.warn("{} Failed to close zombie task: {}", logPrefix, f.getMessage());
+            }
+            log.debug("{} Failed to close zombie task: ", logPrefix, f);
         }
         activeTasks.remove(task.id);
     }

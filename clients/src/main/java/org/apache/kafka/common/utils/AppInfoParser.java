@@ -16,16 +16,15 @@
  */
 package org.apache.kafka.common.utils;
 
-import java.io.InputStream;
-import java.lang.management.ManagementFactory;
-import java.util.Properties;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.management.JMException;
 import javax.management.MBeanServer;
 import javax.management.ObjectName;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import java.io.InputStream;
+import java.lang.management.ManagementFactory;
+import java.util.Properties;
 
 public class AppInfoParser {
     private static final Logger log = LoggerFactory.getLogger(AppInfoParser.class);
@@ -57,7 +56,7 @@ public class AppInfoParser {
             AppInfo mBean = new AppInfo();
             ManagementFactory.getPlatformMBeanServer().registerMBean(mBean, name);
         } catch (JMException e) {
-            log.warn("Error registering AppInfo mbean", e);
+            log.warn("Error registering AppInfo mbean: {}", e.getMessage());
         }
     }
 

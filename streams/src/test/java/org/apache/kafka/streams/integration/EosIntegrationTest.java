@@ -516,7 +516,9 @@ public class EosIntegrationTest {
             TestUtils.waitForCondition(new TestCondition() {
                 @Override
                 public boolean conditionMet() {
-                    return maxPartitionNumberSeen.values().contains(Integer.MAX_VALUE);
+                    return streams1.allMetadata().size() == 1 && streams2.allMetadata().size() == 1 &&
+                        (streams1.allMetadata().iterator().next().topicPartitions().size() == 2
+                        || streams2.allMetadata().iterator().next().topicPartitions().size() == 2);
                 }
             }, MAX_WAIT_TIME_MS, "Should have rebalanced.");
 
@@ -531,11 +533,12 @@ public class EosIntegrationTest {
             checkResultPerKey(committedRecordsAfterRebalance, expectedCommittedRecordsAfterRebalance);
 
             doGC = false;
-
             TestUtils.waitForCondition(new TestCondition() {
                 @Override
                 public boolean conditionMet() {
-                    return maxPartitionNumberSeen.size() > 3;
+                    return streams1.allMetadata().size() == 1 && streams2.allMetadata().size() == 1
+                        && streams1.allMetadata().iterator().next().topicPartitions().size() == 1
+                        && streams2.allMetadata().iterator().next().topicPartitions().size() == 1;
                 }
             }, MAX_WAIT_TIME_MS, "Should have rebalanced.");
 
@@ -670,6 +673,7 @@ public class EosIntegrationTest {
                         put(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG), MAX_POLL_INTERVAL_MS);
                         put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
                         put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath() + File.separator + appDir);
+                        put(StreamsConfig.APPLICATION_SERVER_CONFIG, "dummy:2142");
                     }
                 }));
 
