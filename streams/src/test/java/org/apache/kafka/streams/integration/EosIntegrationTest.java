@@ -167,30 +167,7 @@ public class EosIntegrationTest {
             try {
                 streams.start();
 
-                final List<KeyValue<Long, Long>> inputData = new ArrayList<KeyValue<Long, Long>>() {
-                    {
-                        add(new KeyValue<>(0L, factor * 100));
-                        add(new KeyValue<>(0L, factor * 100 + 1L));
-                        add(new KeyValue<>(0L, factor * 100 + 2L));
-                        add(new KeyValue<>(0L, factor * 100 + 3L));
-                        add(new KeyValue<>(0L, factor * 100 + 4L));
-                        add(new KeyValue<>(0L, factor * 100 + 5L));
-                        add(new KeyValue<>(0L, factor * 100 + 6L));
-                        add(new KeyValue<>(0L, factor * 100 + 7L));
-                        add(new KeyValue<>(0L, factor * 100 + 8L));
-                        add(new KeyValue<>(0L, factor * 100 + 9L));
-                        add(new KeyValue<>(1L, factor * 100));
-                        add(new KeyValue<>(1L, factor * 100 + 1L));
-                        add(new KeyValue<>(1L, factor * 100 + 2L));
-                        add(new KeyValue<>(1L, factor * 100 + 3L));
-                        add(new KeyValue<>(1L, factor * 100 + 4L));
-                        add(new KeyValue<>(1L, factor * 100 + 5L));
-                        add(new KeyValue<>(1L, factor * 100 + 6L));
-                        add(new KeyValue<>(1L, factor * 100 + 7L));
-                        add(new KeyValue<>(1L, factor * 100 + 8L));
-                        add(new KeyValue<>(1L, factor * 100 + 9L));
-                    }
-                };
+                final List<KeyValue<Long, Long>> inputData = prepareData(factor * 100, factor * 100 + 10L, 0L, 1L);
 
                 IntegrationTestUtils.produceKeyValuesSynchronously(
                     inputTopic,
@@ -273,22 +250,8 @@ public class EosIntegrationTest {
         try {
             streams.start();
 
-            final List<KeyValue<Long, Long>> firstBurstOfData = new ArrayList<KeyValue<Long, Long>>() {
-                {
-                    add(new KeyValue<>(0L, 0L));
-                    add(new KeyValue<>(0L, 1L));
-                    add(new KeyValue<>(0L, 2L));
-                    add(new KeyValue<>(0L, 3L));
-                    add(new KeyValue<>(0L, 4L));
-                }
-            };
-            final List<KeyValue<Long, Long>> secondBurstOfData = new ArrayList<KeyValue<Long, Long>>() {
-                {
-                    add(new KeyValue<>(0L, 5L));
-                    add(new KeyValue<>(0L, 6L));
-                    add(new KeyValue<>(0L, 7L));
-                }
-            };
+            final List<KeyValue<Long, Long>> firstBurstOfData = prepareData(0L, 5L, 0L);
+            final List<KeyValue<Long, Long>> secondBurstOfData = prepareData(5L, 8L, 0L);
 
             IntegrationTestUtils.produceKeyValuesSynchronously(
                 SINGLE_PARTITION_INPUT_TOPIC,
@@ -358,63 +321,14 @@ public class EosIntegrationTest {
         try {
             streams.start();
 
-            final List<KeyValue<Long, Long>> committedDataBeforeFailure = new ArrayList<KeyValue<Long, Long>>() {
-                {
-                    add(new KeyValue<>(0L, 0L));
-                    add(new KeyValue<>(0L, 1L));
-                    add(new KeyValue<>(0L, 2L));
-                    add(new KeyValue<>(0L, 3L));
-                    add(new KeyValue<>(0L, 4L));
-                    add(new KeyValue<>(0L, 5L));
-                    add(new KeyValue<>(0L, 6L));
-                    add(new KeyValue<>(0L, 7L));
-                    add(new KeyValue<>(0L, 8L));
-                    add(new KeyValue<>(0L, 9L));
-                    add(new KeyValue<>(1L, 0L));
-                    add(new KeyValue<>(1L, 1L));
-                    add(new KeyValue<>(1L, 2L));
-                    add(new KeyValue<>(1L, 3L));
-                    add(new KeyValue<>(1L, 4L));
-                    add(new KeyValue<>(1L, 5L));
-                    add(new KeyValue<>(1L, 6L));
-                    add(new KeyValue<>(1L, 7L));
-                    add(new KeyValue<>(1L, 8L));
-                    add(new KeyValue<>(1L, 9L));
-                }
-            };
-            final List<KeyValue<Long, Long>> uncommittedDataBeforeFailure = new ArrayList<KeyValue<Long, Long>>() {
-                {
-                    add(new KeyValue<>(0L, 10L));
-                    add(new KeyValue<>(0L, 11L));
-                    add(new KeyValue<>(0L, 12L));
-                    add(new KeyValue<>(0L, 13L));
-                    add(new KeyValue<>(0L, 14L));
-                    add(new KeyValue<>(1L, 10L));
-                    add(new KeyValue<>(1L, 11L));
-                    add(new KeyValue<>(1L, 12L));
-                    add(new KeyValue<>(1L, 13L));
-                    add(new KeyValue<>(1L, 14L));
-                }
-            };
+            final List<KeyValue<Long, Long>> committedDataBeforeFailure = prepareData(0L, 10L, 0L, 1L);
+            final List<KeyValue<Long, Long>> uncommittedDataBeforeFailure = prepareData(10L, 15L, 0L, 1L);
 
             final List<KeyValue<Long, Long>> dataBeforeFailure = new ArrayList<>();
             dataBeforeFailure.addAll(committedDataBeforeFailure);
             dataBeforeFailure.addAll(uncommittedDataBeforeFailure);
 
-            final List<KeyValue<Long, Long>> dataAfterFailure = new ArrayList<KeyValue<Long, Long>>() {
-                {
-                    add(new KeyValue<>(0L, 15L));
-                    add(new KeyValue<>(0L, 16L));
-                    add(new KeyValue<>(0L, 17L));
-                    add(new KeyValue<>(0L, 18L));
-                    add(new KeyValue<>(0L, 19L));
-                    add(new KeyValue<>(1L, 15L));
-                    add(new KeyValue<>(1L, 16L));
-                    add(new KeyValue<>(1L, 17L));
-                    add(new KeyValue<>(1L, 18L));
-                    add(new KeyValue<>(1L, 19L));
-                }
-            };
+            final List<KeyValue<Long, Long>> dataAfterFailure = prepareData(15L, 20L, 0L, 1L);
 
             writeInputData(committedDataBeforeFailure);
 
@@ -483,63 +397,14 @@ public class EosIntegrationTest {
         try {
             streams.start();
 
-            final List<KeyValue<Long, Long>> committedDataBeforeFailure = new ArrayList<KeyValue<Long, Long>>() {
-                {
-                    add(new KeyValue<>(0L, 0L));
-                    add(new KeyValue<>(0L, 1L));
-                    add(new KeyValue<>(0L, 2L));
-                    add(new KeyValue<>(0L, 3L));
-                    add(new KeyValue<>(0L, 4L));
-                    add(new KeyValue<>(0L, 5L));
-                    add(new KeyValue<>(0L, 6L));
-                    add(new KeyValue<>(0L, 7L));
-                    add(new KeyValue<>(0L, 8L));
-                    add(new KeyValue<>(0L, 9L));
-                    add(new KeyValue<>(1L, 0L));
-                    add(new KeyValue<>(1L, 1L));
-                    add(new KeyValue<>(1L, 2L));
-                    add(new KeyValue<>(1L, 3L));
-                    add(new KeyValue<>(1L, 4L));
-                    add(new KeyValue<>(1L, 5L));
-                    add(new KeyValue<>(1L, 6L));
-                    add(new KeyValue<>(1L, 7L));
-                    add(new KeyValue<>(1L, 8L));
-                    add(new KeyValue<>(1L, 9L));
-                }
-            };
-            final List<KeyValue<Long, Long>> uncommittedDataBeforeFailure = new ArrayList<KeyValue<Long, Long>>() {
-                {
-                    add(new KeyValue<>(0L, 10L));
-                    add(new KeyValue<>(0L, 11L));
-                    add(new KeyValue<>(0L, 12L));
-                    add(new KeyValue<>(0L, 13L));
-                    add(new KeyValue<>(0L, 14L));
-                    add(new KeyValue<>(1L, 10L));
-                    add(new KeyValue<>(1L, 11L));
-                    add(new KeyValue<>(1L, 12L));
-                    add(new KeyValue<>(1L, 13L));
-                    add(new KeyValue<>(1L, 14L));
-                }
-            };
+            final List<KeyValue<Long, Long>> committedDataBeforeFailure = prepareData(0L, 10L, 0L, 1L);
+            final List<KeyValue<Long, Long>> uncommittedDataBeforeFailure = prepareData(10L, 15L, 0L, 1L);
 
             final List<KeyValue<Long, Long>> dataBeforeFailure = new ArrayList<>();
             dataBeforeFailure.addAll(committedDataBeforeFailure);
             dataBeforeFailure.addAll(uncommittedDataBeforeFailure);
 
-            final List<KeyValue<Long, Long>> dataAfterFailure = new ArrayList<KeyValue<Long, Long>>() {
-                {
-                    add(new KeyValue<>(0L, 15L));
-                    add(new KeyValue<>(0L, 16L));
-                    add(new KeyValue<>(0L, 17L));
-                    add(new KeyValue<>(0L, 18L));
-                    add(new KeyValue<>(0L, 19L));
-                    add(new KeyValue<>(1L, 15L));
-                    add(new KeyValue<>(1L, 16L));
-                    add(new KeyValue<>(1L, 17L));
-                    add(new KeyValue<>(1L, 18L));
-                    add(new KeyValue<>(1L, 19L));
-                }
-            };
+            final List<KeyValue<Long, Long>> dataAfterFailure = prepareData(15L, 20L, 0L, 1L);
 
             writeInputData(committedDataBeforeFailure);
 
@@ -613,88 +478,16 @@ public class EosIntegrationTest {
             streams1.start();
             streams2.start();
 
-            final List<KeyValue<Long, Long>> committedDataBeforeGC = new ArrayList<KeyValue<Long, Long>>() {
-                {
-                    add(new KeyValue<>(0L, 0L));
-                    add(new KeyValue<>(0L, 1L));
-                    add(new KeyValue<>(0L, 2L));
-                    add(new KeyValue<>(0L, 3L));
-                    add(new KeyValue<>(0L, 4L));
-                    add(new KeyValue<>(0L, 5L));
-                    add(new KeyValue<>(0L, 6L));
-                    add(new KeyValue<>(0L, 7L));
-                    add(new KeyValue<>(0L, 8L));
-                    add(new KeyValue<>(0L, 9L));
-                    add(new KeyValue<>(1L, 0L));
-                    add(new KeyValue<>(1L, 1L));
-                    add(new KeyValue<>(1L, 2L));
-                    add(new KeyValue<>(1L, 3L));
-                    add(new KeyValue<>(1L, 4L));
-                    add(new KeyValue<>(1L, 5L));
-                    add(new KeyValue<>(1L, 6L));
-                    add(new KeyValue<>(1L, 7L));
-                    add(new KeyValue<>(1L, 8L));
-                    add(new KeyValue<>(1L, 9L));
-                }
-            };
-            final List<KeyValue<Long, Long>> uncommittedDataBeforeGC = new ArrayList<KeyValue<Long, Long>>() {
-                {
-                    add(new KeyValue<>(0L, 10L));
-                    add(new KeyValue<>(0L, 11L));
-                    add(new KeyValue<>(0L, 12L));
-                    add(new KeyValue<>(0L, 13L));
-                    add(new KeyValue<>(0L, 14L));
-                    add(new KeyValue<>(1L, 10L));
-                    add(new KeyValue<>(1L, 11L));
-                    add(new KeyValue<>(1L, 12L));
-                    add(new KeyValue<>(1L, 13L));
-                    add(new KeyValue<>(1L, 14L));
-                }
-            };
+            final List<KeyValue<Long, Long>> committedDataBeforeGC = prepareData(0L, 10L, 0L, 1L);
+            final List<KeyValue<Long, Long>> uncommittedDataBeforeGC = prepareData(10L, 15L, 0L, 1L);
 
             final List<KeyValue<Long, Long>> dataBeforeGC = new ArrayList<>();
             dataBeforeGC.addAll(committedDataBeforeGC);
             dataBeforeGC.addAll(uncommittedDataBeforeGC);
 
-            final List<KeyValue<Long, Long>> dataToTriggerFirstRebalance = new ArrayList<KeyValue<Long, Long>>() {
-                {
-                    add(new KeyValue<>(0L, 15L));
-                    add(new KeyValue<>(0L, 16L));
-                    add(new KeyValue<>(0L, 17L));
-                    add(new KeyValue<>(0L, 18L));
-                    add(new KeyValue<>(0L, 19L));
-                    add(new KeyValue<>(1L, 15L));
-                    add(new KeyValue<>(1L, 16L));
-                    add(new KeyValue<>(1L, 17L));
-                    add(new KeyValue<>(1L, 18L));
-                    add(new KeyValue<>(1L, 19L));
-                }
-            };
+            final List<KeyValue<Long, Long>> dataToTriggerFirstRebalance = prepareData(15L, 20L, 0L, 1L);
 
-            final List<KeyValue<Long, Long>> dataAfterSecondRebalance = new ArrayList<KeyValue<Long, Long>>() {
-                {
-                    add(new KeyValue<>(0L, 20L));
-                    add(new KeyValue<>(0L, 21L));
-                    add(new KeyValue<>(0L, 22L));
-                    add(new KeyValue<>(0L, 23L));
-                    add(new KeyValue<>(0L, 24L));
-                    add(new KeyValue<>(0L, 25L));
-                    add(new KeyValue<>(0L, 26L));
-                    add(new KeyValue<>(0L, 27L));
-                    add(new KeyValue<>(0L, 28L));
-                    add(new KeyValue<>(0L, 29L));
-                    add(new KeyValue<>(1L, 20L));
-                    add(new KeyValue<>(1L, 21L));
-                    add(new KeyValue<>(1L, 22L));
-                    add(new KeyValue<>(1L, 23L));
-                    add(new KeyValue<>(1L, 24L));
-                    add(new KeyValue<>(1L, 25L));
-                    add(new KeyValue<>(1L, 26L));
-                    add(new KeyValue<>(1L, 27L));
-                    add(new KeyValue<>(1L, 28L));
-                    add(new KeyValue<>(1L, 29L));
-                }
-            };
+            final List<KeyValue<Long, Long>> dataAfterSecondRebalance = prepareData(20L, 30L, 0L, 1L);
 
             writeInputData(committedDataBeforeGC);
 
@@ -762,6 +555,18 @@ public class EosIntegrationTest {
         }
     }
 
+    private List<KeyValue<Long, Long>> prepareData(final long fromInclusive, final long toExclusive, final Long... keys) {
+        final List<KeyValue<Long, Long>> data = new ArrayList<>();
+
+        for (final Long k : keys) {
+            for (long v = fromInclusive; v < toExclusive; ++v) {
+                data.add(new KeyValue<>(k, v));
+            }
+        }
+
+        return data;
+    }
+
     private KafkaStreams getKafkaStreams(final boolean withState, final String appDir, final int numberOfStreamsThreads) {
         commitRequested = new AtomicInteger(0);
         errorInjected = new AtomicBoolean(false);
@@ -805,7 +610,7 @@ public class EosIntegrationTest {
                             throw new RuntimeException("Injected test exception.");
                         }
                         if (injectGC.compareAndSet(true, false)) {
-                            while(doGC) {
+                            while (doGC) {
                                 try {
                                     Thread.sleep(100);
                                 } catch (final InterruptedException e) {
