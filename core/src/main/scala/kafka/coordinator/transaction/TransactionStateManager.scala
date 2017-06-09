@@ -227,20 +227,19 @@ class TransactionStateManager(brokerId: Int,
       else {
         transactionMetadataCache.get(partitionId) match {
           case Some(cacheEntry) =>
-            cacheEntry.metadataPerTransactionalId.get(transactionalId) match {
+            Right(cacheEntry.metadataPerTransactionalId.get(transactionalId) match {
               case null =>
-                Right(createdTxnMetadata.map { txnMetadata =>
+                createdTxnMetadata.map { txnMetadata =>
                   val currentTxnMetadata = cacheEntry.metadataPerTransactionalId.putIfNotExists(transactionalId, txnMetadata)
                   if (currentTxnMetadata != null) {
                     CoordinatorEpochAndTxnMetadata(cacheEntry.coordinatorEpoch, currentTxnMetadata)
                   } else {
                     CoordinatorEpochAndTxnMetadata(cacheEntry.coordinatorEpoch, txnMetadata)
                   }
-                })
-
+                }
               case currentTxnMetadata =>
-                Right(Some(CoordinatorEpochAndTxnMetadata(cacheEntry.coordinatorEpoch, currentTxnMetadata)))
-            }
+                Some(CoordinatorEpochAndTxnMetadata(cacheEntry.coordinatorEpoch, currentTxnMetadata))
+            })
 
           case None =>
             Left(Errors.NOT_COORDINATOR)
