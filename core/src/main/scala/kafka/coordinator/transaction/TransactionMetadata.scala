@@ -283,7 +283,7 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
     // if valid, transition is done via overwriting the whole object to ensure synchronization
 
     val toState = pendingState.getOrElse {
-      fatal(s"${this.toString}'s transition to $toState failed since pendingState is not defined: this should not happen")
+      fatal(s"${this.toString}'s transition to $transitMetadata failed since pendingState is not defined: this should not happen")
 
       throw new IllegalStateException(s"TransactionalId $transactionalId " +
         "completing transaction state transition while it does not have a pending state")
