@@ -456,7 +456,6 @@ public class EosIntegrationTest {
             public Transformer<Long, Long, KeyValue<Long, Long>> get() {
                 return new Transformer<Long, Long, KeyValue<Long, Long>>() {
                     ProcessorContext context;
-                    int processedRecords = 0;
                     KeyValueStore<Long, Long> state = null;
 
                     @Override
@@ -475,7 +474,7 @@ public class EosIntegrationTest {
                             throw new RuntimeException("Injected test exception.");
                         }
 
-                        if (++processedRecords % 10 == 0) {
+                        if ((value + 1) % 10 == 0) {
                             context.commit();
                             commitRequested.incrementAndGet();
                         }
