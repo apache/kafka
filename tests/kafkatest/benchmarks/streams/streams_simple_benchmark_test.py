@@ -59,8 +59,8 @@ class StreamsSimpleBenchmarkTest(Test):
             'joinSourceTopic2KStreamKTable' : { 'partitions': scale, 'replication-factor': self.replication },
             'joinSourceTopic1KTableKTable' : { 'partitions': scale, 'replication-factor': self.replication },
             'joinSourceTopic2KTableKTable' : { 'partitions': scale, 'replication-factor': self.replication },
-            'yahooCampaigns' : { 'partitions': scale, 'replication-factor': self.replication },
-            'yahooEvents' : { 'partitions': scale, 'replication-factor': self.replication }
+            'yahooCampaigns' : { 'partitions': 20, 'replication-factor': self.replication },
+            'yahooEvents' : { 'partitions': 20, 'replication-factor': self.replication }
         })
         self.kafka.log_level = "INFO"
         self.kafka.start()
