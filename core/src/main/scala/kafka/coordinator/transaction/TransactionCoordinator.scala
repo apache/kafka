@@ -277,7 +277,7 @@ class TransactionCoordinator(brokerId: Int,
   private def logInvalidStateTransitionAndReturnError(transactionalId: String,
                                                       transactionState: TransactionState,
                                                       transactionResult: TransactionResult) = {
-    info(s"TransactionalId: $transactionalId's state is $transactionState, but received transaction " +
+    debug(s"TransactionalId: $transactionalId's state is $transactionState, but received transaction " +
       s"marker result to send: $transactionResult")
     Left(Errors.INVALID_TXN_STATE)
   }
@@ -390,11 +390,11 @@ class TransactionCoordinator(brokerId: Int,
 
                       }
                     }
-                  } else {
-                    debug(s"The transaction coordinator epoch has changed to ${epochAndMetadata.coordinatorEpoch} after $txnMarkerResult was " +
-                      s"successfully appended to the log for $transactionalId with old epoch $coordinatorEpoch")
-                    Left(Errors.NOT_COORDINATOR)
-                  }
+                    } else {
+                      debug(s"The transaction coordinator epoch has changed to ${epochAndMetadata.coordinatorEpoch} after $txnMarkerResult was " +
+                        s"successfully appended to the log for $transactionalId with old epoch $coordinatorEpoch")
+                      Left(Errors.NOT_COORDINATOR)
+                    }
               }
 
               preSendResult match {
