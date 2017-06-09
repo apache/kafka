@@ -400,7 +400,6 @@ class TransactionCoordinator(brokerId: Int,
               preSendResult match {
                 case Left(err) =>
                   info(s"Aborting sending of transaction markers after appended $txnMarkerResult to transaction log and returning $err error to client for $transactionalId's EndTransaction request")
-
                   responseCallback(err)
 
                 case Right((txnMetadata, newPreSendMetadata)) =>
