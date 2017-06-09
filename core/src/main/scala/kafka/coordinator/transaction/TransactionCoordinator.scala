@@ -277,7 +277,7 @@ class TransactionCoordinator(brokerId: Int,
   private def logInvalidStateTransitionAndReturnError(transactionalId: String,
                                                       transactionState: TransactionState,
                                                       transactionResult: TransactionResult) = {
-    debug(s"TransactionalId: $transactionalId's state is $transactionState, but received transaction " +
+    info(s"TransactionalId: $transactionalId's state is $transactionState, but received transaction " +
       s"marker result to send: $transactionResult")
     Left(Errors.INVALID_TXN_STATE)
   }
@@ -434,7 +434,7 @@ class TransactionCoordinator(brokerId: Int,
         TransactionResult.ABORT,
         (error: Errors) => error match {
           case Errors.NONE =>
-            debug(s"Completed rollback ongoing transaction of transactionalId: ${txnIdAndPidEpoch.transactionalId} due to timeout")
+            info(s"Completed rollback ongoing transaction of transactionalId: ${txnIdAndPidEpoch.transactionalId} due to timeout")
           case Errors.INVALID_PRODUCER_ID_MAPPING |
                Errors.INVALID_PRODUCER_EPOCH |
                Errors.CONCURRENT_TRANSACTIONS =>
