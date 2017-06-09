@@ -206,13 +206,16 @@ class TransactionStateManager(brokerId: Int,
 
   def getTransactionState(transactionalId: String) = getAndMaybeAddTransactionState(transactionalId, None)
 
-  def putTransactionStateIfNotExists(transactionalId: String, txnMetadata: TransactionMetadata) =
+  def putTransactionStateIfNotExists(transactionalId: String,
+                                     txnMetadata: TransactionMetadata): Either[Errors, CoordinatorEpochAndTxnMetadata] =
     getAndMaybeAddTransactionState(transactionalId, Some(txnMetadata))
+      .right.map(_.getOrElse(throw new IllegalStateException("Expected non-empty transaction metadata returned")))
 
   /**
    * Get the transaction metadata associated with the given transactional id, or an error if
    * the coordinator does not own the transaction partition or is still loading it; if not found
    * either return None or create a new metadata and added to the cache
+
    *
    * This function is covered by the state read lock
    */

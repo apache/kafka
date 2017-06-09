@@ -106,12 +106,10 @@ class TransactionCoordinatorTest {
       .once()
 
     EasyMock.expect(transactionManager.putTransactionStateIfNotExists(EasyMock.eq(transactionalId), EasyMock.capture(capturedTxn)))
-      .andAnswer(new IAnswer[Either[Errors, Option[CoordinatorEpochAndTxnMetadata]]] {
-        override def answer(): Either[Errors, Option[CoordinatorEpochAndTxnMetadata]] = {
-          if (capturedTxn.hasCaptured)
-            Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, capturedTxn.getValue)))
-          else
-            Right(None)
+      .andAnswer(new IAnswer[Either[Errors, CoordinatorEpochAndTxnMetadata]] {
+        override def answer(): Either[Errors, CoordinatorEpochAndTxnMetadata] = {
+          assertTrue(capturedTxn.hasCaptured)
+          Right(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, capturedTxn.getValue))
         }
       })
       .once()
@@ -513,7 +511,7 @@ class TransactionCoordinatorTest {
       .andReturn(true)
 
     EasyMock.expect(transactionManager.putTransactionStateIfNotExists(EasyMock.eq(transactionalId), EasyMock.anyObject[TransactionMetadata]()))
-      .andReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata))))
+      .andReturn(Right(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata)))
       .anyTimes()
 
     EasyMock.expect(transactionManager.getTransactionState(EasyMock.eq(transactionalId)))
@@ -552,7 +550,7 @@ class TransactionCoordinatorTest {
       .andReturn(true)
 
     EasyMock.expect(transactionManager.putTransactionStateIfNotExists(EasyMock.eq(transactionalId), EasyMock.anyObject[TransactionMetadata]()))
-      .andReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata))))
+      .andReturn(Right(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata)))
       .anyTimes()
 
     EasyMock.expect(transactionManager.getTransactionState(EasyMock.eq(transactionalId)))

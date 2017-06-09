@@ -111,8 +111,8 @@ class TransactionCoordinator(brokerId: Int,
       // check transactionTimeoutMs is not larger than the broker configured maximum allowed value
       responseCallback(initTransactionError(Errors.INVALID_TRANSACTION_TIMEOUT))
     } else {
-      val coordinatorEpochAndMetadata = txnManager.getTransactionState(transactionalId) match {
-        case Right(None) =>
+      val coordinatorEpochAndMetadata = txnManager.getTransactionState(transactionalId).right.flatMap {
+        case None =>
           val producerId = producerIdManager.generateProducerId()
           val createdMetadata = new TransactionMetadata(transactionalId = transactionalId,
             producerId = producerId,
@@ -123,22 +123,17 @@ class TransactionCoordinator(brokerId: Int,
             txnLastUpdateTimestamp = time.milliseconds())
           txnManager.putTransactionStateIfNotExists(transactionalId, createdMetadata)
 
-        case other => other
+        case Some(epochAndTxnMetadata) => Right(epochAndTxnMetadata)
       }
 
       val result: ApiResult[(Int, TxnTransitMetadata)] = coordinatorEpochAndMetadata.right.flatMap {
-        case Some(existingEpochAndMetadata) =>
+        existingEpochAndMetadata =>
           val coordinatorEpoch = existingEpochAndMetadata.coordinatorEpoch
           val txnMetadata = existingEpochAndMetadata.transactionMetadata
 
           txnMetadata synchronized {
             prepareInitProduceIdTransit(transactionalId, transactionTimeoutMs, coordinatorEpoch, txnMetadata)
           }
-
-        case None =>
-          val errorMsg = "Trying to add metadata to the cache still returns NONE; this is not expected"
-          fatal(errorMsg)
-          throw new IllegalStateException(errorMsg)
       }
 
       result match {
