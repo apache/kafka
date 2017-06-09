@@ -47,6 +47,12 @@ import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 
 
+/**
+ * A basic DSL and data generation that emulates the behavior of the Yahoo Benchmark
+ * https://yahooeng.tumblr.com/post/135321837876/benchmarking-streaming-computation-engines-at
+ * Thanks to Michael Armbrust for providing the initial code for this benchmark in his blog:
+ * https://databricks.com/blog/2017/06/06/simple-super-fast-streaming-engine-apache-spark.html
+ */
 public class YahooBenchmark {
     private final SimpleBenchmark parent;
     private final String campaignsTopic;
@@ -295,34 +301,40 @@ public class YahooBenchmark {
             campaignsTopic, "campaign-state");
 
 
-        KStream<String, ProjectedEvent> filteredEvents = kEvents.peek(new ForeachAction<String, ProjectedEvent>() {
-            @Override
-            public void apply(String key, ProjectedEvent value) {
-                parent.processedRecords.getAndIncrement();
-                if (parent.processedRecords.get() % 1000000 == 0) {
-                    System.out.println("Processed " + parent.processedRecords.get());
+        KStream<String, ProjectedEvent> filteredEvents = kEvents
+            // use peek to quick when last element is processed
+            .peek(new ForeachAction<String, ProjectedEvent>() {
+                @Override
+                public void apply(String key, ProjectedEvent value) {
+                    parent.processedRecords.getAndIncrement();
+                    if (parent.processedRecords.get() % 1000000 == 0) {
+                        System.out.println("Processed " + parent.processedRecords.get());
+                    }
+                    if (parent.processedRecords.get() >= numRecords) {
+                        latch.countDown();
+                    }
                 }
-                if (parent.processedRecords.get() >= numRecords) {
-                    latch.countDown();
+            })
+            // only keep "view" events
+            .filter(new Predicate<String, ProjectedEvent>() {
+                @Override
+                public boolean test(final String key, final ProjectedEvent value) {
+                    return value.eventType.equals("view");
                 }
-            }
-        }).filter(new Predicate<String, ProjectedEvent>() {
-            @Override
-            public boolean test(final String key, final ProjectedEvent value) {
-                return value.eventType.equals("view");
-            }
-        }).mapValues(new ValueMapper<ProjectedEvent, ProjectedEvent>() {
-            @Override
-            public ProjectedEvent apply(ProjectedEvent value) {
-                ProjectedEvent event = new ProjectedEvent();
-                event.adID = value.adID;
-                event.eventTime = value.eventTime;
-                event.eventType = value.eventType;
-                return event;
-            }
-        });
+            })
+            // select just a few of the columns
+            .mapValues(new ValueMapper<ProjectedEvent, ProjectedEvent>() {
+                @Override
+                public ProjectedEvent apply(ProjectedEvent value) {
+                    ProjectedEvent event = new ProjectedEvent();
+                    event.adID = value.adID;
+                    event.eventTime = value.eventTime;
+                    event.eventType = value.eventType;
+                    return event;
+                }
+            });
 
-
+        // deserialize the add ID and campaign ID from the stored value in Kafka
         KTable<String, CampaignAd> deserCampaigns = kCampaigns.mapValues(new ValueMapper<String, CampaignAd>() {
             @Override
             public CampaignAd apply(String value) {
@@ -334,22 +346,28 @@ public class YahooBenchmark {
             }
         });
 
-        KStream<String, String> joined = filteredEvents.join(deserCampaigns, new ValueJoiner<ProjectedEvent, CampaignAd, String>() {
-            @Override
-            public String apply(ProjectedEvent value1, CampaignAd value2) {
-                return value2.campaignID;
-            }
-        }, Serdes.String(), Serdes.serdeFrom(projectedEventSerializer, projectedEventDeserializer));
+        // join the events with the campaigns
+        KStream<String, String> joined = filteredEvents.join(deserCampaigns,
+            new ValueJoiner<ProjectedEvent, CampaignAd, String>() {
+                @Override
+                public String apply(ProjectedEvent value1, CampaignAd value2) {
+                    return value2.campaignID;
+                }
+            }, Serdes.String(), Serdes.serdeFrom(projectedEventSerializer, projectedEventDeserializer));
 
 
-        KStream<String, String> keyedByCampaign = joined.selectKey(new KeyValueMapper<String, String, String>() {
-            @Override
-            public String apply(String key, String value) {
-                return value;
-            }
-        });
+        // key by campaign rather than by ad as original
+        KStream<String, String> keyedByCampaign = joined
+            .selectKey(new KeyValueMapper<String, String, String>() {
+                @Override
+                public String apply(String key, String value) {
+                    return value;
+                }
+            });
 
-        KTable<Windowed<String>, Long> counts = keyedByCampaign.groupByKey(Serdes.String(), Serdes.String())
+        // calculate windowed counts
+        KTable<Windowed<String>, Long> counts = keyedByCampaign
+            .groupByKey(Serdes.String(), Serdes.String())
             .count(TimeWindows.of(10 * 1000), "time-windows");
 
         return new KafkaStreams(builder, streamConfig);
