@@ -30,6 +30,9 @@ class TransactionMarkerRequestCompletionHandler(brokerId: Int,
                                                 txnStateManager: TransactionStateManager,
                                                 txnMarkerChannelManager: TransactionMarkerChannelManager,
                                                 txnIdAndMarkerEntries: java.util.List[TxnIdAndMarkerEntry]) extends RequestCompletionHandler with Logging {
+
+  this.logIdent = "[Transaction Marker Request Completion Handler " + brokerId + "]: "
+
   override def onComplete(response: ClientResponse): Unit = {
     val requestHeader = response.requestHeader
     val correlationId = requestHeader.correlationId

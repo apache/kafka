@@ -65,7 +65,7 @@ class TransactionStateManager(brokerId: Int,
                               config: TransactionConfig,
                               time: Time) extends Logging {
 
-  this.logIdent = "[Transaction Log Manager " + brokerId + "]: "
+  this.logIdent = "[Transaction State Manager " + brokerId + "]: "
 
   type SendTxnMarkersCallback = (String, Int, TransactionResult, TransactionMetadata, TxnTransitMetadata) => Unit
 
@@ -218,7 +218,7 @@ class TransactionStateManager(brokerId: Int,
         return Left(Errors.COORDINATOR_LOAD_IN_PROGRESS)
 
       if (leavingPartitions.exists(_.txnPartitionId == partitionId))
-        Right(Errors.NOT_COORDINATOR)
+        return Left(Errors.NOT_COORDINATOR)
 
       transactionMetadataCache.get(partitionId) match {
         case Some(cacheEntry) =>
@@ -471,8 +471,7 @@ class TransactionStateManager(brokerId: Int,
       var responseError = if (status.error == Errors.NONE) {
         Errors.NONE
       } else {
-        debug(s"Transaction state update $newMetadata for $transactionalId failed when appending to log " +
-          s"due to ${status.error.exceptionName}")
+        debug(s"Appending $transactionalId's new metadata $newMetadata failed due to ${status.error.exceptionName}")
 
         // transform the log append error code to the corresponding coordinator error code
         status.error match {
@@ -480,31 +479,16 @@ class TransactionStateManager(brokerId: Int,
                | Errors.NOT_ENOUGH_REPLICAS
                | Errors.NOT_ENOUGH_REPLICAS_AFTER_APPEND
                | Errors.REQUEST_TIMED_OUT => // note that for timed out request we return NOT_AVAILABLE error code to let client retry
-
-            info(s"Appending transaction message $newMetadata for $transactionalId failed due to " +
-              s"${status.error.exceptionName}, returning ${Errors.COORDINATOR_NOT_AVAILABLE} to the client")
-
             Errors.COORDINATOR_NOT_AVAILABLE
 
           case Errors.NOT_LEADER_FOR_PARTITION =>
-
-            info(s"Appending transaction message $newMetadata for $transactionalId failed due to " +
-              s"${status.error.exceptionName}, returning ${Errors.NOT_COORDINATOR} to the client")
-
             Errors.NOT_COORDINATOR
 
           case Errors.MESSAGE_TOO_LARGE
                | Errors.RECORD_LIST_TOO_LARGE =>
-
-            error(s"Appending transaction message $newMetadata for $transactionalId failed due to " +
-              s"${status.error.exceptionName}, returning UNKNOWN error code to the client")
-
             Errors.UNKNOWN
 
           case other =>
-            error(s"Appending metadata message $newMetadata for $transactionalId failed due to " +
-              s"unexpected error: ${status.error.message}")
-
             other
         }
       }
@@ -515,7 +499,9 @@ class TransactionStateManager(brokerId: Int,
         getTransactionState(transactionalId) match {
 
           case Left(err) =>
-            responseCallback(err)
+            info(s"Accessing the cached transaction metadata for $transactionalId returns $err error; " +
+              s"aborting transition to the new metadata and setting the error in the callback")
+            responseError = err
 
           case Right(Some(epochAndMetadata)) =>
             val metadata = epochAndMetadata.transactionMetadata
@@ -524,8 +510,9 @@ class TransactionStateManager(brokerId: Int,
               if (epochAndMetadata.coordinatorEpoch != coordinatorEpoch) {
                 // the cache may have been changed due to txn topic partition emigration and immigration,
                 // in this case directly return NOT_COORDINATOR to client and let it to re-discover the transaction coordinator
-                info(s"Updating $transactionalId's transaction state to $newMetadata with coordinator epoch $coordinatorEpoch for $transactionalId failed after the transaction message " +
-                  s"has been appended to the log. The cached coordinator epoch has changed to ${epochAndMetadata.coordinatorEpoch}")
+                info(s"The cached coordinator epoch for $transactionalId has changed to ${epochAndMetadata.coordinatorEpoch} after appended its new metadata $newMetadata " +
+                  s"to the transaction log (txn topic partition ${partitionFor(transactionalId)}) while it was $coordinatorEpoch before appending; " +
+                  s"aborting transition to the new metadata and returning ${Errors.NOT_COORDINATOR} in the callback")
                 responseError = Errors.NOT_COORDINATOR
               } else {
                 metadata.completeTransitionTo(newMetadata)
@@ -536,8 +523,9 @@ class TransactionStateManager(brokerId: Int,
           case Right(None) =>
             // this transactional id no longer exists, maybe the corresponding partition has already been migrated out.
             // return NOT_COORDINATOR to let the client re-discover the transaction coordinator
-            info(s"Updating $transactionalId's transaction state (txn topic partition ${partitionFor(transactionalId)}) to $newMetadata with coordinator epoch $coordinatorEpoch for $transactionalId " +
-              s"failed after the transaction message has been appended to the log since the corresponding metadata does not exist in the cache anymore")
+            info(s"The cached coordinator metadata does not exist in the cache anymore for $transactionalId after appended its new metadata $newMetadata " +
+              s"to the transaction log (txn topic partition ${partitionFor(transactionalId)}) while it was $coordinatorEpoch before appending; " +
+              s"aborting transition to the new metadata and returning ${Errors.NOT_COORDINATOR} in the callback")
             responseError = Errors.NOT_COORDINATOR
         }
       } else {
@@ -547,19 +535,20 @@ class TransactionStateManager(brokerId: Int,
             val metadata = epochAndTxnMetadata.transactionMetadata
             metadata synchronized {
               if (epochAndTxnMetadata.coordinatorEpoch == coordinatorEpoch) {
-                debug(s"TransactionalId ${metadata.transactionalId}, resetting pending state since we are returning error $responseError")
+                info(s"TransactionalId ${metadata.transactionalId} resetting pending state from ${metadata.pendingState} after transaction log append failed, " +
+                  s"aborting state transition and returning $responseError in the callback")
                 metadata.pendingState = None
               } else {
                 info(s"TransactionalId ${metadata.transactionalId} coordinator epoch changed from " +
-                  s"${epochAndTxnMetadata.coordinatorEpoch} to $coordinatorEpoch after append to log returned $responseError")
+                  s"${epochAndTxnMetadata.coordinatorEpoch} to $coordinatorEpoch after append to log returned $responseError; aborting state transition and returning the error in the callback")
               }
             }
           case Right(None) =>
             // Do nothing here, since we want to return the original append error to the user.
-            info(s"Found no metadata TransactionalId $transactionalId after append to log returned error $responseError")
+            info(s"Found no metadata TransactionalId $transactionalId after append to log returned error $responseError; aborting state transition and returning the error in the callback")
           case Left(error) =>
             // Do nothing here, since we want to return the original append error to the user.
-            info(s"Retrieving metadata for transactionalId $transactionalId returned $error after append to the log returned error $responseError")
+            info(s"Retrieving metadata for transactionalId $transactionalId returned $error after append to the log returned error $responseError; aborting state transition and returning the error in the callback")
         }
 
       }
@@ -600,8 +589,6 @@ class TransactionStateManager(brokerId: Int,
                 recordsPerPartition,
                 updateCacheCallback,
                 delayedProduceLock = Some(newMetadata))
-
-              trace(s"Appended new metadata $newMetadata for transaction id $transactionalId with coordinator epoch $coordinatorEpoch to the local transaction log")
             }
           }
       }

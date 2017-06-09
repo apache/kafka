@@ -130,6 +130,8 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
                                       txnMarkerPurgatory: DelayedOperationPurgatory[DelayedTxnMarker],
                                       time: Time) extends Logging with KafkaMetricsGroup {
 
+  this.logIdent = "[Transaction Marker Channel Manager " + config.brokerId + "]: "
+
   private val interBrokerListenerName: ListenerName = config.interBrokerListenerName
 
   private val txnMarkerSendThread: InterBrokerSendThread = {
@@ -197,8 +199,8 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
   def retryLogAppends(): Unit = {
     val txnLogAppendRetries: java.util.List[TxnLogAppend] = new util.ArrayList[TxnLogAppend]()
     txnLogAppendRetryQueue.drainTo(txnLogAppendRetries)
-    debug(s"retrying: ${txnLogAppendRetries.size} transaction log appends")
     txnLogAppendRetries.asScala.foreach { txnLogAppend =>
+      debug(s"Retry appending $txnLogAppend transaction log")
       tryAppendToLog(txnLogAppend)
     }
   }
@@ -254,16 +256,16 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
 
             case Left(Errors.COORDINATOR_LOAD_IN_PROGRESS) =>
               info(s"I am loading the transaction partition that contains $transactionalId while my current coordinator epoch is $coordinatorEpoch; " +
-                s"so appending $newMetadata to transaction log since the loading process will continue the left work")
+                s"so cancel appending $newMetadata to transaction log since the loading process will continue the left work")
 
             case Right(Some(epochAndMetadata)) =>
               if (epochAndMetadata.coordinatorEpoch == coordinatorEpoch) {
-                debug(s"Updating $transactionalId's transaction state to $txnMetadata with coordinator epoch $coordinatorEpoch for $transactionalId succeeded")
+                debug(s"Sending $transactionalId's transaction markers for $txnMetadata with coordinator epoch $coordinatorEpoch for $transactionalId succeeded, trying to append complete transaction log now")
 
                 tryAppendToLog(TxnLogAppend(transactionalId, coordinatorEpoch, txnMetadata, newMetadata))
               } else {
-                info(s"Updating $transactionalId's transaction state to $txnMetadata with coordinator epoch $coordinatorEpoch for $transactionalId failed after the transaction markers " +
-                  s"has been sent to brokers. The cached metadata have been changed to $epochAndMetadata since preparing to send markers")
+                info(s"The cached metadata for $transactionalId have been changed to $epochAndMetadata after completed sending the markers while its old epoch " +
+                  s"was $coordinatorEpoch when preparing to send markers; abort transiting the state to $txnMetadata as it may have been updated by another process")
               }
 
             case Right(None) =>
@@ -287,15 +289,65 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
     def appendCallback(error: Errors): Unit =
       error match {
         case Errors.NONE =>
-          trace(s"Completed transaction for ${txnLogAppend.transactionalId} with coordinator epoch ${txnLogAppend.coordinatorEpoch}, final state: state after commit: ${txnLogAppend.txnMetadata.state}")
+          trace(s"Completed transaction for ${txnLogAppend.transactionalId} with coordinator epoch ${txnLogAppend.coordinatorEpoch}, final state after commit: ${txnLogAppend.txnMetadata.state}")
 
         case Errors.NOT_COORDINATOR =>
           info(s"No longer the coordinator for transactionalId: ${txnLogAppend.transactionalId} while trying to append to transaction log, skip writing to transaction log")
 
         case Errors.COORDINATOR_NOT_AVAILABLE =>
-          warn(s"Failed updating transaction state for ${txnLogAppend.transactionalId} when appending to transaction log due to ${error.exceptionName}. retrying")
-          // enqueue for retry
-          txnLogAppendRetryQueue.add(txnLogAppend)
+          info(s"I am currently not available to append $txnLogAppend: possible causes include ${Errors.UNKNOWN_TOPIC_OR_PARTITION}, ${Errors.NOT_ENOUGH_REPLICAS}, ${Errors.NOT_ENOUGH_REPLICAS_AFTER_APPEND} and ${Errors.REQUEST_TIMED_OUT}")
+
+          val transactionalId = txnLogAppend.transactionalId
+          val coordinatorEpoch = txnLogAppend.coordinatorEpoch
+
+          txnStateManager.getTransactionState(transactionalId) match {
+            case Left(Errors.NOT_COORDINATOR) =>
+              info(s"I am no longer the coordinator for $transactionalId with coordinator epoch $coordinatorEpoch; cancel appending $txnLogAppend to transaction log")
+
+            case Left(Errors.COORDINATOR_LOAD_IN_PROGRESS) =>
+              info(s"I am loading the transaction partition that contains $transactionalId while my current coordinator epoch is $coordinatorEpoch; " +
+                s"so cancel appending $txnLogAppend to transaction log since the loading process will continue the left work")
+
+            case Right(Some(epochAndMetadata)) =>
+              if (epochAndMetadata.coordinatorEpoch == coordinatorEpoch) {
+
+                val txnMetadata = epochAndMetadata.transactionMetadata
+
+                txnMetadata synchronized {
+                  if (txnMetadata.pendingTransitionInProgress)
+                    info(s"TransactionId $transactionalId's ongoing transaction has been transiting to another state $txnMetadata; abort appending $txnLogAppend as it may have been done by another process")
+                  else txnMetadata.state match {
+                    case Empty | Ongoing | CompleteCommit | CompleteAbort =>
+                      info(s"TransactionId $transactionalId's ongoing transaction has been changed to a different state $txnMetadata; abort appending $txnLogAppend as it may have been done by another process")
+                    case PrepareCommit =>
+                      if (txnLogAppend.newMetadata.txnState != CompleteCommit)
+                        info(s"TransactionId $transactionalId's ongoing transaction has been changed to a different state $txnMetadata; abort appending $txnLogAppend as it may have been done by another process")
+                      else
+                        debug(s"I am still the coordinator for $transactionalId with correct epoch $coordinatorEpoch; retry appending $txnLogAppend")
+                        txnMetadata.prepareComplete(time.milliseconds())
+                        // enqueue for retry
+                        txnLogAppendRetryQueue.add(txnLogAppend)
+                    case PrepareAbort =>
+                      if (txnLogAppend.newMetadata.txnState != CompleteAbort)
+                        info(s"TransactionId $transactionalId's ongoing transaction has been changed to a different state $txnMetadata; abort appending $txnLogAppend as it may have been done by another process")
+                      else
+                        debug(s"I am still the coordinator for $transactionalId with correct epoch $coordinatorEpoch; retry appending $txnLogAppend")
+                      txnMetadata.prepareComplete(time.milliseconds())
+                        // enqueue for retry
+                        txnLogAppendRetryQueue.add(txnLogAppend)
+                    case Dead =>
+                      throw new IllegalStateException(s"Found transactionalId $transactionalId with state ${txnMetadata.state}. " +
+                        s"This is illegal as we should never have transitioned to this state.")
+                  }
+                }
+              } else {
+                info(s"The cached metadata for $transactionalId have been changed to $epochAndMetadata; abort appending $txnLogAppend as it may have been done by another process")
+              }
+
+            case Right(None) =>
+              throw new IllegalStateException(s"The coordinator still owns the transaction partition for $transactionalId, but there is " +
+                s"no metadata in the cache; this is not expected")
+          }
 
         case errors: Errors =>
           throw new IllegalStateException(s"Unexpected error ${errors.exceptionName} while appending to transaction log for ${txnLogAppend.transactionalId}")
