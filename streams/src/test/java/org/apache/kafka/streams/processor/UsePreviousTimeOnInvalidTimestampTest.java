@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.junit.Test;
 
 import static org.hamcrest.CoreMatchers.is;
@@ -42,4 +43,12 @@ public class UsePreviousTimeOnInvalidTimestampTest extends TimestampExtractorTes
         assertThat(timestamp, is(previousTime));
     }
 
+    @Test(expected = StreamsException.class)
+    public void shouldThrowStreamsException() {
+        final TimestampExtractor extractor = new UsePreviousTimeOnInvalidTimestamp();
+        final long timestamp = extractor.extract(
+                new ConsumerRecord<>("anyTopic", 0, 0, null, null),
+                -1
+        );
+    }
 }
