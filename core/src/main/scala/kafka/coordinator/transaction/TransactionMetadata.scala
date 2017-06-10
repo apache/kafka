@@ -285,7 +285,7 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
     val toState = pendingState.getOrElse(throw new IllegalStateException(s"TransactionalId $transactionalId " +
       "completing transaction state transition while it does not have a pending state"))
 
-    if (toState != transitMetadata.txnState || txnLastUpdateTimestamp > transitMetadata.txnLastUpdateTimestamp) {
+    if (toState != transitMetadata.txnState) {
       throwStateTransitionFailure(toState)
     } else {
       toState match {
