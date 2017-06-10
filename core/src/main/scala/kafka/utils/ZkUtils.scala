@@ -615,14 +615,7 @@ class ZkUtils(val zkClient: ZkClient,
   }
 
   def deletePath(path: String): Boolean = {
-    try {
-      zkClient.delete(path)
-    } catch {
-      case _: ZkNoNodeException =>
-        // this can happen during a connection loss event, return normally
-        info(path + " deleted during connection loss; this is ok")
-        false
-    }
+    zkClient.delete(path)
   }
 
   /**
@@ -639,13 +632,7 @@ class ZkUtils(val zkClient: ZkClient,
   }
 
   def deletePathRecursive(path: String) {
-    try {
-      zkClient.deleteRecursive(path)
-    } catch {
-      case _: ZkNoNodeException =>
-        // this can happen during a connection loss event, return normally
-        info(path + " deleted during connection loss; this is ok")
-    }
+    zkClient.deleteRecursive(path)
   }
 
   def readData(path: String): (String, Stat) = {

@@ -47,9 +47,8 @@ class TransactionalMessageCopier(KafkaPathResolverMixin, BackgroundThreadService
 
     def __init__(self, context, num_nodes, kafka, transactional_id, consumer_group,
                  input_topic, input_partition, output_topic, max_messages = -1,
-                 transaction_size = 1000, log_level="INFO"):
+                 transaction_size = 1000):
         super(TransactionalMessageCopier, self).__init__(context, num_nodes)
-        self.log_level = log_level
         self.kafka = kafka
         self.transactional_id = transactional_id
         self.consumer_group = consumer_group
@@ -62,6 +61,9 @@ class TransactionalMessageCopier(KafkaPathResolverMixin, BackgroundThreadService
         self.consumed = -1
         self.remaining = -1
         self.stop_timeout_sec = 60
+        self.loggers = {
+            "org.apache.kafka.clients.producer.internals": "TRACE"
+        }
 
     def _worker(self, idx, node):
         node.account.ssh("mkdir -p %s" % TransactionalMessageCopier.PERSISTENT_ROOT,
