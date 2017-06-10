@@ -169,7 +169,7 @@ class TransactionCoordinator(brokerId: Int,
                   s"${Topic.TRANSACTION_STATE_TOPIC_NAME}-${txnManager.partitionFor(transactionalId)}")
                 responseCallback(initTransactionMetadata(newMetadata))
               } else {
-                info(s"Returning $error error code to client for $transactionalId's init pid request")
+                info(s"Returning $error error code to client for $transactionalId's InitProducerId request")
                 responseCallback(initTransactionError(error))
               }
             }
@@ -224,7 +224,7 @@ class TransactionCoordinator(brokerId: Int,
                                        partitions: collection.Set[TopicPartition],
                                        responseCallback: AddPartitionsCallback): Unit = {
     if (transactionalId == null || transactionalId.isEmpty) {
-      info(s"Returning ${Errors.INVALID_REQUEST} error code to client for $transactionalId's add partitions request")
+      debug(s"Returning ${Errors.INVALID_REQUEST} error code to client for $transactionalId's AddPartitions request")
       responseCallback(Errors.INVALID_REQUEST)
     } else {
       // try to update the transaction metadata and append the updated metadata to txn log;
@@ -262,7 +262,7 @@ class TransactionCoordinator(brokerId: Int,
 
       result match {
         case Left(err) =>
-          info(s"Returning $err error code to client for $transactionalId's add partitions request")
+          info(s"Returning $err error code to client for $transactionalId's AddPartitions request")
           responseCallback(err)
 
         case Right((coordinatorEpoch, newMetadata)) =>
@@ -353,7 +353,7 @@ class TransactionCoordinator(brokerId: Int,
 
       preAppendResult match {
         case Left(err) =>
-          info(s"Aborting to append $txnMarkerResult transaction log with coordinator and returning $err error to client for $transactionalId's end transaction request")
+          info(s"Aborting append of $txnMarkerResult to transaction log with coordinator and returning $err error to client for $transactionalId's EndTransaction request")
           responseCallback(err)
 
         case Right((coordinatorEpoch, newMetadata)) =>
@@ -393,8 +393,8 @@ class TransactionCoordinator(brokerId: Int,
                       }
                     }
                   } else {
-                    debug(s"The transaction coordinator epoch has been changed to ${epochAndMetadata.coordinatorEpoch} after $txnMarkerResult has " +
-                      s"been successfully appended to the log for $transactionalId with old epoch $coordinatorEpoch")
+                    debug(s"The transaction coordinator epoch has changed to ${epochAndMetadata.coordinatorEpoch} after $txnMarkerResult was " +
+                      s"successfully appended to the log for $transactionalId with old epoch $coordinatorEpoch")
 
                     Left(Errors.NOT_COORDINATOR)
                   }
@@ -406,7 +406,7 @@ class TransactionCoordinator(brokerId: Int,
 
               preSendResult match {
                 case Left(err) =>
-                  info(s"Aborting to sending transaction markers after appended $txnMarkerResult to transaction log and returning $err error to client for $transactionalId's end transaction request")
+                  info(s"Aborting sending of transaction markers after appended $txnMarkerResult to transaction log and returning $err error to client for $transactionalId's EndTransaction request")
 
                   responseCallback(err)
 
@@ -418,7 +418,7 @@ class TransactionCoordinator(brokerId: Int,
                   txnMarkerChannelManager.addTxnMarkersToSend(transactionalId, coordinatorEpoch, txnMarkerResult, txnMetadata, newPreSendMetadata)
               }
             } else {
-              info(s"Aborting to sending transaction markers and returning $error error to client for $transactionalId's end transaction request of $txnMarkerResult, " +
+              info(s"Aborting sending of transaction markers and returning $error error to client for $transactionalId's EndTransaction request of $txnMarkerResult, " +
                 s"since appending $newMetadata to transaction log with coordinator epoch $coordinatorEpoch failed")
 
               responseCallback(error)

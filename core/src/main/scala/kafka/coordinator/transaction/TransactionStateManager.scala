@@ -589,6 +589,8 @@ class TransactionStateManager(brokerId: Int,
                 recordsPerPartition,
                 updateCacheCallback,
                 delayedProduceLock = Some(newMetadata))
+
+              trace(s"Appending new metadata $newMetadata for transaction id $transactionalId with coordinator epoch $coordinatorEpoch to the local transaction log")
             }
           }
       }

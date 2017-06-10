@@ -256,16 +256,16 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
 
             case Left(Errors.COORDINATOR_LOAD_IN_PROGRESS) =>
               info(s"I am loading the transaction partition that contains $transactionalId while my current coordinator epoch is $coordinatorEpoch; " +
-                s"so cancel appending $newMetadata to transaction log since the loading process will continue the left work")
+                s"so cancel appending $newMetadata to transaction log since the loading process will continue the remaining work")
 
             case Right(Some(epochAndMetadata)) =>
               if (epochAndMetadata.coordinatorEpoch == coordinatorEpoch) {
-                debug(s"Sending $transactionalId's transaction markers for $txnMetadata with coordinator epoch $coordinatorEpoch for $transactionalId succeeded, trying to append complete transaction log now")
+                debug(s"Sending $transactionalId's transaction markers for $txnMetadata with coordinator epoch $coordinatorEpoch succeeded, trying to append complete transaction log now")
 
                 tryAppendToLog(TxnLogAppend(transactionalId, coordinatorEpoch, txnMetadata, newMetadata))
               } else {
-                info(s"The cached metadata for $transactionalId have been changed to $epochAndMetadata after completed sending the markers while its old epoch " +
-                  s"was $coordinatorEpoch when preparing to send markers; abort transiting the state to $txnMetadata as it may have been updated by another process")
+                info(s"The cached metadata $txnMetadata has changed to $epochAndMetadata after completed sending the markers with coordinator " +
+                  s"epoch $coordinatorEpoch; abort transiting the metadata to $newMetadata as it may have been updated by another process")
               }
 
             case Right(None) =>
@@ -295,17 +295,17 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
           info(s"No longer the coordinator for transactionalId: ${txnLogAppend.transactionalId} while trying to append to transaction log, skip writing to transaction log")
 
         case Errors.COORDINATOR_NOT_AVAILABLE =>
-          info(s"I am currently not available to append $txnLogAppend: possible causes include ${Errors.UNKNOWN_TOPIC_OR_PARTITION}, ${Errors.NOT_ENOUGH_REPLICAS}, ${Errors.NOT_ENOUGH_REPLICAS_AFTER_APPEND} and ${Errors.REQUEST_TIMED_OUT}")
+          info(s"Not available to append $txnLogAppend: possible causes include ${Errors.UNKNOWN_TOPIC_OR_PARTITION}, ${Errors.NOT_ENOUGH_REPLICAS}, ${Errors.NOT_ENOUGH_REPLICAS_AFTER_APPEND} and ${Errors.REQUEST_TIMED_OUT}")
 
           val transactionalId = txnLogAppend.transactionalId
           val coordinatorEpoch = txnLogAppend.coordinatorEpoch
 
           txnStateManager.getTransactionState(transactionalId) match {
             case Left(Errors.NOT_COORDINATOR) =>
-              info(s"I am no longer the coordinator for $transactionalId with coordinator epoch $coordinatorEpoch; cancel appending $txnLogAppend to transaction log")
+              info(s"No longer the coordinator for $transactionalId with coordinator epoch $coordinatorEpoch; cancel appending $txnLogAppend to transaction log")
 
             case Left(Errors.COORDINATOR_LOAD_IN_PROGRESS) =>
-              info(s"I am loading the transaction partition that contains $transactionalId while my current coordinator epoch is $coordinatorEpoch; " +
+              info(s"Currently loading the transaction partition that contains $transactionalId with coordinator epoch $coordinatorEpoch; " +
                 s"so cancel appending $txnLogAppend to transaction log since the loading process will continue the left work")
 
             case Right(Some(epochAndMetadata)) =>
@@ -440,4 +440,13 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
 
 case class TxnIdAndMarkerEntry(txnId: String, txnMarkerEntry: TxnMarkerEntry)
 
-case class TxnLogAppend(transactionalId: String, coordinatorEpoch: Int, txnMetadata: TransactionMetadata, newMetadata: TxnTransitMetadata)
+case class TxnLogAppend(transactionalId: String, coordinatorEpoch: Int, txnMetadata: TransactionMetadata, newMetadata: TxnTransitMetadata) {
+
+  override def toString: String = {
+    "TxnLogAppend(" +
+      s"transactionalId=$transactionalId, " +
+      s"coordinatorEpoch=$coordinatorEpoch, " +
+      s"txnMetadata=$txnMetadata, " +
+      s"newMetadata=$newMetadata)"
+  }
+}
