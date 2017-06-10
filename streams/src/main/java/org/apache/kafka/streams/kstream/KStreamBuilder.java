@@ -795,7 +795,7 @@ public class KStreamBuilder extends TopologyBuilder {
     }
 
     /**
-     * @deprecated As of v0.11.1.0 please use {@link KStreamBuilder#globalTable(Serde, Serde, String, TypedStateStoreSupplier)}
+     * @deprecated Please use {@link KStreamBuilder#globalTable(Serde, Serde, String, TypedStateStoreSupplier)}
      */
     @Deprecated
     public <K, V> GlobalKTable<K, V> globalTable(final Serde<K> keySerde,
