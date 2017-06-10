@@ -289,7 +289,7 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
         "completing transaction state transition while it does not have a pending state")
     }
 
-    if (toState != transitMetadata.txnState || txnLastUpdateTimestamp > transitMetadata.txnLastUpdateTimestamp) {
+    if (toState != transitMetadata.txnState) {
       throwStateTransitionFailure(transitMetadata)
     } else {
       toState match {
@@ -373,7 +373,7 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
 
   def pendingTransitionInProgress: Boolean = pendingState.isDefined
 
-  override def toString = {
+  override def toString: String = {
     "TransactionMetadata(" +
       s"transactionalId=$transactionalId, " +
       s"producerId=$producerId, " +
