@@ -204,7 +204,8 @@ class TransactionStateManager(brokerId: Int,
     }, delay = config.removeExpiredTransactionalIdsIntervalMs, period = config.removeExpiredTransactionalIdsIntervalMs)
   }
 
-  def getTransactionState(transactionalId: String) = getAndMaybeAddTransactionState(transactionalId, None)
+  def getTransactionState(transactionalId: String): Either[Errors, Option[CoordinatorEpochAndTxnMetadata]] =
+    getAndMaybeAddTransactionState(transactionalId, None)
 
   def putTransactionStateIfNotExists(transactionalId: String,
                                      txnMetadata: TransactionMetadata): Either[Errors, CoordinatorEpochAndTxnMetadata] =
@@ -229,19 +230,16 @@ class TransactionStateManager(brokerId: Int,
       else {
         transactionMetadataCache.get(partitionId) match {
           case Some(cacheEntry) =>
-            Right(cacheEntry.metadataPerTransactionalId.get(transactionalId) match {
-              case null =>
-                createdTxnMetadata.map { txnMetadata =>
-                  val currentTxnMetadata = cacheEntry.metadataPerTransactionalId.putIfNotExists(transactionalId, txnMetadata)
-                  if (currentTxnMetadata != null) {
-                    CoordinatorEpochAndTxnMetadata(cacheEntry.coordinatorEpoch, currentTxnMetadata)
-                  } else {
-                    CoordinatorEpochAndTxnMetadata(cacheEntry.coordinatorEpoch, txnMetadata)
-                  }
-                }
-              case currentTxnMetadata =>
-                Some(CoordinatorEpochAndTxnMetadata(cacheEntry.coordinatorEpoch, currentTxnMetadata))
-            })
+            val txnMetadata = Option(cacheEntry.metadataPerTransactionalId.get(transactionalId)).orElse {
+              createdTxnMetadata.map { txnMetadata =>
+                val currentTxnMetadata = cacheEntry.metadataPerTransactionalId.putIfNotExists(transactionalId, txnMetadata)
+                if (currentTxnMetadata != null)
+                  currentTxnMetadata
+                else
+                  txnMetadata
+              }
+            }
+            Right(txnMetadata.map(CoordinatorEpochAndTxnMetadata(cacheEntry.coordinatorEpoch, _)))
 
           case None =>
             Left(Errors.NOT_COORDINATOR)
