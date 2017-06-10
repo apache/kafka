@@ -48,9 +48,10 @@ public interface Processor<K, V> {
     void process(K key, V value);
 
     /**
-     * @deprecated As of 0.11.1.0 please use {@link Punctuator} functional interface instead.
      * Perform any periodic operations, if this processor {@link ProcessorContext#schedule(long) schedule itself} with the context
      * during {@link #init(ProcessorContext) initialization}.
+     *
+     * @deprecated Please use {@link Punctuator} functional interface instead.
      * 
      * @param timestamp the stream time when this method is being called
      */

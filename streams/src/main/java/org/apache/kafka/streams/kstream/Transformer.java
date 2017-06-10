@@ -29,7 +29,7 @@ import org.apache.kafka.streams.processor.TimestampExtractor;
  * This is a stateful record-by-record operation, i.e, {@link #transform(Object, Object)} is invoked individually for
  * each record of a stream and can access and modify a state that is available beyond a single call of
  * {@link #transform(Object, Object)} (cf. {@link KeyValueMapper} for stateless record transformation).
- * Additionally, this Transformer can {@link ProcessorContext#schedule(long, PunctuationType, Punctuator) schedule}
+ * Additionally, this {@code Transformer} can {@link ProcessorContext#schedule(long, PunctuationType, Punctuator) schedule}
  * a method to be {@link Punctuator#punctuate(long) called periodically} with the provided context.
  * <p>
  * Use {@link TransformerSupplier} to provide new instances of {@code Transformer} to Kafka Stream's runtime.
@@ -82,7 +82,6 @@ public interface Transformer<K, V, R> {
     R transform(final K key, final V value);
 
     /**
-     * @deprecated As of 0.11.1.0 please use {@link Punctuator} functional interface instead.
      * Perform any periodic operations and possibly generate new {@link KeyValue} pairs if this processor
      * {@link ProcessorContext#schedule(long) schedules itself} with the context during
      * {@link #init(ProcessorContext) initialization}.
@@ -94,6 +93,8 @@ public interface Transformer<K, V, R> {
      * Note that {@code punctuate} is called based on <it>stream time</it> (i.e., time progresses with regard to
      * timestamps return by the used {@link TimestampExtractor})
      * and not based on wall-clock time.
+     *
+     * @deprecated Please use {@link Punctuator} functional interface instead.
      *
      * @param timestamp the stream time when {@code punctuate} is being called
      * @return new {@link KeyValue} pair to be forwarded to down stream&mdash;if {@code null} will not be forwarded

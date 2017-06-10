@@ -29,7 +29,7 @@ import org.apache.kafka.streams.processor.TimestampExtractor;
  * This is a stateful record-by-record operation, i.e, {@link #transform(Object)} is invoked individually for each
  * record of a stream and can access and modify a state that is available beyond a single call of
  * {@link #transform(Object)} (cf. {@link ValueMapper} for stateless value transformation).
- * Additionally, this ValueTransformer can {@link ProcessorContext#schedule(long, PunctuationType, Punctuator) schedule}
+ * Additionally, this {@code ValueTransformer} can {@link ProcessorContext#schedule(long, PunctuationType, Punctuator) schedule}
  * a method to be {@link Punctuator#punctuate(long) called periodically} with the provided context.
  * If {@code ValueTransformer} is applied to a {@link KeyValue} pair record the record's key is preserved.
  * <p>
@@ -82,7 +82,6 @@ public interface ValueTransformer<V, VR> {
     VR transform(final V value);
 
     /**
-     * @deprecated As of 0.11.1.0 please use {@link Punctuator} functional interface instead.
      * Perform any periodic operations if this processor {@link ProcessorContext#schedule(long) schedule itself} with
      * the context during {@link #init(ProcessorContext) initialization}.
      * <p>
@@ -95,6 +94,8 @@ public interface ValueTransformer<V, VR> {
      * Note, that {@code punctuate} is called base on <it>stream time</it> (i.e., time progress with regard to
      * timestamps return by the used {@link TimestampExtractor})
      * and not based on wall-clock time.
+     *
+     * @deprecated Please use {@link Punctuator} functional interface instead.
      *
      * @param timestamp the stream time when {@code punctuate} is being called
      * @return must return {@code null}&mdash;otherwise, an {@link StreamsException exception} will be thrown

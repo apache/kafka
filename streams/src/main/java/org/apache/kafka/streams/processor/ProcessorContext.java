@@ -88,9 +88,9 @@ public interface ProcessorContext {
 
     /**
      * Schedules a periodic operation for processors. A processor may call this method during
-     * {@link Processor#init(ProcessorContext) initialization} or processing
-     * {@link Processor#process(Object, Object)} to
-     * schedule a periodic call called a punctuation to {@link Punctuator#punctuate(long)}.
+     * {@link Processor#init(ProcessorContext) initialization} or
+     * {@link Processor#process(Object, Object) processing} to
+     * schedule a periodic callback - called a punctuation - to {@link Punctuator#punctuate(long)}.
      * The type parameter controls what notion of time is used for punctuation:
      * <ul>
      *   <li>{@link PunctuationType#STREAM_TIME} - uses "stream time", which is advanced by the processing of messages
@@ -109,10 +109,11 @@ public interface ProcessorContext {
     Cancellable schedule(long interval, PunctuationType type, Punctuator callback);
 
     /**
-     * @deprecated As of 0.11.1.0 please use {@link #schedule(long, PunctuationType, Punctuator)} instead.
      * Schedules a periodic operation for processors. A processor may call this method during
      * {@link Processor#init(ProcessorContext) initialization} to
-     * schedule a periodic call called a punctuation to {@link Processor#punctuate(long)}.
+     * schedule a periodic call - called a punctuation - to {@link Processor#punctuate(long)}.
+     *
+     * @deprecated Please use {@link #schedule(long, PunctuationType, Punctuator)} instead.
      *
      * @param interval the time interval between punctuations
      */
