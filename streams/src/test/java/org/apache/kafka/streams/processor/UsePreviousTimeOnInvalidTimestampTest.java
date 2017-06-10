@@ -22,6 +22,7 @@ import org.junit.Test;
 
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.Assert.fail;
 
 public class UsePreviousTimeOnInvalidTimestampTest extends TimestampExtractorTest {
 
@@ -43,12 +44,13 @@ public class UsePreviousTimeOnInvalidTimestampTest extends TimestampExtractorTes
         assertThat(timestamp, is(previousTime));
     }
 
-    @Test(expected = StreamsException.class)
+    @Test
     public void shouldThrowStreamsException() {
         final TimestampExtractor extractor = new UsePreviousTimeOnInvalidTimestamp();
-        final long timestamp = extractor.extract(
-                new ConsumerRecord<>("anyTopic", 0, 0, null, null),
-                -1
-        );
+        final ConsumerRecord record = new ConsumerRecord<>("anyTopic", 0, 0, null, null);
+        try {
+            extractor.extract(record, -1);
+            fail("should have thrown StreamsException");
+        } catch (final StreamsException expected) { }
     }
 }
