@@ -87,6 +87,16 @@ class TransactionStateManager(brokerId: Int,
   /** number of partitions for the transaction log topic */
   private val transactionTopicPartitionCount = getTransactionTopicPartitionCount
 
+  // visible for testing only
+  private[transaction] def addLoadingPartition(partitionId: Int, coordinatorEpoch: Int): Unit = {
+    val partitionAndLeaderEpoch = TransactionPartitionAndLeaderEpoch(partitionId, coordinatorEpoch)
+
+    inWriteLock(stateLock) {
+      leavingPartitions.remove(partitionAndLeaderEpoch)
+      loadingPartitions.add(partitionAndLeaderEpoch)
+    }
+  }
+
   // this is best-effort expiration of an ongoing transaction which has been open for more than its
   // txn timeout value, we do not need to grab the lock on the metadata object upon checking its state
   // since the timestamp is volatile and we will get the lock when actually trying to transit the transaction
@@ -113,8 +123,6 @@ class TransactionStateManager(brokerId: Int,
       }
     }
   }
-
-
 
   def enableTransactionalIdExpiration() {
     scheduler.schedule("transactionalId-expiration", () => {

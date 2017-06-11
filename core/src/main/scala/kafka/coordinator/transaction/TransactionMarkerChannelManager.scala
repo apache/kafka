@@ -301,6 +301,10 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
           // enqueue for retry
           txnLogAppendRetryQueue.add(txnLogAppend)
 
+        case Errors.COORDINATOR_LOAD_IN_PROGRESS =>
+          info(s"Coordinator is loading the partition ${txnStateManager.partitionFor(txnLogAppend.transactionalId)} and hence cannot complete append of $txnLogAppend; " +
+            s"skip writing to transaction log as the loading process should complete it")
+
         case other: Errors =>
           throw new IllegalStateException(s"Unexpected error ${other.exceptionName} while appending to transaction log for ${txnLogAppend.transactionalId}")
       }
