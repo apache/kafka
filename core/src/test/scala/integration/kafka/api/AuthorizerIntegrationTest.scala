@@ -926,10 +926,10 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     try {
       // the second time, the call to send itself should fail (the producer becomes unusable
       // if no producerId can be obtained)
-      producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, "hi".getBytes))
+      producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, "hi".getBytes)).get()
       fail("Should have raised ClusterAuthorizationException")
     } catch {
-      case e: KafkaException =>
+      case e: ExecutionException =>
         assertTrue(e.getCause.isInstanceOf[ClusterAuthorizationException])
     }
   }
@@ -959,10 +959,10 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     try {
       // the second time, the call to send itself should fail (the producer becomes unusable
       // if no producerId can be obtained)
-      producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, "hi".getBytes))
+      producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, "hi".getBytes)).get()
       fail("Should have raised ClusterAuthorizationException")
     } catch {
-      case e: KafkaException =>
+      case e: ExecutionException =>
         assertTrue(e.getCause.isInstanceOf[ClusterAuthorizationException])
     }
   }
@@ -1061,7 +1061,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     try {
       producer.send(new ProducerRecord(deleteTopic, 0, "1".getBytes, "1".getBytes)).get
     } catch {
-      case e : ExecutionException =>
+      case e: ExecutionException =>
         assertTrue(e.getCause.isInstanceOf[TopicAuthorizationException])
     }
     // now rollback
