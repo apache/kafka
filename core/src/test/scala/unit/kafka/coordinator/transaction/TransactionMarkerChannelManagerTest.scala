@@ -282,7 +282,8 @@ class TransactionMarkerChannelManagerTest {
       EasyMock.eq(transactionalId2),
       EasyMock.eq(coordinatorEpoch),
       EasyMock.eq(txnTransitionMetadata2),
-      EasyMock.capture(capturedErrorsCallback)))
+      EasyMock.capture(capturedErrorsCallback),
+      EasyMock.anyObject()))
       .andAnswer(new IAnswer[Unit] {
         override def answer(): Unit = {
           txnMetadata2.completeTransitionTo(txnTransitionMetadata2)
@@ -329,7 +330,8 @@ class TransactionMarkerChannelManagerTest {
       EasyMock.eq(transactionalId2),
       EasyMock.eq(coordinatorEpoch),
       EasyMock.eq(txnTransitionMetadata2),
-      EasyMock.capture(capturedErrorsCallback)))
+      EasyMock.capture(capturedErrorsCallback),
+      EasyMock.anyObject()))
       .andAnswer(new IAnswer[Unit] {
         override def answer(): Unit = {
           txnMetadata2.pendingState = None
@@ -376,10 +378,10 @@ class TransactionMarkerChannelManagerTest {
       EasyMock.eq(transactionalId2),
       EasyMock.eq(coordinatorEpoch),
       EasyMock.eq(txnTransitionMetadata2),
-      EasyMock.capture(capturedErrorsCallback)))
+      EasyMock.capture(capturedErrorsCallback),
+      EasyMock.anyObject()))
       .andAnswer(new IAnswer[Unit] {
         override def answer(): Unit = {
-          txnMetadata2.pendingState = None
           capturedErrorsCallback.getValue.apply(Errors.COORDINATOR_NOT_AVAILABLE)
         }
       })

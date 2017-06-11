@@ -120,7 +120,8 @@ class TransactionCoordinatorTest {
       EasyMock.eq(transactionalId),
       EasyMock.eq(coordinatorEpoch),
       EasyMock.anyObject().asInstanceOf[TxnTransitMetadata],
-      EasyMock.capture(capturedErrorsCallback)))
+      EasyMock.capture(capturedErrorsCallback),
+      EasyMock.anyObject()))
       .andAnswer(new IAnswer[Unit] {
         override def answer(): Unit = {
           capturedErrorsCallback.getValue.apply(Errors.NONE)
@@ -147,7 +148,8 @@ class TransactionCoordinatorTest {
       EasyMock.eq(transactionalId),
       EasyMock.eq(coordinatorEpoch),
       EasyMock.anyObject().asInstanceOf[TxnTransitMetadata],
-      EasyMock.capture(capturedErrorsCallback)
+      EasyMock.capture(capturedErrorsCallback),
+      EasyMock.anyObject()
     )).andAnswer(new IAnswer[Unit] {
       override def answer(): Unit = {
         capturedErrorsCallback.getValue.apply(Errors.NONE)
@@ -293,7 +295,8 @@ class TransactionCoordinatorTest {
       EasyMock.eq(transactionalId),
       EasyMock.eq(coordinatorEpoch),
       EasyMock.anyObject().asInstanceOf[TxnTransitMetadata],
-      EasyMock.capture(capturedErrorsCallback)
+      EasyMock.capture(capturedErrorsCallback),
+      EasyMock.anyObject()
     ))
 
     EasyMock.replay(transactionManager)
@@ -523,7 +526,8 @@ class TransactionCoordinatorTest {
       EasyMock.eq(transactionalId),
       EasyMock.eq(coordinatorEpoch),
       EasyMock.eq(originalMetadata.prepareAbortOrCommit(PrepareAbort, time.milliseconds())),
-      EasyMock.capture(capturedErrorsCallback)))
+      EasyMock.capture(capturedErrorsCallback),
+      EasyMock.anyObject()))
       .andAnswer(new IAnswer[Unit] {
         override def answer(): Unit = {
           capturedErrorsCallback.getValue.apply(Errors.NONE)
@@ -566,7 +570,8 @@ class TransactionCoordinatorTest {
         topicPartitions = partitions.toSet,
         txnStartTimestamp = time.milliseconds(),
         txnLastUpdateTimestamp = time.milliseconds())),
-      EasyMock.capture(capturedErrorsCallback)))
+      EasyMock.capture(capturedErrorsCallback),
+      EasyMock.anyObject()))
       .andAnswer(new IAnswer[Unit] {
         override def answer(): Unit = {
           capturedErrorsCallback.getValue.apply(Errors.NONE)
@@ -612,7 +617,8 @@ class TransactionCoordinatorTest {
     EasyMock.expect(transactionManager.appendTransactionToLog(EasyMock.eq(transactionalId),
       EasyMock.eq(coordinatorEpoch),
       EasyMock.eq(expectedTransition),
-      EasyMock.capture(capturedErrorsCallback)))
+      EasyMock.capture(capturedErrorsCallback),
+      EasyMock.anyObject()))
       .andAnswer(new IAnswer[Unit] {
         override def answer(): Unit = {}
       })
@@ -677,7 +683,8 @@ class TransactionCoordinatorTest {
       EasyMock.eq(transactionalId),
       EasyMock.eq(coordinatorEpoch),
       EasyMock.capture(capturedNewMetadata),
-      EasyMock.capture(capturedErrorsCallback)
+      EasyMock.capture(capturedErrorsCallback),
+      EasyMock.anyObject()
     )).andAnswer(new IAnswer[Unit] {
       override def answer(): Unit = {
         metadata.completeTransitionTo(capturedNewMetadata.getValue)
@@ -712,7 +719,8 @@ class TransactionCoordinatorTest {
       EasyMock.eq(transactionalId),
       EasyMock.eq(coordinatorEpoch),
       EasyMock.eq(transition),
-      EasyMock.capture(capturedErrorsCallback)))
+      EasyMock.capture(capturedErrorsCallback),
+      EasyMock.anyObject()))
       .andAnswer(new IAnswer[Unit] {
         override def answer(): Unit = {
           if (runCallback)

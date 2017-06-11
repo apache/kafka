@@ -448,7 +448,8 @@ class TransactionStateManager(brokerId: Int,
   def appendTransactionToLog(transactionalId: String,
                              coordinatorEpoch: Int,
                              newMetadata: TxnTransitMetadata,
-                             responseCallback: Errors => Unit): Unit = {
+                             responseCallback: Errors => Unit,
+                             retryOnError: Errors => Boolean = _ => false): Unit = {
 
     // generate the message for this transaction metadata
     val keyBytes = TransactionLog.keyToBytes(transactionalId)
@@ -535,20 +536,30 @@ class TransactionStateManager(brokerId: Int,
             val metadata = epochAndTxnMetadata.transactionMetadata
             metadata synchronized {
               if (epochAndTxnMetadata.coordinatorEpoch == coordinatorEpoch) {
-                info(s"TransactionalId ${metadata.transactionalId} resetting pending state from ${metadata.pendingState} after transaction log append failed, " +
-                  s"aborting state transition and returning $responseError in the callback")
-                metadata.pendingState = None
+                if (retryOnError(responseError)) {
+                  info(s"TransactionalId ${metadata.transactionalId} append transaction log for $newMetadata transition failed due to $responseError, " +
+                    s"not resetting pending state ${metadata.pendingState} but just returning the error in the callback to let the caller retry")
+                } else {
+                  info(s"TransactionalId ${metadata.transactionalId} append transaction log for $newMetadata transition failed due to $responseError, " +
+                    s"resetting pending state from ${metadata.pendingState}, aborting state transition and returning $responseError in the callback")
+
+                  metadata.pendingState = None
+                }
               } else {
-                info(s"TransactionalId ${metadata.transactionalId} coordinator epoch changed from " +
-                  s"${epochAndTxnMetadata.coordinatorEpoch} to $coordinatorEpoch after append to log returned $responseError; aborting state transition and returning the error in the callback")
+                info(s"TransactionalId ${metadata.transactionalId} append transaction log for $newMetadata transition failed due to $responseError, " +
+                  s"aborting state transition and returning the error in the callback since the coordinator epoch has changed from ${epochAndTxnMetadata.coordinatorEpoch} to $coordinatorEpoch")
               }
             }
+
           case Right(None) =>
             // Do nothing here, since we want to return the original append error to the user.
-            info(s"Found no metadata TransactionalId $transactionalId after append to log returned error $responseError; aborting state transition and returning the error in the callback")
+            info(s"TransactionalId $transactionalId append transaction log for $newMetadata transition failed due to $responseError, " +
+              s"aborting state transition and returning the error in the callback since metadata is not available in the cache anymore")
+
           case Left(error) =>
             // Do nothing here, since we want to return the original append error to the user.
-            info(s"Retrieving metadata for transactionalId $transactionalId returned $error after append to the log returned error $responseError; aborting state transition and returning the error in the callback")
+            info(s"TransactionalId $transactionalId append transaction log for $newMetadata transition failed due to $responseError, " +
+              s"aborting state transition and returning the error in the callback since retrieving metadata returned $error")
         }
 
       }
