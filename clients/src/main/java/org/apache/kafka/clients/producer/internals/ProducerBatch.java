@@ -41,12 +41,11 @@ import java.util.ArrayList;
 import java.util.Deque;
 import java.util.Iterator;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.apache.kafka.common.record.RecordBatch.MAGIC_VALUE_V2;
 import static org.apache.kafka.common.record.RecordBatch.NO_TIMESTAMP;
-
 
 /**
  * A batch of records that is or will be sent.
@@ -72,8 +71,10 @@ public final class ProducerBatch {
     private long lastAppendTime;
     private long drainedMs;
     private String expiryErrorMessage;
-    private AtomicBoolean completed;
     private boolean retry;
+
+    private enum FinalState { ABORTED, FAILED, SUCCEEDED };
+    private AtomicReference<FinalState> finalState = new AtomicReference<>(null);
 
     public ProducerBatch(TopicPartition tp, MemoryRecordsBuilder recordsBuilder, long now) {
         this(tp, recordsBuilder, now, false);
@@ -86,7 +87,6 @@ public final class ProducerBatch {
         this.topicPartition = tp;
         this.lastAppendTime = createdMs;
         this.produceFuture = new ProduceRequestResult(topicPartition);
-        this.completed = new AtomicBoolean();
         this.retry = false;
         this.isSplitBatch = isSplitBatch;
         float compressionRatioEstimation = CompressionRatioEstimator.estimation(topicPartition.topic(),
@@ -142,6 +142,14 @@ public final class ProducerBatch {
         }
     }
 
+    public void abort(RuntimeException exception) {
+        if (!finalState.compareAndSet(null, FinalState.ABORTED))
+            throw new IllegalStateException("Batch has already been completed in final state " + finalState.get());
+
+        log.trace("Aborting batch for partition {}", topicPartition, exception);
+        completeFutureAndFireCallbacks(ProduceResponse.INVALID_OFFSET, RecordBatch.NO_TIMESTAMP, exception);
+    }
+
     /**
      * Complete the request.
      *
@@ -152,10 +160,20 @@ public final class ProducerBatch {
     public void done(long baseOffset, long logAppendTime, RuntimeException exception) {
         log.trace("Produced messages to topic-partition {} with base offset offset {} and error: {}.",
                   topicPartition, baseOffset, exception);
+        FinalState finalState = exception != null ? FinalState.FAILED : FinalState.SUCCEEDED;
+        if (!this.finalState.compareAndSet(null, finalState)) {
+            if (this.finalState.get() == FinalState.ABORTED) {
+                log.debug("ProduceResponse returned for {} after batch had already been aborted.", topicPartition);
+                return;
+            } else {
+                throw new IllegalStateException("Batch has already been completed in final state " + this.finalState.get());
+            }
+        }
 
-        if (completed.getAndSet(true))
-            throw new IllegalStateException("Batch has already been completed");
+        completeFutureAndFireCallbacks(baseOffset, logAppendTime, exception);
+    }
 
+    private void completeFutureAndFireCallbacks(long baseOffset, long logAppendTime, RuntimeException exception) {
         // Set the future before invoking the callbacks as we rely on its state for the `onCompletion` call
         produceFuture.set(baseOffset, logAppendTime, exception);
 
@@ -275,7 +293,7 @@ public final class ProducerBatch {
 
         boolean expired = expiryErrorMessage != null;
         if (expired)
-            abort();
+            abortRecordAppends();
         return expired;
     }
 
@@ -366,7 +384,7 @@ public final class ProducerBatch {
         }
     }
 
-    public void abort() {
+    public void abortRecordAppends() {
         recordsBuilder.abort();
     }
 
@@ -390,9 +408,6 @@ public final class ProducerBatch {
         return recordsBuilder.magic();
     }
 
-    /**
-     * Return the ProducerId (Pid) of the current batch.
-     */
     public long producerId() {
         return recordsBuilder.producerId();
     }
