@@ -1480,6 +1480,33 @@ public class TransactionManagerTest {
     }
 
     @Test
+    public void resendFailedProduceRequestAfterAbortableError() throws Exception {
+        final long pid = 13131L;
+        final short epoch = 1;
+        doInitTransactions(pid, epoch);
+        transactionManager.beginTransaction();
+
+        transactionManager.maybeAddPartitionToTransaction(tp0);
+
+        Future<RecordMetadata> responseFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
+                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
+
+        prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, epoch, pid);
+        prepareProduceResponse(Errors.NOT_LEADER_FOR_PARTITION, pid, epoch);
+        sender.run(time.milliseconds()); // AddPartitions
+        sender.run(time.milliseconds()); // Produce
+
+        assertFalse(responseFuture.isDone());
+
+        transactionManager.transitionToAbortableError(new KafkaException());
+        prepareProduceResponse(Errors.NONE, pid, epoch);
+
+        sender.run(time.milliseconds());
+        assertTrue(responseFuture.isDone());
+        assertNotNull(responseFuture.get());
+    }
+
+    @Test
     public void testTransitionToAbortableErrorOnBatchExpiry() throws InterruptedException, ExecutionException {
         final long pid = 13131L;
         final short epoch = 1;
