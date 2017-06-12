@@ -324,13 +324,16 @@ class LogManager(val logDirs: Array[File],
       // If the log does not exist, skip it
       if (log != null) {
         //May need to abort and pause the cleaning of the log, and resume after truncation is done.
-        val needToStopCleaner: Boolean = truncateOffset < log.activeSegment.baseOffset
-        if (needToStopCleaner && cleaner != null)
+        val needToStopCleaner = cleaner != null && truncateOffset < log.activeSegment.baseOffset
+        if (needToStopCleaner)
           cleaner.abortAndPauseCleaning(topicPartition)
-        log.truncateTo(truncateOffset)
-        if (needToStopCleaner && cleaner != null) {
-          cleaner.maybeTruncateCheckpoint(log.dir.getParentFile, topicPartition, log.activeSegment.baseOffset)
-          cleaner.resumeCleaning(topicPartition)
+        try {
+          log.truncateTo(truncateOffset)
+          if (needToStopCleaner)
+            cleaner.maybeTruncateCheckpoint(log.dir.getParentFile, topicPartition, log.activeSegment.baseOffset)
+        } finally {
+          if (needToStopCleaner)
+            cleaner.resumeCleaning(topicPartition)
         }
       }
     }
