@@ -74,7 +74,7 @@ public final class ProducerBatch {
     private boolean retry;
 
     private enum FinalState { ABORTED, FAILED, SUCCEEDED };
-    private AtomicReference<FinalState> finalState = new AtomicReference<>(null);
+    private final AtomicReference<FinalState> finalState = new AtomicReference<>(null);
 
     public ProducerBatch(TopicPartition tp, MemoryRecordsBuilder recordsBuilder, long now) {
         this(tp, recordsBuilder, now, false);
@@ -142,7 +142,14 @@ public final class ProducerBatch {
         }
     }
 
+    /**
+     * Abort the batch and complete the future and callbacks.
+     *
+     * @param exception The exception to use to complete the future and awaiting callbacks.
+     */
     public void abort(RuntimeException exception) {
+        abortRecordAppends();
+
         if (!finalState.compareAndSet(null, FinalState.ABORTED))
             throw new IllegalStateException("Batch has already been completed in final state " + finalState.get());
 
@@ -151,7 +158,7 @@ public final class ProducerBatch {
     }
 
     /**
-     * Complete the request.
+     * Complete the request. If the batch was previously aborted, this is a no-op.
      *
      * @param baseOffset The base offset of the messages assigned by the server
      * @param logAppendTime The log append time or -1 if CreateTime is being used
@@ -384,6 +391,13 @@ public final class ProducerBatch {
         }
     }
 
+    /**
+     * Abort the record builder and reset the state of the underlying buffer. This is used prior to aborting
+     * the batch with {@link #abort(RuntimeException)} and ensures that no record previously appended can be
+     * read. This is used in scenarios where we want to ensure a batch ultimately gets aborted, but in which
+     * it is not safe to invoke the completion callbacks (e.g. because we are holding a lock,
+     * {@link RecordAccumulator#abortBatches()}).
+     */
     public void abortRecordAppends() {
         recordsBuilder.abort();
     }
