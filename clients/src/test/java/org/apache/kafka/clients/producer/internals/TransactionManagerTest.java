@@ -80,6 +80,7 @@ import static java.util.Collections.singletonMap;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -1059,6 +1060,71 @@ public class TransactionManagerTest {
     }
 
     @Test
+    public void testAbortableErrorWhileAbortInProgress() throws InterruptedException {
+        final long pid = 13131L;
+        final short epoch = 1;
+
+        doInitTransactions(pid, epoch);
+
+        transactionManager.beginTransaction();
+        transactionManager.maybeAddPartitionToTransaction(tp0);
+
+        Future<RecordMetadata> responseFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
+                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
+
+        assertFalse(responseFuture.isDone());
+        prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, epoch, pid);
+
+        sender.run(time.milliseconds());  // Send AddPartitionsRequest
+        sender.run(time.milliseconds());  // Send Produce Request
+
+        TransactionalRequestResult abortResult = transactionManager.beginAbortingTransaction();
+        assertTrue(transactionManager.isAborting());
+        assertFalse(transactionManager.hasError());
+
+        sendProduceResponse(Errors.OUT_OF_ORDER_SEQUENCE_NUMBER, pid, epoch);
+        prepareEndTxnResponse(Errors.NONE, TransactionResult.ABORT, pid, epoch);
+        sender.run(time.milliseconds());  // receive the produce response
+
+        // we do not transition to ABORTABLE_ERROR since we were already aborting
+        assertTrue(transactionManager.isAborting());
+        assertFalse(transactionManager.hasError());
+
+        sender.run(time.milliseconds());  // handle the abort
+        assertTrue(abortResult.isCompleted());
+        assertTrue(abortResult.isSuccessful());
+        assertTrue(transactionManager.isReady());  // make sure we are ready for a transaction now.
+    }
+
+    @Test
+    public void testFindCoordinatorAllowedInAbortableErrorState() throws InterruptedException {
+        final long pid = 13131L;
+        final short epoch = 1;
+
+        doInitTransactions(pid, epoch);
+
+        transactionManager.beginTransaction();
+        transactionManager.maybeAddPartitionToTransaction(tp0);
+
+        Future<RecordMetadata> responseFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
+                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
+
+        assertFalse(responseFuture.isDone());
+        sender.run(time.milliseconds());  // Send AddPartitionsRequest
+
+        transactionManager.transitionToAbortableError(new KafkaException());
+        sendAddPartitionsToTxnResponse(Errors.NOT_COORDINATOR, tp0, epoch, pid);
+        sender.run(time.milliseconds()); // AddPartitions returns
+        assertTrue(transactionManager.hasAbortableError());
+
+        assertNull(transactionManager.coordinator(CoordinatorType.TRANSACTION));
+        prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.TRANSACTION, transactionalId);
+        sender.run(time.milliseconds()); // FindCoordinator handled
+        assertEquals(brokerNode, transactionManager.coordinator(CoordinatorType.TRANSACTION));
+        assertTrue(transactionManager.hasAbortableError());
+    }
+
+    @Test
     public void testCancelUnsentAddPartitionsAndProduceOnAbort() throws InterruptedException {
         final long pid = 13131L;
         final short epoch = 1;
@@ -1279,13 +1345,40 @@ public class TransactionManagerTest {
 
         TransactionalRequestResult abortResult = transactionManager.beginAbortingTransaction();
 
-        prepareAddOffsetsToTxnResponse(Errors.TOPIC_AUTHORIZATION_FAILED, consumerGroupId, pid, epoch);
+        prepareAddOffsetsToTxnResponse(Errors.GROUP_AUTHORIZATION_FAILED, consumerGroupId, pid, epoch);
+        sender.run(time.milliseconds());  // Send AddOffsetsToTxnRequest
+        assertFalse(abortResult.isCompleted());
+
+        sender.run(time.milliseconds());
+        assertTrue(transactionManager.isReady());
+        assertTrue(abortResult.isCompleted());
+        assertTrue(abortResult.isSuccessful());
+    }
+
+    @Test
+    public void shouldFailAbortIfAddOffsetsFailsWithFatalError() throws Exception {
+        final long pid = 13131L;
+        final short epoch = 1;
+
+        doInitTransactions(pid, epoch);
+
+        transactionManager.beginTransaction();
+        Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
+        offsets.put(tp1, new OffsetAndMetadata(1));
+        final String consumerGroupId = "myconsumergroup";
+
+        transactionManager.sendOffsetsToTransaction(offsets, consumerGroupId);
+
+        TransactionalRequestResult abortResult = transactionManager.beginAbortingTransaction();
+
+        prepareAddOffsetsToTxnResponse(Errors.UNKNOWN, consumerGroupId, pid, epoch);
         sender.run(time.milliseconds());  // Send AddOffsetsToTxnRequest
         assertFalse(abortResult.isCompleted());
 
         sender.run(time.milliseconds());
         assertTrue(abortResult.isCompleted());
-        assertTrue(abortResult.isSuccessful());
+        assertFalse(abortResult.isSuccessful());
+        assertTrue(transactionManager.hasFatalError());
     }
 
     @Test
@@ -1623,8 +1716,15 @@ public class TransactionManagerTest {
         }, new InitProducerIdResponse(0, error, pid, epoch), shouldDisconnect);
     }
 
+    private void sendProduceResponse(Errors error, final long pid, final short epoch) {
+        client.respond(produceRequestMatcher(pid, epoch), produceResponse(tp0, 0, error, 0));
+    }
+
     private void prepareProduceResponse(Errors error, final long pid, final short epoch) {
-        client.prepareResponse(new MockClient.RequestMatcher() {
+        client.prepareResponse(produceRequestMatcher(pid, epoch), produceResponse(tp0, 0, error, 0));
+    }
+    private MockClient.RequestMatcher produceRequestMatcher(final long pid, final short epoch) {
+        return new MockClient.RequestMatcher() {
             @Override
             public boolean matches(AbstractRequest body) {
                 ProduceRequest produceRequest = (ProduceRequest) body;
@@ -1640,12 +1740,24 @@ public class TransactionManagerTest {
                 assertEquals(transactionalId, produceRequest.transactionalId());
                 return true;
             }
-        }, produceResponse(tp0, 0, error, 0));
-
+        };
     }
 
-    private void prepareAddPartitionsToTxnResponse(Errors error, final TopicPartition topicPartition, final short epoch, final long pid) {
-        client.prepareResponse(new MockClient.RequestMatcher() {
+    private void prepareAddPartitionsToTxnResponse(Errors error, final TopicPartition topicPartition,
+                                                   final short epoch, final long pid) {
+        client.prepareResponse(addPartitionsRequestMatcher(topicPartition, epoch, pid),
+                new AddPartitionsToTxnResponse(0, singletonMap(topicPartition, error)));
+    }
+
+    private void sendAddPartitionsToTxnResponse(Errors error, final TopicPartition topicPartition,
+                                                final short epoch, final long pid) {
+        client.respond(addPartitionsRequestMatcher(topicPartition, epoch, pid),
+                new AddPartitionsToTxnResponse(0, singletonMap(topicPartition, error)));
+    }
+
+    private MockClient.RequestMatcher addPartitionsRequestMatcher(final TopicPartition topicPartition,
+                                                                  final short epoch, final long pid) {
+        return new MockClient.RequestMatcher() {
             @Override
             public boolean matches(AbstractRequest body) {
                 AddPartitionsToTxnRequest addPartitionsToTxnRequest = (AddPartitionsToTxnRequest) body;
@@ -1655,7 +1767,7 @@ public class TransactionManagerTest {
                 assertEquals(transactionalId, addPartitionsToTxnRequest.transactionalId());
                 return true;
             }
-        }, new AddPartitionsToTxnResponse(0, singletonMap(topicPartition, error)));
+        };
     }
 
     private void prepareEndTxnResponse(Errors error, final TransactionResult result, final long pid, final short epoch) {
