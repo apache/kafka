@@ -614,10 +614,10 @@ public final class RecordAccumulator {
         for (ProducerBatch batch : incomplete.all()) {
             Deque<ProducerBatch> dq = getDeque(batch.topicPartition);
             synchronized (dq) {
-                batch.abort();
+                batch.abortRecordAppends();
                 dq.remove(batch);
             }
-            batch.done(-1L, RecordBatch.NO_TIMESTAMP, reason);
+            batch.abort(reason);
             deallocate(batch);
         }
     }
@@ -629,12 +629,12 @@ public final class RecordAccumulator {
             synchronized (dq) {
                 if (!batch.isClosed()) {
                     aborted = true;
-                    batch.abort();
+                    batch.abortRecordAppends();
                     dq.remove(batch);
                 }
             }
             if (aborted) {
-                batch.done(-1L, RecordBatch.NO_TIMESTAMP, reason);
+                batch.abort(reason);
                 deallocate(batch);
             }
         }
