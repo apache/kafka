@@ -1087,14 +1087,12 @@ public class Protocol {
                        new Field("isr", new ArrayOf(INT32), "The in sync replica ids."),
                        new Field("zk_version", INT32, "The ZK version."),
                        new Field("replicas", new ArrayOf(INT32), "The replica ids."),
-                       new Field("is_new", BOOLEAN, "If this is false, the replica will only be created if there is no bad log directory"));
+                       new Field("is_new", BOOLEAN, "Whether the replica should have existed on the broker or not"));
 
     public static final Schema LEADER_AND_ISR_REQUEST_LIVE_LEADER_V0 =
             new Schema(new Field("id", INT32, "The broker id."),
                        new Field("host", STRING, "The hostname of the broker."),
                        new Field("port", INT32, "The port on which the broker accepts requests."));
-
-    public static final Schema LEADER_AND_ISR_REQUEST_LIVE_LEADER_V1 = LEADER_AND_ISR_REQUEST_LIVE_LEADER_V0;
 
     public static final Schema LEADER_AND_ISR_REQUEST_V0 = new Schema(new Field("controller_id", INT32, "The controller id."),
                                                                       new Field("controller_epoch", INT32, "The controller epoch."),
@@ -1106,7 +1104,7 @@ public class Protocol {
                                                                       new Field("controller_epoch", INT32, "The controller epoch."),
                                                                       new Field("partition_states",
                                                                                 new ArrayOf(LEADER_AND_ISR_REQUEST_PARTITION_STATE_V1)),
-                                                                      new Field("live_leaders", new ArrayOf(LEADER_AND_ISR_REQUEST_LIVE_LEADER_V1)));
+                                                                      new Field("live_leaders", new ArrayOf(LEADER_AND_ISR_REQUEST_LIVE_LEADER_V0)));
 
     public static final Schema LEADER_AND_ISR_RESPONSE_PARTITION_V0 = new Schema(new Field("topic", STRING, "Topic name."),
                                                                                  new Field("partition", INT32, "Topic partition id."),

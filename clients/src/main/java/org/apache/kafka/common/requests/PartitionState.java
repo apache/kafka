@@ -20,7 +20,7 @@ import org.apache.kafka.common.utils.Utils;
 
 import java.util.List;
 
-// TODO: rename this class to LeaderAndIsrPartitionInfo
+// This is used to describe LeaderAndIsrPartitionInfo
 public class PartitionState {
     public final int controllerEpoch;
     public final int leader;

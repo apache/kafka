@@ -75,7 +75,6 @@ public class UpdateMetadataRequest extends AbstractRequest {
         }
     }
 
-    // TODO: rename this class to UpdateMetadataPartitionState and probably move it to its own class
     public static final class UpdateMetadataRequestPartitionState {
         public final int controllerEpoch;
         public final int leader;

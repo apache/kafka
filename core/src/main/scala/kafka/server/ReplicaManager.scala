@@ -283,6 +283,7 @@ class ReplicaManager(val config: KafkaConfig,
 
   def stopReplica(topicPartition: TopicPartition, deletePartition: Boolean): Errors  = {
     stateChangeLogger.trace(s"Broker $localBrokerId handling stop replica (delete=$deletePartition) for partition $topicPartition")
+    // TODO: return error if replica is on offline disk
     val error = Errors.NONE
     getPartition(topicPartition) match {
       case Some(_) =>
@@ -300,7 +301,7 @@ class ReplicaManager(val config: KafkaConfig,
         // This could happen when topic is being deleted while broker is down and recovers.
         if (deletePartition && logManager.getLog(topicPartition).isDefined)
           logManager.asyncDelete(topicPartition)
-        stateChangeLogger.trace(s"Broker $localBrokerId ignoring stop replica (delete=$deletePartition) for partition $topicPartition as replica doesn't exist on broker")
+        stateChangeLogger.trace(s"Broker $localBrokerId ignoring stop replica (delete=$deletePartition) for partition $topicPartition as replica either doesn't exist on broker")
     }
     stateChangeLogger.trace(s"Broker $localBrokerId finished handling stop replica (delete=$deletePartition) for partition $topicPartition")
     error

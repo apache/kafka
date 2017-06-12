@@ -278,7 +278,7 @@ class RequestSendThread(val controllerId: Int,
 
 }
 
-class ControllerBrokerRequestBatch(controller: KafkaController, eventManager: ControllerEventManager) extends  Logging {
+class ControllerBrokerRequestBatch(controller: KafkaController) extends  Logging {
   val controllerContext = controller.controllerContext
   val controllerId: Int = controller.config.brokerId
   val leaderAndIsrRequestMap = mutable.Map.empty[Int, mutable.Map[TopicPartition, LeaderAndIsrPartitionState]]
@@ -316,7 +316,7 @@ class ControllerBrokerRequestBatch(controller: KafkaController, eventManager: Co
 
     brokerIds.filter(_ >= 0).foreach { brokerId =>
       val result = leaderAndIsrRequestMap.getOrElseUpdate(brokerId, mutable.Map.empty)
-      val alreadyNew = result.get(topicPartition).map(_.isNew).getOrElse(false)
+      val alreadyNew = result.get(topicPartition).exists(_.isNew)
       result.put(topicPartition, LeaderAndIsrPartitionState(leaderIsrAndControllerEpoch, replicas, isNew || alreadyNew))
     }
 
@@ -381,6 +381,10 @@ class ControllerBrokerRequestBatch(controller: KafkaController, eventManager: Co
 
   def sendRequestsToBrokers(controllerEpoch: Int) {
     try {
+      val leaderAndIsrRequestVersion: Short =
+        if (controller.config.interBrokerProtocolVersion >= KAFKA_0_11_1_IV0) 1
+        else 0
+
       leaderAndIsrRequestMap.foreach { case (broker, leaderAndIsrPartitionStates) =>
         leaderAndIsrPartitionStates.foreach { case (topicPartition, state) =>
           val typeOfRequest =
@@ -402,10 +406,10 @@ class ControllerBrokerRequestBatch(controller: KafkaController, eventManager: Co
             leaderAndIsrPartitionState.allReplicas.map(Integer.valueOf).asJava, leaderAndIsrPartitionState.isNew)
           topicPartition -> partitionState
         }
-        val leaderAndIsrRequest = new LeaderAndIsrRequest.Builder(controllerId, controllerEpoch, partitionStates.asJava,
-          leaders.asJava)
-        controller.sendRequest(broker, ApiKeys.LEADER_AND_ISR, leaderAndIsrRequest,
-          (r: AbstractResponse) => eventManager.put(controller.LeaderAndIsrResponseReceived(r, broker)))
+        val leaderAndIsrRequestBuilder = new LeaderAndIsrRequest.Builder(leaderAndIsrRequestVersion, controllerId,
+          controllerEpoch, partitionStates.asJava, leaders.asJava)
+        controller.sendRequest(broker, ApiKeys.LEADER_AND_ISR, leaderAndIsrRequestBuilder,
+          (r: AbstractResponse) => controller.eventManager.put(controller.LeaderAndIsrResponseReceived(r, broker)))
       }
       leaderAndIsrRequestMap.clear()
 
@@ -420,14 +424,15 @@ class ControllerBrokerRequestBatch(controller: KafkaController, eventManager: Co
         topicPartition -> partitionState
       }
 
-      val version: Short =
-        if (controller.config.interBrokerProtocolVersion >= KAFKA_0_10_2_IV0) 3
+      val updateMetadataRequestVersion: Short =
+        if (controller.config.interBrokerProtocolVersion >= KAFKA_0_11_1_IV0) 4
+        else if (controller.config.interBrokerProtocolVersion >= KAFKA_0_10_2_IV0) 3
         else if (controller.config.interBrokerProtocolVersion >= KAFKA_0_10_0_IV1) 2
         else if (controller.config.interBrokerProtocolVersion >= KAFKA_0_9_0) 1
         else 0
 
       val updateMetadataRequest = {
-        val liveBrokers = if (version == 0) {
+        val liveBrokers = if (updateMetadataRequestVersion == 0) {
           // Version 0 of UpdateMetadataRequest only supports PLAINTEXT.
           controllerContext.liveOrShuttingDownBrokers.map { broker =>
             val securityProtocol = SecurityProtocol.PLAINTEXT
@@ -444,7 +449,7 @@ class ControllerBrokerRequestBatch(controller: KafkaController, eventManager: Co
             new UpdateMetadataRequest.Broker(broker.id, endPoints.asJava, broker.rack.orNull)
           }
         }
-        new UpdateMetadataRequest.Builder(version, controllerId, controllerEpoch, partitionStates.asJava,
+        new UpdateMetadataRequest.Builder(updateMetadataRequestVersion, controllerId, controllerEpoch, partitionStates.asJava,
           liveBrokers.asJava)
       }
 

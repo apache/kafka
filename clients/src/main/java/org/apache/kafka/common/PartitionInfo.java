@@ -17,9 +17,8 @@
 package org.apache.kafka.common;
 
 /**
- * Information about a topic-partition.
+ * Information about a topic-partition. This is used to describe MetadataPartitionInfo.
  */
-// TODO: rename this class to MetadataPartitionInfo
 public class PartitionInfo {
 
     private final String topic;

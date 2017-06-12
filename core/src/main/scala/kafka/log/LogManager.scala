@@ -138,9 +138,7 @@ class LogManager(private val logDirs: Array[File],
       }
       info(s"Stopping serving logs in dir $dir")
 
-      val newOfflineDirs = liveLogDirs.filter(_.getAbsolutePath == dir)
-      liveLogDirs --= newOfflineDirs
-
+      liveLogDirs -= new File(dir)
       if (liveLogDirs.isEmpty) {
         fatal(s"Shutdown broker because all log dirs in ${logDirs.mkString(", ")} have failed");
         Runtime.getRuntime().halt(1)
@@ -179,6 +177,34 @@ class LogManager(private val logDirs: Array[File],
     }
   }
 
+  private def loadLogs(logDir: File, recoveryPoints: Map[TopicPartition, Long], logStartOffsets: Map[TopicPartition, Long]): Unit = {
+    debug("Loading log '" + logDir.getName + "'")
+    val topicPartition = Log.parseTopicPartitionName(logDir)
+    val config = topicConfigs.getOrElse(topicPartition.topic, defaultConfig)
+    val logRecoveryPoint = recoveryPoints.getOrElse(topicPartition, 0L)
+    val logStartOffset = logStartOffsets.getOrElse(topicPartition, 0L)
+
+    val current = new Log(
+      dir = logDir,
+      config = config,
+      logStartOffset = logStartOffset,
+      recoveryPoint = logRecoveryPoint,
+      maxProducerIdExpirationMs = maxPidExpirationMs,
+      scheduler = scheduler,
+      time = time,
+      brokerTopicStats = brokerTopicStats)
+    if (logDir.getName.endsWith(Log.DeleteDirSuffix)) {
+      this.logsToBeDeleted.add(current)
+    } else {
+      val previous = this.logs.put(topicPartition, current)
+      if (previous != null) {
+        throw new IllegalArgumentException(
+          "Duplicate log directories found: %s, %s!".format(
+            current.dir.getAbsolutePath, previous.dir.getAbsolutePath))
+      }
+    }
+  }
+
   /**
    * Recover and load all logs in the given data directories
    */
@@ -186,6 +212,7 @@ class LogManager(private val logDirs: Array[File],
     info("Loading logs.")
     val startMs = time.milliseconds
     val threadPools = ArrayBuffer.empty[ExecutorService]
+    val offlineDirs = ArrayBuffer.empty[String]
     val jobs = mutable.Map.empty[File, Seq[Future[_]]]
 
     for (dir <- liveLogDirs) {
@@ -226,49 +253,31 @@ class LogManager(private val logDirs: Array[File],
           logDir <- dirContent if logDir.isDirectory
         } yield {
           CoreUtils.runnable {
-            debug("Loading log '" + logDir.getName + "'")
-
-            val topicPartition = Log.parseTopicPartitionName(logDir)
-            val config = topicConfigs.getOrElse(topicPartition.topic, defaultConfig)
-            val logRecoveryPoint = recoveryPoints.getOrElse(topicPartition, 0L)
-            val logStartOffset = logStartOffsets.getOrElse(topicPartition, 0L)
-
-          val current = Log(
-            dir = logDir,
-            config = config,
-            logStartOffset = logStartOffset,
-            recoveryPoint = logRecoveryPoint,
-            maxProducerIdExpirationMs = maxPidExpirationMs,
-            scheduler = scheduler,
-            time = time,
-            brokerTopicStats = brokerTopicStats)
-          if (logDir.getName.endsWith(Log.DeleteDirSuffix)) {
-            this.logsToBeDeleted.add(current)
-          } else {
-            val previous = this.logs.put(topicPartition, current)
-            if (previous != null) {
-              throw new IllegalArgumentException(
-                "Duplicate log directories found: %s, %s!".format(
-                  current.dir.getAbsolutePath, previous.dir.getAbsolutePath))
+            try {
+              loadLogs(logDir, recoveryPoints, logStartOffsets)
+            } catch {
+              case e: IOException =>
+                offlineDirs.append(dir.getAbsolutePath)
+                error("Error while load log dir " + dir.getAbsolutePath, e)
             }
           }
         }
-      }
 
         threadPools.append(pool)
         jobs(cleanShutdownFile) = jobsForDir.map(pool.submit).toSeq
       } catch {
         case e: IOException =>
+          offlineDirs.append(dir.getAbsolutePath)
           error("Error while load log dir " + dir.getAbsolutePath, e)
       }
     }
-
 
     try {
       for ((cleanShutdownFile, dirJobs) <- jobs) {
         dirJobs.foreach(_.get)
         cleanShutdownFile.delete()
       }
+      offlineDirs.foreach(handleLogDirFailure)
     } catch {
       case e: ExecutionException => {
         error("There was an error in one of the threads during logs loading: " + e.getCause)
@@ -411,6 +420,7 @@ class LogManager(private val logDirs: Array[File],
 
   /**
    *  Delete all data in a partition and start the log at the new offset
+   *
    *  @param newOffset The new offset to start the log with
    */
   def truncateFullyAndStartAt(topicPartition: TopicPartition, newOffset: Long) {
@@ -552,6 +562,7 @@ class LogManager(private val logDirs: Array[File],
   /**
     * Rename the directory of the given topic-partition "logdir" as "logdir.uuid.delete" and
     * add it in the queue for deletion.
+    *
     * @param topicPartition TopicPartition that needs to be deleted
     */
   def asyncDelete(topicPartition: TopicPartition) = {

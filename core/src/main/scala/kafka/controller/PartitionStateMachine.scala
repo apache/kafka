@@ -37,12 +37,12 @@ import scala.collection._
  * 4. OfflinePartition    : If, after successful leader election, the leader for partition dies, then the partition
  *                          moves to the OfflinePartition state. Valid previous states are NewPartition/OnlinePartition
  */
-class PartitionStateMachine(controller: KafkaController, eventManager: ControllerEventManager) extends Logging {
+class PartitionStateMachine(controller: KafkaController) extends Logging {
   private val controllerContext = controller.controllerContext
   private val controllerId = controller.config.brokerId
   private val zkUtils = controllerContext.zkUtils
   private val partitionState: mutable.Map[TopicAndPartition, PartitionState] = mutable.Map.empty
-  private val brokerRequestBatch = new ControllerBrokerRequestBatch(controller, eventManager)
+  private val brokerRequestBatch = new ControllerBrokerRequestBatch(controller)
   private val noOpPartitionLeaderSelector = new NoOpLeaderSelector(controllerContext)
 
   private val stateChangeLogger = KafkaController.stateChangeLogger

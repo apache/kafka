@@ -338,7 +338,7 @@ public class MetadataResponse extends AbstractResponse {
 
     }
 
-    // TODO: rename this class to MetadataResponsePartitionState
+    // This is used to describe MetadataResponsePartitionState
     public static class PartitionMetadata {
         private final Errors error;
         private final int partition;

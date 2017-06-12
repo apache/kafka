@@ -58,9 +58,9 @@ public class LeaderAndIsrRequest extends AbstractRequest {
         private final Map<TopicPartition, PartitionState> partitionStates;
         private final Set<Node> liveLeaders;
 
-        public Builder(int controllerId, int controllerEpoch,
+        public Builder(short version, int controllerId, int controllerEpoch,
                        Map<TopicPartition, PartitionState> partitionStates, Set<Node> liveLeaders) {
-            super(ApiKeys.LEADER_AND_ISR);
+            super(ApiKeys.LEADER_AND_ISR, version);
             this.controllerId = controllerId;
             this.controllerEpoch = controllerEpoch;
             this.partitionStates = partitionStates;
@@ -126,7 +126,6 @@ public class LeaderAndIsrRequest extends AbstractRequest {
 
             PartitionState partitionState = new PartitionState(controllerEpoch, leader, leaderEpoch, isr, zkVersion, replicas, isNew);
             partitionStates.put(new TopicPartition(topic, partition), partitionState);
-
         }
 
         Set<Node> leaders = new HashSet<>();
