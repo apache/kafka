@@ -38,15 +38,19 @@ class SaslSslAdminClientIntegrationTest extends AdminClientIntegrationTest with 
 
   override def configureSecurityBeforeServersStart() {
     val authorizer = CoreUtils.createObject[Authorizer](classOf[SimpleAclAuthorizer].getName())
-    authorizer.configure(this.configs.head.originals())
-    authorizer.addAcls(Set(new AuthAcl(AuthAcl.WildCardPrincipal, Allow,
-                            AuthAcl.WildCardHost, All)), new AuthResource(Topic, "*"))
-    authorizer.addAcls(Set(clusterAcl(Allow, Create),
-                           clusterAcl(Allow, Delete),
-                           clusterAcl(Allow, ClusterAction),
-                           clusterAcl(Allow, AlterConfigs),
-                           clusterAcl(Allow, Alter)),
-                       AuthResource.ClusterResource)
+    try {
+      authorizer.configure(this.configs.head.originals())
+      authorizer.addAcls(Set(new AuthAcl(AuthAcl.WildCardPrincipal, Allow,
+                              AuthAcl.WildCardHost, All)), new AuthResource(Topic, "*"))
+      authorizer.addAcls(Set(clusterAcl(Allow, Create),
+                             clusterAcl(Allow, Delete),
+                             clusterAcl(Allow, ClusterAction),
+                             clusterAcl(Allow, AlterConfigs),
+                             clusterAcl(Allow, Alter)),
+                         AuthResource.ClusterResource)
+    } finally {
+      authorizer.close()
+    }
   }
 
   @Before
