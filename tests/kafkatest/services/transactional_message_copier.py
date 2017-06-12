@@ -123,8 +123,8 @@ class TransactionalMessageCopier(KafkaPathResolverMixin, BackgroundThreadService
 
         return cmd
 
-    def clean_node(self, node, clean_shutdown=True):
-        self.kill_node(node, clean_shutdown)
+    def clean_node(self, node):
+        self.kill_node(node, clean_shutdown=False)
         node.account.ssh("rm -rf " + self.PERSISTENT_ROOT, allow_fail=False)
         self.security_config.clean_node(node)
 
