@@ -2003,16 +2003,19 @@ class KafkaApis(val requestChannel: RequestChannel,
       // When this callback is triggered, the remote API call has completed
       request.apiRemoteCompleteTimeNanos = time.nanoseconds
     }
-    val quotaSensors = quotas.request.getOrCreateQuotaSensors(request.session.sanitizedUser, clientId)
-    def recordNetworkThreadTimeNanos(timeNanos: Long) {
-      quotas.request.recordNoThrottle(quotaSensors, nanosToPercentage(timeNanos))
-    }
-    request.recordNetworkThreadTimeCallback = Some(recordNetworkThreadTimeNanos)
+    if (quotas.request.quotasEnabled) {
+      val quotaSensors = quotas.request.getOrCreateQuotaSensors(request.session.sanitizedUser, clientId)
+      def recordNetworkThreadTimeNanos(timeNanos: Long) {
+        quotas.request.recordNoThrottle(quotaSensors, nanosToPercentage(timeNanos))
+      }
+      request.recordNetworkThreadTimeCallback = Some(recordNetworkThreadTimeNanos)
 
-    quotas.request.recordAndThrottleOnQuotaViolation(
-        quotaSensors,
-        nanosToPercentage(request.requestThreadTimeNanos),
-        sendResponseCallback)
+      quotas.request.recordAndThrottleOnQuotaViolation(
+          quotaSensors,
+          nanosToPercentage(request.requestThreadTimeNanos),
+          sendResponseCallback)
+    } else
+      sendResponseCallback(0)
   }
 
   private def sendResponseExemptThrottle(response: RequestChannel.Response) {
@@ -2020,12 +2023,14 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   private def sendResponseExemptThrottle(request: RequestChannel.Request, sendResponseCallback: () => Unit) {
-    def recordNetworkThreadTimeNanos(timeNanos: Long) {
-      quotas.request.recordExempt(nanosToPercentage(timeNanos))
-    }
-    request.recordNetworkThreadTimeCallback = Some(recordNetworkThreadTimeNanos)
+    if (quotas.request.quotasEnabled) {
+      def recordNetworkThreadTimeNanos(timeNanos: Long) {
+        quotas.request.recordExempt(nanosToPercentage(timeNanos))
+      }
+      request.recordNetworkThreadTimeCallback = Some(recordNetworkThreadTimeNanos)
 
-    quotas.request.recordExempt(nanosToPercentage(request.requestThreadTimeNanos))
+      quotas.request.recordExempt(nanosToPercentage(request.requestThreadTimeNanos))
+    }
     sendResponseCallback()
   }
 

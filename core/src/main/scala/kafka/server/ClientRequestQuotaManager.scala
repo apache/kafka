@@ -27,7 +27,7 @@ class ClientRequestQuotaManager(private val config: ClientQuotaManagerConfig,
                          private val metrics: Metrics,
                          private val time: Time) extends ClientQuotaManager(config, metrics, QuotaType.Request, time) {
   val maxThrottleTimeMs = TimeUnit.SECONDS.toMillis(this.config.quotaWindowSizeSeconds)
-  val exemptSensor = createSensor(exemptSensorName, exemptMetricName)
+  def exemptSensor = getOrCreateSensor(exemptSensorName, exemptMetricName)
 
   def recordExempt(value: Double) {
     exemptSensor.record(value)
