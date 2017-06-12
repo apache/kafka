@@ -65,9 +65,11 @@ public class ProducerBatchTest {
 
         KafkaException exception = new KafkaException();
         batch.abort(exception);
+        assertTrue(future.isDone());
 
         // subsequent completion should be ignored
         batch.done(500L, 2342342341L, null);
+        batch.done(-1, -1, new KafkaException());
 
         assertTrue(future.isDone());
         try {

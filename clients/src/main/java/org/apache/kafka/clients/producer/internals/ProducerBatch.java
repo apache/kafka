@@ -56,15 +56,18 @@ public final class ProducerBatch {
 
     private static final Logger log = LoggerFactory.getLogger(ProducerBatch.class);
 
+    private enum FinalState { ABORTED, FAILED, SUCCEEDED };
+
     final long createdMs;
     final TopicPartition topicPartition;
     final ProduceRequestResult produceFuture;
 
     private final List<Thunk> thunks = new ArrayList<>();
     private final MemoryRecordsBuilder recordsBuilder;
-
     private final AtomicInteger attempts = new AtomicInteger(0);
     private final boolean isSplitBatch;
+    private final AtomicReference<FinalState> finalState = new AtomicReference<>(null);
+
     int recordCount;
     int maxRecordSize;
     private long lastAttemptMs;
@@ -72,9 +75,6 @@ public final class ProducerBatch {
     private long drainedMs;
     private String expiryErrorMessage;
     private boolean retry;
-
-    private enum FinalState { ABORTED, FAILED, SUCCEEDED };
-    private final AtomicReference<FinalState> finalState = new AtomicReference<>(null);
 
     public ProducerBatch(TopicPartition tp, MemoryRecordsBuilder recordsBuilder, long now) {
         this(tp, recordsBuilder, now, false);
@@ -148,8 +148,6 @@ public final class ProducerBatch {
      * @param exception The exception to use to complete the future and awaiting callbacks.
      */
     public void abort(RuntimeException exception) {
-        abortRecordAppends();
-
         if (!finalState.compareAndSet(null, FinalState.ABORTED))
             throw new IllegalStateException("Batch has already been completed in final state " + finalState.get());
 
