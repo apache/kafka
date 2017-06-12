@@ -95,6 +95,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     private Options options;
     private WriteOptions wOptions;
     private FlushOptions fOptions;
+    private boolean eosEnabled;
 
     protected volatile boolean open = false;
 
@@ -178,7 +179,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
                 putInternal(key, value);
             }
         });
-
+        eosEnabled = checkForEos(context.appConfigs());
         open = true;
     }
 
@@ -355,8 +356,12 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
     @Override
     public synchronized void flush() {
-        // no-op method since we don't flush on commits
+        if (db == null || eosEnabled) {
+            return;
+        }
+        flushInternal();
     }
+
     /**
      * @throws ProcessorStateException if flushing failed because of any internal store exceptions
      */
@@ -366,6 +371,10 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         } catch (RocksDBException e) {
             throw new ProcessorStateException("Error while executing flush from store " + this.name, e);
         }
+    }
+
+    private boolean checkForEos(Map<String, Object> configs) {
+        return StreamsConfig.EXACTLY_ONCE.equals(configs.get(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
     }
 
     @Override
