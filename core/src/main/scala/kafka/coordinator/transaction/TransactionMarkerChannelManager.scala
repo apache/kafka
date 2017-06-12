@@ -269,12 +269,16 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
               }
 
             case Right(None) =>
-              throw new IllegalStateException(s"The coordinator still owns the transaction partition for $transactionalId, but there is " +
-                s"no metadata in the cache; this is not expected")
+              val errorMsg = s"The coordinator still owns the transaction partition for $transactionalId, but there is " +
+                s"no metadata in the cache; this is not expected"
+              fatal(errorMsg)
+              throw new IllegalStateException(errorMsg)
           }
 
         case other =>
-          throw new IllegalStateException(s"Unexpected error ${other.exceptionName} before appending to txn log for $transactionalId")
+          val errorMsg = s"Unexpected error ${other.exceptionName} before appending to txn log for $transactionalId"
+          fatal(errorMsg)
+          throw new IllegalStateException(errorMsg)
       }
     }
 
@@ -306,7 +310,9 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
             s"skip writing to transaction log as the loading process should complete it")
 
         case other: Errors =>
-          throw new IllegalStateException(s"Unexpected error ${other.exceptionName} while appending to transaction log for ${txnLogAppend.transactionalId}")
+          val errorMsg = s"Unexpected error ${other.exceptionName} while appending to transaction log for ${txnLogAppend.transactionalId}"
+          fatal(errorMsg)
+          throw new IllegalStateException(errorMsg)
       }
 
     txnStateManager.appendTransactionToLog(txnLogAppend.transactionalId, txnLogAppend.coordinatorEpoch, txnLogAppend.newMetadata, appendCallback,
@@ -361,8 +367,11 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
               }
 
             case Right(None) =>
-              throw new IllegalStateException(s"The coordinator still owns the transaction partition for $transactionalId, but there is " +
-                s"no metadata in the cache; this is not expected")
+              val errorMsg = s"The coordinator still owns the transaction partition for $transactionalId, but there is " +
+                s"no metadata in the cache; this is not expected"
+              fatal(errorMsg)
+              throw new IllegalStateException(errorMsg)
+
           }
       }
     }

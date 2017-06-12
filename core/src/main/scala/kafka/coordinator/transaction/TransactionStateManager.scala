@@ -353,11 +353,11 @@ class TransactionStateManager(brokerId: Int,
     if (currentTxnMetadataCacheEntry.isDefined) {
       val coordinatorEpoch = currentTxnMetadataCacheEntry.get.coordinatorEpoch
       val metadataPerTxnId = currentTxnMetadataCacheEntry.get.metadataPerTransactionalId
-      info(s"The metadata cache for txn partition $txnTopicPartition has already exist with epoch $coordinatorEpoch " +
+      val errorMsg = s"The metadata cache for txn partition $txnTopicPartition has already exist with epoch $coordinatorEpoch " +
         s"and ${metadataPerTxnId.size} entries while trying to add to it; " +
-        s"it is likely that another process for loading from the transaction log has just executed earlier before")
-
-      throw new IllegalStateException(s"The metadata cache entry for txn partition $txnTopicPartition has already exist while trying to add to it.")
+        s"this should not happen"
+      fatal(errorMsg)
+      throw new IllegalStateException(errorMsg)
     }
   }
 
@@ -384,27 +384,32 @@ class TransactionStateManager(brokerId: Int,
         if (loadingPartitions.contains(partitionAndLeaderEpoch)) {
           addLoadedTransactionsToCache(topicPartition.partition, coordinatorEpoch, loadedTransactions)
 
+          val transactionsPendingForCompletion = new mutable.ListBuffer[TransactionalIdCoordinatorEpochAndTransitMetadata]
           loadedTransactions.foreach {
             case (transactionalId, txnMetadata) =>
-              val result = txnMetadata synchronized {
+              txnMetadata synchronized {
                 // if state is PrepareCommit or PrepareAbort we need to complete the transaction
                 txnMetadata.state match {
                   case PrepareAbort =>
-                    Some(TransactionResult.ABORT, txnMetadata.prepareComplete(time.milliseconds()))
+                    transactionsPendingForCompletion +=
+                      TransactionalIdCoordinatorEpochAndTransitMetadata(transactionalId, coordinatorEpoch, TransactionResult.ABORT, txnMetadata, txnMetadata.prepareComplete(time.milliseconds()))
                   case PrepareCommit =>
-                    Some(TransactionResult.COMMIT, txnMetadata.prepareComplete(time.milliseconds()))
+                    transactionsPendingForCompletion +=
+                      TransactionalIdCoordinatorEpochAndTransitMetadata(transactionalId, coordinatorEpoch, TransactionResult.COMMIT, txnMetadata, txnMetadata.prepareComplete(time.milliseconds()))
                   case _ =>
                     // nothing need to be done
-                    None
                 }
-              }
-
-              result.foreach { case (command, newMetadata) =>
-                sendTxnMarkers(transactionalId, coordinatorEpoch, command, txnMetadata, newMetadata)
               }
           }
 
+          // we first remove the partition from loading partition then send out the markers for those pending to be
+          // completed transactions, so that when the markers get sent the attempt of appending the complete transaction
+          // log would not be blocked by the coordinator loading error
           loadingPartitions.remove(partitionAndLeaderEpoch)
+
+          transactionsPendingForCompletion.foreach { txnTransitMetadata =>
+            sendTxnMarkers(txnTransitMetadata.transactionalId, txnTransitMetadata.coordinatorEpoch, txnTransitMetadata.result, txnTransitMetadata.txnMetadata, txnTransitMetadata.transitMetadata)
+          }
         }
       }
     }
@@ -644,6 +649,7 @@ private[transaction] case class TransactionConfig(transactionalIdExpirationMs: I
 case class TransactionalIdAndProducerIdEpoch(transactionalId: String, producerId: Long, producerEpoch: Short)
 
 case class TransactionPartitionAndLeaderEpoch(txnPartitionId: Int, coordinatorEpoch: Int)
-case class TransactionalIdCoordinatorEpochAndMetadata(transactionalId: String,
-                                                      coordinatorEpoch: Int,
-                                                      transitMetadata: TxnTransitMetadata)
+
+case class TransactionalIdCoordinatorEpochAndMetadata(transactionalId: String, coordinatorEpoch: Int, transitMetadata: TxnTransitMetadata)
+
+case class TransactionalIdCoordinatorEpochAndTransitMetadata(transactionalId: String, coordinatorEpoch: Int, result: TransactionResult, txnMetadata: TransactionMetadata, transitMetadata: TxnTransitMetadata)

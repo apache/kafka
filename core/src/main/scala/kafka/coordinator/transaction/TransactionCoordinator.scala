@@ -138,7 +138,9 @@ class TransactionCoordinator(brokerId: Int,
           }
 
         case Right(None) =>
-          throw new IllegalStateException("Trying to add metadata to the cache still returns NONE; this is not expected")
+          val errorMsg = "Trying to add metadata to the cache still returns NONE; this is not expected"
+          fatal(errorMsg)
+          throw new IllegalStateException(errorMsg)
       }
 
       result match {
@@ -212,8 +214,11 @@ class TransactionCoordinator(brokerId: Int,
           // then when the client retries, we will generate a new producerId.
           Right(coordinatorEpoch, txnMetadata.prepareFenceProducerEpoch())
         case Dead =>
-          throw new IllegalStateException(s"Found transactionalId $transactionalId with state ${txnMetadata.state}. " +
-            s"This is illegal as we should never have transitioned to this state.")
+          val errorMsg = s"Found transactionalId $transactionalId with state ${txnMetadata.state}. " +
+            s"This is illegal as we should never have transitioned to this state."
+          fatal(errorMsg)
+          throw new IllegalStateException(errorMsg)
+
       }
     }
   }
@@ -344,8 +349,10 @@ class TransactionCoordinator(brokerId: Int,
               case Empty =>
                 logInvalidStateTransitionAndReturnError(transactionalId, txnMetadata.state, txnMarkerResult)
               case Dead =>
-                throw new IllegalStateException(s"Found transactionalId $transactionalId with state ${txnMetadata.state}. " +
-                  s"This is illegal as we should never have transitioned to this state.")
+                val errorMsg = s"Found transactionalId $transactionalId with state ${txnMetadata.state}. " +
+                  s"This is illegal as we should never have transitioned to this state."
+                fatal(errorMsg)
+                throw new IllegalStateException(errorMsg)
 
             }
           }
@@ -387,8 +394,10 @@ class TransactionCoordinator(brokerId: Int,
                           else
                             Right(txnMetadata, txnMetadata.prepareComplete(time.milliseconds()))
                         case Dead =>
-                          throw new IllegalStateException(s"Found transactionalId $transactionalId with state ${txnMetadata.state}. " +
-                            s"This is illegal as we should never have transitioned to this state.")
+                          val errorMsg = s"Found transactionalId $transactionalId with state ${txnMetadata.state}. " +
+                            s"This is illegal as we should never have transitioned to this state."
+                          fatal(errorMsg)
+                          throw new IllegalStateException(errorMsg)
 
                       }
                     }
@@ -400,8 +409,10 @@ class TransactionCoordinator(brokerId: Int,
                   }
 
                 case Right(None) =>
-                  throw new IllegalStateException(s"The coordinator still owns the transaction partition for $transactionalId, but there is " +
-                    s"no metadata in the cache; this is not expected")
+                  val errorMsg = s"The coordinator still owns the transaction partition for $transactionalId, but there is " +
+                    s"no metadata in the cache; this is not expected"
+                  fatal(errorMsg)
+                  throw new IllegalStateException(errorMsg)
               }
 
               preSendResult match {
