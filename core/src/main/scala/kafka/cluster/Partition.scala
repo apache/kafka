@@ -151,8 +151,9 @@ class Partition(val topic: String,
       assignedReplicaMap.clear()
       inSyncReplicas = Set.empty[Replica]
       leaderReplicaIdOpt = None
-      logManager.asyncDelete(topicPartition)
       removePartitionMetrics()
+      // This call may throw exception if the log is on offline directory
+      logManager.asyncDelete(topicPartition)
     }
   }
 

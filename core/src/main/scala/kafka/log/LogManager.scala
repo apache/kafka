@@ -502,7 +502,7 @@ class LogManager(private val logDirs: Array[File],
       getLog(topicPartition).getOrElse {
         // create the log if it has not already been created in another thread
         if (!isNew && offlineLogDirs.nonEmpty)
-          throw new KafkaStorageException("Can not create log for " + topicPartition + " because log directories " + offlineLogDirs + " are offline")
+          throw new KafkaStorageException("Can not create log for " + topicPartition + " because log directories " + offlineLogDirs.mkString(",") + " are offline")
 
         val dataDir = nextLogDir()
         val dir = new File(dataDir, topicPartition.topic + "-" + topicPartition.partition)
@@ -594,6 +594,8 @@ class LogManager(private val logDirs: Array[File],
       } else {
         throw new KafkaStorageException("Failed to rename log directory from " + removedLog.dir.getAbsolutePath + " to " + renamedDir.getAbsolutePath)
       }
+    } else if (offlineLogDirs.nonEmpty) {
+      throw new KafkaStorageException("Can not delete log for " + topicPartition + " because it may be on offline directories " + offlineLogDirs.mkString(","))
     }
   }
 
