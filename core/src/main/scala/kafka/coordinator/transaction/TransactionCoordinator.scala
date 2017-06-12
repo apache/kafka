@@ -138,7 +138,9 @@ class TransactionCoordinator(brokerId: Int,
           }
 
         case Right(None) =>
-          throw new IllegalStateException("Trying to add metadata to the cache still returns NONE; this is not expected")
+          val errorMsg = "Trying to add metadata to the cache still returns NONE; this is not expected"
+          fatal(errorMsg)
+          throw new IllegalStateException(errorMsg)
       }
 
       result match {
@@ -169,6 +171,7 @@ class TransactionCoordinator(brokerId: Int,
                   s"${Topic.TRANSACTION_STATE_TOPIC_NAME}-${txnManager.partitionFor(transactionalId)}")
                 responseCallback(initTransactionMetadata(newMetadata))
               } else {
+                info(s"Returning $error error code to client for $transactionalId's InitProducerId request")
                 responseCallback(initTransactionError(error))
               }
             }
@@ -211,8 +214,11 @@ class TransactionCoordinator(brokerId: Int,
           // then when the client retries, we will generate a new producerId.
           Right(coordinatorEpoch, txnMetadata.prepareFenceProducerEpoch())
         case Dead =>
-          throw new IllegalStateException(s"Found transactionalId $transactionalId with state ${txnMetadata.state}. " +
-            s"This is illegal as we should never have transitioned to this state.")
+          val errorMsg = s"Found transactionalId $transactionalId with state ${txnMetadata.state}. " +
+            s"This is illegal as we should never have transitioned to this state."
+          fatal(errorMsg)
+          throw new IllegalStateException(errorMsg)
+
       }
     }
   }
@@ -223,6 +229,7 @@ class TransactionCoordinator(brokerId: Int,
                                        partitions: collection.Set[TopicPartition],
                                        responseCallback: AddPartitionsCallback): Unit = {
     if (transactionalId == null || transactionalId.isEmpty) {
+      debug(s"Returning ${Errors.INVALID_REQUEST} error code to client for $transactionalId's AddPartitions request")
       responseCallback(Errors.INVALID_REQUEST)
     } else {
       // try to update the transaction metadata and append the updated metadata to txn log;
@@ -260,6 +267,7 @@ class TransactionCoordinator(brokerId: Int,
 
       result match {
         case Left(err) =>
+          info(s"Returning $err error code to client for $transactionalId's AddPartitions request")
           responseCallback(err)
 
         case Right((coordinatorEpoch, newMetadata)) =>
@@ -341,8 +349,10 @@ class TransactionCoordinator(brokerId: Int,
               case Empty =>
                 logInvalidStateTransitionAndReturnError(transactionalId, txnMetadata.state, txnMarkerResult)
               case Dead =>
-                throw new IllegalStateException(s"Found transactionalId $transactionalId with state ${txnMetadata.state}. " +
-                  s"This is illegal as we should never have transitioned to this state.")
+                val errorMsg = s"Found transactionalId $transactionalId with state ${txnMetadata.state}. " +
+                  s"This is illegal as we should never have transitioned to this state."
+                fatal(errorMsg)
+                throw new IllegalStateException(errorMsg)
 
             }
           }
@@ -350,6 +360,7 @@ class TransactionCoordinator(brokerId: Int,
 
       preAppendResult match {
         case Left(err) =>
+          info(s"Aborting append of $txnMarkerResult to transaction log with coordinator and returning $err error to client for $transactionalId's EndTransaction request")
           responseCallback(err)
 
         case Right((coordinatorEpoch, newMetadata)) =>
@@ -383,25 +394,31 @@ class TransactionCoordinator(brokerId: Int,
                           else
                             Right(txnMetadata, txnMetadata.prepareComplete(time.milliseconds()))
                         case Dead =>
-                          throw new IllegalStateException(s"Found transactionalId $transactionalId with state ${txnMetadata.state}. " +
-                            s"This is illegal as we should never have transitioned to this state.")
+                          val errorMsg = s"Found transactionalId $transactionalId with state ${txnMetadata.state}. " +
+                            s"This is illegal as we should never have transitioned to this state."
+                          fatal(errorMsg)
+                          throw new IllegalStateException(errorMsg)
 
                       }
                     }
                   } else {
-                    info(s"Updating $transactionalId's transaction state to $newMetadata with coordinator epoch $coordinatorEpoch for $transactionalId failed since the transaction coordinator epoch " +
-                      s"has been changed to ${epochAndMetadata.coordinatorEpoch} after the transaction metadata has been successfully appended to the log")
+                    debug(s"The transaction coordinator epoch has changed to ${epochAndMetadata.coordinatorEpoch} after $txnMarkerResult was " +
+                      s"successfully appended to the log for $transactionalId with old epoch $coordinatorEpoch")
 
                     Left(Errors.NOT_COORDINATOR)
                   }
 
                 case Right(None) =>
-                  throw new IllegalStateException(s"The coordinator still owns the transaction partition for $transactionalId, but there is " +
-                    s"no metadata in the cache; this is not expected")
+                  val errorMsg = s"The coordinator still owns the transaction partition for $transactionalId, but there is " +
+                    s"no metadata in the cache; this is not expected"
+                  fatal(errorMsg)
+                  throw new IllegalStateException(errorMsg)
               }
 
               preSendResult match {
                 case Left(err) =>
+                  info(s"Aborting sending of transaction markers after appended $txnMarkerResult to transaction log and returning $err error to client for $transactionalId's EndTransaction request")
+
                   responseCallback(err)
 
                 case Right((txnMetadata, newPreSendMetadata)) =>
@@ -412,8 +429,8 @@ class TransactionCoordinator(brokerId: Int,
                   txnMarkerChannelManager.addTxnMarkersToSend(transactionalId, coordinatorEpoch, txnMarkerResult, txnMetadata, newPreSendMetadata)
               }
             } else {
-              info(s"Updating $transactionalId's transaction state to $newMetadata with coordinator epoch $coordinatorEpoch for $transactionalId failed since the transaction message " +
-                s"cannot be appended to the log. Returning error code $error to the client")
+              info(s"Aborting sending of transaction markers and returning $error error to client for $transactionalId's EndTransaction request of $txnMarkerResult, " +
+                s"since appending $newMetadata to transaction log with coordinator epoch $coordinatorEpoch failed")
 
               responseCallback(error)
             }
