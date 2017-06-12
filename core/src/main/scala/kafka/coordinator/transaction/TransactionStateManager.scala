@@ -26,7 +26,6 @@ import kafka.common.KafkaException
 import kafka.log.LogConfig
 import kafka.message.UncompressedCodec
 import kafka.server.Defaults
-import kafka.utils.CoreUtils.inLock
 import kafka.server.ReplicaManager
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils.{Logging, Pool, Scheduler, ZkUtils}
@@ -205,10 +204,13 @@ class TransactionStateManager(brokerId: Int,
     }, delay = config.removeExpiredTransactionalIdsIntervalMs, period = config.removeExpiredTransactionalIdsIntervalMs)
   }
 
-  def getTransactionState(transactionalId: String) = getAndMaybeAddTransactionState(transactionalId, None)
+  def getTransactionState(transactionalId: String): Either[Errors, Option[CoordinatorEpochAndTxnMetadata]] =
+    getAndMaybeAddTransactionState(transactionalId, None)
 
-  def putTransactionStateIfNotExists(transactionalId: String, txnMetadata: TransactionMetadata) =
+  def putTransactionStateIfNotExists(transactionalId: String,
+                                     txnMetadata: TransactionMetadata): Either[Errors, CoordinatorEpochAndTxnMetadata] =
     getAndMaybeAddTransactionState(transactionalId, Some(txnMetadata))
+      .right.map(_.getOrElse(throw new IllegalStateException(s"Unexpected empty transaction metadata returned while putting $txnMetadata")))
 
   /**
    * Get the transaction metadata associated with the given transactional id, or an error if
@@ -218,39 +220,27 @@ class TransactionStateManager(brokerId: Int,
    * This function is covered by the state read lock
    */
   private def getAndMaybeAddTransactionState(transactionalId: String,
-                                             createdTxnMetadata: Option[TransactionMetadata]): Either[Errors, Option[CoordinatorEpochAndTxnMetadata]] = {
+                                             createdTxnMetadataOpt: Option[TransactionMetadata]): Either[Errors, Option[CoordinatorEpochAndTxnMetadata]] = {
     inReadLock(stateLock) {
       val partitionId = partitionFor(transactionalId)
-
       if (loadingPartitions.exists(_.txnPartitionId == partitionId))
-        return Left(Errors.COORDINATOR_LOAD_IN_PROGRESS)
-
-      if (leavingPartitions.exists(_.txnPartitionId == partitionId))
-        return Left(Errors.NOT_COORDINATOR)
-
-      transactionMetadataCache.get(partitionId) match {
-        case Some(cacheEntry) =>
-          cacheEntry.metadataPerTransactionalId.get(transactionalId) match {
-            case null =>
-              createdTxnMetadata match {
-                case None =>
-                  Right(None)
-
-                case Some(txnMetadata) =>
-                  val currentTxnMetadata = cacheEntry.metadataPerTransactionalId.putIfNotExists(transactionalId, txnMetadata)
-                  if (currentTxnMetadata != null) {
-                    Right(Some(CoordinatorEpochAndTxnMetadata(cacheEntry.coordinatorEpoch, currentTxnMetadata)))
-                  } else {
-                    Right(Some(CoordinatorEpochAndTxnMetadata(cacheEntry.coordinatorEpoch, txnMetadata)))
-                  }
+        Left(Errors.COORDINATOR_LOAD_IN_PROGRESS)
+      else if (leavingPartitions.exists(_.txnPartitionId == partitionId))
+        Left(Errors.NOT_COORDINATOR)
+      else {
+        transactionMetadataCache.get(partitionId) match {
+          case Some(cacheEntry) =>
+            val txnMetadata = Option(cacheEntry.metadataPerTransactionalId.get(transactionalId)).orElse {
+              createdTxnMetadataOpt.map { createdTxnMetadata =>
+                Option(cacheEntry.metadataPerTransactionalId.putIfNotExists(transactionalId, createdTxnMetadata))
+                  .getOrElse(createdTxnMetadata)
               }
+            }
+            Right(txnMetadata.map(CoordinatorEpochAndTxnMetadata(cacheEntry.coordinatorEpoch, _)))
 
-            case currentTxnMetadata =>
-              Right(Some(CoordinatorEpochAndTxnMetadata(cacheEntry.coordinatorEpoch, currentTxnMetadata)))
-          }
-
-        case None =>
-          Left(Errors.NOT_COORDINATOR)
+          case None =>
+            Left(Errors.NOT_COORDINATOR)
+        }
       }
     }
   }
