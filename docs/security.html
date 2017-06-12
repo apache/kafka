@@ -43,7 +43,7 @@
             The first step of deploying HTTPS is to generate the key and the certificate for each machine in the cluster. You can use Java's keytool utility to accomplish this task.
             We will generate the key into a temporary keystore initially so that we can export and sign it later with CA.
             <pre class="brush: bash;">
-            keytool -keystore server.keystore.jks -alias localhost -validity {validity} -genkey</pre>
+            keytool -keystore server.keystore.jks -alias localhost -validity {validity} -genkey -keyalg RSA</pre>
 
             You need to specify two parameters in the above command:
             <ol>
@@ -63,7 +63,7 @@
         <br>
         Both fields are valid, RFC-2818 recommends the use of SAN however. SAN is also more flexible, allowing for multiple DNS entries to be declared. Another advantage is that the CN can be set to a more meaningful value for authorization purposes. To add a SAN field  append the following argument <code> -ext SAN=DNS:{FQDN} </code> to the keytool command:
         <pre class="brush: bash;">
-        keytool -keystore server.keystore.jks -alias localhost -validity {validity} -genkey -ext SAN=DNS:{FQDN}
+        keytool -keystore server.keystore.jks -alias localhost -validity {validity} -genkey -keyalg RSA -ext SAN=DNS:{FQDN}
         </pre>
         The following command can be run afterwards to verify the contents of the generated certificate:
         <pre class="brush: bash;">
