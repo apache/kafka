@@ -252,11 +252,14 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
 
           txnStateManager.getTransactionState(transactionalId) match {
             case Left(Errors.NOT_COORDINATOR) =>
-              info(s"I am no longer the coordinator for $transactionalId with coordinator epoch $coordinatorEpoch; cancel appending $newMetadata to transaction log")
+              info(s"No longer the coordinator for $transactionalId with coordinator epoch $coordinatorEpoch; cancel appending $newMetadata to transaction log")
 
             case Left(Errors.COORDINATOR_LOAD_IN_PROGRESS) =>
-              info(s"I am loading the transaction partition that contains $transactionalId while my current coordinator epoch is $coordinatorEpoch; " +
+              info(s"Loading the transaction partition that contains $transactionalId while my current coordinator epoch is $coordinatorEpoch; " +
                 s"so cancel appending $newMetadata to transaction log since the loading process will continue the remaining work")
+
+            case Left(unexpectedError) =>
+              throw new IllegalStateException(s"Unhandled error $unexpectedError when fetching current transaction state")
 
             case Right(Some(epochAndMetadata)) =>
               if (epochAndMetadata.coordinatorEpoch == coordinatorEpoch) {
