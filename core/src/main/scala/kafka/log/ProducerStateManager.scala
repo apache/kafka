@@ -376,7 +376,7 @@ class ProducerStateManager(val topicPartition: TopicPartition,
   private val validateSequenceNumbers = topicPartition.topic != Topic.GROUP_METADATA_TOPIC_NAME
   private val producers = mutable.Map.empty[Long, ProducerIdEntry]
   private var lastMapOffset = 0L
-  private var lastSnapOffset = 0L
+  private var lastSnapOffset = -1L
 
   // ongoing transactions sorted by the first offset of the transaction
   private val ongoingTxns = new util.TreeMap[Long, TxnMetadata]
@@ -444,7 +444,7 @@ class ProducerStateManager(val topicPartition: TopicPartition,
               Files.deleteIfExists(file.toPath)
           }
         case None =>
-          lastSnapOffset = logStartOffset
+          lastSnapOffset = -1
           lastMapOffset = logStartOffset
           return
       }
@@ -472,6 +472,11 @@ class ProducerStateManager(val topicPartition: TopicPartition,
     }
   }
 
+  private def isSnapshotInRange(snapshotFile: File, startOffset: Long, endOffset: Long): Boolean = {
+    val offset = offsetFromFilename(snapshotFile.getName)
+    offset >= startOffset && offset <= endOffset
+  }
+
   /**
    * Truncate the producer id mapping to the given offset range and reload the entries from the most recent
    * snapshot in range (if there is one). Note that the log end offset is assumed to be less than
@@ -480,8 +485,7 @@ class ProducerStateManager(val topicPartition: TopicPartition,
   def truncateAndReload(logStartOffset: Long, logEndOffset: Long, currentTimeMs: Long) {
     // remove all out of range snapshots
     deleteSnapshotFiles { file =>
-      val offset = offsetFromFilename(file.getName)
-      offset > logEndOffset || offset <= logStartOffset
+      !isSnapshotInRange(file, logStartOffset, logEndOffset)
     }
 
     if (logEndOffset != mapEndOffset) {
@@ -541,6 +545,18 @@ class ProducerStateManager(val topicPartition: TopicPartition,
     }
   }
 
+  def hasSnapshotInRange(startOffset: Long, endOffset: Long): Boolean = {
+    listSnapshotFiles.exists { file =>
+      isSnapshotInRange(file, startOffset, endOffset)
+    }
+  }
+
+  def takeEmptySnapshot(offset: Long) = {
+    val snapshotFile = Log.producerSnapshotFile(logDir, offset)
+    debug(s"Writing empty producer snapshot for partition $topicPartition at offset $offset")
+    writeSnapshot(snapshotFile, mutable.Map.empty)
+  }
+
   /**
    * Get the last offset (exclusive) of the latest snapshot file.
    */
@@ -563,7 +579,7 @@ class ProducerStateManager(val topicPartition: TopicPartition,
     removeEvictedOngoingTransactions(evictedProducerIds)
     removeUnreplicatedTransactions(logStartOffset)
 
-    deleteSnapshotFiles(file => offsetFromFilename(file.getName) <= logStartOffset)
+    deleteSnapshotFiles(file => offsetFromFilename(file.getName) < logStartOffset)
     if (lastMapOffset < logStartOffset)
       lastMapOffset = logStartOffset
     lastSnapOffset = latestSnapshotOffset.getOrElse(logStartOffset)
@@ -596,7 +612,7 @@ class ProducerStateManager(val topicPartition: TopicPartition,
     ongoingTxns.clear()
     unreplicatedTxns.clear()
     deleteSnapshotFiles()
-    lastSnapOffset = 0L
+    lastSnapOffset = -1L
     lastMapOffset = 0L
   }
 

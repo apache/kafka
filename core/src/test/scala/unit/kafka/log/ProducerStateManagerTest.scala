@@ -266,14 +266,30 @@ class ProducerStateManagerTest extends JUnitSuite {
     append(stateManager, producerId, epoch, 4, 4L)
     stateManager.takeSnapshot()
 
+    assertFalse(stateManager.hasSnapshotInRange(0L, 0L))
+    assertTrue(stateManager.hasSnapshotInRange(0L, 4L))
+    assertTrue(stateManager.hasSnapshotInRange(1L, 1L))
+    assertTrue(stateManager.hasSnapshotInRange(1L, 4L))
+    assertTrue(stateManager.hasSnapshotInRange(0L, 3L))
+    assertTrue(stateManager.hasSnapshotInRange(2L, 2L))
+    assertTrue(stateManager.hasSnapshotInRange(4L, 5L))
+    assertTrue(stateManager.hasSnapshotInRange(5L, 5L))
+    assertFalse(stateManager.hasSnapshotInRange(6L, 6L))
+    assertFalse(stateManager.hasSnapshotInRange(6L, 8L))
+
     stateManager.truncateAndReload(1L, 3L, time.milliseconds())
 
-    assertEquals(Some(2L), stateManager.oldestSnapshotOffset)
+    assertEquals(Some(1L), stateManager.oldestSnapshotOffset)
     assertEquals(Some(3L), stateManager.latestSnapshotOffset)
   }
 
   @Test
   def testTakeSnapshot(): Unit = {
+    // Should be able to take a snapshot at offset 0
+    stateManager.takeSnapshot()
+    assertEquals(Some(0), stateManager.oldestSnapshotOffset)
+    assertEquals(Some(0), stateManager.latestSnapshotOffset)
+
     val epoch = 0.toShort
     append(stateManager, producerId, epoch, 0, 0L, 0L)
     append(stateManager, producerId, epoch, 1, 1L, 1L)
@@ -282,8 +298,41 @@ class ProducerStateManagerTest extends JUnitSuite {
     stateManager.takeSnapshot()
 
     // Check that file exists and it is not empty
-    assertEquals("Directory doesn't contain a single file as expected", 1, logDir.list().length)
-    assertTrue("Snapshot file is empty", logDir.list().head.length > 0)
+    assertEquals(2, logDir.list().length)
+    assertEquals(Some(0), stateManager.oldestSnapshotOffset)
+    assertEquals(Some(2), stateManager.latestSnapshotOffset)
+  }
+
+  @Test
+  def testTakeEmptySnapshot(): Unit = {
+    val epoch = 0.toShort
+    append(stateManager, producerId, epoch, seq = 0, 0L)
+    append(stateManager, producerId, epoch, seq = 1, 1L)
+    stateManager.takeSnapshot()
+
+    stateManager.takeEmptySnapshot(0L)
+    assertEquals(Some(0L), stateManager.oldestSnapshotOffset)
+
+    stateManager.truncateAndReload(0L, 1L, time.milliseconds())
+    assertEquals(0, stateManager.activeProducers.size)
+    assertEquals(0, stateManager.mapEndOffset)
+    assertEquals(Some(0L), stateManager.oldestSnapshotOffset)
+    assertEquals(Some(0L), stateManager.latestSnapshotOffset)
+  }
+
+  @Test
+  def testSnapshotAfterTruncation(): Unit = {
+    val epoch = 0.toShort
+    append(stateManager, producerId, epoch, 0, 0L)
+    append(stateManager, producerId, epoch, 1, 1L)
+    stateManager.takeSnapshot()
+    assertEquals(Some(2), stateManager.latestSnapshotOffset)
+
+    stateManager.truncateAndReload(0L, 1L, time.milliseconds())
+    assertEquals(None, stateManager.latestSnapshotOffset)
+
+    stateManager.takeSnapshot()
+    assertEquals(Some(0), stateManager.latestSnapshotOffset)
   }
 
   @Test
@@ -402,6 +451,8 @@ class ProducerStateManagerTest extends JUnitSuite {
     val epoch = 0.toShort
 
     append(stateManager, producerId, epoch, 0, 0L)
+    stateManager.takeSnapshot()
+
     append(stateManager, producerId, epoch, 1, 1L)
     stateManager.takeSnapshot()
 
@@ -409,10 +460,10 @@ class ProducerStateManagerTest extends JUnitSuite {
     append(stateManager, anotherPid, epoch, 0, 2L)
     append(stateManager, anotherPid, epoch, 1, 3L)
     stateManager.takeSnapshot()
-    assertEquals(Set(2, 4), currentSnapshotOffsets)
+    assertEquals(Set(1, 2, 4), currentSnapshotOffsets)
 
     stateManager.evictUnretainedProducers(2)
-    assertEquals(Set(4), currentSnapshotOffsets)
+    assertEquals(Set(2, 4), currentSnapshotOffsets)
     assertEquals(Set(anotherPid), stateManager.activeProducers.keySet)
     assertEquals(None, stateManager.lastEntry(producerId))
 
