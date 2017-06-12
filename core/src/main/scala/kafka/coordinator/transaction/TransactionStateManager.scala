@@ -220,7 +220,7 @@ class TransactionStateManager(brokerId: Int,
    * This function is covered by the state read lock
    */
   private def getAndMaybeAddTransactionState(transactionalId: String,
-                                             createdTxnMetadata: Option[TransactionMetadata]): Either[Errors, Option[CoordinatorEpochAndTxnMetadata]] = {
+                                             createdTxnMetadataOpt: Option[TransactionMetadata]): Either[Errors, Option[CoordinatorEpochAndTxnMetadata]] = {
     inReadLock(stateLock) {
       val partitionId = partitionFor(transactionalId)
       if (loadingPartitions.exists(_.txnPartitionId == partitionId))
@@ -231,12 +231,9 @@ class TransactionStateManager(brokerId: Int,
         transactionMetadataCache.get(partitionId) match {
           case Some(cacheEntry) =>
             val txnMetadata = Option(cacheEntry.metadataPerTransactionalId.get(transactionalId)).orElse {
-              createdTxnMetadata.map { txnMetadata =>
-                val currentTxnMetadata = cacheEntry.metadataPerTransactionalId.putIfNotExists(transactionalId, txnMetadata)
-                if (currentTxnMetadata != null)
-                  currentTxnMetadata
-                else
-                  txnMetadata
+              createdTxnMetadataOpt.map { createdTxnMetadata =>
+                Option(cacheEntry.metadataPerTransactionalId.putIfNotExists(transactionalId, createdTxnMetadata))
+                  .getOrElse(createdTxnMetadata)
               }
             }
             Right(txnMetadata.map(CoordinatorEpochAndTxnMetadata(cacheEntry.coordinatorEpoch, _)))
