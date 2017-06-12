@@ -446,7 +446,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       // When this callback is triggered, the remote API call has completed
       request.apiRemoteCompleteTimeNanos = time.nanoseconds
 
-      quotas.produce.recordAndMaybeThrottle(
+      quotas.produce.maybeRecordAndThrottle(
         request.session.sanitizedUser,
         request.header.clientId,
         numBytesAppended,
@@ -594,7 +594,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         // result in data being loaded into memory, it is better to do this after throttling to avoid OOM.
         val response = new FetchResponse(fetchedPartitionData, 0)
         val responseStruct = response.toStruct(versionId)
-        quotas.fetch.recordAndMaybeThrottle(request.session.sanitizedUser, clientId, responseStruct.sizeOf,
+        quotas.fetch.maybeRecordAndThrottle(request.session.sanitizedUser, clientId, responseStruct.sizeOf,
           fetchResponseCallback)
       }
     }
@@ -2003,7 +2003,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       // When this callback is triggered, the remote API call has completed
       request.apiRemoteCompleteTimeNanos = time.nanoseconds
     }
-    quotas.request.recordRequestTimeAndMaybeThrottle(request.session.sanitizedUser, clientId,
+    quotas.request.maybeRecordAndThrottle(request.session.sanitizedUser, clientId,
         request.requestThreadTimeNanos, sendResponseCallback,
         callback => request.recordNetworkThreadTimeCallback = Some(callback))
   }
@@ -2013,8 +2013,9 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   private def sendResponseExemptThrottle(request: RequestChannel.Request, sendResponseCallback: () => Unit) {
-    quotas.request.recordRequestTimeAndExemptThrottle(request.requestThreadTimeNanos, sendResponseCallback,
+    quotas.request.maybeRecordExempt(request.requestThreadTimeNanos,
         callback => request.recordNetworkThreadTimeCallback = Some(callback))
+    sendResponseCallback()
   }
 
   private def sendResponse(request: RequestChannel.Request, response: AbstractResponse) {

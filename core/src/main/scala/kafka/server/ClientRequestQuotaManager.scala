@@ -33,7 +33,7 @@ class ClientRequestQuotaManager(private val config: ClientQuotaManagerConfig,
     exemptSensor.record(value)
   }
 
-  def recordRequestTimeAndMaybeThrottle(sanitizedUser: String, clientId: String, requestThreadTimeNanos: Long,
+  def maybeRecordAndThrottle(sanitizedUser: String, clientId: String, requestThreadTimeNanos: Long,
       sendResponseCallback: Int => Unit, recordNetworkThreadTimeCallback: (Long => Unit) => Unit): Unit = {
     if (quotasEnabled) {
       val quotaSensors = getOrCreateQuotaSensors(sanitizedUser, clientId)
@@ -48,12 +48,11 @@ class ClientRequestQuotaManager(private val config: ClientQuotaManagerConfig,
     }
   }
 
-  def recordRequestTimeAndExemptThrottle(requestThreadTimeNanos: Long, sendResponseCallback: () => Unit, recordNetworkThreadTimeCallback: (Long => Unit) => Unit): Unit = {
+  def maybeRecordExempt(requestThreadTimeNanos: Long, recordNetworkThreadTimeCallback: (Long => Unit) => Unit): Unit = {
     if (quotasEnabled) {
       recordNetworkThreadTimeCallback.apply(timeNanos => recordExempt(nanosToPercentage(timeNanos)))
       recordExempt(nanosToPercentage(requestThreadTimeNanos))
     }
-    sendResponseCallback()
   }
 
   override protected def throttleTime(clientMetric: KafkaMetric, config: MetricConfig): Long = {
