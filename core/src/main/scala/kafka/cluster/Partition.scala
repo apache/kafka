@@ -391,8 +391,8 @@ class Partition(val topic: String,
       debug("High watermark for partition [%s,%d] updated to %s".format(topic, partitionId, newHighWatermark))
       true
     } else  {
-      debug("Skipping update high watermark since new hw %s is not larger than old hw %s for partition [%s,%d]. All leo's are %s"
-        .format(oldHighWatermark, newHighWatermark, topic, partitionId, allLogEndOffsets.mkString(",")))
+      debug(s"Skipping update high watermark since new hw $newHighWatermark is not larger than old hw $oldHighWatermark" +
+        s" for partition [$topic,$partitionId]. All leo's are ${allLogEndOffsets.mkString(",")}")
       false
     }
   }

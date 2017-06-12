@@ -928,6 +928,8 @@ public class TransactionManagerTest {
         assertTrue(transactionManager.hasAbortableError());
         assertTrue(transactionManager.isPartitionAdded(tp0));
         assertFalse(transactionManager.isPartitionAdded(unauthorizedPartition));
+        assertFalse(authorizedTopicProduceFuture.isDone());
+        assertFalse(unauthorizedTopicProduceFuture.isDone());
 
         prepareEndTxnResponse(Errors.NONE, TransactionResult.ABORT, pid, epoch);
         transactionManager.beginAbortingTransaction();
@@ -944,7 +946,7 @@ public class TransactionManagerTest {
         transactionManager.beginTransaction();
         transactionManager.maybeAddPartitionToTransaction(tp0);
 
-        unauthorizedTopicProduceFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
+        FutureRecordMetadata nextTransactionFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
                 "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
 
         prepareAddPartitionsToTxn(singletonMap(tp0, Errors.NONE));
@@ -956,8 +958,8 @@ public class TransactionManagerTest {
         prepareProduceResponse(Errors.NONE, pid, epoch);
         sender.run(time.milliseconds());
 
-        assertTrue(unauthorizedTopicProduceFuture.isDone());
-        assertNotNull(unauthorizedTopicProduceFuture.get());
+        assertTrue(nextTransactionFuture.isDone());
+        assertNotNull(nextTransactionFuture.get());
 
         prepareEndTxnResponse(Errors.NONE, TransactionResult.COMMIT, pid, epoch);
         sender.run(time.milliseconds());
@@ -1017,7 +1019,7 @@ public class TransactionManagerTest {
         transactionManager.beginTransaction();
         transactionManager.maybeAddPartitionToTransaction(tp0);
 
-        unauthorizedTopicProduceFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
+        FutureRecordMetadata nextTransactionFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
                 "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
 
         prepareAddPartitionsToTxn(singletonMap(tp0, Errors.NONE));
@@ -1029,8 +1031,8 @@ public class TransactionManagerTest {
         prepareProduceResponse(Errors.NONE, pid, epoch);
         sender.run(time.milliseconds());
 
-        assertTrue(unauthorizedTopicProduceFuture.isDone());
-        assertNotNull(unauthorizedTopicProduceFuture.get());
+        assertTrue(nextTransactionFuture.isDone());
+        assertNotNull(nextTransactionFuture.get());
 
         prepareEndTxnResponse(Errors.NONE, TransactionResult.COMMIT, pid, epoch);
         sender.run(time.milliseconds());
