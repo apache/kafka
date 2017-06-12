@@ -22,7 +22,7 @@ import kafka.message._
 import kafka.serializer._
 import kafka.utils.{CommandLineUtils, Exit, ToolsUtils}
 import kafka.producer.{NewShinyProducer, OldProducer}
-import java.util.Properties
+import java.util.{Properties, Random}
 import java.io._
 import java.nio.charset.StandardCharsets
 
@@ -79,8 +79,10 @@ object ConsoleProducer {
   }
 
   def getOldProducerProps(config: ProducerConfig): Properties = {
-    val props = producerProps(config)
+    val props = new Properties();
 
+    props.putAll(config.producerProps)
+    props.putAll(config.extraProducerProps)
     props.put("metadata.broker.list", config.brokerList)
     props.put("compression.codec", config.compressionCodec)
     props.put("producer.type", if(config.sync) "sync" else "async")
@@ -96,23 +98,15 @@ object ConsoleProducer {
     props.put("serializer.class", config.valueEncoderClass)
     props.put("send.buffer.bytes", config.socketBuffer.toString)
     props.put("topic.metadata.refresh.interval.ms", config.metadataExpiryMs.toString)
-    props.put("client.id", "console-producer")
 
-    props
-  }
-
-  private def producerProps(config: ProducerConfig): Properties = {
-    val props =
-      if (config.options.has(config.producerConfigOpt))
-        Utils.loadProps(config.options.valueOf(config.producerConfigOpt))
-      else new Properties
-    props.putAll(config.extraProducerProps)
     props
   }
 
   def getNewProducerProps(config: ProducerConfig): Properties = {
-    val props = producerProps(config)
+    val props = new Properties();
 
+    props.putAll(config.producerProps)
+    props.putAll(config.extraProducerProps)
     props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, config.brokerList)
     props.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, config.compressionCodec)
     props.put(ProducerConfig.SEND_BUFFER_CONFIG, config.socketBuffer.toString)
@@ -125,7 +119,6 @@ object ConsoleProducer {
     props.put(ProducerConfig.LINGER_MS_CONFIG, config.sendTimeout.toString)
     props.put(ProducerConfig.BUFFER_MEMORY_CONFIG, config.maxMemoryBytes.toString)
     props.put(ProducerConfig.BATCH_SIZE_CONFIG, config.maxPartitionMemoryBytes.toString)
-    props.put(ProducerConfig.CLIENT_ID_CONFIG, "console-producer")
     props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
     props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
 
@@ -279,11 +272,20 @@ object ConsoleProducer {
     val socketBuffer = options.valueOf(socketBufferSizeOpt)
     val cmdLineProps = CommandLineUtils.parseKeyValueArgs(options.valuesOf(propertyOpt).asScala)
     val extraProducerProps = CommandLineUtils.parseKeyValueArgs(options.valuesOf(producerPropertyOpt).asScala)
+    val producerProps = if (options.has(producerConfigOpt))
+      Utils.loadProps(options.valueOf(producerConfigOpt))
+    else
+      new Properties()
     /* new producer related configs */
     val maxMemoryBytes = options.valueOf(maxMemoryBytesOpt)
     val maxPartitionMemoryBytes = options.valueOf(maxPartitionMemoryBytesOpt)
     val metadataExpiryMs = options.valueOf(metadataExpiryMsOpt)
     val maxBlockMs = options.valueOf(maxBlockMsOpt)
+
+    // if no client.id specified through the producer property options, a random one is generated
+    if (!extraProducerProps.containsKey(ProducerConfig.CLIENT_ID_CONFIG)) {
+      extraProducerProps.put(ProducerConfig.CLIENT_ID_CONFIG, s"console-producer-${new Random().nextInt(100000)}");
+    }
   }
 
   class LineMessageReader extends MessageReader {
