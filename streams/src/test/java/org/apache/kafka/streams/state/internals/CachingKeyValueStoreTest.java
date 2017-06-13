@@ -245,21 +245,21 @@ public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
         store.putIfAbsent("b", "c");
     }
 
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerExceptionOnPutWithNullKey() {
+        store.put(null, "c");
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerExceptionOnPutIfAbsentWithNullKey() {
+        store.putIfAbsent(null, "c");
+    }
+
     @Test
-    public void shouldThrowNullPointerException() {
+    public void shouldThrowNullPointerExceptionOnPutAllWithNullKey() {
+        List<KeyValue<String, String>> entries = new ArrayList<>();
+        entries.add(new KeyValue<String, String>(null, "a"));
         try {
-            store.put(null, "c");
-            fail("Should have thrown NullPointerException while putting null key");
-        } catch (NullPointerException e) { }
-
-        try {
-            store.putIfAbsent(null, "c");
-            fail("Should have thrown NullPointerException while putIfAbsent null key");
-        } catch (NullPointerException e) { }
-
-        try {
-            List<KeyValue<String, String>> entries = new ArrayList<>();
-            entries.add(new KeyValue<String, String>(null, "a"));
             store.putAll(entries);
             fail("Should have thrown NullPointerException while putAll null key");
         } catch (NullPointerException e) { }
