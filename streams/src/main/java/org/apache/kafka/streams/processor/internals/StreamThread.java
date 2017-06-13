@@ -260,7 +260,7 @@ public class StreamThread extends Thread {
                     } catch (final LockException e) {
                         // ignore and retry
                         if (!retryingTasks.contains(taskId)) {
-                            log.warn("{} Could not create task {}. Will retry. {}", logPrefix, taskId, e.getMessage());
+                            log.warn("{} Could not create task {} due to {}. Will retry.", logPrefix, taskId, e.getMessage());
                             retryingTasks.add(taskId);
                         }
                     }
