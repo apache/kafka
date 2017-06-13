@@ -1264,38 +1264,6 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     @Override
-    public ApiVersionsResult apiVersions(Collection<Node> nodes, ApiVersionsOptions options) {
-        final long now = time.milliseconds();
-        final long deadlineMs = calcDeadlineMs(now, options.timeoutMs());
-        Map<Node, KafkaFuture<NodeApiVersions>> nodeFutures = new HashMap<>();
-        for (final Node node : nodes) {
-            if (nodeFutures.get(node) != null)
-                continue;
-            final KafkaFutureImpl<NodeApiVersions> nodeFuture = new KafkaFutureImpl<>();
-            nodeFutures.put(node, nodeFuture);
-            runnable.call(new Call("apiVersions", deadlineMs, new ConstantNodeProvider(node)) {
-                    @Override
-                    public AbstractRequest.Builder createRequest(int timeoutMs) {
-                        return new ApiVersionsRequest.Builder();
-                    }
-
-                    @Override
-                    public void handleResponse(AbstractResponse abstractResponse) {
-                        ApiVersionsResponse response = (ApiVersionsResponse) abstractResponse;
-                        nodeFuture.complete(new NodeApiVersions(response.apiVersions()));
-                    }
-
-                    @Override
-                    public void handleFailure(Throwable throwable) {
-                        nodeFuture.completeExceptionally(throwable);
-                    }
-                }, now);
-        }
-        return new ApiVersionsResult(nodeFutures);
-
-    }
-
-    @Override
     public DescribeAclsResult describeAcls(final AclBindingFilter filter, DescribeAclsOptions options) {
         final long now = time.milliseconds();
         final KafkaFutureImpl<Collection<AclBinding>> future = new KafkaFutureImpl<>();
