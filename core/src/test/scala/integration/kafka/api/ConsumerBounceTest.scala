@@ -348,7 +348,9 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
 
   private def createConsumer(groupId: String) : KafkaConsumer[Array[Byte], Array[Byte]] = {
     this.consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groupId)
-    createNewConsumer
+    val consumer = createNewConsumer
+    consumers += consumer
+    consumer
   }
 
   private def createConsumerAndReceive(groupId: String, manualAssign: Boolean, numRecords: Int) : KafkaConsumer[Array[Byte], Array[Byte]] = {

@@ -148,6 +148,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     private static final Logger log = LoggerFactory.getLogger(KafkaProducer.class);
     private static final AtomicInteger PRODUCER_CLIENT_ID_SEQUENCE = new AtomicInteger(1);
     private static final String JMX_PREFIX = "kafka.producer";
+    public static final String NETWORK_THREAD_PREFIX = "kafka-producer-network-thread";
 
     private String clientId;
     // Visible for testing
@@ -322,7 +323,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                     config.getLong(ProducerConfig.RETRY_BACKOFF_MS_CONFIG),
                     this.transactionManager,
                     apiVersions);
-            String ioThreadName = "kafka-producer-network-thread" + (clientId.length() > 0 ? " | " + clientId : "");
+            String ioThreadName = NETWORK_THREAD_PREFIX + (clientId.length() > 0 ? " | " + clientId : "");
             this.ioThread = new KafkaThread(ioThreadName, this.sender, true);
             this.ioThread.start();
             this.errors = this.metrics.sensor("errors");
