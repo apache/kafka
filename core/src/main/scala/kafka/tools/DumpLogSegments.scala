@@ -283,7 +283,8 @@ object DumpLogSegments {
         s"producerEpoch:${txnMetadata.producerEpoch}," +
         s"state=${txnMetadata.state}," +
         s"partitions=${txnMetadata.topicPartitions}," +
-        s"lastUpdateTimestamp=${txnMetadata.txnLastUpdateTimestamp}"
+        s"txnLastUpdateTimestamp=${txnMetadata.txnLastUpdateTimestamp}," +
+        s"txnTimeoutMs=${txnMetadata.txnTimeoutMs}"
 
       (Some(keyString), Some(valueString))
     }
