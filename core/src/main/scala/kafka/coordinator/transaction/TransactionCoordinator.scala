@@ -390,11 +390,11 @@ class TransactionCoordinator(brokerId: Int,
 
                       }
                     }
-                    } else {
-                      debug(s"The transaction coordinator epoch has changed to ${epochAndMetadata.coordinatorEpoch} after $txnMarkerResult was " +
-                        s"successfully appended to the log for $transactionalId with old epoch $coordinatorEpoch")
-                      Left(Errors.NOT_COORDINATOR)
-                    }
+                  } else {
+                    debug(s"The transaction coordinator epoch has changed to ${epochAndMetadata.coordinatorEpoch} after $txnMarkerResult was " +
+                      s"successfully appended to the log for $transactionalId with old epoch $coordinatorEpoch")
+                    Left(Errors.NOT_COORDINATOR)
+                  }
               }
 
               preSendResult match {
