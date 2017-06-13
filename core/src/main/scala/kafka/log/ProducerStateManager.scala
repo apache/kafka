@@ -548,12 +548,6 @@ class ProducerStateManager(val topicPartition: TopicPartition,
     }
   }
 
-  def hasSnapshotInRangeInclusive(startOffset: Long, endOffset: Long): Boolean = {
-    listSnapshotFiles.exists { file =>
-      inRangeInclusive(file, startOffset, endOffset)
-    }
-  }
-
   def takeEmptySnapshot(offset: Long) = {
     val snapshotFile = Log.producerSnapshotFile(logDir, offset)
     debug(s"Writing empty producer snapshot for partition $topicPartition at offset $offset")

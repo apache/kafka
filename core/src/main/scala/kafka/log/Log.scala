@@ -46,8 +46,6 @@ import java.util.Map.{Entry => JEntry}
 import java.lang.{Long => JLong}
 import java.util.regex.Pattern
 
-import org.apache.kafka.common.internals.Topic
-
 object LogAppendInfo {
   val UnknownLogAppendInfo = LogAppendInfo(-1, -1, RecordBatch.NO_TIMESTAMP, -1L, RecordBatch.NO_TIMESTAMP,
     NoCompressionCodec, NoCompressionCodec, -1, -1, offsetsMonotonic = false)
@@ -450,7 +448,7 @@ class Log(@volatile var dir: File,
       producerStateManager.takeEmptySnapshot(logStartOffset)
       producerStateManager.truncateAndReload(logStartOffset, lastOffset, time.milliseconds())
 
-      // Only do the potentially expensive reloading of the last snapshot offset is lower than the
+      // Only do the potentially expensive reloading if the last snapshot offset is lower than the
       // log end offset (which would be the case on first startup) and there are active producers.
       // if there are no active producers, then truncating shouldn't change that fact (although it
       // could cause a producerId to expire earlier than expected), so we can skip the loading.

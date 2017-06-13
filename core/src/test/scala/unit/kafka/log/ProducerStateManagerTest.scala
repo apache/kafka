@@ -266,17 +266,6 @@ class ProducerStateManagerTest extends JUnitSuite {
     append(stateManager, producerId, epoch, 4, 4L)
     stateManager.takeSnapshot()
 
-    assertFalse(stateManager.hasSnapshotInRangeInclusive(0L, 0L))
-    assertTrue(stateManager.hasSnapshotInRangeInclusive(0L, 4L))
-    assertTrue(stateManager.hasSnapshotInRangeInclusive(1L, 1L))
-    assertTrue(stateManager.hasSnapshotInRangeInclusive(1L, 4L))
-    assertTrue(stateManager.hasSnapshotInRangeInclusive(0L, 3L))
-    assertTrue(stateManager.hasSnapshotInRangeInclusive(2L, 2L))
-    assertTrue(stateManager.hasSnapshotInRangeInclusive(4L, 5L))
-    assertTrue(stateManager.hasSnapshotInRangeInclusive(5L, 5L))
-    assertFalse(stateManager.hasSnapshotInRangeInclusive(6L, 6L))
-    assertFalse(stateManager.hasSnapshotInRangeInclusive(6L, 8L))
-
     stateManager.truncateAndReload(1L, 3L, time.milliseconds())
 
     assertEquals(Some(1L), stateManager.oldestSnapshotOffset)
@@ -385,6 +374,36 @@ class ProducerStateManagerTest extends JUnitSuite {
     stateManager.deleteSnapshotsBefore(4L)
     assertEquals(0, logDir.listFiles().length)
     assertEquals(Set(), currentSnapshotOffsets)
+  }
+
+  @Test
+  def testDeleteSnapshotsInRangeExclusive(): Unit = {
+    val epoch = 0.toShort
+    stateManager.takeSnapshot()
+    append(stateManager, producerId, epoch, 0, 0L)
+    stateManager.takeSnapshot()
+    append(stateManager, producerId, epoch, 1, 1L)
+    stateManager.takeSnapshot()
+    append(stateManager, producerId, epoch, 2, 2L)
+    stateManager.takeSnapshot()
+    append(stateManager, producerId, epoch, 3, 3L)
+    stateManager.takeSnapshot()
+    assertEquals(Set(0, 1, 2, 3, 4), currentSnapshotOffsets)
+
+    stateManager.deleteSnapshotsInRangeExclusive(3L, 4L)
+    assertEquals(Set(0, 1, 2, 3, 4), currentSnapshotOffsets)
+
+    stateManager.deleteSnapshotsInRangeExclusive(0L, 0L)
+    assertEquals(Set(0, 1, 2, 3, 4), currentSnapshotOffsets)
+
+    stateManager.deleteSnapshotsInRangeExclusive(0L, 2L)
+    assertEquals(Set(0, 2, 3, 4), currentSnapshotOffsets)
+
+    stateManager.deleteSnapshotsInRangeExclusive(3L, 5L)
+    assertEquals(Set(0, 2, 3), currentSnapshotOffsets)
+
+    stateManager.deleteSnapshotsInRangeExclusive(0L, 3L)
+    assertEquals(Set(0, 3), currentSnapshotOffsets)
   }
 
   @Test
