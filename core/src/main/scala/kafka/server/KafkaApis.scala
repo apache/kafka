@@ -1503,14 +1503,11 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     def sendResponseCallback(producerId: Long, result: TransactionResult)(responseStatus: Map[TopicPartition, PartitionResponse]): Unit = {
       trace(s"End transaction marker append for producer id $producerId completed with status: $responseStatus")
-      val partitionErrors = new util.HashMap[TopicPartition, Errors]()
-      responseStatus.foreach { case (topicPartition, partitionResponse) =>
-        partitionErrors.put(topicPartition, partitionResponse.error)
-      }
-      val previous = errors.putIfAbsent(producerId, partitionErrors)
-      if (previous != null)
-        previous.putAll(partitionErrors)
-      
+      val currentErrors = new java.util.HashMap[TopicPartition, Errors](responseStatus.mapValues(_.error).asJava)
+      val previousErrors = errors.putIfAbsent(producerId, currentErrors)
+      if (previousErrors != null)
+        previousErrors synchronized previousErrors.putAll(currentErrors)
+
       val successfulOffsetsPartitions = responseStatus.filter { case (topicPartition, partitionResponse) =>
         topicPartition.topic == GROUP_METADATA_TOPIC_NAME && partitionResponse.error == Errors.NONE
       }.keys
