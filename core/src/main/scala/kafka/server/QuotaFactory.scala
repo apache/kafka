@@ -57,8 +57,8 @@ object QuotaFactory extends Logging {
   }
 
   def clientProduceConfig(cfg: KafkaConfig): ClientQuotaManagerConfig = {
-  if (cfg.producerQuotaBytesPerSecondDefault != Long.MaxValue)
-    warn(s"${KafkaConfig.ProducerQuotaBytesPerSecondDefaultProp} has been deprecated in 0.11.0 and will be removed in a future release. Use dynamic quota defaults instead.")
+    if (cfg.producerQuotaBytesPerSecondDefault != Long.MaxValue)
+      warn(s"${KafkaConfig.ProducerQuotaBytesPerSecondDefaultProp} has been deprecated in 0.11.0.0 and will be removed in a future release. Use dynamic quota defaults instead.")
     ClientQuotaManagerConfig(
       quotaBytesPerSecondDefault = cfg.producerQuotaBytesPerSecondDefault,
       numQuotaSamples = cfg.numQuotaSamples,
@@ -68,7 +68,7 @@ object QuotaFactory extends Logging {
 
   def clientFetchConfig(cfg: KafkaConfig): ClientQuotaManagerConfig = {
     if (cfg.consumerQuotaBytesPerSecondDefault != Long.MaxValue)
-      warn(s"${KafkaConfig.ConsumerQuotaBytesPerSecondDefaultProp} has been deprecated in 0.11.0 and will be removed in a future release. Use dynamic quota defaults instead.")
+      warn(s"${KafkaConfig.ConsumerQuotaBytesPerSecondDefaultProp} has been deprecated in 0.11.0.0 and will be removed in a future release. Use dynamic quota defaults instead.")
     ClientQuotaManagerConfig(
       quotaBytesPerSecondDefault = cfg.consumerQuotaBytesPerSecondDefault,
       numQuotaSamples = cfg.numQuotaSamples,
