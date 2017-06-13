@@ -37,7 +37,7 @@ class ClientRequestQuotaManager(private val config: ClientQuotaManagerConfig,
       sendResponseCallback: Int => Unit, recordNetworkThreadTimeCallback: (Long => Unit) => Unit): Unit = {
     if (quotasEnabled) {
       val quotaSensors = getOrCreateQuotaSensors(sanitizedUser, clientId)
-      recordNetworkThreadTimeCallback.apply(timeNanos => recordNoThrottle(quotaSensors, nanosToPercentage(timeNanos)))
+      recordNetworkThreadTimeCallback(timeNanos => recordNoThrottle(quotaSensors, nanosToPercentage(timeNanos)))
 
       recordAndThrottleOnQuotaViolation(
           quotaSensors,
@@ -50,7 +50,7 @@ class ClientRequestQuotaManager(private val config: ClientQuotaManagerConfig,
 
   def maybeRecordExempt(requestThreadTimeNanos: Long, recordNetworkThreadTimeCallback: (Long => Unit) => Unit): Unit = {
     if (quotasEnabled) {
-      recordNetworkThreadTimeCallback.apply(timeNanos => recordExempt(nanosToPercentage(timeNanos)))
+      recordNetworkThreadTimeCallback(timeNanos => recordExempt(nanosToPercentage(timeNanos)))
       recordExempt(nanosToPercentage(requestThreadTimeNanos))
     }
   }
