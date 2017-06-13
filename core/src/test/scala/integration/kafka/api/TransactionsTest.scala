@@ -44,8 +44,6 @@ class TransactionsTest extends KafkaServerTestHarness {
 
   val topic1 = "topic1"
   val topic2 = "topic2"
-  val topicWith100Partitions = "largeTopic"
-  val topicWith100PartitionsAndOneReplica = "largeTopicOneReplica"
 
   val transactionalProducers = Buffer[KafkaProducer[Array[Byte], Array[Byte]]]()
   val transactionalConsumers = Buffer[KafkaConsumer[Array[Byte], Array[Byte]]]()
@@ -63,8 +61,6 @@ class TransactionsTest extends KafkaServerTestHarness {
     topicConfig.put(KafkaConfig.MinInSyncReplicasProp, 2.toString)
     TestUtils.createTopic(zkUtils, topic1, numPartitions, numServers, servers, topicConfig)
     TestUtils.createTopic(zkUtils, topic2, numPartitions, numServers, servers, topicConfig)
-    TestUtils.createTopic(zkUtils, topicWith100Partitions, 100, numServers, servers, topicConfig)
-    TestUtils.createTopic(zkUtils, topicWith100PartitionsAndOneReplica, 100, 1, servers, new Properties())
 
     for (_ <- 0 until transactionalProducerCount)
       createTransactionalProducer("transactional-producer")
@@ -443,6 +439,13 @@ class TransactionsTest extends KafkaServerTestHarness {
     val firstProducer = transactionalProducers.head
     val consumer = transactionalConsumers.head
     val unCommittedConsumer = nonTransactionalConsumers.head
+    val topicWith100Partitions = "largeTopic"
+    val topicWith100PartitionsAndOneReplica = "largeTopicOneReplica"
+    val topicConfig = new Properties()
+    topicConfig.put(KafkaConfig.MinInSyncReplicasProp, 2.toString)
+
+    TestUtils.createTopic(zkUtils, topicWith100Partitions, 100, numServers, servers, topicConfig)
+    TestUtils.createTopic(zkUtils, topicWith100PartitionsAndOneReplica, 100, 1, servers, new Properties())
 
     firstProducer.initTransactions()
 
