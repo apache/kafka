@@ -1696,8 +1696,6 @@ class TopicChangeListener(controller: KafkaController, eventManager: ControllerE
 
 /**
   * Called when broker notifies controller of disk change
-  *
-  * @param controller
   */
 class LogDirEventNotificationListener(controller: KafkaController, eventManager: ControllerEventManager) extends IZkChildListener with Logging {
   override def handleChildChange(parentPath: String, currentChilds: java.util.List[String]): Unit = {
