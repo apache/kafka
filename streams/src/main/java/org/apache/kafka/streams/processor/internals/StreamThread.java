@@ -238,7 +238,7 @@ public class StreamThread extends Thread {
     }
 
     abstract class AbstractTaskCreator {
-        final long maxBackoffTimeMs = 1000L;
+        final static long MAX_BACKOFF_TIME_MS = 1000L;
         void retryWithBackoff(final Map<TaskId, Set<TopicPartition>> tasksToBeCreated, final long start) {
             long backoffTimeMs = 50L;
             final Set<TaskId> retryingTasks = new HashSet<>();
@@ -273,7 +273,7 @@ public class StreamThread extends Thread {
                 try {
                     Thread.sleep(backoffTimeMs);
                     backoffTimeMs <<= 1;
-                    backoffTimeMs = Math.min(backoffTimeMs, maxBackoffTimeMs);
+                    backoffTimeMs = Math.min(backoffTimeMs, MAX_BACKOFF_TIME_MS);
                 } catch (final InterruptedException e) {
                     // ignore
                 }
