@@ -431,25 +431,23 @@ class Log(@volatile var dir: File,
   private def loadProducerState(lastOffset: Long): Unit = lock synchronized {
     info(s"Loading producer state from offset $lastOffset for partition $topicPartition")
 
+    // To avoid expensive initialization when upgrading from older brokers, we skip loading producer
+    // state if no snapshot file is found. To ensure that we cannot hit this case after upgrading (which
+    // could cause us to lose producer state), we enforce the invariant that we always have an empty snapshot
+    // file at the log start offset.
+
     if (producerStateManager.latestSnapshotOffset.isEmpty) {
-      // If there are no snapshots to load producer state from, we assume that the brokers are
-      // being upgraded, which means there would be no previous idempotent/transactional producers
-      // to load state for. To avoid an expensive scan through all of the segments, we take
-      // empty snapshots from the start of the last two segments and the last offset. The purpose
-      // of taking the segment snapshots is to avoid the full scan in the case that the log needs
-      // truncation.
+      // There are no snapshots so this is the upgrade path. In addition to taking a snapshot at the log start
+      // offset to enforce the invariant mentioned above, we take empty snapshots from the start of the last
+      // two segments and the last offset. The purpose of the additional snapshots is to avoid the full scan in
+      // the case that the log needs truncation.
       val nextLatestSegmentBaseOffset = Option(segments.lowerEntry(activeSegment.baseOffset)).map(_.getValue.baseOffset)
-      val offsetsToSnapshot = Seq(nextLatestSegmentBaseOffset, Some(activeSegment.baseOffset), Some(lastOffset))
-      offsetsToSnapshot.flatten.foreach { offset =>
-        producerStateManager.updateMapEndOffset(offset)
-        producerStateManager.takeSnapshot()
-      }
+      val offsetsToSnapshot = Seq(Some(logStartOffset), nextLatestSegmentBaseOffset, Some(activeSegment.baseOffset), Some(lastOffset))
+      offsetsToSnapshot.flatten.foreach(producerStateManager.takeEmptySnapshot)
     } else {
-      // Since the oldest snapshot will be removed after truncation, we need to take an empty snapshot
-      // at the log start offset to ensure that we cannot reach the optimization path above if the
-      // broker fails after out-of-range snapshots are removed below. Otherwise, we would incorrectly assume
-      // that no producer data exists in the log.
-      ensureSnapshotRetained(logStartOffset, lastOffset)
+      // Ensure we have an empty snapshot at the log start offset to enforce the invariant mentioned above.
+      // This must be done prior to truncation in case of failure after previous snapshots are removed.
+      producerStateManager.takeEmptySnapshot(logStartOffset)
       producerStateManager.truncateAndReload(logStartOffset, lastOffset, time.milliseconds())
 
       // Only do the potentially expensive reloading of the last snapshot offset is lower than the
@@ -469,11 +467,6 @@ class Log(@volatile var dir: File,
       producerStateManager.updateMapEndOffset(lastOffset)
       updateFirstUnstableOffset()
     }
-  }
-
-  private def ensureSnapshotRetained(logStartOffset: Long, logEndOffset: Long): Unit = {
-    if (!producerStateManager.hasSnapshotInRange(logStartOffset, logEndOffset))
-      producerStateManager.takeEmptySnapshot(logStartOffset)
   }
 
   private def loadProducersFromLog(producerStateManager: ProducerStateManager, records: Records): Unit = {
@@ -715,6 +708,11 @@ class Log(@volatile var dir: File,
     lock synchronized {
       if (offset > logStartOffset) {
         logStartOffset = offset
+
+        // Enforce the invariant that we have an empty snapshot at the log start offset to ensure
+        // proper loading of producer state upon recovery.
+        producerStateManager.takeEmptySnapshot(logStartOffset)
+        producerStateManager.deleteSnapshotsBefore(logStartOffset)
       }
     }
   }
@@ -1060,10 +1058,10 @@ class Log(@volatile var dir: File,
         logStartOffset = math.max(logStartOffset, segments.firstEntry().getValue.baseOffset)
         leaderEpochCache.clearAndFlushEarliest(logStartOffset)
 
-        // Producer eviction can also result in snapshot deletion, so ensure ahead of time that
-        // there will still be at least one snapshot remaining in case we fail after the deletion
-        ensureSnapshotRetained(logStartOffset, logEndOffset)
-        producerStateManager.evictUnretainedProducers(logStartOffset)
+        // Update the producer state with the new log start offset, which we cause any non-retained producers to
+        // be evicted. Enforce the invariant that we always have an empty snapshot at the log start offset.
+        producerStateManager.takeEmptySnapshot(logStartOffset)
+        producerStateManager.truncateHead(logStartOffset)
         updateFirstUnstableOffset()
       }
     }
@@ -1268,10 +1266,10 @@ class Log(@volatile var dir: File,
     for(segment <- logSegments(this.recoveryPoint, offset))
       segment.flush()
 
-    // now that we have flushed, we can cleanup old producer snapshots. However, it is useful to retain
-    // the snapshots from the recent segments in case we need to truncate and rebuild the producer state.
-    // Otherwise, we would always need to rebuild from the earliest segment.
-    producerStateManager.deleteSnapshotsBefore(minSnapshotOffsetToRetain(offset))
+    // Now that we have flushed, we can cleanup old producer snapshots. However, it is useful to retain the
+    // snapshots from the recent segments in case we need to truncate and rebuild the producer state. Note that
+    // we still retain the snapshot from the log start offset.
+    producerStateManager.deleteSnapshotsInRangeExclusive(logStartOffset, minSnapshotOffsetToRetain(offset))
 
     lock synchronized {
       if(offset > this.recoveryPoint) {
@@ -1378,10 +1376,9 @@ class Log(@volatile var dir: File,
       producerStateManager.truncate()
       producerStateManager.updateMapEndOffset(newOffset)
 
-      // Truncation results in all snapshot files being removed, so take a new snapshot now
-      // to ensure we won't incorrectly assume the upgrade path (and skip reloading of producer
-      // state) if the broker crashes after doing some appends following full truncation.
-      producerStateManager.takeSnapshot()
+      // Truncation results in all snapshot files being removed, so take an empty snapshot at the new offset
+      // to maintain the invariant that we always have a snapshot at the log start offset.
+      producerStateManager.takeEmptySnapshot(newOffset)
 
       updateFirstUnstableOffset()
 

@@ -472,9 +472,14 @@ class ProducerStateManager(val topicPartition: TopicPartition,
     }
   }
 
-  private def isSnapshotInRange(snapshotFile: File, startOffset: Long, endOffset: Long): Boolean = {
+  private def inRangeInclusive(snapshotFile: File, startOffset: Long, endOffset: Long): Boolean = {
     val offset = offsetFromFilename(snapshotFile.getName)
     offset >= startOffset && offset <= endOffset
+  }
+
+  private def inRangeExclusive(snapshotFile: File, startOffset: Long, endOffset: Long): Boolean = {
+    val offset = offsetFromFilename(snapshotFile.getName)
+    offset > startOffset && offset < endOffset
   }
 
   /**
@@ -484,9 +489,7 @@ class ProducerStateManager(val topicPartition: TopicPartition,
    */
   def truncateAndReload(logStartOffset: Long, logEndOffset: Long, currentTimeMs: Long) {
     // remove all out of range snapshots
-    deleteSnapshotFiles { file =>
-      !isSnapshotInRange(file, logStartOffset, logEndOffset)
-    }
+    deleteSnapshotFiles(!inRangeInclusive(_, logStartOffset, logEndOffset))
 
     if (logEndOffset != mapEndOffset) {
       producers.clear()
@@ -497,7 +500,7 @@ class ProducerStateManager(val topicPartition: TopicPartition,
       unreplicatedTxns.clear()
       loadFromSnapshot(logStartOffset, currentTimeMs)
     } else {
-      evictUnretainedProducers(logStartOffset)
+      truncateHead(logStartOffset)
     }
   }
 
@@ -545,9 +548,9 @@ class ProducerStateManager(val topicPartition: TopicPartition,
     }
   }
 
-  def hasSnapshotInRange(startOffset: Long, endOffset: Long): Boolean = {
+  def hasSnapshotInRangeInclusive(startOffset: Long, endOffset: Long): Boolean = {
     listSnapshotFiles.exists { file =>
-      isSnapshotInRange(file, startOffset, endOffset)
+      inRangeInclusive(file, startOffset, endOffset)
     }
   }
 
@@ -569,9 +572,10 @@ class ProducerStateManager(val topicPartition: TopicPartition,
 
   /**
    * When we remove the head of the log due to retention, we need to clean up the id map. This method takes
-   * the new start offset and removes all producerIds which have a smaller last written offset.
+   * the new start offset and removes all producerIds which have a smaller last written offset. Additionally,
+   * all snapshot files at offsets strictly lower than the log start offset will be removed.
    */
-  def evictUnretainedProducers(logStartOffset: Long) {
+  def truncateHead(logStartOffset: Long) {
     val evictedProducerEntries = producers.filter(_._2.lastOffset < logStartOffset)
     val evictedProducerIds = evictedProducerEntries.keySet
 
@@ -579,7 +583,7 @@ class ProducerStateManager(val topicPartition: TopicPartition,
     removeEvictedOngoingTransactions(evictedProducerIds)
     removeUnreplicatedTransactions(logStartOffset)
 
-    deleteSnapshotFiles(file => offsetFromFilename(file.getName) < logStartOffset)
+    deleteSnapshotsBefore(logStartOffset)
     if (lastMapOffset < logStartOffset)
       lastMapOffset = logStartOffset
     lastSnapOffset = latestSnapshotOffset.getOrElse(logStartOffset)
@@ -634,6 +638,11 @@ class ProducerStateManager(val topicPartition: TopicPartition,
   @threadsafe
   def deleteSnapshotsBefore(offset: Long): Unit = {
     deleteSnapshotFiles(file => offsetFromFilename(file.getName) < offset)
+  }
+
+  @threadsafe
+  def deleteSnapshotsInRangeExclusive(startOffset: Long, endOffset: Long): Unit = {
+    deleteSnapshotFiles(inRangeExclusive(_, startOffset, endOffset))
   }
 
   private def listSnapshotFiles: List[File] = {

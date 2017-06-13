@@ -266,16 +266,16 @@ class ProducerStateManagerTest extends JUnitSuite {
     append(stateManager, producerId, epoch, 4, 4L)
     stateManager.takeSnapshot()
 
-    assertFalse(stateManager.hasSnapshotInRange(0L, 0L))
-    assertTrue(stateManager.hasSnapshotInRange(0L, 4L))
-    assertTrue(stateManager.hasSnapshotInRange(1L, 1L))
-    assertTrue(stateManager.hasSnapshotInRange(1L, 4L))
-    assertTrue(stateManager.hasSnapshotInRange(0L, 3L))
-    assertTrue(stateManager.hasSnapshotInRange(2L, 2L))
-    assertTrue(stateManager.hasSnapshotInRange(4L, 5L))
-    assertTrue(stateManager.hasSnapshotInRange(5L, 5L))
-    assertFalse(stateManager.hasSnapshotInRange(6L, 6L))
-    assertFalse(stateManager.hasSnapshotInRange(6L, 8L))
+    assertFalse(stateManager.hasSnapshotInRangeInclusive(0L, 0L))
+    assertTrue(stateManager.hasSnapshotInRangeInclusive(0L, 4L))
+    assertTrue(stateManager.hasSnapshotInRangeInclusive(1L, 1L))
+    assertTrue(stateManager.hasSnapshotInRangeInclusive(1L, 4L))
+    assertTrue(stateManager.hasSnapshotInRangeInclusive(0L, 3L))
+    assertTrue(stateManager.hasSnapshotInRangeInclusive(2L, 2L))
+    assertTrue(stateManager.hasSnapshotInRangeInclusive(4L, 5L))
+    assertTrue(stateManager.hasSnapshotInRangeInclusive(5L, 5L))
+    assertFalse(stateManager.hasSnapshotInRangeInclusive(6L, 6L))
+    assertFalse(stateManager.hasSnapshotInRangeInclusive(6L, 8L))
 
     stateManager.truncateAndReload(1L, 3L, time.milliseconds())
 
@@ -436,18 +436,18 @@ class ProducerStateManagerTest extends JUnitSuite {
   }
 
   @Test
-  def testFirstUnstableOffsetAfterEviction(): Unit = {
+  def testFirstUnstableOffsetAfterTruncateHead(): Unit = {
     val epoch = 0.toShort
     val sequence = 0
     append(stateManager, producerId, epoch, sequence, offset = 99, isTransactional = true)
     assertEquals(Some(99), stateManager.firstUnstableOffset.map(_.messageOffset))
     append(stateManager, 2L, epoch, 0, offset = 106, isTransactional = true)
-    stateManager.evictUnretainedProducers(100)
+    stateManager.truncateHead(100)
     assertEquals(Some(106), stateManager.firstUnstableOffset.map(_.messageOffset))
   }
 
   @Test
-  def testEvictUnretainedPids(): Unit = {
+  def testTruncateHead(): Unit = {
     val epoch = 0.toShort
 
     append(stateManager, producerId, epoch, 0, 0L)
@@ -462,7 +462,7 @@ class ProducerStateManagerTest extends JUnitSuite {
     stateManager.takeSnapshot()
     assertEquals(Set(1, 2, 4), currentSnapshotOffsets)
 
-    stateManager.evictUnretainedProducers(2)
+    stateManager.truncateHead(2)
     assertEquals(Set(2, 4), currentSnapshotOffsets)
     assertEquals(Set(anotherPid), stateManager.activeProducers.keySet)
     assertEquals(None, stateManager.lastEntry(producerId))
@@ -471,12 +471,12 @@ class ProducerStateManagerTest extends JUnitSuite {
     assertTrue(maybeEntry.isDefined)
     assertEquals(3L, maybeEntry.get.lastOffset)
 
-    stateManager.evictUnretainedProducers(3)
+    stateManager.truncateHead(3)
     assertEquals(Set(anotherPid), stateManager.activeProducers.keySet)
     assertEquals(Set(4), currentSnapshotOffsets)
     assertEquals(4, stateManager.mapEndOffset)
 
-    stateManager.evictUnretainedProducers(5)
+    stateManager.truncateHead(5)
     assertEquals(Set(), stateManager.activeProducers.keySet)
     assertEquals(Set(), currentSnapshotOffsets)
     assertEquals(5, stateManager.mapEndOffset)
