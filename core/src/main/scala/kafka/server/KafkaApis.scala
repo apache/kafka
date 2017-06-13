@@ -1507,7 +1507,13 @@ class KafkaApis(val requestChannel: RequestChannel,
         previousErrors.putAll(currentErrors)
     }
 
-    def sendResponseCallback(producerId: Long, result: TransactionResult)(responseStatus: Map[TopicPartition, PartitionResponse]): Unit = {
+    /**
+      * This is the call back invoked when a log append of transaction markers succeeds. This can be called multiple
+      * times when handling a single WriteTxnMarkersRequest because there is one append per TransactionMarker in the
+      * request, so there could be multiple appends of markers to the log. The final response will be sent only
+      * after all appends have returned.
+      */
+    def maybeSendResponseCallback(producerId: Long, result: TransactionResult)(responseStatus: Map[TopicPartition, PartitionResponse]): Unit = {
       trace(s"End transaction marker append for producer id $producerId completed with status: $responseStatus")
       val currentErrors = new ConcurrentHashMap[TopicPartition, Errors](responseStatus.mapValues(_.error).asJava)
       updateErrors(producerId, currentErrors)
@@ -1572,7 +1578,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           internalTopicsAllowed = true,
           isFromClient = false,
           entriesPerPartition = controlRecords,
-          responseCallback = sendResponseCallback(producerId, marker.transactionResult))
+          responseCallback = maybeSendResponseCallback(producerId, marker.transactionResult))
       }
     }
 
