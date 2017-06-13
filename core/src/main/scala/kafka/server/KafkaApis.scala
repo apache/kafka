@@ -1492,7 +1492,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     ensureInterBrokerVersion(KAFKA_0_11_0_IV0)
     authorizeClusterAction(request)
     val writeTxnMarkersRequest = request.body[WriteTxnMarkersRequest]
-    val errors = new ConcurrentHashMap[java.lang.Long, java.util.Map[TopicPartition, Errors]]()
+    val errors = new ConcurrentHashMap[java.lang.Long, util.Map[TopicPartition, Errors]]()
     val markers = writeTxnMarkersRequest.markers
     val numAppends = new AtomicInteger(markers.size)
 
@@ -1501,13 +1501,22 @@ class KafkaApis(val requestChannel: RequestChannel,
       return
     }
 
-    def sendResponseCallback(producerId: Long, result: TransactionResult)(responseStatus: Map[TopicPartition, PartitionResponse]): Unit = {
+    def updateErrors(producerId: Long, currentErrors: ConcurrentHashMap[TopicPartition, Errors]): Unit = {
+      val previousErrors = errors.putIfAbsent(producerId, currentErrors)
+      if (previousErrors != null)
+        previousErrors.putAll(currentErrors)
+    }
+
+    /**
+      * This is the call back invoked when a log append of transaction markers succeeds. This can be called multiple
+      * times when handling a single WriteTxnMarkersRequest because there is one append per TransactionMarker in the
+      * request, so there could be multiple appends of markers to the log. The final response will be sent only
+      * after all appends have returned.
+      */
+    def maybeSendResponseCallback(producerId: Long, result: TransactionResult)(responseStatus: Map[TopicPartition, PartitionResponse]): Unit = {
       trace(s"End transaction marker append for producer id $producerId completed with status: $responseStatus")
-      val partitionErrors = responseStatus.mapValues(_.error).asJava
-      val previous = errors.putIfAbsent(producerId, partitionErrors)
-      if (previous != null)
-        previous.putAll(partitionErrors)
-      
+      val currentErrors = new ConcurrentHashMap[TopicPartition, Errors](responseStatus.mapValues(_.error).asJava)
+      updateErrors(producerId, currentErrors)
       val successfulOffsetsPartitions = responseStatus.filter { case (topicPartition, partitionResponse) =>
         topicPartition.topic == GROUP_METADATA_TOPIC_NAME && partitionResponse.error == Errors.NONE
       }.keys
@@ -1520,8 +1529,9 @@ class KafkaApis(val requestChannel: RequestChannel,
         } catch {
           case e: Exception =>
             error(s"Received an exception while trying to update the offsets cache on transaction marker append", e)
-            val partitionErrors = errors.get(producerId)
-            successfulOffsetsPartitions.foreach(partitionErrors.put(_, Errors.UNKNOWN))
+            val updatedErrors = new ConcurrentHashMap[TopicPartition, Errors]()
+            successfulOffsetsPartitions.foreach(updatedErrors.put(_, Errors.UNKNOWN))
+            updateErrors(producerId, updatedErrors)
         }
       }
 
@@ -1544,9 +1554,9 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
 
       if (partitionsWithIncorrectMessageFormat.nonEmpty) {
-        val partitionErrors = new util.HashMap[TopicPartition, Errors]()
-        partitionsWithIncorrectMessageFormat.foreach { partition => partitionErrors.put(partition, Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT) }
-        errors.put(producerId, partitionErrors)
+        val currentErrors = new ConcurrentHashMap[TopicPartition, Errors]()
+        partitionsWithIncorrectMessageFormat.foreach { partition => currentErrors.put(partition, Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT) }
+        updateErrors(producerId, currentErrors)
       }
 
       if (goodPartitions.isEmpty) {
@@ -1568,7 +1578,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           internalTopicsAllowed = true,
           isFromClient = false,
           entriesPerPartition = controlRecords,
-          responseCallback = sendResponseCallback(producerId, marker.transactionResult))
+          responseCallback = maybeSendResponseCallback(producerId, marker.transactionResult))
       }
     }
 
