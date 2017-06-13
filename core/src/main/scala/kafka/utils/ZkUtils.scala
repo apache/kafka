@@ -906,7 +906,11 @@ class ZkUtils(val zkClient: ZkClient,
     if(topics == null) Set.empty[TopicAndPartition]
     else {
       topics.flatMap { topic =>
-        getChildren(getTopicPartitionsPath(topic)).map(_.toInt).map(TopicAndPartition(topic, _))
+        try {
+          getChildren(getTopicPartitionsPath(topic)).map(_.toInt).map(TopicAndPartition(topic, _))
+        } catch {
+          case _: ZkNoNodeException => None
+        }
       }.toSet
     }
   }
