@@ -42,7 +42,7 @@ public class AccessControlEntry {
         Objects.requireNonNull(principal);
         Objects.requireNonNull(host);
         Objects.requireNonNull(operation);
-        assert(operation != AclOperation.ANY);
+        assert operation != AclOperation.ANY;
         Objects.requireNonNull(permissionType);
         assert permissionType != AclPermissionType.ANY;
         this.data = new AccessControlEntryData(principal, host, operation, permissionType);
