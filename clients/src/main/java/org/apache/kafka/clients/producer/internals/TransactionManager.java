@@ -218,8 +218,7 @@ public class TransactionManager {
     }
 
     public synchronized void maybeAddPartitionToTransaction(TopicPartition topicPartition) {
-        if (currentState != State.IN_TRANSACTION)
-            throw new IllegalStateException("Cannot add partitions to a transaction in state " + currentState);
+        failIfNotReadyForSend();
 
         if (isPartitionAdded(topicPartition) || isPartitionPendingAdd(topicPartition))
             return;
@@ -540,6 +539,8 @@ public class TransactionManager {
         transitionTo(State.READY);
         lastError = null;
         transactionStarted = false;
+        newPartitionsInTransaction.clear();
+        pendingPartitionsInTransaction.clear();
         partitionsInTransaction.clear();
     }
 
@@ -757,15 +758,22 @@ public class TransactionManager {
                 }
             }
 
+            Set<TopicPartition> partitions = errors.keySet();
+
+            // Remove the partitions from the pending set regardless of the result. We use the presence
+            // of partitions in the pending set to know when it is not safe to send batches. However, if
+            // the partitions failed to be added and we enter an error state, we expect the batches to be
+            // aborted anyway. In this case, we must be able to continue sending the batches which are in
+            // retry for partitions that were successfully added.
+            pendingPartitionsInTransaction.removeAll(partitions);
+
             if (!unauthorizedTopics.isEmpty()) {
                 abortableError(new TopicAuthorizationException(unauthorizedTopics));
             } else if (hasPartitionErrors) {
-                abortableError(new KafkaException("Could not add partitions to transaction due to partition level errors"));
+                abortableError(new KafkaException("Could not add partitions to transaction due to errors: " + errors));
             } else {
-                Set<TopicPartition> addedPartitions = errors.keySet();
-                log.debug("{}Successfully added partitions {} to transaction", logPrefix, addedPartitions);
-                partitionsInTransaction.addAll(addedPartitions);
-                pendingPartitionsInTransaction.removeAll(addedPartitions);
+                log.debug("{}Successfully added partitions {} to transaction", logPrefix, partitions);
+                partitionsInTransaction.addAll(partitions);
                 transactionStarted = true;
                 result.done();
             }
