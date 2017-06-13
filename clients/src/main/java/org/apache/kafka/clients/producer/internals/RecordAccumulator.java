@@ -622,7 +622,7 @@ public final class RecordAccumulator {
         }
     }
 
-    void abortUnclosedBatches(RuntimeException reason) {
+    void abortOpenBatches(RuntimeException reason) {
         for (ProducerBatch batch : incomplete.all()) {
             Deque<ProducerBatch> dq = getDeque(batch.topicPartition);
             boolean aborted = false;

@@ -163,9 +163,15 @@ public final class ProducerBatch {
      * @param exception The exception that occurred (or null if the request was successful)
      */
     public void done(long baseOffset, long logAppendTime, RuntimeException exception) {
-        log.trace("Produced messages to topic-partition {} with base offset offset {} and error: {}.",
-                  topicPartition, baseOffset, exception);
-        FinalState finalState = exception != null ? FinalState.FAILED : FinalState.SUCCEEDED;
+        final FinalState finalState;
+        if (exception == null) {
+            log.trace("Successfully produced messages to {} with base offset {}.", topicPartition, baseOffset);
+            finalState = FinalState.SUCCEEDED;
+        } else {
+            log.trace("Failed to produce messages to {}.", topicPartition, exception);
+            finalState = FinalState.FAILED;
+        }
+
         if (!this.finalState.compareAndSet(null, finalState)) {
             if (this.finalState.get() == FinalState.ABORTED) {
                 log.debug("ProduceResponse returned for {} after batch had already been aborted.", topicPartition);

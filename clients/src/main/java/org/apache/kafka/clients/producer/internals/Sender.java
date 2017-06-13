@@ -209,12 +209,14 @@ public class Sender implements Runnable {
 
             // do not continue sending if the transaction manager is in a failed state or if there
             // is no producer id (for the idempotent case).
-            if (transactionManager.hasError() || !transactionManager.hasProducerId()) {
+            if (transactionManager.hasFatalError() || !transactionManager.hasProducerId()) {
                 RuntimeException lastError = transactionManager.lastError();
                 if (lastError != null)
                     maybeAbortBatches(lastError);
                 client.poll(retryBackoffMs, now);
                 return;
+            } else if (transactionManager.hasAbortableError()) {
+                accumulator.abortOpenBatches(transactionManager.lastError());
             }
         }
 
@@ -260,7 +262,6 @@ public class Sender implements Runnable {
         }
 
         List<ProducerBatch> expiredBatches = this.accumulator.expiredBatches(this.requestTimeout, now);
-
         boolean needsTransactionStateReset = false;
         // Reset the producer id if an expired batch has previously been sent to the broker. Also update the metrics
         // for expired batches. see the documentation of @TransactionState.resetProducerId to understand why
@@ -298,7 +299,6 @@ public class Sender implements Runnable {
         sendProduceRequests(batches, now);
 
         return pollTimeout;
-
     }
 
     private boolean maybeSendTransactionalRequest(long now) {
@@ -308,7 +308,7 @@ public class Sender implements Runnable {
 
             // If the transaction is being aborted, then we can clear any unsent produce requests
             if (transactionManager.isAborting())
-                accumulator.abortUnclosedBatches(new KafkaException("Failing batch since transaction was aborted"));
+                accumulator.abortOpenBatches(new KafkaException("Failing batch since transaction was aborted"));
 
             // There may still be requests left which are being retried. Since we do not know whether they had
             // been successfully appended to the broker log, we must resend them until their final status is clear.
@@ -553,7 +553,6 @@ public class Sender implements Runnable {
 
         } else {
             completeBatch(batch, response);
-
         }
 
         // Unmute the completed partition.

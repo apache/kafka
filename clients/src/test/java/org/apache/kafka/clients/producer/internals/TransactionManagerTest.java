@@ -316,7 +316,7 @@ public class TransactionManagerTest {
         transactionManager.maybeAddPartitionToTransaction(new TopicPartition("foo", 0));
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test(expected = KafkaException.class)
     public void testMaybeAddPartitionToTransactionAfterAbortableError() {
         long pid = 13131L;
         short epoch = 1;
@@ -326,7 +326,7 @@ public class TransactionManagerTest {
         transactionManager.maybeAddPartitionToTransaction(new TopicPartition("foo", 0));
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test(expected = KafkaException.class)
     public void testMaybeAddPartitionToTransactionAfterFatalError() {
         long pid = 13131L;
         short epoch = 1;
@@ -836,11 +836,208 @@ public class TransactionManagerTest {
 
         assertTrue(transactionManager.hasError());
         assertTrue(transactionManager.lastError() instanceof TopicAuthorizationException);
+        assertFalse(transactionManager.isPartitionPendingAdd(tp0));
+        assertFalse(transactionManager.isPartitionPendingAdd(tp1));
+        assertFalse(transactionManager.isPartitionAdded(tp0));
+        assertFalse(transactionManager.isPartitionAdded(tp1));
+        assertFalse(transactionManager.hasPartitionsToAdd());
 
         TopicAuthorizationException exception = (TopicAuthorizationException) transactionManager.lastError();
         assertEquals(singleton(tp0.topic()), exception.unauthorizedTopics());
 
         assertAbortableError(TopicAuthorizationException.class);
+    }
+
+    @Test
+    public void testRecoveryFromAbortableErrorTransactionNotStarted() throws Exception {
+        final long pid = 13131L;
+        final short epoch = 1;
+        final TopicPartition unauthorizedPartition = new TopicPartition("foo", 0);
+
+        doInitTransactions(pid, epoch);
+
+        transactionManager.beginTransaction();
+        transactionManager.maybeAddPartitionToTransaction(unauthorizedPartition);
+
+        Future<RecordMetadata> responseFuture = accumulator.append(unauthorizedPartition, time.milliseconds(), "key".getBytes(),
+                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
+
+        prepareAddPartitionsToTxn(singletonMap(unauthorizedPartition, Errors.TOPIC_AUTHORIZATION_FAILED));
+        sender.run(time.milliseconds());
+
+        assertTrue(transactionManager.hasAbortableError());
+        transactionManager.beginAbortingTransaction();
+        sender.run(time.milliseconds());
+        assertTrue(responseFuture.isDone());
+        assertFutureFailed(responseFuture);
+
+        // No partitions added, so no need to prepare EndTxn response
+        sender.run(time.milliseconds());
+        assertTrue(transactionManager.isReady());
+        assertFalse(transactionManager.hasPartitionsToAdd());
+        assertFalse(accumulator.hasUnflushedBatches());
+
+        // ensure we can now start a new transaction
+
+        transactionManager.beginTransaction();
+        transactionManager.maybeAddPartitionToTransaction(tp0);
+
+        responseFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
+                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
+
+        prepareAddPartitionsToTxn(singletonMap(tp0, Errors.NONE));
+        sender.run(time.milliseconds());
+        assertTrue(transactionManager.isPartitionAdded(tp0));
+        assertFalse(transactionManager.hasPartitionsToAdd());
+
+        transactionManager.beginCommittingTransaction();
+        prepareProduceResponse(Errors.NONE, pid, epoch);
+        sender.run(time.milliseconds());
+
+        assertTrue(responseFuture.isDone());
+        assertNotNull(responseFuture.get());
+
+        prepareEndTxnResponse(Errors.NONE, TransactionResult.COMMIT, pid, epoch);
+        sender.run(time.milliseconds());
+
+        assertTrue(transactionManager.isReady());
+    }
+
+    @Test
+    public void testRecoveryFromAbortableErrorTransactionStarted() throws Exception {
+        final long pid = 13131L;
+        final short epoch = 1;
+        final TopicPartition unauthorizedPartition = new TopicPartition("foo", 0);
+
+        doInitTransactions(pid, epoch);
+
+        transactionManager.beginTransaction();
+        transactionManager.maybeAddPartitionToTransaction(tp0);
+        prepareAddPartitionsToTxn(tp0, Errors.NONE);
+
+        Future<RecordMetadata> authorizedTopicProduceFuture = accumulator.append(unauthorizedPartition, time.milliseconds(),
+                "key".getBytes(), "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
+        sender.run(time.milliseconds());
+        assertTrue(transactionManager.isPartitionAdded(tp0));
+
+        transactionManager.maybeAddPartitionToTransaction(unauthorizedPartition);
+        Future<RecordMetadata> unauthorizedTopicProduceFuture = accumulator.append(unauthorizedPartition, time.milliseconds(),
+                "key".getBytes(), "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
+        prepareAddPartitionsToTxn(singletonMap(unauthorizedPartition, Errors.TOPIC_AUTHORIZATION_FAILED));
+        sender.run(time.milliseconds());
+        assertTrue(transactionManager.hasAbortableError());
+        assertTrue(transactionManager.isPartitionAdded(tp0));
+        assertFalse(transactionManager.isPartitionAdded(unauthorizedPartition));
+        assertFalse(authorizedTopicProduceFuture.isDone());
+        assertFalse(unauthorizedTopicProduceFuture.isDone());
+
+        prepareEndTxnResponse(Errors.NONE, TransactionResult.ABORT, pid, epoch);
+        transactionManager.beginAbortingTransaction();
+        sender.run(time.milliseconds());
+        // neither produce request has been sent, so they should both be failed immediately
+        assertFutureFailed(authorizedTopicProduceFuture);
+        assertFutureFailed(unauthorizedTopicProduceFuture);
+        assertTrue(transactionManager.isReady());
+        assertFalse(transactionManager.hasPartitionsToAdd());
+        assertFalse(accumulator.hasUnflushedBatches());
+
+        // ensure we can now start a new transaction
+
+        transactionManager.beginTransaction();
+        transactionManager.maybeAddPartitionToTransaction(tp0);
+
+        FutureRecordMetadata nextTransactionFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
+                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
+
+        prepareAddPartitionsToTxn(singletonMap(tp0, Errors.NONE));
+        sender.run(time.milliseconds());
+        assertTrue(transactionManager.isPartitionAdded(tp0));
+        assertFalse(transactionManager.hasPartitionsToAdd());
+
+        transactionManager.beginCommittingTransaction();
+        prepareProduceResponse(Errors.NONE, pid, epoch);
+        sender.run(time.milliseconds());
+
+        assertTrue(nextTransactionFuture.isDone());
+        assertNotNull(nextTransactionFuture.get());
+
+        prepareEndTxnResponse(Errors.NONE, TransactionResult.COMMIT, pid, epoch);
+        sender.run(time.milliseconds());
+
+        assertTrue(transactionManager.isReady());
+    }
+
+    @Test
+    public void testRecoveryFromAbortableErrorProduceRequestInRetry() throws Exception {
+        final long pid = 13131L;
+        final short epoch = 1;
+        final TopicPartition unauthorizedPartition = new TopicPartition("foo", 0);
+
+        doInitTransactions(pid, epoch);
+
+        transactionManager.beginTransaction();
+        transactionManager.maybeAddPartitionToTransaction(tp0);
+        prepareAddPartitionsToTxn(tp0, Errors.NONE);
+
+        Future<RecordMetadata> authorizedTopicProduceFuture = accumulator.append(tp0, time.milliseconds(),
+                "key".getBytes(), "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
+        sender.run(time.milliseconds());
+        assertTrue(transactionManager.isPartitionAdded(tp0));
+
+        accumulator.beginFlush();
+        prepareProduceResponse(Errors.REQUEST_TIMED_OUT, pid, epoch);
+        sender.run(time.milliseconds());
+        assertFalse(authorizedTopicProduceFuture.isDone());
+        assertTrue(accumulator.hasUnflushedBatches());
+
+        transactionManager.maybeAddPartitionToTransaction(unauthorizedPartition);
+        Future<RecordMetadata> unauthorizedTopicProduceFuture = accumulator.append(unauthorizedPartition, time.milliseconds(),
+                "key".getBytes(), "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
+        prepareAddPartitionsToTxn(singletonMap(unauthorizedPartition, Errors.TOPIC_AUTHORIZATION_FAILED));
+        sender.run(time.milliseconds());
+        assertTrue(transactionManager.hasAbortableError());
+        assertTrue(transactionManager.isPartitionAdded(tp0));
+        assertFalse(transactionManager.isPartitionAdded(unauthorizedPartition));
+        assertFalse(authorizedTopicProduceFuture.isDone());
+
+        prepareProduceResponse(Errors.NONE, pid, epoch);
+        sender.run(time.milliseconds());
+        assertFutureFailed(unauthorizedTopicProduceFuture);
+        assertTrue(authorizedTopicProduceFuture.isDone());
+        assertNotNull(authorizedTopicProduceFuture.get());
+
+        prepareEndTxnResponse(Errors.NONE, TransactionResult.ABORT, pid, epoch);
+        transactionManager.beginAbortingTransaction();
+        sender.run(time.milliseconds());
+        // neither produce request has been sent, so they should both be failed immediately
+        assertTrue(transactionManager.isReady());
+        assertFalse(transactionManager.hasPartitionsToAdd());
+        assertFalse(accumulator.hasUnflushedBatches());
+
+        // ensure we can now start a new transaction
+
+        transactionManager.beginTransaction();
+        transactionManager.maybeAddPartitionToTransaction(tp0);
+
+        FutureRecordMetadata nextTransactionFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
+                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
+
+        prepareAddPartitionsToTxn(singletonMap(tp0, Errors.NONE));
+        sender.run(time.milliseconds());
+        assertTrue(transactionManager.isPartitionAdded(tp0));
+        assertFalse(transactionManager.hasPartitionsToAdd());
+
+        transactionManager.beginCommittingTransaction();
+        prepareProduceResponse(Errors.NONE, pid, epoch);
+        sender.run(time.milliseconds());
+
+        assertTrue(nextTransactionFuture.isDone());
+        assertNotNull(nextTransactionFuture.get());
+
+        prepareEndTxnResponse(Errors.NONE, TransactionResult.COMMIT, pid, epoch);
+        sender.run(time.milliseconds());
+
+        assertTrue(transactionManager.isReady());
     }
 
     @Test
@@ -1480,6 +1677,33 @@ public class TransactionManagerTest {
     }
 
     @Test
+    public void resendFailedProduceRequestAfterAbortableError() throws Exception {
+        final long pid = 13131L;
+        final short epoch = 1;
+        doInitTransactions(pid, epoch);
+        transactionManager.beginTransaction();
+
+        transactionManager.maybeAddPartitionToTransaction(tp0);
+
+        Future<RecordMetadata> responseFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
+                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
+
+        prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, epoch, pid);
+        prepareProduceResponse(Errors.NOT_LEADER_FOR_PARTITION, pid, epoch);
+        sender.run(time.milliseconds()); // AddPartitions
+        sender.run(time.milliseconds()); // Produce
+
+        assertFalse(responseFuture.isDone());
+
+        transactionManager.transitionToAbortableError(new KafkaException());
+        prepareProduceResponse(Errors.NONE, pid, epoch);
+
+        sender.run(time.milliseconds());
+        assertTrue(responseFuture.isDone());
+        assertNotNull(responseFuture.get());
+    }
+
+    @Test
     public void testTransitionToAbortableErrorOnBatchExpiry() throws InterruptedException, ExecutionException {
         final long pid = 13131L;
         final short epoch = 1;
@@ -1866,4 +2090,16 @@ public class TransactionManagerTest {
             assertTrue(transactionManager.hasError());
         }
     }
+
+    private void assertFutureFailed(Future<RecordMetadata> future) throws InterruptedException {
+        assertTrue(future.isDone());
+
+        try {
+            future.get();
+            fail("Expected produce future to throw");
+        } catch (ExecutionException e) {
+            // expected
+        }
+    }
+
 }

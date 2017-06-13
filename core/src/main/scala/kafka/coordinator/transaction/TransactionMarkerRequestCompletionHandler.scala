@@ -87,7 +87,7 @@ class TransactionMarkerRequestCompletionHandler(brokerId: Int,
         }
       }
     } else {
-      trace(s"Received response $response from node ${response.destination} with correlation id $correlationId")
+      debug(s"Received WriteTxnMarker response $response from node ${response.destination} with correlation id $correlationId")
 
       val writeTxnMarkerResponse = response.responseBody.asInstanceOf[WriteTxnMarkersResponse]
 
@@ -135,7 +135,6 @@ class TransactionMarkerRequestCompletionHandler(brokerId: Int,
                 for ((topicPartition: TopicPartition, error: Errors) <- errors) {
                   error match {
                     case Errors.NONE =>
-
                       txnMetadata.removePartition(topicPartition)
 
                     case Errors.CORRUPT_MESSAGE |
