@@ -64,7 +64,7 @@ public class InMemoryKeyValueLoggedStoreTest extends AbstractKeyValueStoreTest {
     }
 
     @Test
-    public void testIfPersistent() {
+    public void shouldCreatePersistentStore() {
         assertEquals(store.persistent(), false);
 
         StateStoreSupplier supplier = Stores.create("my-store").withKeys(context.keySerde()).
