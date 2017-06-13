@@ -780,6 +780,7 @@ project(':clients') {
     include "**/org/apache/kafka/clients/producer/*"
     include "**/org/apache/kafka/common/*"
     include "**/org/apache/kafka/common/acl/*"
+    include "**/org/apache/kafka/common/annotation/*"
     include "**/org/apache/kafka/common/errors/*"
     include "**/org/apache/kafka/common/header/*"
     include "**/org/apache/kafka/common/resource/*"
