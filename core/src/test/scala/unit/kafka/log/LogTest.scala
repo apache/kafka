@@ -1985,21 +1985,25 @@ class LogTest {
       log.appendAsLeader(createRecords, leaderEpoch = 0)
     assertEquals("should have 3 segments", 3, log.numberOfSegments)
     assertEquals(log.logStartOffset, 0)
+    assertEquals(Some(0), log.oldestProducerSnapshotOffset)
 
     log.maybeIncrementLogStartOffset(1)
     log.deleteOldSegments()
     assertEquals("should have 3 segments", 3, log.numberOfSegments)
     assertEquals(log.logStartOffset, 1)
+    assertEquals(Some(1), log.oldestProducerSnapshotOffset)
 
     log.maybeIncrementLogStartOffset(6)
     log.deleteOldSegments()
     assertEquals("should have 2 segments", 2, log.numberOfSegments)
     assertEquals(log.logStartOffset, 6)
+    assertEquals(Some(6), log.oldestProducerSnapshotOffset)
 
     log.maybeIncrementLogStartOffset(15)
     log.deleteOldSegments()
     assertEquals("should have 1 segments", 1, log.numberOfSegments)
     assertEquals(log.logStartOffset, 15)
+    assertEquals(Some(15), log.oldestProducerSnapshotOffset)
   }
 
   def epochCache(log: Log): LeaderEpochFileCache = {
@@ -2015,7 +2019,7 @@ class LogTest {
     for (_ <- 0 until 15)
       log.appendAsLeader(createRecords, leaderEpoch = 0)
 
-    log.deleteOldSegments
+    log.deleteOldSegments()
     assertEquals("should have 2 segments", 2,log.numberOfSegments)
   }
 
@@ -2028,7 +2032,7 @@ class LogTest {
     for (_ <- 0 until 15)
       log.appendAsLeader(createRecords, leaderEpoch = 0)
 
-    log.deleteOldSegments
+    log.deleteOldSegments()
     assertEquals("should have 3 segments", 3,log.numberOfSegments)
   }
 
