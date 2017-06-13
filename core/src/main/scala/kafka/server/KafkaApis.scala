@@ -1492,7 +1492,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     ensureInterBrokerVersion(KAFKA_0_11_0_IV0)
     authorizeClusterAction(request)
     val writeTxnMarkersRequest = request.body[WriteTxnMarkersRequest]
-    val errors = new ConcurrentHashMap[java.lang.Long, java.util.Map[TopicPartition, Errors]]()
+    val errors = new ConcurrentHashMap[java.lang.Long, util.Map[TopicPartition, Errors]]()
     val markers = writeTxnMarkersRequest.markers
     val numAppends = new AtomicInteger(markers.size)
 
@@ -1501,15 +1501,15 @@ class KafkaApis(val requestChannel: RequestChannel,
       return
     }
 
-    def updateErrors(producerId: Long, currentErrors: util.HashMap[TopicPartition, Errors]): Unit = {
+    def updateErrors(producerId: Long, currentErrors: ConcurrentHashMap[TopicPartition, Errors]): Unit = {
       val previousErrors = errors.putIfAbsent(producerId, currentErrors)
       if (previousErrors != null)
-        previousErrors synchronized previousErrors.putAll(currentErrors)
+        previousErrors.putAll(currentErrors)
     }
 
     def sendResponseCallback(producerId: Long, result: TransactionResult)(responseStatus: Map[TopicPartition, PartitionResponse]): Unit = {
       trace(s"End transaction marker append for producer id $producerId completed with status: $responseStatus")
-      val currentErrors = new java.util.HashMap[TopicPartition, Errors](responseStatus.mapValues(_.error).asJava)
+      val currentErrors = new ConcurrentHashMap[TopicPartition, Errors](responseStatus.mapValues(_.error).asJava)
       updateErrors(producerId, currentErrors)
       val successfulOffsetsPartitions = responseStatus.filter { case (topicPartition, partitionResponse) =>
         topicPartition.topic == GROUP_METADATA_TOPIC_NAME && partitionResponse.error == Errors.NONE
@@ -1523,7 +1523,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         } catch {
           case e: Exception =>
             error(s"Received an exception while trying to update the offsets cache on transaction marker append", e)
-            val updatedErrors = new util.HashMap[TopicPartition, Errors]()
+            val updatedErrors = new ConcurrentHashMap[TopicPartition, Errors]()
             successfulOffsetsPartitions.foreach(updatedErrors.put(_, Errors.UNKNOWN))
             updateErrors(producerId, updatedErrors)
         }
@@ -1548,7 +1548,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
 
       if (partitionsWithIncorrectMessageFormat.nonEmpty) {
-        val currentErrors = new util.HashMap[TopicPartition, Errors]()
+        val currentErrors = new ConcurrentHashMap[TopicPartition, Errors]()
         partitionsWithIncorrectMessageFormat.foreach { partition => currentErrors.put(partition, Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT) }
         updateErrors(producerId, currentErrors)
       }
