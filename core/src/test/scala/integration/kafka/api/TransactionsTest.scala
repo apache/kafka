@@ -439,27 +439,27 @@ class TransactionsTest extends KafkaServerTestHarness {
     val firstProducer = transactionalProducers.head
     val consumer = transactionalConsumers.head
     val unCommittedConsumer = nonTransactionalConsumers.head
-    val topicWith100Partitions = "largeTopic"
-    val topicWith100PartitionsAndOneReplica = "largeTopicOneReplica"
+    val topicWith10Partitions = "largeTopic"
+    val topicWith10PartitionsAndOneReplica = "largeTopicOneReplica"
     val topicConfig = new Properties()
     topicConfig.put(KafkaConfig.MinInSyncReplicasProp, 2.toString)
 
-    TestUtils.createTopic(zkUtils, topicWith100Partitions, 10, numServers, servers, topicConfig)
-    TestUtils.createTopic(zkUtils, topicWith100PartitionsAndOneReplica, 10, 1, servers, new Properties())
+    TestUtils.createTopic(zkUtils, topicWith10Partitions, 10, numServers, servers, topicConfig)
+    TestUtils.createTopic(zkUtils, topicWith10PartitionsAndOneReplica, 10, 1, servers, new Properties())
 
     firstProducer.initTransactions()
 
     firstProducer.beginTransaction()
-    sendTransactionalMessagesWithValueRange(firstProducer, topicWith100Partitions, 0, 5000, willBeCommitted = false)
-    sendTransactionalMessagesWithValueRange(firstProducer, topicWith100PartitionsAndOneReplica, 5000, 10000, willBeCommitted = false)
+    sendTransactionalMessagesWithValueRange(firstProducer, topicWith10Partitions, 0, 5000, willBeCommitted = false)
+    sendTransactionalMessagesWithValueRange(firstProducer, topicWith10PartitionsAndOneReplica, 5000, 10000, willBeCommitted = false)
     firstProducer.abortTransaction()
 
     firstProducer.beginTransaction()
-    sendTransactionalMessagesWithValueRange(firstProducer, topicWith100Partitions, 10000, 11000, willBeCommitted = true)
+    sendTransactionalMessagesWithValueRange(firstProducer, topicWith10Partitions, 10000, 11000, willBeCommitted = true)
     firstProducer.commitTransaction()
 
-    consumer.subscribe(List(topicWith100PartitionsAndOneReplica, topicWith100Partitions).asJava)
-    unCommittedConsumer.subscribe(List(topicWith100PartitionsAndOneReplica, topicWith100Partitions).asJava)
+    consumer.subscribe(List(topicWith10PartitionsAndOneReplica, topicWith10Partitions).asJava)
+    unCommittedConsumer.subscribe(List(topicWith10PartitionsAndOneReplica, topicWith10Partitions).asJava)
 
     val records = consumeRecords(consumer, 1000)
     records.foreach { record =>
