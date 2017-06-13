@@ -433,15 +433,15 @@ class LogTest {
     log.appendAsLeader(TestUtils.singletonRecords("b".getBytes), leaderEpoch = 0)
     log.roll(2L)
     assertTrue(Seq(0L, 1L, 2L).forall(Log.producerSnapshotFile(logDir, _).exists))
-    assertEquals(Some(0L), log.latestProducerSnapshotOffset)
-    assertEquals(Some(2L), log.oldestProducerSnapshotOffset)
+    assertEquals(Some(0L), log.oldestProducerSnapshotOffset)
+    assertEquals(Some(2L), log.latestProducerSnapshotOffset)
 
     log.appendAsLeader(TestUtils.singletonRecords("c".getBytes), leaderEpoch = 0)
     log.roll(3L)
     assertTrue(Seq(0L, 2L, 3L).forall(Log.producerSnapshotFile(logDir, _).exists))
     assertTrue(Seq(1L).forall(!Log.producerSnapshotFile(logDir, _).exists))
-    assertEquals(Some(0L), log.latestProducerSnapshotOffset)
-    assertEquals(Some(3L), log.oldestProducerSnapshotOffset)
+    assertEquals(Some(0L), log.oldestProducerSnapshotOffset)
+    assertEquals(Some(3L), log.latestProducerSnapshotOffset)
 
     // if we flush within the active segment, nothing changes
     log.appendAsLeader(TestUtils.singletonRecords("baz".getBytes), leaderEpoch = 0)
