@@ -56,7 +56,7 @@ class TransactionsTest extends KafkaServerTestHarness {
   @Before
   override def setUp(): Unit = {
     super.setUp()
-    val numPartitions = 3
+    val numPartitions = 4
     val topicConfig = new Properties()
     topicConfig.put(KafkaConfig.MinInSyncReplicasProp, 2.toString)
     TestUtils.createTopic(zkUtils, topic1, numPartitions, numServers, servers, topicConfig)
@@ -432,6 +432,53 @@ class TransactionsTest extends KafkaServerTestHarness {
     records.foreach { record =>
       TestUtils.assertCommittedAndGetValue(record)
     }
+  }
+
+  @Test
+  def testMultipleMarkersOneLeader(): Unit = {
+    val firstProducer = transactionalProducers.head
+    val consumer = transactionalConsumers.head
+    val unCommittedConsumer = nonTransactionalConsumers.head
+    val topicWith10Partitions = "largeTopic"
+    val topicWith10PartitionsAndOneReplica = "largeTopicOneReplica"
+    val topicConfig = new Properties()
+    topicConfig.put(KafkaConfig.MinInSyncReplicasProp, 2.toString)
+
+    TestUtils.createTopic(zkUtils, topicWith10Partitions, 10, numServers, servers, topicConfig)
+    TestUtils.createTopic(zkUtils, topicWith10PartitionsAndOneReplica, 10, 1, servers, new Properties())
+
+    firstProducer.initTransactions()
+
+    firstProducer.beginTransaction()
+    sendTransactionalMessagesWithValueRange(firstProducer, topicWith10Partitions, 0, 5000, willBeCommitted = false)
+    sendTransactionalMessagesWithValueRange(firstProducer, topicWith10PartitionsAndOneReplica, 5000, 10000, willBeCommitted = false)
+    firstProducer.abortTransaction()
+
+    firstProducer.beginTransaction()
+    sendTransactionalMessagesWithValueRange(firstProducer, topicWith10Partitions, 10000, 11000, willBeCommitted = true)
+    firstProducer.commitTransaction()
+
+    consumer.subscribe(List(topicWith10PartitionsAndOneReplica, topicWith10Partitions).asJava)
+    unCommittedConsumer.subscribe(List(topicWith10PartitionsAndOneReplica, topicWith10Partitions).asJava)
+
+    val records = consumeRecords(consumer, 1000)
+    records.foreach { record =>
+      TestUtils.assertCommittedAndGetValue(record)
+    }
+
+    val allRecords = consumeRecords(unCommittedConsumer, 11000)
+    val expectedValues = Range(0, 11000).map(_.toString).toSet
+    allRecords.foreach { record =>
+      assertTrue(expectedValues.contains(TestUtils.recordValueAsString(record)))
+    }
+  }
+
+  private def sendTransactionalMessagesWithValueRange(producer: KafkaProducer[Array[Byte], Array[Byte]], topic: String,
+                                                      start: Int, end: Int, willBeCommitted: Boolean): Unit = {
+    for (i <- start until end) {
+      producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic, i.toString, i.toString, willBeCommitted))
+    }
+    producer.flush()
   }
 
   private def serverProps() = {
