@@ -28,12 +28,13 @@ import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 
 /**
- * The public interface for the {@link KafkaAdminClient}, which supports managing and inspecting topics,
- * brokers, and configurations.
+ * The administrative client for Kafka, which supports managing and inspecting topics, brokers, configurations and ACLs.
  *
- * @see KafkaAdminClient
+ * This client was introduced in 0.11.0.0 and the API is still evolving. We will try to evolve the API in a compatible
+ * manner, but we reserve the right to make breaking changes in minor releases, if necessary. We will update the
+ * {@code InterfaceStability} annotation and this notice once the API is considered stable.
  */
-@InterfaceStability.Unstable
+@InterfaceStability.Evolving
 public abstract class AdminClient implements AutoCloseable {
 
     /**

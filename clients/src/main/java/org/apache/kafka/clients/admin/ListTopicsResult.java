@@ -24,9 +24,11 @@ import java.util.Collection;
 import java.util.Map;
 
 /**
- * The result of the listTopics call.
+ * The result of the {@link AdminClient#listTopics()} call.
+ *
+ * The API of this class is evolving, see {@link AdminClient} for details.
  */
-@InterfaceStability.Unstable
+@InterfaceStability.Evolving
 public class ListTopicsResult {
     final KafkaFuture<Map<String, TopicListing>> future;
 

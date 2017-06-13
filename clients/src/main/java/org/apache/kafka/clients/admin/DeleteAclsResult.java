@@ -21,6 +21,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
+import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.errors.ApiException;
 
 import java.util.ArrayList;
@@ -29,9 +30,16 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * The result of the deleteAcls call.
+ * The result of the {@link AdminClient#deleteAcls(Collection)} call.
+ *
+ * The API of this class is evolving, see {@link AdminClient} for details.
  */
+@InterfaceStability.Evolving
 public class DeleteAclsResult {
+
+    /**
+     * A class containing either the deleted ACL or an exception if the delete failed.
+     */
     public static class FilterResult {
         private final AclBinding acl;
         private final ApiException exception;
@@ -41,15 +49,24 @@ public class DeleteAclsResult {
             this.exception = exception;
         }
 
+        /**
+         * Return the deleted ACL or null if there was an error.
+         */
         public AclBinding acl() {
             return acl;
         }
 
+        /**
+         * Return an exception if the ACL delete was not successful or null if it was.
+         */
         public ApiException exception() {
             return exception;
         }
     }
 
+    /**
+     * A class containing the results of the delete ACLs operation.
+     */
     public static class FilterResults {
         private final List<FilterResult> acls;
 
@@ -57,6 +74,9 @@ public class DeleteAclsResult {
             this.acls = acls;
         }
 
+        /**
+         * Return a list of delete ACLs results.
+         */
         public List<FilterResult> acls() {
             return acls;
         }
@@ -69,8 +89,8 @@ public class DeleteAclsResult {
     }
 
     /**
-     * Return a map from topic names to futures which can be used to check the status of
-     * individual deletions.
+     * Return a map from acl filters to futures which can be used to check the status of the deletions by each
+     * filter.
      */
     public Map<AclBindingFilter, KafkaFuture<FilterResults>> results() {
         return futures;

@@ -24,17 +24,19 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 import java.util.Collection;
 
 /**
- * The results of the describeCluster call.
+ * The result of the {@link KafkaAdminClient#describeCluster()} call.
+ *
+ * The API of this class is evolving, see {@link AdminClient} for details.
  */
-@InterfaceStability.Unstable
+@InterfaceStability.Evolving
 public class DescribeClusterResult {
     private final KafkaFuture<Collection<Node>> nodes;
     private final KafkaFuture<Node> controller;
     private final KafkaFuture<String> clusterId;
 
     DescribeClusterResult(KafkaFuture<Collection<Node>> nodes,
-                           KafkaFuture<Node> controller,
-                           KafkaFuture<String> clusterId) {
+                          KafkaFuture<Node> controller,
+                          KafkaFuture<String> clusterId) {
         this.nodes = nodes;
         this.controller = controller;
         this.clusterId = clusterId;

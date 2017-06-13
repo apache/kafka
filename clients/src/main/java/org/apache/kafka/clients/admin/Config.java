@@ -17,21 +17,38 @@
 
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.annotation.InterfaceStability;
+
 import java.util.Collection;
 import java.util.Collections;
 
+/**
+ * A configuration object containing the configuration entries for a resource.
+ *
+ * The API of this class is evolving, see {@link AdminClient} for details.
+ */
+@InterfaceStability.Evolving
 public class Config {
 
     private final Collection<ConfigEntry> entries;
 
+    /**
+     * Create a configuration instance with the provided entries.
+     */
     public Config(Collection<ConfigEntry> entries) {
-        this.entries = entries;
+        this.entries = Collections.unmodifiableCollection(entries);
     }
 
+    /**
+     * Configuration entries for a resource.
+     */
     public Collection<ConfigEntry> entries() {
-        return Collections.unmodifiableCollection(entries);
+        return entries;
     }
 
+    /**
+     * Get the configuration entry with the provided name or null if there isn't one.
+     */
     public ConfigEntry get(String name) {
         for (ConfigEntry entry : entries)
             if (entry.name().equals(name))
