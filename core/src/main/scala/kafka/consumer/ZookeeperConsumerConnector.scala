@@ -591,7 +591,9 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
             if (doRebalance)
               syncedRebalance
           } catch {
-            case t: Throwable => error("error during syncedRebalance", t)
+            case t: Throwable =>
+              error("Error during syncedRebalance", t)
+              shutdown()
           }
         }
         info("stopping watcher executor thread for consumer " + consumerIdString)

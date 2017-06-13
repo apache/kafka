@@ -324,6 +324,17 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                     apiVersions);
             String ioThreadName = "kafka-producer-network-thread" + (clientId.length() > 0 ? " | " + clientId : "");
             this.ioThread = new KafkaThread(ioThreadName, this.sender, true);
+            this.ioThread.setUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
+                @Override
+                public void uncaughtException(Thread t, Throwable e) {
+                    try {
+                        log.error("Thread " + t.getName() + " died due to uncaught exception", e);
+                    } finally {
+                        close(0, TimeUnit.MILLISECONDS); //cant wait to properly flush, because the thread doing the flushing just died
+                    }
+
+                }
+            });
             this.ioThread.start();
             this.errors = this.metrics.sensor("errors");
             config.logUnused();

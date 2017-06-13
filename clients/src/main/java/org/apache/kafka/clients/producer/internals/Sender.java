@@ -154,41 +154,51 @@ public class Sender implements Runnable {
      * The main run loop for the sender thread
      */
     public void run() {
-        log.debug("Starting Kafka producer I/O thread.");
-
-        // main loop, runs until close is called
-        while (running) {
-            try {
-                run(time.milliseconds());
-            } catch (Exception e) {
-                log.error("Uncaught error in kafka producer I/O thread: ", e);
-            }
-        }
-
-        log.debug("Beginning shutdown of Kafka producer I/O thread, sending remaining records.");
-
-        // okay we stopped accepting requests but there may still be
-        // requests in the accumulator or waiting for acknowledgment,
-        // wait until these are completed.
-        while (!forceClose && (this.accumulator.hasUnsent() || this.client.inFlightRequestCount() > 0)) {
-            try {
-                run(time.milliseconds());
-            } catch (Exception e) {
-                log.error("Uncaught error in kafka producer I/O thread: ", e);
-            }
-        }
-        if (forceClose) {
-            // We need to fail all the incomplete batches and wake up the threads waiting on
-            // the futures.
-            this.accumulator.abortIncompleteBatches();
-        }
+        boolean gracefulShutdown = false;
         try {
-            this.client.close();
-        } catch (Exception e) {
-            log.error("Failed to close network client", e);
-        }
+            log.debug("Starting Kafka producer I/O thread.");
 
-        log.debug("Shutdown of Kafka producer I/O thread has completed.");
+            // main loop, runs until close is called
+            while (running) {
+                try {
+                    run(time.milliseconds());
+                } catch (Exception e) {
+                    log.error("Uncaught error in kafka producer I/O thread: ", e);
+                }
+            }
+
+            log.debug("Beginning shutdown of Kafka producer I/O thread, sending remaining records.");
+
+            // okay we stopped accepting requests but there may still be
+            // requests in the accumulator or waiting for acknowledgment,
+            // wait until these are completed.
+            while (!forceClose && (this.accumulator.hasUnsent() || this.client.inFlightRequestCount() > 0)) {
+                try {
+                    run(time.milliseconds());
+                } catch (Exception e) {
+                    log.error("Uncaught error in kafka producer I/O thread: ", e);
+                }
+            }
+            if (forceClose) {
+                // We need to fail all the incomplete batches and wake up the threads waiting on
+                // the futures.
+                this.accumulator.abortIncompleteBatches();
+            }
+            try {
+                this.client.close();
+            } catch (Exception e) {
+                log.error("Failed to close network client", e);
+            }
+
+            log.debug("Shutdown of Kafka producer I/O thread has completed.");
+            gracefulShutdown = true;
+        } finally {
+            //make sure to clean up any pending batches. this is a nop on graceful shutdown
+            if (!gracefulShutdown) {
+                forceClose();
+                this.accumulator.abortIncompleteBatches();
+            }
+        }
     }
 
     /**
