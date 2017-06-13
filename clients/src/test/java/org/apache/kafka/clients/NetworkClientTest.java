@@ -29,6 +29,7 @@ import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.ProduceRequest;
 import org.apache.kafka.common.requests.ResponseHeader;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.test.DelayedReceive;
 import org.apache.kafka.test.MockSelector;
 import org.apache.kafka.test.TestUtils;
@@ -264,7 +265,21 @@ public class NetworkClientTest {
         assertEquals(1, responses.size());
         assertTrue(responses.iterator().next().wasDisconnected());
     }
-    
+
+    @Test
+    public void testCallDisconnect() throws Exception {
+        awaitReady(client, node);
+        assertTrue("Expected NetworkClient to be ready to send to node " + node.idString(),
+            client.isReady(node, Time.SYSTEM.milliseconds()));
+        assertFalse("Did not expect connection to node " + node.idString() + " to be failed",
+            client.connectionFailed(node));
+        client.disconnect(node.idString());
+        assertFalse("Expected node " + node.idString() + " to be disconnected.",
+            client.isReady(node, Time.SYSTEM.milliseconds()));
+        assertTrue("Expected connection to node " + node.idString() + " to be failed after disconnect",
+            client.connectionFailed(node));
+    }
+
     private static class TestCallbackHandler implements RequestCompletionHandler {
         public boolean executed = false;
         public ClientResponse response;
