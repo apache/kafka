@@ -475,7 +475,7 @@ class TransactionsTest extends KafkaServerTestHarness {
 
   private def sendTransactionalMessagesWithValueRange(producer: KafkaProducer[Array[Byte], Array[Byte]], topic: String,
                                                       start: Int, end: Int, willBeCommitted: Boolean): Unit = {
-    for (i <- Range(start, end)) {
+    for (i <- start until end) {
       producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic, i.toString, i.toString, willBeCommitted))
     }
     producer.flush()
