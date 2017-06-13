@@ -444,8 +444,8 @@ class TransactionsTest extends KafkaServerTestHarness {
     val topicConfig = new Properties()
     topicConfig.put(KafkaConfig.MinInSyncReplicasProp, 2.toString)
 
-    TestUtils.createTopic(zkUtils, topicWith100Partitions, 100, numServers, servers, topicConfig)
-    TestUtils.createTopic(zkUtils, topicWith100PartitionsAndOneReplica, 100, 1, servers, new Properties())
+    TestUtils.createTopic(zkUtils, topicWith100Partitions, 10, numServers, servers, topicConfig)
+    TestUtils.createTopic(zkUtils, topicWith100PartitionsAndOneReplica, 10, 1, servers, new Properties())
 
     firstProducer.initTransactions()
 
