@@ -22,10 +22,8 @@ import org.easymock.EasyMock
 import org.junit.Before
 import org.junit.Test
 
-import kafka.admin.ConsumerGroupCommand.ConsumerGroupCommandOptions
-import kafka.admin.ConsumerGroupCommand.ZkConsumerGroupService
-import kafka.consumer.OldConsumer
-import kafka.consumer.Whitelist
+import kafka.admin.ConsumerGroupCommand.{ConsumerGroupCommandOptions, KafkaConsumerGroupService, ZkConsumerGroupService}
+import kafka.consumer.{OldConsumer, Whitelist}
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
@@ -53,7 +51,8 @@ class ListConsumerGroupTest extends KafkaServerTestHarness {
   }
 
   @Test
-  def testListGroupWithNoExistingGroup() {
+  @deprecated("This test has been deprecated and will be removed in a future release.", "0.11.0.0")
+  def testListGroupWithNoExistingGroupWithOldConsumer() {
     val opts = new ConsumerGroupCommandOptions(Array("--zookeeper", zkConnect))
     val consumerGroupCommand = new ZkConsumerGroupService(opts)
     try {
@@ -64,7 +63,8 @@ class ListConsumerGroupTest extends KafkaServerTestHarness {
   }
 
   @Test
-  def testListGroupWithSomeGroups() {
+  @deprecated("This test has been deprecated and will be removed in a future release.", "0.11.0.0")
+  def testListGroupWithSomeGroupsWithOldConsumer() {
     // mocks
     val consumer1Mock = EasyMock.createMockBuilder(classOf[OldConsumer]).withConstructor(topicFilter, props).createMock()
     props.setProperty("group.id", "some.other.group")
@@ -88,5 +88,37 @@ class ListConsumerGroupTest extends KafkaServerTestHarness {
     consumerGroupCommand.close()
     consumer1Mock.stop()
     consumer2Mock.stop()
+  }
+
+  @Test
+  def testListGroupWithNoExistingGroup() {
+    val opts = new ConsumerGroupCommandOptions(Array("--bootstrap-server", brokerList))
+    val consumerGroupCommand = new KafkaConsumerGroupService(opts)
+    try {
+      assert(consumerGroupCommand.listGroups().isEmpty)
+    } finally {
+      consumerGroupCommand.close()
+    }
+  }
+
+  @Test
+  def testListGroupWithSomeGroups() {
+    // run one consumer in the group consuming from a single-partition topic
+    val executor1 = new ConsumerGroupExecutor(brokerList, 1, group, topic)
+    val executor2 = new ConsumerGroupExecutor(brokerList, 1, "some.other.group", topic)
+
+    val opts = new ConsumerGroupCommandOptions(Array("--bootstrap-server", brokerList))
+    val consumerGroupCommand = new KafkaConsumerGroupService(opts)
+
+    // action/test
+    TestUtils.waitUntilTrue(() => {
+        val groups = consumerGroupCommand.listGroups()
+        groups.size == 2 && groups.contains(group) && groups.contains("some.other.group")
+      }, "Expected a different list group results.")
+
+    // cleanup
+    consumerGroupCommand.close()
+    executor1.shutdown()
+    executor2.shutdown()
   }
 }
