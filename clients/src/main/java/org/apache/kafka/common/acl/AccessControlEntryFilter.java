@@ -30,6 +30,9 @@ import java.util.Objects;
 public class AccessControlEntryFilter {
     private final AccessControlEntryData data;
 
+    /**
+     * Matches any access control entry.
+     */
     public static final AccessControlEntryFilter ANY =
         new AccessControlEntryFilter(null, null, AclOperation.ANY, AclPermissionType.ANY);
 
@@ -112,7 +115,7 @@ public class AccessControlEntryFilter {
     }
 
     /**
-     * Returns true if this filter could only match one ACE-- in other words, if
+     * Returns true if this filter could only match one ACE -- in other words, if
      * there are no ANY or UNKNOWN fields.
      */
     public boolean matchesAtMostOne() {
