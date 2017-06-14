@@ -55,7 +55,7 @@ public class TopicPartitionInfo {
     }
 
     /**
-     * Return the leader of the partition or {@link Node#noNode()} if there is none.
+     * Return the leader of the partition or null if there is none.
      */
     public Node leader() {
         return leader;
