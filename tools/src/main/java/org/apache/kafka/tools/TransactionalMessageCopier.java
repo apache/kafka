@@ -272,7 +272,7 @@ public class TransactionalMessageCopier {
         });
 
         try {
-            Random random = new Random(System.currentTimeMillis());
+            Random random = new Random();
             while (0 < remainingMessages.get()) {
                 System.out.println(statusAsJson(numMessagesProcessed.get(), remainingMessages.get(), transactionalId));
                 if (isShuttingDown.get())
