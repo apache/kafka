@@ -206,9 +206,9 @@ class TransactionsTest(Test):
 
         for copier in copiers:
             wait_until(lambda: copier.is_done,
-                       timeout_sec=60,
+                       timeout_sec=120,
                        err_msg="%s - Failed to copy all messages in  %ds." %\
-                       (copier.transactional_id, 60))
+                       (copier.transactional_id, 120))
         self.logger.info("finished copying messages")
         return self.drain_consumer(concurrent_consumer)
 
