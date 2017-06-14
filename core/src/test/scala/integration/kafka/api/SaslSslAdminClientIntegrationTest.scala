@@ -107,9 +107,9 @@ class SaslSslAdminClientIntegrationTest extends AdminClientIntegrationTest with 
     assertFutureExceptionTypeEquals(results2.all, classOf[InvalidRequestException])
     val results3 = client.deleteAcls(List(ACL1.toFilter, acl2.toFilter, acl3.toFilter).asJava).values
     assertEquals(Set(ACL1.toFilter, acl2.toFilter, acl3.toFilter), results3.keySet.asScala)
-    assertEquals(0, results3.get(ACL1.toFilter).get.acls.size())
-    assertEquals(Set(acl2), results3.get(acl2.toFilter).get.acls.asScala.map(_.acl).toSet)
-    assertEquals(Set(acl3), results3.get(acl3.toFilter).get.acls.asScala.map(_.acl).toSet)
+    assertEquals(0, results3.get(ACL1.toFilter).get.values.size())
+    assertEquals(Set(acl2), results3.get(acl2.toFilter).get.values.asScala.map(_.binding).toSet)
+    assertEquals(Set(acl3), results3.get(acl3.toFilter).get.values.asScala.map(_.binding).toSet)
   }
 
   def waitForDescribeAcls(client: AdminClient, filter: AclBindingFilter, acls: Set[AclBinding]): Unit = {
@@ -134,8 +134,8 @@ class SaslSslAdminClientIntegrationTest extends AdminClientIntegrationTest with 
 
     val results2 = client.deleteAcls(List(filterA, filterB).asJava, new DeleteAclsOptions())
     assertEquals(Set(filterA, filterB), results2.values.keySet().asScala)
-    assertEquals(Set(), results2.values.get(filterA).get.acls.asScala.map(_.acl).toSet)
-    assertEquals(Set(acl2), results2.values.get(filterB).get.acls.asScala.map(_.acl).toSet)
+    assertEquals(Set(), results2.values.get(filterA).get.values.asScala.map(_.binding).toSet)
+    assertEquals(Set(acl2), results2.values.get(filterB).get.values.asScala.map(_.binding).toSet)
 
     waitForDescribeAcls(client, filterB, Set())
   }
@@ -196,7 +196,7 @@ class SaslSslAdminClientIntegrationTest extends AdminClientIntegrationTest with 
             verifyCauseIsClusterAuth(e)
             true
           case Success(_) =>
-            assertEquals(Set(fooAcl), result.values.get(fooAcl.toFilter).get.acls.asScala.map(_.acl).toSet)
+            assertEquals(Set(fooAcl), result.values.get(fooAcl.toFilter).get.values.asScala.map(_.binding).toSet)
             true
         }
       }

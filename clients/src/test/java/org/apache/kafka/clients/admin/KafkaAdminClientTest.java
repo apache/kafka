@@ -297,10 +297,10 @@ public class KafkaAdminClientTest {
                     }});
             Map<AclBindingFilter, KafkaFuture<FilterResults>> filterResults = results.values();
             FilterResults filter1Results = filterResults.get(FILTER1).get();
-            assertEquals(null, filter1Results.acls().get(0).exception());
-            assertEquals(ACL1, filter1Results.acls().get(0).acl());
-            assertEquals(null, filter1Results.acls().get(1).exception());
-            assertEquals(ACL2, filter1Results.acls().get(1).acl());
+            assertEquals(null, filter1Results.values().get(0).exception());
+            assertEquals(ACL1, filter1Results.values().get(0).binding());
+            assertEquals(null, filter1Results.values().get(1).exception());
+            assertEquals(ACL2, filter1Results.values().get(1).binding());
             assertFutureError(filterResults.get(FILTER2), SecurityDisabledException.class);
             assertFutureError(results.all(), SecurityDisabledException.class);
 
@@ -318,7 +318,7 @@ public class KafkaAdminClientTest {
                             add(FILTER1);
                             add(FILTER2);
                         }});
-            assertTrue(results.values().get(FILTER2).get().acls().isEmpty());
+            assertTrue(results.values().get(FILTER2).get().values().isEmpty());
             assertFutureError(results.all(), SecurityDisabledException.class);
 
             // Test a call where there are no errors.
