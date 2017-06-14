@@ -1106,7 +1106,7 @@ public class KafkaAdminClient extends AdminClient {
 
     @Override
     public ListTopicsResult listTopics(final ListTopicsOptions options) {
-        final KafkaFutureImpl<Map<String, TopicListItem>> topicListingFuture = new KafkaFutureImpl<>();
+        final KafkaFutureImpl<Map<String, TopicListing>> topicListingFuture = new KafkaFutureImpl<>();
         final long now = time.milliseconds();
         runnable.call(new Call("listTopics", calcDeadlineMs(now, options.timeoutMs()),
             new LeastLoadedNodeProvider()) {
@@ -1120,11 +1120,11 @@ public class KafkaAdminClient extends AdminClient {
             void handleResponse(AbstractResponse abstractResponse) {
                 MetadataResponse response = (MetadataResponse) abstractResponse;
                 Cluster cluster = response.cluster();
-                Map<String, TopicListItem> topicListing = new HashMap<>();
+                Map<String, TopicListing> topicListing = new HashMap<>();
                 for (String topicName : cluster.topics()) {
                     boolean internal = cluster.internalTopics().contains(topicName);
                     if (!internal || options.shouldListInternal())
-                        topicListing.put(topicName, new TopicListItem(topicName, internal));
+                        topicListing.put(topicName, new TopicListing(topicName, internal));
                 }
                 topicListingFuture.complete(topicListing);
             }

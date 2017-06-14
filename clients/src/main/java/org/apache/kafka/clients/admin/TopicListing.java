@@ -18,9 +18,9 @@
 package org.apache.kafka.clients.admin;
 
 /**
- * A list item for a topic in the cluster.
+ * A listing of a topic in the cluster.
  */
-public class TopicListItem {
+public class TopicListing {
     private final String name;
     private final boolean internal;
 
@@ -30,7 +30,7 @@ public class TopicListItem {
      * @param name The topic name
      * @param internal Whether the topic is internal to Kafka
      */
-    public TopicListItem(String name, boolean internal) {
+    public TopicListing(String name, boolean internal) {
         this.name = name;
         this.internal = internal;
     }
