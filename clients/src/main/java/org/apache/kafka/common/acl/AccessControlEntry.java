@@ -42,9 +42,11 @@ public class AccessControlEntry {
         Objects.requireNonNull(principal);
         Objects.requireNonNull(host);
         Objects.requireNonNull(operation);
-        assert operation != AclOperation.ANY;
+        if (operation == AclOperation.ANY)
+            throw new IllegalArgumentException("operation must not be ANY");
         Objects.requireNonNull(permissionType);
-        assert permissionType != AclPermissionType.ANY;
+        if (permissionType == AclPermissionType.ANY)
+            throw new IllegalArgumentException("permissionType must not be ANY");
         this.data = new AccessControlEntryData(principal, host, operation, permissionType);
     }
 
