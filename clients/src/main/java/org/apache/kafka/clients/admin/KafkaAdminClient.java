@@ -1182,11 +1182,8 @@ public class KafkaAdminClient extends AdminClient {
                     List<PartitionInfo> partitionInfos = cluster.partitionsForTopic(topicName);
                     List<TopicPartitionInfo> partitions = new ArrayList<>(partitionInfos.size());
                     for (PartitionInfo partitionInfo : partitionInfos) {
-                        Node leader = null;
-                        if (partitionInfo.leader() != null || partitionInfo.leader().id() != Node.noNode().id())
-                            leader = partitionInfo.leader();
                         TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(
-                            partitionInfo.partition(), leader, Arrays.asList(partitionInfo.replicas()),
+                            partitionInfo.partition(), leader(partitionInfo), Arrays.asList(partitionInfo.replicas()),
                             Arrays.asList(partitionInfo.inSyncReplicas()));
                         partitions.add(topicPartitionInfo);
                     }
@@ -1199,6 +1196,12 @@ public class KafkaAdminClient extends AdminClient {
                     TopicDescription topicDescription = new TopicDescription(topicName, isInternal, partitions);
                     future.complete(topicDescription);
                 }
+            }
+
+            private Node leader(PartitionInfo partitionInfo) {
+                if (partitionInfo.leader() == null || partitionInfo.leader().id() == Node.noNode().id())
+                    return null;
+                return partitionInfo.leader();
             }
 
             @Override
@@ -1238,11 +1241,14 @@ public class KafkaAdminClient extends AdminClient {
             void handleResponse(AbstractResponse abstractResponse) {
                 MetadataResponse response = (MetadataResponse) abstractResponse;
                 describeClusterFuture.complete(response.brokers());
-                Node controller = null;
-                if (response.controller() != null && response.controller().id() != MetadataResponse.NO_CONTROLLER_ID)
-                    controller = response.controller();
-                controllerFuture.complete(controller);
+                controllerFuture.complete(controller(response));
                 clusterIdFuture.complete(response.clusterId());
+            }
+
+            private Node controller(MetadataResponse response) {
+                if (response.controller() == null || response.controller().id() == MetadataResponse.NO_CONTROLLER_ID)
+                    return null;
+                return response.controller();
             }
 
             @Override
