@@ -19,12 +19,15 @@ package org.apache.kafka.clients.admin;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
+import java.util.Collection;
 import java.util.Map;
 
 /**
- * The result of newTopics.
+ * The result of {@link AdminClient#createTopics(Collection)}.
+ *
+ * The API of this class is evolving, see {@link AdminClient} for details.
  */
-@InterfaceStability.Unstable
+@InterfaceStability.Evolving
 public class CreateTopicsResult {
     private final Map<String, KafkaFuture<Void>> futures;
 

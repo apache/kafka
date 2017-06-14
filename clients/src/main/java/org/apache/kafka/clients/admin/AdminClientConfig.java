@@ -31,7 +31,7 @@ import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
 
 /**
- * The AdminClient configuration keys
+ * The AdminClient configuration class, which also contains constants for configuration entry names.
  */
 public class AdminClientConfig extends AbstractConfig {
     private static final ConfigDef CONFIG;

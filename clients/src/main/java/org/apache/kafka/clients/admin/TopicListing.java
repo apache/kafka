@@ -24,15 +24,28 @@ public class TopicListing {
     private final String name;
     private final boolean internal;
 
+    /**
+     * Create an instance with the specified parameters.
+     *
+     * @param name The topic name
+     * @param internal Whether the topic is internal to Kafka
+     */
     public TopicListing(String name, boolean internal) {
         this.name = name;
         this.internal = internal;
     }
 
+    /**
+     * The name of the topic.
+     */
     public String name() {
         return name;
     }
 
+    /**
+     * Whether the topic is internal to Kafka. An example of an internal topic is the offsets and group management topic:
+     * __consumer_offsets.
+     */
     public boolean internal() {
         return internal;
     }

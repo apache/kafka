@@ -17,15 +17,27 @@
 
 package org.apache.kafka.common.acl;
 
+import org.apache.kafka.common.annotation.InterfaceStability;
+
 import java.util.Objects;
 
 /**
- * Represents an access control entry.  ACEs are a tuple of principal, host,
- * operation, and permissionType.
+ * Represents an access control entry.  ACEs are a tuple of principal, host, operation, and permissionType.
+ *
+ * The API for this class is still evolving and we may break compatibility in minor releases, if necessary.
  */
+@InterfaceStability.Evolving
 public class AccessControlEntry {
     final AccessControlEntryData data;
 
+    /**
+     * Create an instance of an access control entry with the provided parameters.
+     *
+     * @param principal non-null principal
+     * @param host non-null host
+     * @param operation non-null operation, ANY is not an allowed operation
+     * @param permissionType non-null permission type, ANY is not an allowed type
+     */
     public AccessControlEntry(String principal, String host, AclOperation operation, AclPermissionType permissionType) {
         Objects.requireNonNull(principal);
         Objects.requireNonNull(host);
@@ -36,18 +48,30 @@ public class AccessControlEntry {
         this.data = new AccessControlEntryData(principal, host, operation, permissionType);
     }
 
+    /**
+     * Return the principal for this entry.
+     */
     public String principal() {
         return data.principal();
     }
 
+    /**
+     * Return the host or `*` for all hosts.
+     */
     public String host() {
         return data.host();
     }
 
+    /**
+     * Return the AclOperation. This method will never return AclOperation.ANY.
+     */
     public AclOperation operation() {
         return data.operation();
     }
 
+    /**
+     * Return the AclPermissionType. This method will never return AclPermissionType.ANY.
+     */
     public AclPermissionType permissionType() {
         return data.permissionType();
     }
