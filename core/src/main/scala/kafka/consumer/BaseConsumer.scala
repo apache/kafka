@@ -28,6 +28,7 @@ import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.header.Headers
 import org.apache.kafka.common.header.internals.RecordHeaders
+import scala.collection.JavaConverters._
 
 /**
  * A base consumer used to abstract both old and new consumer
@@ -83,6 +84,13 @@ class NewShinyConsumer(topic: Option[String], partitionId: Option[Int], offset: 
   }
 
   def seek(topic: String, partitionId: Int, offset: Long) {
+
+    // check if the requested partition exists for the topic
+    val availablePartitions = consumer.partitionsFor(topic).asScala
+    val partitionInfo = availablePartitions.find(_.partition() == partitionId)
+    if (partitionInfo.isEmpty)
+      throw new IllegalArgumentException("An invalid partition is provided.")
+
     val topicPartition = new TopicPartition(topic, partitionId)
     consumer.assign(Collections.singletonList(topicPartition))
     offset match {
