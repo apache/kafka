@@ -1188,7 +1188,7 @@ public class KafkaAdminClient extends AdminClient {
                         if (partitionInfo.leader() != null || partitionInfo.leader().id() != Node.noNode().id())
                             leader = partitionInfo.leader();
                         TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(
-                            partitionInfo.partition(), partitionInfo.leader(), Arrays.asList(partitionInfo.replicas()),
+                            partitionInfo.partition(), leader, Arrays.asList(partitionInfo.replicas()),
                             Arrays.asList(partitionInfo.inSyncReplicas()));
                         partitions.add(topicPartitionInfo);
                     }
@@ -1241,7 +1241,7 @@ public class KafkaAdminClient extends AdminClient {
                 MetadataResponse response = (MetadataResponse) abstractResponse;
                 describeClusterFuture.complete(response.brokers());
                 Node controller = null;
-                if (response.controller() != null && response.controller().id() == MetadataResponse.NO_CONTROLLER_ID)
+                if (response.controller() != null && response.controller().id() != MetadataResponse.NO_CONTROLLER_ID)
                     controller = response.controller();
                 controllerFuture.complete(controller);
                 clusterIdFuture.complete(response.clusterId());
