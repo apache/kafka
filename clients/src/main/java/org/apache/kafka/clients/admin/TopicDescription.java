@@ -60,7 +60,7 @@ public class TopicDescription {
     }
 
     /**
-     * A map from partition id to its leadership and replica information.
+     * A map from partition id to the leadership and replica information for that partition.
      */
     public NavigableMap<Integer, TopicPartitionInfo> partitions() {
         return partitions;
