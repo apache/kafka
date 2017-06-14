@@ -82,20 +82,20 @@ public class TimestampConverterTest {
     @Test(expected = ConfigException.class)
     public void testConfigInvalidTargetType() {
         TimestampConverter<SourceRecord> xform = new TimestampConverter.Value<>();
-        xform.configure(Collections.singletonMap(TimestampConverter.TYPE_CONFIG, "invalid"));
+        xform.configure(Collections.singletonMap(TimestampConverter.TARGET_TYPE_CONFIG, "invalid"));
     }
 
     @Test(expected = ConfigException.class)
     public void testConfigMissingFormat() {
         TimestampConverter<SourceRecord> xform = new TimestampConverter.Value<>();
-        xform.configure(Collections.singletonMap(TimestampConverter.TYPE_CONFIG, "string"));
+        xform.configure(Collections.singletonMap(TimestampConverter.TARGET_TYPE_CONFIG, "string"));
     }
 
     @Test(expected = ConfigException.class)
     public void testConfigInvalidFormat() {
         TimestampConverter<SourceRecord> xform = new TimestampConverter.Value<>();
         Map<String, String> config = new HashMap<>();
-        config.put(TimestampConverter.TYPE_CONFIG, "string");
+        config.put(TimestampConverter.TARGET_TYPE_CONFIG, "string");
         config.put(TimestampConverter.FORMAT_CONFIG, "bad-format");
         xform.configure(config);
     }
@@ -106,7 +106,7 @@ public class TimestampConverterTest {
     @Test
     public void testSchemalessIdentity() {
         TimestampConverter<SourceRecord> xform = new TimestampConverter.Value<>();
-        xform.configure(Collections.singletonMap(TimestampConverter.TYPE_CONFIG, "Timestamp"));
+        xform.configure(Collections.singletonMap(TimestampConverter.TARGET_TYPE_CONFIG, "Timestamp"));
         SourceRecord transformed = xform.apply(new SourceRecord(null, null, "topic", 0, null, DATE_PLUS_TIME.getTime()));
 
         assertNull(transformed.valueSchema());
@@ -116,7 +116,7 @@ public class TimestampConverterTest {
     @Test
     public void testSchemalessTimestampToDate() {
         TimestampConverter<SourceRecord> xform = new TimestampConverter.Value<>();
-        xform.configure(Collections.singletonMap(TimestampConverter.TYPE_CONFIG, "Date"));
+        xform.configure(Collections.singletonMap(TimestampConverter.TARGET_TYPE_CONFIG, "Date"));
         SourceRecord transformed = xform.apply(new SourceRecord(null, null, "topic", 0, null, DATE_PLUS_TIME.getTime()));
 
         assertNull(transformed.valueSchema());
@@ -126,7 +126,7 @@ public class TimestampConverterTest {
     @Test
     public void testSchemalessTimestampToTime() {
         TimestampConverter<SourceRecord> xform = new TimestampConverter.Value<>();
-        xform.configure(Collections.singletonMap(TimestampConverter.TYPE_CONFIG, "Time"));
+        xform.configure(Collections.singletonMap(TimestampConverter.TARGET_TYPE_CONFIG, "Time"));
         SourceRecord transformed = xform.apply(new SourceRecord(null, null, "topic", 0, null, DATE_PLUS_TIME.getTime()));
 
         assertNull(transformed.valueSchema());
@@ -136,7 +136,7 @@ public class TimestampConverterTest {
     @Test
     public void testSchemalessTimestampToUnix() {
         TimestampConverter<SourceRecord> xform = new TimestampConverter.Value<>();
-        xform.configure(Collections.singletonMap(TimestampConverter.TYPE_CONFIG, "unix"));
+        xform.configure(Collections.singletonMap(TimestampConverter.TARGET_TYPE_CONFIG, "unix"));
         SourceRecord transformed = xform.apply(new SourceRecord(null, null, "topic", 0, null, DATE_PLUS_TIME.getTime()));
 
         assertNull(transformed.valueSchema());
@@ -147,7 +147,7 @@ public class TimestampConverterTest {
     public void testSchemalessTimestampToString() {
         TimestampConverter<SourceRecord> xform = new TimestampConverter.Value<>();
         Map<String, String> config = new HashMap<>();
-        config.put(TimestampConverter.TYPE_CONFIG, "string");
+        config.put(TimestampConverter.TARGET_TYPE_CONFIG, "string");
         config.put(TimestampConverter.FORMAT_CONFIG, STRING_DATE_FMT);
         xform.configure(config);
         SourceRecord transformed = xform.apply(new SourceRecord(null, null, "topic", 0, null, DATE_PLUS_TIME.getTime()));
@@ -162,7 +162,7 @@ public class TimestampConverterTest {
     @Test
     public void testSchemalessDateToTimestamp() {
         TimestampConverter<SourceRecord> xform = new TimestampConverter.Value<>();
-        xform.configure(Collections.singletonMap(TimestampConverter.TYPE_CONFIG, "Timestamp"));
+        xform.configure(Collections.singletonMap(TimestampConverter.TARGET_TYPE_CONFIG, "Timestamp"));
         SourceRecord transformed = xform.apply(new SourceRecord(null, null, "topic", 0, null, DATE.getTime()));
 
         assertNull(transformed.valueSchema());
@@ -173,7 +173,7 @@ public class TimestampConverterTest {
     @Test
     public void testSchemalessTimeToTimestamp() {
         TimestampConverter<SourceRecord> xform = new TimestampConverter.Value<>();
-        xform.configure(Collections.singletonMap(TimestampConverter.TYPE_CONFIG, "Timestamp"));
+        xform.configure(Collections.singletonMap(TimestampConverter.TARGET_TYPE_CONFIG, "Timestamp"));
         SourceRecord transformed = xform.apply(new SourceRecord(null, null, "topic", 0, null, TIME.getTime()));
 
         assertNull(transformed.valueSchema());
@@ -184,7 +184,7 @@ public class TimestampConverterTest {
     @Test
     public void testSchemalessUnixToTimestamp() {
         TimestampConverter<SourceRecord> xform = new TimestampConverter.Value<>();
-        xform.configure(Collections.singletonMap(TimestampConverter.TYPE_CONFIG, "Timestamp"));
+        xform.configure(Collections.singletonMap(TimestampConverter.TARGET_TYPE_CONFIG, "Timestamp"));
         SourceRecord transformed = xform.apply(new SourceRecord(null, null, "topic", 0, null, DATE_PLUS_TIME_UNIX));
 
         assertNull(transformed.valueSchema());
@@ -195,7 +195,7 @@ public class TimestampConverterTest {
     public void testSchemalessStringToTimestamp() {
         TimestampConverter<SourceRecord> xform = new TimestampConverter.Value<>();
         Map<String, String> config = new HashMap<>();
-        config.put(TimestampConverter.TYPE_CONFIG, "Timestamp");
+        config.put(TimestampConverter.TARGET_TYPE_CONFIG, "Timestamp");
         config.put(TimestampConverter.FORMAT_CONFIG, STRING_DATE_FMT);
         xform.configure(config);
         SourceRecord transformed = xform.apply(new SourceRecord(null, null, "topic", 0, null, DATE_PLUS_TIME_STRING));
@@ -210,7 +210,7 @@ public class TimestampConverterTest {
     @Test
     public void testWithSchemaIdentity() {
         TimestampConverter<SourceRecord> xform = new TimestampConverter.Value<>();
-        xform.configure(Collections.singletonMap(TimestampConverter.TYPE_CONFIG, "Timestamp"));
+        xform.configure(Collections.singletonMap(TimestampConverter.TARGET_TYPE_CONFIG, "Timestamp"));
         SourceRecord transformed = xform.apply(new SourceRecord(null, null, "topic", 0, Timestamp.SCHEMA, DATE_PLUS_TIME.getTime()));
 
         assertEquals(Timestamp.SCHEMA, transformed.valueSchema());
@@ -220,7 +220,7 @@ public class TimestampConverterTest {
     @Test
     public void testWithSchemaTimestampToDate() {
         TimestampConverter<SourceRecord> xform = new TimestampConverter.Value<>();
-        xform.configure(Collections.singletonMap(TimestampConverter.TYPE_CONFIG, "Date"));
+        xform.configure(Collections.singletonMap(TimestampConverter.TARGET_TYPE_CONFIG, "Date"));
         SourceRecord transformed = xform.apply(new SourceRecord(null, null, "topic", 0, Timestamp.SCHEMA, DATE_PLUS_TIME.getTime()));
 
         assertEquals(Date.SCHEMA, transformed.valueSchema());
@@ -230,7 +230,7 @@ public class TimestampConverterTest {
     @Test
     public void testWithSchemaTimestampToTime() {
         TimestampConverter<SourceRecord> xform = new TimestampConverter.Value<>();
-        xform.configure(Collections.singletonMap(TimestampConverter.TYPE_CONFIG, "Time"));
+        xform.configure(Collections.singletonMap(TimestampConverter.TARGET_TYPE_CONFIG, "Time"));
         SourceRecord transformed = xform.apply(new SourceRecord(null, null, "topic", 0, Timestamp.SCHEMA, DATE_PLUS_TIME.getTime()));
 
         assertEquals(Time.SCHEMA, transformed.valueSchema());
@@ -240,7 +240,7 @@ public class TimestampConverterTest {
     @Test
     public void testWithSchemaTimestampToUnix() {
         TimestampConverter<SourceRecord> xform = new TimestampConverter.Value<>();
-        xform.configure(Collections.singletonMap(TimestampConverter.TYPE_CONFIG, "unix"));
+        xform.configure(Collections.singletonMap(TimestampConverter.TARGET_TYPE_CONFIG, "unix"));
         SourceRecord transformed = xform.apply(new SourceRecord(null, null, "topic", 0, Timestamp.SCHEMA, DATE_PLUS_TIME.getTime()));
 
         assertEquals(Schema.INT64_SCHEMA, transformed.valueSchema());
@@ -251,7 +251,7 @@ public class TimestampConverterTest {
     public void testWithSchemaTimestampToString() {
         TimestampConverter<SourceRecord> xform = new TimestampConverter.Value<>();
         Map<String, String> config = new HashMap<>();
-        config.put(TimestampConverter.TYPE_CONFIG, "string");
+        config.put(TimestampConverter.TARGET_TYPE_CONFIG, "string");
         config.put(TimestampConverter.FORMAT_CONFIG, STRING_DATE_FMT);
         xform.configure(config);
         SourceRecord transformed = xform.apply(new SourceRecord(null, null, "topic", 0, Timestamp.SCHEMA, DATE_PLUS_TIME.getTime()));
@@ -266,7 +266,7 @@ public class TimestampConverterTest {
     @Test
     public void testWithSchemaDateToTimestamp() {
         TimestampConverter<SourceRecord> xform = new TimestampConverter.Value<>();
-        xform.configure(Collections.singletonMap(TimestampConverter.TYPE_CONFIG, "Timestamp"));
+        xform.configure(Collections.singletonMap(TimestampConverter.TARGET_TYPE_CONFIG, "Timestamp"));
         SourceRecord transformed = xform.apply(new SourceRecord(null, null, "topic", 0, Date.SCHEMA, DATE.getTime()));
 
         assertEquals(Timestamp.SCHEMA, transformed.valueSchema());
@@ -277,7 +277,7 @@ public class TimestampConverterTest {
     @Test
     public void testWithSchemaTimeToTimestamp() {
         TimestampConverter<SourceRecord> xform = new TimestampConverter.Value<>();
-        xform.configure(Collections.singletonMap(TimestampConverter.TYPE_CONFIG, "Timestamp"));
+        xform.configure(Collections.singletonMap(TimestampConverter.TARGET_TYPE_CONFIG, "Timestamp"));
         SourceRecord transformed = xform.apply(new SourceRecord(null, null, "topic", 0, Time.SCHEMA, TIME.getTime()));
 
         assertEquals(Timestamp.SCHEMA, transformed.valueSchema());
@@ -288,7 +288,7 @@ public class TimestampConverterTest {
     @Test
     public void testWithSchemaUnixToTimestamp() {
         TimestampConverter<SourceRecord> xform = new TimestampConverter.Value<>();
-        xform.configure(Collections.singletonMap(TimestampConverter.TYPE_CONFIG, "Timestamp"));
+        xform.configure(Collections.singletonMap(TimestampConverter.TARGET_TYPE_CONFIG, "Timestamp"));
         SourceRecord transformed = xform.apply(new SourceRecord(null, null, "topic", 0, Schema.INT64_SCHEMA, DATE_PLUS_TIME_UNIX));
 
         assertEquals(Timestamp.SCHEMA, transformed.valueSchema());
@@ -299,7 +299,7 @@ public class TimestampConverterTest {
     public void testWithSchemaStringToTimestamp() {
         TimestampConverter<SourceRecord> xform = new TimestampConverter.Value<>();
         Map<String, String> config = new HashMap<>();
-        config.put(TimestampConverter.TYPE_CONFIG, "Timestamp");
+        config.put(TimestampConverter.TARGET_TYPE_CONFIG, "Timestamp");
         config.put(TimestampConverter.FORMAT_CONFIG, STRING_DATE_FMT);
         xform.configure(config);
         SourceRecord transformed = xform.apply(new SourceRecord(null, null, "topic", 0, Schema.STRING_SCHEMA, DATE_PLUS_TIME_STRING));
@@ -315,7 +315,7 @@ public class TimestampConverterTest {
     public void testSchemalessFieldConversion() {
         TimestampConverter<SourceRecord> xform = new TimestampConverter.Value<>();
         Map<String, String> config = new HashMap<>();
-        config.put(TimestampConverter.TYPE_CONFIG, "Date");
+        config.put(TimestampConverter.TARGET_TYPE_CONFIG, "Date");
         config.put(TimestampConverter.FIELD_CONFIG, "ts");
         xform.configure(config);
 
@@ -330,7 +330,7 @@ public class TimestampConverterTest {
     public void testWithSchemaFieldConversion() {
         TimestampConverter<SourceRecord> xform = new TimestampConverter.Value<>();
         Map<String, String> config = new HashMap<>();
-        config.put(TimestampConverter.TYPE_CONFIG, "Timestamp");
+        config.put(TimestampConverter.TARGET_TYPE_CONFIG, "Timestamp");
         config.put(TimestampConverter.FIELD_CONFIG, "ts");
         xform.configure(config);
 
@@ -360,7 +360,7 @@ public class TimestampConverterTest {
     @Test
     public void testKey() {
         TimestampConverter<SourceRecord> xform = new TimestampConverter.Key<>();
-        xform.configure(Collections.singletonMap(TimestampConverter.TYPE_CONFIG, "Timestamp"));
+        xform.configure(Collections.singletonMap(TimestampConverter.TARGET_TYPE_CONFIG, "Timestamp"));
         SourceRecord transformed = xform.apply(new SourceRecord(null, null, "topic", 0, null, DATE_PLUS_TIME.getTime(), null, null));
 
         assertNull(transformed.keySchema());
