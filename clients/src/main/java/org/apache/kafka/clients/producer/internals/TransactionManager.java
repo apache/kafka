@@ -473,7 +473,7 @@ public class TransactionManager {
 
     private synchronized void transitionTo(State target, RuntimeException error) {
         if (!currentState.isTransitionValid(currentState, target))
-            throw new KafkaException("Invalid transition attempted from state " + currentState.name() +
+            throw new KafkaException(logPrefix + "Invalid transition attempted from state " + currentState.name() +
                     " to state " + target.name());
 
         if (target == State.FATAL_ERROR || target == State.ABORTABLE_ERROR) {
