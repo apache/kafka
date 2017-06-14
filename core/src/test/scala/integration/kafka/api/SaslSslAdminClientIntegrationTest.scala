@@ -96,16 +96,16 @@ class SaslSslAdminClientIntegrationTest extends AdminClientIntegrationTest with 
   @Test
   override def testAclOperations(): Unit = {
     client = AdminClient.create(createConfig())
-    assertEquals(6, client.describeAcls(AclBindingFilter.ANY).all.get().size)
+    assertEquals(6, client.describeAcls(AclBindingFilter.ANY).value.get().size)
     val results = client.createAcls(List(acl2, acl3).asJava)
-    assertEquals(Set(acl2, acl3), results.results.keySet().asScala)
-    results.results.values().asScala.foreach(value => value.get)
+    assertEquals(Set(acl2, acl3), results.value.keySet().asScala)
+    results.value.values().asScala.foreach(value => value.get)
     val aclUnknown = new AclBinding(new Resource(ResourceType.TOPIC, "mytopic3"),
       new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.UNKNOWN, AclPermissionType.ALLOW))
     val results2 = client.createAcls(List(aclUnknown).asJava)
-    assertEquals(Set(aclUnknown), results2.results.keySet().asScala)
+    assertEquals(Set(aclUnknown), results2.value.keySet().asScala)
     assertFutureExceptionTypeEquals(results2.all, classOf[InvalidRequestException])
-    val results3 = client.deleteAcls(List(ACL1.toFilter, acl2.toFilter, acl3.toFilter).asJava).results
+    val results3 = client.deleteAcls(List(ACL1.toFilter, acl2.toFilter, acl3.toFilter).asJava).value
     assertEquals(Set(ACL1.toFilter, acl2.toFilter, acl3.toFilter), results3.keySet.asScala)
     assertEquals(0, results3.get(ACL1.toFilter).get.acls.size())
     assertEquals(Set(acl2), results3.get(acl2.toFilter).get.acls.asScala.map(_.acl).toSet)
@@ -114,7 +114,7 @@ class SaslSslAdminClientIntegrationTest extends AdminClientIntegrationTest with 
 
   def waitForDescribeAcls(client: AdminClient, filter: AclBindingFilter, acls: Set[AclBinding]): Unit = {
     TestUtils.waitUntilTrue(() => {
-      val results = client.describeAcls(filter).all.get()
+      val results = client.describeAcls(filter).value.get()
       acls == results.asScala.toSet
     }, "timed out waiting for ACLs")
   }
@@ -123,7 +123,7 @@ class SaslSslAdminClientIntegrationTest extends AdminClientIntegrationTest with 
   def testAclOperations2(): Unit = {
     client = AdminClient.create(createConfig())
     val results = client.createAcls(List(acl2, acl2).asJava)
-    assertEquals(Set(acl2, acl2), results.results.keySet().asScala)
+    assertEquals(Set(acl2, acl2), results.value.keySet().asScala)
     results.all.get()
     waitForDescribeAcls(client, acl2.toFilter, Set(acl2))
 
@@ -133,9 +133,9 @@ class SaslSslAdminClientIntegrationTest extends AdminClientIntegrationTest with 
     waitForDescribeAcls(client, filterA, Set())
 
     val results2 = client.deleteAcls(List(filterA, filterB).asJava, new DeleteAclsOptions())
-    assertEquals(Set(filterA, filterB), results2.results.keySet().asScala)
-    assertEquals(Set(), results2.results.get(filterA).get.acls.asScala.map(_.acl).toSet)
-    assertEquals(Set(acl2), results2.results.get(filterB).get.acls.asScala.map(_.acl).toSet)
+    assertEquals(Set(filterA, filterB), results2.value.keySet().asScala)
+    assertEquals(Set(), results2.value.get(filterA).get.acls.asScala.map(_.acl).toSet)
+    assertEquals(Set(acl2), results2.value.get(filterB).get.acls.asScala.map(_.acl).toSet)
 
     waitForDescribeAcls(client, filterB, Set())
   }
@@ -148,9 +148,9 @@ class SaslSslAdminClientIntegrationTest extends AdminClientIntegrationTest with 
     val emptyResourceNameAcl = new AclBinding(new Resource(ResourceType.TOPIC, ""),
       new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.READ, AclPermissionType.ALLOW))
     val results = client.createAcls(List(clusterAcl, emptyResourceNameAcl).asJava, new CreateAclsOptions())
-    assertEquals(Set(clusterAcl, emptyResourceNameAcl), results.results.keySet().asScala)
-    assertFutureExceptionTypeEquals(results.results.get(clusterAcl), classOf[InvalidRequestException])
-    assertFutureExceptionTypeEquals(results.results.get(emptyResourceNameAcl), classOf[InvalidRequestException])
+    assertEquals(Set(clusterAcl, emptyResourceNameAcl), results.value.keySet().asScala)
+    assertFutureExceptionTypeEquals(results.value.get(clusterAcl), classOf[InvalidRequestException])
+    assertFutureExceptionTypeEquals(results.value.get(emptyResourceNameAcl), classOf[InvalidRequestException])
   }
 
   private def verifyCauseIsClusterAuth(e: Throwable): Unit = {
@@ -196,7 +196,7 @@ class SaslSslAdminClientIntegrationTest extends AdminClientIntegrationTest with 
             verifyCauseIsClusterAuth(e)
             true
           case Success(_) =>
-            assertEquals(Set(fooAcl), result.results.get(fooAcl.toFilter).get.acls.asScala.map(_.acl).toSet)
+            assertEquals(Set(fooAcl), result.value.get(fooAcl.toFilter).get.acls.asScala.map(_.acl).toSet)
             true
         }
       }
@@ -212,14 +212,14 @@ class SaslSslAdminClientIntegrationTest extends AdminClientIntegrationTest with 
         new AccessControlEntry("User:*", "*", AclOperation.ALL, AclPermissionType.ALLOW))
       val results = client.describeAcls(userAcl.toFilter)
       if (expectAuth) {
-        Try(results.all.get) match {
+        Try(results.value.get) match {
           case Failure(e) =>
             verifyCauseIsClusterAuth(e)
             false
           case Success(acls) => Set(userAcl).equals(acls.asScala.toSet)
         }
       } else {
-        Try(results.all.get) match {
+        Try(results.value.get) match {
           case Failure(e) =>
             verifyCauseIsClusterAuth(e)
             true

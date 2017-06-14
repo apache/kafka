@@ -92,7 +92,7 @@ public class DeleteAclsResult {
      * Return a map from acl filters to futures which can be used to check the status of the deletions by each
      * filter.
      */
-    public Map<AclBindingFilter, KafkaFuture<FilterResults>> results() {
+    public Map<AclBindingFilter, KafkaFuture<FilterResults>> value() {
         return futures;
     }
 
