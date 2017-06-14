@@ -1015,7 +1015,7 @@ public class KafkaAdminClient extends AdminClient {
 
             @Override
             public AbstractRequest.Builder createRequest(int timeoutMs) {
-                return new CreateTopicsRequest.Builder(topicsMap, timeoutMs, options.validateOnly());
+                return new CreateTopicsRequest.Builder(topicsMap, timeoutMs, options.isValidateOnly());
             }
 
             @Override
@@ -1125,7 +1125,7 @@ public class KafkaAdminClient extends AdminClient {
                 Map<String, TopicListItem> topicListing = new HashMap<>();
                 for (String topicName : cluster.topics()) {
                     boolean internal = cluster.internalTopics().contains(topicName);
-                    if (!internal || options.listInternal())
+                    if (!internal || options.shouldListInternal())
                         topicListing.put(topicName, new TopicListItem(topicName, internal));
                 }
                 topicListingFuture.complete(topicListing);

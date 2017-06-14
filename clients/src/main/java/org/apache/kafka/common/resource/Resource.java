@@ -83,8 +83,8 @@ public class Resource {
     /**
      * Return true if this Resource has any UNKNOWN components.
      */
-    public boolean unknown() {
-        return resourceType.unknown();
+    public boolean isUnknown() {
+        return resourceType.isUnknown();
     }
 
     @Override

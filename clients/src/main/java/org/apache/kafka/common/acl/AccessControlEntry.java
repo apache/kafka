@@ -93,8 +93,8 @@ public class AccessControlEntry {
     /**
      * Return true if this AclResource has any UNKNOWN components.
      */
-    public boolean unknown() {
-        return data.unknown();
+    public boolean isUnknown() {
+        return data.isUnknown();
     }
 
     @Override

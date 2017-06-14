@@ -61,7 +61,7 @@ public class ListTopicsOptions {
     /**
      * Return true if we should list internal topics.
      */
-    public boolean listInternal() {
+    public boolean shouldListInternal() {
         return listInternal;
     }
 }

@@ -293,7 +293,7 @@ public class ClientCompatibilityTest {
                 boolean foundNewTopic = false;
                 for (TopicListItem listing : listings) {
                     if (listing.name().equals("newtopic")) {
-                        if (listing.internal())
+                        if (listing.isInternal())
                             throw new KafkaException("Did not expect newtopic to be an internal topic.");
                         foundNewTopic = true;
                     }

@@ -47,7 +47,7 @@ public class AclPermissionTypeTest {
     public void testIsUnknown() throws Exception {
         for (AclPermissionTypeTestInfo info : INFOS) {
             assertEquals(info.ty + " was supposed to have unknown == " + info.unknown,
-                info.unknown, info.ty.unknown());
+                info.unknown, info.ty.isUnknown());
         }
     }
 
