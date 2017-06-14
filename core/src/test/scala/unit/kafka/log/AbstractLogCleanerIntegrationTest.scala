@@ -24,10 +24,13 @@ import kafka.server.BrokerTopicStats
 import kafka.utils.{MockTime, Pool, TestUtils}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.test.IntegrationTest
 import org.junit.After
+import org.junit.experimental.categories.Category
 
 import scala.collection.mutable.ListBuffer
 
+@Category(Array(classOf[IntegrationTest]))
 abstract class AbstractLogCleanerIntegrationTest {
 
   var cleaner: LogCleaner = _
