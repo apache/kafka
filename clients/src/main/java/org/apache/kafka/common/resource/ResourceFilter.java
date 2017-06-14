@@ -17,11 +17,16 @@
 
 package org.apache.kafka.common.resource;
 
+import org.apache.kafka.common.annotation.InterfaceStability;
+
 import java.util.Objects;
 
 /**
  * A filter which matches Resource objects.
+ *
+ * The API for this class is still evolving and we may break compatibility in minor releases, if necessary.
  */
+@InterfaceStability.Evolving
 public class ResourceFilter {
     private final ResourceType resourceType;
     private final String name;
