@@ -1027,6 +1027,13 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                     maybeCloseRecordStream();
 
                     if (!batches.hasNext()) {
+                        // Message format v2 preserves the last offset in a batch even if the last record is removed
+                        // through compaction. By using the next offset computed from the last offset in the batch,
+                        // we ensure that the offset of the next fetch will point to the next batch, which avoids
+                        // unnecessary re-fetching of the same batch (in the worst case, the consumer could get stuck
+                        // fetching the same batch repeatedly).
+                        if (currentBatch != null)
+                            nextFetchOffset = currentBatch.nextOffset();
                         drain();
                         return null;
                     }
