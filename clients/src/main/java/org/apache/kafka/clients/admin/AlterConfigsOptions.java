@@ -52,7 +52,7 @@ public class AlterConfigsOptions {
     /**
      * Return true if the request should be validated without altering the configs.
      */
-    public boolean isValidateOnly() {
+    public boolean shouldValidateOnly() {
         return validateOnly;
     }
 

@@ -1013,7 +1013,7 @@ public class KafkaAdminClient extends AdminClient {
 
             @Override
             public AbstractRequest.Builder createRequest(int timeoutMs) {
-                return new CreateTopicsRequest.Builder(topicsMap, timeoutMs, options.isValidateOnly());
+                return new CreateTopicsRequest.Builder(topicsMap, timeoutMs, options.shouldValidateOnly());
             }
 
             @Override
@@ -1524,7 +1524,7 @@ public class KafkaAdminClient extends AdminClient {
 
             @Override
             public AbstractRequest.Builder createRequest(int timeoutMs) {
-                return new AlterConfigsRequest.Builder(requestMap, options.isValidateOnly());
+                return new AlterConfigsRequest.Builder(requestMap, options.shouldValidateOnly());
             }
 
             @Override

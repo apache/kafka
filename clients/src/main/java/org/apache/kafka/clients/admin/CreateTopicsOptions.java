@@ -59,7 +59,7 @@ public class CreateTopicsOptions {
     /**
      * Return true if the request should be validated without creating the topic.
      */
-    public boolean isValidateOnly() {
+    public boolean shouldValidateOnly() {
         return validateOnly;
     }
 
