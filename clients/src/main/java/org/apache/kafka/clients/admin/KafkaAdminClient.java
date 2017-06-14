@@ -113,11 +113,6 @@ public class KafkaAdminClient extends AdminClient {
     private static final Logger log = LoggerFactory.getLogger(KafkaAdminClient.class);
 
     /**
-     * The maximum number of times to retry a call before failing it.
-     */
-    private static final int MAX_CALL_RETRIES = 5;
-
-    /**
      * The next integer to use to name a KafkaAdminClient which the user hasn't specified an explicit name for.
      */
     private static final AtomicInteger ADMIN_CLIENT_ID_SEQUENCE = new AtomicInteger(1);
@@ -182,6 +177,8 @@ public class KafkaAdminClient extends AdminClient {
      * A factory which creates TimeoutProcessors for the RPC thread.
      */
     private final TimeoutProcessorFactory timeoutProcessorFactory;
+
+    private final int maxRetries;
 
     /**
      * Get or create a list value from a map.
@@ -357,6 +354,7 @@ public class KafkaAdminClient extends AdminClient {
         this.thread = new KafkaThread(threadName, runnable, false);
         this.timeoutProcessorFactory = (timeoutProcessorFactory == null) ?
             new TimeoutProcessorFactory() : timeoutProcessorFactory;
+        this.maxRetries = config.getInt(AdminClientConfig.RETRIES_CONFIG);
         config.logUnused();
         log.debug("Created Kafka admin client {}", this.clientId);
         thread.start();
@@ -421,22 +419,6 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     /**
-     * Provides a constant node which is known at construction time.
-     */
-    private static class ConstantNodeProvider implements NodeProvider {
-        private final Node node;
-
-        ConstantNodeProvider(Node node) {
-            this.node = node;
-        }
-
-        @Override
-        public Node provide() {
-            return node;
-        }
-    }
-
-    /**
      * Provides the controller node.
      */
     private class ControllerNodeProvider implements NodeProvider {
@@ -460,12 +442,14 @@ public class KafkaAdminClient extends AdminClient {
         private final String callName;
         private final long deadlineMs;
         private final NodeProvider nodeProvider;
+        private final int maxRetries;
         private int tries = 0;
 
-        Call(String callName, long deadlineMs, NodeProvider nodeProvider) {
+        Call(String callName, long deadlineMs, NodeProvider nodeProvider, int maxRetries) {
             this.callName = callName;
             this.deadlineMs = deadlineMs;
             this.nodeProvider = nodeProvider;
+            this.maxRetries = maxRetries;
         }
 
         /**
@@ -506,7 +490,7 @@ public class KafkaAdminClient extends AdminClient {
                 return;
             }
             // If we are out of retries, fail.
-            if (tries > MAX_CALL_RETRIES) {
+            if (tries > maxRetries) {
                 if (log.isDebugEnabled()) {
                     log.debug("{} failed after {} attempt(s)", this, tries,
                         new Exception(prettyPrintException(throwable)));
@@ -1027,7 +1011,7 @@ public class KafkaAdminClient extends AdminClient {
         }
         final long now = time.milliseconds();
         runnable.call(new Call("createTopics", calcDeadlineMs(now, options.timeoutMs()),
-            new ControllerNodeProvider()) {
+            new ControllerNodeProvider(), maxRetries) {
 
             @Override
             public AbstractRequest.Builder createRequest(int timeoutMs) {
@@ -1080,7 +1064,7 @@ public class KafkaAdminClient extends AdminClient {
         }
         final long now = time.milliseconds();
         runnable.call(new Call("deleteTopics", calcDeadlineMs(now, options.timeoutMs()),
-            new ControllerNodeProvider()) {
+            new ControllerNodeProvider(), maxRetries) {
 
             @Override
             AbstractRequest.Builder createRequest(int timeoutMs) {
@@ -1127,7 +1111,7 @@ public class KafkaAdminClient extends AdminClient {
         final KafkaFutureImpl<Map<String, TopicListItem>> topicListingFuture = new KafkaFutureImpl<>();
         final long now = time.milliseconds();
         runnable.call(new Call("listTopics", calcDeadlineMs(now, options.timeoutMs()),
-            new LeastLoadedNodeProvider()) {
+            new LeastLoadedNodeProvider(), maxRetries) {
 
             @Override
             AbstractRequest.Builder createRequest(int timeoutMs) {
@@ -1167,7 +1151,7 @@ public class KafkaAdminClient extends AdminClient {
         }
         final long now = time.milliseconds();
         runnable.call(new Call("describeTopics", calcDeadlineMs(now, options.timeoutMs()),
-            new ControllerNodeProvider()) {
+            new ControllerNodeProvider(), maxRetries) {
 
             private boolean supportsDisablingTopicCreation = true;
 
@@ -1240,7 +1224,7 @@ public class KafkaAdminClient extends AdminClient {
         final KafkaFutureImpl<String> clusterIdFuture = new KafkaFutureImpl<>();
         final long now = time.milliseconds();
         runnable.call(new Call("listNodes", calcDeadlineMs(now, options.timeoutMs()),
-            new LeastLoadedNodeProvider()) {
+            new LeastLoadedNodeProvider(), maxRetries) {
 
             @Override
             AbstractRequest.Builder createRequest(int timeoutMs) {
@@ -1273,7 +1257,7 @@ public class KafkaAdminClient extends AdminClient {
         final long now = time.milliseconds();
         final KafkaFutureImpl<Collection<AclBinding>> future = new KafkaFutureImpl<>();
         runnable.call(new Call("describeAcls", calcDeadlineMs(now, options.timeoutMs()),
-            new LeastLoadedNodeProvider()) {
+            new LeastLoadedNodeProvider(), maxRetries) {
 
             @Override
             AbstractRequest.Builder createRequest(int timeoutMs) {
@@ -1317,7 +1301,7 @@ public class KafkaAdminClient extends AdminClient {
             }
         }
         runnable.call(new Call("createAcls", calcDeadlineMs(now, options.timeoutMs()),
-            new LeastLoadedNodeProvider()) {
+            new LeastLoadedNodeProvider(), maxRetries) {
 
             @Override
             AbstractRequest.Builder createRequest(int timeoutMs) {
@@ -1365,7 +1349,7 @@ public class KafkaAdminClient extends AdminClient {
             }
         }
         runnable.call(new Call("deleteAcls", calcDeadlineMs(now, options.timeoutMs()),
-            new LeastLoadedNodeProvider()) {
+            new LeastLoadedNodeProvider(), maxRetries) {
 
             @Override
             AbstractRequest.Builder createRequest(int timeoutMs) {
@@ -1425,7 +1409,7 @@ public class KafkaAdminClient extends AdminClient {
 
         final long now = time.milliseconds();
         runnable.call(new Call("describeConfigs", calcDeadlineMs(now, options.timeoutMs()),
-                new LeastLoadedNodeProvider()) {
+                new LeastLoadedNodeProvider(), maxRetries) {
 
             @Override
             AbstractRequest.Builder createRequest(int timeoutMs) {
@@ -1463,7 +1447,7 @@ public class KafkaAdminClient extends AdminClient {
             final Resource resource = configResourceToResource(entry.getKey());
             int nodeId = Integer.parseInt(resource.name());
             runnable.call(new Call("describeConfigs", calcDeadlineMs(now, options.timeoutMs()),
-                    new ConstantNodeIdProvider(nodeId)) {
+                    new ConstantNodeIdProvider(nodeId), maxRetries) {
 
                 @Override
                 AbstractRequest.Builder createRequest(int timeoutMs) {
@@ -1532,7 +1516,7 @@ public class KafkaAdminClient extends AdminClient {
 
         final long now = time.milliseconds();
         runnable.call(new Call("alterConfigs", calcDeadlineMs(now, options.timeoutMs()),
-                new LeastLoadedNodeProvider()) {
+                new LeastLoadedNodeProvider(), maxRetries) {
 
             @Override
             public AbstractRequest.Builder createRequest(int timeoutMs) {
