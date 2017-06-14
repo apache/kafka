@@ -36,6 +36,12 @@ public class Resource {
      */
     public final static Resource CLUSTER = new Resource(ResourceType.CLUSTER, CLUSTER_NAME);
 
+    /**
+     * Create an instance of this class with the provided parameters.
+     *
+     * @param resourceType non-null resource type
+     * @param name non-null resource name
+     */
     public Resource(ResourceType resourceType, String name) {
         Objects.requireNonNull(resourceType);
         this.resourceType = resourceType;
@@ -43,10 +49,16 @@ public class Resource {
         this.name = name;
     }
 
+    /**
+     * Return the resource type.
+     */
     public ResourceType resourceType() {
         return resourceType;
     }
 
+    /**
+     * Return the resource name.
+     */
     public String name() {
         return name;
     }

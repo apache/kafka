@@ -78,6 +78,9 @@ public enum ResourceType {
         }
     }
 
+    /**
+     * Return the ResourceType with the provided code or `ResourceType.UNKNOWN` if one cannot be found.
+     */
     public static ResourceType fromCode(byte code) {
         ResourceType resourceType = CODE_TO_VALUE.get(code);
         if (resourceType == null) {
@@ -92,10 +95,16 @@ public enum ResourceType {
         this.code = code;
     }
 
+    /**
+     * Return the code of this resource.
+     */
     public byte code() {
         return code;
     }
 
+    /**
+     * Return whether this resource type is UNKNOWN.
+     */
     public boolean unknown() {
         return this == UNKNOWN;
     }
