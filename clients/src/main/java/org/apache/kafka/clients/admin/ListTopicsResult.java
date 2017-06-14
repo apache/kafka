@@ -30,26 +30,26 @@ import java.util.Map;
  */
 @InterfaceStability.Evolving
 public class ListTopicsResult {
-    final KafkaFuture<Map<String, TopicListing>> future;
+    final KafkaFuture<Map<String, TopicListItem>> future;
 
-    ListTopicsResult(KafkaFuture<Map<String, TopicListing>> future) {
+    ListTopicsResult(KafkaFuture<Map<String, TopicListItem>> future) {
         this.future = future;
     }
 
     /**
      * Return a future which yields a map of topic names to TopicListing objects.
      */
-    public KafkaFuture<Map<String, TopicListing>> namesToDescriptions() {
+    public KafkaFuture<Map<String, TopicListItem>> namesToDescriptions() {
         return future;
     }
 
     /**
      * Return a future which yields a collection of TopicListing objects.
      */
-    public KafkaFuture<Collection<TopicListing>> descriptions() {
-        return future.thenApply(new KafkaFuture.Function<Map<String, TopicListing>, Collection<TopicListing>>() {
+    public KafkaFuture<Collection<TopicListItem>> descriptions() {
+        return future.thenApply(new KafkaFuture.Function<Map<String, TopicListItem>, Collection<TopicListItem>>() {
             @Override
-            public Collection<TopicListing> apply(Map<String, TopicListing> namesToDescriptions) {
+            public Collection<TopicListItem> apply(Map<String, TopicListItem> namesToDescriptions) {
                 return namesToDescriptions.values();
             }
         });
@@ -59,9 +59,9 @@ public class ListTopicsResult {
      * Return a future which yields a collection of topic names.
      */
     public KafkaFuture<Collection<String>> names() {
-        return future.thenApply(new KafkaFuture.Function<Map<String, TopicListing>, Collection<String>>() {
+        return future.thenApply(new KafkaFuture.Function<Map<String, TopicListItem>, Collection<String>>() {
             @Override
-            public Collection<String> apply(Map<String, TopicListing> namesToDescriptions) {
+            public Collection<String> apply(Map<String, TopicListItem> namesToDescriptions) {
                 return namesToDescriptions.keySet();
             }
         });

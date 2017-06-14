@@ -96,7 +96,6 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.TreeMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -1125,7 +1124,7 @@ public class KafkaAdminClient extends AdminClient {
 
     @Override
     public ListTopicsResult listTopics(final ListTopicsOptions options) {
-        final KafkaFutureImpl<Map<String, TopicListing>> topicListingFuture = new KafkaFutureImpl<>();
+        final KafkaFutureImpl<Map<String, TopicListItem>> topicListingFuture = new KafkaFutureImpl<>();
         final long now = time.milliseconds();
         runnable.call(new Call("listTopics", calcDeadlineMs(now, options.timeoutMs()),
             new LeastLoadedNodeProvider()) {
@@ -1139,11 +1138,11 @@ public class KafkaAdminClient extends AdminClient {
             void handleResponse(AbstractResponse abstractResponse) {
                 MetadataResponse response = (MetadataResponse) abstractResponse;
                 Cluster cluster = response.cluster();
-                Map<String, TopicListing> topicListing = new HashMap<>();
+                Map<String, TopicListItem> topicListing = new HashMap<>();
                 for (String topicName : cluster.topics()) {
                     boolean internal = cluster.internalTopics().contains(topicName);
                     if (!internal || options.listInternal())
-                        topicListing.put(topicName, new TopicListing(topicName, internal));
+                        topicListing.put(topicName, new TopicListItem(topicName, internal));
                 }
                 topicListingFuture.complete(topicListing);
             }

@@ -23,7 +23,7 @@ import net.sourceforge.argparse4j.inf.Namespace;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.NewTopic;
-import org.apache.kafka.clients.admin.TopicListing;
+import org.apache.kafka.clients.admin.TopicListItem;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -287,11 +287,11 @@ public class ClientCompatibilityTest {
                     }
                 });
             while (true) {
-                Collection<TopicListing> listings = client.listTopics().descriptions().get();
+                Collection<TopicListItem> listings = client.listTopics().descriptions().get();
                 if (!testConfig.createTopicsSupported)
                     break;
                 boolean foundNewTopic = false;
-                for (TopicListing listing : listings) {
+                for (TopicListItem listing : listings) {
                     if (listing.name().equals("newtopic")) {
                         if (listing.internal())
                             throw new KafkaException("Did not expect newtopic to be an internal topic.");
