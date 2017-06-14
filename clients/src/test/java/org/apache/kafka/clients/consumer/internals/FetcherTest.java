@@ -1661,7 +1661,7 @@ public class FetcherTest {
         assertEquals(3, fetchedRecords.size());
 
         for (int i = 0; i < 3; i++) {
-            assertArrayEquals(Integer.toString(i).getBytes(), fetchedRecords.get(i).key());
+            assertEquals(Integer.toString(i), new String(fetchedRecords.get(i).key()));
         }
 
         // The next offset should point to the next batch
