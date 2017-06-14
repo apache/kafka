@@ -20,12 +20,15 @@ package org.apache.kafka.clients.admin;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
+import java.util.Collection;
 import java.util.Map;
 
 /**
- * The result of the deleteTopics call.
+ * The result of the {@link AdminClient#deleteTopics(Collection)} call.
+ *
+ * The API of this class is evolving, see {@link AdminClient} for details.
  */
-@InterfaceStability.Unstable
+@InterfaceStability.Evolving
 public class DeleteTopicsResult {
     final Map<String, KafkaFuture<Void>> futures;
 

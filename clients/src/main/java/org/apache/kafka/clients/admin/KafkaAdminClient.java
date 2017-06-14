@@ -103,10 +103,12 @@ import java.util.concurrent.atomic.AtomicLong;
 import static org.apache.kafka.common.utils.Utils.closeQuietly;
 
 /**
- * An administrative client for Kafka which supports managing and inspecting topics, brokers,
- * and configurations.
+ * The default implementation of {@link AdminClient}. An instance of this class is created by invoking one of the
+ * {@code create()} methods in {@code AdminClient}. Users should not refer to this class directly.
+ *
+ * The API of this class is evolving, see {@link AdminClient} for details.
  */
-@InterfaceStability.Unstable
+@InterfaceStability.Evolving
 public class KafkaAdminClient extends AdminClient {
     private static final Logger log = LoggerFactory.getLogger(KafkaAdminClient.class);
 
