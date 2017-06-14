@@ -148,16 +148,14 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
     "UnknownDestinationQueueSize",
     new Gauge[Int] {
       def value: Int = markersQueueForUnknownBroker.totalNumMarkers
-    },
-    Map("broker-id" -> config.brokerId.toString)
+    }
   )
 
   newGauge(
-    "CompleteTxnLogAppendQueueSize",
+    "LogAppendRetryQueueSize",
     new Gauge[Int] {
       def value: Int = txnLogAppendRetryQueue.size
-    },
-    Map("broker-id" -> config.brokerId.toString)
+    }
   )
 
   def start(): Unit = {
