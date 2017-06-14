@@ -68,7 +68,7 @@ public class NewTopic {
     /**
      * The number of partitions for the new topic or -1 if a replica assignment has been specified.
      */
-    public int partitions() {
+    public int numPartitions() {
         return numPartitions;
     }
 

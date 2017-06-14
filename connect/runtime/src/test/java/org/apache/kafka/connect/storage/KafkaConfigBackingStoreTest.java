@@ -169,7 +169,7 @@ public class KafkaConfigBackingStoreTest {
         assertEquals("org.apache.kafka.common.serialization.ByteArrayDeserializer", capturedConsumerProps.getValue().get(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG));
 
         assertEquals(TOPIC, capturedNewTopic.getValue().name());
-        assertEquals(1, capturedNewTopic.getValue().partitions());
+        assertEquals(1, capturedNewTopic.getValue().numPartitions());
         assertEquals(TOPIC_REPLICATION_FACTOR, capturedNewTopic.getValue().replicationFactor());
         configStorage.start();
         configStorage.stop();
