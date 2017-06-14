@@ -1027,6 +1027,8 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                     maybeCloseRecordStream();
 
                     if (!batches.hasNext()) {
+                        if (currentBatch != null)
+                            nextFetchOffset = currentBatch.nextOffset();
                         drain();
                         return null;
                     }
