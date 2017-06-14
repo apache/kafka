@@ -89,6 +89,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -1197,14 +1198,20 @@ public class KafkaAdminClient extends AdminClient {
                         continue;
                     }
                     boolean isInternal = cluster.internalTopics().contains(topicName);
-                    TreeMap<Integer, TopicPartitionInfo> partitions = new TreeMap<>();
                     List<PartitionInfo> partitionInfos = cluster.partitionsForTopic(topicName);
+                    List<TopicPartitionInfo> partitions = new ArrayList<>(partitionInfos.size());
                     for (PartitionInfo partitionInfo : partitionInfos) {
                         TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(
                             partitionInfo.partition(), partitionInfo.leader(), Arrays.asList(partitionInfo.replicas()),
                             Arrays.asList(partitionInfo.inSyncReplicas()));
-                        partitions.put(partitionInfo.partition(), topicPartitionInfo);
+                        partitions.add(topicPartitionInfo);
                     }
+                    Collections.sort(partitions, new Comparator<TopicPartitionInfo>() {
+                        @Override
+                        public int compare(TopicPartitionInfo tp1, TopicPartitionInfo tp2) {
+                            return Integer.compare(tp1.partition(), tp2.partition());
+                        }
+                    });
                     TopicDescription topicDescription = new TopicDescription(topicName, isInternal, partitions);
                     future.complete(topicDescription);
                 }
