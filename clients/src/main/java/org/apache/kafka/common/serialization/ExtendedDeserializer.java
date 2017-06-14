@@ -20,8 +20,25 @@ import java.util.Map;
 
 import org.apache.kafka.common.header.Headers;
 
+/**
+ * A Deserializer that has access to the headers associated with the record.
+ *
+ * Prefer {@link Deserializer} if access to the headers is not required. Once Kafka drops support for Java 7, the
+ * {@code deserialize()} method introduced by this interface will be added to Deserializer with a default implementation
+ * so that backwards compatibility is maintained. This interface may be deprecated once that happens.
+ *
+ * A class that implements this interface is expected to have a constructor with no parameters.
+ * @param <T>
+ */
 public interface ExtendedDeserializer<T> extends Deserializer<T> {
-    
+
+    /**
+     * Deserialize a record value from a byte array into a value or object.
+     * @param topic topic associated with the data
+     * @param headers headers associated with the record; may be empty.
+     * @param data serialized bytes; may be null; implementations are recommended to handle null by returning a value or null rather than throwing an exception.
+     * @return deserialized typed data; may be null
+     */
     T deserialize(String topic, Headers headers, byte[] data);
 
     class Wrapper<T> implements ExtendedDeserializer<T> {
