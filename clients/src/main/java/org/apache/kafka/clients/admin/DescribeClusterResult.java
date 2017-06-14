@@ -58,8 +58,8 @@ public class DescribeClusterResult {
     }
 
     /**
-     * Returns a future which yields the current cluster Id.
-     * Note that this may yield null, if the cluster version is too old.
+     * Returns a future which yields the current cluster id. The future value will be non-null if the
+     * broker version is 0.10.1.0 or higher and null otherwise.
      */
     public KafkaFuture<String> clusterId() {
         return clusterId;
