@@ -46,16 +46,24 @@ public abstract class ExtractFields<R extends ConnectRecord<R>> implements Trans
                     + "<p/>Use the concrete transformation type designed for the record key (<code>" + Key.class.getCanonicalName() + "</code>) "
                     + "or value (<code>" + Value.class.getCanonicalName() + "</code>).";
 
-    private static final String FIELDS_CONFIG = "fields";
+    interface ConfigName {
+        String FIELDS = "fields";
+        String DELIM = "delimiter";
+    }
 
     public static final ConfigDef CONFIG_DEF = new ConfigDef()
-            .define(FIELDS_CONFIG, ConfigDef.Type.LIST, ConfigDef.NO_DEFAULT_VALUE, new NonEmptyListValidator(), ConfigDef.Importance.HIGH, "List of fields to extract.");
+            .define(ConfigName.FIELDS, ConfigDef.Type.LIST, ConfigDef.NO_DEFAULT_VALUE, new NonEmptyListValidator(), ConfigDef.Importance.HIGH,
+                    "List of fields to extract.")
+            .define(ConfigName.DELIM, ConfigDef.Type.STRING, ".".toString(), ConfigDef.Importance.LOW,
+            "Delimiter for nested structure levels.");
+
 
     private static final char EFDELIM = '.';
 
     private static final String PURPOSE = "field extraction";
 
     private List<String> extractedFields;
+    private char efDelim;
 
     private Cache<Schema, Schema> schemaUpdateCache;
 
@@ -64,7 +72,7 @@ public abstract class ExtractFields<R extends ConnectRecord<R>> implements Trans
             if (name.equals(field.name())) {
                 return field.schema();
             } else if (schema.type() == Schema.Type.STRUCT) {
-                Integer dindex = name.indexOf(EFDELIM);
+                Integer dindex = name.indexOf(efDelim);
                 if (dindex > 0 && dindex < (name.length() - 2)) {
                     Schema subSchema = schema.field(name.substring(0, dindex)).schema();
                     if (subSchema != null) {
@@ -100,7 +108,8 @@ public abstract class ExtractFields<R extends ConnectRecord<R>> implements Trans
     @Override
     public void configure(Map<String, ?> props) {
         final SimpleConfig config = new SimpleConfig(CONFIG_DEF, props);
-        extractedFields = config.getList(FIELDS_CONFIG);
+        extractedFields = config.getList(ConfigName.FIELDS);
+        efDelim = config.getString(ConfigName.DELIM).charAt(0);
 
         schemaUpdateCache = new SynchronizedCache<>(new LRUCache<Schema, Schema>(16));
     }
@@ -109,7 +118,7 @@ public abstract class ExtractFields<R extends ConnectRecord<R>> implements Trans
         if (entries.get(name) != null) {
             return entries.get(name);
         } else {
-            Integer dindex = name.indexOf(EFDELIM);
+            Integer dindex = name.indexOf(efDelim);
             if (dindex > 0 && dindex < (name.length() - 2)) {
                 Map<String, Object> subEntries = (Map) entries.get(name.substring(0, dindex));
                 if (subEntries != null) {
@@ -122,7 +131,7 @@ public abstract class ExtractFields<R extends ConnectRecord<R>> implements Trans
     }
 
     private Object retrieveField(String name, Struct entries) {
-        Integer dindex = name.indexOf(EFDELIM);
+        Integer dindex = name.indexOf(efDelim);
         if (dindex < 0) {
             return entries.get(name);
         } else if (dindex > 0 && dindex < (name.length() - 2)) {

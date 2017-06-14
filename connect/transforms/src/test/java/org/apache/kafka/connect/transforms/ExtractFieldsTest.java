@@ -144,7 +144,8 @@ public class ExtractFieldsTest {
         final ExtractFields<SinkRecord> xform = new ExtractFields.Value<>();
 
         final Map<String, String> props = new HashMap<>();
-        props.put("fields", "User.id,User.address.state");
+        props.put("fields", "User-id,User-address-state");
+        props.put("delimiter", "-");
         xform.configure(props);
 
         final Schema addressSchema = SchemaBuilder.struct()
@@ -191,8 +192,8 @@ public class ExtractFieldsTest {
         final Struct updatedValue = (Struct) transformedRecord.value();
 
         assertEquals(2, updatedValue.schema().fields().size());
-        assertEquals(new Integer(1), updatedValue.getInt32("User.id"));
-        assertEquals("CA", updatedValue.getString("User.address.state"));
+        assertEquals(new Integer(1), updatedValue.getInt32("User-id"));
+        assertEquals("CA", updatedValue.getString("User-address-state"));
 
     }
 
