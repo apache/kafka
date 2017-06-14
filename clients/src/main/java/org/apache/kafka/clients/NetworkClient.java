@@ -249,7 +249,7 @@ public class NetworkClient implements KafkaClient {
                         true, null, null));
             }
         }
-        connectionStates.remove(nodeId);
+        connectionStates.disconnected(nodeId, now);
         if (log.isDebugEnabled()) {
             log.debug("Manually disconnected from {}.  Removed requests: {}.", nodeId,
                 Utils.join(requestTypes, ", "));
