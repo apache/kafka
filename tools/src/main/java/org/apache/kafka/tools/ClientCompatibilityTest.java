@@ -308,7 +308,7 @@ public class ClientCompatibilityTest {
                     @Override
                     public void invoke() throws Throwable {
                         try {
-                            client.describeAcls(AclBindingFilter.ANY).value().get();
+                            client.describeAcls(AclBindingFilter.ANY).values().get();
                         } catch (ExecutionException e) {
                             if (e.getCause() instanceof SecurityDisabledException)
                                 return;

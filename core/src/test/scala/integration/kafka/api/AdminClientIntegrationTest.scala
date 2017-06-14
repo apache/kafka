@@ -133,7 +133,7 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
     client.createTopics(newTopics.asJava).all.get()
     waitForTopics(client, topics, List())
 
-    val results = client.createTopics(newTopics.asJava).value()
+    val results = client.createTopics(newTopics.asJava).values()
     assertTrue(results.containsKey("mytopic"))
     assertFutureExceptionTypeEquals(results.get("mytopic"), classOf[TopicExistsException])
     assertTrue(results.containsKey("mytopic2"))
@@ -192,7 +192,7 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
     waitForTopics(client, Seq(existingTopic), List())
 
     val nonExistingTopic = "non-existing"
-    val results = client.describeTopics(Seq(nonExistingTopic, existingTopic).asJava).value
+    val results = client.describeTopics(Seq(nonExistingTopic, existingTopic).asJava).values
     assertEquals(existingTopic, results.get(existingTopic).get.name)
     intercept[ExecutionException](results.get(nonExistingTopic).get).getCause.isInstanceOf[UnknownTopicOrPartitionException]
     assertEquals(None, zkUtils.getTopicPartitionCount(nonExistingTopic))
@@ -303,7 +303,7 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
   @Test
   def testAclOperations(): Unit = {
     client = AdminClient.create(createConfig())
-    assertFutureExceptionTypeEquals(client.describeAcls(AclBindingFilter.ANY).value(), classOf[SecurityDisabledException])
+    assertFutureExceptionTypeEquals(client.describeAcls(AclBindingFilter.ANY).values(), classOf[SecurityDisabledException])
     assertFutureExceptionTypeEquals(client.createAcls(Collections.singleton(ACL1)).all(),
         classOf[SecurityDisabledException])
     assertFutureExceptionTypeEquals(client.deleteAcls(Collections.singleton(ACL1.toFilter())).all(),
@@ -422,7 +422,7 @@ object AdminClientIntegrationTest {
       topicResource2 -> new Config(topicConfigEntries2)
     ).asJava)
 
-    assertEquals(Set(topicResource1, topicResource2).asJava, alterResult.value.keySet)
+    assertEquals(Set(topicResource1, topicResource2).asJava, alterResult.values.keySet)
     alterResult.all.get
 
     // Verify that topics were updated correctly
@@ -454,7 +454,7 @@ object AdminClientIntegrationTest {
       topicResource2 -> new Config(topicConfigEntries2)
     ).asJava, new AlterConfigsOptions().validateOnly(true))
 
-    assertEquals(Set(topicResource1, topicResource2).asJava, alterResult.value.keySet)
+    assertEquals(Set(topicResource1, topicResource2).asJava, alterResult.values.keySet)
     alterResult.all.get
 
     // Verify that topics were not updated due to validateOnly = true
@@ -495,10 +495,10 @@ object AdminClientIntegrationTest {
       brokerResource -> new Config(brokerConfigEntries)
     ).asJava)
 
-    assertEquals(Set(topicResource1, topicResource2, brokerResource).asJava, alterResult.value.keySet)
-    assertTrue(intercept[ExecutionException](alterResult.value.get(topicResource1).get).getCause.isInstanceOf[InvalidRequestException])
-    alterResult.value.get(topicResource2).get
-    assertTrue(intercept[ExecutionException](alterResult.value.get(brokerResource).get).getCause.isInstanceOf[InvalidRequestException])
+    assertEquals(Set(topicResource1, topicResource2, brokerResource).asJava, alterResult.values.keySet)
+    assertTrue(intercept[ExecutionException](alterResult.values.get(topicResource1).get).getCause.isInstanceOf[InvalidRequestException])
+    alterResult.values.get(topicResource2).get
+    assertTrue(intercept[ExecutionException](alterResult.values.get(brokerResource).get).getCause.isInstanceOf[InvalidRequestException])
 
     // Verify that first and third resources were not updated and second was updated
     var describeResult = client.describeConfigs(Seq(topicResource1, topicResource2, brokerResource).asJava)
@@ -523,10 +523,10 @@ object AdminClientIntegrationTest {
       brokerResource -> new Config(brokerConfigEntries)
     ).asJava, new AlterConfigsOptions().validateOnly(true))
 
-    assertEquals(Set(topicResource1, topicResource2, brokerResource).asJava, alterResult.value.keySet)
-    assertTrue(intercept[ExecutionException](alterResult.value.get(topicResource1).get).getCause.isInstanceOf[InvalidRequestException])
-    alterResult.value.get(topicResource2).get
-    assertTrue(intercept[ExecutionException](alterResult.value.get(brokerResource).get).getCause.isInstanceOf[InvalidRequestException])
+    assertEquals(Set(topicResource1, topicResource2, brokerResource).asJava, alterResult.values.keySet)
+    assertTrue(intercept[ExecutionException](alterResult.values.get(topicResource1).get).getCause.isInstanceOf[InvalidRequestException])
+    alterResult.values.get(topicResource2).get
+    assertTrue(intercept[ExecutionException](alterResult.values.get(brokerResource).get).getCause.isInstanceOf[InvalidRequestException])
 
     // Verify that no resources are updated since validate_only = true
     describeResult = client.describeConfigs(Seq(topicResource1, topicResource2, brokerResource).asJava)
