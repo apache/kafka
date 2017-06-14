@@ -17,7 +17,6 @@
 
 package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.common.Node;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.annotation.InterfaceStability;
@@ -191,26 +190,6 @@ public abstract class AdminClient implements AutoCloseable {
      * @return                  The DescribeClusterResult.
      */
     public abstract DescribeClusterResult describeCluster(DescribeClusterOptions options);
-
-    /**
-     * Get information about the api versions of nodes in the cluster with the default options.
-     * See {@link AdminClient#apiVersions(Collection<Node>, ApiVersionsOptions)}
-     *
-     * @param nodes             The nodes to get information about, or null to get information about all nodes.
-     * @return                  The ApiVersionsResult.
-     */
-    public ApiVersionsResult apiVersions(Collection<Node> nodes) {
-        return apiVersions(nodes, new ApiVersionsOptions());
-    }
-
-    /**
-     * Get information about the api versions of nodes in the cluster.
-     *
-     * @param nodes             The nodes to get information about, or null to get information about all nodes.
-     * @param options           The options to use when getting api versions of the nodes.
-     * @return                  The ApiVersionsResult.
-     */
-    public abstract ApiVersionsResult apiVersions(Collection<Node> nodes, ApiVersionsOptions options);
 
     /**
      * Similar to #{@link AdminClient#describeAcls(AclBindingFilter, DescribeAclsOptions)},
