@@ -21,7 +21,6 @@ import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.utils.Utils;
 
 import java.util.List;
-import java.util.NavigableMap;
 
 /**
  * A detailed description of a single topic in the cluster.
