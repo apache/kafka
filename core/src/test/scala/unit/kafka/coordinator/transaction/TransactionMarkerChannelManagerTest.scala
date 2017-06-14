@@ -427,10 +427,10 @@ class TransactionMarkerChannelManagerTest {
     val metrics = Metrics.defaultRegistry.allMetrics
 
     assertEquals(1, Metrics.defaultRegistry.allMetrics.asScala
-      .filterKeys(_.getMBeanName == "kafka.coordinator.transaction:type=TransactionMarkerChannelManager,name=UnknownDestinationQueueSize,broker-id=1")
+      .filterKeys(_.getMBeanName == "kafka.coordinator.transaction:type=TransactionMarkerChannelManager,name=UnknownDestinationQueueSize")
       .size)
     assertEquals(1, Metrics.defaultRegistry.allMetrics.asScala
-      .filterKeys(_.getMBeanName == "kafka.coordinator.transaction:type=TransactionMarkerChannelManager,name=CompleteTxnLogAppendQueueSize,broker-id=1")
+      .filterKeys(_.getMBeanName == "kafka.coordinator.transaction:type=TransactionMarkerChannelManager,name=LogAppendRetryQueueSize")
       .size)
   }
 }
