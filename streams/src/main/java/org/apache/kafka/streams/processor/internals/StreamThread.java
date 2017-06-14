@@ -259,7 +259,7 @@ public class StreamThread extends Thread {
                     } catch (final LockException e) {
                         // ignore and retry
                         if (!retryingTasks.contains(taskId)) {
-                            log.warn("{} Could not create task {}. Will retry. {}", logPrefix, taskId, e);
+                            log.warn("{} Could not create task {}. Will retry: ", logPrefix, taskId, e);
                             retryingTasks.add(taskId);
                         }
                     }
@@ -530,7 +530,7 @@ public class StreamThread extends Thread {
         } catch (final Exception e) {
             // we have caught all Kafka related exceptions, and other runtime exceptions
             // should be due to user application errors
-            log.error("{} Streams application error during processing: {}", logPrefix, e);
+            log.error("{} Streams application error during processing: ", logPrefix, e);
             throw e;
         } finally {
             shutdown(cleanRun);
@@ -727,7 +727,7 @@ public class StreamThread extends Thread {
                 streamsMetrics.punctuateTimeSensor.record(computeLatency(), timerStartedMs);
             }
         } catch (final KafkaException e) {
-            log.error("{} Failed to punctuate active task {}: {}", logPrefix, task.id(), e);
+            log.error("{} Failed to punctuate active task {}: ", logPrefix, task.id(), e);
             throw e;
         }
     }
@@ -1043,23 +1043,23 @@ public class StreamThread extends Thread {
             try {
                 threadProducer.close();
             } catch (final Throwable e) {
-                log.error("{} Failed to close producer: {}", logPrefix, e);
+                log.error("{} Failed to close producer: ", logPrefix, e);
             }
         }
         try {
             consumer.close();
         } catch (final Throwable e) {
-            log.error("{} Failed to close consumer: {}", logPrefix, e);
+            log.error("{} Failed to close consumer: ", logPrefix, e);
         }
         try {
             restoreConsumer.close();
         } catch (final Throwable e) {
-            log.error("{} Failed to close restore consumer: {}", logPrefix, e);
+            log.error("{} Failed to close restore consumer: ", logPrefix, e);
         }
         try {
             partitionAssignor.close();
         } catch (final Throwable e) {
-            log.error("{} Failed to close KafkaStreamClient: {}", logPrefix, e);
+            log.error("{} Failed to close KafkaStreamClient: ", logPrefix, e);
         }
 
         removeStreamTasks();
@@ -1083,7 +1083,7 @@ public class StreamThread extends Thread {
             try {
                 task.close(cleanRun);
             } catch (final RuntimeException e) {
-                log.error("{} Failed while closing {} {} due to {}: ",
+                log.error("{} Failed while closing {} {}: ",
                     logPrefix,
                     task.getClass().getSimpleName(),
                     task.id(),
@@ -1140,7 +1140,7 @@ public class StreamThread extends Thread {
             // un-assign the change log partitions
             restoreConsumer.assign(Collections.<TopicPartition>emptyList());
         } catch (final RuntimeException e) {
-            log.error("{} Failed to un-assign change log partitions: {}", logPrefix, e);
+            log.error("{} Failed to un-assign change log partitions: ", logPrefix, e);
             return e;
         }
         return null;
@@ -1196,7 +1196,7 @@ public class StreamThread extends Thread {
                 try {
                     task.close(true);
                 } catch (final Exception e) {
-                    log.error("{} Failed to remove suspended task {}: {}", logPrefix, next.getKey(), e);
+                    log.error("{} Failed to remove suspended task {}: ", logPrefix, next.getKey(), e);
                 } finally {
                     suspendedTaskIterator.remove();
                 }
@@ -1215,7 +1215,7 @@ public class StreamThread extends Thread {
                 try {
                     task.close(true);
                 } catch (final Exception e) {
-                    log.error("{} Failed to remove suspended standby task {}: {}", logPrefix, task.id(), e);
+                    log.error("{} Failed to remove suspended standby task {}: ", logPrefix, task.id(), e);
                 } finally {
                     standByTaskIterator.remove();
                 }
@@ -1295,7 +1295,7 @@ public class StreamThread extends Thread {
                         newTasks.put(taskId, partitions);
                     }
                 } catch (final StreamsException e) {
-                    log.error("{} Failed to create an active task {}: {}", logPrefix, taskId, e);
+                    log.error("{} Failed to create an active task {}: ", logPrefix, taskId, e);
                     throw e;
                 }
             } else {
@@ -1410,7 +1410,7 @@ public class StreamThread extends Thread {
             activeTasks.clear();
             activeTasksByPartition.clear();
         } catch (final Exception e) {
-            log.error("{} Failed to remove stream tasks: {}", logPrefix, e);
+            log.error("{} Failed to remove stream tasks: ", logPrefix, e);
         }
     }
 
@@ -1444,7 +1444,7 @@ public class StreamThread extends Thread {
                 closeZombieTask(task);
                 it.remove();
             } catch (final RuntimeException t) {
-                log.error("{} Failed to {} stream task {} due to: {}",
+                log.error("{} Failed to {} stream task {}: ",
                     logPrefix,
                     action.name(),
                     task.id(),
