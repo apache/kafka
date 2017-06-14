@@ -48,6 +48,7 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.network.NetworkReceive;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.record.BufferSupplier;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.ControlRecordType;
 import org.apache.kafka.common.record.DefaultRecordBatch;
@@ -1627,6 +1628,44 @@ public class FetcherTest {
         List<ConsumerRecord<String, String>> fetchedRecords = allFetchedRecords.get(tp1);
         assertEquals(3, fetchedRecords.size());
         assertEquals(Arrays.asList(6L, 7L, 8L), collectRecordOffsets(fetchedRecords));
+    }
+
+    @Test
+    public void testUpdatePositionWithLastRecordMissingFromBatch() {
+        MemoryRecords records = MemoryRecords.withRecords(CompressionType.NONE,
+                new SimpleRecord("0".getBytes(), "v".getBytes()),
+                new SimpleRecord("1".getBytes(), "v".getBytes()),
+                new SimpleRecord("2".getBytes(), "v".getBytes()),
+                new SimpleRecord(null, "value".getBytes()));
+
+        // Remove the last record to simulate compaction
+        MemoryRecords.FilterResult result = records.filterTo(tp1, new MemoryRecords.RecordFilter() {
+            @Override
+            protected boolean shouldRetain(RecordBatch recordBatch, Record record) {
+                return record.key() != null;
+            }
+        }, ByteBuffer.allocate(1024), Integer.MAX_VALUE, BufferSupplier.NO_CACHING);
+        result.output.flip();
+        MemoryRecords compactedRecords = MemoryRecords.readableRecords(result.output);
+
+        subscriptions.assignFromUser(singleton(tp1));
+        subscriptions.seek(tp1, 0);
+        assertEquals(1, fetcher.sendFetches());
+        client.prepareResponse(fetchResponse(tp1, compactedRecords, Errors.NONE, 100L, 0));
+        consumerClient.poll(0);
+        assertTrue(fetcher.hasCompletedFetches());
+
+        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> allFetchedRecords = fetcher.fetchedRecords();
+        assertTrue(allFetchedRecords.containsKey(tp1));
+        List<ConsumerRecord<byte[], byte[]>> fetchedRecords = allFetchedRecords.get(tp1);
+        assertEquals(3, fetchedRecords.size());
+
+        for (int i = 0; i < 3; i++) {
+            assertEquals(Integer.toString(i), new String(fetchedRecords.get(i).key()));
+        }
+
+        // The next offset should point to the next batch
+        assertEquals(4L, subscriptions.position(tp1).longValue());
     }
 
     @Test
