@@ -39,14 +39,14 @@ public class ListTopicsResult {
     /**
      * Return a future which yields a map of topic names to TopicListing objects.
      */
-    public KafkaFuture<Map<String, TopicListItem>> namesToDescriptions() {
+    public KafkaFuture<Map<String, TopicListItem>> namesToItems() {
         return future;
     }
 
     /**
      * Return a future which yields a collection of TopicListing objects.
      */
-    public KafkaFuture<Collection<TopicListItem>> descriptions() {
+    public KafkaFuture<Collection<TopicListItem>> items() {
         return future.thenApply(new KafkaFuture.Function<Map<String, TopicListItem>, Collection<TopicListItem>>() {
             @Override
             public Collection<TopicListItem> apply(Map<String, TopicListItem> namesToDescriptions) {

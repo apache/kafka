@@ -287,7 +287,7 @@ public class ClientCompatibilityTest {
                     }
                 });
             while (true) {
-                Collection<TopicListItem> listings = client.listTopics().descriptions().get();
+                Collection<TopicListItem> listings = client.listTopics().items().get();
                 if (!testConfig.createTopicsSupported)
                     break;
                 boolean foundNewTopic = false;
