@@ -199,21 +199,19 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
   }
 
   @Test
-  def testGetAllBrokerVersionsAndDescribeCluster(): Unit = {
+  def testDescribeCluster(): Unit = {
     client = AdminClient.create(createConfig())
-    val nodes = client.describeCluster().nodes().get()
+    val nodes = client.describeCluster.nodes.get()
     val clusterId = client.describeCluster().clusterId().get()
     assertEquals(servers.head.apis.clusterId, clusterId)
     val controller = client.describeCluster().controller().get()
     assertEquals(servers.head.apis.metadataCache.getControllerId.
       getOrElse(MetadataResponse.NO_CONTROLLER_ID), controller.id())
-    val nodesToVersions = client.apiVersions(nodes).all().get()
     val brokers = brokerList.split(",")
-    assert(brokers.size == nodesToVersions.size())
-    for ((node, brokerVersionInfo) <- nodesToVersions.asScala) {
+    assertEquals(brokers.size, nodes.size)
+    for (node <- nodes.asScala) {
       val hostStr = s"${node.host}:${node.port}"
       assertTrue(s"Unknown host:port pair $hostStr in brokerVersionInfos", brokers.contains(hostStr))
-      assertEquals(1, brokerVersionInfo.usableVersion(ApiKeys.API_VERSIONS))
     }
   }
 
