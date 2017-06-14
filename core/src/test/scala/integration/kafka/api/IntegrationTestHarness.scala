@@ -95,9 +95,12 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
 
   @After
   override def tearDown() {
-    producers.foreach(_.close())
-    consumers.foreach(_.close())
-    super.tearDown()
+    try {
+      producers.foreach(_.close())
+      consumers.foreach(_.close())
+    } finally {
+      super.tearDown()
+    }
   }
 
 }
