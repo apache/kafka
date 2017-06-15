@@ -629,7 +629,7 @@ private[log] class Cleaner(val id: Int,
             logSize + segs.head.size <= maxSize &&
             indexSize + segs.head.index.sizeInBytes <= maxIndexSize &&
             timeIndexSize + segs.head.timeIndex.sizeInBytes <= maxIndexSize &&
-            segs.head.index.lastOffset - group.last.index.baseOffset <= Int.MaxValue) {
+            estimateLastOffset(segs) - group.last.index.baseOffset <= Int.MaxValue) {
         group = segs.head :: group
         logSize += segs.head.size
         indexSize += segs.head.index.sizeInBytes
@@ -639,6 +639,25 @@ private[log] class Cleaner(val id: Int,
       grouped ::= group.reverse
     }
     grouped.reverse
+  }
+
+  /**
+   * Estimate what the last offset is for the current segment because we can't be sure
+   * that the index is returning a valid value in all cases.
+   *    @param segs - remaining segments to group. The current head is segment were estimating the lastOffset for.
+   *
+   * @return The estimated last offset in this segment
+   */
+  private def estimateLastOffset(segs: List[LogSegment]): Long = {
+    if (segs.size > 1) {
+      /* if there is a next segment, use its base offset as the bounding offset to guarantee we know 
+       * the worst case offset */
+      segs(1).index.baseOffset - 1
+    } else {
+      /* if this is the last segment, then just assume worst case and place into a group
+       * of its own. */
+      segs.head.baseOffset + Int.MaxValue - 1
+    }
   }
 
   /**
