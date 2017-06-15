@@ -576,8 +576,8 @@ public final class RecordAccumulator {
         }
     }
 
-    public boolean hasUnflushedBatches() {
-        return hasUnsent() || !this.incomplete.isEmpty();
+    public boolean hasIncompleteBatches() {
+        return !this.incomplete.isEmpty();
     }
 
     /**
@@ -618,7 +618,7 @@ public final class RecordAccumulator {
         }
     }
 
-    void abortOpenBatches(RuntimeException reason) {
+    void abortUnsentBatches(RuntimeException reason) {
         for (ProducerBatch batch : incomplete.all()) {
             Deque<ProducerBatch> dq = getDeque(batch.topicPartition);
             boolean aborted = false;

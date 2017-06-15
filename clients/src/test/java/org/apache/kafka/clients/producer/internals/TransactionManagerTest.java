@@ -875,7 +875,7 @@ public class TransactionManagerTest {
         sender.run(time.milliseconds());
         assertTrue(transactionManager.isReady());
         assertFalse(transactionManager.hasPartitionsToAdd());
-        assertFalse(accumulator.hasUnflushedBatches());
+        assertFalse(accumulator.hasIncompleteBatches());
 
         // ensure we can now start a new transaction
 
@@ -939,7 +939,7 @@ public class TransactionManagerTest {
         assertFutureFailed(unauthorizedTopicProduceFuture);
         assertTrue(transactionManager.isReady());
         assertFalse(transactionManager.hasPartitionsToAdd());
-        assertFalse(accumulator.hasUnflushedBatches());
+        assertFalse(accumulator.hasIncompleteBatches());
 
         // ensure we can now start a new transaction
 
@@ -988,7 +988,7 @@ public class TransactionManagerTest {
         prepareProduceResponse(Errors.REQUEST_TIMED_OUT, pid, epoch);
         sender.run(time.milliseconds());
         assertFalse(authorizedTopicProduceFuture.isDone());
-        assertTrue(accumulator.hasUnflushedBatches());
+        assertTrue(accumulator.hasIncompleteBatches());
 
         transactionManager.maybeAddPartitionToTransaction(unauthorizedPartition);
         Future<RecordMetadata> unauthorizedTopicProduceFuture = accumulator.append(unauthorizedPartition, time.milliseconds(),
@@ -1012,7 +1012,7 @@ public class TransactionManagerTest {
         // neither produce request has been sent, so they should both be failed immediately
         assertTrue(transactionManager.isReady());
         assertFalse(transactionManager.hasPartitionsToAdd());
-        assertFalse(accumulator.hasUnflushedBatches());
+        assertFalse(accumulator.hasIncompleteBatches());
 
         // ensure we can now start a new transaction
 

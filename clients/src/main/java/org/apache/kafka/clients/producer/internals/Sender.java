@@ -216,7 +216,7 @@ public class Sender implements Runnable {
                 client.poll(retryBackoffMs, now);
                 return;
             } else if (transactionManager.hasAbortableError()) {
-                accumulator.abortOpenBatches(transactionManager.lastError());
+                accumulator.abortUnsentBatches(transactionManager.lastError());
             }
         }
 
@@ -304,11 +304,11 @@ public class Sender implements Runnable {
     private boolean maybeSendTransactionalRequest(long now) {
         if (transactionManager.isCompletingTransaction() &&
                 !transactionManager.hasPartitionsToAdd() &&
-                accumulator.hasUnflushedBatches()) {
+                accumulator.hasIncompleteBatches()) {
 
             // If the transaction is being aborted, then we can clear any unsent produce requests
             if (transactionManager.isAborting())
-                accumulator.abortOpenBatches(new KafkaException("Failing batch since transaction was aborted"));
+                accumulator.abortUnsentBatches(new KafkaException("Failing batch since transaction was aborted"));
 
             // There may still be requests left which are being retried. Since we do not know whether they had
             // been successfully appended to the broker log, we must resend them until their final status is clear.
@@ -318,7 +318,7 @@ public class Sender implements Runnable {
                 accumulator.beginFlush();
 
             // Do not send the EndTxn until all pending batches have been completed
-            if (accumulator.hasUnflushedBatches())
+            if (accumulator.hasIncompleteBatches())
                 return false;
         }
 
@@ -377,7 +377,7 @@ public class Sender implements Runnable {
     }
 
     private void maybeAbortBatches(RuntimeException exception) {
-        if (accumulator.hasUnflushedBatches()) {
+        if (accumulator.hasIncompleteBatches()) {
             String logPrefix = "";
             if (transactionManager != null)
                 logPrefix = transactionManager.logPrefix;

@@ -21,6 +21,7 @@ import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
@@ -322,8 +323,10 @@ public class RecordAccumulatorTest {
         long lingerMs = Long.MAX_VALUE;
         final RecordAccumulator accum = new RecordAccumulator(4 * 1024 + DefaultRecordBatch.RECORD_BATCH_OVERHEAD, 64 * 1024,
                 CompressionType.NONE, lingerMs, 100L, metrics, time, new ApiVersions(), null);
-        for (int i = 0; i < 100; i++)
+        for (int i = 0; i < 100; i++) {
             accum.append(new TopicPartition(topic, i % 3), 0L, key, value, Record.EMPTY_HEADERS, null, maxBlockTimeMs);
+            assertTrue(accum.hasIncompleteBatches());
+        }
         RecordAccumulator.ReadyCheckResult result = accum.ready(cluster, time.milliseconds());
         assertEquals("No nodes should be ready.", 0, result.readyNodes.size());
 
@@ -332,6 +335,8 @@ public class RecordAccumulatorTest {
 
         // drain and deallocate all batches
         Map<Integer, List<ProducerBatch>> results = accum.drain(cluster, result.readyNodes, Integer.MAX_VALUE, time.milliseconds());
+        assertTrue(accum.hasIncompleteBatches());
+
         for (List<ProducerBatch> batches: results.values())
             for (ProducerBatch batch: batches)
                 accum.deallocate(batch);
@@ -339,6 +344,7 @@ public class RecordAccumulatorTest {
         // should be complete with no unsent records.
         accum.awaitFlushCompletion();
         assertFalse(accum.hasUnsent());
+        assertFalse(accum.hasIncompleteBatches());
     }
 
 
@@ -369,12 +375,11 @@ public class RecordAccumulatorTest {
         }
     }
 
-
     @Test
     public void testAbortIncompleteBatches() throws Exception {
         long lingerMs = Long.MAX_VALUE;
         final AtomicInteger numExceptionReceivedInCallback = new AtomicInteger(0);
-        final RecordAccumulator accum = new RecordAccumulator(4 * 1024 + DefaultRecordBatch.RECORD_BATCH_OVERHEAD, 64 * 1024,
+        final RecordAccumulator accum = new RecordAccumulator(128 + DefaultRecordBatch.RECORD_BATCH_OVERHEAD, 64 * 1024,
                 CompressionType.NONE, lingerMs, 100L, metrics, time, new ApiVersions(), null);
         class TestCallback implements Callback {
             @Override
@@ -386,11 +391,55 @@ public class RecordAccumulatorTest {
         for (int i = 0; i < 100; i++)
             accum.append(new TopicPartition(topic, i % 3), 0L, key, value, null, new TestCallback(), maxBlockTimeMs);
         RecordAccumulator.ReadyCheckResult result = accum.ready(cluster, time.milliseconds());
-        assertEquals("No nodes should be ready.", 0, result.readyNodes.size());
+        assertTrue(result.readyNodes.size() > 0);
+        accum.drain(cluster, result.readyNodes, Integer.MAX_VALUE, time.milliseconds());
+        assertTrue(accum.hasUnsent());
+        assertTrue(accum.hasIncompleteBatches());
 
         accum.abortIncompleteBatches();
         assertEquals(numExceptionReceivedInCallback.get(), 100);
         assertFalse(accum.hasUnsent());
+        assertFalse(accum.hasIncompleteBatches());
+    }
+
+    @Test
+    public void testAbortUnsentBatches() throws Exception {
+        long lingerMs = Long.MAX_VALUE;
+        final AtomicInteger numExceptionReceivedInCallback = new AtomicInteger(0);
+        final RecordAccumulator accum = new RecordAccumulator(128 + DefaultRecordBatch.RECORD_BATCH_OVERHEAD, 64 * 1024,
+                CompressionType.NONE, lingerMs, 100L, metrics, time, new ApiVersions(), null);
+        final KafkaException cause = new KafkaException();
+
+        class TestCallback implements Callback {
+            @Override
+            public void onCompletion(RecordMetadata metadata, Exception exception) {
+                assertEquals(cause, exception);
+                numExceptionReceivedInCallback.incrementAndGet();
+            }
+        }
+        for (int i = 0; i < 100; i++)
+            accum.append(new TopicPartition(topic, i % 3), 0L, key, value, null, new TestCallback(), maxBlockTimeMs);
+        RecordAccumulator.ReadyCheckResult result = accum.ready(cluster, time.milliseconds());
+        assertTrue(result.readyNodes.size() > 0);
+        Map<Integer, List<ProducerBatch>> drained = accum.drain(cluster, result.readyNodes, Integer.MAX_VALUE,
+                time.milliseconds());
+        assertTrue(accum.hasUnsent());
+        assertTrue(accum.hasIncompleteBatches());
+
+        accum.abortUnsentBatches(cause);
+        int numSentRecords = 0;
+        for (Map.Entry<Integer, List<ProducerBatch>> drainedEntry : drained.entrySet()) {
+            for (ProducerBatch batch : drainedEntry.getValue()) {
+                assertTrue(batch.isClosed());
+                assertFalse(batch.produceFuture.completed());
+                numSentRecords += batch.recordCount;
+            }
+        }
+
+        assertTrue(numSentRecords > 0);
+        assertEquals(numExceptionReceivedInCallback.get(), 100 - numSentRecords);
+        assertFalse(accum.hasUnsent());
+        assertTrue(accum.hasIncompleteBatches());
     }
 
     @Test
