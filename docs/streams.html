@@ -167,7 +167,7 @@
             In stream processing, one of the most frequently asked question is "does my stream processing system guarantee that each record is processed once and only once, even if some failures are encountered in the middle of processing?"
             Failing to guarantee exactly-once stream processing is a deal-breaker for many applications that cannot tolerate any data-loss or date duplicates, and in that case a batch-oriented framework is usually used in addition
             to the stream processing pipeline, known as the <a href="http://lambda-architecture.net/">Lambda Architecture</a>.
-            Prior to 0.11.0.0, Kafka only provides at-least-once delivery guarantees and hence any stream processing systems that leverages it as the backend storage cannot guarantee end-to-end exactly-once semantics.
+            Prior to 0.11.0.0, Kafka only provides at-least-once delivery guarantees and hence any stream processing systems that leverages it as the backend storage could not guarantee end-to-end exactly-once semantics.
             In fact, even for those stream processing systems that claim to support exactly-once processing, as long as they are reading from / writing to Kafka as the source / sink, their applications cannot actually guarantee that
             no duplicates will be generated throughout the pipeline.
 
@@ -176,10 +176,10 @@
             More specifically, it guarantees that for any record read from the source Kafka topics, its processing results will be reflected exactly once in the output Kafka topic as well as in the updated processing state.
             Note the key difference between Kafka Streams end-to-end exactly-once guarantee with other stream processing frameworks' claimed guarantees is that Kafka Streams tightly integrates with the underlying Kafka storage system and ensure that
             committing on the input topic offsets, updating on the processing state, and producing to the output topics will be completed atomically instead of treating Kafka as an external system that may have side-effects.
-            To read more details on how this is done inside Kafka Streams, readers are recommended to read <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-129%3A+Streams+Exactly-Once+Semantics">this KIP</a>.
+            To read more details on how this is done inside Kafka Streams, readers are recommended to read <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-129%3A+Streams+Exactly-Once+Semantics">KIP-129</a>.
 
             In order to achieve exactly-once semantics when running Kafka Streams applications, users can simply set the <code>processing.guarantee</code> config value to <b>exactly_once</b> (default value is <b>at_least_once</b>).
-            More details can be found <a href="#streamsconfigs">here</a>
+            More details can be found in the <a href="#streamsconfigs">Kafka Streams Configs</a> section.
         </p>
 
         <h2><a id="streams_architecture" href="#streams_architecture">Architecture</a></h2>
