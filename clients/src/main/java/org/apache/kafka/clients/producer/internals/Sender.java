@@ -304,7 +304,7 @@ public class Sender implements Runnable {
     private boolean maybeSendTransactionalRequest(long now) {
         if (transactionManager.isCompletingTransaction() &&
                 !transactionManager.hasPartitionsToAdd() &&
-                accumulator.hasIncompleteBatches()) {
+                accumulator.hasIncomplete()) {
 
             // If the transaction is being aborted, then we can clear any unsent produce requests
             if (transactionManager.isAborting())
@@ -318,7 +318,7 @@ public class Sender implements Runnable {
                 accumulator.beginFlush();
 
             // Do not send the EndTxn until all pending batches have been completed
-            if (accumulator.hasIncompleteBatches())
+            if (accumulator.hasIncomplete())
                 return false;
         }
 
@@ -377,7 +377,7 @@ public class Sender implements Runnable {
     }
 
     private void maybeAbortBatches(RuntimeException exception) {
-        if (accumulator.hasIncompleteBatches()) {
+        if (accumulator.hasIncomplete()) {
             String logPrefix = "";
             if (transactionManager != null)
                 logPrefix = transactionManager.logPrefix;

@@ -875,7 +875,7 @@ public class TransactionManagerTest {
         sender.run(time.milliseconds());
         assertTrue(transactionManager.isReady());
         assertFalse(transactionManager.hasPartitionsToAdd());
-        assertFalse(accumulator.hasIncompleteBatches());
+        assertFalse(accumulator.hasIncomplete());
 
         // ensure we can now start a new transaction
 
@@ -939,7 +939,7 @@ public class TransactionManagerTest {
         assertFutureFailed(unauthorizedTopicProduceFuture);
         assertTrue(transactionManager.isReady());
         assertFalse(transactionManager.hasPartitionsToAdd());
-        assertFalse(accumulator.hasIncompleteBatches());
+        assertFalse(accumulator.hasIncomplete());
 
         // ensure we can now start a new transaction
 
@@ -988,7 +988,7 @@ public class TransactionManagerTest {
         prepareProduceResponse(Errors.REQUEST_TIMED_OUT, pid, epoch);
         sender.run(time.milliseconds());
         assertFalse(authorizedTopicProduceFuture.isDone());
-        assertTrue(accumulator.hasIncompleteBatches());
+        assertTrue(accumulator.hasIncomplete());
 
         transactionManager.maybeAddPartitionToTransaction(unauthorizedPartition);
         Future<RecordMetadata> unauthorizedTopicProduceFuture = accumulator.append(unauthorizedPartition, time.milliseconds(),
@@ -1012,7 +1012,7 @@ public class TransactionManagerTest {
         // neither produce request has been sent, so they should both be failed immediately
         assertTrue(transactionManager.isReady());
         assertFalse(transactionManager.hasPartitionsToAdd());
-        assertFalse(accumulator.hasIncompleteBatches());
+        assertFalse(accumulator.hasIncomplete());
 
         // ensure we can now start a new transaction
 
@@ -1291,6 +1291,110 @@ public class TransactionManagerTest {
         assertTrue(abortResult.isCompleted());
         assertTrue(abortResult.isSuccessful());
         assertTrue(transactionManager.isReady());  // make sure we are ready for a transaction now.
+    }
+
+    @Test
+    public void testCommitTransactionWithUnsentProduceRequest() throws Exception {
+        final long pid = 13131L;
+        final short epoch = 1;
+
+        doInitTransactions(pid, epoch);
+
+        transactionManager.beginTransaction();
+        transactionManager.maybeAddPartitionToTransaction(tp0);
+
+        Future<RecordMetadata> responseFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
+                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
+
+        prepareAddPartitionsToTxn(tp0, Errors.NONE);
+        sender.run(time.milliseconds());
+        assertTrue(accumulator.hasUnsent());
+
+        // committing the transaction should cause the unsent batch to be flushed
+        transactionManager.beginCommittingTransaction();
+        sender.run(time.milliseconds());
+        assertFalse(accumulator.hasUnsent());
+        assertTrue(accumulator.hasIncomplete());
+        assertFalse(transactionManager.hasInflightRequest());
+        assertFalse(responseFuture.isDone());
+
+        // until the produce future returns, we will not send EndTxn
+        sender.run(time.milliseconds());
+        assertFalse(accumulator.hasUnsent());
+        assertTrue(accumulator.hasIncomplete());
+        assertFalse(transactionManager.hasInflightRequest());
+        assertFalse(responseFuture.isDone());
+
+        // now the produce response returns
+        sendProduceResponse(Errors.NONE, pid, epoch);
+        sender.run(time.milliseconds());
+        assertTrue(responseFuture.isDone());
+        assertFalse(accumulator.hasUnsent());
+        assertFalse(accumulator.hasIncomplete());
+        assertFalse(transactionManager.hasInflightRequest());
+
+        // now we send EndTxn
+        sender.run(time.milliseconds());
+        assertTrue(transactionManager.hasInflightRequest());
+        sendEndTxnResponse(Errors.NONE, TransactionResult.COMMIT, pid, epoch);
+        sender.run(time.milliseconds());
+        assertFalse(transactionManager.hasInflightRequest());
+        assertTrue(transactionManager.isReady());
+    }
+
+    @Test
+    public void testCommitTransactionWithInFlightProduceRequest() throws Exception {
+        final long pid = 13131L;
+        final short epoch = 1;
+
+        doInitTransactions(pid, epoch);
+
+        transactionManager.beginTransaction();
+        transactionManager.maybeAddPartitionToTransaction(tp0);
+
+        Future<RecordMetadata> responseFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
+                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
+
+        prepareAddPartitionsToTxn(tp0, Errors.NONE);
+        sender.run(time.milliseconds());
+        assertTrue(accumulator.hasUnsent());
+
+        accumulator.beginFlush();
+        sender.run(time.milliseconds());
+        assertFalse(accumulator.hasUnsent());
+        assertTrue(accumulator.hasIncomplete());
+        assertFalse(transactionManager.hasInflightRequest());
+
+        // now we begin the commit with the produce request still pending
+        transactionManager.beginCommittingTransaction();
+        sender.run(time.milliseconds());
+        assertFalse(accumulator.hasUnsent());
+        assertTrue(accumulator.hasIncomplete());
+        assertFalse(transactionManager.hasInflightRequest());
+        assertFalse(responseFuture.isDone());
+
+        // until the produce future returns, we will not send EndTxn
+        sender.run(time.milliseconds());
+        assertFalse(accumulator.hasUnsent());
+        assertTrue(accumulator.hasIncomplete());
+        assertFalse(transactionManager.hasInflightRequest());
+        assertFalse(responseFuture.isDone());
+
+        // now the produce response returns
+        sendProduceResponse(Errors.NONE, pid, epoch);
+        sender.run(time.milliseconds());
+        assertTrue(responseFuture.isDone());
+        assertFalse(accumulator.hasUnsent());
+        assertFalse(accumulator.hasIncomplete());
+        assertFalse(transactionManager.hasInflightRequest());
+
+        // now we send EndTxn
+        sender.run(time.milliseconds());
+        assertTrue(transactionManager.hasInflightRequest());
+        sendEndTxnResponse(Errors.NONE, TransactionResult.COMMIT, pid, epoch);
+        sender.run(time.milliseconds());
+        assertFalse(transactionManager.hasInflightRequest());
+        assertTrue(transactionManager.isReady());
     }
 
     @Test
@@ -1995,7 +2099,15 @@ public class TransactionManagerTest {
     }
 
     private void prepareEndTxnResponse(Errors error, final TransactionResult result, final long pid, final short epoch) {
-        client.prepareResponse(new MockClient.RequestMatcher() {
+        client.prepareResponse(endTxnMatcher(result, pid, epoch), new EndTxnResponse(0, error));
+    }
+
+    private void sendEndTxnResponse(Errors error, final TransactionResult result, final long pid, final short epoch) {
+        client.respond(endTxnMatcher(result, pid, epoch), new EndTxnResponse(0, error));
+    }
+
+    private MockClient.RequestMatcher endTxnMatcher(final TransactionResult result, final long pid, final short epoch) {
+        return new MockClient.RequestMatcher() {
             @Override
             public boolean matches(AbstractRequest body) {
                 EndTxnRequest endTxnRequest = (EndTxnRequest) body;
@@ -2005,7 +2117,7 @@ public class TransactionManagerTest {
                 assertEquals(result, endTxnRequest.command());
                 return true;
             }
-        }, new EndTxnResponse(0, error));
+        };
     }
 
     private void prepareAddOffsetsToTxnResponse(Errors error, final String consumerGroupId, final long producerId,

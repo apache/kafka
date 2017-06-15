@@ -325,7 +325,7 @@ public class RecordAccumulatorTest {
                 CompressionType.NONE, lingerMs, 100L, metrics, time, new ApiVersions(), null);
         for (int i = 0; i < 100; i++) {
             accum.append(new TopicPartition(topic, i % 3), 0L, key, value, Record.EMPTY_HEADERS, null, maxBlockTimeMs);
-            assertTrue(accum.hasIncompleteBatches());
+            assertTrue(accum.hasIncomplete());
         }
         RecordAccumulator.ReadyCheckResult result = accum.ready(cluster, time.milliseconds());
         assertEquals("No nodes should be ready.", 0, result.readyNodes.size());
@@ -335,7 +335,7 @@ public class RecordAccumulatorTest {
 
         // drain and deallocate all batches
         Map<Integer, List<ProducerBatch>> results = accum.drain(cluster, result.readyNodes, Integer.MAX_VALUE, time.milliseconds());
-        assertTrue(accum.hasIncompleteBatches());
+        assertTrue(accum.hasIncomplete());
 
         for (List<ProducerBatch> batches: results.values())
             for (ProducerBatch batch: batches)
@@ -344,7 +344,7 @@ public class RecordAccumulatorTest {
         // should be complete with no unsent records.
         accum.awaitFlushCompletion();
         assertFalse(accum.hasUnsent());
-        assertFalse(accum.hasIncompleteBatches());
+        assertFalse(accum.hasIncomplete());
     }
 
 
@@ -394,12 +394,12 @@ public class RecordAccumulatorTest {
         assertTrue(result.readyNodes.size() > 0);
         accum.drain(cluster, result.readyNodes, Integer.MAX_VALUE, time.milliseconds());
         assertTrue(accum.hasUnsent());
-        assertTrue(accum.hasIncompleteBatches());
+        assertTrue(accum.hasIncomplete());
 
         accum.abortIncompleteBatches();
         assertEquals(numExceptionReceivedInCallback.get(), 100);
         assertFalse(accum.hasUnsent());
-        assertFalse(accum.hasIncompleteBatches());
+        assertFalse(accum.hasIncomplete());
     }
 
     @Test
@@ -424,7 +424,7 @@ public class RecordAccumulatorTest {
         Map<Integer, List<ProducerBatch>> drained = accum.drain(cluster, result.readyNodes, Integer.MAX_VALUE,
                 time.milliseconds());
         assertTrue(accum.hasUnsent());
-        assertTrue(accum.hasIncompleteBatches());
+        assertTrue(accum.hasIncomplete());
 
         accum.abortUnsentBatches(cause);
         int numSentRecords = 0;
@@ -439,7 +439,7 @@ public class RecordAccumulatorTest {
         assertTrue(numSentRecords > 0);
         assertEquals(numExceptionReceivedInCallback.get(), 100 - numSentRecords);
         assertFalse(accum.hasUnsent());
-        assertTrue(accum.hasIncompleteBatches());
+        assertTrue(accum.hasIncomplete());
     }
 
     @Test

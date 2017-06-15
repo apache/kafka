@@ -576,7 +576,7 @@ public final class RecordAccumulator {
         }
     }
 
-    public boolean hasIncompleteBatches() {
+    public boolean hasIncomplete() {
         return !this.incomplete.isEmpty();
     }
 
