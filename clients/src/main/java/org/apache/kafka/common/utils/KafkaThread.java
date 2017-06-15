@@ -28,19 +28,19 @@ public class KafkaThread extends Thread {
 
     public KafkaThread(final String name, boolean daemon) {
         super(name);
-        configureThread(name, daemon);
+        configureThread(daemon);
     }
 
     public KafkaThread(final String name, Runnable runnable, boolean daemon) {
         super(runnable, name);
-        configureThread(name, daemon);
+        configureThread(daemon);
     }
 
-    private void configureThread(final String name, boolean daemon) {
+    private void configureThread(boolean daemon) {
         setDaemon(daemon);
-        setUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
+        setUncaughtExceptionHandler(new UncaughtExceptionHandler() {
             public void uncaughtException(Thread t, Throwable e) {
-                log.error("Uncaught exception in " + name + ": ", e);
+                log.error("Uncaught exception in thread '{}':", t.getName(), e);
             }
         });
     }
