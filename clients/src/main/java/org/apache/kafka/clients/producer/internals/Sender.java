@@ -378,7 +378,10 @@ public class Sender implements Runnable {
 
     private void maybeAbortBatches(RuntimeException exception) {
         if (accumulator.hasUnflushedBatches()) {
-            log.error("Aborting producer batches due to fatal error", exception);
+            String logPrefix = "";
+            if (transactionManager != null)
+                logPrefix = transactionManager.logPrefix;
+            log.error("{}Aborting producer batches due to fatal error", logPrefix, exception);
             accumulator.abortBatches(exception);
         }
     }
