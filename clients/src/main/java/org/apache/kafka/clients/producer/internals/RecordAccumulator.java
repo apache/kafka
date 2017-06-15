@@ -577,11 +577,7 @@ public final class RecordAccumulator {
     }
 
     public boolean hasUnflushedBatches() {
-        for (Map.Entry<TopicPartition, Deque<ProducerBatch>> entry : this.batches().entrySet()) {
-            if (!entry.getValue().isEmpty())
-                return true;
-        }
-        return !this.incomplete.isEmpty();
+        return hasUnsent() || !this.incomplete.isEmpty();
     }
 
     /**
