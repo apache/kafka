@@ -292,7 +292,7 @@ class TransactionMarkerChannelManagerTest {
 
     channelManager.addTxnMarkersToSend(transactionalId2, coordinatorEpoch, txnResult, txnMetadata2, txnTransitionMetadata2)
 
-    val requestAndHandlers: Iterable[RequestAndCompletionHandler] = senderThread.generateRequests()
+    val requestAndHandlers: Iterable[RequestAndCompletionHandler] = channelManager.generateRequests()
 
     val response = new WriteTxnMarkersResponse(createPidErrorMap(Errors.NONE))
     for (requestAndHandler <- requestAndHandlers) {
@@ -340,7 +340,7 @@ class TransactionMarkerChannelManagerTest {
 
     channelManager.addTxnMarkersToSend(transactionalId2, coordinatorEpoch, txnResult, txnMetadata2, txnTransitionMetadata2)
 
-    val requestAndHandlers: Iterable[RequestAndCompletionHandler] = senderThread.generateRequests()
+    val requestAndHandlers: Iterable[RequestAndCompletionHandler] = channelManager.generateRequests()
 
     val response = new WriteTxnMarkersResponse(createPidErrorMap(Errors.NONE))
     for (requestAndHandler <- requestAndHandlers) {
@@ -394,7 +394,7 @@ class TransactionMarkerChannelManagerTest {
 
     channelManager.addTxnMarkersToSend(transactionalId2, coordinatorEpoch, txnResult, txnMetadata2, txnTransitionMetadata2)
 
-    val requestAndHandlers: Iterable[RequestAndCompletionHandler] = senderThread.generateRequests()
+    val requestAndHandlers: Iterable[RequestAndCompletionHandler] = channelManager.generateRequests()
 
     val response = new WriteTxnMarkersResponse(createPidErrorMap(Errors.NONE))
     for (requestAndHandler <- requestAndHandlers) {
@@ -402,7 +402,7 @@ class TransactionMarkerChannelManagerTest {
     }
 
     // call this again so that append log will be retried
-    senderThread.generateRequests()
+    channelManager.generateRequests()
 
     EasyMock.verify(txnStateManager)
 
