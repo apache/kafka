@@ -139,9 +139,54 @@ import static org.apache.kafka.common.serialization.ExtendedSerializer.Wrapper.e
  * their <code>ProducerRecord</code> into bytes. You can use the included {@link org.apache.kafka.common.serialization.ByteArraySerializer} or
  * {@link org.apache.kafka.common.serialization.StringSerializer} for simple string or byte types.
  * <p>
+ * The KafkaProducer also supports transactions. All messages sent as part of a single transaction will be
+ * materialized together, or not at all. This guarantee holds even when the messages in a transaction are sent to
+ * different topics and partitions. There can be only one open transaction at a time per producer.
+ * </p>
+ * <p>To use the transactional APIs, you must set the <code>transactional.id</code> configuration property. All the
+ * new transactional APIs are blocking and will throw exceptions on failure. The example below illustrates how the
+ * new APIs are meant to be used. It is similar to the example above, except that all 100 messages are part of
+ * a single transaction.
+ * </p>
+ * <p>
+ * <pre>
+ * {@code
+ * Properties props = new Properties();
+ * props.put("bootstrap.servers", "localhost:9092");
+ * props.put("transactional.id", "my-transactional-id");
+ * props.put("key.serializer", "org.apache.kafka.common.serialization.StringSerializer");
+ * props.put("value.serializer", "org.apache.kafka.common.serialization.StringSerializer");
+ * Producer<String, String> producer = new KafkaProducer<String, String>(props);
+ *
+ * producer.initTransactions();
+ *
+ * try {
+ *     producer.beginTransaction();
+ *     for(int i = 0; i < 100; i++)
+ *         producer.send(new ProducerRecord<String, String>("my-topic", Integer.toString(i), Integer.toString(i)));
+ *     producer.commitTransaction();
+ * } catch (ProducerFencedException | OutOfOrderSequenceException e) {
+ *     // We can't recover from these exceptions, so our only option is to close the producer and exit.
+ *     producer.close();
+ * } catch (KafkaException e) {
+ *     // For all other exceptions, just abort the transaction and try again.
+ *     producer.abortTransaction();
+ * }
+ * producer.close();
+ * } </pre>
+ * </p>
+ * <p>
+ * The transactional producer uses exceptions to communicate error states by design. In particular, it is not required
+ * to specify callbacks for <code>producer.send()</code>: a <code>KafkaException</code> would be thrown if any of the
+ * <code>producer.send()</code> or transactional calls hit an irrecoverable error during a transaction. By calling
+ * <code>producer.abortTransaction()</code> upon receiving a <code>KafkaException</code> we can ensure that any
+ * successful writes are marked as aborted, hence keeping the transactional guarantees.
+ * </p>
+ * <p>
  * This client can communicate with brokers that are version 0.10.0 or newer. Older or newer brokers may not support
- * certain client features.  You will receive an UnsupportedVersionException when invoking an API that is not available
- * with the running broker verion.
+ * certain client features.  For instance, you need 0.11.0 brokers to use the transactional APIs. You will receive an
+ * <code>UnsupportedVersionException</code> when invoking an API that is not available with the running broker version.
+ * </p>
  */
 public class KafkaProducer<K, V> implements Producer<K, V> {
 
