@@ -382,13 +382,16 @@ public class TransactionManager {
             enqueueRequest(addPartitionsToTransactionHandler());
 
         TxnRequestHandler nextRequestHandler = pendingRequests.poll();
-        if (nextRequestHandler != null && maybeTerminateRequestWithError(nextRequestHandler)) {
+        if (nextRequestHandler == null)
+            return null;
+
+        if (maybeTerminateRequestWithError(nextRequestHandler)) {
             log.trace("{}Not sending transactional request {} because we are in an error state",
                     logPrefix, nextRequestHandler.requestBuilder());
             return null;
         }
 
-        if (nextRequestHandler != null && nextRequestHandler.isEndTxn() && !transactionStarted) {
+        if (nextRequestHandler.isEndTxn() && !transactionStarted) {
             nextRequestHandler.result.done();
             if (currentState != State.FATAL_ERROR) {
                 log.debug("{}Not sending EndTxn for completed transaction since no partitions " +
