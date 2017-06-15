@@ -302,7 +302,7 @@ public class Sender implements Runnable {
     }
 
     private boolean maybeSendTransactionalRequest(long now) {
-        if (transactionManager.isCompleting()) {
+        if (transactionManager.isCompleting() && accumulator.hasIncomplete()) {
             // If the transaction is being aborted, then we can clear any unsent produce requests
             if (transactionManager.isAborting())
                 accumulator.abortUnsentBatches(new KafkaException("Failing batch since transaction was aborted"));
