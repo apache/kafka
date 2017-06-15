@@ -129,4 +129,14 @@ abstract class KafkaServerTestHarness extends ZooKeeperTestHarness {
       alive(i) = true
     }
   }
+
+  def setupListenersOnRandomPorts(configs: Seq[Properties]) : Seq[Properties] = {
+    configs.foreach { config =>
+      config.setProperty(KafkaConfig.ListenersProp, s"${listenerName.value}://localhost:${TestUtils.RandomPort}")
+      config.remove(KafkaConfig.InterBrokerSecurityProtocolProp)
+      config.setProperty(KafkaConfig.InterBrokerListenerNameProp, listenerName.value)
+      config.setProperty(KafkaConfig.ListenerSecurityProtocolMapProp, s"${listenerName.value}:${securityProtocol.name}")
+    }
+    configs
+  }
 }
