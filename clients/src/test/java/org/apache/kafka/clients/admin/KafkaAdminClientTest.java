@@ -220,17 +220,17 @@ public class KafkaAdminClientTest {
                         add(ACL1);
                         add(ACL2);
                     }}));
-            assertCollectionIs(env.adminClient().describeAcls(FILTER1).all().get(), ACL1, ACL2);
+            assertCollectionIs(env.adminClient().describeAcls(FILTER1).values().get(), ACL1, ACL2);
 
             // Test a call where we get back no results.
             env.kafkaClient().prepareResponse(new DescribeAclsResponse(0, null,
                 Collections.<AclBinding>emptySet()));
-            assertTrue(env.adminClient().describeAcls(FILTER2).all().get().isEmpty());
+            assertTrue(env.adminClient().describeAcls(FILTER2).values().get().isEmpty());
 
             // Test a call where we get back an error.
             env.kafkaClient().prepareResponse(new DescribeAclsResponse(0,
                 new SecurityDisabledException("Security is disabled"), Collections.<AclBinding>emptySet()));
-            assertFutureError(env.adminClient().describeAcls(FILTER2).all(), SecurityDisabledException.class);
+            assertFutureError(env.adminClient().describeAcls(FILTER2).values(), SecurityDisabledException.class);
         }
     }
 
@@ -251,8 +251,8 @@ public class KafkaAdminClientTest {
                         add(ACL1);
                         add(ACL2);
                     }});
-            assertCollectionIs(results.results().keySet(), ACL1, ACL2);
-            for (KafkaFuture<Void> future : results.results().values()) {
+            assertCollectionIs(results.values().keySet(), ACL1, ACL2);
+            for (KafkaFuture<Void> future : results.values().values()) {
                 future.get();
             }
             results.all().get();
@@ -267,9 +267,9 @@ public class KafkaAdminClientTest {
                     add(ACL1);
                     add(ACL2);
                 }});
-            assertCollectionIs(results.results().keySet(), ACL1, ACL2);
-            assertFutureError(results.results().get(ACL1), SecurityDisabledException.class);
-            results.results().get(ACL2).get();
+            assertCollectionIs(results.values().keySet(), ACL1, ACL2);
+            assertFutureError(results.values().get(ACL1), SecurityDisabledException.class);
+            results.values().get(ACL2).get();
             assertFutureError(results.all(), SecurityDisabledException.class);
         }
     }
@@ -295,12 +295,12 @@ public class KafkaAdminClientTest {
                         add(FILTER1);
                         add(FILTER2);
                     }});
-            Map<AclBindingFilter, KafkaFuture<FilterResults>> filterResults = results.results();
+            Map<AclBindingFilter, KafkaFuture<FilterResults>> filterResults = results.values();
             FilterResults filter1Results = filterResults.get(FILTER1).get();
-            assertEquals(null, filter1Results.acls().get(0).exception());
-            assertEquals(ACL1, filter1Results.acls().get(0).acl());
-            assertEquals(null, filter1Results.acls().get(1).exception());
-            assertEquals(ACL2, filter1Results.acls().get(1).acl());
+            assertEquals(null, filter1Results.values().get(0).exception());
+            assertEquals(ACL1, filter1Results.values().get(0).binding());
+            assertEquals(null, filter1Results.values().get(1).exception());
+            assertEquals(ACL2, filter1Results.values().get(1).binding());
             assertFutureError(filterResults.get(FILTER2), SecurityDisabledException.class);
             assertFutureError(results.all(), SecurityDisabledException.class);
 
@@ -318,7 +318,7 @@ public class KafkaAdminClientTest {
                             add(FILTER1);
                             add(FILTER2);
                         }});
-            assertTrue(results.results().get(FILTER2).get().acls().isEmpty());
+            assertTrue(results.values().get(FILTER2).get().values().isEmpty());
             assertFutureError(results.all(), SecurityDisabledException.class);
 
             // Test a call where there are no errors.

@@ -46,7 +46,7 @@ public class TopicListing {
      * Whether the topic is internal to Kafka. An example of an internal topic is the offsets and group management topic:
      * __consumer_offsets.
      */
-    public boolean internal() {
+    public boolean isInternal() {
         return internal;
     }
 

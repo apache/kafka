@@ -71,7 +71,7 @@ public class ResourceFilter {
      * Return true if this ResourceFilter has any UNKNOWN components.
      */
     public boolean unknown() {
-        return resourceType.unknown();
+        return resourceType.isUnknown();
     }
 
     @Override

@@ -130,7 +130,7 @@ public class KafkaOffsetBackingStoreTest {
         assertEquals("org.apache.kafka.common.serialization.ByteArrayDeserializer", capturedConsumerProps.getValue().get(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG));
 
         assertEquals(TOPIC, capturedNewTopic.getValue().name());
-        assertEquals(TOPIC_PARTITIONS, capturedNewTopic.getValue().partitions());
+        assertEquals(TOPIC_PARTITIONS, capturedNewTopic.getValue().numPartitions());
         assertEquals(TOPIC_REPLICATION_FACTOR, capturedNewTopic.getValue().replicationFactor());
 
         store.start();

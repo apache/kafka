@@ -216,7 +216,7 @@ public class TopicAdmin implements AutoCloseable {
 
         // Attempt to create any missing topics
         CreateTopicsOptions args = new CreateTopicsOptions().validateOnly(false);
-        Map<String, KafkaFuture<Void>> newResults = admin.createTopics(topicsByName.values(), args).results();
+        Map<String, KafkaFuture<Void>> newResults = admin.createTopics(topicsByName.values(), args).values();
 
         // Iterate over each future so that we can handle individual failures like when some topics already exist
         Set<String> newlyCreatedTopicNames = new HashSet<>();

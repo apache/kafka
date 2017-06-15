@@ -100,7 +100,7 @@ public enum AclPermissionType {
     /**
      * Return true if this permission type is UNKNOWN.
      */
-    public boolean unknown() {
+    public boolean isUnknown() {
         return this == UNKNOWN;
     }
 }

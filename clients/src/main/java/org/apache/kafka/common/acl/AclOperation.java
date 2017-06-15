@@ -158,7 +158,7 @@ public enum AclOperation {
     /**
      * Return true if this operation is UNKNOWN.
      */
-    public boolean unknown() {
+    public boolean isUnknown() {
         return this == UNKNOWN;
     }
 }

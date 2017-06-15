@@ -44,7 +44,7 @@ public class DescribeConfigsResult {
      * Return a map from resources to futures which can be used to check the status of the configuration for each
      * resource.
      */
-    public Map<ConfigResource, KafkaFuture<Config>> results() {
+    public Map<ConfigResource, KafkaFuture<Config>> values() {
         return futures;
     }
 

@@ -22,6 +22,7 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Collection;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * The result of the {@link AdminClient#listTopics()} call.
@@ -39,14 +40,14 @@ public class ListTopicsResult {
     /**
      * Return a future which yields a map of topic names to TopicListing objects.
      */
-    public KafkaFuture<Map<String, TopicListing>> namesToDescriptions() {
+    public KafkaFuture<Map<String, TopicListing>> namesToListings() {
         return future;
     }
 
     /**
      * Return a future which yields a collection of TopicListing objects.
      */
-    public KafkaFuture<Collection<TopicListing>> descriptions() {
+    public KafkaFuture<Collection<TopicListing>> listings() {
         return future.thenApply(new KafkaFuture.Function<Map<String, TopicListing>, Collection<TopicListing>>() {
             @Override
             public Collection<TopicListing> apply(Map<String, TopicListing> namesToDescriptions) {
@@ -58,11 +59,11 @@ public class ListTopicsResult {
     /**
      * Return a future which yields a collection of topic names.
      */
-    public KafkaFuture<Collection<String>> names() {
-        return future.thenApply(new KafkaFuture.Function<Map<String, TopicListing>, Collection<String>>() {
+    public KafkaFuture<Set<String>> names() {
+        return future.thenApply(new KafkaFuture.Function<Map<String, TopicListing>, Set<String>>() {
             @Override
-            public Collection<String> apply(Map<String, TopicListing> namesToDescriptions) {
-                return namesToDescriptions.keySet();
+            public Set<String> apply(Map<String, TopicListing> namesToListings) {
+                return namesToListings.keySet();
             }
         });
     }
