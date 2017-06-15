@@ -34,6 +34,7 @@ import kafka.coordinator.group.{GroupCoordinator, JoinGroupResult}
 import kafka.coordinator.transaction.{InitProducerIdResult, TransactionCoordinator}
 import kafka.log.{Log, LogManager, TimestampOffset}
 import kafka.network.{RequestChannel, RequestOrResponseSend}
+import kafka.security.SecurityUtils
 import kafka.security.auth._
 import kafka.utils.{CoreUtils, Exit, Logging, ZKGroupTopicDirs, ZkUtils}
 import org.apache.kafka.common.errors._
@@ -50,13 +51,12 @@ import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{Node, TopicPartition}
 import org.apache.kafka.common.requests.SaslHandshakeResponse
-import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.resource.{Resource => AdminResource, ResourceType => AdminResourceType}
-import org.apache.kafka.common.acl.{AccessControlEntry, AclBinding, AclBindingFilter, AclOperation, AclPermissionType}
+import org.apache.kafka.common.acl.{AccessControlEntry, AclBinding}
 
 import scala.collection._
 import scala.collection.JavaConverters._
-import scala.collection.mutable.ListBuffer
+import scala.collection.mutable.ArrayBuffer
 import scala.util.{Failure, Success, Try}
 
 /**
@@ -1782,24 +1782,6 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
   }
 
-  private def convertToResourceAndAcl(filter: AclBindingFilter): Try[(Resource, Acl)] = {
-      for {
-        resourceType <- Try(ResourceType.fromJava(filter.resourceFilter.resourceType))
-        principal <- Try(KafkaPrincipal.fromString(filter.entryFilter.principal))
-        operation <- Try(Operation.fromJava(filter.entryFilter.operation))
-        permissionType <- Try(PermissionType.fromJava(filter.entryFilter.permissionType))
-        resource = Resource(resourceType, filter.resourceFilter.name)
-        acl = Acl(principal, permissionType, filter.entryFilter.host, operation)
-      } yield (resource, acl)
-  }
-
-  private def convertToAclBinding(resource: Resource, acl: Acl): AclBinding = {
-    val adminResource = new AdminResource(AdminResourceType.fromString(resource.resourceType.toString), resource.name)
-    val entry = new AccessControlEntry(acl.principal.toString, acl.host.toString,
-      acl.operation.toJava, acl.permissionType.toJava)
-    new AclBinding(adminResource, entry)
-  }
-
   def handleCreateAcls(request: RequestChannel.Request): Unit = {
     authorizeClusterAlter(request)
     val createAclsRequest = request.body[CreateAclsRequest]
@@ -1810,7 +1792,7 @@ class KafkaApis(val requestChannel: RequestChannel,
             new SecurityDisabledException("No Authorizer is configured on the broker.")))
       case Some(auth) =>
         val aclCreationResults = createAclsRequest.aclCreations.asScala.map { aclCreation =>
-          convertToResourceAndAcl(aclCreation.acl.toFilter) match {
+          SecurityUtils.convertToResourceAndAcl(aclCreation.acl.toFilter) match {
             case Failure(throwable) => new AclCreationResponse(throwable)
             case Success((resource, acl)) => try {
                 if (resource.resourceType.equals(Cluster) &&
@@ -1844,51 +1826,52 @@ class KafkaApis(val requestChannel: RequestChannel,
           deleteAclsRequest.getErrorResponse(requestThrottleMs,
             new SecurityDisabledException("No Authorizer is configured on the broker.")))
       case Some(auth) =>
-        val filtersWithIndex = deleteAclsRequest.filters.asScala.zipWithIndex
-        val filterResponseMap = mutable.HashMap[Int, AclFilterResponse]()
-        val toDelete = mutable.HashMap[Int, ListBuffer[(Resource, Acl)]]()
-        if (filtersWithIndex.exists(!_._1.matchesAtMostOne())) {
-          // Delete based on filters that may match more than one ACL.
-          val aclMap: Map[Resource, Set[Acl]] = auth.getAcls()
-          for ((resource, acls) <- aclMap; acl <- acls) {
-            val binding = new AclBinding(new AdminResource(AdminResourceType.
-              fromString(resource.resourceType.toString), resource.name),
-              new AccessControlEntry(acl.principal.toString, acl.host.toString,
-                acl.operation.toJava, acl.permissionType.toJava))
-            for ((filter, i) <- filtersWithIndex if filter.matches(binding))
-              toDelete.getOrElseUpdate(i, ListBuffer.empty) += ((resource, acl))
+        val filters = deleteAclsRequest.filters.asScala
+        val filterResponseMap = mutable.Map[Int, AclFilterResponse]()
+        val toDelete = mutable.Map[Int, ArrayBuffer[(Resource, Acl)]]()
+
+        if (filters.forall(_.matchesAtMostOne)) {
+          // Delete based on a list of ACL fixtures.
+          for ((filter, i) <- filters.zipWithIndex) {
+            SecurityUtils.convertToResourceAndAcl(filter) match {
+              case Failure(throwable) => filterResponseMap.put(i, new AclFilterResponse(throwable, Seq.empty.asJava))
+              case Success(fixture) => toDelete.put(i, ArrayBuffer(fixture))
+            }
           }
         } else {
-          // Delete based on a list of ACL fixtures.
-          for ((filter, i) <- filtersWithIndex) {
-            convertToResourceAndAcl(filter) match {
-              case Failure(throwable) => filterResponseMap.put(i,
-                new AclFilterResponse(throwable, Collections.emptySet[AclDeletionResult]))
-              case Success(fixture) => toDelete.put(i, ListBuffer(fixture))
-            }
+          // Delete based on filters that may match more than one ACL.
+          val aclMap = auth.getAcls()
+          val filtersWithIndex = filters.zipWithIndex
+          for ((resource, acls) <- aclMap; acl <- acls) {
+            val binding = new AclBinding(
+              new AdminResource(AdminResourceType.fromString(resource.resourceType.toString), resource.name),
+              new AccessControlEntry(acl.principal.toString, acl.host.toString, acl.operation.toJava,
+                acl.permissionType.toJava))
+
+            for ((filter, i) <- filtersWithIndex if filter.matches(binding))
+              toDelete.getOrElseUpdate(i, ArrayBuffer.empty) += ((resource, acl))
           }
         }
 
         for ((i, acls) <- toDelete) {
           val deletionResults = acls.flatMap { case (resource, acl) =>
-            val aclBinding = convertToAclBinding(resource, acl)
+            val aclBinding = SecurityUtils.convertToAclBinding(resource, acl)
             try {
-              if (auth.removeAcls(immutable.Set(acl), resource)) {
+              if (auth.removeAcls(immutable.Set(acl), resource))
                 Some(new AclDeletionResult(aclBinding))
-              } else {
-                None
-              }
+              else None
             } catch {
               case throwable: Throwable =>
-                Some(new AclDeletionResult(new UnknownServerException("Failed to delete ACL: " + throwable.toString),
+                Some(new AclDeletionResult(new UnknownServerException(s"Failed to delete ACL $acl: $throwable"),
                   aclBinding))
             }
           }.asJava
+          
           filterResponseMap.put(i, new AclFilterResponse(deletionResults))
         }
 
-        val filterResponses = filtersWithIndex.map { case (filter, i) =>
-          filterResponseMap.getOrElse(i, new AclFilterResponse(Collections.emptySet[AclDeletionResult]()))
+        val filterResponses = filters.indices.map { i =>
+          filterResponseMap.getOrElse(i, new AclFilterResponse(Seq.empty.asJava))
         }.asJava
         sendResponseMaybeThrottle(request, requestThrottleMs => new DeleteAclsResponse(requestThrottleMs, filterResponses))
     }
