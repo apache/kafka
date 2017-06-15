@@ -31,7 +31,8 @@ public class StateRestorerTest {
 
     private static final long OFFSET_LIMIT = 50;
     private final MockRestoreCallback callback = new MockRestoreCallback();
-    private final StateRestorer restorer = new StateRestorer(new TopicPartition("topic", 1), callback, null, OFFSET_LIMIT, true);
+    private final StateRestorer restorer = new StateRestorer(new TopicPartition("topic", 1), callback,
+                                                             null, OFFSET_LIMIT, true, "storeName");
 
     @Test
     public void shouldCallRestoreOnRestoreCallback() throws Exception {
@@ -56,7 +57,7 @@ public class StateRestorerTest {
 
     @Test
     public void shouldBeCompletedIfOffsetAndOffsetLimitAreZero() throws Exception {
-        final StateRestorer restorer = new StateRestorer(new TopicPartition("topic", 1), callback, null, 0, true);
+        final StateRestorer restorer = new StateRestorer(new TopicPartition("topic", 1), callback, null, 0, true, "storeName");
         assertTrue(restorer.hasCompleted(0, 10));
     }
 

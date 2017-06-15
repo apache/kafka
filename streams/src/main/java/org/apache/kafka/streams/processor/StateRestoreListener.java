@@ -18,14 +18,12 @@
 package org.apache.kafka.streams.processor;
 
 
-import org.apache.kafka.common.TopicPartition;
-
 public interface StateRestoreListener {
 
-    void onRestoreStart(TopicPartition topicPartition, long startingOffset);
+    void onRestoreStart(String storeName, long startingOffset, long endingOffset);
 
-    void onBatchRestored(TopicPartition topicPartition, long batchEndOffset, long numRestored);
+    void onBatchRestored(String storeName, long batchEndOffset, long numRestored);
 
-    void onRestoreEnd(TopicPartition topicPartition, long endOffset, long totalRestored);
+    void onRestoreEnd(String storeName, long endOffset, long totalRestored);
 
 }

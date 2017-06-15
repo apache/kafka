@@ -189,8 +189,8 @@ public class StoreChangelogReader implements ChangelogReader {
                                   final Iterator<TopicPartition> partitionIterator) {
         final TopicPartition topicPartition = partitionIterator.next();
         final StateRestorer restorer = stateRestorers.get(topicPartition);
-        restorer.maybeNotifyRestoreStarted();
         final Long endOffset = endOffsets.get(topicPartition);
+        restorer.maybeNotifyRestoreStarted(restorer.startingOffset(), endOffset);
         final long pos = processNext(allRecords.records(topicPartition), restorer, endOffset);
         if (restorer.hasCompleted(pos, endOffset)) {
             if (pos > endOffset + 1) {

@@ -32,6 +32,7 @@ public class StateRestorer {
     private final boolean persistent;
     private final TopicPartition partition;
     private final StateRestoreCallback stateRestoreCallback;
+    private final String storeName;
     private StateRestoreListener stateRestoreListener;
 
     private long restoredOffset;
@@ -42,12 +43,14 @@ public class StateRestorer {
                   final StateRestoreCallback stateRestoreCallback,
                   final Long checkpoint,
                   final long offsetLimit,
-                  final boolean persistent) {
+                  final boolean persistent,
+                  final String storeName) {
         this.partition = partition;
         this.stateRestoreCallback = stateRestoreCallback;
         this.checkpoint = checkpoint;
         this.offsetLimit = offsetLimit;
         this.persistent = persistent;
+        this.storeName = storeName;
     }
 
     public TopicPartition partition() {
@@ -58,23 +61,23 @@ public class StateRestorer {
         return checkpoint == null ? NO_CHECKPOINT : checkpoint;
     }
 
-    void maybeNotifyRestoreStarted() {
+    void maybeNotifyRestoreStarted(long startingOffset, long endingOffset) {
         if (!restoreStarted && stateRestoreListener != null) {
-            stateRestoreListener.onRestoreStart(partition, startingOffset);
+            stateRestoreListener.onRestoreStart(storeName, startingOffset, endingOffset);
             restoreStarted = true;
         }
     }
 
     void restoreDone() {
         if (stateRestoreListener != null) {
-            stateRestoreListener.onRestoreEnd(partition, restoredOffset, restoredNumRecords());
+            stateRestoreListener.onRestoreEnd(storeName, restoredOffset, restoredNumRecords());
             restoreStarted = false;
         }
     }
 
     void restoreBatchCompleted(long currentRestoredOffset, int numRestored) {
         if (stateRestoreListener != null) {
-            stateRestoreListener.onBatchRestored(partition, currentRestoredOffset, numRestored);
+            stateRestoreListener.onBatchRestored(storeName, currentRestoredOffset, numRestored);
         }
 
     }
