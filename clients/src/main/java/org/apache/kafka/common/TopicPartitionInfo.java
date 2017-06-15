@@ -19,6 +19,7 @@ package org.apache.kafka.common;
 
 import org.apache.kafka.common.utils.Utils;
 
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -42,8 +43,8 @@ public class TopicPartitionInfo {
     public TopicPartitionInfo(int partition, Node leader, List<Node> replicas, List<Node> isr) {
         this.partition = partition;
         this.leader = leader;
-        this.replicas = replicas;
-        this.isr = isr;
+        this.replicas = Collections.unmodifiableList(replicas);
+        this.isr = Collections.unmodifiableList(isr);
     }
 
     /**
@@ -54,7 +55,7 @@ public class TopicPartitionInfo {
     }
 
     /**
-     * Return the leader of the partition or {@link Node#noNode()} if there is none.
+     * Return the leader of the partition or null if there is none.
      */
     public Node leader() {
         return leader;

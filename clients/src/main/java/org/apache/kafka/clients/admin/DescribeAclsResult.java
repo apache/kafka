@@ -40,7 +40,7 @@ public class DescribeAclsResult {
     /**
      * Return a future containing the ACLs requested.
      */
-    public KafkaFuture<Collection<AclBinding>> all() {
+    public KafkaFuture<Collection<AclBinding>> values() {
         return future;
     }
 }

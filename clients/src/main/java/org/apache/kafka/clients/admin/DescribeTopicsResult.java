@@ -42,7 +42,7 @@ public class DescribeTopicsResult {
      * Return a map from topic names to futures which can be used to check the status of
      * individual topics.
      */
-    public Map<String, KafkaFuture<TopicDescription>> results() {
+    public Map<String, KafkaFuture<TopicDescription>> values() {
         return futures;
     }
 

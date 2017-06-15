@@ -40,7 +40,7 @@ public class DeleteTopicsResult {
      * Return a map from topic names to futures which can be used to check the status of
      * individual deletions.
      */
-    public Map<String, KafkaFuture<Void>> results() {
+    public Map<String, KafkaFuture<Void>> values() {
         return futures;
     }
 

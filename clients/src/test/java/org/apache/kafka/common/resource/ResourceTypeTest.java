@@ -48,7 +48,7 @@ public class ResourceTypeTest {
     public void testIsUnknown() throws Exception {
         for (AclResourceTypeTestInfo info : INFOS) {
             assertEquals(info.resourceType + " was supposed to have unknown == " + info.unknown,
-                info.unknown, info.resourceType.unknown());
+                info.unknown, info.resourceType.isUnknown());
         }
     }
 

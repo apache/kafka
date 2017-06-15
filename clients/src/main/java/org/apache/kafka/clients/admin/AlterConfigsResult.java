@@ -40,7 +40,7 @@ public class AlterConfigsResult {
     /**
      * Return a map from resources to futures which can be used to check the status of the operation on each resource.
      */
-    public Map<ConfigResource, KafkaFuture<Void>> results() {
+    public Map<ConfigResource, KafkaFuture<Void>> values() {
         return futures;
     }
 

@@ -41,7 +41,7 @@ public class CreateAclsResult {
      * Return a map from ACL bindings to futures which can be used to check the status of the creation of each ACL
      * binding.
      */
-    public Map<AclBinding, KafkaFuture<Void>> results() {
+    public Map<AclBinding, KafkaFuture<Void>> values() {
         return futures;
     }
 

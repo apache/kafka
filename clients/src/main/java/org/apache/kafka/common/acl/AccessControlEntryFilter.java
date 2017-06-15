@@ -95,8 +95,8 @@ public class AccessControlEntryFilter {
     /**
      * Return true if there are any UNKNOWN components.
      */
-    public boolean unknown() {
-        return data.unknown();
+    public boolean isUnknown() {
+        return data.isUnknown();
     }
 
     /**
