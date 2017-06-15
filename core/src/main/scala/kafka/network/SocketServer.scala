@@ -37,7 +37,7 @@ import org.apache.kafka.common.network.{ChannelBuilders, KafkaChannel, ListenerN
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.kafka.common.protocol.types.SchemaException
-import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.common.utils.{KafkaThread, Time}
 
 import scala.collection._
 import JavaConverters._
@@ -91,7 +91,7 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
         val acceptor = new Acceptor(endpoint, sendBufferSize, recvBufferSize, brokerId,
           processors.slice(processorBeginIndex, processorEndIndex), connectionQuotas)
         acceptors.put(endpoint, acceptor)
-        Utils.newThread(s"kafka-socket-acceptor-$listenerName-$securityProtocol-${endpoint.port}", acceptor, false).start()
+        KafkaThread.nonDaemon(s"kafka-socket-acceptor-$listenerName-$securityProtocol-${endpoint.port}", acceptor).start()
         acceptor.awaitStartup()
 
         processorBeginIndex = processorEndIndex
@@ -253,8 +253,8 @@ private[kafka] class Acceptor(val endPoint: EndPoint,
 
   this.synchronized {
     processors.foreach { processor =>
-      Utils.newThread(s"kafka-network-thread-$brokerId-${endPoint.listenerName}-${endPoint.securityProtocol}-${processor.id}",
-        processor, false).start()
+      KafkaThread.nonDaemon(s"kafka-network-thread-$brokerId-${endPoint.listenerName}-${endPoint.securityProtocol}-${processor.id}",
+        processor).start()
     }
   }
 
