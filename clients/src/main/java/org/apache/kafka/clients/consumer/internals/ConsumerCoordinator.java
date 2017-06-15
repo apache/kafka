@@ -278,23 +278,39 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
      *
      * @param now current time in milliseconds
      */
-    public void poll(long now) {
+    public void poll(long now, long remainingMs) {
         invokeCompletedOffsetCommitCallbacks();
 
-        if (subscriptions.partitionsAutoAssigned() && coordinatorUnknown()) {
-            ensureCoordinatorReady();
-            now = time.milliseconds();
-        }
+        if (subscriptions.partitionsAutoAssigned()) {
+            if (coordinatorUnknown()) {
+                ensureCoordinatorReady();
+                now = time.milliseconds();
+            }
 
-        if (needRejoin()) {
-            // due to a race condition between the initial metadata fetch and the initial rebalance,
-            // we need to ensure that the metadata is fresh before joining initially. This ensures
-            // that we have matched the pattern against the cluster's topics at least once before joining.
-            if (subscriptions.hasPatternSubscription())
-                client.ensureFreshMetadata();
+            if (needRejoin()) {
+                // due to a race condition between the initial metadata fetch and the initial rebalance,
+                // we need to ensure that the metadata is fresh before joining initially. This ensures
+                // that we have matched the pattern against the cluster's topics at least once before joining.
+                if (subscriptions.hasPatternSubscription())
+                    client.ensureFreshMetadata();
 
-            ensureActiveGroup();
-            now = time.milliseconds();
+                ensureActiveGroup();
+                now = time.milliseconds();
+            }
+        } else {
+            // For manually assigned partitions, if there are no ready nodes, await metadata.
+            // If connections to all nodes fail, wakeups triggered while attempting to send fetch
+            // requests result in polls returning immediately, causing a tight loop of polls. Without
+            // the wakeup, poll() with no channels would block for the timeout, delaying re-connection.
+            // awaitMetadataUpdate() initiates new connections with configured backoff and avoids the busy loop.
+            // When group management is used, metadata wait is already performed for this scenario as
+            // coordinator is unknown, hence this check is not required.
+            if (metadata.updateRequested() && !client.hasReadyNodes()) {
+                boolean metadataUpdated = client.awaitMetadataUpdate(remainingMs);
+                if (!metadataUpdated && !client.hasReadyNodes())
+                    return;
+                now = time.milliseconds();
+            }
         }
 
         pollHeartbeat(now);

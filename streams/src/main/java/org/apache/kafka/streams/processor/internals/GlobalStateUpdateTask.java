@@ -88,7 +88,7 @@ public class GlobalStateUpdateTask implements GlobalStateMaintainer {
     }
 
     public void flushState() {
-        stateMgr.flush(processorContext);
+        stateMgr.flush();
         stateMgr.checkpoint(offsets);
     }
 

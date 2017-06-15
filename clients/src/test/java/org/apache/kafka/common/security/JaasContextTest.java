@@ -53,8 +53,8 @@ public class JaasContextTest {
     public void setUp() throws IOException {
         jaasConfigFile = File.createTempFile("jaas", ".conf");
         jaasConfigFile.deleteOnExit();
-        Configuration.setConfiguration(null);
         System.setProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM, jaasConfigFile.toString());
+        Configuration.setConfiguration(null);
     }
 
     @After

@@ -64,9 +64,7 @@ object ZkUtils {
   val BrokerSequenceIdPath = s"$BrokersPath/seqid"
   val ConfigChangesPath = s"$ConfigPath/changes"
   val ConfigUsersPath = s"$ConfigPath/users"
-  val PidBlockPath = "/latest_pid_block"
-
-
+  val ProducerIdBlockPath = "/latest_producer_id_block"
   // Important: it is necessary to add any new top level Zookeeper path to the Seq
   val SecureZkRootPaths = Seq(AdminPath,
                               BrokersPath,
@@ -77,7 +75,7 @@ object ZkUtils {
                               IsrChangeNotificationPath,
                               KafkaAclPath,
                               KafkaAclChangesPath,
-                              PidBlockPath)
+                              ProducerIdBlockPath)
 
   // Important: it is necessary to add any new top level Zookeeper path that contains
   //            sensitive information that should not be world readable to the Seq
@@ -205,6 +203,14 @@ object ZkUtils {
     topics
   }
 
+  def controllerZkData(brokerId: Int, timestamp: Long): String = {
+    Json.encode(Map("version" -> 1, "brokerid" -> brokerId, "timestamp" -> timestamp.toString))
+  }
+
+  def preferredReplicaLeaderElectionZkData(partitions: scala.collection.Set[TopicAndPartition]): String = {
+    Json.encode(Map("version" -> 1, "partitions" -> partitions.map(tp => Map("topic" -> tp.topic, "partition" -> tp.partition))))
+  }
+
   def formatAsReassignmentJson(partitionsToBeReassigned: Map[TopicAndPartition, Seq[Int]]): String = {
     Json.encode(Map(
       "version" -> 1,
@@ -233,7 +239,10 @@ class ZkUtils(val zkClient: ZkClient,
                               DeleteTopicsPath,
                               BrokerSequenceIdPath,
                               IsrChangeNotificationPath,
-                              PidBlockPath)
+                              ProducerIdBlockPath)
+
+  // Visible for testing
+  val zkPath = new ZkPath(zkClient)
 
   import ZkUtils._
 
@@ -412,11 +421,11 @@ class ZkUtils(val zkClient: ZkClient,
     }
   }
 
+  @deprecated("This method has been deprecated and will be removed in a future release.", "0.11.0.0")
   def getConsumerPartitionOwnerPath(group: String, topic: String, partition: Int): String = {
     val topicDirs = new ZKGroupTopicDirs(group, topic)
     topicDirs.consumerOwnerDir + "/" + partition
   }
-
 
   def leaderAndIsrZkData(leaderAndIsr: LeaderAndIsr, controllerEpoch: Int): String = {
     Json.encode(Map("version" -> 1, "leader" -> leaderAndIsr.leader, "leader_epoch" -> leaderAndIsr.leaderEpoch,
@@ -444,7 +453,7 @@ class ZkUtils(val zkClient: ZkClient,
     }
 
     if (!zkClient.exists(path))
-      ZkPath.createPersistent(zkClient, path, createParents = true, acl) //won't throw NoNodeException or NodeExistsException
+      zkPath.createPersistent(path, createParents = true, acl) //won't throw NoNodeException or NodeExistsException
   }
 
   /**
@@ -454,7 +463,7 @@ class ZkUtils(val zkClient: ZkClient,
     val acl = if (acls eq UseDefaultAcls) ZkUtils.defaultAcls(isSecure, path) else acls
     val parentDir = path.substring(0, path.lastIndexOf('/'))
     if (parentDir.length != 0) {
-      ZkPath.createPersistent(zkClient, parentDir, createParents = true, acl)
+      zkPath.createPersistent(parentDir, createParents = true, acl)
     }
   }
 
@@ -464,11 +473,11 @@ class ZkUtils(val zkClient: ZkClient,
   private def createEphemeralPath(path: String, data: String, acls: java.util.List[ACL] = UseDefaultAcls): Unit = {
     val acl = if (acls eq UseDefaultAcls) ZkUtils.defaultAcls(isSecure, path) else acls
     try {
-      ZkPath.createEphemeral(zkClient, path, data, acl)
+      zkPath.createEphemeral(path, data, acl)
     } catch {
       case _: ZkNoNodeException =>
         createParentPath(path)
-        ZkPath.createEphemeral(zkClient, path, data, acl)
+        zkPath.createEphemeral(path, data, acl)
     }
   }
 
@@ -505,17 +514,17 @@ class ZkUtils(val zkClient: ZkClient,
   def createPersistentPath(path: String, data: String = "", acls: java.util.List[ACL] = UseDefaultAcls): Unit = {
     val acl = if (acls eq UseDefaultAcls) ZkUtils.defaultAcls(isSecure, path) else acls
     try {
-      ZkPath.createPersistent(zkClient, path, data, acl)
+      zkPath.createPersistent(path, data, acl)
     } catch {
       case _: ZkNoNodeException =>
         createParentPath(path)
-        ZkPath.createPersistent(zkClient, path, data, acl)
+        zkPath.createPersistent(path, data, acl)
     }
   }
 
   def createSequentialPersistentPath(path: String, data: String = "", acls: java.util.List[ACL] = UseDefaultAcls): String = {
     val acl = if (acls eq UseDefaultAcls) ZkUtils.defaultAcls(isSecure, path) else acls
-    ZkPath.createPersistentSequential(zkClient, path, data, acl)
+    zkPath.createPersistentSequential(path, data, acl)
   }
 
   /**
@@ -531,7 +540,7 @@ class ZkUtils(val zkClient: ZkClient,
       case _: ZkNoNodeException =>
         createParentPath(path)
         try {
-          ZkPath.createPersistent(zkClient, path, data, acl)
+          zkPath.createPersistent(path, data, acl)
         } catch {
           case _: ZkNodeExistsException =>
             zkClient.writeData(path, data)
@@ -601,19 +610,12 @@ class ZkUtils(val zkClient: ZkClient,
     } catch {
       case _: ZkNoNodeException =>
         createParentPath(path)
-        ZkPath.createEphemeral(zkClient, path, data, acl)
+        zkPath.createEphemeral(path, data, acl)
     }
   }
 
   def deletePath(path: String): Boolean = {
-    try {
-      zkClient.delete(path)
-    } catch {
-      case _: ZkNoNodeException =>
-        // this can happen during a connection loss event, return normally
-        info(path + " deleted during connection loss; this is ok")
-        false
-    }
+    zkClient.delete(path)
   }
 
   /**
@@ -630,13 +632,7 @@ class ZkUtils(val zkClient: ZkClient,
   }
 
   def deletePathRecursive(path: String) {
-    try {
-      zkClient.deleteRecursive(path)
-    } catch {
-      case _: ZkNoNodeException =>
-        // this can happen during a connection loss event, return normally
-        info(path + " deleted during connection loss; this is ok")
-    }
+    zkClient.deleteRecursive(path)
   }
 
   def readData(path: String): (String, Stat) = {
@@ -683,6 +679,10 @@ class ZkUtils(val zkClient: ZkClient,
     zkClient.exists(path)
   }
 
+  def isTopicMarkedForDeletion(topic: String): Boolean = {
+    pathExists(getDeleteTopicPath(topic))
+  }
+
   def getCluster(): Cluster = {
     val cluster = new Cluster
     val nodes = getChildrenParentMayNotExist(BrokerIdsPath)
@@ -693,8 +693,7 @@ class ZkUtils(val zkClient: ZkClient,
     cluster
   }
 
-  def getPartitionLeaderAndIsrForTopics(zkClient: ZkClient, topicAndPartitions: Set[TopicAndPartition])
-  : mutable.Map[TopicAndPartition, LeaderIsrAndControllerEpoch] = {
+  def getPartitionLeaderAndIsrForTopics(topicAndPartitions: Set[TopicAndPartition]): mutable.Map[TopicAndPartition, LeaderIsrAndControllerEpoch] = {
     val ret = new mutable.HashMap[TopicAndPartition, LeaderIsrAndControllerEpoch]
     for(topicAndPartition <- topicAndPartitions) {
       ReplicationUtils.getLeaderIsrAndEpochForPartition(this, topicAndPartition.topic, topicAndPartition.partition) match {
@@ -816,11 +815,13 @@ class ZkUtils(val zkClient: ZkClient,
     zkClient.delete(brokerPartTopicPath)
   }
 
+  @deprecated("This method has been deprecated and will be removed in a future release.", "0.11.0.0")
   def getConsumersInGroup(group: String): Seq[String] = {
     val dirs = new ZKGroupDirs(group)
     getChildren(dirs.consumerRegistryDir)
   }
 
+  @deprecated("This method has been deprecated and will be removed in a future release.", "0.11.0.0")
   def getConsumersPerTopic(group: String, excludeInternalTopics: Boolean): mutable.Map[String, List[ConsumerThreadId]] = {
     val dirs = new ZKGroupDirs(group)
     val consumers = getChildrenParentMayNotExist(dirs.consumerRegistryDir)
@@ -840,6 +841,7 @@ class ZkUtils(val zkClient: ZkClient,
     consumersPerTopicMap
   }
 
+  @deprecated("This method has been deprecated and will be removed in a future release.", "0.11.0.0")
   def getTopicsPerMemberId(group: String, excludeInternalTopics: Boolean = true): Map[String, List[String]] = {
     val dirs = new ZKGroupDirs(group)
     val memberIds = getChildrenParentMayNotExist(dirs.consumerRegistryDir)
@@ -901,22 +903,26 @@ class ZkUtils(val zkClient: ZkClient,
 
   def getAllPartitions(): Set[TopicAndPartition] = {
     val topics = getChildrenParentMayNotExist(BrokerTopicsPath)
-    if(topics == null) Set.empty[TopicAndPartition]
+    if (topics == null) Set.empty[TopicAndPartition]
     else {
       topics.flatMap { topic =>
-        getChildren(getTopicPartitionsPath(topic)).map(_.toInt).map(TopicAndPartition(topic, _))
+        // The partitions path may not exist if the topic is in the process of being deleted
+        getChildrenParentMayNotExist(getTopicPartitionsPath(topic)).map(_.toInt).map(TopicAndPartition(topic, _))
       }.toSet
     }
   }
 
+  @deprecated("This method has been deprecated and will be removed in a future release.", "0.11.0.0")
   def getConsumerGroups() = {
     getChildren(ConsumersPath)
   }
 
+  @deprecated("This method has been deprecated and will be removed in a future release.", "0.11.0.0")
   def getTopicsByConsumerGroup(consumerGroup:String) = {
     getChildrenParentMayNotExist(new ZKGroupDirs(consumerGroup).consumerGroupOwnersDir)
   }
 
+  @deprecated("This method has been deprecated and will be removed in a future release.", "0.11.0.0")
   def getAllConsumerGroupsForTopic(topic: String): Set[String] = {
     val groups = getChildrenParentMayNotExist(ConsumersPath)
     if (groups == null) Set.empty
@@ -950,6 +956,7 @@ private object ZKStringSerializer extends ZkSerializer {
   }
 }
 
+@deprecated("This class has been deprecated and will be removed in a future release.", "0.11.0.0")
 class ZKGroupDirs(val group: String) {
   def consumerDir = ConsumersPath
   def consumerGroupDir = consumerDir + "/" + group
@@ -958,6 +965,7 @@ class ZKGroupDirs(val group: String) {
   def consumerGroupOwnersDir = consumerGroupDir + "/owners"
 }
 
+@deprecated("This class has been deprecated and will be removed in a future release.", "0.11.0.0")
 class ZKGroupTopicDirs(group: String, topic: String) extends ZKGroupDirs(group) {
   def consumerOffsetDir = consumerGroupOffsetsDir + "/" + topic
   def consumerOwnerDir = consumerGroupOwnersDir + "/" + topic
@@ -986,11 +994,12 @@ class ZKConfig(props: VerifiableProperties) {
   val zkSyncTimeMs = props.getInt(ZkSyncTimeMsProp, 2000)
 }
 
-object ZkPath {
+class ZkPath(client: ZkClient) {
+
   @volatile private var isNamespacePresent: Boolean = false
 
-  def checkNamespace(client: ZkClient) {
-    if(isNamespacePresent)
+  def checkNamespace() {
+    if (isNamespacePresent)
       return
 
     if (!client.exists("/")) {
@@ -1003,23 +1012,23 @@ object ZkPath {
     isNamespacePresent = false
   }
 
-  def createPersistent(client: ZkClient, path: String, data: Object, acls: java.util.List[ACL]) {
-    checkNamespace(client)
+  def createPersistent(path: String, data: Object, acls: java.util.List[ACL]) {
+    checkNamespace()
     client.createPersistent(path, data, acls)
   }
 
-  def createPersistent(client: ZkClient, path: String, createParents: Boolean, acls: java.util.List[ACL]) {
-    checkNamespace(client)
+  def createPersistent(path: String, createParents: Boolean, acls: java.util.List[ACL]) {
+    checkNamespace()
     client.createPersistent(path, createParents, acls)
   }
 
-  def createEphemeral(client: ZkClient, path: String, data: Object, acls: java.util.List[ACL]) {
-    checkNamespace(client)
+  def createEphemeral(path: String, data: Object, acls: java.util.List[ACL]) {
+    checkNamespace()
     client.createEphemeral(path, data, acls)
   }
 
-  def createPersistentSequential(client: ZkClient, path: String, data: Object, acls: java.util.List[ACL]): String = {
-    checkNamespace(client)
+  def createPersistentSequential(path: String, data: Object, acls: java.util.List[ACL]): String = {
+    checkNamespace()
     client.createPersistentSequential(path, data, acls)
   }
 }

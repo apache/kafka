@@ -81,7 +81,7 @@ public class SelectorTest {
 
         // disconnect
         this.server.closeConnections();
-        while (!selector.disconnected().contains(node))
+        while (!selector.disconnected().containsKey(node))
             selector.poll(1000L);
 
         // reconnect and do another request
@@ -127,8 +127,10 @@ public class SelectorTest {
         ServerSocket nonListeningSocket = new ServerSocket(0);
         int nonListeningPort = nonListeningSocket.getLocalPort();
         selector.connect(node, new InetSocketAddress("localhost", nonListeningPort), BUFFER_SIZE, BUFFER_SIZE);
-        while (selector.disconnected().contains(node))
+        while (selector.disconnected().containsKey(node)) {
+            assertEquals(ChannelState.NOT_CONNECTED, selector.disconnected().get(node));
             selector.poll(1000L);
+        }
         nonListeningSocket.close();
     }
 
@@ -262,7 +264,8 @@ public class SelectorTest {
         time.sleep(6000); // The max idle time is 5000ms
         selector.poll(0);
 
-        assertTrue("The idle connection should have been closed", selector.disconnected().contains(id));
+        assertTrue("The idle connection should have been closed", selector.disconnected().containsKey(id));
+        assertEquals(ChannelState.EXPIRED, selector.disconnected().get(id));
     }
 
 

@@ -160,9 +160,14 @@ For a detailed description of findbugs bug categories, see http://findbugs.sourc
     </Match>
 
     <Match>
-        <!-- Suppress some minor warnings about machine-generated code for LRU cache
+        <!-- Suppress some minor warnings about machine-generated code for
              benchmarking. -->
-        <Package name="org.apache.kafka.jmh.cache.generated"/>
+        <Or>
+            <Package name="org.apache.kafka.jmh.cache.generated"/>
+            <Package name="org.apache.kafka.jmh.common.generated"/>
+            <Package name="org.apache.kafka.jmh.record.generated"/>
+            <Package name="org.apache.kafka.jmh.producer.generated"/>
+        </Or>
     </Match>
 
     <Match>
@@ -266,13 +271,6 @@ For a detailed description of findbugs bug categories, see http://findbugs.sourc
 
     <Match>
         <!-- TODO: fix this (see KAFKA-4996) -->
-        <Class name="org.apache.kafka.streams.state.internals.Segments"/>
-        <Method name="getOrCreateSegment"/>
-        <Bug pattern="AT_OPERATION_SEQUENCE_ON_CONCURRENT_ABSTRACTION"/>
-    </Match>
-
-    <Match>
-        <!-- TODO: fix this (see KAFKA-4996) -->
         <Or>
             <Package name="org.apache.kafka.streams.state.internals"/>
             <Package name="org.apache.kafka.streams.processor.internals"/>
@@ -288,6 +286,15 @@ For a detailed description of findbugs bug categories, see http://findbugs.sourc
         <Source name="KafkaMetricsReporter.scala"/>
         <Method name="startReporters"/>
         <Bug pattern="JLM_JSR166_UTILCONCURRENT_MONITORENTER"/>
+    </Match>
+
+    <Match>
+        <!-- Ignore spurious warning about imbalanced synchronization on a cached Exception. Some accesses of the
+             variable must occur in synchronized blocks, while some need not, because of the nature of the producer.
+             This seems to throw the static checker off. -->
+        <Package name="org.apache.kafka.clients.producer" />
+        <Source name="TransactionState.java" />
+        <Bug pattern="IS2_INCONSISTENT_SYNC" />
     </Match>
 
     <Match>

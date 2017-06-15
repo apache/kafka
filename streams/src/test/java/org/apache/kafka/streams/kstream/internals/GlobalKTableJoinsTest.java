@@ -52,7 +52,7 @@ public class GlobalKTableJoinsTest {
     @Before
     public void setUp() throws Exception {
         stateDir = TestUtils.tempDirectory();
-        global = builder.globalTable(Serdes.String(), Serdes.String(), globalTopic, "global-store");
+        global = builder.globalTable(Serdes.String(), Serdes.String(), null, globalTopic, "global-store");
         stream = builder.stream(Serdes.String(), Serdes.String(), streamTopic);
         keyValueMapper = new KeyValueMapper<String, String, String>() {
             @Override

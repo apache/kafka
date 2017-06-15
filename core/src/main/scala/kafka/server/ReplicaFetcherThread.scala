@@ -96,7 +96,7 @@ class ReplicaFetcherThread(name: String,
           .format(replica.brokerId, replica.logEndOffset.messageOffset, topicPartition, records.sizeInBytes, partitionData.highWatermark))
 
       // Append the leader's messages to the log
-      replica.log.get.append(records, assignOffsets = false)
+      replica.log.get.appendAsFollower(records)
 
       if (logger.isTraceEnabled)
         trace("Follower %d has replica log end offset %d after appending %d bytes of messages for partition %s"
@@ -112,6 +112,7 @@ class ReplicaFetcherThread(name: String,
         trace(s"Follower ${replica.brokerId} set replica high watermark for partition $topicPartition to $followerHighWatermark")
       if (quota.isThrottled(topicPartition))
         quota.record(records.sizeInBytes)
+      replicaMgr.brokerTopicStats.updateReplicationBytesIn(records.sizeInBytes)
     } catch {
       case e: KafkaStorageException =>
         fatal(s"Disk error while replicating data for $topicPartition", e)
@@ -286,7 +287,7 @@ class ReplicaFetcherThread(name: String,
   override def buildLeaderEpochRequest(allPartitions: Seq[(TopicPartition, PartitionFetchState)]): Map[TopicPartition, Int] = {
     val result = allPartitions
       .filter { case (_, state) => state.isTruncatingLog }
-      .map { case (tp, _) => tp -> epochCache(tp).latestUsedEpoch }.toMap
+      .map { case (tp, _) => tp -> epochCache(tp).latestEpoch }.toMap
 
     debug(s"Build leaderEpoch request $result for broker $sourceBroker")
 
@@ -348,6 +349,7 @@ object ReplicaFetcherThread {
     def isEmpty: Boolean = underlying.fetchData().isEmpty
     def offset(topicPartition: TopicPartition): Long =
       underlying.fetchData().asScala(topicPartition).fetchOffset
+    override def toString = underlying.toString
   }
 
   private[server] class PartitionData(val underlying: FetchResponse.PartitionData) extends AbstractFetcherThread.PartitionData {
@@ -366,5 +368,7 @@ object ReplicaFetcherThread {
       case Errors.NONE => None
       case e => Some(e.exception)
     }
+
+    override def toString = underlying.toString
   }
 }

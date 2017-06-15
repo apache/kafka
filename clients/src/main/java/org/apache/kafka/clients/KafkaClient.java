@@ -86,7 +86,17 @@ public interface KafkaClient extends Closeable {
     List<ClientResponse> poll(long timeout, long now);
 
     /**
+     * Diconnects the connection to a particular node, if there is one.
+     * Any pending ClientRequests for this connection will receive disconnections.
+     *
+     * @param nodeId The id of the node
+     */
+    void disconnect(String nodeId);
+
+    /**
      * Closes the connection to a particular node (if there is one).
+     * All requests on the connection will be cleared.  ClientRequest callbacks will not be invoked
+     * for the cleared requests, nor will they be returned from poll().
      *
      * @param nodeId The id of the node
      */
@@ -123,6 +133,11 @@ public interface KafkaClient extends Closeable {
      * Return true if there is at least one in-flight request for a particular node and false otherwise.
      */
     boolean hasInFlightRequests(String nodeId);
+
+    /**
+     * Return true if there is at least one node with connection in ready state and false otherwise.
+     */
+    boolean hasReadyNodes();
 
     /**
      * Wake up the client if it is currently blocked waiting for I/O

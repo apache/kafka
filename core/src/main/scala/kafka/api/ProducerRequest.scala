@@ -130,14 +130,14 @@ case class ProducerRequest(versionId: Short = ProducerRequest.CurrentVersion,
 
   override def handleError(e: Throwable, requestChannel: RequestChannel, request: RequestChannel.Request): Unit = {
     if (request.body[org.apache.kafka.common.requests.ProduceRequest].acks == 0) {
-        requestChannel.closeConnection(request.processor, request)
+        requestChannel.sendResponse(new RequestChannel.Response(request, None, RequestChannel.CloseConnectionAction))
     }
     else {
       val producerResponseStatus = data.map { case (topicAndPartition, _) =>
         (topicAndPartition, ProducerResponseStatus(Errors.forException(e), -1l, Message.NoTimestamp))
       }
       val errorResponse = ProducerResponse(correlationId, producerResponseStatus)
-      requestChannel.sendResponse(new Response(request, new RequestOrResponseSend(request.connectionId, errorResponse)))
+      requestChannel.sendResponse(Response(request, new RequestOrResponseSend(request.connectionId, errorResponse)))
     }
   }
 

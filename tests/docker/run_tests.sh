@@ -29,7 +29,7 @@ KAFKA_SRC=`dirname ${TESTS_DIR}`
 KAFKA_VERSION=$(grep "version=.*" ${KAFKA_SRC}/gradle.properties | cut -f 2 -d =)
 JDK_INFO="openjdk8"
 KAFKA_IMAGE=${KAFKA_IMAGE:-kafkadev/kafka-image:${KAFKA_VERSION}}_${JDK_INFO}
-export KAFKA_NUM_CONTAINERS=12
+export KAFKA_NUM_CONTAINERS=13
 
 chmod 600 ${SCRIPT_DIR}/ssh/id_rsa
 cd ${KAFKA_SRC}

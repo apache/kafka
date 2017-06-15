@@ -17,6 +17,8 @@
 
 package kafka.serializer
 
+import java.nio.ByteBuffer
+
 import kafka.utils.VerifiableProperties
 
 /**
@@ -48,5 +50,21 @@ class StringDecoder(props: VerifiableProperties = null) extends Decoder[String] 
 
   def fromBytes(bytes: Array[Byte]): String = {
     new String(bytes, encoding)
+  }
+}
+
+/**
+  * The string decoder translates bytes into strings. It uses UTF8 by default but takes
+  * an optional property serializer.encoding to control this.
+  */
+class LongDecoder(props: VerifiableProperties = null) extends Decoder[Long] {
+  val encoding =
+    if(props == null)
+      "UTF8"
+    else
+      props.getString("serializer.encoding", "UTF8")
+
+  def fromBytes(bytes: Array[Byte]): Long = {
+    ByteBuffer.wrap(bytes).getLong
   }
 }

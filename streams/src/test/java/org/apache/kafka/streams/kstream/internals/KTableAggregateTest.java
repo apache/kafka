@@ -212,18 +212,7 @@ public class KTableAggregateTest {
                 ), proc.processed);
     }
 
-    @Test
-    public void testCount() throws IOException {
-        final KStreamBuilder builder = new KStreamBuilder();
-        final String input = "count-test-input";
-        final MockProcessorSupplier<String, Long> proc = new MockProcessorSupplier<>();
-
-        builder.table(Serdes.String(), Serdes.String(), input, "anyStoreName")
-                .groupBy(MockKeyValueMapper.<String, String>SelectValueKeyValueMapper(), stringSerde, stringSerde)
-                .count("count")
-                .toStream()
-                .process(proc);
-
+    private void testCountHelper(final KStreamBuilder builder, final String input, final MockProcessorSupplier<String, Long> proc) throws IOException {
         driver = new KStreamTestDriver(builder, stateDir);
 
         driver.process(input, "A", "green");
@@ -240,12 +229,42 @@ public class KTableAggregateTest {
 
 
         assertEquals(Utils.mkList(
-                 "green:1",
-                 "green:2",
-                 "green:1", "blue:1",
-                 "yellow:1",
-                 "green:2"
-                 ), proc.processed);
+            "green:1",
+            "green:2",
+            "green:1", "blue:1",
+            "yellow:1",
+            "green:2"
+        ), proc.processed);
+    }
+
+    @Test
+    public void testCount() throws IOException {
+        final KStreamBuilder builder = new KStreamBuilder();
+        final String input = "count-test-input";
+        final MockProcessorSupplier<String, Long> proc = new MockProcessorSupplier<>();
+
+        builder.table(Serdes.String(), Serdes.String(), input, "anyStoreName")
+                .groupBy(MockKeyValueMapper.<String, String>SelectValueKeyValueMapper(), stringSerde, stringSerde)
+                .count("count")
+                .toStream()
+                .process(proc);
+
+        testCountHelper(builder, input, proc);
+    }
+
+    @Test
+    public void testCountWithInternalStore() throws IOException {
+        final KStreamBuilder builder = new KStreamBuilder();
+        final String input = "count-test-input";
+        final MockProcessorSupplier<String, Long> proc = new MockProcessorSupplier<>();
+
+        builder.table(Serdes.String(), Serdes.String(), input, "anyStoreName")
+            .groupBy(MockKeyValueMapper.<String, String>SelectValueKeyValueMapper(), stringSerde, stringSerde)
+            .count()
+            .toStream()
+            .process(proc);
+
+        testCountHelper(builder, input, proc);
     }
 
     @Test

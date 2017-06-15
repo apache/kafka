@@ -22,6 +22,7 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Utils;
@@ -46,65 +47,77 @@ public class RecordCollectorImpl implements RecordCollector {
     private volatile Exception sendException;
 
 
-    public RecordCollectorImpl(Producer<byte[], byte[]> producer, String streamTaskId) {
+    public RecordCollectorImpl(final Producer<byte[], byte[]> producer, final String streamTaskId) {
         this.producer = producer;
-        this.offsets = new HashMap<>();
-        this.logPrefix = String.format("task [%s]", streamTaskId);
+        offsets = new HashMap<>();
+        logPrefix = String.format("task [%s]", streamTaskId);
     }
 
     @Override
     public <K, V> void send(final String topic,
-                            K key,
-                            V value,
-                            Integer partition,
-                            Long timestamp,
-                            Serializer<K> keySerializer,
-                            Serializer<V> valueSerializer) {
-        send(topic, key, value, partition, timestamp, keySerializer, valueSerializer, null);
+                            final K key,
+                            final V value,
+                            final Long timestamp,
+                            final Serializer<K> keySerializer,
+                            final Serializer<V> valueSerializer,
+                            final StreamPartitioner<? super K, ? super V> partitioner) {
+        Integer partition = null;
+
+        if (partitioner != null) {
+            final List<PartitionInfo> partitions = producer.partitionsFor(topic);
+            if (partitions.size() > 0) {
+                partition = partitioner.partition(key, value, partitions.size());
+            } else {
+                throw new StreamsException("Could not get partition information for topic '" + topic + "'." +
+                    " This can happen if the topic does not exist.");
+            }
+        }
+
+        send(topic, key, value, partition, timestamp, keySerializer, valueSerializer);
     }
 
     @Override
     public <K, V> void  send(final String topic,
-                             K key,
-                             V value,
-                             Integer partition,
-                             Long timestamp,
-                             Serializer<K> keySerializer,
-                             Serializer<V> valueSerializer,
-                             StreamPartitioner<? super K, ? super V> partitioner) {
+                             final K key,
+                             final V value,
+                             final Integer partition,
+                             final Long timestamp,
+                             final Serializer<K> keySerializer,
+                             final Serializer<V> valueSerializer) {
         checkForException();
-        byte[] keyBytes = keySerializer.serialize(topic, key);
-        byte[] valBytes = valueSerializer.serialize(topic, value);
-        if (partition == null && partitioner != null) {
-            List<PartitionInfo> partitions = this.producer.partitionsFor(topic);
-            if (partitions != null && partitions.size() > 0)
-                partition = partitioner.partition(key, value, partitions.size());
-        }
+        final byte[] keyBytes = keySerializer.serialize(topic, key);
+        final byte[] valBytes = valueSerializer.serialize(topic, value);
 
-        ProducerRecord<byte[], byte[]> serializedRecord =
+        final ProducerRecord<byte[], byte[]> serializedRecord =
                 new ProducerRecord<>(topic, partition, timestamp, keyBytes, valBytes);
 
-        for (int attempt = 1; attempt <= MAX_SEND_ATTEMPTS; attempt++) {
+        // counting from 1 to make check further down more natural
+        // -> `if (attempt == MAX_SEND_ATTEMPTS)`
+        for (int attempt = 1; attempt <= MAX_SEND_ATTEMPTS; ++attempt) {
             try {
-                this.producer.send(serializedRecord, new Callback() {
+                producer.send(serializedRecord, new Callback() {
                     @Override
-                    public void onCompletion(RecordMetadata metadata, Exception exception) {
+                    public void onCompletion(final RecordMetadata metadata, final Exception exception) {
                         if (exception == null) {
                             if (sendException != null) {
                                 return;
                             }
-                            TopicPartition tp = new TopicPartition(metadata.topic(), metadata.partition());
+                            final TopicPartition tp = new TopicPartition(metadata.topic(), metadata.partition());
                             offsets.put(tp, metadata.offset());
                         } else {
                             if (sendException == null) {
                                 sendException = exception;
-                                log.error("{} Error sending record to topic {}. No more offsets will be recorded for this task and the exception will eventually be thrown", logPrefix, topic, exception);
+                                if (sendException instanceof ProducerFencedException) {
+                                    log.error("{} Error sending record to topic {}. No more offsets will be recorded for this task and it will be closed as it is a zombie.", logPrefix, topic, exception);
+                                } else {
+                                    log.error("{} Error sending record to topic {}. No more offsets will be recorded for this task and the exception will eventually be thrown", logPrefix, topic, exception);
+                                }
                             }
                         }
                     }
                 });
                 return;
-            } catch (TimeoutException e) {
+            } catch (final TimeoutException e) {
                 if (attempt == MAX_SEND_ATTEMPTS) {
                     throw new StreamsException(String.format("%s Failed to send record to topic %s after %d attempts", logPrefix, topic, attempt));
                 }
@@ -117,6 +130,9 @@ public class RecordCollectorImpl implements RecordCollector {
 
     private void checkForException() {
         if (sendException != null) {
+            if (sendException instanceof ProducerFencedException) {
+                throw (ProducerFencedException) sendException;
+            }
             throw new StreamsException(String.format("%s exception caught when producing", logPrefix), sendException);
         }
     }
@@ -124,26 +140,25 @@ public class RecordCollectorImpl implements RecordCollector {
     @Override
     public void flush() {
         log.debug("{} Flushing producer", logPrefix);
-        this.producer.flush();
+        producer.flush();
         checkForException();
     }
 
-    /**
-     * Closes this RecordCollector
-     */
     @Override
     public void close() {
+        log.debug("{} Closing producer", logPrefix);
         producer.close();
         checkForException();
     }
 
-    /**
-     * The last ack'd offset from the producer
-     *
-     * @return the map from TopicPartition to offset
-     */
     @Override
     public Map<TopicPartition, Long> offsets() {
-        return this.offsets;
+        return offsets;
     }
+
+    // for testing only
+    Producer<byte[], byte[]> producer() {
+        return producer;
+    }
+
 }

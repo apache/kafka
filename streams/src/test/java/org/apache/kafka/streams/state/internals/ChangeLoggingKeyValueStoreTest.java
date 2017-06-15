@@ -27,6 +27,7 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.test.MockProcessorContext;
 import org.apache.kafka.test.NoOpRecordCollector;
 import org.apache.kafka.test.TestUtils;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -42,6 +43,7 @@ import static org.junit.Assert.assertFalse;
 
 public class ChangeLoggingKeyValueStoreTest {
 
+    private MockProcessorContext context;
     private final InMemoryKeyValueStore<Bytes, byte[]> inner = new InMemoryKeyValueStore<>("kv", Serdes.Bytes(), Serdes.ByteArray());
     private final Serde<String> keySerde = Serdes.String();
     private final Serde<String> valueSerde = Serdes.String();
@@ -69,13 +71,20 @@ public class ChangeLoggingKeyValueStoreTest {
                 sent.put(key, value);
             }
         };
-        final MockProcessorContext context = new MockProcessorContext(TestUtils.tempDirectory(),
-                                                                      Serdes.String(),
-                                                                      Serdes.Long(),
-                                                                      collector,
-                                                                      new ThreadCache("testCache", 0, new MockStreamsMetrics(new Metrics())));
+        context = new MockProcessorContext(
+            TestUtils.tempDirectory(),
+            Serdes.String(),
+            Serdes.Long(),
+            collector,
+            new ThreadCache("testCache", 0, new MockStreamsMetrics(new Metrics())));
         context.setTime(0);
         store.init(context, store);
+    }
+
+    @After
+    public void after() {
+        context.close();
+        store.close();
     }
 
     @Test

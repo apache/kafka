@@ -33,7 +33,7 @@ class SourceNodeRecordDeserializer implements RecordDeserializer {
     public ConsumerRecord<Object, Object> deserialize(final ConsumerRecord<byte[], byte[]> rawRecord) {
         final Object key;
         try {
-            key = sourceNode.deserializeKey(rawRecord.topic(), rawRecord.key());
+            key = sourceNode.deserializeKey(rawRecord.topic(), rawRecord.headers(), rawRecord.key());
         } catch (Exception e) {
             throw new StreamsException(format("Failed to deserialize key for record. topic=%s, partition=%d, offset=%d",
                                               rawRecord.topic(), rawRecord.partition(), rawRecord.offset()), e);
@@ -41,7 +41,7 @@ class SourceNodeRecordDeserializer implements RecordDeserializer {
 
         final Object value;
         try {
-            value = sourceNode.deserializeValue(rawRecord.topic(), rawRecord.value());
+            value = sourceNode.deserializeValue(rawRecord.topic(), rawRecord.headers(), rawRecord.value());
         } catch (Exception e) {
             throw new StreamsException(format("Failed to deserialize value for record. topic=%s, partition=%d, offset=%d",
                                               rawRecord.topic(), rawRecord.partition(), rawRecord.offset()), e);

@@ -77,10 +77,10 @@ public class SslSelectorTest extends SelectorTest {
     public void testRenegotiation() throws Exception {
         ChannelBuilder channelBuilder = new SslChannelBuilder(Mode.CLIENT) {
             @Override
-            protected SslTransportLayer buildTransportLayer(SslFactory sslFactory, String id, SelectionKey key) throws IOException {
+            protected SslTransportLayer buildTransportLayer(SslFactory sslFactory, String id, SelectionKey key, String host) throws IOException {
                 SocketChannel socketChannel = (SocketChannel) key.channel();
                 SslTransportLayer transportLayer = new SslTransportLayer(id, key,
-                    sslFactory.createSslEngine(socketChannel.socket().getInetAddress().getHostName(), socketChannel.socket().getPort()),
+                    sslFactory.createSslEngine(host, socketChannel.socket().getPort()),
                     true);
                 transportLayer.startHandshake();
                 return transportLayer;
@@ -154,7 +154,7 @@ public class SslSelectorTest extends SelectorTest {
         List<String> disconnected = new ArrayList<>();
         while (!disconnected.contains(node) && System.currentTimeMillis() < expiryTime) {
             selector.poll(10);
-            disconnected.addAll(selector.disconnected());
+            disconnected.addAll(selector.disconnected().keySet());
         }
         assertTrue("Renegotiation should cause disconnection", disconnected.contains(node));
 

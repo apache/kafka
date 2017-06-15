@@ -17,6 +17,7 @@
 
 package kafka.utils
 
+import kafka.common.TopicAndPartition
 import kafka.zk.ZooKeeperTestHarness
 import org.junit.Assert._
 import org.junit.Test
@@ -72,5 +73,15 @@ class ZkUtilsTest extends ZooKeeperTestHarness {
   def testClusterIdentifierJsonParsing() {
     val clusterId = "test"
     assertEquals(zkUtils.ClusterId.fromJson(zkUtils.ClusterId.toJson(clusterId)), clusterId)
+  }
+
+  @Test
+  def testGetAllPartitionsTopicWithoutPartitions() {
+    val topic = "testtopic"
+    // Create a regular topic and a topic without any partitions
+    zkUtils.createPersistentPath(ZkUtils.getTopicPartitionPath(topic, 0))
+    zkUtils.createPersistentPath(ZkUtils.getTopicPath("nopartitions"))
+
+    assertEquals(Set(TopicAndPartition(topic, 0)), zkUtils.getAllPartitions())
   }
 }

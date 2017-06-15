@@ -150,6 +150,16 @@ class StreamsSmokeTestBaseService(StreamsTestBaseService):
                                                           command)
 
 
+class StreamsEosTestBaseService(StreamsTestBaseService):
+    """Base class for Streams EOS Test services providing some common settings and functionality"""
+
+    def __init__(self, test_context, kafka, command):
+        super(StreamsEosTestBaseService, self).__init__(test_context,
+                                                        kafka,
+                                                        "org.apache.kafka.streams.tests.StreamsEosTest",
+                                                        command)
+
+
 class StreamsSmokeTestDriverService(StreamsSmokeTestBaseService):
     def __init__(self, test_context, kafka):
         super(StreamsSmokeTestDriverService, self).__init__(test_context, kafka, "run")
@@ -160,14 +170,29 @@ class StreamsSmokeTestJobRunnerService(StreamsSmokeTestBaseService):
         super(StreamsSmokeTestJobRunnerService, self).__init__(test_context, kafka, "process")
 
 
+class StreamsEosTestDriverService(StreamsEosTestBaseService):
+    def __init__(self, test_context, kafka):
+        super(StreamsEosTestDriverService, self).__init__(test_context, kafka, "run")
+
+
+class StreamsEosTestJobRunnerService(StreamsEosTestBaseService):
+    def __init__(self, test_context, kafka):
+        super(StreamsEosTestJobRunnerService, self).__init__(test_context, kafka, "process")
+
+
+class StreamsEosTestVerifyRunnerService(StreamsEosTestBaseService):
+    def __init__(self, test_context, kafka):
+        super(StreamsEosTestVerifyRunnerService, self).__init__(test_context, kafka, "verify")
+
+
 class StreamsSmokeTestShutdownDeadlockService(StreamsSmokeTestBaseService):
     def __init__(self, test_context, kafka):
         super(StreamsSmokeTestShutdownDeadlockService, self).__init__(test_context, kafka, "close-deadlock-test")
 
 
 class StreamsBrokerCompatibilityService(StreamsTestBaseService):
-    def __init__(self, test_context, kafka):
+    def __init__(self, test_context, kafka, eosEnabled):
         super(StreamsBrokerCompatibilityService, self).__init__(test_context,
                                                                 kafka,
                                                                 "org.apache.kafka.streams.tests.BrokerCompatibilityTest",
-                                                                "dummy")
+                                                                eosEnabled)

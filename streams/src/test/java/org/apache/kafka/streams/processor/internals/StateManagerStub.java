@@ -26,25 +26,20 @@ import java.io.IOException;
 import java.util.Map;
 
 public class StateManagerStub implements StateManager {
+
     @Override
     public File baseDir() {
         return null;
     }
 
     @Override
-    public void register(final StateStore store, final boolean loggingEnabled, final StateRestoreCallback stateRestoreCallback) {
-
-    }
+    public void register(final StateStore store, final boolean loggingEnabled, final StateRestoreCallback stateRestoreCallback) {}
 
     @Override
-    public void flush(final InternalProcessorContext context) {
-
-    }
+    public void flush() {}
 
     @Override
-    public void close(final Map<TopicPartition, Long> offsets) throws IOException {
-
-    }
+    public void close(final Map<TopicPartition, Long> offsets) throws IOException {}
 
     @Override
     public StateStore getGlobalStore(final String name) {
@@ -62,7 +57,6 @@ public class StateManagerStub implements StateManager {
     }
 
     @Override
-    public void checkpoint(final Map<TopicPartition, Long> offsets) {
+    public void checkpoint(final Map<TopicPartition, Long> offsets) {}
 
-    }
 }

@@ -16,11 +16,21 @@
   */
 package kafka.api
 
-import kafka.utils.JaasTestUtils
+import kafka.utils.{JaasTestUtils, TestUtils}
+import org.junit.Test
 
 class SaslPlainSslEndToEndAuthorizationTest extends SaslEndToEndAuthorizationTest {
   override protected def kafkaClientSaslMechanism = "PLAIN"
   override protected def kafkaServerSaslMechanisms = List("PLAIN")
   override val clientPrincipal = JaasTestUtils.KafkaPlainUser
   override val kafkaPrincipal = JaasTestUtils.KafkaPlainAdmin
+
+  /**
+   * Checks that secure paths created by broker and acl paths created by AclCommand
+   * have expected ACLs.
+   */
+  @Test
+  def testAcls() {
+    TestUtils.verifySecureZkAcls(zkUtils, 1)
+  }
 }

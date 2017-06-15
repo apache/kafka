@@ -83,8 +83,9 @@ class WorkerSinkTask extends WorkerTask {
                           Converter keyConverter,
                           Converter valueConverter,
                           TransformationChain<SinkRecord> transformationChain,
+                          ClassLoader loader,
                           Time time) {
-        super(id, statusListener, initialState);
+        super(id, statusListener, initialState, loader);
 
         this.workerConfig = workerConfig;
         this.task = task;
@@ -154,7 +155,6 @@ class WorkerSinkTask extends WorkerTask {
 
     protected void iteration() {
         final long offsetCommitIntervalMs = workerConfig.getLong(WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_CONFIG);
-        final long commitTimeoutMs = commitStarted + workerConfig.getLong(WorkerConfig.OFFSET_COMMIT_TIMEOUT_MS_CONFIG);
 
         try {
             long now = time.milliseconds();
@@ -165,6 +165,8 @@ class WorkerSinkTask extends WorkerTask {
                 nextCommit += offsetCommitIntervalMs;
                 context.clearCommitRequest();
             }
+
+            final long commitTimeoutMs = commitStarted + workerConfig.getLong(WorkerConfig.OFFSET_COMMIT_TIMEOUT_MS_CONFIG);
 
             // Check for timed out commits
             if (committing && now >= commitTimeoutMs) {
@@ -247,6 +249,11 @@ class WorkerSinkTask extends WorkerTask {
 
         convertMessages(msgs);
         deliverMessages();
+    }
+
+    // Visible for testing
+    boolean isCommitting() {
+        return committing;
     }
 
     private void doCommitSync(Map<TopicPartition, OffsetAndMetadata> offsets, int seqno) {

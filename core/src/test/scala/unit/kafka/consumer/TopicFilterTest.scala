@@ -18,11 +18,12 @@
 package kafka.consumer
 
 
+import org.apache.kafka.common.internals.Topic
 import org.junit.Assert._
 import org.scalatest.junit.JUnitSuite
 import org.junit.Test
-import kafka.common.Topic
 
+@deprecated("This test has been deprecated and will be removed in a future release.", "0.11.0.0")
 class TopicFilterTest extends JUnitSuite {
 
   @Test
@@ -36,8 +37,8 @@ class TopicFilterTest extends JUnitSuite {
 
     val topicFilter2 = Whitelist(".+")
     assertTrue(topicFilter2.isTopicAllowed("alltopics", excludeInternalTopics = true))
-    assertFalse(topicFilter2.isTopicAllowed(Topic.GroupMetadataTopicName, excludeInternalTopics = true))
-    assertTrue(topicFilter2.isTopicAllowed(Topic.GroupMetadataTopicName, excludeInternalTopics = false))
+    assertFalse(topicFilter2.isTopicAllowed(Topic.GROUP_METADATA_TOPIC_NAME, excludeInternalTopics = true))
+    assertTrue(topicFilter2.isTopicAllowed(Topic.GROUP_METADATA_TOPIC_NAME, excludeInternalTopics = false))
 
     val topicFilter3 = Whitelist("white_listed-topic.+")
     assertTrue(topicFilter3.isTopicAllowed("white_listed-topic1", excludeInternalTopics = true))
@@ -45,7 +46,7 @@ class TopicFilterTest extends JUnitSuite {
 
     val topicFilter4 = Whitelist("test-(?!bad\\b)[\\w]+")
     assertTrue(topicFilter4.isTopicAllowed("test-good", excludeInternalTopics = true))
-    assertFalse(topicFilter4.isTopicAllowed("test-bad", excludeInternalTopics = true))    
+    assertFalse(topicFilter4.isTopicAllowed("test-bad", excludeInternalTopics = true))
   }
 
   @Test
@@ -56,8 +57,8 @@ class TopicFilterTest extends JUnitSuite {
     assertFalse(topicFilter1.isTopicAllowed("black1", excludeInternalTopics = true))
     assertFalse(topicFilter1.isTopicAllowed("black1", excludeInternalTopics = false))
 
-    assertFalse(topicFilter1.isTopicAllowed(Topic.GroupMetadataTopicName, excludeInternalTopics = true))
-    assertTrue(topicFilter1.isTopicAllowed(Topic.GroupMetadataTopicName, excludeInternalTopics = false))
+    assertFalse(topicFilter1.isTopicAllowed(Topic.GROUP_METADATA_TOPIC_NAME, excludeInternalTopics = true))
+    assertTrue(topicFilter1.isTopicAllowed(Topic.GROUP_METADATA_TOPIC_NAME, excludeInternalTopics = false))
   }
 
   @Test
@@ -80,5 +81,5 @@ class TopicFilterTest extends JUnitSuite {
     assertEquals("-\\\\u001f-", getTopicCountMapKey("-\\u001f-"))
     assertEquals("-\\\\u007f-", getTopicCountMapKey("-\\u007f-"))
     assertEquals("-\\\\u009f-", getTopicCountMapKey("-\\u009f-"))
-  }    
+  }
 }

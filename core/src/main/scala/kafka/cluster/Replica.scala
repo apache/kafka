@@ -135,6 +135,7 @@ class Replica(val brokerId: Int,
   def highWatermark_=(newHighWatermark: LogOffsetMetadata) {
     if (isLocal) {
       highWatermarkMetadata = newHighWatermark
+      log.foreach(_.onHighWatermarkIncremented(newHighWatermark.messageOffset))
       trace(s"Setting high watermark for replica $brokerId partition $topicPartition to [$newHighWatermark]")
     } else {
       throw new KafkaException(s"Should not set high watermark on partition $topicPartition's non-local replica $brokerId")
@@ -142,6 +143,23 @@ class Replica(val brokerId: Int,
   }
 
   def highWatermark = highWatermarkMetadata
+
+  /**
+   * The last stable offset (LSO) is defined as the first offset such that all lower offsets have been "decided."
+   * Non-transactional messages are considered decided immediately, but transactional messages are only decided when
+   * the corresponding COMMIT or ABORT marker is written. This implies that the last stable offset will be equal
+   * to the high watermark if there are no transactional messages in the log. Note also that the LSO cannot advance
+   * beyond the high watermark.
+   */
+  def lastStableOffset: LogOffsetMetadata = {
+    log.map { log =>
+      log.firstUnstableOffset match {
+        case Some(offsetMetadata) if offsetMetadata.messageOffset < highWatermark.messageOffset => offsetMetadata
+        case _ => highWatermark
+      }
+    }.getOrElse(throw new KafkaException(s"Cannot fetch last stable offset on partition $topicPartition's " +
+      s"non-local replica $brokerId"))
+  }
 
   def convertHWToLocalOffsetMetadata() = {
     if (isLocal) {
@@ -165,7 +183,10 @@ class Replica(val brokerId: Int,
     replicaString.append("; Partition: " + partition.partitionId)
     replicaString.append("; isLocal: " + isLocal)
     replicaString.append("; lastCaughtUpTimeMs: " + lastCaughtUpTimeMs)
-    if (isLocal) replicaString.append("; Highwatermark: " + highWatermark)
+    if (isLocal) {
+      replicaString.append("; Highwatermark: " + highWatermark)
+      replicaString.append("; LastStableOffset: " + lastStableOffset)
+    }
     replicaString.toString
   }
 }

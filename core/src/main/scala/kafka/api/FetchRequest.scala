@@ -37,6 +37,7 @@ import scala.util.Random
 
 case class PartitionFetchInfo(offset: Long, fetchSize: Int)
 
+@deprecated("This object has been deprecated and will be removed in a future release.", "0.11.0.0")
 object FetchRequest {
 
   private val random = new Random
@@ -90,6 +91,7 @@ object FetchRequest {
 
 }
 
+@deprecated("This class has been deprecated and will be removed in a future release.", "0.11.0.0")
 case class FetchRequest(versionId: Short = FetchRequest.CurrentVersion,
                         correlationId: Int = FetchRequest.DefaultCorrelationId,
                         clientId: String = ConsumerConfig.DefaultClientId,
@@ -208,7 +210,7 @@ case class FetchRequest(versionId: Short = FetchRequest.CurrentVersion,
     }
     val errorResponse = new JFetchResponse(responseData, 0)
     // Magic value does not matter here because the message set is empty
-    requestChannel.sendResponse(new RequestChannel.Response(request, errorResponse))
+    requestChannel.sendResponse(RequestChannel.Response(request, errorResponse))
   }
 
   override def describe(details: Boolean): String = {
@@ -227,6 +229,7 @@ case class FetchRequest(versionId: Short = FetchRequest.CurrentVersion,
   }
 }
 
+@deprecated("This class has been deprecated and will be removed in a future release.", "0.11.0.0")
 @nonthreadsafe
 class FetchRequestBuilder() {
   private val correlationId = new AtomicInteger(0)

@@ -23,7 +23,10 @@ import kafka.utils.Logging
 import kafka.utils.ZkUtils
 
 import scala.collection._
+import scala.collection.JavaConverters._
 import kafka.admin.AdminUtils
+import org.apache.kafka.common.config.types.Password
+import org.apache.kafka.common.security.scram.ScramMechanism
 import org.apache.kafka.common.utils.Time
 
 /**
@@ -142,7 +145,10 @@ class DynamicConfigManager(private val zkUtils: ZkUtils,
       val fullSanitizedEntityName = entityPath.substring(index + 1)
 
       val entityConfig = AdminUtils.fetchEntityConfig(zkUtils, rootEntityType, fullSanitizedEntityName)
-      logger.info(s"Processing override for entityPath: $entityPath with config: $entityConfig")
+      val loggableConfig = entityConfig.asScala.map {
+        case (k, v) => (k, if (ScramMechanism.isScram(k)) Password.HIDDEN else v)
+      }
+      logger.info(s"Processing override for entityPath: $entityPath with config: $loggableConfig")
       configHandlers(rootEntityType).processConfigChanges(fullSanitizedEntityName, entityConfig)
 
     }

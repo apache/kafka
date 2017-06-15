@@ -40,12 +40,19 @@ public class DeleteTopicsResponse extends AbstractResponse {
      * NOT_CONTROLLER(41)
      */
     private final Map<String, Errors> errors;
+    private final int throttleTimeMs;
 
     public DeleteTopicsResponse(Map<String, Errors> errors) {
+        this(DEFAULT_THROTTLE_TIME, errors);
+    }
+
+    public DeleteTopicsResponse(int throttleTimeMs, Map<String, Errors> errors) {
+        this.throttleTimeMs = throttleTimeMs;
         this.errors = errors;
     }
 
     public DeleteTopicsResponse(Struct struct) {
+        this.throttleTimeMs = struct.hasField(THROTTLE_TIME_KEY_NAME) ? struct.getInt(THROTTLE_TIME_KEY_NAME) : DEFAULT_THROTTLE_TIME;
         Object[] topicErrorCodesStructs = struct.getArray(TOPIC_ERROR_CODES_KEY_NAME);
         Map<String, Errors> errors = new HashMap<>();
         for (Object topicErrorCodeStructObj : topicErrorCodesStructs) {
@@ -61,6 +68,8 @@ public class DeleteTopicsResponse extends AbstractResponse {
     @Override
     protected Struct toStruct(short version) {
         Struct struct = new Struct(ApiKeys.DELETE_TOPICS.responseSchema(version));
+        if (struct.hasField(THROTTLE_TIME_KEY_NAME))
+            struct.set(THROTTLE_TIME_KEY_NAME, throttleTimeMs);
         List<Struct> topicErrorCodeStructs = new ArrayList<>(errors.size());
         for (Map.Entry<String, Errors> topicError : errors.entrySet()) {
             Struct topicErrorCodeStruct = struct.instance(TOPIC_ERROR_CODES_KEY_NAME);
@@ -70,6 +79,10 @@ public class DeleteTopicsResponse extends AbstractResponse {
         }
         struct.set(TOPIC_ERROR_CODES_KEY_NAME, topicErrorCodeStructs.toArray());
         return struct;
+    }
+
+    public int throttleTimeMs() {
+        return throttleTimeMs;
     }
 
     public Map<String, Errors> errors() {

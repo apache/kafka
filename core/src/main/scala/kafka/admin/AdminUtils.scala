@@ -17,7 +17,6 @@
 
 package kafka.admin
 
-import kafka.common._
 import kafka.cluster.Broker
 import kafka.log.LogConfig
 import kafka.server.{ConfigEntityName, ConfigType, DynamicConfig}
@@ -26,6 +25,7 @@ import kafka.utils.ZkUtils._
 import java.util.Random
 import java.util.Properties
 
+import kafka.common.TopicAlreadyMarkedForDeletionException
 import org.apache.kafka.common.Node
 import org.apache.kafka.common.errors.{InvalidPartitionsException, InvalidReplicaAssignmentException, InvalidReplicationFactorException, InvalidTopicException, LeaderNotAvailableException, ReplicaNotAvailableException, TopicExistsException, UnknownTopicOrPartitionException}
 import org.apache.kafka.common.network.ListenerName
@@ -39,12 +39,33 @@ import scala.collection.mutable
 import collection.Map
 import collection.Set
 import org.I0Itec.zkclient.exception.ZkNodeExistsException
+import org.apache.kafka.common.internals.Topic
 
 trait AdminUtilities {
   def changeTopicConfig(zkUtils: ZkUtils, topic: String, configs: Properties)
   def changeClientIdConfig(zkUtils: ZkUtils, clientId: String, configs: Properties)
   def changeUserOrUserClientIdConfig(zkUtils: ZkUtils, sanitizedEntityName: String, configs: Properties)
   def changeBrokerConfig(zkUtils: ZkUtils, brokerIds: Seq[Int], configs: Properties)
+
+  def changeConfigs(zkUtils: ZkUtils, entityType: String, entityName: String, configs: Properties): Unit = {
+
+    def parseBroker(broker: String): Int = {
+      try broker.toInt
+      catch {
+        case _: NumberFormatException =>
+          throw new IllegalArgumentException(s"Error parsing broker $broker. The broker's Entity Name must be a single integer value")
+      }
+    }
+
+    entityType match {
+      case ConfigType.Topic => changeTopicConfig(zkUtils, entityName, configs)
+      case ConfigType.Client => changeClientIdConfig(zkUtils, entityName, configs)
+      case ConfigType.User => changeUserOrUserClientIdConfig(zkUtils, entityName, configs)
+      case ConfigType.Broker => changeBrokerConfig(zkUtils, Seq(parseBroker(entityName)), configs)
+      case _ => throw new IllegalArgumentException(s"$entityType is not a known entityType. Should be one of ${ConfigType.Topic}, ${ConfigType.Client}, ${ConfigType.Broker}")
+    }
+  }
+
   def fetchEntityConfig(zkUtils: ZkUtils,entityType: String, entityName: String): Properties
 }
 
@@ -331,6 +352,7 @@ object AdminUtils extends Logging with AdminUtilities {
       }
     }
 
+  @deprecated("This method has been deprecated and will be removed in a future release.", "0.11.0.0")
   def isConsumerGroupActive(zkUtils: ZkUtils, group: String) = {
     zkUtils.getConsumersInGroup(group).nonEmpty
   }
@@ -342,6 +364,7 @@ object AdminUtils extends Logging with AdminUtilities {
    * @param group Consumer group
    * @return whether or not we deleted the consumer group information
    */
+  @deprecated("This method has been deprecated and will be removed in a future release.", "0.11.0.0")
   def deleteConsumerGroupInZK(zkUtils: ZkUtils, group: String) = {
     if (!isConsumerGroupActive(zkUtils, group)) {
       val dir = new ZKGroupDirs(group)
@@ -360,6 +383,7 @@ object AdminUtils extends Logging with AdminUtilities {
    * @param topic Topic of the consumer group information we wish to delete
    * @return whether or not we deleted the consumer group information for the given topic
    */
+  @deprecated("This method has been deprecated and will be removed in a future release.", "0.11.0.0")
   def deleteConsumerGroupInfoForTopicInZK(zkUtils: ZkUtils, group: String, topic: String) = {
     val topics = zkUtils.getTopicsByConsumerGroup(group)
     if (topics == Seq(topic)) {
@@ -380,6 +404,7 @@ object AdminUtils extends Logging with AdminUtilities {
    * @param zkUtils Zookeeper utilities
    * @param topic Topic of the consumer group information we wish to delete
    */
+  @deprecated("This method has been deprecated and will be removed in a future release.", "0.11.0.0")
   def deleteAllConsumerGroupInfoForTopicInZK(zkUtils: ZkUtils, topic: String) {
     val groups = zkUtils.getAllConsumerGroupsForTopic(topic)
     groups.foreach(group => deleteConsumerGroupInfoForTopicInZK(zkUtils, group, topic))
@@ -526,6 +551,14 @@ object AdminUtils extends Logging with AdminUtilities {
     changeEntityConfig(zkUtils, ConfigType.User, sanitizedEntityName, configs)
   }
 
+  def validateTopicConfig(zkUtils: ZkUtils, topic: String, configs: Properties): Unit = {
+    Topic.validate(topic)
+    if (!topicExists(zkUtils, topic))
+      throw new AdminOperationException("Topic \"%s\" does not exist.".format(topic))
+    // remove the topic overrides
+    LogConfig.validate(configs)
+  }
+
   /**
    * Update the config for an existing topic and create a change notification so the change will propagate to other brokers
    *
@@ -536,10 +569,7 @@ object AdminUtils extends Logging with AdminUtilities {
    *
    */
   def changeTopicConfig(zkUtils: ZkUtils, topic: String, configs: Properties) {
-    if (!topicExists(zkUtils, topic))
-      throw new AdminOperationException("Topic \"%s\" does not exist.".format(topic))
-    // remove the topic overrides
-    LogConfig.validate(configs)
+    validateTopicConfig(zkUtils, topic, configs)
     changeEntityConfig(zkUtils, ConfigType.Topic, topic, configs)
   }
 
@@ -567,7 +597,7 @@ object AdminUtils extends Logging with AdminUtilities {
     // create the change notification
     val seqNode = ZkUtils.ConfigChangesPath + "/" + EntityConfigChangeZnodePrefix
     val content = Json.encode(getConfigChangeZnodeData(sanitizedEntityPath))
-    zkUtils.zkClient.createPersistentSequential(seqNode, content)
+    zkUtils.createSequentialPersistentPath(seqNode, content)
   }
 
   def getConfigChangeZnodeData(sanitizedEntityPath: String) : Map[String, Any] = {
@@ -588,7 +618,8 @@ object AdminUtils extends Logging with AdminUtilities {
    */
   def fetchEntityConfig(zkUtils: ZkUtils, rootEntityType: String, sanitizedEntityName: String): Properties = {
     val entityConfigPath = getEntityConfigPath(rootEntityType, sanitizedEntityName)
-    val str: String = zkUtils.zkClient.readData(entityConfigPath, true)
+    // readDataMaybeNull returns Some(null) if the path exists, but there is no data
+    val str: String = zkUtils.readDataMaybeNull(entityConfigPath)._1.orNull
     val props = new Properties()
     if (str != null) {
       Json.parseFull(str) match {

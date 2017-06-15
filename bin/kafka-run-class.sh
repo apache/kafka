@@ -48,7 +48,7 @@ should_include_file() {
 base_dir=$(dirname $0)/..
 
 if [ -z "$SCALA_VERSION" ]; then
-  SCALA_VERSION=2.10.6
+  SCALA_VERSION=2.11.11
 fi
 
 if [ -z "$SCALA_BINARY_VERSION" ]; then
@@ -247,9 +247,9 @@ if [ "x$GC_LOG_ENABLED" = "xtrue" ]; then
   GC_LOG_FILE_NAME=$DAEMON_NAME$GC_FILE_SUFFIX
   JAVA_VERSION=$($JAVA -version 2>&1 | sed -n 's/.* version "\(.*\)"/\1/p')
   if [[ ! "$JAVA_VERSION" < "9" ]] ; then
-    KAFKA_GC_LOG_OPTS+="-Xlog:gc*:$LOG_DIR/$GC_LOG_FILE_NAME:time,tags "
+    KAFKA_GC_LOG_OPTS+="-Xlog:gc*:$LOG_DIR/$GC_LOG_FILE_NAME:time,tags:filecount=10,filesize=102400"
   else
-    KAFKA_GC_LOG_OPTS+="-verbose:gc -Xloggc:$LOG_DIR/$GC_LOG_FILE_NAME -XX:+PrintGCDetails -XX:+PrintGCDateStamps -XX:+PrintGCTimeStamps "
+    KAFKA_GC_LOG_OPTS+="-verbose:gc -Xloggc:$LOG_DIR/$GC_LOG_FILE_NAME -XX:+PrintGCDetails -XX:+PrintGCDateStamps -XX:+PrintGCTimeStamps -XX:+UseGCLogFileRotation -XX:NumberOfGCLogFiles=10 -XX:GCLogFileSize=100M"
   fi
 fi
 

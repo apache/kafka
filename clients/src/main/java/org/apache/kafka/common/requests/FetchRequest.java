@@ -104,24 +104,30 @@ public class FetchRequest extends AbstractRequest {
         private final int minBytes;
         private final int replicaId;
         private final LinkedHashMap<TopicPartition, PartitionData> fetchData;
+        private final IsolationLevel isolationLevel;
         private int maxBytes = DEFAULT_RESPONSE_MAX_BYTES;
 
         public static Builder forConsumer(int maxWait, int minBytes, LinkedHashMap<TopicPartition, PartitionData> fetchData) {
-            return new Builder(null, CONSUMER_REPLICA_ID, maxWait, minBytes, fetchData);
+            return new Builder(null, CONSUMER_REPLICA_ID, maxWait, minBytes, fetchData, IsolationLevel.READ_UNCOMMITTED);
+        }
+
+        public static Builder forConsumer(int maxWait, int minBytes, LinkedHashMap<TopicPartition, PartitionData> fetchData, IsolationLevel isolationLevel) {
+            return new Builder(null, CONSUMER_REPLICA_ID, maxWait, minBytes, fetchData, isolationLevel);
         }
 
         public static Builder forReplica(short desiredVersion, int replicaId, int maxWait, int minBytes,
                                          LinkedHashMap<TopicPartition, PartitionData> fetchData) {
-            return new Builder(desiredVersion, replicaId, maxWait, minBytes, fetchData);
+            return new Builder(desiredVersion, replicaId, maxWait, minBytes, fetchData, IsolationLevel.READ_UNCOMMITTED);
         }
 
         private Builder(Short desiredVersion, int replicaId, int maxWait, int minBytes,
-                        LinkedHashMap<TopicPartition, PartitionData> fetchData) {
+                        LinkedHashMap<TopicPartition, PartitionData> fetchData, IsolationLevel isolationLevel) {
             super(ApiKeys.FETCH, desiredVersion);
             this.replicaId = replicaId;
             this.maxWait = maxWait;
             this.minBytes = minBytes;
             this.fetchData = fetchData;
+            this.isolationLevel = isolationLevel;
         }
 
         public LinkedHashMap<TopicPartition, PartitionData> fetchData() {
@@ -139,13 +145,13 @@ public class FetchRequest extends AbstractRequest {
                 maxBytes = DEFAULT_RESPONSE_MAX_BYTES;
             }
 
-            return new FetchRequest(version, replicaId, maxWait, minBytes, maxBytes, fetchData);
+            return new FetchRequest(version, replicaId, maxWait, minBytes, maxBytes, fetchData, isolationLevel);
         }
 
         @Override
         public String toString() {
             StringBuilder bld = new StringBuilder();
-            bld.append("(type:FetchRequest").
+            bld.append("(type=FetchRequest").
                     append(", replicaId=").append(replicaId).
                     append(", maxWait=").append(maxWait).
                     append(", minBytes=").append(minBytes).
@@ -157,14 +163,14 @@ public class FetchRequest extends AbstractRequest {
     }
 
     private FetchRequest(short version, int replicaId, int maxWait, int minBytes, int maxBytes,
-                         LinkedHashMap<TopicPartition, PartitionData> fetchData) {
+                         LinkedHashMap<TopicPartition, PartitionData> fetchData, IsolationLevel isolationLevel) {
         super(version);
         this.replicaId = replicaId;
         this.maxWait = maxWait;
         this.minBytes = minBytes;
         this.maxBytes = maxBytes;
         this.fetchData = fetchData;
-        this.isolationLevel = IsolationLevel.READ_UNCOMMITTED;
+        this.isolationLevel = isolationLevel;
     }
 
     public FetchRequest(Struct struct, short version) {
@@ -200,7 +206,7 @@ public class FetchRequest extends AbstractRequest {
     }
 
     @Override
-    public AbstractResponse getErrorResponse(Throwable e) {
+    public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         LinkedHashMap<TopicPartition, FetchResponse.PartitionData> responseData = new LinkedHashMap<>();
 
         for (Map.Entry<TopicPartition, PartitionData> entry: fetchData.entrySet()) {
@@ -209,7 +215,7 @@ public class FetchRequest extends AbstractRequest {
                 null, MemoryRecords.EMPTY);
             responseData.put(entry.getKey(), partitionResponse);
         }
-        return new FetchResponse(responseData, 0);
+        return new FetchResponse(responseData, throttleTimeMs);
     }
 
     public int replicaId() {
@@ -255,7 +261,7 @@ public class FetchRequest extends AbstractRequest {
         if (struct.hasField(MAX_BYTES_KEY_NAME))
             struct.set(MAX_BYTES_KEY_NAME, maxBytes);
         if (struct.hasField(ISOLATION_LEVEL_KEY_NAME))
-            struct.set(ISOLATION_LEVEL_KEY_NAME, IsolationLevel.READ_UNCOMMITTED.id());
+            struct.set(ISOLATION_LEVEL_KEY_NAME, isolationLevel.id());
 
         List<Struct> topicArray = new ArrayList<>();
         for (TopicAndPartitionData<PartitionData> topicEntry : topicsData) {

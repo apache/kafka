@@ -27,7 +27,8 @@ public class InMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
     @Override
     protected <K, V> KeyValueStore<K, V> createKeyValueStore(
             ProcessorContext context,
-            Class<K> keyClass, Class<V> valueClass,
+            Class<K> keyClass,
+            Class<V> valueClass,
             boolean useContextSerdes) {
 
         StateStoreSupplier supplier;

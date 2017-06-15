@@ -32,6 +32,7 @@ import org.apache.kafka.common.security.authenticator.LoginManager;
 import org.apache.kafka.common.security.authenticator.SaslClientAuthenticator;
 import org.apache.kafka.common.security.authenticator.SaslServerAuthenticator;
 import org.apache.kafka.common.security.ssl.SslFactory;
+import org.apache.kafka.common.utils.Java;
 import org.apache.kafka.common.protocol.SecurityProtocol;
 import org.apache.kafka.common.KafkaException;
 import org.slf4j.Logger;
@@ -143,7 +144,7 @@ public class SaslChannelBuilder implements ChannelBuilder {
         Class<?> classRef;
         Method getInstanceMethod;
         Method getDefaultRealmMethod;
-        if (System.getProperty("java.vendor").contains("IBM")) {
+        if (Java.isIBMJdk()) {
             classRef = Class.forName("com.ibm.security.krb5.internal.Config");
         } else {
             classRef = Class.forName("sun.security.krb5.Config");

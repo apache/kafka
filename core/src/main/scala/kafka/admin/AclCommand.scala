@@ -19,7 +19,9 @@ package kafka.admin
 
 import joptsimple._
 import kafka.security.auth._
+import kafka.server.KafkaConfig
 import kafka.utils._
+import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.Utils
 
@@ -29,9 +31,10 @@ object AclCommand {
 
   val Newline = scala.util.Properties.lineSeparator
   val ResourceTypeToValidOperations = Map[ResourceType, Set[Operation]] (
-    Topic -> Set(Read, Write, Describe, All, Delete),
+    Topic -> Set(Read, Write, Describe, Delete, DescribeConfigs, AlterConfigs, All),
     Group -> Set(Read, Describe, All),
-    Cluster -> Set(Create, ClusterAction, All)
+    Cluster -> Set(Create, ClusterAction, DescribeConfigs, AlterConfigs, IdempotentWrite, Alter, Describe, All),
+    TransactionalId -> Set(Describe, Write, All)
   )
 
   def main(args: Array[String]) {
@@ -59,12 +62,13 @@ object AclCommand {
   }
 
   def withAuthorizer(opts: AclCommandOptions)(f: Authorizer => Unit) {
+    val defaultProps = Map(KafkaConfig.ZkEnableSecureAclsProp -> JaasUtils.isZkSecurityEnabled)
     val authorizerProperties =
       if (opts.options.has(opts.authorizerPropertiesOpt)) {
         val authorizerProperties = opts.options.valuesOf(opts.authorizerPropertiesOpt).asScala
-        CommandLineUtils.parseKeyValueArgs(authorizerProperties, acceptMissingValue = false).asScala
+        defaultProps ++ CommandLineUtils.parseKeyValueArgs(authorizerProperties, acceptMissingValue = false).asScala
       } else {
-        Map.empty[String, Any]
+        defaultProps
       }
 
     val authorizerClass = opts.options.valueOf(opts.authorizerOpt)
@@ -84,7 +88,7 @@ object AclCommand {
         CommandLineUtils.printUsageAndDie(opts.parser, "You must specify one of: --allow-principal, --deny-principal when trying to add ACLs.")
 
       for ((resource, acls) <- resourceToAcl) {
-        println(s"Adding ACLs for resource `${resource}`: $Newline ${acls.map("\t" + _).mkString(Newline)} $Newline")
+        println(s"Adding ACLs for resource `$resource`: $Newline ${acls.map("\t" + _).mkString(Newline)} $Newline")
         authorizer.addAcls(acls, resource)
       }
 
@@ -98,10 +102,10 @@ object AclCommand {
 
       for ((resource, acls) <- resourceToAcl) {
         if (acls.isEmpty) {
-          if (confirmAction(opts, s"Are you sure you want to delete all ACLs for resource `${resource}`? (y/n)"))
+          if (confirmAction(opts, s"Are you sure you want to delete all ACLs for resource `$resource`? (y/n)"))
             authorizer.removeAcls(resource)
         } else {
-          if (confirmAction(opts, s"Are you sure you want to remove ACLs: $Newline ${acls.map("\t" + _).mkString(Newline)} $Newline from resource `${resource}`? (y/n)"))
+          if (confirmAction(opts, s"Are you sure you want to remove ACLs: $Newline ${acls.map("\t" + _).mkString(Newline)} $Newline from resource `$resource`? (y/n)"))
             authorizer.removeAcls(acls, resource)
         }
       }
@@ -119,7 +123,7 @@ object AclCommand {
         else resources.map(resource => resource -> authorizer.getAcls(resource))
 
       for ((resource, acls) <- resourceToAcls)
-        println(s"Current ACLs for resource `${resource}`: $Newline ${acls.map("\t" + _).mkString(Newline)} $Newline")
+        println(s"Current ACLs for resource `$resource`: $Newline ${acls.map("\t" + _).mkString(Newline)} $Newline")
     }
   }
 
@@ -145,12 +149,16 @@ object AclCommand {
 
   private def getProducerResourceToAcls(opts: AclCommandOptions): Map[Resource, Set[Acl]] = {
     val topics: Set[Resource] = getResource(opts).filter(_.resourceType == Topic)
+    val transactionalIds: Set[Resource] = getResource(opts).filter(_.resourceType == TransactionalId)
+    val enableIdempotence = opts.options.has(opts.idempotentOpt)
 
     val acls = getAcl(opts, Set(Write, Describe))
 
-    //Write, Describe permission on topics, Create permission on cluster
-    topics.map(_ -> acls).toMap[Resource, Set[Acl]] +
-      (Resource.ClusterResource -> getAcl(opts, Set(Create)))
+    //Write, Describe permission on topics, Create permission on cluster, Write, Describe on transactionalIds
+    topics.map(_ -> acls).toMap[Resource, Set[Acl]] ++
+      transactionalIds.map(_ -> acls).toMap[Resource, Set[Acl]] +
+      (Resource.ClusterResource -> (getAcl(opts, Set(Create)) ++
+        (if (enableIdempotence) getAcl(opts, Set(IdempotentWrite)) else Set.empty[Acl])))
   }
 
   private def getConsumerResourceToAcls(opts: AclCommandOptions): Map[Resource, Set[Acl]] = {
@@ -180,7 +188,7 @@ object AclCommand {
 
     val allowedHosts = getHosts(opts, opts.allowHostsOpt, opts.allowPrincipalsOpt)
 
-    val deniedHosts = getHosts(opts, opts.denyHostssOpt, opts.denyPrincipalsOpt)
+    val deniedHosts = getHosts(opts, opts.denyHostsOpt, opts.denyPrincipalsOpt)
 
     val acls = new collection.mutable.HashSet[Acl]
     if (allowedHosts.nonEmpty && allowedPrincipals.nonEmpty)
@@ -228,11 +236,15 @@ object AclCommand {
     if (opts.options.has(opts.topicOpt))
       opts.options.valuesOf(opts.topicOpt).asScala.foreach(topic => resources += new Resource(Topic, topic.trim))
 
-    if (opts.options.has(opts.clusterOpt))
+    if (opts.options.has(opts.clusterOpt) || opts.options.has(opts.idempotentOpt))
       resources += Resource.ClusterResource
 
     if (opts.options.has(opts.groupOpt))
       opts.options.valuesOf(opts.groupOpt).asScala.foreach(group => resources += new Resource(Group, group.trim))
+
+    if (opts.options.has(opts.transactionalIdOpt))
+      opts.options.valuesOf(opts.transactionalIdOpt).asScala.foreach(transactionalId =>
+        resources += new Resource(TransactionalId, transactionalId))
 
     if (resources.isEmpty && dieIfNoResourceFound)
       CommandLineUtils.printUsageAndDie(opts.parser, "You must provide at least one resource: --topic <topic> or --cluster or --group <group>")
@@ -256,7 +268,7 @@ object AclCommand {
   }
 
   class AclCommandOptions(args: Array[String]) {
-    val parser = new OptionParser
+    val parser = new OptionParser(false)
     val authorizerOpt = parser.accepts("authorizer", "Fully qualified class name of the authorizer, defaults to kafka.security.auth.SimpleAclAuthorizer.")
       .withRequiredArg
       .describedAs("authorizer")
@@ -281,6 +293,16 @@ object AclCommand {
       .withRequiredArg
       .describedAs("group")
       .ofType(classOf[String])
+
+    val transactionalIdOpt = parser.accepts("transactional-id", "The transactionalId to which ACLs should " +
+      "be added or removed. A value of * indicates the ACLs should apply to all transactionalIds.")
+      .withRequiredArg
+      .describedAs("transactional-id")
+      .ofType(classOf[String])
+
+    val idempotentOpt = parser.accepts("idempotent", "Enable idempotence for the producer. This should be " +
+      "used in combination with the --producer option. Note that idempotence is enabled automatically if " +
+      "the producer is authorized to a particular transactional-id.")
 
     val addOpt = parser.accepts("add", "Indicates you are trying to add ACLs.")
     val removeOpt = parser.accepts("remove", "Indicates you are trying to remove ACLs.")
@@ -316,7 +338,7 @@ object AclCommand {
       .describedAs("allow-host")
       .ofType(classOf[String])
 
-    val denyHostssOpt = parser.accepts("deny-host", "Host from which principals listed in --deny-principal will be denied access. " +
+    val denyHostsOpt = parser.accepts("deny-host", "Host from which principals listed in --deny-principal will be denied access. " +
       "If you have specified --deny-principal then the default for this option will be set to * which denies access from all hosts.")
       .withRequiredArg
       .describedAs("deny-host")
@@ -341,17 +363,20 @@ object AclCommand {
       if (actions != 1)
         CommandLineUtils.printUsageAndDie(parser, "Command must include exactly one action: --list, --add, --remove. ")
 
-      CommandLineUtils.checkInvalidArgs(parser, options, listOpt, Set(producerOpt, consumerOpt, allowHostsOpt, allowPrincipalsOpt, denyHostssOpt, denyPrincipalsOpt))
+      CommandLineUtils.checkInvalidArgs(parser, options, listOpt, Set(producerOpt, consumerOpt, allowHostsOpt, allowPrincipalsOpt, denyHostsOpt, denyPrincipalsOpt))
 
       //when --producer or --consumer is specified , user should not specify operations as they are inferred and we also disallow --deny-principals and --deny-hosts.
-      CommandLineUtils.checkInvalidArgs(parser, options, producerOpt, Set(operationsOpt, denyPrincipalsOpt, denyHostssOpt))
-      CommandLineUtils.checkInvalidArgs(parser, options, consumerOpt, Set(operationsOpt, denyPrincipalsOpt, denyHostssOpt))
+      CommandLineUtils.checkInvalidArgs(parser, options, producerOpt, Set(operationsOpt, denyPrincipalsOpt, denyHostsOpt))
+      CommandLineUtils.checkInvalidArgs(parser, options, consumerOpt, Set(operationsOpt, denyPrincipalsOpt, denyHostsOpt))
 
       if (options.has(producerOpt) && !options.has(topicOpt))
         CommandLineUtils.printUsageAndDie(parser, "With --producer you must specify a --topic")
 
-      if (options.has(consumerOpt) && (!options.has(topicOpt) || !options.has(groupOpt) || (!options.has(producerOpt) && options.has(clusterOpt))))
-        CommandLineUtils.printUsageAndDie(parser, "With --consumer you must specify a --topic and a --group and no --cluster option should be specified.")
+      if (options.has(idempotentOpt) && !options.has(producerOpt))
+        CommandLineUtils.printUsageAndDie(parser, "The --idempotent option is only available if --producer is set")
+
+      if (options.has(consumerOpt) && (!options.has(topicOpt) || !options.has(groupOpt) || (!options.has(producerOpt) && (options.has(clusterOpt) || options.has(transactionalIdOpt)))))
+        CommandLineUtils.printUsageAndDie(parser, "With --consumer you must specify a --topic and a --group and no --cluster or --transactional-id option should be specified.")
     }
   }
 

@@ -40,88 +40,109 @@ public class StandbyTask extends AbstractTask {
 
     /**
      * Create {@link StandbyTask} with its assigned partitions
-     * @param id                    the ID of this task
-     * @param applicationId         the ID of the stream processing application
-     * @param partitions            the collection of assigned {@link TopicPartition}
-     * @param topology              the instance of {@link ProcessorTopology}
-     * @param consumer              the instance of {@link Consumer}
-     * @param config                the {@link StreamsConfig} specified by the user
-     * @param metrics               the {@link StreamsMetrics} created by the thread
-     * @param stateDirectory        the {@link StateDirectory} created by the thread
+     *
+     * @param id             the ID of this task
+     * @param applicationId  the ID of the stream processing application
+     * @param partitions     the collection of assigned {@link TopicPartition}
+     * @param topology       the instance of {@link ProcessorTopology}
+     * @param consumer       the instance of {@link Consumer}
+     * @param config         the {@link StreamsConfig} specified by the user
+     * @param metrics        the {@link StreamsMetrics} created by the thread
+     * @param stateDirectory the {@link StateDirectory} created by the thread
      */
-    public StandbyTask(final TaskId id,
-                       final String applicationId,
-                       final Collection<TopicPartition> partitions,
-                       final ProcessorTopology topology,
-                       final Consumer<byte[], byte[]> consumer,
-                       final ChangelogReader changelogReader,
-                       final StreamsConfig config,
-                       final StreamsMetrics metrics,
-                       final StateDirectory stateDirectory) {
-        super(id, applicationId, partitions, topology, consumer, changelogReader, true, stateDirectory, null);
+    StandbyTask(final TaskId id,
+                final String applicationId,
+                final Collection<TopicPartition> partitions,
+                final ProcessorTopology topology,
+                final Consumer<byte[], byte[]> consumer,
+                final ChangelogReader changelogReader,
+                final StreamsConfig config,
+                final StreamsMetrics metrics,
+                final StateDirectory stateDirectory) {
+        super(id, applicationId, partitions, topology, consumer, changelogReader, true, stateDirectory, null, config);
 
         // initialize the topology with its own context
-        this.processorContext = new StandbyContextImpl(id, applicationId, config, stateMgr, metrics);
+        processorContext = new StandbyContextImpl(id, applicationId, config, stateMgr, metrics);
 
-        log.info("standby-task [{}] Initializing state stores", id());
+        log.debug("{} Initializing", logPrefix);
         initializeStateStores();
-
-        this.processorContext.initialized();
-
-        this.checkpointedOffsets = Collections.unmodifiableMap(stateMgr.checkpointed());
+        processorContext.initialized();
+        checkpointedOffsets = Collections.unmodifiableMap(stateMgr.checkpointed());
     }
 
-    public Map<TopicPartition, Long> checkpointedOffsets() {
-        return checkpointedOffsets;
+    /**
+     * <pre>
+     * - update offset limits
+     * </pre>
+     */
+    @Override
+    public void resume() {
+        log.debug("{} " + "Resuming", logPrefix);
+        updateOffsetLimits();
     }
 
-    public Collection<TopicPartition> changeLogPartitions() {
-        return checkpointedOffsets.keySet();
+    /**
+     * <pre>
+     * - flush store
+     * - checkpoint store
+     * - update offset limits
+     * </pre>
+     */
+    @Override
+    public void commit() {
+        log.trace("{} Committing", logPrefix);
+        stateMgr.flush();
+        stateMgr.checkpoint(Collections.<TopicPartition, Long>emptyMap());
+        // reinitialize offset limits
+        updateOffsetLimits();
+    }
+
+    /**
+     * <pre>
+     * - flush store
+     * - checkpoint store
+     * </pre>
+     */
+    @Override
+    public void suspend() {
+        log.debug("{} Suspending", logPrefix);
+        stateMgr.flush();
+        stateMgr.checkpoint(Collections.<TopicPartition, Long>emptyMap());
+    }
+
+    /**
+     * <pre>
+     * - {@link #commit()}
+     * - close state
+     * <pre>
+     * @param clean ignored by {@code StandbyTask} as it can always try to close cleanly
+     *              (ie, commit, flush, and write checkpoint file)
+     */
+    @Override
+    public void close(final boolean clean) {
+        log.debug("{} Closing", logPrefix);
+        boolean committedSuccessfully = false;
+        try {
+            commit();
+            committedSuccessfully = true;
+        } finally {
+            closeStateManager(committedSuccessfully);
+        }
     }
 
     /**
      * Updates a state store using records from one change log partition
+     *
      * @return a list of records not consumed
      */
-    public List<ConsumerRecord<byte[], byte[]>> update(TopicPartition partition, List<ConsumerRecord<byte[], byte[]>> records) {
-        log.debug("standby-task [{}] Updating standby replicas of its state store for partition [{}]", id(), partition);
+    public List<ConsumerRecord<byte[], byte[]>> update(final TopicPartition partition,
+                                                       final List<ConsumerRecord<byte[], byte[]>> records) {
+        log.debug("{} Updating standby replicas of its state store for partition [{}]", logPrefix, partition);
         return stateMgr.updateStandbyStates(partition, records);
     }
 
-    public void commit() {
-        log.debug("standby-task [{}] Committing its state", id());
-        stateMgr.flush(processorContext);
-        stateMgr.checkpoint(Collections.<TopicPartition, Long>emptyMap());
-        // reinitialize offset limits
-        initializeOffsetLimits();
+    Map<TopicPartition, Long> checkpointedOffsets() {
+        return checkpointedOffsets;
     }
 
-    @Override
-    public void close() {
-        //no-op
-    }
-
-    @Override
-    public void initTopology() {
-        //no-op
-    }
-
-    @Override
-    public void closeTopology() {
-        //no-op
-    }
-
-    @Override
-    public void commitOffsets() {
-        // no-op
-    }
-
-    /**
-     * Produces a string representation contain useful information about a StreamTask.
-     * This is useful in debugging scenarios.
-     * @return A string representation of the StreamTask instance.
-     */
-    public String toString() {
-        return super.toString();
-    }
 }

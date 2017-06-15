@@ -233,7 +233,7 @@ class ConnectStandaloneService(ConnectServiceBase):
             cmd = self.start_cmd(node, remote_connector_configs)
             self.logger.debug("Connect standalone command: %s", cmd)
             node.account.ssh(cmd)
-            monitor.wait_until('Kafka Connect started', timeout_sec=30, err_msg="Never saw message indicating Kafka Connect finished startup on " + str(node.account))
+            monitor.wait_until('Kafka Connect started', timeout_sec=60, err_msg="Never saw message indicating Kafka Connect finished startup on " + str(node.account))
 
         if len(self.pids(node)) == 0:
             raise RuntimeError("No process ids recorded")
@@ -272,7 +272,7 @@ class ConnectDistributedService(ConnectServiceBase):
             cmd = self.start_cmd(node)
             self.logger.debug("Connect distributed command: %s", cmd)
             node.account.ssh(cmd)
-            monitor.wait_until('Kafka Connect started', timeout_sec=15, err_msg="Never saw message indicating Kafka Connect finished startup on " + str(node.account))
+            monitor.wait_until('Kafka Connect started', timeout_sec=60, err_msg="Never saw message indicating Kafka Connect finished startup on " + str(node.account))
 
         if len(self.pids(node)) == 0:
             raise RuntimeError("No process ids recorded")

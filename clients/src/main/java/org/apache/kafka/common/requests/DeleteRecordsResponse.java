@@ -44,6 +44,7 @@ public class DeleteRecordsResponse extends AbstractResponse {
     private static final String LOW_WATERMARK_KEY_NAME = "low_watermark";
     private static final String ERROR_CODE_KEY_NAME = "error_code";
 
+    private final int throttleTimeMs;
     private final Map<TopicPartition, PartitionResponse> responses;
 
     /**
@@ -80,6 +81,7 @@ public class DeleteRecordsResponse extends AbstractResponse {
     }
 
     public DeleteRecordsResponse(Struct struct) {
+        this.throttleTimeMs = struct.hasField(THROTTLE_TIME_KEY_NAME) ? struct.getInt(THROTTLE_TIME_KEY_NAME) : DEFAULT_THROTTLE_TIME;
         responses = new HashMap<>();
         for (Object topicStructObj : struct.getArray(TOPICS_KEY_NAME)) {
             Struct topicStruct = (Struct) topicStructObj;
@@ -97,13 +99,16 @@ public class DeleteRecordsResponse extends AbstractResponse {
     /**
      * Constructor for version 0.
      */
-    public DeleteRecordsResponse(Map<TopicPartition, PartitionResponse> responses) {
+    public DeleteRecordsResponse(int throttleTimeMs, Map<TopicPartition, PartitionResponse> responses) {
+        this.throttleTimeMs = throttleTimeMs;
         this.responses = responses;
     }
 
     @Override
     protected Struct toStruct(short version) {
         Struct struct = new Struct(ApiKeys.DELETE_RECORDS.responseSchema(version));
+        if (struct.hasField(THROTTLE_TIME_KEY_NAME))
+            struct.set(THROTTLE_TIME_KEY_NAME, throttleTimeMs);
         Map<String, Map<Integer, PartitionResponse>> responsesByTopic = CollectionUtils.groupDataByTopic(responses);
         List<Struct> topicStructArray = new ArrayList<>();
         for (Map.Entry<String, Map<Integer, PartitionResponse>> responsesByTopicEntry : responsesByTopic.entrySet()) {
@@ -123,6 +128,10 @@ public class DeleteRecordsResponse extends AbstractResponse {
         }
         struct.set(TOPICS_KEY_NAME, topicStructArray.toArray());
         return struct;
+    }
+
+    public int throttleTimeMs() {
+        return throttleTimeMs;
     }
 
     public Map<TopicPartition, PartitionResponse> responses() {
