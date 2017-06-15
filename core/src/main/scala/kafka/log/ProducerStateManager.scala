@@ -444,7 +444,7 @@ class ProducerStateManager(val topicPartition: TopicPartition,
               Files.deleteIfExists(file.toPath)
           }
         case None =>
-          lastSnapOffset = -1
+          lastSnapOffset = -1L
           lastMapOffset = logStartOffset
           return
       }

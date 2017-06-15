@@ -443,17 +443,19 @@ class Log(@volatile var dir: File,
       val offsetsToSnapshot = Seq(Some(logStartOffset), nextLatestSegmentBaseOffset, Some(activeSegment.baseOffset), Some(lastOffset))
       offsetsToSnapshot.flatten.foreach(producerStateManager.takeEmptySnapshot)
     } else {
+      val hasProducersBeforeTruncation = !producerStateManager.isEmpty
+
       // Ensure we have an empty snapshot at the log start offset to enforce the invariant mentioned above.
       // This must be done prior to truncation in case of failure after previous snapshots are removed.
       producerStateManager.takeEmptySnapshot(logStartOffset)
       producerStateManager.truncateAndReload(logStartOffset, lastOffset, time.milliseconds())
 
       // Only do the potentially expensive reloading if the last snapshot offset is lower than the
-      // log end offset (which would be the case on first startup) and there are active producers.
-      // if there are no active producers, then truncating shouldn't change that fact (although it
-      // could cause a producerId to expire earlier than expected), so we can skip the loading.
+      // log end offset (which would be the case on first startup) and there were active producers
+      // prior to truncation. If there weren't, then truncating shouldn't change that fact (although it
+      // could cause a producerId to expire earlier than expected), and we can skip the loading.
       // This is an optimization for users which are not yet using idempotent/transactional features yet.
-      if (lastOffset > producerStateManager.mapEndOffset || !producerStateManager.isEmpty) {
+      if (lastOffset > producerStateManager.mapEndOffset && hasProducersBeforeTruncation) {
         logSegments(producerStateManager.mapEndOffset, lastOffset).foreach { segment =>
           val startOffset = math.max(segment.baseOffset, producerStateManager.mapEndOffset)
           val fetchDataInfo = segment.read(startOffset, Some(lastOffset), Int.MaxValue)
@@ -471,8 +473,10 @@ class Log(@volatile var dir: File,
     val loadedProducers = mutable.Map.empty[Long, ProducerAppendInfo]
     val completedTxns = ListBuffer.empty[CompletedTxn]
     records.batches.asScala.foreach { batch =>
-      if (batch.hasProducerId)
-        updateProducers(batch, loadedProducers, completedTxns, loadingFromLog = true)
+      if (batch.hasProducerId) {
+        val maybeCompletedTxn = updateProducers(batch, loadedProducers, loadingFromLog = true)
+        maybeCompletedTxn.foreach(completedTxns += _)
+      }
     }
     loadedProducers.values.foreach(producerStateManager.update)
     completedTxns.foreach(producerStateManager.completeTxn)
@@ -727,7 +731,8 @@ class Log(@volatile var dir: File,
       // the last appended entry to the client.
       if (isFromClient && maybeLastEntry.exists(_.isDuplicate(batch)))
         return (updatedProducers, completedTxns.toList, maybeLastEntry)
-      updateProducers(batch, updatedProducers, completedTxns, loadingFromLog = false)
+      val maybeCompletedTxn = updateProducers(batch, updatedProducers, loadingFromLog = false)
+      maybeCompletedTxn.foreach(completedTxns += _)
     }
     (updatedProducers, completedTxns.toList, None)
   }
@@ -813,12 +818,10 @@ class Log(@volatile var dir: File,
 
   private def updateProducers(batch: RecordBatch,
                               producers: mutable.Map[Long, ProducerAppendInfo],
-                              completedTxns: ListBuffer[CompletedTxn],
-                              loadingFromLog: Boolean): Unit = {
+                              loadingFromLog: Boolean): Option[CompletedTxn] = {
     val producerId = batch.producerId
     val appendInfo = producers.getOrElseUpdate(producerId, producerStateManager.prepareUpdate(producerId, loadingFromLog))
-    val maybeCompletedTxn = appendInfo.append(batch)
-    maybeCompletedTxn.foreach(completedTxns += _)
+    appendInfo.append(batch)
   }
 
   /**
@@ -1056,7 +1059,7 @@ class Log(@volatile var dir: File,
         logStartOffset = math.max(logStartOffset, segments.firstEntry().getValue.baseOffset)
         leaderEpochCache.clearAndFlushEarliest(logStartOffset)
 
-        // Update the producer state with the new log start offset, which we cause any non-retained producers to
+        // Update the producer state with the new log start offset, which would cause any non-retained producers to
         // be evicted. Enforce the invariant that we always have an empty snapshot at the log start offset.
         producerStateManager.takeEmptySnapshot(logStartOffset)
         producerStateManager.truncateHead(logStartOffset)

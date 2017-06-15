@@ -319,9 +319,11 @@ class ProducerStateManagerTest extends JUnitSuite {
 
     stateManager.truncateAndReload(0L, 1L, time.milliseconds())
     assertEquals(None, stateManager.latestSnapshotOffset)
+    assertEquals(None, stateManager.oldestSnapshotOffset)
 
     stateManager.takeSnapshot()
     assertEquals(Some(0), stateManager.latestSnapshotOffset)
+    assertEquals(Some(0), stateManager.oldestSnapshotOffset)
   }
 
   @Test

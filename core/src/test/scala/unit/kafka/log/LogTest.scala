@@ -302,6 +302,21 @@ class LogTest {
   }
 
   @Test
+  def testTruncateToWithEmptyProducerState() {
+    val log = createLog(2048)
+    log.appendAsLeader(TestUtils.records(List(new SimpleRecord("a".getBytes))), leaderEpoch = 0)
+    log.appendAsLeader(TestUtils.records(List(new SimpleRecord("b".getBytes))), leaderEpoch = 0)
+    log.appendAsLeader(TestUtils.records(List(new SimpleRecord("c".getBytes))), leaderEpoch = 0)
+    log.appendAsLeader(TestUtils.records(List(new SimpleRecord("d".getBytes))), leaderEpoch = 0)
+    assertTrue(log.activeProducers.isEmpty)
+    assertEquals(4L, log.latestProducerStateEndOffset)
+
+    log.truncateTo(1L)
+    assertTrue(log.activeProducers.isEmpty)
+    assertEquals(1L, log.latestProducerStateEndOffset)
+  }
+
+  @Test
   def testTruncateBeforeOldestProducerSnapshot(): Unit = {
     val pid = 1L
     val log = createLog(2048)
@@ -360,6 +375,7 @@ class LogTest {
     log.truncateFullyAndStartAt(29)
     assertEquals(1, log.logSegments.size)
     assertEquals(Some(29), log.latestProducerSnapshotOffset)
+    assertEquals(Some(29), log.oldestProducerSnapshotOffset)
     assertEquals(29, log.latestProducerStateEndOffset)
   }
 
