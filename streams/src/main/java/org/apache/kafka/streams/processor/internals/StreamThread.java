@@ -1250,15 +1250,16 @@ public class StreamThread extends Thread {
     }
 
     private Producer<byte[], byte[]> createProducer(final TaskId id) {
-        final Map<String, Object> producerConfigs = config.getProducerConfigs(threadClientId);
 
         final Producer<byte[], byte[]> producer;
         if (eosEnabled) {
+            final Map<String, Object> producerConfigs = config.getProducerConfigs(threadClientId + "-" + id);
             log.info("{} Creating producer client for task {}", logPrefix, id);
             producerConfigs.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, applicationId + "-" + id);
             producer = clientSupplier.getProducer(producerConfigs);
         } else {
             if (threadProducer == null) {
+                final Map<String, Object> producerConfigs = config.getProducerConfigs(threadClientId);
                 log.info("{} Creating shared producer client", logPrefix);
                 threadProducer = clientSupplier.getProducer(producerConfigs);
             }
