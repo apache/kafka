@@ -100,8 +100,8 @@ public final class RecordAccumulator {
      * @param metrics The metrics
      * @param time The time instance to use
      * @param apiVersions Request API versions for current connected brokers
-     * @param transactionManager The shared transaction state object which tracks Pids, epochs, and sequence numbers per
-     *                         partition.
+     * @param transactionManager The shared transaction state object which tracks producer IDs, epochs, and sequence
+     *                           numbers per partition.
      */
     public RecordAccumulator(int batchSize,
                              long totalSize,
@@ -399,9 +399,9 @@ public final class RecordAccumulator {
     }
 
     /**
-     * @return Whether there is any unsent record in the accumulator.
+     * Check whether there are any batches which haven't been drained
      */
-    public boolean hasUnsent() {
+    public boolean hasUndrained() {
         for (Map.Entry<TopicPartition, Deque<ProducerBatch>> entry : this.batches.entrySet()) {
             Deque<ProducerBatch> deque = entry.getValue();
             synchronized (deque) {
@@ -569,19 +569,18 @@ public final class RecordAccumulator {
      */
     public void awaitFlushCompletion() throws InterruptedException {
         try {
-            for (ProducerBatch batch : this.incomplete.all())
+            for (ProducerBatch batch : this.incomplete.copyAll())
                 batch.produceFuture.await();
         } finally {
             this.flushesInProgress.decrementAndGet();
         }
     }
 
-    public boolean hasUnflushedBatches() {
-        for (Map.Entry<TopicPartition, Deque<ProducerBatch>> entry : this.batches().entrySet()) {
-            if (!entry.getValue().isEmpty())
-                return true;
-        }
-        return !this.incomplete.incomplete.isEmpty();
+    /**
+     * Check whether there are any pending batches (whether sent or unsent).
+     */
+    public boolean hasIncomplete() {
+        return !this.incomplete.isEmpty();
     }
 
     /**
@@ -610,8 +609,11 @@ public final class RecordAccumulator {
         abortBatches(new IllegalStateException("Producer is closed forcefully."));
     }
 
+    /**
+     * Abort all incomplete batches (whether they have been sent or not)
+     */
     void abortBatches(final RuntimeException reason) {
-        for (ProducerBatch batch : incomplete.all()) {
+        for (ProducerBatch batch : incomplete.copyAll()) {
             Deque<ProducerBatch> dq = getDeque(batch.topicPartition);
             synchronized (dq) {
                 batch.abortRecordAppends();
@@ -622,8 +624,11 @@ public final class RecordAccumulator {
         }
     }
 
-    void abortOpenBatches(RuntimeException reason) {
-        for (ProducerBatch batch : incomplete.all()) {
+    /**
+     * Abort any batches which have not been drained
+     */
+    void abortUndrainedBatches(RuntimeException reason) {
+        for (ProducerBatch batch : incomplete.copyAll()) {
             Deque<ProducerBatch> dq = getDeque(batch.topicPartition);
             boolean aborted = false;
             synchronized (dq) {
@@ -682,37 +687,6 @@ public final class RecordAccumulator {
             this.readyNodes = readyNodes;
             this.nextReadyCheckDelayMs = nextReadyCheckDelayMs;
             this.unknownLeaderTopics = unknownLeaderTopics;
-        }
-    }
-
-    /*
-     * A threadsafe helper class to hold batches that haven't been ack'd yet
-     */
-    private final static class IncompleteBatches {
-        private final Set<ProducerBatch> incomplete;
-
-        public IncompleteBatches() {
-            this.incomplete = new HashSet<>();
-        }
-
-        public void add(ProducerBatch batch) {
-            synchronized (incomplete) {
-                this.incomplete.add(batch);
-            }
-        }
-
-        public void remove(ProducerBatch batch) {
-            synchronized (incomplete) {
-                boolean removed = this.incomplete.remove(batch);
-                if (!removed)
-                    throw new IllegalStateException("Remove from the incomplete set failed. This should be impossible.");
-            }
-        }
-
-        public Iterable<ProducerBatch> all() {
-            synchronized (incomplete) {
-                return new ArrayList<>(this.incomplete);
-            }
         }
     }
 

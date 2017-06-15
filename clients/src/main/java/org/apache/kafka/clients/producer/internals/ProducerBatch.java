@@ -56,7 +56,7 @@ public final class ProducerBatch {
 
     private static final Logger log = LoggerFactory.getLogger(ProducerBatch.class);
 
-    private enum FinalState { ABORTED, FAILED, SUCCEEDED };
+    private enum FinalState { ABORTED, FAILED, SUCCEEDED }
 
     final long createdMs;
     final TopicPartition topicPartition;
