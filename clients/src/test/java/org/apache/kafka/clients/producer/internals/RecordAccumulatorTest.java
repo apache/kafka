@@ -393,13 +393,23 @@ public class RecordAccumulatorTest {
         for (int i = 0; i < numRecords; i++)
             accum.append(new TopicPartition(topic, i % 3), 0L, key, value, null, new TestCallback(), maxBlockTimeMs);
         RecordAccumulator.ReadyCheckResult result = accum.ready(cluster, time.milliseconds());
-        assertTrue(result.readyNodes.size() > 0);
-        accum.drain(cluster, result.readyNodes, Integer.MAX_VALUE, time.milliseconds());
+        assertFalse(result.readyNodes.isEmpty());
+        Map<Integer, List<ProducerBatch>> drained = accum.drain(cluster, result.readyNodes, Integer.MAX_VALUE, time.milliseconds());
         assertTrue(accum.hasUndrained());
         assertTrue(accum.hasIncomplete());
 
+        int numDrainedRecords = 0;
+        for (Map.Entry<Integer, List<ProducerBatch>> drainedEntry : drained.entrySet()) {
+            for (ProducerBatch batch : drainedEntry.getValue()) {
+                assertTrue(batch.isClosed());
+                assertFalse(batch.produceFuture.completed());
+                numDrainedRecords += batch.recordCount;
+            }
+        }
+
+        assertTrue(numDrainedRecords > 0 && numDrainedRecords < numRecords);
         accum.abortIncompleteBatches();
-        assertEquals(numExceptionReceivedInCallback.get(), numRecords);
+        assertEquals(numRecords, numExceptionReceivedInCallback.get());
         assertFalse(accum.hasUndrained());
         assertFalse(accum.hasIncomplete());
     }
@@ -424,7 +434,7 @@ public class RecordAccumulatorTest {
         for (int i = 0; i < numRecords; i++)
             accum.append(new TopicPartition(topic, i % 3), 0L, key, value, null, new TestCallback(), maxBlockTimeMs);
         RecordAccumulator.ReadyCheckResult result = accum.ready(cluster, time.milliseconds());
-        assertTrue(result.readyNodes.size() > 0);
+        assertFalse(result.readyNodes.isEmpty());
         Map<Integer, List<ProducerBatch>> drained = accum.drain(cluster, result.readyNodes, Integer.MAX_VALUE,
                 time.milliseconds());
         assertTrue(accum.hasUndrained());
@@ -442,7 +452,7 @@ public class RecordAccumulatorTest {
 
         assertTrue(numDrainedRecords > 0);
         assertTrue(numExceptionReceivedInCallback.get() > 0);
-        assertEquals(numExceptionReceivedInCallback.get(), numRecords - numDrainedRecords);
+        assertEquals(numRecords, numExceptionReceivedInCallback.get() + numDrainedRecords);
         assertFalse(accum.hasUndrained());
         assertTrue(accum.hasIncomplete());
     }
