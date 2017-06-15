@@ -50,7 +50,10 @@ class TransactionsTest extends KafkaServerTestHarness {
   val nonTransactionalConsumers = Buffer[KafkaConsumer[Array[Byte], Array[Byte]]]()
 
   override def generateConfigs: Seq[KafkaConfig] = {
-    TestUtils.createBrokerConfigs(numServers, zkConnect).map(KafkaConfig.fromProps(_, serverProps()))
+    val cfgs = TestUtils.createBrokerConfigs(numServers, zkConnect, interBrokerSecurityProtocol = Some(securityProtocol),
+      trustStoreFile = trustStoreFile, saslProperties = serverSaslProperties)
+    setupListenersOnRandomPorts(cfgs)
+    cfgs.map(KafkaConfig.fromProps(_, serverProps()))
   }
 
   @Before
@@ -75,6 +78,9 @@ class TransactionsTest extends KafkaServerTestHarness {
     transactionalProducers.foreach(_.close())
     transactionalConsumers.foreach(_.close())
     nonTransactionalConsumers.foreach(_.close())
+    transactionalProducers.clear()
+    transactionalConsumers.clear()
+    nonTransactionalConsumers.clear()
     super.tearDown()
   }
 
