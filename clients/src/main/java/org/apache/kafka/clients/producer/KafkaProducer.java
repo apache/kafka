@@ -165,7 +165,7 @@ import static org.apache.kafka.common.serialization.ExtendedSerializer.Wrapper.e
  *     for(int i = 0; i < 100; i++)
  *         producer.send(new ProducerRecord<String, String>("my-topic", Integer.toString(i), Integer.toString(i)));
  *     producer.commitTransaction();
- * } catch (ProducerFencedException | OutOfOrderSequenceException e) {
+ * } catch (ProducerFencedException | OutOfOrderSequenceException | AuthorizationException e) {
  *     // We can't recover from these exceptions, so our only option is to close the producer and exit.
  *     producer.close();
  * } catch (KafkaException e) {
