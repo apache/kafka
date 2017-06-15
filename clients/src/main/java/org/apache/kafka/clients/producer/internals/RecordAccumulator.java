@@ -100,8 +100,8 @@ public final class RecordAccumulator {
      * @param metrics The metrics
      * @param time The time instance to use
      * @param apiVersions Request API versions for current connected brokers
-     * @param transactionManager The shared transaction state object which tracks Pids, epochs, and sequence numbers per
-     *                         partition.
+     * @param transactionManager The shared transaction state object which tracks producer IDs, epochs, and sequence
+     *                           numbers per partition.
      */
     public RecordAccumulator(int batchSize,
                              long totalSize,
