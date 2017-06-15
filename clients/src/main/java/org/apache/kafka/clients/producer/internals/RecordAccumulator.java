@@ -399,9 +399,9 @@ public final class RecordAccumulator {
     }
 
     /**
-     * @return Whether there is any unsent record in the accumulator.
+     * @return Whether there are any batches which haven't been drained
      */
-    public boolean hasUnsent() {
+    public boolean hasUndrained() {
         for (Map.Entry<TopicPartition, Deque<ProducerBatch>> entry : this.batches.entrySet()) {
             Deque<ProducerBatch> deque = entry.getValue();
             synchronized (deque) {
@@ -569,7 +569,7 @@ public final class RecordAccumulator {
      */
     public void awaitFlushCompletion() throws InterruptedException {
         try {
-            for (ProducerBatch batch : this.incomplete.all())
+            for (ProducerBatch batch : this.incomplete.copyAll())
                 batch.produceFuture.await();
         } finally {
             this.flushesInProgress.decrementAndGet();
@@ -607,7 +607,7 @@ public final class RecordAccumulator {
     }
 
     void abortBatches(final RuntimeException reason) {
-        for (ProducerBatch batch : incomplete.all()) {
+        for (ProducerBatch batch : incomplete.copyAll()) {
             Deque<ProducerBatch> dq = getDeque(batch.topicPartition);
             synchronized (dq) {
                 batch.abortRecordAppends();
@@ -618,8 +618,8 @@ public final class RecordAccumulator {
         }
     }
 
-    void abortUnsentBatches(RuntimeException reason) {
-        for (ProducerBatch batch : incomplete.all()) {
+    void abortUndrainedBatches(RuntimeException reason) {
+        for (ProducerBatch batch : incomplete.copyAll()) {
             Deque<ProducerBatch> dq = getDeque(batch.topicPartition);
             boolean aborted = false;
             synchronized (dq) {

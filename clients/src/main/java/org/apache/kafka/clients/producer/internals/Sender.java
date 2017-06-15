@@ -170,7 +170,7 @@ public class Sender implements Runnable {
         // okay we stopped accepting requests but there may still be
         // requests in the accumulator or waiting for acknowledgment,
         // wait until these are completed.
-        while (!forceClose && (this.accumulator.hasUnsent() || this.client.inFlightRequestCount() > 0)) {
+        while (!forceClose && (this.accumulator.hasUndrained() || this.client.inFlightRequestCount() > 0)) {
             try {
                 run(time.milliseconds());
             } catch (Exception e) {
@@ -216,7 +216,7 @@ public class Sender implements Runnable {
                 client.poll(retryBackoffMs, now);
                 return;
             } else if (transactionManager.hasAbortableError()) {
-                accumulator.abortUnsentBatches(transactionManager.lastError());
+                accumulator.abortUndrainedBatches(transactionManager.lastError());
             }
         }
 
@@ -305,7 +305,7 @@ public class Sender implements Runnable {
         if (transactionManager.isCompleting() && accumulator.hasIncomplete()) {
             // If the transaction is being aborted, then we can clear any unsent produce requests
             if (transactionManager.isAborting())
-                accumulator.abortUnsentBatches(new KafkaException("Failing batch since transaction was aborted"));
+                accumulator.abortUndrainedBatches(new KafkaException("Failing batch since transaction was aborted"));
 
             // There may still be requests left which are being retried. Since we do not know whether they had
             // been successfully appended to the broker log, we must resend them until their final status is clear.

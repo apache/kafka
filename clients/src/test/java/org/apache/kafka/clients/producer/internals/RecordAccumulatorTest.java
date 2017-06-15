@@ -343,7 +343,7 @@ public class RecordAccumulatorTest {
 
         // should be complete with no unsent records.
         accum.awaitFlushCompletion();
-        assertFalse(accum.hasUnsent());
+        assertFalse(accum.hasUndrained());
         assertFalse(accum.hasIncomplete());
     }
 
@@ -378,6 +378,8 @@ public class RecordAccumulatorTest {
     @Test
     public void testAbortIncompleteBatches() throws Exception {
         long lingerMs = Long.MAX_VALUE;
+        int numRecords = 100;
+
         final AtomicInteger numExceptionReceivedInCallback = new AtomicInteger(0);
         final RecordAccumulator accum = new RecordAccumulator(128 + DefaultRecordBatch.RECORD_BATCH_OVERHEAD, 64 * 1024,
                 CompressionType.NONE, lingerMs, 100L, metrics, time, new ApiVersions(), null);
@@ -388,23 +390,25 @@ public class RecordAccumulatorTest {
                 numExceptionReceivedInCallback.incrementAndGet();
             }
         }
-        for (int i = 0; i < 100; i++)
+        for (int i = 0; i < numRecords; i++)
             accum.append(new TopicPartition(topic, i % 3), 0L, key, value, null, new TestCallback(), maxBlockTimeMs);
         RecordAccumulator.ReadyCheckResult result = accum.ready(cluster, time.milliseconds());
         assertTrue(result.readyNodes.size() > 0);
         accum.drain(cluster, result.readyNodes, Integer.MAX_VALUE, time.milliseconds());
-        assertTrue(accum.hasUnsent());
+        assertTrue(accum.hasUndrained());
         assertTrue(accum.hasIncomplete());
 
         accum.abortIncompleteBatches();
-        assertEquals(numExceptionReceivedInCallback.get(), 100);
-        assertFalse(accum.hasUnsent());
+        assertEquals(numExceptionReceivedInCallback.get(), numRecords);
+        assertFalse(accum.hasUndrained());
         assertFalse(accum.hasIncomplete());
     }
 
     @Test
     public void testAbortUnsentBatches() throws Exception {
         long lingerMs = Long.MAX_VALUE;
+        int numRecords = 100;
+
         final AtomicInteger numExceptionReceivedInCallback = new AtomicInteger(0);
         final RecordAccumulator accum = new RecordAccumulator(128 + DefaultRecordBatch.RECORD_BATCH_OVERHEAD, 64 * 1024,
                 CompressionType.NONE, lingerMs, 100L, metrics, time, new ApiVersions(), null);
@@ -417,28 +421,29 @@ public class RecordAccumulatorTest {
                 numExceptionReceivedInCallback.incrementAndGet();
             }
         }
-        for (int i = 0; i < 100; i++)
+        for (int i = 0; i < numRecords; i++)
             accum.append(new TopicPartition(topic, i % 3), 0L, key, value, null, new TestCallback(), maxBlockTimeMs);
         RecordAccumulator.ReadyCheckResult result = accum.ready(cluster, time.milliseconds());
         assertTrue(result.readyNodes.size() > 0);
         Map<Integer, List<ProducerBatch>> drained = accum.drain(cluster, result.readyNodes, Integer.MAX_VALUE,
                 time.milliseconds());
-        assertTrue(accum.hasUnsent());
+        assertTrue(accum.hasUndrained());
         assertTrue(accum.hasIncomplete());
 
-        accum.abortUnsentBatches(cause);
-        int numSentRecords = 0;
+        accum.abortUndrainedBatches(cause);
+        int numDrainedRecords = 0;
         for (Map.Entry<Integer, List<ProducerBatch>> drainedEntry : drained.entrySet()) {
             for (ProducerBatch batch : drainedEntry.getValue()) {
                 assertTrue(batch.isClosed());
                 assertFalse(batch.produceFuture.completed());
-                numSentRecords += batch.recordCount;
+                numDrainedRecords += batch.recordCount;
             }
         }
 
-        assertTrue(numSentRecords > 0);
-        assertEquals(numExceptionReceivedInCallback.get(), 100 - numSentRecords);
-        assertFalse(accum.hasUnsent());
+        assertTrue(numDrainedRecords > 0);
+        assertTrue(numExceptionReceivedInCallback.get() > 0);
+        assertEquals(numExceptionReceivedInCallback.get(), numRecords - numDrainedRecords);
+        assertFalse(accum.hasUndrained());
         assertTrue(accum.hasIncomplete());
     }
 

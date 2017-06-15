@@ -1325,19 +1325,19 @@ public class TransactionManagerTest {
 
         prepareAddPartitionsToTxn(tp0, Errors.NONE);
         sender.run(time.milliseconds());
-        assertTrue(accumulator.hasUnsent());
+        assertTrue(accumulator.hasUndrained());
 
         // committing the transaction should cause the unsent batch to be flushed
         transactionManager.beginCommit();
         sender.run(time.milliseconds());
-        assertFalse(accumulator.hasUnsent());
+        assertFalse(accumulator.hasUndrained());
         assertTrue(accumulator.hasIncomplete());
         assertFalse(transactionManager.hasInFlightRequest());
         assertFalse(responseFuture.isDone());
 
         // until the produce future returns, we will not send EndTxn
         sender.run(time.milliseconds());
-        assertFalse(accumulator.hasUnsent());
+        assertFalse(accumulator.hasUndrained());
         assertTrue(accumulator.hasIncomplete());
         assertFalse(transactionManager.hasInFlightRequest());
         assertFalse(responseFuture.isDone());
@@ -1346,7 +1346,7 @@ public class TransactionManagerTest {
         sendProduceResponse(Errors.NONE, pid, epoch);
         sender.run(time.milliseconds());
         assertTrue(responseFuture.isDone());
-        assertFalse(accumulator.hasUnsent());
+        assertFalse(accumulator.hasUndrained());
         assertFalse(accumulator.hasIncomplete());
         assertFalse(transactionManager.hasInFlightRequest());
 
@@ -1374,25 +1374,25 @@ public class TransactionManagerTest {
 
         prepareAddPartitionsToTxn(tp0, Errors.NONE);
         sender.run(time.milliseconds());
-        assertTrue(accumulator.hasUnsent());
+        assertTrue(accumulator.hasUndrained());
 
         accumulator.beginFlush();
         sender.run(time.milliseconds());
-        assertFalse(accumulator.hasUnsent());
+        assertFalse(accumulator.hasUndrained());
         assertTrue(accumulator.hasIncomplete());
         assertFalse(transactionManager.hasInFlightRequest());
 
         // now we begin the commit with the produce request still pending
         transactionManager.beginCommit();
         sender.run(time.milliseconds());
-        assertFalse(accumulator.hasUnsent());
+        assertFalse(accumulator.hasUndrained());
         assertTrue(accumulator.hasIncomplete());
         assertFalse(transactionManager.hasInFlightRequest());
         assertFalse(responseFuture.isDone());
 
         // until the produce future returns, we will not send EndTxn
         sender.run(time.milliseconds());
-        assertFalse(accumulator.hasUnsent());
+        assertFalse(accumulator.hasUndrained());
         assertTrue(accumulator.hasIncomplete());
         assertFalse(transactionManager.hasInFlightRequest());
         assertFalse(responseFuture.isDone());
@@ -1401,7 +1401,7 @@ public class TransactionManagerTest {
         sendProduceResponse(Errors.NONE, pid, epoch);
         sender.run(time.milliseconds());
         assertTrue(responseFuture.isDone());
-        assertFalse(accumulator.hasUnsent());
+        assertFalse(accumulator.hasUndrained());
         assertFalse(accumulator.hasIncomplete());
         assertFalse(transactionManager.hasInFlightRequest());
 

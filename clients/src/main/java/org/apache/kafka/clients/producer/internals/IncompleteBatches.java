@@ -21,7 +21,8 @@ import java.util.HashSet;
 import java.util.Set;
 
 /*
- * A thread-safe helper class to hold batches that haven't been acknowledged yet
+ * A thread-safe helper class to hold batches that haven't been acknowledged yet (including those
+ * which have and have not been sent).
  */
 class IncompleteBatches {
     private final Set<ProducerBatch> incomplete;
@@ -44,7 +45,7 @@ class IncompleteBatches {
         }
     }
 
-    public Iterable<ProducerBatch> all() {
+    public Iterable<ProducerBatch> copyAll() {
         synchronized (incomplete) {
             return new ArrayList<>(this.incomplete);
         }
