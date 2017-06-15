@@ -302,7 +302,7 @@ public class Sender implements Runnable {
     }
 
     private boolean maybeSendTransactionalRequest(long now) {
-        if (transactionManager.isCompletingTransaction() && !transactionManager.hasPartitionsToAdd()) {
+        if (transactionManager.isCompleting()) {
             // If the transaction is being aborted, then we can clear any unsent produce requests
             if (transactionManager.isAborting())
                 accumulator.abortUnsentBatches(new KafkaException("Failing batch since transaction was aborted"));
@@ -313,13 +313,9 @@ public class Sender implements Runnable {
             // be correct which would lead to an OutOfSequenceException.
             if (!accumulator.flushInProgress())
                 accumulator.beginFlush();
-
-            // Do not send the EndTxn until all pending batches have been completed
-            if (accumulator.hasIncomplete())
-                return false;
         }
 
-        TransactionManager.TxnRequestHandler nextRequestHandler = transactionManager.nextRequestHandler();
+        TransactionManager.TxnRequestHandler nextRequestHandler = transactionManager.nextRequestHandler(accumulator.hasIncomplete());
         if (nextRequestHandler == null)
             return false;
 

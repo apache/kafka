@@ -173,14 +173,14 @@ public class TransactionManager {
         transitionTo(State.IN_TRANSACTION);
     }
 
-    public synchronized TransactionalRequestResult beginCommittingTransaction() {
+    public synchronized TransactionalRequestResult beginCommit() {
         ensureTransactional();
         maybeFailWithError();
         transitionTo(State.COMMITTING_TRANSACTION);
         return beginCompletingTransaction(TransactionResult.COMMIT);
     }
 
-    public synchronized TransactionalRequestResult beginAbortingTransaction() {
+    public synchronized TransactionalRequestResult beginAbort() {
         ensureTransactional();
         if (currentState != State.ABORTABLE_ERROR)
             maybeFailWithError();
@@ -268,7 +268,7 @@ public class TransactionManager {
         return !newPartitionsInTransaction.isEmpty() || !pendingPartitionsInTransaction.isEmpty();
     }
 
-    synchronized boolean isCompletingTransaction() {
+    synchronized boolean isCompleting() {
         return currentState == State.COMMITTING_TRANSACTION || currentState == State.ABORTING_TRANSACTION;
     }
 
@@ -377,14 +377,19 @@ public class TransactionManager {
         sequenceNumbers.put(topicPartition, currentSequenceNumber);
     }
 
-    synchronized TxnRequestHandler nextRequestHandler() {
+    synchronized TxnRequestHandler nextRequestHandler(boolean hasIncompleteBatches) {
         if (!newPartitionsInTransaction.isEmpty())
             enqueueRequest(addPartitionsToTransactionHandler());
 
-        TxnRequestHandler nextRequestHandler = pendingRequests.poll();
+        TxnRequestHandler nextRequestHandler = pendingRequests.peek();
         if (nextRequestHandler == null)
             return null;
 
+        // Do not send the EndTxn until all batches have been flushed
+        if (nextRequestHandler.isEndTxn() && hasIncompleteBatches)
+            return null;
+
+        pendingRequests.poll();
         if (maybeTerminateRequestWithError(nextRequestHandler)) {
             log.trace("{}Not sending transactional request {} because we are in an error state",
                     logPrefix, nextRequestHandler.requestBuilder());
@@ -462,7 +467,7 @@ public class TransactionManager {
     // visible for testing
     synchronized boolean hasOngoingTransaction() {
         // transactions are considered ongoing once started until completion or a fatal error
-        return currentState == State.IN_TRANSACTION || isCompletingTransaction() || hasAbortableError();
+        return currentState == State.IN_TRANSACTION || isCompleting() || hasAbortableError();
     }
 
     // visible for testing
