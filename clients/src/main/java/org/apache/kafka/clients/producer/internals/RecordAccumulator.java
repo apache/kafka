@@ -399,7 +399,7 @@ public final class RecordAccumulator {
     }
 
     /**
-     * @return Whether there are any batches which haven't been drained
+     * Check whether there are any batches which haven't been drained
      */
     public boolean hasUndrained() {
         for (Map.Entry<TopicPartition, Deque<ProducerBatch>> entry : this.batches.entrySet()) {
@@ -576,6 +576,9 @@ public final class RecordAccumulator {
         }
     }
 
+    /**
+     * Check whether there are any pending batches (whether sent or unsent).
+     */
     public boolean hasIncomplete() {
         return !this.incomplete.isEmpty();
     }
@@ -606,6 +609,9 @@ public final class RecordAccumulator {
         abortBatches(new IllegalStateException("Producer is closed forcefully."));
     }
 
+    /**
+     * Abort all incomplete batches (whether they have been sent or not)
+     */
     void abortBatches(final RuntimeException reason) {
         for (ProducerBatch batch : incomplete.copyAll()) {
             Deque<ProducerBatch> dq = getDeque(batch.topicPartition);
@@ -618,6 +624,9 @@ public final class RecordAccumulator {
         }
     }
 
+    /**
+     * Abort any batches which have not been drained
+     */
     void abortUndrainedBatches(RuntimeException reason) {
         for (ProducerBatch batch : incomplete.copyAll()) {
             Deque<ProducerBatch> dq = getDeque(batch.topicPartition);
