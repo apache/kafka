@@ -1315,14 +1315,14 @@ public class TransactionManagerTest {
         sender.run(time.milliseconds());
         assertFalse(accumulator.hasUnsent());
         assertTrue(accumulator.hasIncomplete());
-        assertFalse(transactionManager.hasInflightRequest());
+        assertFalse(transactionManager.hasInFlightRequest());
         assertFalse(responseFuture.isDone());
 
         // until the produce future returns, we will not send EndTxn
         sender.run(time.milliseconds());
         assertFalse(accumulator.hasUnsent());
         assertTrue(accumulator.hasIncomplete());
-        assertFalse(transactionManager.hasInflightRequest());
+        assertFalse(transactionManager.hasInFlightRequest());
         assertFalse(responseFuture.isDone());
 
         // now the produce response returns
@@ -1331,14 +1331,14 @@ public class TransactionManagerTest {
         assertTrue(responseFuture.isDone());
         assertFalse(accumulator.hasUnsent());
         assertFalse(accumulator.hasIncomplete());
-        assertFalse(transactionManager.hasInflightRequest());
+        assertFalse(transactionManager.hasInFlightRequest());
 
         // now we send EndTxn
         sender.run(time.milliseconds());
-        assertTrue(transactionManager.hasInflightRequest());
+        assertTrue(transactionManager.hasInFlightRequest());
         sendEndTxnResponse(Errors.NONE, TransactionResult.COMMIT, pid, epoch);
         sender.run(time.milliseconds());
-        assertFalse(transactionManager.hasInflightRequest());
+        assertFalse(transactionManager.hasInFlightRequest());
         assertTrue(transactionManager.isReady());
     }
 
@@ -1363,21 +1363,21 @@ public class TransactionManagerTest {
         sender.run(time.milliseconds());
         assertFalse(accumulator.hasUnsent());
         assertTrue(accumulator.hasIncomplete());
-        assertFalse(transactionManager.hasInflightRequest());
+        assertFalse(transactionManager.hasInFlightRequest());
 
         // now we begin the commit with the produce request still pending
         transactionManager.beginCommittingTransaction();
         sender.run(time.milliseconds());
         assertFalse(accumulator.hasUnsent());
         assertTrue(accumulator.hasIncomplete());
-        assertFalse(transactionManager.hasInflightRequest());
+        assertFalse(transactionManager.hasInFlightRequest());
         assertFalse(responseFuture.isDone());
 
         // until the produce future returns, we will not send EndTxn
         sender.run(time.milliseconds());
         assertFalse(accumulator.hasUnsent());
         assertTrue(accumulator.hasIncomplete());
-        assertFalse(transactionManager.hasInflightRequest());
+        assertFalse(transactionManager.hasInFlightRequest());
         assertFalse(responseFuture.isDone());
 
         // now the produce response returns
@@ -1386,14 +1386,14 @@ public class TransactionManagerTest {
         assertTrue(responseFuture.isDone());
         assertFalse(accumulator.hasUnsent());
         assertFalse(accumulator.hasIncomplete());
-        assertFalse(transactionManager.hasInflightRequest());
+        assertFalse(transactionManager.hasInFlightRequest());
 
         // now we send EndTxn
         sender.run(time.milliseconds());
-        assertTrue(transactionManager.hasInflightRequest());
+        assertTrue(transactionManager.hasInFlightRequest());
         sendEndTxnResponse(Errors.NONE, TransactionResult.COMMIT, pid, epoch);
         sender.run(time.milliseconds());
-        assertFalse(transactionManager.hasInflightRequest());
+        assertFalse(transactionManager.hasInFlightRequest());
         assertTrue(transactionManager.isReady());
     }
 

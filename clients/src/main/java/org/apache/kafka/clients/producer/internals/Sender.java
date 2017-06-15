@@ -201,7 +201,7 @@ public class Sender implements Runnable {
             if (!transactionManager.isTransactional()) {
                 // this is an idempotent producer, so make sure we have a producer id
                 maybeWaitForProducerId();
-            } else if (transactionManager.hasInflightRequest() || maybeSendTransactionalRequest(now)) {
+            } else if (transactionManager.hasInFlightRequest() || maybeSendTransactionalRequest(now)) {
                 // as long as there are outstanding transactional requests, we simply wait for them to return
                 client.poll(retryBackoffMs, now);
                 return;
