@@ -651,7 +651,6 @@ class LogCleanerTest extends JUnitSuite {
 
     // grouping by very small values should result in all groups having one entry
     groups = cleaner.groupSegmentsBySize(log.logSegments, maxSize = 1, maxIndexSize = Int.MaxValue)
-    println("groups=" + groups)
     assertEquals(log.numberOfSegments, groups.size)
     assertTrue("All groups should be singletons.", groups.forall(_.size == 1))
     checkSegmentOrder(groups)
@@ -695,8 +694,6 @@ class LogCleanerTest extends JUnitSuite {
     while (log.numberOfSegments <= 2)
       log.appendAsLeader(TestUtils.singletonRecords(value = "hello".getBytes, key = "hello".getBytes), leaderEpoch = 0)
 
-    assertEquals(3, log.logSegments.size)
-
     // grouping should result in two groups 
     var groups = cleaner.groupSegmentsBySize(log.logSegments, maxSize = Int.MaxValue, maxIndexSize = Int.MaxValue)
     assertEquals(2, groups.size)
@@ -724,6 +721,14 @@ class LogCleanerTest extends JUnitSuite {
     checkSegmentOrder(groups)
   }
 
+  /** 
+   * Following the loading of a log segment where the index file is zero sized,
+   * the index returned would be the base offset.  Sometimes the log file would
+   * contain data with offsets in excess of the baseOffset which would cause
+   * the log cleaner to group together segments with a range of > Int.MaxValue
+   * this test replicates that scenario to ensure that the segments are grouped
+   * correctly.
+   */
   @Test
   def testSegmentGroupingFollowingLoadOfZeroIndex(): Unit = {
     val cleaner = makeCleaner(Int.MaxValue)
