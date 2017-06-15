@@ -581,7 +581,7 @@ public final class RecordAccumulator {
             if (!entry.getValue().isEmpty())
                 return true;
         }
-        return !this.incomplete.incomplete.isEmpty();
+        return !this.incomplete.isEmpty();
     }
 
     /**
@@ -712,6 +712,12 @@ public final class RecordAccumulator {
         public Iterable<ProducerBatch> all() {
             synchronized (incomplete) {
                 return new ArrayList<>(this.incomplete);
+            }
+        }
+
+        public boolean isEmpty() {
+            synchronized (incomplete) {
+                return incomplete.isEmpty();
             }
         }
     }
