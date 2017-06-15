@@ -26,19 +26,11 @@ public class KafkaThread extends Thread {
 
     private final Logger log = LoggerFactory.getLogger(getClass());
     
-    public static KafkaThread daemon(String name) {
-        return new KafkaThread(name, true);
-    }
-    
-    public static KafkaThread daemon(String name, Runnable runnable) {
+    public static KafkaThread daemon(final String name, Runnable runnable) {
         return new KafkaThread(name, runnable, true);
     }
 
-    public static KafkaThread nonDaemon(String name) {
-        return new KafkaThread(name, false);
-    }
-
-    public static KafkaThread nonDaemon(String name, Runnable runnable) {
+    public static KafkaThread nonDaemon(final String name, Runnable runnable) {
         return new KafkaThread(name, runnable, false);
     }
 
