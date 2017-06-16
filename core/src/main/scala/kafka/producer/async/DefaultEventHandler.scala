@@ -114,9 +114,7 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
             case Some(messageSetPerBroker) =>
               val failedTopicPartitions = send(brokerid, messageSetPerBroker)
               failedTopicPartitions.foreach(topicPartition => {
-                messagesPerBrokerMap.get(topicPartition).foreach { data =>
-                  failedProduceRequests.appendAll(data)
-                }
+                messagesPerBrokerMap.get(topicPartition).foreach(failedProduceRequests.appendAll)
               })
             case None => // failed to group messages
               messagesPerBrokerMap.values.foreach(m => failedProduceRequests.appendAll(m))

@@ -190,21 +190,14 @@ object ConsumerOffsetChecker extends Logging {
       if (options.has("broker-info"))
         printBrokerInfo()
 
-      for ((_, consumerOpt) <- consumerMap)
-        consumerOpt.foreach { consumer =>
-          consumer.close()
-        }
+      consumerMap.values.flatten.foreach(_.close())
     }
     catch {
       case t: Throwable =>
         println("Exiting due to: %s.".format(t.getMessage))
     }
     finally {
-      for (consumerOpt <- consumerMap.values) {
-        consumerOpt.foreach { consumer =>
-          consumer.close()
-        }
-      }
+      consumerMap.values.flatten.foreach(_.close())
       if (zkUtils != null)
         zkUtils.close()
 
