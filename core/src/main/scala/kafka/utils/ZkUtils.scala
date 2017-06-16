@@ -188,13 +188,13 @@ object ZkUtils {
   def parseTopicsData(jsonData: String): Seq[String] = {
     var topics = List.empty[String]
     Json.parseFull(jsonData).foreach { m =>
-        m.asInstanceOf[Map[String, Any]].get("topics").foreach { partitionsSeq =>
-            val mapPartitionSeq = partitionsSeq.asInstanceOf[Seq[Map[String, Any]]]
-            mapPartitionSeq.foreach(p => {
-              val topic = p.get("topic").get.asInstanceOf[String]
-              topics ++= List(topic)
-            })
-        }
+      m.asInstanceOf[Map[String, Any]].get("topics").foreach { partitionsSeq =>
+          val mapPartitionSeq = partitionsSeq.asInstanceOf[Seq[Map[String, Any]]]
+          mapPartitionSeq.foreach(p => {
+            val topic = p.get("topic").get.asInstanceOf[String]
+            topics ++= List(topic)
+          })
+      }
     }
     topics
   }
@@ -713,15 +713,15 @@ class ZkUtils(val zkClient: ZkClient,
     topics.foreach { topic =>
       val jsonPartitionMapOpt = readDataMaybeNull(getTopicPath(topic))._1
       jsonPartitionMapOpt.foreach { jsonPartitionMap =>
-          Json.parseFull(jsonPartitionMap).foreach { m =>
-            m.asInstanceOf[Map[String, Any]].get("partitions").foreach { repl =>
-                val replicaMap = repl.asInstanceOf[Map[String, Seq[Int]]]
-                for((partition, replicas) <- replicaMap){
-                  ret.put(TopicAndPartition(topic, partition.toInt), replicas)
-                  debug("Replicas assigned to topic [%s], partition [%s] are [%s]".format(topic, partition, replicas))
-                }
-            }
+        Json.parseFull(jsonPartitionMap).foreach { m =>
+          m.asInstanceOf[Map[String, Any]].get("partitions").foreach { repl =>
+              val replicaMap = repl.asInstanceOf[Map[String, Seq[Int]]]
+              for((partition, replicas) <- replicaMap){
+                ret.put(TopicAndPartition(topic, partition.toInt), replicas)
+                debug("Replicas assigned to topic [%s], partition [%s] are [%s]".format(topic, partition, replicas))
+              }
           }
+        }
       }
     }
     ret

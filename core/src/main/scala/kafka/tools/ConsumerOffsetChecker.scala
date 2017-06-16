@@ -63,14 +63,14 @@ object ConsumerOffsetChecker extends Logging {
       case Some(bid) =>
         val consumerOpt = consumerMap.getOrElseUpdate(bid, getConsumer(zkUtils, bid))
         consumerOpt.foreach { consumer =>
-            val topicAndPartition = TopicAndPartition(topic, producerId)
-            val request =
-              OffsetRequest(immutable.Map(topicAndPartition -> PartitionOffsetRequestInfo(OffsetRequest.LatestTime, 1)))
-            val logSize = consumer.getOffsetsBefore(request).partitionErrorAndOffsets(topicAndPartition).offsets.head
+          val topicAndPartition = TopicAndPartition(topic, producerId)
+          val request =
+            OffsetRequest(immutable.Map(topicAndPartition -> PartitionOffsetRequestInfo(OffsetRequest.LatestTime, 1)))
+          val logSize = consumer.getOffsetsBefore(request).partitionErrorAndOffsets(topicAndPartition).offsets.head
 
-            val lagString = offsetOpt.map(o => if (o == -1) "unknown" else (logSize - o).toString)
-            println("%-15s %-30s %-3s %-15s %-15s %-15s %s".format(group, topic, producerId, offsetOpt.getOrElse("unknown"), logSize, lagString.getOrElse("unknown"),
-                                                                   owner match {case Some(ownerStr) => ownerStr case None => "none"}))
+          val lagString = offsetOpt.map(o => if (o == -1) "unknown" else (logSize - o).toString)
+          println("%-15s %-30s %-3s %-15s %-15s %-15s %s".format(group, topic, producerId, offsetOpt.getOrElse("unknown"), logSize, lagString.getOrElse("unknown"),
+                                                                 owner match {case Some(ownerStr) => ownerStr case None => "none"}))
         }
       case None =>
         println("No broker for partition %s - %s".format(topic, producerId))
@@ -89,7 +89,7 @@ object ConsumerOffsetChecker extends Logging {
     println("BROKER INFO")
     for ((bid, consumerOpt) <- consumerMap)
       consumerOpt.foreach { consumer =>
-          println("%s -> %s:%d".format(bid, consumer.host, consumer.port))
+        println("%s -> %s:%d".format(bid, consumer.host, consumer.port))
       }
   }
 

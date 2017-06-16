@@ -776,16 +776,16 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
                                        queuesToBeCleared: Iterable[BlockingQueue[FetchedDataChunk]]) {
       val allPartitionInfos = topicRegistry.values.map(p => p.values).flatten
       fetcher.foreach { f =>
-          f.stopConnections()
-          clearFetcherQueues(allPartitionInfos, cluster, queuesToBeCleared, messageStreams)
-          /**
-          * here, we need to commit offsets before stopping the consumer from returning any more messages
-          * from the current data chunk. Since partition ownership is not yet released, this commit offsets
-          * call will ensure that the offsets committed now will be used by the next consumer thread owning the partition
-          * for the current data chunk. Since the fetchers are already shutdown and this is the last chunk to be iterated
-          * by the consumer, there will be no more messages returned by this iterator until the rebalancing finishes
-          * successfully and the fetchers restart to fetch more data chunks
-          **/
+        f.stopConnections()
+        clearFetcherQueues(allPartitionInfos, cluster, queuesToBeCleared, messageStreams)
+        /**
+        * here, we need to commit offsets before stopping the consumer from returning any more messages
+        * from the current data chunk. Since partition ownership is not yet released, this commit offsets
+        * call will ensure that the offsets committed now will be used by the next consumer thread owning the partition
+        * for the current data chunk. Since the fetchers are already shutdown and this is the last chunk to be iterated
+        * by the consumer, there will be no more messages returned by this iterator until the rebalancing finishes
+        * successfully and the fetchers restart to fetch more data chunks
+        **/
         if (config.autoCommitEnable) {
           info("Committing all offsets after clearing the fetcher queues")
           commitOffsets(true)
