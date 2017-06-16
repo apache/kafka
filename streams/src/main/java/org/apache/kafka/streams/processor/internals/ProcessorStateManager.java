@@ -286,7 +286,7 @@ public class ProcessorStateManager implements StateManager {
                         if (firstException == null) {
                             firstException = new ProcessorStateException(String.format("%s Failed to close state store %s", logPrefix, entry.getKey()), e);
                         }
-                        log.error("{} Failed to close state store {} due to {}", logPrefix, entry.getKey(), e);
+                        log.error("{} Failed to close state store {}: ", logPrefix, entry.getKey(), e);
                     }
                 }
 
@@ -303,7 +303,7 @@ public class ProcessorStateManager implements StateManager {
                 if (firstException == null) {
                     firstException = new ProcessorStateException(String.format("%s Failed to release state dir lock", logPrefix), e);
                 }
-                log.error("{} Failed to release state dir lock due to {}", logPrefix, e);
+                log.error("{} Failed to release state dir lock: ", logPrefix, e);
             }
         }
 
@@ -339,7 +339,7 @@ public class ProcessorStateManager implements StateManager {
             }
             checkpoint.write(checkpointedOffsets);
         } catch (final IOException e) {
-            log.warn("Failed to write checkpoint file to {}", new File(baseDir, CHECKPOINT_FILE_NAME), e);
+            log.warn("Failed to write checkpoint file to {}:", new File(baseDir, CHECKPOINT_FILE_NAME), e);
         }
     }
 
