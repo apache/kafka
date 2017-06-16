@@ -162,10 +162,10 @@ class LogTest {
     val pid = 1L
     val epoch: Short = 0
 
-    val records = TestUtils.records(List(new SimpleRecord(time.milliseconds, "key".getBytes, "value".getBytes)), pid = pid, epoch = epoch, sequence = 0)
+    val records = TestUtils.records(List(new SimpleRecord(time.milliseconds, "key".getBytes, "value".getBytes)), pid = pid, producerEpoch = epoch, sequence = 0)
     log.appendAsLeader(records, leaderEpoch = 0)
 
-    val nextRecords = TestUtils.records(List(new SimpleRecord(time.milliseconds, "key".getBytes, "value".getBytes)), pid = pid, epoch = epoch, sequence = 2)
+    val nextRecords = TestUtils.records(List(new SimpleRecord(time.milliseconds, "key".getBytes, "value".getBytes)), pid = pid, producerEpoch = epoch, sequence = 2)
     log.appendAsLeader(nextRecords, leaderEpoch = 0)
   }
 
@@ -175,7 +175,6 @@ class LogTest {
     // snapshot files, and then reloading the log
 
     val log = createLog(64, messagesPerSegment = 10)
-    assertEquals(None, log.oldestProducerSnapshotOffset)
 
     for (i <- 0 to 100) {
       val record = new SimpleRecord(time.milliseconds, i.toString.getBytes)
@@ -183,11 +182,11 @@ class LogTest {
     }
 
     assertTrue(log.logSegments.size >= 2)
-    log.close()
-
     logDir.listFiles.filter(f => f.isFile && f.getName.endsWith(Log.PidSnapshotFileSuffix)).foreach { file =>
       Files.delete(file.toPath)
     }
+    assertEquals(None, log.oldestProducerSnapshotOffset)
+    log.close()
 
     val reloadedLog = createLog(64, messagesPerSegment = 10)
     val expectedSnapshotsOffsets = log.logSegments.toSeq.reverse.take(2).map(_.baseOffset) ++ Seq(reloadedLog.logEndOffset)
@@ -214,7 +213,7 @@ class LogTest {
     val baseOffset = 23L
 
     // create a batch with a couple gaps to simulate compaction
-    val records = TestUtils.records(pid = pid, epoch = epoch, sequence = seq, baseOffset = baseOffset, records = List(
+    val records = TestUtils.records(pid = pid, producerEpoch = epoch, sequence = seq, baseOffset = baseOffset, records = List(
       new SimpleRecord(System.currentTimeMillis(), "a".getBytes),
       new SimpleRecord(System.currentTimeMillis(), "key".getBytes, "b".getBytes),
       new SimpleRecord(System.currentTimeMillis(), "c".getBytes),
@@ -239,10 +238,10 @@ class LogTest {
 
     log.truncateTo(baseOffset + 4)
 
-    val activePids = log.activePids
-    assertTrue(activePids.contains(pid))
+    val activeProducers = log.activeProducers
+    assertTrue(activeProducers.contains(pid))
 
-    val entry = activePids(pid)
+    val entry = activeProducers(pid)
     assertEquals(0, entry.firstSeq)
     assertEquals(baseOffset, entry.firstOffset)
     assertEquals(3, entry.lastSeq)
@@ -258,7 +257,7 @@ class LogTest {
     val baseOffset = 23L
 
     // create a batch with a couple gaps to simulate compaction
-    val records = TestUtils.records(pid = pid, epoch = epoch, sequence = seq, baseOffset = baseOffset, records = List(
+    val records = TestUtils.records(pid = pid, producerEpoch = epoch, sequence = seq, baseOffset = baseOffset, records = List(
       new SimpleRecord(System.currentTimeMillis(), "a".getBytes),
       new SimpleRecord(System.currentTimeMillis(), "key".getBytes, "b".getBytes),
       new SimpleRecord(System.currentTimeMillis(), "c".getBytes),
@@ -273,10 +272,10 @@ class LogTest {
     val filteredRecords = MemoryRecords.readableRecords(filtered)
 
     log.appendAsFollower(filteredRecords)
-    val activePids = log.activePids
-    assertTrue(activePids.contains(pid))
+    val activeProducers = log.activeProducers
+    assertTrue(activeProducers.contains(pid))
 
-    val entry = activePids(pid)
+    val entry = activeProducers(pid)
     assertEquals(0, entry.firstSeq)
     assertEquals(baseOffset, entry.firstOffset)
     assertEquals(3, entry.lastSeq)
@@ -298,8 +297,64 @@ class LogTest {
     assertEquals(2, log.latestProducerStateEndOffset)
 
     log.truncateTo(1)
-    assertEquals(None, log.latestProducerSnapshotOffset)
+    assertEquals(Some(0), log.latestProducerSnapshotOffset)
     assertEquals(1, log.latestProducerStateEndOffset)
+  }
+
+  @Test
+  def testTruncateToWithEmptyProducerState() {
+    val log = createLog(2048)
+    log.appendAsLeader(TestUtils.records(List(new SimpleRecord("a".getBytes))), leaderEpoch = 0)
+    log.appendAsLeader(TestUtils.records(List(new SimpleRecord("b".getBytes))), leaderEpoch = 0)
+    log.appendAsLeader(TestUtils.records(List(new SimpleRecord("c".getBytes))), leaderEpoch = 0)
+    log.appendAsLeader(TestUtils.records(List(new SimpleRecord("d".getBytes))), leaderEpoch = 0)
+    assertTrue(log.activeProducers.isEmpty)
+    assertEquals(4L, log.latestProducerStateEndOffset)
+
+    log.truncateTo(1L)
+    assertTrue(log.activeProducers.isEmpty)
+    assertEquals(1L, log.latestProducerStateEndOffset)
+  }
+
+  @Test
+  def testTruncateBeforeOldestProducerSnapshot(): Unit = {
+    val pid = 1L
+    val log = createLog(2048)
+
+    // delete all snapshot files
+    logDir.listFiles.filter(f => f.isFile && f.getName.endsWith(Log.PidSnapshotFileSuffix)).foreach { file =>
+      Files.delete(file.toPath)
+    }
+    assertEquals(None, log.oldestProducerSnapshotOffset)
+
+    log.appendAsLeader(TestUtils.records(List(new SimpleRecord("a".getBytes)), pid = pid, sequence = 0, producerEpoch = 0), leaderEpoch = 0)
+    log.appendAsLeader(TestUtils.records(List(new SimpleRecord("b".getBytes)), pid = pid, sequence = 1, producerEpoch = 0), leaderEpoch = 0)
+    log.takeProducerSnapshot()
+
+    log.truncateTo(1)
+    assertEquals(Some(0), log.oldestProducerSnapshotOffset)
+    assertEquals(1, log.latestProducerStateEndOffset)
+
+    assertEquals(1, log.activeProducers.size)
+    val entry = log.activeProducers(pid)
+    assertEquals(0, entry.lastSeq)
+    assertEquals(0, entry.lastOffset)
+    assertEquals(0, entry.producerEpoch)
+  }
+
+  @Test
+  def testTakeEmptySnapshotAfterFullTruncation(): Unit = {
+    val pid = 1L
+    val log = createLog(2048)
+    log.appendAsLeader(TestUtils.records(List(new SimpleRecord("a".getBytes)), pid = pid, sequence = 0, producerEpoch = 0), leaderEpoch = 0)
+    log.appendAsLeader(TestUtils.records(List(new SimpleRecord("b".getBytes)), pid = pid, sequence = 1, producerEpoch = 0), leaderEpoch = 0)
+    log.takeProducerSnapshot()
+
+    log.truncateFullyAndStartAt(1)
+    assertEquals(Some(1), log.oldestProducerSnapshotOffset)
+    assertEquals(Some(1), log.latestProducerSnapshotOffset)
+    assertEquals(1, log.latestProducerStateEndOffset)
+    assertTrue(log.activeProducers.isEmpty)
   }
 
   @Test
@@ -319,61 +374,97 @@ class LogTest {
 
     log.truncateFullyAndStartAt(29)
     assertEquals(1, log.logSegments.size)
-    assertEquals(None, log.latestProducerSnapshotOffset)
+    assertEquals(Some(29), log.latestProducerSnapshotOffset)
+    assertEquals(Some(29), log.oldestProducerSnapshotOffset)
     assertEquals(29, log.latestProducerStateEndOffset)
   }
 
   @Test
   def testPidExpirationOnSegmentDeletion() {
     val pid1 = 1L
-    val records = TestUtils.records(Seq(new SimpleRecord("foo".getBytes)), pid = pid1, epoch = 0, sequence = 0)
+    val records = TestUtils.records(Seq(new SimpleRecord("foo".getBytes)), pid = pid1, producerEpoch = 0, sequence = 0)
     val log = createLog(records.sizeInBytes, messagesPerSegment = 1, retentionBytes = records.sizeInBytes * 2)
     log.appendAsLeader(records, leaderEpoch = 0)
     log.takeProducerSnapshot()
 
     val pid2 = 2L
-    log.appendAsLeader(TestUtils.records(Seq(new SimpleRecord("bar".getBytes)), pid = pid2, epoch = 0, sequence = 0),
+    log.appendAsLeader(TestUtils.records(Seq(new SimpleRecord("bar".getBytes)), pid = pid2, producerEpoch = 0, sequence = 0),
       leaderEpoch = 0)
-    log.appendAsLeader(TestUtils.records(Seq(new SimpleRecord("baz".getBytes)), pid = pid2, epoch = 0, sequence = 1),
+    log.appendAsLeader(TestUtils.records(Seq(new SimpleRecord("baz".getBytes)), pid = pid2, producerEpoch = 0, sequence = 1),
       leaderEpoch = 0)
     log.takeProducerSnapshot()
 
     assertEquals(3, log.logSegments.size)
-    assertEquals(Set(pid1, pid2), log.activePids.keySet)
+    assertEquals(Set(pid1, pid2), log.activeProducers.keySet)
 
     log.deleteOldSegments()
 
     assertEquals(2, log.logSegments.size)
-    assertEquals(Set(pid2), log.activePids.keySet)
+    assertEquals(Set(pid2), log.activeProducers.keySet)
+  }
+
+  @Test
+  def testSnapshotRetainedAfterProducerIdExpiration() {
+    val pid1 = 1L
+    val records = TestUtils.records(Seq(new SimpleRecord("foo".getBytes)), pid = pid1, producerEpoch = 0, sequence = 0)
+    val log = createLog(records.sizeInBytes, messagesPerSegment = 1, retentionBytes = records.sizeInBytes * 2)
+    log.appendAsLeader(records, leaderEpoch = 0)
+    log.takeProducerSnapshot()
+
+    val pid2 = 2L
+    log.appendAsLeader(TestUtils.records(Seq(new SimpleRecord("bar".getBytes)), pid = pid2, producerEpoch = 0, sequence = 0),
+      leaderEpoch = 0)
+    log.appendAsLeader(TestUtils.records(Seq(new SimpleRecord("baz".getBytes)), pid = pid2, producerEpoch = 0, sequence = 1),
+      leaderEpoch = 0)
+
+    assertEquals(3, log.logSegments.size)
+    assertEquals(Set(pid1, pid2), log.activeProducers.keySet)
+
+    // this is a bit contrived, but we force deletion of all snapshots to ensure that deleteOldSegments() will
+    // create a new snapshot if needed
+    logDir.listFiles.filter(f => f.isFile && f.getName.endsWith(Log.PidSnapshotFileSuffix)).foreach { file =>
+      Files.delete(file.toPath)
+    }
+
+    log.deleteOldSegments()
+
+    assertEquals(2, log.logSegments.size)
+    assertEquals(Set(pid2), log.activeProducers.keySet)
+    assertEquals(Some(log.logStartOffset), log.oldestProducerSnapshotOffset)
   }
 
   @Test
   def testTakeSnapshotOnRollAndDeleteSnapshotOnFlush() {
+    // roll triggers a flush at the starting offset of the new segment. we should
+    // retain the snapshots from the active segment, the previous segment,
+    // and the log start offset. Other snapshots should be removed.
+
     val log = createLog(2048)
     log.appendAsLeader(TestUtils.singletonRecords("a".getBytes), leaderEpoch = 0)
     log.roll(1L)
+    assertTrue(Seq(0L, 1L).forall(Log.producerSnapshotFile(logDir, _).exists))
     assertEquals(Some(1L), log.latestProducerSnapshotOffset)
-    assertEquals(Some(1L), log.oldestProducerSnapshotOffset)
+    assertEquals(Some(0L), log.oldestProducerSnapshotOffset)
 
     log.appendAsLeader(TestUtils.singletonRecords("b".getBytes), leaderEpoch = 0)
     log.roll(2L)
+    assertTrue(Seq(0L, 1L, 2L).forall(Log.producerSnapshotFile(logDir, _).exists))
+    assertEquals(Some(0L), log.oldestProducerSnapshotOffset)
     assertEquals(Some(2L), log.latestProducerSnapshotOffset)
-    assertEquals(Some(1L), log.oldestProducerSnapshotOffset)
 
     log.appendAsLeader(TestUtils.singletonRecords("c".getBytes), leaderEpoch = 0)
     log.roll(3L)
+    assertTrue(Seq(0L, 2L, 3L).forall(Log.producerSnapshotFile(logDir, _).exists))
+    assertTrue(Seq(1L).forall(!Log.producerSnapshotFile(logDir, _).exists))
+    assertEquals(Some(0L), log.oldestProducerSnapshotOffset)
     assertEquals(Some(3L), log.latestProducerSnapshotOffset)
 
-    // roll triggers a flush at the starting offset of the new segment. we should
-    // retain the snapshots from the active segment and the previous segment, but
-    // the oldest one should be gone
-    assertEquals(Some(2L), log.oldestProducerSnapshotOffset)
-
-    // even if we flush within the active segment, the snapshot should remain
+    // if we flush within the active segment, nothing changes
     log.appendAsLeader(TestUtils.singletonRecords("baz".getBytes), leaderEpoch = 0)
     log.flush(4L)
+    assertTrue(Seq(0L, 2L, 3L).forall(Log.producerSnapshotFile(logDir, _).exists))
     assertEquals(Some(3L), log.latestProducerSnapshotOffset)
-    assertEquals(Some(2L), log.oldestProducerSnapshotOffset)
+    assertEquals(Some(0L), log.oldestProducerSnapshotOffset)
   }
 
   @Test
@@ -423,15 +514,15 @@ class LogTest {
     val log = createLog(2048, maxPidExpirationMs = maxPidExpirationMs,
       pidExpirationCheckIntervalMs = expirationCheckInterval)
     val records = Seq(new SimpleRecord(time.milliseconds(), "foo".getBytes))
-    log.appendAsLeader(TestUtils.records(records, pid = pid, epoch = 0, sequence = 0), leaderEpoch = 0)
+    log.appendAsLeader(TestUtils.records(records, pid = pid, producerEpoch = 0, sequence = 0), leaderEpoch = 0)
 
-    assertEquals(Set(pid), log.activePids.keySet)
-
-    time.sleep(expirationCheckInterval)
-    assertEquals(Set(pid), log.activePids.keySet)
+    assertEquals(Set(pid), log.activeProducers.keySet)
 
     time.sleep(expirationCheckInterval)
-    assertEquals(Set(), log.activePids.keySet)
+    assertEquals(Set(pid), log.activeProducers.keySet)
+
+    time.sleep(expirationCheckInterval)
+    assertEquals(Set(), log.activeProducers.keySet)
   }
 
   @Test
@@ -453,7 +544,7 @@ class LogTest {
     // Pad the beginning of the log.
     for (_ <- 0 to 5) {
       val record = TestUtils.records(List(new SimpleRecord(time.milliseconds, "key".getBytes, "value".getBytes)),
-        pid = pid, epoch = epoch, sequence = seq)
+        pid = pid, producerEpoch = epoch, sequence = seq)
       log.appendAsLeader(record, leaderEpoch = 0)
       seq = seq + 1
     }
@@ -462,7 +553,7 @@ class LogTest {
       new SimpleRecord(time.milliseconds, s"key-$seq".getBytes, s"value-$seq".getBytes),
       new SimpleRecord(time.milliseconds, s"key-$seq".getBytes, s"value-$seq".getBytes),
       new SimpleRecord(time.milliseconds, s"key-$seq".getBytes, s"value-$seq".getBytes)
-    ), pid = pid, epoch = epoch, sequence = seq)
+    ), pid = pid, producerEpoch = epoch, sequence = seq)
     val multiEntryAppendInfo = log.appendAsLeader(createRecords, leaderEpoch = 0)
     assertEquals("should have appended 3 entries", multiEntryAppendInfo.lastOffset - multiEntryAppendInfo.firstOffset + 1, 3)
 
@@ -481,7 +572,7 @@ class LogTest {
         List(
           new SimpleRecord(time.milliseconds, s"key-$seq".getBytes, s"value-$seq".getBytes),
           new SimpleRecord(time.milliseconds, s"key-$seq".getBytes, s"value-$seq".getBytes)),
-        pid = pid, epoch = epoch, sequence = seq - 2)
+        pid = pid, producerEpoch = epoch, sequence = seq - 2)
       log.appendAsLeader(records, leaderEpoch = 0)
       fail ("Should have received an OutOfOrderSequenceException since we attempted to append a duplicate of a records " +
         "in the middle of the log.")
@@ -493,7 +584,7 @@ class LogTest {
      try {
       val records = TestUtils.records(
         List(new SimpleRecord(time.milliseconds, s"key-1".getBytes, s"value-1".getBytes)),
-        pid = pid, epoch = epoch, sequence = 1)
+        pid = pid, producerEpoch = epoch, sequence = 1)
       log.appendAsLeader(records, leaderEpoch = 0)
       fail ("Should have received an OutOfOrderSequenceException since we attempted to append a duplicate of a records " +
         "in the middle of the log.")
@@ -503,7 +594,7 @@ class LogTest {
 
     // Append a duplicate entry with a single records at the tail of the log. This should return the appendInfo of the original entry.
     def createRecordsWithDuplicate = TestUtils.records(List(new SimpleRecord(time.milliseconds, "key".getBytes, "value".getBytes)),
-      pid = pid, epoch = epoch, sequence = seq)
+      pid = pid, producerEpoch = epoch, sequence = seq)
     val origAppendInfo = log.appendAsLeader(createRecordsWithDuplicate, leaderEpoch = 0)
     val newAppendInfo = log.appendAsLeader(createRecordsWithDuplicate, leaderEpoch = 0)
     assertEquals("Inserted a duplicate records into the log", origAppendInfo.firstOffset, newAppendInfo.firstOffset)
@@ -643,10 +734,10 @@ class LogTest {
     val newEpoch: Short = 1
     val oldEpoch: Short = 0
 
-    val records = TestUtils.records(List(new SimpleRecord(time.milliseconds, "key".getBytes, "value".getBytes)), pid = pid, epoch = newEpoch, sequence = 0)
+    val records = TestUtils.records(List(new SimpleRecord(time.milliseconds, "key".getBytes, "value".getBytes)), pid = pid, producerEpoch = newEpoch, sequence = 0)
     log.appendAsLeader(records, leaderEpoch = 0)
 
-    val nextRecords = TestUtils.records(List(new SimpleRecord(time.milliseconds, "key".getBytes, "value".getBytes)), pid = pid, epoch = oldEpoch, sequence = 0)
+    val nextRecords = TestUtils.records(List(new SimpleRecord(time.milliseconds, "key".getBytes, "value".getBytes)), pid = pid, producerEpoch = oldEpoch, sequence = 0)
     log.appendAsLeader(nextRecords, leaderEpoch = 0)
   }
 
@@ -1910,21 +2001,25 @@ class LogTest {
       log.appendAsLeader(createRecords, leaderEpoch = 0)
     assertEquals("should have 3 segments", 3, log.numberOfSegments)
     assertEquals(log.logStartOffset, 0)
+    assertEquals(Some(0), log.oldestProducerSnapshotOffset)
 
     log.maybeIncrementLogStartOffset(1)
     log.deleteOldSegments()
     assertEquals("should have 3 segments", 3, log.numberOfSegments)
     assertEquals(log.logStartOffset, 1)
+    assertEquals(Some(1), log.oldestProducerSnapshotOffset)
 
     log.maybeIncrementLogStartOffset(6)
     log.deleteOldSegments()
     assertEquals("should have 2 segments", 2, log.numberOfSegments)
     assertEquals(log.logStartOffset, 6)
+    assertEquals(Some(6), log.oldestProducerSnapshotOffset)
 
     log.maybeIncrementLogStartOffset(15)
     log.deleteOldSegments()
     assertEquals("should have 1 segments", 1, log.numberOfSegments)
     assertEquals(log.logStartOffset, 15)
+    assertEquals(Some(15), log.oldestProducerSnapshotOffset)
   }
 
   def epochCache(log: Log): LeaderEpochFileCache = {
@@ -1940,7 +2035,7 @@ class LogTest {
     for (_ <- 0 until 15)
       log.appendAsLeader(createRecords, leaderEpoch = 0)
 
-    log.deleteOldSegments
+    log.deleteOldSegments()
     assertEquals("should have 2 segments", 2,log.numberOfSegments)
   }
 
@@ -1953,7 +2048,7 @@ class LogTest {
     for (_ <- 0 until 15)
       log.appendAsLeader(createRecords, leaderEpoch = 0)
 
-    log.deleteOldSegments
+    log.deleteOldSegments()
     assertEquals("should have 3 segments", 3,log.numberOfSegments)
   }
 

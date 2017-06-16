@@ -353,12 +353,12 @@ object TestUtils extends Logging {
               magicValue: Byte = RecordBatch.CURRENT_MAGIC_VALUE,
               codec: CompressionType = CompressionType.NONE,
               pid: Long = RecordBatch.NO_PRODUCER_ID,
-              epoch: Short = RecordBatch.NO_PRODUCER_EPOCH,
+              producerEpoch: Short = RecordBatch.NO_PRODUCER_EPOCH,
               sequence: Int = RecordBatch.NO_SEQUENCE,
               baseOffset: Long = 0L): MemoryRecords = {
     val buf = ByteBuffer.allocate(DefaultRecordBatch.sizeInBytes(records.asJava))
     val builder = MemoryRecords.builder(buf, magicValue, codec, TimestampType.CREATE_TIME, baseOffset,
-      System.currentTimeMillis, pid, epoch, sequence)
+      System.currentTimeMillis, pid, producerEpoch, sequence)
     records.foreach(builder.append)
     builder.build()
   }

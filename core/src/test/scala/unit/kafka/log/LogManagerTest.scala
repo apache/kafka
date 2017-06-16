@@ -105,8 +105,8 @@ class LogManagerTest {
     assertEquals("Now there should only be only one segment in the index.", 1, log.numberOfSegments)
     time.sleep(log.config.fileDeleteDelayMs + 1)
 
-    // there should be a log file, two indexes, and the leader epoch checkpoint
-    assertEquals("Files should have been deleted", log.numberOfSegments * 3 + 1, log.dir.list.length)
+    // there should be a log file, two indexes, one empty producer snapshot, and the leader epoch checkpoint
+    assertEquals("Files should have been deleted", log.numberOfSegments * 4 + 1, log.dir.list.length)
     assertEquals("Should get empty fetch off new log.", 0, log.readUncommitted(offset+1, 1024).records.sizeInBytes)
 
     try {
@@ -132,7 +132,7 @@ class LogManagerTest {
     val config = LogConfig.fromProps(logConfig.originals, logProps)
 
     logManager = createLogManager()
-    logManager.startup
+    logManager.startup()
 
     // create a log
     val log = logManager.createLog(new TopicPartition(name, 0), config)
@@ -154,8 +154,8 @@ class LogManagerTest {
     time.sleep(log.config.fileDeleteDelayMs + 1)
 
     // there should be a log file, two indexes (the txn index is created lazily),
-    // the leader epoch checkpoint and two pid mapping files (one for the active and previous segments)
-    assertEquals("Files should have been deleted", log.numberOfSegments * 3 + 3, log.dir.list.length)
+    // the leader epoch checkpoint and three pid mapping files (one for active and previous segments and the log start offset)
+    assertEquals("Files should have been deleted", log.numberOfSegments * 3 + 4, log.dir.list.length)
     assertEquals("Should get empty fetch off new log.", 0, log.readUncommitted(offset + 1, 1024).records.sizeInBytes)
     try {
       log.readUncommitted(0, 1024)
