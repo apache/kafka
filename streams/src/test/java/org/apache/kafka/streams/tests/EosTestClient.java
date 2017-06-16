@@ -152,9 +152,9 @@ public class EosTestClient extends SmokeTestUtil {
 
             repartitionedData.process(SmokeTestUtil.printProcessorSupplier("repartition"));
 
-            final KGroupedStream<String, Integer> groupedData2 = repartitionedData.groupByKey();
+            final KGroupedStream<String, Integer> groupedDataAfterRepartitioning = repartitionedData.groupByKey();
             // max
-            groupedData2
+            groupedDataAfterRepartitioning
                 .aggregate(
                     new Initializer<Integer>() {
                         @Override
@@ -175,7 +175,7 @@ public class EosTestClient extends SmokeTestUtil {
                 .to(stringSerde, intSerde, "max");
 
             // count
-            groupedData2.count("cnt")
+            groupedDataAfterRepartitioning.count("cnt")
                 .to(stringSerde, longSerde, "cnt");
         }
 
