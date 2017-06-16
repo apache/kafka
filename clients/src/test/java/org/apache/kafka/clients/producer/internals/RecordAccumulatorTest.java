@@ -138,11 +138,59 @@ public class RecordAccumulatorTest {
     }
 
     @Test
-    public void testAppendLarge() throws Exception {
+    public void testAppendLargeCompressed() throws Exception {
+        testAppendLarge(CompressionType.GZIP);
+    }
+
+    @Test
+    public void testAppendLargeNonCompressed() throws Exception {
+        testAppendLarge(CompressionType.NONE);
+    }
+
+    private void testAppendLarge(CompressionType compressionType) throws Exception {
         int batchSize = 512;
         byte[] value = new byte[2 * batchSize];
         RecordAccumulator accum = new RecordAccumulator(batchSize + DefaultRecordBatch.RECORD_BATCH_OVERHEAD, 10 * 1024,
-                CompressionType.NONE, 0L, 100L, metrics, time, new ApiVersions(), null);
+                compressionType, 0L, 100L, metrics, time, new ApiVersions(), null);
+        accum.append(tp1, 0L, key, value, Record.EMPTY_HEADERS, null, maxBlockTimeMs);
+        assertEquals("Our partition's leader should be ready", Collections.singleton(node1), accum.ready(cluster, time.milliseconds()).readyNodes);
+
+        Deque<ProducerBatch> batches = accum.batches().get(tp1);
+        assertEquals(1, batches.size());
+        ProducerBatch producerBatch = batches.peek();
+        List<MutableRecordBatch> recordBatches = TestUtils.toList(producerBatch.records().batches());
+        assertEquals(1, recordBatches.size());
+        MutableRecordBatch recordBatch = recordBatches.get(0);
+        assertEquals(0L, recordBatch.baseOffset());
+        List<Record> records = TestUtils.toList(recordBatch);
+        assertEquals(1, records.size());
+        Record record = records.get(0);
+        assertEquals(0L, record.offset());
+        assertEquals(ByteBuffer.wrap(key), record.key());
+        assertEquals(ByteBuffer.wrap(value), record.value());
+        assertEquals(0L, record.timestamp());
+    }
+
+    @Test
+    public void testAppendLargeOldMessageFormatCompressed() throws Exception {
+        testAppendLargeOldMessageFormat(CompressionType.GZIP);
+    }
+
+    @Test
+    public void testAppendLargeOldMessageFormatNonCompressed() throws Exception {
+        testAppendLargeOldMessageFormat(CompressionType.NONE);
+    }
+
+    private void testAppendLargeOldMessageFormat(CompressionType compressionType) throws Exception {
+        int batchSize = 512;
+        byte[] value = new byte[2 * batchSize];
+
+        ApiVersions apiVersions = new ApiVersions();
+        apiVersions.update(node1.idString(), NodeApiVersions.create(Collections.singleton(
+                new ApiVersionsResponse.ApiVersion(ApiKeys.PRODUCE.id, (short) 0, (short) 2))));
+
+        RecordAccumulator accum = new RecordAccumulator(batchSize + DefaultRecordBatch.RECORD_BATCH_OVERHEAD, 10 * 1024,
+                compressionType, 0L, 100L, metrics, time, apiVersions, null);
         accum.append(tp1, 0L, key, value, Record.EMPTY_HEADERS, null, maxBlockTimeMs);
         assertEquals("Our partition's leader should be ready", Collections.singleton(node1), accum.ready(cluster, time.milliseconds()).readyNodes);
 

@@ -709,9 +709,8 @@ public class MemoryRecordsBuilder {
         }
 
         // Be conservative and not take compression of the new record into consideration.
-        return numRecords == 0 ?
-                bufferStream.remaining() >= recordSize :
-                this.writeLimit >= estimatedBytesWritten() + recordSize;
+        // If there are no records inserted, allow the append (the ByteBufferOutputStream will grow as needed)
+        return numRecords == 0 || this.writeLimit >= estimatedBytesWritten() + recordSize;
     }
 
     public boolean isClosed() {
