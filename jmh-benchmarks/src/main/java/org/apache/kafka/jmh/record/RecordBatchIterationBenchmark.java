@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.jmh.record;
 
-import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.record.AbstractRecords;
 import org.apache.kafka.common.record.BufferSupplier;
 import org.apache.kafka.common.record.CompressionType;
