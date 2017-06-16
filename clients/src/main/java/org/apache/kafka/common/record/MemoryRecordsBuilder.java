@@ -679,8 +679,8 @@ public class MemoryRecordsBuilder {
     /**
      * Check if we have room for a new record containing the given key/value pair
      */
-    public boolean hasRoomFor(long timestamp, byte[] key, byte[] value) {
-        return hasRoomFor(timestamp, wrapNullable(key), wrapNullable(value));
+    public boolean hasRoomFor(long timestamp, byte[] key, byte[] value, Header[] headers) {
+        return hasRoomFor(timestamp, wrapNullable(key), wrapNullable(value), headers);
     }
 
     /**
@@ -695,7 +695,7 @@ public class MemoryRecordsBuilder {
      * the checking should be based on the capacity of the initialized buffer rather than the write limit in order
      * to accept this single record.
      */
-    public boolean hasRoomFor(long timestamp, ByteBuffer key, ByteBuffer value) {
+    public boolean hasRoomFor(long timestamp, ByteBuffer key, ByteBuffer value, Header[] headers) {
         if (isFull())
             return false;
 
@@ -705,7 +705,7 @@ public class MemoryRecordsBuilder {
         } else {
             int nextOffsetDelta = lastOffset == null ? 0 : (int) (lastOffset - baseOffset + 1);
             long timestampDelta = baseTimestamp == null ? 0 : timestamp - baseTimestamp;
-            recordSize = DefaultRecord.sizeInBytes(nextOffsetDelta, timestampDelta, key, value, Record.EMPTY_HEADERS);
+            recordSize = DefaultRecord.sizeInBytes(nextOffsetDelta, timestampDelta, key, value, headers);
         }
 
         // Be conservative and not take compression of the new record into consideration.
