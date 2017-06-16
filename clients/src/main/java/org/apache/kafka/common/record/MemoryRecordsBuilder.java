@@ -677,23 +677,20 @@ public class MemoryRecordsBuilder {
     }
 
     /**
-     * Check if we have room for a new record containing the given key/value pair
+     * Check if we have room for a new record containing the given key/value pair. If no records have been
+     * appended, then this returns true.
      */
     public boolean hasRoomFor(long timestamp, byte[] key, byte[] value, Header[] headers) {
         return hasRoomFor(timestamp, wrapNullable(key), wrapNullable(value), headers);
     }
 
     /**
-     * Check if we have room for a new record containing the given key/value pair
+     * Check if we have room for a new record containing the given key/value pair. If no records have been
+     * appended, then this returns true.
      *
      * Note that the return value is based on the estimate of the bytes written to the compressor, which may not be
-     * accurate if compression is really used. When this happens, the following append may cause dynamic buffer
+     * accurate if compression is used. When this happens, the following append may cause dynamic buffer
      * re-allocation in the underlying byte buffer stream.
-     *
-     * There is an exceptional case when appending a single message whose size is larger than the batch size, the
-     * capacity will be the message size which is larger than the write limit, i.e. the batch size. In this case
-     * the checking should be based on the capacity of the initialized buffer rather than the write limit in order
-     * to accept this single record.
      */
     public boolean hasRoomFor(long timestamp, ByteBuffer key, ByteBuffer value, Header[] headers) {
         if (isFull())
