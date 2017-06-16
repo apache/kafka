@@ -75,32 +75,33 @@ public class TimestampConverterTest {
 
     @Test(expected = ConfigException.class)
     public void testConfigNoTargetType() {
-        TimestampConverter<SourceRecord> xform = new TimestampConverter.Value<>();
-        xform.configure(Collections.<String, String>emptyMap());
-        xform.close();
+        try (TimestampConverter<SourceRecord> xform = new TimestampConverter.Value<>()) {
+            xform.configure(Collections.<String, String>emptyMap());
+        }
     }
 
     @Test(expected = ConfigException.class)
     public void testConfigInvalidTargetType() {
-        TimestampConverter<SourceRecord> xform = new TimestampConverter.Value<>();
-        xform.configure(Collections.singletonMap(TimestampConverter.TARGET_TYPE_CONFIG, "invalid"));
+        try (TimestampConverter<SourceRecord> xform = new TimestampConverter.Value<>()) {
+            xform.configure(Collections.singletonMap(TimestampConverter.TARGET_TYPE_CONFIG, "invalid"));
+        }
     }
 
     @Test(expected = ConfigException.class)
     public void testConfigMissingFormat() {
-        TimestampConverter<SourceRecord> xform = new TimestampConverter.Value<>();
-        xform.configure(Collections.singletonMap(TimestampConverter.TARGET_TYPE_CONFIG, "string"));
-        xform.close();
+        try (TimestampConverter<SourceRecord> xform = new TimestampConverter.Value<>()) {
+            xform.configure(Collections.singletonMap(TimestampConverter.TARGET_TYPE_CONFIG, "string"));
+        }
     }
 
     @Test(expected = ConfigException.class)
     public void testConfigInvalidFormat() {
-        TimestampConverter<SourceRecord> xform = new TimestampConverter.Value<>();
-        Map<String, String> config = new HashMap<>();
-        config.put(TimestampConverter.TARGET_TYPE_CONFIG, "string");
-        config.put(TimestampConverter.FORMAT_CONFIG, "bad-format");
-        xform.configure(config);
-        xform.close();
+        try (TimestampConverter<SourceRecord> xform = new TimestampConverter.Value<>()) {
+            Map<String, String> config = new HashMap<>();
+            config.put(TimestampConverter.TARGET_TYPE_CONFIG, "string");
+            config.put(TimestampConverter.FORMAT_CONFIG, "bad-format");
+            xform.configure(config);
+        }
     }
 
 

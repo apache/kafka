@@ -69,8 +69,7 @@ public class FileOffsetBackingStore extends MemoryOffsetBackingStore {
 
     @SuppressWarnings("unchecked")
     private void load() {
-        try {
-            ObjectInputStream is = new ObjectInputStream(new FileInputStream(file));
+        try (ObjectInputStream is = new ObjectInputStream(new FileInputStream(file))) {
             Object obj = is.readObject();
             if (!(obj instanceof HashMap)) {
                 is.close();
@@ -83,7 +82,6 @@ public class FileOffsetBackingStore extends MemoryOffsetBackingStore {
                 ByteBuffer value = (mapEntry.getValue() != null) ? ByteBuffer.wrap(mapEntry.getValue()) : null;
                 data.put(key, value);
             }
-            is.close();
         } catch (FileNotFoundException | EOFException e) {
             // FileNotFoundException: Ignore, may be new.
             // EOFException: Ignore, this means the file was missing or corrupt

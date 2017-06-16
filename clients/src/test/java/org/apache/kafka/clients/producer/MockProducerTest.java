@@ -25,6 +25,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.test.MockSerializer;
+import org.junit.After;
 import org.junit.Test;
 
 import java.util.ArrayList;
@@ -51,6 +52,10 @@ public class MockProducerTest {
     private final ProducerRecord<byte[], byte[]> record1 = new ProducerRecord<>(topic, "key1".getBytes(), "value1".getBytes());
     private final ProducerRecord<byte[], byte[]> record2 = new ProducerRecord<>(topic, "key2".getBytes(), "value2".getBytes());
 
+    @After
+    public void close() {
+        producer.close();
+    }
 
     @Test
     public void testAutoCompleteMock() throws Exception {
@@ -220,6 +225,7 @@ public class MockProducerTest {
 
     @Test
     public void shouldAbortInFlightTransactionOnClose() {
+        MockProducer<byte[], byte[]> producer = new MockProducer<>(true, new MockSerializer(), new MockSerializer());
         producer.initTransactions();
         producer.beginTransaction();
         producer.close();
@@ -548,6 +554,7 @@ public class MockProducerTest {
 
     @Test
     public void shouldThrowOnInitTransactionIfProducerIsClosed() {
+        MockProducer<byte[], byte[]> producer = new MockProducer<>(true, new MockSerializer(), new MockSerializer());
         producer.close();
         try {
             producer.initTransactions();
@@ -557,6 +564,7 @@ public class MockProducerTest {
 
     @Test
     public void shouldThrowOnSendIfProducerIsClosed() {
+        MockProducer<byte[], byte[]> producer = new MockProducer<>(true, new MockSerializer(), new MockSerializer());
         producer.close();
         try {
             producer.send(null);
@@ -566,6 +574,7 @@ public class MockProducerTest {
 
     @Test
     public void shouldThrowOnBeginTransactionIfProducerIsClosed() {
+        MockProducer<byte[], byte[]> producer = new MockProducer<>(true, new MockSerializer(), new MockSerializer());
         producer.close();
         try {
             producer.beginTransaction();
@@ -575,6 +584,7 @@ public class MockProducerTest {
 
     @Test
     public void shouldThrowSendOffsetsToTransactionIfProducerIsClosed() {
+        MockProducer<byte[], byte[]> producer = new MockProducer<>(true, new MockSerializer(), new MockSerializer());
         producer.close();
         try {
             producer.sendOffsetsToTransaction(null, null);
@@ -584,6 +594,7 @@ public class MockProducerTest {
 
     @Test
     public void shouldThrowOnCommitTransactionIfProducerIsClosed() {
+        MockProducer<byte[], byte[]> producer = new MockProducer<>(true, new MockSerializer(), new MockSerializer());
         producer.close();
         try {
             producer.commitTransaction();
@@ -593,6 +604,7 @@ public class MockProducerTest {
 
     @Test
     public void shouldThrowOnAbortTransactionIfProducerIsClosed() {
+        MockProducer<byte[], byte[]> producer = new MockProducer<>(true, new MockSerializer(), new MockSerializer());
         producer.close();
         try {
             producer.abortTransaction();
@@ -602,6 +614,7 @@ public class MockProducerTest {
 
     @Test
     public void shouldThrowOnCloseIfProducerIsClosed() {
+        MockProducer<byte[], byte[]> producer = new MockProducer<>(true, new MockSerializer(), new MockSerializer());
         producer.close();
         try {
             producer.close();
@@ -611,6 +624,7 @@ public class MockProducerTest {
 
     @Test
     public void shouldThrowOnFenceProducerIfProducerIsClosed() {
+        MockProducer<byte[], byte[]> producer = new MockProducer<>(true, new MockSerializer(), new MockSerializer());
         producer.close();
         try {
             producer.fenceProducer();
@@ -620,6 +634,7 @@ public class MockProducerTest {
 
     @Test
     public void shouldThrowOnFlushProducerIfProducerIsClosed() {
+        MockProducer<byte[], byte[]> producer = new MockProducer<>(true, new MockSerializer(), new MockSerializer());
         producer.close();
         try {
             producer.flush();

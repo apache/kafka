@@ -39,18 +39,18 @@ public class FlattenTest {
 
     @Test(expected = DataException.class)
     public void topLevelStructRequired() {
-        final Flatten<SourceRecord> xform = new Flatten.Value<>();
-        xform.configure(Collections.<String, String>emptyMap());
-        xform.apply(new SourceRecord(null, null, "topic", 0, Schema.INT32_SCHEMA, 42));
-        xform.close();
+        try (final Flatten<SourceRecord> xform = new Flatten.Value<>()) {
+            xform.configure(Collections.<String, String>emptyMap());
+            xform.apply(new SourceRecord(null, null, "topic", 0, Schema.INT32_SCHEMA, 42));
+        }
     }
 
     @Test(expected = DataException.class)
     public void topLevelMapRequired() {
-        final Flatten<SourceRecord> xform = new Flatten.Value<>();
-        xform.configure(Collections.<String, String>emptyMap());
-        xform.apply(new SourceRecord(null, null, "topic", 0, null, 42));
-        xform.close();
+        try (final Flatten<SourceRecord> xform = new Flatten.Value<>()) {
+            xform.configure(Collections.<String, String>emptyMap());
+            xform.apply(new SourceRecord(null, null, "topic", 0, null, 42));
+        }
     }
 
     @Test
@@ -222,11 +222,11 @@ public class FlattenTest {
 
     @Test(expected = DataException.class)
     public void testUnsupportedTypeInMap() {
-        final Flatten<SourceRecord> xform = new Flatten.Value<>();
-        xform.configure(Collections.<String, String>emptyMap());
-        Object value = Collections.singletonMap("foo", Arrays.asList("bar", "baz"));
-        xform.apply(new SourceRecord(null, null, "topic", 0, null, value));
-        xform.close();
+        try (final Flatten<SourceRecord> xform = new Flatten.Value<>()) {
+            xform.configure(Collections.<String, String>emptyMap());
+            Object value = Collections.singletonMap("foo", Arrays.asList("bar", "baz"));
+            xform.apply(new SourceRecord(null, null, "topic", 0, null, value));
+        }
     }
 
     @Test

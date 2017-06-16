@@ -120,15 +120,13 @@ public class AssignmentInfo {
     public static AssignmentInfo decode(ByteBuffer data) {
         // ensure we are at the beginning of the ByteBuffer
         data.rewind();
-        DataInputStream in = new DataInputStream(new ByteBufferInputStream(data));
 
-        try {
+        try (DataInputStream in = new DataInputStream(new ByteBufferInputStream(data))) {
             // Decode version
             int version = in.readInt();
             if (version < 0 || version > CURRENT_VERSION) {
                 TaskAssignmentException ex = new TaskAssignmentException("Unknown assignment data version: " + version);
                 log.error(ex.getMessage(), ex);
-                in.close();
                 throw ex;
             }
 
@@ -156,7 +154,6 @@ public class AssignmentInfo {
             }
 
             return new AssignmentInfo(activeTasks, standbyTasks, hostStateToTopicPartitions);
-
 
         } catch (IOException ex) {
             throw new TaskAssignmentException("Failed to decode AssignmentInfo", ex);
