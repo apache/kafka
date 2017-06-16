@@ -699,6 +699,10 @@ public class MemoryRecordsBuilder {
         if (isFull())
             return false;
 
+        // We always allow at least one record to be appended (the ByteBufferOutputStream will grow as needed)
+        if (numRecords == 0)
+            return true;
+
         final int recordSize;
         if (magic < RecordBatch.MAGIC_VALUE_V2) {
             recordSize = Records.LOG_OVERHEAD + LegacyRecord.recordSize(magic, key, value);
@@ -709,8 +713,7 @@ public class MemoryRecordsBuilder {
         }
 
         // Be conservative and not take compression of the new record into consideration.
-        // If there are no records inserted, allow the append (the ByteBufferOutputStream will grow as needed)
-        return numRecords == 0 || this.writeLimit >= estimatedBytesWritten() + recordSize;
+        return this.writeLimit >= estimatedBytesWritten() + recordSize;
     }
 
     public boolean isClosed() {
