@@ -218,7 +218,8 @@ object ConsoleConsumer extends Logging {
       .withRequiredArg
       .describedAs("blacklist")
       .ofType(classOf[String])
-    val partitionIdOpt = parser.accepts("partition", "The partition to consume from.")
+    val partitionIdOpt = parser.accepts("partition", "The partition to consume from. Consumption " +
+      "starts from the end of the partition unless '--offset' is specified.")
       .withRequiredArg
       .describedAs("partition")
       .ofType(classOf[java.lang.Integer])
