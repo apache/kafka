@@ -173,14 +173,14 @@ public class TransactionManager {
         transitionTo(State.IN_TRANSACTION);
     }
 
-    public synchronized TransactionalRequestResult beginCommittingTransaction() {
+    public synchronized TransactionalRequestResult beginCommit() {
         ensureTransactional();
         maybeFailWithError();
         transitionTo(State.COMMITTING_TRANSACTION);
         return beginCompletingTransaction(TransactionResult.COMMIT);
     }
 
-    public synchronized TransactionalRequestResult beginAbortingTransaction() {
+    public synchronized TransactionalRequestResult beginAbort() {
         ensureTransactional();
         if (currentState != State.ABORTABLE_ERROR)
             maybeFailWithError();
@@ -268,7 +268,7 @@ public class TransactionManager {
         return !newPartitionsInTransaction.isEmpty() || !pendingPartitionsInTransaction.isEmpty();
     }
 
-    synchronized boolean isCompletingTransaction() {
+    synchronized boolean isCompleting() {
         return currentState == State.COMMITTING_TRANSACTION || currentState == State.ABORTING_TRANSACTION;
     }
 
@@ -377,18 +377,26 @@ public class TransactionManager {
         sequenceNumbers.put(topicPartition, currentSequenceNumber);
     }
 
-    synchronized TxnRequestHandler nextRequestHandler() {
+    synchronized TxnRequestHandler nextRequestHandler(boolean hasIncompleteBatches) {
         if (!newPartitionsInTransaction.isEmpty())
             enqueueRequest(addPartitionsToTransactionHandler());
 
-        TxnRequestHandler nextRequestHandler = pendingRequests.poll();
-        if (nextRequestHandler != null && maybeTerminateRequestWithError(nextRequestHandler)) {
+        TxnRequestHandler nextRequestHandler = pendingRequests.peek();
+        if (nextRequestHandler == null)
+            return null;
+
+        // Do not send the EndTxn until all batches have been flushed
+        if (nextRequestHandler.isEndTxn() && hasIncompleteBatches)
+            return null;
+
+        pendingRequests.poll();
+        if (maybeTerminateRequestWithError(nextRequestHandler)) {
             log.trace("{}Not sending transactional request {} because we are in an error state",
                     logPrefix, nextRequestHandler.requestBuilder());
             return null;
         }
 
-        if (nextRequestHandler != null && nextRequestHandler.isEndTxn() && !transactionStarted) {
+        if (nextRequestHandler.isEndTxn() && !transactionStarted) {
             nextRequestHandler.result.done();
             if (currentState != State.FATAL_ERROR) {
                 log.debug("{}Not sending EndTxn for completed transaction since no partitions " +
@@ -432,7 +440,7 @@ public class TransactionManager {
         inFlightRequestCorrelationId = NO_INFLIGHT_REQUEST_CORRELATION_ID;
     }
 
-    boolean hasInflightRequest() {
+    boolean hasInFlightRequest() {
         return inFlightRequestCorrelationId != NO_INFLIGHT_REQUEST_CORRELATION_ID;
     }
 
@@ -459,7 +467,7 @@ public class TransactionManager {
     // visible for testing
     synchronized boolean hasOngoingTransaction() {
         // transactions are considered ongoing once started until completion or a fatal error
-        return currentState == State.IN_TRANSACTION || isCompletingTransaction() || hasAbortableError();
+        return currentState == State.IN_TRANSACTION || isCompleting() || hasAbortableError();
     }
 
     // visible for testing
@@ -472,9 +480,11 @@ public class TransactionManager {
     }
 
     private synchronized void transitionTo(State target, RuntimeException error) {
-        if (!currentState.isTransitionValid(currentState, target))
-            throw new KafkaException("Invalid transition attempted from state " + currentState.name() +
-                    " to state " + target.name());
+        if (!currentState.isTransitionValid(currentState, target)) {
+            String idString = transactionalId == null ?  "" : "TransactionalId " + transactionalId + ": ";
+            throw new KafkaException(idString + "Invalid transition attempted from state "
+                    + currentState.name() + " to state " + target.name());
+        }
 
         if (target == State.FATAL_ERROR || target == State.ABORTABLE_ERROR) {
             if (error == null)

@@ -20,7 +20,7 @@ package org.apache.kafka.clients.admin;
 import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.utils.Utils;
 
-import java.util.NavigableMap;
+import java.util.List;
 
 /**
  * A detailed description of a single topic in the cluster.
@@ -28,30 +28,48 @@ import java.util.NavigableMap;
 public class TopicDescription {
     private final String name;
     private final boolean internal;
-    private final NavigableMap<Integer, TopicPartitionInfo> partitions;
+    private final List<TopicPartitionInfo> partitions;
 
-    public TopicDescription(String name, boolean internal,
-                    NavigableMap<Integer, TopicPartitionInfo> partitions) {
+    /**
+     * Create an instance with the specified parameters.
+     *
+     * @param name The topic name
+     * @param internal Whether the topic is internal to Kafka
+     * @param partitions A list of partitions where the index represents the partition id and the element contains
+     *                   leadership and replica information for that partition.
+     */
+    public TopicDescription(String name, boolean internal, List<TopicPartitionInfo> partitions) {
         this.name = name;
         this.internal = internal;
         this.partitions = partitions;
     }
 
+    /**
+     * The name of the topic.
+     */
     public String name() {
         return name;
     }
 
-    public boolean internal() {
+    /**
+     * Whether the topic is internal to Kafka. An example of an internal topic is the offsets and group management topic:
+     * __consumer_offsets.
+     */
+    public boolean isInternal() {
         return internal;
     }
 
-    public NavigableMap<Integer, TopicPartitionInfo> partitions() {
+    /**
+     * A list of partitions where the index represents the partition id and the element contains leadership and replica
+     * information for that partition.
+     */
+    public List<TopicPartitionInfo> partitions() {
         return partitions;
     }
 
     @Override
     public String toString() {
         return "(name=" + name + ", internal=" + internal + ", partitions=" +
-            Utils.mkString(partitions, "[", "]", "=", ",") + ")";
+            Utils.join(partitions, ",") + ")";
     }
 }

@@ -55,7 +55,7 @@ public class AclOperationTest {
     public void testIsUnknown() throws Exception {
         for (AclOperationTestInfo info : INFOS) {
             assertEquals(info.operation + " was supposed to have unknown == " + info.unknown,
-                info.unknown, info.operation.unknown());
+                info.unknown, info.operation.isUnknown());
         }
     }
 

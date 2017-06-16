@@ -19,11 +19,13 @@ package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.requests.CreateTopicsRequest.TopicDetails;
 
+import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
 /**
- * A request to create a new topic through the AdminClient API. 
+ * A new topic to be created via {@link AdminClient#createTopics(Collection)}.
  */
 public class NewTopic {
     private final String name;
@@ -33,7 +35,7 @@ public class NewTopic {
     private Map<String, String> configs = null;
 
     /**
-     * Create a new topic with a fixed replication factor and number of partitions.
+     * A new topic with the specified replication factor and number of partitions.
      */
     public NewTopic(String name, int numPartitions, short replicationFactor) {
         this.name = name;
@@ -43,25 +45,46 @@ public class NewTopic {
     }
 
     /**
-     * A request to create a new topic with a specific replica assignment configuration.
+     * A new topic with the specified replica assignment configuration.
+     *
+     * @param name the topic name.
+     * @param replicasAssignments a map from partition id to replica ids (i.e. broker ids). Although not enforced, it is
+     *                            generally a good idea for all partitions to have the same number of replicas.
      */
     public NewTopic(String name, Map<Integer, List<Integer>> replicasAssignments) {
         this.name = name;
         this.numPartitions = -1;
         this.replicationFactor = -1;
-        this.replicasAssignments = replicasAssignments;
+        this.replicasAssignments = Collections.unmodifiableMap(replicasAssignments);
     }
 
+    /**
+     * The name of the topic to be created.
+     */
     public String name() {
         return name;
     }
 
-    public int partitions() {
+    /**
+     * The number of partitions for the new topic or -1 if a replica assignment has been specified.
+     */
+    public int numPartitions() {
         return numPartitions;
     }
 
+    /**
+     * The replication factor for the new topic or -1 if a replica assignment has been specified.
+     */
     public short replicationFactor() {
         return replicationFactor;
+    }
+
+    /**
+     * A map from partition id to replica ids (i.e. broker ids) or null if the number of partitions and replication
+     * factor have been specified instead.
+     */
+    public Map<Integer, List<Integer>> replicasAssignments() {
+        return replicasAssignments;
     }
 
     /**

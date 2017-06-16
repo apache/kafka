@@ -287,13 +287,13 @@ public class ClientCompatibilityTest {
                     }
                 });
             while (true) {
-                Collection<TopicListing> listings = client.listTopics().descriptions().get();
+                Collection<TopicListing> listings = client.listTopics().listings().get();
                 if (!testConfig.createTopicsSupported)
                     break;
                 boolean foundNewTopic = false;
                 for (TopicListing listing : listings) {
                     if (listing.name().equals("newtopic")) {
-                        if (listing.internal())
+                        if (listing.isInternal())
                             throw new KafkaException("Did not expect newtopic to be an internal topic.");
                         foundNewTopic = true;
                     }
@@ -308,7 +308,7 @@ public class ClientCompatibilityTest {
                     @Override
                     public void invoke() throws Throwable {
                         try {
-                            client.describeAcls(AclBindingFilter.ANY).all().get();
+                            client.describeAcls(AclBindingFilter.ANY).values().get();
                         } catch (ExecutionException e) {
                             if (e.getCause() instanceof SecurityDisabledException)
                                 return;
