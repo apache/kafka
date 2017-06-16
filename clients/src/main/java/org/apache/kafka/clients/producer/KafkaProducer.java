@@ -636,8 +636,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             setReadOnly(record.headers());
             Header[] headers = record.headers().toArray();
 
-            int serializedSize = AbstractRecords.sizeInBytesUpperBound(apiVersions.maxUsableProduceMagic(),
-                    serializedKey, serializedValue, headers);
+            int serializedSize = AbstractRecords.estimateSizeInBytesUpperBound(apiVersions.maxUsableProduceMagic(),
+                    compressionType, serializedKey, serializedValue, headers);
             ensureValidRecordSize(serializedSize);
             long timestamp = record.timestamp() == null ? time.milliseconds() : record.timestamp();
             log.trace("Sending record {} with callback {} to topic {} partition {}", record, callback, record.topic(), partition);
