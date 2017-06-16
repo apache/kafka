@@ -18,6 +18,7 @@ package org.apache.kafka.common.metrics;
 
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.MetricNameTemplate;
+import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
@@ -142,7 +143,7 @@ public class Metrics implements Closeable {
             // Creating a daemon thread to not block shutdown
             this.metricsScheduler.setThreadFactory(new ThreadFactory() {
                 public Thread newThread(Runnable runnable) {
-                    return Utils.newThread("SensorExpiryThread", runnable, true);
+                    return KafkaThread.daemon("SensorExpiryThread", runnable);
                 }
             });
             this.metricsScheduler.scheduleAtFixedRate(new ExpireSensorTask(), 30, 30, TimeUnit.SECONDS);
