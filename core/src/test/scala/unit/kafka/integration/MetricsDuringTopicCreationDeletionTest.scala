@@ -56,13 +56,9 @@ class MetricsDuringTopicCreationDeletionTest extends KafkaServerTestHarness with
     // Do some Metrics Registry cleanup by removing the metrics that this test checks. 
     // This is a test workaround to the issue that prior harness runs may have left a populated registry.
     // see https://issues.apache.org/jira/browse/KAFKA-4605
-    for (m <- (testedMetrics)) {
-        Metrics.defaultRegistry.allMetrics.asScala
-        .filterKeys(k => k.getName.endsWith(m))
-        .headOption match {
-           case Some(e) => Metrics.defaultRegistry.removeMetric(e._1)
-           case None =>
-        }
+    for (m <- testedMetrics) {
+        val metricName = Metrics.defaultRegistry.allMetrics.asScala.keys.find(_.getName.endsWith(m))
+        metricName.foreach(Metrics.defaultRegistry.removeMetric)
     }
     
     super.setUp

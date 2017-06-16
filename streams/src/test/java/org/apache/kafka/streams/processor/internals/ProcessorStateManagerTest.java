@@ -45,6 +45,7 @@ import java.util.Set;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
@@ -90,15 +91,23 @@ public class ProcessorStateManagerTest {
     public void testRegisterPersistentStore() throws IOException {
         final TaskId taskId = new TaskId(0, 2);
 
-        MockStateStoreSupplier.MockStateStore persistentStore = new MockStateStoreSupplier.MockStateStore("persistentStore", true); // persistent store
-        ProcessorStateManager stateMgr = new ProcessorStateManager(taskId, noPartitions, false, stateDirectory, new HashMap<String, String>() {
-            {
-                put(persistentStoreName, persistentStoreTopicName);
-                put(nonPersistentStoreName, nonPersistentStoreName);
-            }
-        }, changelogReader);
-        try {
+        final MockStateStoreSupplier.MockStateStore persistentStore
+            = new MockStateStoreSupplier.MockStateStore("persistentStore", true); // persistent store
+        final ProcessorStateManager stateMgr = new ProcessorStateManager(
+            taskId,
+            noPartitions,
+            false,
+            stateDirectory,
+            new HashMap<String, String>() {
+                {
+                    put(persistentStoreName, persistentStoreTopicName);
+                    put(nonPersistentStoreName, nonPersistentStoreName);
+                }
+            },
+            changelogReader,
+            false);
 
+        try {
             stateMgr.register(persistentStore, true, persistentStore.stateRestoreCallback);
             assertTrue(changelogReader.wasRegistered(new TopicPartition(persistentStoreTopicName, 2)));
         } finally {
@@ -108,18 +117,25 @@ public class ProcessorStateManagerTest {
 
     @Test
     public void testRegisterNonPersistentStore() throws IOException {
-        MockStateStoreSupplier.MockStateStore nonPersistentStore = new MockStateStoreSupplier.MockStateStore(nonPersistentStoreName, false); // non persistent store
-        ProcessorStateManager stateMgr = new ProcessorStateManager(new TaskId(0, 2), noPartitions, false, stateDirectory, new HashMap<String, String>() {
-            {
-                put(persistentStoreName, persistentStoreTopicName);
-                put(nonPersistentStoreName, nonPersistentStoreTopicName);
-            }
-        }, changelogReader);
-        try {
+        final MockStateStoreSupplier.MockStateStore nonPersistentStore
+            = new MockStateStoreSupplier.MockStateStore(nonPersistentStoreName, false); // non persistent store
+        final ProcessorStateManager stateMgr = new ProcessorStateManager(
+            new TaskId(0, 2),
+            noPartitions,
+            false,
+            stateDirectory,
+            new HashMap<String, String>() {
+                {
+                    put(persistentStoreName, persistentStoreTopicName);
+                    put(nonPersistentStoreName, nonPersistentStoreTopicName);
+                }
+            },
+            changelogReader,
+            false);
 
+        try {
             stateMgr.register(nonPersistentStore, true, nonPersistentStore.stateRestoreCallback);
             assertTrue(changelogReader.wasRegistered(new TopicPartition(nonPersistentStoreTopicName, 2)));
-
         } finally {
             stateMgr.close(Collections.<TopicPartition, Long>emptyMap());
         }
@@ -128,41 +144,49 @@ public class ProcessorStateManagerTest {
     @Test
     public void testChangeLogOffsets() throws IOException {
         final TaskId taskId = new TaskId(0, 0);
-        long lastCheckpointedOffset = 10L;
-        String storeName1 = "store1";
-        String storeName2 = "store2";
-        String storeName3 = "store3";
+        final long lastCheckpointedOffset = 10L;
+        final String storeName1 = "store1";
+        final String storeName2 = "store2";
+        final String storeName3 = "store3";
 
-        String storeTopicName1 = ProcessorStateManager.storeChangelogTopic(applicationId, storeName1);
-        String storeTopicName2 = ProcessorStateManager.storeChangelogTopic(applicationId, storeName2);
-        String storeTopicName3 = ProcessorStateManager.storeChangelogTopic(applicationId, storeName3);
+        final String storeTopicName1 = ProcessorStateManager.storeChangelogTopic(applicationId, storeName1);
+        final String storeTopicName2 = ProcessorStateManager.storeChangelogTopic(applicationId, storeName2);
+        final String storeTopicName3 = ProcessorStateManager.storeChangelogTopic(applicationId, storeName3);
 
-        Map<String, String> storeToChangelogTopic = new HashMap<>();
+        final Map<String, String> storeToChangelogTopic = new HashMap<>();
         storeToChangelogTopic.put(storeName1, storeTopicName1);
         storeToChangelogTopic.put(storeName2, storeTopicName2);
         storeToChangelogTopic.put(storeName3, storeTopicName3);
 
-        OffsetCheckpoint checkpoint = new OffsetCheckpoint(new File(stateDirectory.directoryForTask(taskId), ProcessorStateManager.CHECKPOINT_FILE_NAME));
+        final OffsetCheckpoint checkpoint = new OffsetCheckpoint(new File(stateDirectory.directoryForTask(taskId), ProcessorStateManager.CHECKPOINT_FILE_NAME));
         checkpoint.write(Collections.singletonMap(new TopicPartition(storeTopicName1, 0), lastCheckpointedOffset));
 
-        TopicPartition partition1 = new TopicPartition(storeTopicName1, 0);
-        TopicPartition partition2 = new TopicPartition(storeTopicName2, 0);
-        TopicPartition partition3 = new TopicPartition(storeTopicName3, 1);
+        final TopicPartition partition1 = new TopicPartition(storeTopicName1, 0);
+        final TopicPartition partition2 = new TopicPartition(storeTopicName2, 0);
+        final TopicPartition partition3 = new TopicPartition(storeTopicName3, 1);
 
-        MockStateStoreSupplier.MockStateStore store1 = new MockStateStoreSupplier.MockStateStore(storeName1, true);
-        MockStateStoreSupplier.MockStateStore store2 = new MockStateStoreSupplier.MockStateStore(storeName2, true);
-        MockStateStoreSupplier.MockStateStore store3 = new MockStateStoreSupplier.MockStateStore(storeName3, true);
+        final MockStateStoreSupplier.MockStateStore store1 = new MockStateStoreSupplier.MockStateStore(storeName1, true);
+        final MockStateStoreSupplier.MockStateStore store2 = new MockStateStoreSupplier.MockStateStore(storeName2, true);
+        final MockStateStoreSupplier.MockStateStore store3 = new MockStateStoreSupplier.MockStateStore(storeName3, true);
 
         // if there is a source partition, inherit the partition id
-        Set<TopicPartition> sourcePartitions = Utils.mkSet(new TopicPartition(storeTopicName3, 1));
+        final Set<TopicPartition> sourcePartitions = Utils.mkSet(new TopicPartition(storeTopicName3, 1));
 
-        ProcessorStateManager stateMgr = new ProcessorStateManager(taskId, sourcePartitions, true, stateDirectory, storeToChangelogTopic, changelogReader); // standby
+        final ProcessorStateManager stateMgr = new ProcessorStateManager(
+            taskId,
+            sourcePartitions,
+            true, // standby
+            stateDirectory,
+            storeToChangelogTopic,
+            changelogReader,
+            false);
+
         try {
             stateMgr.register(store1, true, store1.stateRestoreCallback);
             stateMgr.register(store2, true, store2.stateRestoreCallback);
             stateMgr.register(store3, true, store3.stateRestoreCallback);
 
-            Map<TopicPartition, Long> changeLogOffsets = stateMgr.checkpointed();
+            final Map<TopicPartition, Long> changeLogOffsets = stateMgr.checkpointed();
 
             assertEquals(3, changeLogOffsets.size());
             assertTrue(changeLogOffsets.containsKey(partition1));
@@ -180,7 +204,14 @@ public class ProcessorStateManagerTest {
     @Test
     public void testGetStore() throws IOException {
         final MockStateStoreSupplier.MockStateStore mockStateStore = new MockStateStoreSupplier.MockStateStore(nonPersistentStoreName, false);
-        final ProcessorStateManager stateMgr = new ProcessorStateManager(new TaskId(0, 1), noPartitions, false, stateDirectory, Collections.<String, String>emptyMap(), changelogReader);
+        final ProcessorStateManager stateMgr = new ProcessorStateManager(
+            new TaskId(0, 1),
+            noPartitions,
+            false,
+            stateDirectory,
+            Collections.<String, String>emptyMap(),
+            changelogReader,
+            false);
         try {
             stateMgr.register(mockStateStore, true, mockStateStore.stateRestoreCallback);
 
@@ -202,12 +233,19 @@ public class ProcessorStateManagerTest {
         ackedOffsets.put(new TopicPartition(nonPersistentStoreTopicName, 1), 456L);
         ackedOffsets.put(new TopicPartition(ProcessorStateManager.storeChangelogTopic(applicationId, "otherTopic"), 1), 789L);
 
-        ProcessorStateManager stateMgr = new ProcessorStateManager(taskId, noPartitions, false, stateDirectory, new HashMap<String, String>() {
-            {
-                put(persistentStoreName, persistentStoreTopicName);
-                put(nonPersistentStoreName, nonPersistentStoreTopicName);
-            }
-        }, changelogReader);
+        final ProcessorStateManager stateMgr = new ProcessorStateManager(
+            taskId,
+            noPartitions,
+            false,
+            stateDirectory,
+            new HashMap<String, String>() {
+                {
+                    put(persistentStoreName, persistentStoreTopicName);
+                    put(nonPersistentStoreName, nonPersistentStoreTopicName);
+                }
+            },
+            changelogReader,
+            false);
         try {
             // make sure the checkpoint file isn't deleted
             assertTrue(checkpointFile.exists());
@@ -234,7 +272,14 @@ public class ProcessorStateManagerTest {
 
     @Test
     public void shouldRegisterStoreWithoutLoggingEnabledAndNotBackedByATopic() throws Exception {
-        final ProcessorStateManager stateMgr = new ProcessorStateManager(new TaskId(0, 1), noPartitions, false, stateDirectory, Collections.<String, String>emptyMap(), changelogReader);
+        final ProcessorStateManager stateMgr = new ProcessorStateManager(
+            new TaskId(0, 1),
+            noPartitions,
+            false,
+            stateDirectory,
+            Collections.<String, String>emptyMap(),
+            changelogReader,
+            false);
         stateMgr.register(nonPersistentStore, false, nonPersistentStore.stateRestoreCallback);
         assertNotNull(stateMgr.getStore(nonPersistentStoreName));
     }
@@ -245,7 +290,14 @@ public class ProcessorStateManagerTest {
         checkpoint.write(offsets);
 
         final MockStateStoreSupplier.MockStateStore persistentStore = new MockStateStoreSupplier.MockStateStore(persistentStoreName, true);
-        final ProcessorStateManager stateMgr = new ProcessorStateManager(taskId, noPartitions, false, stateDirectory, Collections.<String, String>emptyMap(), changelogReader);
+        final ProcessorStateManager stateMgr = new ProcessorStateManager(
+            taskId,
+            noPartitions,
+            false,
+            stateDirectory,
+            Collections.<String, String>emptyMap(),
+            changelogReader,
+            false);
         stateMgr.register(persistentStore, true, persistentStore.stateRestoreCallback);
         stateMgr.close(null);
         final Map<TopicPartition, Long> read = checkpoint.read();
@@ -254,13 +306,14 @@ public class ProcessorStateManagerTest {
 
     @Test
     public void shouldWriteCheckpointForPersistentLogEnabledStore() throws Exception {
-        final ProcessorStateManager stateMgr = new ProcessorStateManager(taskId,
-                                                                         noPartitions,
-                                                                         false,
-                                                                         stateDirectory,
-                                                                         Collections.singletonMap(persistentStore.name(),
-                                                                                                  persistentStoreTopicName),
-                                                                         changelogReader);
+        final ProcessorStateManager stateMgr = new ProcessorStateManager(
+            taskId,
+            noPartitions,
+            false,
+            stateDirectory,
+            Collections.singletonMap(persistentStore.name(), persistentStoreTopicName),
+            changelogReader,
+            false);
         stateMgr.register(persistentStore, true, persistentStore.stateRestoreCallback);
 
 
@@ -271,13 +324,14 @@ public class ProcessorStateManagerTest {
 
     @Test
     public void shouldWriteCheckpointForStandbyReplica() throws Exception {
-        final ProcessorStateManager stateMgr = new ProcessorStateManager(taskId,
-                                                                         noPartitions,
-                                                                         true,
-                                                                         stateDirectory,
-                                                                         Collections.singletonMap(persistentStore.name(),
-                                                                                                  persistentStoreTopicName),
-                                                                         changelogReader);
+        final ProcessorStateManager stateMgr = new ProcessorStateManager(
+            taskId,
+            noPartitions,
+            true, // standby
+            stateDirectory,
+            Collections.singletonMap(persistentStore.name(), persistentStoreTopicName),
+            changelogReader,
+            false);
 
         stateMgr.register(persistentStore, true, persistentStore.stateRestoreCallback);
         final byte[] bytes = Serdes.Integer().serializer().serialize("", 10);
@@ -300,14 +354,14 @@ public class ProcessorStateManagerTest {
     public void shouldNotWriteCheckpointForNonPersistent() throws Exception {
         final TopicPartition topicPartition = new TopicPartition(nonPersistentStoreTopicName, 1);
 
-
-        final ProcessorStateManager stateMgr = new ProcessorStateManager(taskId,
-                                                                         noPartitions,
-                                                                         true,
-                                                                         stateDirectory,
-                                                                         Collections.singletonMap(nonPersistentStoreName,
-                                                                                                  nonPersistentStoreTopicName),
-                                                                         changelogReader);
+        final ProcessorStateManager stateMgr = new ProcessorStateManager(
+            taskId,
+            noPartitions,
+            true, // standby
+            stateDirectory,
+            Collections.singletonMap(nonPersistentStoreName, nonPersistentStoreTopicName),
+            changelogReader,
+            false);
 
         stateMgr.register(nonPersistentStore, true, nonPersistentStore.stateRestoreCallback);
         stateMgr.checkpoint(Collections.singletonMap(topicPartition, 876L));
@@ -318,12 +372,14 @@ public class ProcessorStateManagerTest {
 
     @Test
     public void shouldNotWriteCheckpointForStoresWithoutChangelogTopic() throws Exception {
-        final ProcessorStateManager stateMgr = new ProcessorStateManager(taskId,
-                                                                         noPartitions,
-                                                                         true,
-                                                                         stateDirectory,
-                                                                         Collections.<String, String>emptyMap(),
-                                                                         changelogReader);
+        final ProcessorStateManager stateMgr = new ProcessorStateManager(
+            taskId,
+            noPartitions,
+            true, // standby
+            stateDirectory,
+            Collections.<String, String>emptyMap(),
+            changelogReader,
+            false);
 
         stateMgr.register(persistentStore, true, persistentStore.stateRestoreCallback);
 
@@ -344,7 +400,14 @@ public class ProcessorStateManagerTest {
         final FileLock lock = channel.lock();
 
         try {
-            new ProcessorStateManager(taskId, noPartitions, false, stateDirectory, Collections.<String, String>emptyMap(), changelogReader);
+            new ProcessorStateManager(
+                taskId,
+                noPartitions,
+                false,
+                stateDirectory,
+                Collections.<String, String>emptyMap(),
+                changelogReader,
+                false);
             fail("Should have thrown LockException");
         } catch (final LockException e) {
            // pass
@@ -356,11 +419,14 @@ public class ProcessorStateManagerTest {
 
     @Test
     public void shouldThrowIllegalArgumentExceptionIfStoreNameIsSameAsCheckpointFileName() throws Exception {
-        final ProcessorStateManager stateManager = new ProcessorStateManager(taskId,
-                                                                             noPartitions,
-                                                                             false,
-                                                                             stateDirectory,
-                                                                             Collections.<String, String>emptyMap(), changelogReader);
+        final ProcessorStateManager stateManager = new ProcessorStateManager(
+            taskId,
+            noPartitions,
+            false,
+            stateDirectory,
+            Collections.<String, String>emptyMap(),
+            changelogReader,
+            false);
 
         try {
             stateManager.register(new MockStateStoreSupplier.MockStateStore(ProcessorStateManager.CHECKPOINT_FILE_NAME, true), true, null);
@@ -372,11 +438,14 @@ public class ProcessorStateManagerTest {
 
     @Test
     public void shouldThrowIllegalArgumentExceptionOnRegisterWhenStoreHasAlreadyBeenRegistered() throws Exception {
-        final ProcessorStateManager stateManager = new ProcessorStateManager(taskId,
-                                                                             noPartitions,
-                                                                             false,
-                                                                             stateDirectory,
-                                                                             Collections.<String, String>emptyMap(), changelogReader);
+        final ProcessorStateManager stateManager = new ProcessorStateManager(
+            taskId,
+            noPartitions,
+            false,
+            stateDirectory,
+            Collections.<String, String>emptyMap(),
+            changelogReader,
+            false);
         stateManager.register(mockStateStore, false, null);
 
         try {
@@ -391,12 +460,14 @@ public class ProcessorStateManagerTest {
     @Test
     public void shouldThrowProcessorStateExceptionOnCloseIfStoreThrowsAnException() throws Exception {
 
-        final ProcessorStateManager stateManager = new ProcessorStateManager(taskId,
-                                                                             Collections.singleton(changelogTopicPartition),
-                                                                             false,
-                                                                             stateDirectory,
-                                                                             Collections.singletonMap(storeName, changelogTopic),
-                                                                             changelogReader);
+        final ProcessorStateManager stateManager = new ProcessorStateManager(
+            taskId,
+            Collections.singleton(changelogTopicPartition),
+            false,
+            stateDirectory,
+            Collections.singletonMap(storeName, changelogTopic),
+            changelogReader,
+            false);
 
         final MockStateStoreSupplier.MockStateStore stateStore = new MockStateStoreSupplier.MockStateStore(storeName, true) {
             @Override
@@ -414,5 +485,28 @@ public class ProcessorStateManagerTest {
         }
     }
 
+    @Test
+    public void shouldDeleteCheckpointFileOnCreationIfEosEnabled() throws Exception {
+        checkpoint.write(Collections.<TopicPartition, Long>emptyMap());
+        assertTrue(checkpointFile.exists());
+
+        ProcessorStateManager stateManager = null;
+        try {
+            stateManager = new ProcessorStateManager(
+                taskId,
+                noPartitions,
+                false,
+                stateDirectory,
+                Collections.<String, String>emptyMap(),
+                changelogReader,
+                true);
+
+            assertFalse(checkpointFile.exists());
+        } finally {
+            if (stateManager != null) {
+                stateManager.close(null);
+            }
+        }
+    }
 
 }

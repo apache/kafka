@@ -48,6 +48,7 @@ public class WriteTxnMarkersResponse extends AbstractResponse {
     //   InvalidRequiredAcks
     //   TransactionCoordinatorFenced
     //   RequestTimeout
+    //   ClusterAuthorizationFailed
 
     private final Map<Long, Map<TopicPartition, Errors>> errors;
 

@@ -42,7 +42,7 @@ import org.apache.kafka.streams.state.WindowStore;
  * @param <V> Type of values
  * @see KStream
  */
-@InterfaceStability.Unstable
+@InterfaceStability.Evolving
 public interface KGroupedStream<K, V> {
 
     /**

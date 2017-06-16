@@ -117,9 +117,9 @@ class ReplicaFetcherThreadFatalErrorTest extends ZooKeeperTestHarness {
                                                              quotaManager: ReplicationQuotaManager) =
             new ReplicaFetcherManager(config, this, metrics, time, threadNamePrefix, quotaManager) {
               override def createFetcherThread(fetcherId: Int, sourceBroker: BrokerEndPoint): AbstractFetcherThread = {
-                val prefix = threadNamePrefix.map(tp => s"${tp}:").getOrElse("")
+                val prefix = threadNamePrefix.map(tp => s"$tp:").getOrElse("")
                 val threadName = s"${prefix}ReplicaFetcherThread-$fetcherId-${sourceBroker.id}"
-                fetcherThread(new FetcherThreadParams(threadName, fetcherId, sourceBroker, replicaManager, metrics,
+                fetcherThread(FetcherThreadParams(threadName, fetcherId, sourceBroker, replicaManager, metrics,
                   time, quotaManager))
               }
             }

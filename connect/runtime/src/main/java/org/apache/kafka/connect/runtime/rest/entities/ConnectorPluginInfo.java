@@ -18,22 +18,12 @@ package org.apache.kafka.connect.runtime.rest.entities;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
-
 import org.apache.kafka.connect.connector.Connector;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.apache.kafka.connect.runtime.isolation.PluginDesc;
 
-import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.ConcurrentHashMap;
 
 public class ConnectorPluginInfo {
-
-    private static final Logger log = LoggerFactory.getLogger(ConnectorPluginInfo.class);
-
-    private static final Map<Class<? extends Connector>, String>
-        VERSIONS = new ConcurrentHashMap<>();
-
     private String className;
     private ConnectorType type;
     private String version;
@@ -49,29 +39,8 @@ public class ConnectorPluginInfo {
         this.version = version;
     }
 
-    public ConnectorPluginInfo(Class<? extends Connector> klass) {
-        this(klass.getCanonicalName(), ConnectorType.from(klass), getVersion(klass));
-    }
-
-    private static String getVersion(Class<? extends Connector> klass) {
-        if (!VERSIONS.containsKey(klass)) {
-            synchronized (VERSIONS) {
-                if (!VERSIONS.containsKey(klass)) {
-                    try {
-                        VERSIONS.put(klass, klass.newInstance().version());
-                    } catch (
-                        ExceptionInInitializerError
-                            | InstantiationException
-                            | IllegalAccessException
-                            | SecurityException e
-                    ) {
-                        log.warn("Unable to instantiate connector", e);
-                        VERSIONS.put(klass, "unknown");
-                    }
-                }
-            }
-        }
-        return VERSIONS.get(klass);
+    public ConnectorPluginInfo(PluginDesc<Connector> plugin) {
+        this(plugin.className(), ConnectorType.from(plugin.pluginClass()), plugin.version());
     }
 
     @JsonProperty("class")

@@ -18,7 +18,6 @@ package org.apache.kafka.connect.runtime.rest.resources;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-
 import org.apache.kafka.common.config.Config;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
@@ -31,6 +30,9 @@ import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.runtime.AbstractHerder;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.Herder;
+import org.apache.kafka.connect.runtime.isolation.PluginClassLoader;
+import org.apache.kafka.connect.runtime.isolation.PluginDesc;
+import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.rest.RestServer;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
@@ -57,7 +59,8 @@ import org.powermock.core.classloader.annotations.PowerMockIgnore;
 import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
 
-import java.io.IOException;
+import javax.ws.rs.BadRequestException;
+import java.net.URL;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -66,8 +69,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-
-import javax.ws.rs.BadRequestException;
+import java.util.TreeSet;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -88,12 +90,14 @@ public class ConnectorPluginsResourceTest {
 
         props = new HashMap<>(partialProps);
         props.put("connector.class", ConnectorPluginsResourceTestConnector.class.getSimpleName());
+        props.put("plugin.path", null);
     }
 
     private static final ConfigInfos CONFIG_INFOS;
     private static final ConfigInfos PARTIAL_CONFIG_INFOS;
     private static final int ERROR_COUNT = 0;
     private static final int PARTIAL_CONFIG_ERROR_COUNT = 1;
+    private static final Set<PluginDesc<Connector>> CONNECTOR_PLUGINS = new TreeSet<>();
 
     static {
         List<ConfigInfo> configs = new LinkedList<>();
@@ -133,17 +137,56 @@ public class ConnectorPluginsResourceTest {
 
         CONFIG_INFOS = new ConfigInfos(ConnectorPluginsResourceTestConnector.class.getName(), ERROR_COUNT, Collections.singletonList("Test"), configs);
         PARTIAL_CONFIG_INFOS = new ConfigInfos(ConnectorPluginsResourceTestConnector.class.getName(), PARTIAL_CONFIG_ERROR_COUNT, Collections.singletonList("Test"), partialConfigs);
+
+        Class<?>[] abstractConnectorClasses = {
+            Connector.class,
+            SourceConnector.class,
+            SinkConnector.class
+        };
+
+        Class<?>[] connectorClasses = {
+            VerifiableSourceConnector.class,
+            VerifiableSinkConnector.class,
+            MockSourceConnector.class,
+            MockSinkConnector.class,
+            MockConnector.class,
+            SchemaSourceConnector.class,
+            ConnectorPluginsResourceTestConnector.class
+        };
+
+        try {
+            for (Class<?> klass : abstractConnectorClasses) {
+                CONNECTOR_PLUGINS.add(
+                        new MockConnectorPluginDesc((Class<? extends Connector>) klass, "0.0.0"));
+            }
+            for (Class<?> klass : connectorClasses) {
+                CONNECTOR_PLUGINS.add(new MockConnectorPluginDesc((Class<? extends Connector>) klass));
+            }
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 
     @Mock
     private Herder herder;
+    @Mock
+    private Plugins plugins;
     private ConnectorPluginsResource connectorPluginsResource;
 
     @Before
-    public void setUp() throws NoSuchMethodException {
+    public void setUp() throws Exception {
         PowerMock.mockStatic(RestServer.class,
                              RestServer.class.getMethod("httpRequest", String.class, String.class, Object.class, TypeReference.class));
+
+        plugins = PowerMock.createMock(Plugins.class);
+        herder = PowerMock.createMock(AbstractHerder.class);
         connectorPluginsResource = new ConnectorPluginsResource(herder);
+    }
+
+    private void expectPlugins() {
+        EasyMock.expect(herder.plugins()).andReturn(plugins);
+        EasyMock.expect(plugins.connectors()).andReturn(CONNECTOR_PLUGINS);
+        PowerMock.replayAll();
     }
 
     @Test
@@ -359,27 +402,30 @@ public class ConnectorPluginsResourceTest {
     }
 
     @Test
-    public void testListConnectorPlugins() {
+    public void testListConnectorPlugins() throws Exception {
+        expectPlugins();
         Set<ConnectorPluginInfo> connectorPlugins = new HashSet<>(connectorPluginsResource.listConnectorPlugins());
-        assertFalse(connectorPlugins.contains(new ConnectorPluginInfo(Connector.class)));
-        assertFalse(connectorPlugins.contains(new ConnectorPluginInfo(SourceConnector.class)));
-        assertFalse(connectorPlugins.contains(new ConnectorPluginInfo(SinkConnector.class)));
-        assertFalse(connectorPlugins.contains(new ConnectorPluginInfo(VerifiableSourceConnector.class)));
-        assertFalse(connectorPlugins.contains(new ConnectorPluginInfo(VerifiableSinkConnector.class)));
-        assertFalse(connectorPlugins.contains(new ConnectorPluginInfo(MockSourceConnector.class)));
-        assertFalse(connectorPlugins.contains(new ConnectorPluginInfo(MockSinkConnector.class)));
-        assertFalse(connectorPlugins.contains(new ConnectorPluginInfo(MockConnector.class)));
-        assertFalse(connectorPlugins.contains(new ConnectorPluginInfo(SchemaSourceConnector.class)));
-        assertTrue(connectorPlugins.contains(new ConnectorPluginInfo(ConnectorPluginsResourceTestConnector.class)));
+        assertFalse(connectorPlugins.contains(newInfo(Connector.class, "0.0")));
+        assertFalse(connectorPlugins.contains(newInfo(SourceConnector.class, "0.0")));
+        assertFalse(connectorPlugins.contains(newInfo(SinkConnector.class, "0.0")));
+        assertFalse(connectorPlugins.contains(newInfo(VerifiableSourceConnector.class)));
+        assertFalse(connectorPlugins.contains(newInfo(VerifiableSinkConnector.class)));
+        assertFalse(connectorPlugins.contains(newInfo(MockSourceConnector.class)));
+        assertFalse(connectorPlugins.contains(newInfo(MockSinkConnector.class)));
+        assertFalse(connectorPlugins.contains(newInfo(MockConnector.class)));
+        assertFalse(connectorPlugins.contains(newInfo(SchemaSourceConnector.class)));
+        assertTrue(connectorPlugins.contains(newInfo(ConnectorPluginsResourceTestConnector.class)));
+        PowerMock.verifyAll();
     }
 
     @Test
-    public void testConnectorPluginsIncludesTypeAndVersionInformation()
-        throws IOException {
-        ConnectorPluginInfo sinkInfo = new ConnectorPluginInfo(TestSinkConnector.class);
-        ConnectorPluginInfo sourceInfo = new ConnectorPluginInfo(TestSourceConnector.class);
+    public void testConnectorPluginsIncludesTypeAndVersionInformation() throws Exception {
+        expectPlugins();
+        ConnectorPluginInfo sinkInfo = newInfo(TestSinkConnector.class);
+        ConnectorPluginInfo sourceInfo =
+                newInfo(TestSourceConnector.class);
         ConnectorPluginInfo unkownInfo =
-            new ConnectorPluginInfo(ConnectorPluginsResourceTestConnector.class);
+            newInfo(ConnectorPluginsResourceTestConnector.class);
         assertEquals(ConnectorType.SINK, sinkInfo.type());
         assertEquals(ConnectorType.SOURCE, sourceInfo.type());
         assertEquals(ConnectorType.UNKNOWN, unkownInfo.type());
@@ -405,6 +451,46 @@ public class ConnectorPluginsResourceTest {
             ConnectorType.UNKNOWN,
             objectMapper.readValue(serializedUnknown, ConnectorType.class)
         );
+    }
+
+    protected static ConnectorPluginInfo newInfo(Class<? extends Connector> klass, String version)
+            throws Exception {
+        return new ConnectorPluginInfo(new MockConnectorPluginDesc(klass, version));
+    }
+
+    protected static ConnectorPluginInfo newInfo(Class<? extends Connector> klass)
+            throws Exception {
+        return new ConnectorPluginInfo(new MockConnectorPluginDesc(klass));
+    }
+
+    public static class MockPluginClassLoader extends PluginClassLoader {
+        public MockPluginClassLoader(URL pluginLocation, URL[] urls, ClassLoader parent) {
+            super(pluginLocation, urls, parent);
+        }
+
+        public MockPluginClassLoader(URL pluginLocation, URL[] urls) {
+            super(pluginLocation, urls);
+        }
+
+        @Override
+        public String location() {
+            return "/tmp/mockpath";
+        }
+    }
+
+    public static class MockConnectorPluginDesc extends PluginDesc<Connector> {
+        public MockConnectorPluginDesc(Class<? extends Connector> klass, String version)
+                throws Exception {
+            super(klass, version, new MockPluginClassLoader(null, new URL[0]));
+        }
+
+        public MockConnectorPluginDesc(Class<? extends Connector> klass) throws Exception {
+            super(
+                    klass,
+                    klass.newInstance().version(),
+                    new MockPluginClassLoader(null, new URL[0])
+            );
+        }
     }
 
     public static class TestSinkConnector extends SinkConnector {

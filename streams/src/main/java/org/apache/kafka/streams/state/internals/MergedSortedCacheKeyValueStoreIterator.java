@@ -27,12 +27,15 @@ import org.apache.kafka.streams.state.StateSerdes;
  * @param <K>
  * @param <V>
  */
-class MergedSortedCacheKeyValueStoreIterator<K, V> extends AbstractMergedSortedCacheStoreIterator<K, Bytes, V> {
+class MergedSortedCacheKeyValueStoreIterator<K, V> extends AbstractMergedSortedCacheStoreIterator<K, Bytes, V, byte[]> {
+
+    private final StateSerdes<K, V> serdes;
 
     MergedSortedCacheKeyValueStoreIterator(final PeekingKeyValueIterator<Bytes, LRUCacheEntry> cacheIterator,
                                            final KeyValueIterator<Bytes, byte[]> storeIterator,
                                            final StateSerdes<K, V> serdes) {
-        super(cacheIterator, storeIterator, serdes);
+        super(cacheIterator, storeIterator);
+        this.serdes = serdes;
     }
 
     @Override
@@ -43,6 +46,11 @@ class MergedSortedCacheKeyValueStoreIterator<K, V> extends AbstractMergedSortedC
     @Override
     K deserializeCacheKey(final Bytes cacheKey) {
         return serdes.keyFrom(cacheKey.get());
+    }
+
+    @Override
+    V deserializeCacheValue(final LRUCacheEntry cacheEntry) {
+        return serdes.valueFrom(cacheEntry.value);
     }
 
     @Override

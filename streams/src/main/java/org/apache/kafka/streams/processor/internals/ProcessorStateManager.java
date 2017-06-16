@@ -58,11 +58,12 @@ public class ProcessorStateManager implements StateManager {
     private final Map<TopicPartition, Long> checkpointedOffsets;
     private final Map<String, StateRestoreCallback> restoreCallbacks; // used for standby tasks, keyed by state topic name
     private final Map<String, String> storeToChangelogTopic;
+    private final boolean eosEnabled;
 
     // TODO: this map does not work with customized grouper where multiple partitions
     // of the same topic can be assigned to the same topic.
     private final Map<String, TopicPartition> partitionForTopic;
-    private final OffsetCheckpoint checkpoint;
+    private OffsetCheckpoint checkpoint;
 
     /**
      * @throws LockException if the state directory cannot be locked because another thread holds the lock
@@ -74,7 +75,8 @@ public class ProcessorStateManager implements StateManager {
                                  final boolean isStandby,
                                  final StateDirectory stateDirectory,
                                  final Map<String, String> storeToChangelogTopic,
-                                 final ChangelogReader changelogReader) throws LockException, IOException {
+                                 final ChangelogReader changelogReader,
+                                 final boolean eosEnabled) throws LockException, IOException {
         this.taskId = taskId;
         this.stateDirectory = stateDirectory;
         this.changelogReader = changelogReader;
@@ -91,6 +93,7 @@ public class ProcessorStateManager implements StateManager {
         this.isStandby = isStandby;
         restoreCallbacks = isStandby ? new HashMap<String, StateRestoreCallback>() : null;
         this.storeToChangelogTopic = storeToChangelogTopic;
+        this.eosEnabled = eosEnabled;
 
         if (!stateDirectory.lock(taskId, 5)) {
             throw new LockException(String.format("%s Failed to lock the state directory for task %s",
@@ -109,6 +112,12 @@ public class ProcessorStateManager implements StateManager {
         // load the checkpoint information
         checkpoint = new OffsetCheckpoint(new File(baseDir, CHECKPOINT_FILE_NAME));
         checkpointedOffsets = new HashMap<>(checkpoint.read());
+
+        if (eosEnabled) {
+            // delete the checkpoint file after finish loading its stored offsets
+            checkpoint.delete();
+            checkpoint = null;
+        }
 
         log.info("{} Created state store manager for task {} with the acquired state dir lock", logPrefix, taskId);
     }
@@ -325,6 +334,9 @@ public class ProcessorStateManager implements StateManager {
         }
         // write the checkpoint file before closing, to indicate clean shutdown
         try {
+            if (checkpoint == null) {
+                checkpoint = new OffsetCheckpoint(new File(baseDir, CHECKPOINT_FILE_NAME));
+            }
             checkpoint.write(checkpointedOffsets);
         } catch (final IOException e) {
             log.warn("Failed to write checkpoint file to {}", new File(baseDir, CHECKPOINT_FILE_NAME), e);
@@ -333,7 +345,6 @@ public class ProcessorStateManager implements StateManager {
 
     private int getPartition(final String topic) {
         final TopicPartition partition = partitionForTopic.get(topic);
-
         return partition == null ? taskId.partition : partition.partition();
     }
 

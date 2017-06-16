@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.common.requests;
 
-import java.util.Arrays;
+import org.apache.kafka.common.utils.Utils;
+
 import java.util.List;
-import java.util.Set;
 
 public class PartitionState {
     public final int controllerEpoch;
@@ -26,9 +26,9 @@ public class PartitionState {
     public final int leaderEpoch;
     public final List<Integer> isr;
     public final int zkVersion;
-    public final Set<Integer> replicas;
+    public final List<Integer> replicas;
 
-    public PartitionState(int controllerEpoch, int leader, int leaderEpoch, List<Integer> isr, int zkVersion, Set<Integer> replicas) {
+    public PartitionState(int controllerEpoch, int leader, int leaderEpoch, List<Integer> isr, int zkVersion, List<Integer> replicas) {
         this.controllerEpoch = controllerEpoch;
         this.leader = leader;
         this.leaderEpoch = leaderEpoch;
@@ -42,8 +42,8 @@ public class PartitionState {
         return "PartitionState(controllerEpoch=" + controllerEpoch +
                 ", leader=" + leader +
                 ", leaderEpoch=" + leaderEpoch +
-                ", isr=" + Arrays.toString(isr.toArray()) +
+                ", isr=" + Utils.join(isr, ",") +
                 ", zkVersion=" + zkVersion +
-                ", replicas=" + Arrays.toString(replicas.toArray()) + ")";
+                ", replicas=" + Utils.join(replicas, ",") + ")";
     }
 }

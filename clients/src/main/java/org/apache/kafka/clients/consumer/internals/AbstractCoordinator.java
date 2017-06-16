@@ -93,6 +93,7 @@ import org.apache.kafka.common.errors.InterruptException;
 public abstract class AbstractCoordinator implements Closeable {
 
     private static final Logger log = LoggerFactory.getLogger(AbstractCoordinator.class);
+    public static final String HEARTBEAT_THREAD_PREFIX = "kafka-coordinator-heartbeat-thread";
 
     private enum MemberState {
         UNJOINED,    // the client is not part of a group
@@ -398,6 +399,7 @@ public abstract class AbstractCoordinator implements Closeable {
                     synchronized (AbstractCoordinator.this) {
                         log.info("Successfully joined group {} with generation {}", groupId, generation.generationId);
                         state = MemberState.STABLE;
+                        rejoinNeeded = false;
 
                         if (heartbeatThread != null)
                             heartbeatThread.enable();
@@ -457,7 +459,6 @@ public abstract class AbstractCoordinator implements Closeable {
                     } else {
                         AbstractCoordinator.this.generation = new Generation(joinResponse.generationId(),
                                 joinResponse.memberId(), joinResponse.groupProtocol());
-                        AbstractCoordinator.this.rejoinNeeded = false;
                         if (joinResponse.isLeader()) {
                             onJoinLeader(joinResponse).chain(future);
                         } else {
@@ -783,8 +784,9 @@ public abstract class AbstractCoordinator implements Closeable {
         @Override
         public void onFailure(RuntimeException e, RequestFuture<T> future) {
             // mark the coordinator as dead
-            if (e instanceof DisconnectException)
+            if (e instanceof DisconnectException) {
                 coordinatorDead();
+            }
             future.raise(e);
         }
 
@@ -862,7 +864,7 @@ public abstract class AbstractCoordinator implements Closeable {
         private AtomicReference<RuntimeException> failed = new AtomicReference<>(null);
 
         private HeartbeatThread() {
-            super("kafka-coordinator-heartbeat-thread" + (groupId.isEmpty() ? "" : " | " + groupId), true);
+            super(HEARTBEAT_THREAD_PREFIX + (groupId.isEmpty() ? "" : " | " + groupId), true);
         }
 
         public void enable() {

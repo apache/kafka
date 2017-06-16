@@ -24,14 +24,17 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.InvalidOffsetException;
 import org.apache.kafka.clients.producer.Producer;
+import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Type;
+import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Count;
+import org.apache.kafka.common.metrics.stats.Sum;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.utils.Time;
@@ -79,35 +82,40 @@ public class StreamThread extends Thread {
      *
      * <pre>
      *                +-------------+
-     *                | Not Running | <-------+
-     *                +-----+-------+         |
-     *                      |                 |
-     *                      v                 |
-     *                +-----+-------+         |
-     *          +<--- | Running     | <----+  |
-     *          |     +-----+-------+      |  |
-     *          |           |              |  |
-     *          |           v              |  |
-     *          |     +-----+-------+      |  |
-     *          +<--- | Partitions  |      |  |
-     *          |     | Revoked     |      |  |
-     *          |     +-----+-------+      |  |
-     *          |           |              |  |
-     *          |           v              |  |
-     *          |     +-----+-------+      |  |
-     *          |     | Assigning   |      |  |
-     *          |     | Partitions  | ---->+  |
-     *          |     +-----+-------+         |
-     *          |           |                 |
-     *          |           v                 |
-     *          |     +-----+-------+         |
-     *          +---> | Pending     | ------->+
+     *                | Created     |
+     *                +-----+-------+
+     *                      |
+     *                      v
+     *                +-----+-------+
+     *          +<--- | Running     | <----+
+     *          |     +-----+-------+      |
+     *          |           |              |
+     *          |           v              |
+     *          |     +-----+-------+      |
+     *          +<--- | Partitions  |      |
+     *          |     | Revoked     |      |
+     *          |     +-----+-------+      |
+     *          |           |              |
+     *          |           v              |
+     *          |     +-----+-------+      |
+     *          |     | Assigning   |      |
+     *          |     | Partitions  | ---->+
+     *          |     +-----+-------+
+     *          |           |
+     *          |           v
+     *          |     +-----+-------+
+     *          +---> | Pending     |
      *                | Shutdown    |
+     *                +-----+-------+
+     *                      |
+     *                      v
+     *                +-----+-------+
+     *                | Dead        |
      *                +-------------+
      * </pre>
      */
     public enum State {
-        NOT_RUNNING(1), RUNNING(1, 2, 4), PARTITIONS_REVOKED(3, 4), ASSIGNING_PARTITIONS(1, 4), PENDING_SHUTDOWN(0);
+        CREATED(1), RUNNING(1, 2, 4), PARTITIONS_REVOKED(3, 4), ASSIGNING_PARTITIONS(1, 4), PENDING_SHUTDOWN(5), DEAD;
 
         private final Set<Integer> validTransitions = new HashSet<>();
 
@@ -116,7 +124,7 @@ public class StreamThread extends Thread {
         }
 
         public boolean isRunning() {
-            return !equals(PENDING_SHUTDOWN) && !equals(NOT_RUNNING);
+            return !equals(PENDING_SHUTDOWN) && !equals(CREATED) && !equals(DEAD);
         }
 
         public boolean isValidTransition(final State newState) {
@@ -230,6 +238,7 @@ public class StreamThread extends Thread {
     }
 
     abstract class AbstractTaskCreator {
+        final static long MAX_BACKOFF_TIME_MS = 1000L;
         void retryWithBackoff(final Map<TaskId, Set<TopicPartition>> tasksToBeCreated, final long start) {
             long backoffTimeMs = 50L;
             final Set<TaskId> retryingTasks = new HashSet<>();
@@ -251,7 +260,7 @@ public class StreamThread extends Thread {
                     } catch (final LockException e) {
                         // ignore and retry
                         if (!retryingTasks.contains(taskId)) {
-                            log.warn("{} Could not create task {}. Will retry. {}", logPrefix, taskId, e);
+                            log.warn("{} Could not create task {} due to {}. Will retry.", logPrefix, taskId, e.getMessage());
                             retryingTasks.add(taskId);
                         }
                     }
@@ -264,6 +273,7 @@ public class StreamThread extends Thread {
                 try {
                     Thread.sleep(backoffTimeMs);
                     backoffTimeMs <<= 1;
+                    backoffTimeMs = Math.min(backoffTimeMs, MAX_BACKOFF_TIME_MS);
                 } catch (final InterruptedException e) {
                     // ignore
                 }
@@ -303,6 +313,11 @@ public class StreamThread extends Thread {
             final StandbyTask task = createStandbyTask(taskId, partitions);
             updateStandByTaskMaps(checkpointedOffsets, taskId, partitions, task);
         }
+    }
+
+    interface StreamTaskAction {
+        String name();
+        void apply(final StreamTask task);
     }
 
     /**
@@ -347,7 +362,7 @@ public class StreamThread extends Thread {
             tasksClosedSensor.add(metrics.metricName("task-closed-rate", this.groupName, "The average per-second number of closed tasks", this.tags), new Rate(new Count()));
 
             skippedRecordsSensor = metrics.sensor(prefix + ".skipped-records");
-            skippedRecordsSensor.add(metrics.metricName("skipped-records-rate", this.groupName, "The average per-second number of skipped records.", this.tags), new Rate(new Count()));
+            skippedRecordsSensor.add(metrics.metricName("skipped-records-rate", this.groupName, "The average per-second number of skipped records.", this.tags), new Rate(new Sum()));
 
         }
 
@@ -370,7 +385,7 @@ public class StreamThread extends Thread {
     }
 
 
-    private volatile State state = State.NOT_RUNNING;
+    private volatile State state = State.CREATED;
     private StreamThread.StateListener stateListener = null;
     final PartitionGrouper partitionGrouper;
     private final StreamsMetadataState streamsMetadataState;
@@ -409,7 +424,7 @@ public class StreamThread extends Thread {
     private long lastCleanMs;
     private long lastCommitMs;
     private Throwable rebalanceException = null;
-    private final boolean exactlyOnceEnabled;
+    private final boolean eosEnabled;
 
     private Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> standbyRecords;
     private boolean processStandbyRecords = false;
@@ -451,7 +466,7 @@ public class StreamThread extends Thread {
             log.warn("{} Negative cache size passed in thread. Reverting to cache size of 0 bytes.", logPrefix);
         }
         cache = new ThreadCache(threadClientId, cacheSizeBytes, streamsMetrics);
-        exactlyOnceEnabled = config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG).equals(StreamsConfig.EXACTLY_ONCE);
+        eosEnabled = StreamsConfig.EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
 
 
         // set the consumer clients
@@ -507,8 +522,10 @@ public class StreamThread extends Thread {
     public void run() {
         log.info("{} Starting", logPrefix);
 
+        boolean cleanRun = false;
         try {
             runLoop();
+            cleanRun = true;
         } catch (final KafkaException e) {
             // just re-throw the exception as it should be logged already
             throw e;
@@ -518,7 +535,7 @@ public class StreamThread extends Thread {
             log.error("{} Streams application error during processing: {}", logPrefix, e);
             throw e;
         } finally {
-            shutdown();
+            shutdown(cleanRun);
         }
     }
 
@@ -533,7 +550,7 @@ public class StreamThread extends Thread {
             timerStartedMs = time.milliseconds();
 
             // try to fetch some records if necessary
-            final ConsumerRecords<byte[], byte[]> records = pollRequests(pollTimeMs);
+            final ConsumerRecords<byte[], byte[]> records = pollRequests();
             if (records != null && !records.isEmpty() && !activeTasks.isEmpty()) {
                 streamsMetrics.pollTimeSensor.record(computeLatency(), timerStartedMs);
                 addRecordsToTasks(records);
@@ -558,7 +575,7 @@ public class StreamThread extends Thread {
      * Get the next batch of records by polling.
      * @return Next batch of records or null if no records available.
      */
-    private ConsumerRecords<byte[], byte[]> pollRequests(final long pollTimeMs) {
+    private ConsumerRecords<byte[], byte[]> pollRequests() {
         ConsumerRecords<byte[], byte[]> records = null;
 
         try {
@@ -568,7 +585,9 @@ public class StreamThread extends Thread {
         }
 
         if (rebalanceException != null) {
-            throw new StreamsException(logPrefix + " Failed to rebalance.", rebalanceException);
+            if (!(rebalanceException instanceof ProducerFencedException)) {
+                throw new StreamsException(logPrefix + " Failed to rebalance.", rebalanceException);
+            }
         }
 
         return records;
@@ -651,14 +670,22 @@ public class StreamThread extends Thread {
         // until no task has any records left
         do {
             totalProcessedEachRound = 0;
-            for (final StreamTask task : tasks.values()) {
-                // we processed one record,
-                // and more are buffered waiting for the next round
-                if (task.process()) {
-                    totalProcessedEachRound++;
-                    totalProcessedSinceLastMaybeCommit++;
+            final Iterator<Map.Entry<TaskId, StreamTask>> it = tasks.entrySet().iterator();
+            while (it.hasNext()) {
+                final StreamTask task = it.next().getValue();
+                try {
+                    // we processed one record,
+                    // if more are buffered waiting for the next round
+                    if (task.process()) {
+                        totalProcessedEachRound++;
+                        totalProcessedSinceLastMaybeCommit++;
+                    }
+                } catch (final ProducerFencedException e) {
+                    closeZombieTask(task);
+                    it.remove();
                 }
             }
+
             if (recordsProcessedBeforeCommit != UNLIMITED_RECORDS &&
                 totalProcessedSinceLastMaybeCommit >= recordsProcessedBeforeCommit) {
                 totalProcessedSinceLastMaybeCommit = 0;
@@ -670,11 +697,25 @@ public class StreamThread extends Thread {
         } while (totalProcessedEachRound != 0);
 
         // go over the tasks again to punctuate or commit
-        for (final StreamTask task : tasks.values()) {
-            maybePunctuate(task);
-            if (task.commitNeeded()) {
-                commitOne(task);
+        final RuntimeException e = performOnStreamTasks(new StreamTaskAction() {
+            private String name;
+            @Override
+            public String name() {
+                return name;
             }
+
+            @Override
+            public void apply(final StreamTask task) {
+                name = "punctuate";
+                maybePunctuate(task);
+                if (task.commitNeeded()) {
+                    name = "commit";
+                    commitOne(task);
+                }
+            }
+        });
+        if (e != null) {
+            throw e;
         }
 
         return totalProcessedSinceLastMaybeCommit;
@@ -709,7 +750,7 @@ public class StreamThread extends Thread {
         // note that once we set recordsProcessedBeforeCommit, it will never be UNLIMITED_RECORDS again, so
         // we will never process all records again. This might be an issue if the initial measurement
         // was off due to a slow start.
-        if (processLatency > commitTime) {
+        if (processLatency > 0 && processLatency > commitTime) {
             // push down
             recordsProcessedBeforeCommit = Math.max(1, (commitTime * totalProcessed) / processLatency);
             log.debug("{} processing latency {} > commit time {} for {} records. Adjusting down recordsProcessedBeforeCommit={}",
@@ -745,9 +786,21 @@ public class StreamThread extends Thread {
      * Commit the states of all its tasks
      */
     private void commitAll() {
-        for (final StreamTask task : activeTasks.values()) {
-            commitOne(task);
+        final RuntimeException e = performOnStreamTasks(new StreamTaskAction() {
+            @Override
+            public String name() {
+                return "commit";
+            }
+
+            @Override
+            public void apply(final StreamTask task) {
+                commitOne(task);
+            }
+        });
+        if (e != null) {
+            throw e;
         }
+
         for (final StandbyTask task : standbyTasks.values()) {
             commitOne(task);
         }
@@ -762,10 +815,10 @@ public class StreamThread extends Thread {
             task.commit();
         } catch (final CommitFailedException e) {
             // commit failed. Just log it.
-            log.warn("{} Failed to commit {} {} state: {}", logPrefix, task.getClass().getSimpleName(), task.id(), e);
+            log.warn("{} Failed to commit {} {} state: ", logPrefix, task.getClass().getSimpleName(), task.id(), e);
         } catch (final KafkaException e) {
             // commit failed due to an unexpected exception. Log it and rethrow the exception.
-            log.error("{} Failed to commit {} {} state: {}", logPrefix, task.getClass().getSimpleName(), task.id(), e);
+            log.error("{} Failed to commit {} {} state: ", logPrefix, task.getClass().getSimpleName(), task.id(), e);
             throw e;
         }
 
@@ -983,9 +1036,9 @@ public class StreamThread extends Thread {
         this.partitionAssignor = partitionAssignor;
     }
 
-    private void shutdown() {
+    private void shutdown(final boolean cleanRun) {
         log.info("{} Shutting down", logPrefix);
-        shutdownTasksAndState();
+        shutdownTasksAndState(cleanRun);
 
         // close all embedded clients
         if (threadProducer != null) {
@@ -1017,12 +1070,12 @@ public class StreamThread extends Thread {
         // clean up global tasks
 
         log.info("{} Stream thread shutdown complete", logPrefix);
-        setState(State.NOT_RUNNING);
+        setState(State.DEAD);
         streamsMetrics.removeAllSensors();
     }
 
     @SuppressWarnings("ThrowableNotThrown")
-    private void shutdownTasksAndState() {
+    private void shutdownTasksAndState(final boolean cleanRun) {
         log.debug("{} shutdownTasksAndState: shutting down" +
                 "active tasks {}, standby tasks {}, suspended tasks {}, and suspended standby tasks {}",
             logPrefix, activeTasks.keySet(), standbyTasks.keySet(),
@@ -1030,7 +1083,7 @@ public class StreamThread extends Thread {
 
         for (final AbstractTask task : allTasks()) {
             try {
-                task.close();
+                task.close(cleanRun);
             } catch (final RuntimeException e) {
                 log.error("{} Failed while closing {} {} due to {}: ",
                     logPrefix,
@@ -1054,7 +1107,19 @@ public class StreamThread extends Thread {
 
         final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
 
-        for (final AbstractTask task : activeAndStandbytasks()) {
+        firstException.compareAndSet(null, performOnStreamTasks(new StreamTaskAction() {
+            @Override
+            public String name() {
+                return "suspend";
+            }
+
+            @Override
+            public void apply(final StreamTask task) {
+                task.suspend();
+            }
+        }));
+
+        for (final StandbyTask task : standbyTasks.values()) {
             try {
                 task.suspend();
             } catch (final RuntimeException e) {
@@ -1131,7 +1196,7 @@ public class StreamThread extends Thread {
             if (!task.partitions().equals(assignedPartitionsForTask)) {
                 log.debug("{} Closing suspended non-assigned active task {}", logPrefix, task.id());
                 try {
-                    task.close();
+                    task.close(true);
                 } catch (final Exception e) {
                     log.error("{} Failed to remove suspended task {}: {}", logPrefix, next.getKey(), e);
                 } finally {
@@ -1150,7 +1215,7 @@ public class StreamThread extends Thread {
                 final StandbyTask task = suspendedTask.getValue();
                 log.debug("{} Closing suspended non-assigned standby task {}", logPrefix, task.id());
                 try {
-                    task.close();
+                    task.close(true);
                 } catch (final Exception e) {
                     log.error("{} Failed to remove suspended standby task {}: {}", logPrefix, task.id(), e);
                 } finally {
@@ -1165,37 +1230,43 @@ public class StreamThread extends Thread {
 
         streamsMetrics.taskCreatedSensor.record();
 
-        return new StreamTask(
-            id,
-            applicationId,
-            partitions,
-            builder.build(id.topicGroupId),
-            consumer,
-            storeChangelogReader,
-            config,
-            streamsMetrics,
-            stateDirectory,
-            cache,
-            time,
-            createRecordCollector(id));
+        try {
+            return new StreamTask(
+                id,
+                applicationId,
+                partitions,
+                builder.build(id.topicGroupId),
+                consumer,
+                storeChangelogReader,
+                config,
+                streamsMetrics,
+                stateDirectory,
+                cache,
+                time,
+                createProducer(id));
+        } finally {
+            log.info("{} Created active task {} with assigned partitions {}", logPrefix, id, partitions);
+        }
     }
 
-    private RecordCollector createRecordCollector(final TaskId id) {
-        final Map<String, Object> producerConfigs = config.getProducerConfigs(threadClientId);
+    private Producer<byte[], byte[]> createProducer(final TaskId id) {
 
         final Producer<byte[], byte[]> producer;
-        if (exactlyOnceEnabled) {
+        if (eosEnabled) {
+            final Map<String, Object> producerConfigs = config.getProducerConfigs(threadClientId + "-" + id);
             log.info("{} Creating producer client for task {}", logPrefix, id);
+            producerConfigs.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, applicationId + "-" + id);
             producer = clientSupplier.getProducer(producerConfigs);
         } else {
             if (threadProducer == null) {
+                final Map<String, Object> producerConfigs = config.getProducerConfigs(threadClientId);
                 log.info("{} Creating shared producer client", logPrefix);
                 threadProducer = clientSupplier.getProducer(producerConfigs);
             }
             producer = threadProducer;
         }
 
-        return new RecordCollectorImpl(producer, id.toString());
+        return producer;
     }
 
     private void addStreamTasks(final Collection<TopicPartition> assignment, final long start) {
@@ -1354,4 +1425,42 @@ public class StreamThread extends Thread {
         standbyRecords.clear();
     }
 
+    private void closeZombieTask(final StreamTask task) {
+        log.warn("{} Producer of task {} fenced; closing zombie task.", logPrefix, task.id);
+        try {
+            task.close(false);
+        } catch (final Exception f) {
+            if (!log.isDebugEnabled() && !log.isTraceEnabled()) {
+                log.warn("{} Failed to close zombie task: {}", logPrefix, f.getMessage());
+            }
+            log.debug("{} Failed to close zombie task: ", logPrefix, f);
+        }
+        activeTasks.remove(task.id);
+    }
+
+
+    private RuntimeException performOnStreamTasks(final StreamTaskAction action) {
+        RuntimeException firstException = null;
+        final Iterator<Map.Entry<TaskId, StreamTask>> it = activeTasks.entrySet().iterator();
+        while (it.hasNext()) {
+            final StreamTask task = it.next().getValue();
+            try {
+                action.apply(task);
+            } catch (final ProducerFencedException e) {
+                closeZombieTask(task);
+                it.remove();
+            } catch (final RuntimeException t) {
+                log.error("{} Failed to {} stream task {} due to: {}",
+                    logPrefix,
+                    action.name(),
+                    task.id(),
+                    t);
+                if (firstException == null) {
+                    firstException = t;
+                }
+            }
+        }
+
+        return firstException;
+    }
 }

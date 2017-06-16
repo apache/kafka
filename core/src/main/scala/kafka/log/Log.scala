@@ -56,7 +56,8 @@ object LogAppendInfo {
 /**
  * Struct to hold various quantities we compute about each message set before appending to the log
  *
- * @param firstOffset The first offset in the message set
+ * @param firstOffset The first offset in the message set unless the message format is less than V2 and we are appending
+ *                    to the follower. In that case, this will be the last offset for performance reasons.
  * @param lastOffset The last offset in the message set
  * @param maxTimestamp The maximum timestamp of the message set.
  * @param offsetOfMaxTimestamp The offset of the message with the maximum timestamp.
@@ -88,7 +89,15 @@ case class LogAppendInfo(var firstOffset: Long,
  *                   COMMIT/ABORT control record which indicates the transaction's completion.
  * @param isAborted Whether or not the transaction was aborted
  */
-case class CompletedTxn(producerId: Long, firstOffset: Long, lastOffset: Long, isAborted: Boolean)
+case class CompletedTxn(producerId: Long, firstOffset: Long, lastOffset: Long, isAborted: Boolean) {
+  override def toString: String = {
+    "CompletedTxn(" +
+      s"producerId=$producerId, " +
+      s"firstOffset=$firstOffset, " +
+      s"lastOffset=$lastOffset, " +
+      s"isAborted=$isAborted)"
+  }
+}
 
 /**
  * An append-only log for storing messages.
@@ -317,7 +326,7 @@ class Log(@volatile var dir: File,
         loadProducersFromLog(stateManager, fetchDataInfo.records)
     }
     stateManager.updateMapEndOffset(segment.baseOffset)
-    val bytesTruncated = segment.recover(config.maxMessageSize, stateManager, leaderEpochCache)
+    val bytesTruncated = segment.recover(stateManager, leaderEpochCache)
 
     // once we have recovered the segment's data, take a snapshot to ensure that we won't
     // need to reload the same segment again while recovering another segment.
@@ -421,35 +430,49 @@ class Log(@volatile var dir: File,
 
   private def loadProducerState(lastOffset: Long): Unit = lock synchronized {
     info(s"Loading producer state from offset $lastOffset for partition $topicPartition")
-    val currentTimeMs = time.milliseconds
-    producerStateManager.truncateAndReload(logStartOffset, lastOffset, currentTimeMs)
 
-    // only do the potentially expensive reloading of the last snapshot offset is lower than the
-    // log end offset (which would be the case on first startup) and there are active producers.
-    // if there are no active producers, then truncating shouldn't change that fact (although it
-    // could cause a producerId to expire earlier than expected), so we can skip the loading.
-    // This is an optimization for users which are not yet using idempotent/transactional features yet.
-    if (lastOffset > producerStateManager.mapEndOffset || !producerStateManager.isEmpty) {
-      logSegments(producerStateManager.mapEndOffset, lastOffset).foreach { segment =>
-        val startOffset = math.max(segment.baseOffset, producerStateManager.mapEndOffset)
-        val fetchDataInfo = segment.read(startOffset, Some(lastOffset), Int.MaxValue)
-        if (fetchDataInfo != null)
-          loadProducersFromLog(producerStateManager, fetchDataInfo.records)
+    if (producerStateManager.latestSnapshotOffset.isEmpty) {
+      // if there are no snapshots to load producer state from, we assume that the brokers are
+      // being upgraded, which means there would be no previous idempotent/transactional producers
+      // to load state for. To avoid an expensive scan through all of the segments, we take
+      // empty snapshots from the start of the last two segments and the last offset. The purpose
+      // of taking the segment snapshots is to avoid the full scan in the case that the log needs
+      // truncation.
+      val nextLatestSegmentBaseOffset = Option(segments.lowerEntry(activeSegment.baseOffset)).map(_.getValue.baseOffset)
+      val offsetsToSnapshot = Seq(nextLatestSegmentBaseOffset, Some(activeSegment.baseOffset), Some(lastOffset))
+      offsetsToSnapshot.flatten.foreach { offset =>
+        producerStateManager.updateMapEndOffset(offset)
+        producerStateManager.takeSnapshot()
       }
-    }
+    } else {
+      val currentTimeMs = time.milliseconds
+      producerStateManager.truncateAndReload(logStartOffset, lastOffset, currentTimeMs)
 
-    producerStateManager.updateMapEndOffset(lastOffset)
-    updateFirstUnstableOffset()
+      // only do the potentially expensive reloading of the last snapshot offset is lower than the
+      // log end offset (which would be the case on first startup) and there are active producers.
+      // if there are no active producers, then truncating shouldn't change that fact (although it
+      // could cause a producerId to expire earlier than expected), so we can skip the loading.
+      // This is an optimization for users which are not yet using idempotent/transactional features yet.
+      if (lastOffset > producerStateManager.mapEndOffset || !producerStateManager.isEmpty) {
+        logSegments(producerStateManager.mapEndOffset, lastOffset).foreach { segment =>
+          val startOffset = math.max(segment.baseOffset, producerStateManager.mapEndOffset)
+          val fetchDataInfo = segment.read(startOffset, Some(lastOffset), Int.MaxValue)
+          if (fetchDataInfo != null)
+            loadProducersFromLog(producerStateManager, fetchDataInfo.records)
+        }
+      }
+
+      producerStateManager.updateMapEndOffset(lastOffset)
+      updateFirstUnstableOffset()
+    }
   }
 
   private def loadProducersFromLog(producerStateManager: ProducerStateManager, records: Records): Unit = {
     val loadedProducers = mutable.Map.empty[Long, ProducerAppendInfo]
     val completedTxns = ListBuffer.empty[CompletedTxn]
     records.batches.asScala.foreach { batch =>
-      if (batch.hasProducerId) {
-        val lastEntry = producerStateManager.lastEntry(batch.producerId)
-        updateProducers(batch, loadedProducers, completedTxns, lastEntry, loadingFromLog = true)
-      }
+      if (batch.hasProducerId)
+        updateProducers(batch, loadedProducers, completedTxns, loadingFromLog = true)
     }
     loadedProducers.values.foreach(producerStateManager.update)
     completedTxns.foreach(producerStateManager.completeTxn)
@@ -515,7 +538,7 @@ class Log(@volatile var dir: File,
    * @throws KafkaStorageException If the append fails due to an I/O error.
    * @return Information about the appended messages including the first and last offset.
    */
-  private def append(records: MemoryRecords, isFromClient: Boolean, assignOffsets: Boolean = true, leaderEpoch: Int): LogAppendInfo = {
+  private def append(records: MemoryRecords, isFromClient: Boolean, assignOffsets: Boolean, leaderEpoch: Int): LogAppendInfo = {
     val appendInfo = analyzeAndValidateRecords(records, isFromClient = isFromClient)
 
     // return if we have no valid messages or if this is a duplicate of the last appended entry
@@ -616,7 +639,6 @@ class Log(@volatile var dir: File,
 
         // update the producer state
         for ((producerId, producerAppendInfo) <- updatedProducers) {
-          trace(s"Updating producer $producerId state: ${producerAppendInfo.lastEntry}")
           producerAppendInfo.maybeCacheTxnFirstOffsetMetadata(logOffsetMetadata)
           producerStateManager.update(producerAppendInfo)
         }
@@ -659,13 +681,18 @@ class Log(@volatile var dir: File,
   }
 
   private def updateFirstUnstableOffset(): Unit = lock synchronized {
-    this.firstUnstableOffset = producerStateManager.firstUnstableOffset match {
+    val updatedFirstStableOffset = producerStateManager.firstUnstableOffset match {
       case Some(logOffsetMetadata) if logOffsetMetadata.messageOffsetOnly =>
         val offset = logOffsetMetadata.messageOffset
         val segment = segments.floorEntry(offset).getValue
         val position  = segment.translateOffset(offset)
         Some(LogOffsetMetadata(offset, segment.baseOffset, position.position))
       case other => other
+    }
+
+    if (updatedFirstStableOffset != this.firstUnstableOffset) {
+      debug(s"First unstable offset for ${this.name} updated to $updatedFirstStableOffset")
+      this.firstUnstableOffset = updatedFirstStableOffset
     }
   }
 
@@ -695,7 +722,7 @@ class Log(@volatile var dir: File,
       // the last appended entry to the client.
       if (isFromClient && maybeLastEntry.exists(_.isDuplicate(batch)))
         return (updatedProducers, completedTxns.toList, maybeLastEntry)
-      updateProducers(batch, updatedProducers, completedTxns, maybeLastEntry, loadingFromLog = false)
+      updateProducers(batch, updatedProducers, completedTxns, loadingFromLog = false)
     }
     (updatedProducers, completedTxns.toList, None)
   }
@@ -736,6 +763,8 @@ class Log(@volatile var dir: File,
       // update the first offset if on the first message. For magic versions older than 2, we use the last offset
       // to avoid the need to decompress the data (the last offset can be obtained directly from the wrapper message).
       // For magic version 2, we can get the first offset directly from the batch header.
+      // When appending to the leader, we will update LogAppendInfo.baseOffset with the correct value. In the follower
+      // case, validation will be more lenient.
       if (firstOffset < 0)
         firstOffset = if (batch.magic >= RecordBatch.MAGIC_VALUE_V2) batch.baseOffset else batch.lastOffset
 
@@ -780,12 +809,10 @@ class Log(@volatile var dir: File,
   private def updateProducers(batch: RecordBatch,
                               producers: mutable.Map[Long, ProducerAppendInfo],
                               completedTxns: ListBuffer[CompletedTxn],
-                              lastEntry: Option[ProducerIdEntry],
                               loadingFromLog: Boolean): Unit = {
     val producerId = batch.producerId
-    val appendInfo = producers.getOrElseUpdate(producerId, new ProducerAppendInfo(producerId, lastEntry, loadingFromLog))
-    val shouldValidateSequenceNumbers = topicPartition.topic != Topic.GROUP_METADATA_TOPIC_NAME
-    val maybeCompletedTxn = appendInfo.append(batch, shouldValidateSequenceNumbers)
+    val appendInfo = producers.getOrElseUpdate(producerId, producerStateManager.prepareUpdate(producerId, loadingFromLog))
+    val maybeCompletedTxn = appendInfo.append(batch)
     maybeCompletedTxn.foreach(completedTxns += _)
   }
 
@@ -810,6 +837,11 @@ class Log(@volatile var dir: File,
     }
   }
 
+  private[log] def readUncommitted(startOffset: Long, maxLength: Int, maxOffset: Option[Long] = None,
+                                   minOneMessage: Boolean = false): FetchDataInfo = {
+    read(startOffset, maxLength, maxOffset, minOneMessage, isolationLevel = IsolationLevel.READ_UNCOMMITTED)
+  }
+
   /**
    * Read messages from the log.
    *
@@ -829,20 +861,25 @@ class Log(@volatile var dir: File,
    * @return The fetch data information including fetch starting offset metadata and messages read.
    */
   def read(startOffset: Long, maxLength: Int, maxOffset: Option[Long] = None, minOneMessage: Boolean = false,
-           isolationLevel: IsolationLevel = IsolationLevel.READ_UNCOMMITTED): FetchDataInfo = {
+           isolationLevel: IsolationLevel): FetchDataInfo = {
     trace("Reading %d bytes from offset %d in log %s of length %d bytes".format(maxLength, startOffset, name, size))
 
     // Because we don't use lock for reading, the synchronization is a little bit tricky.
     // We create the local variables to avoid race conditions with updates to the log.
     val currentNextOffsetMetadata = nextOffsetMetadata
     val next = currentNextOffsetMetadata.messageOffset
-    if(startOffset == next)
-      return FetchDataInfo(currentNextOffsetMetadata, MemoryRecords.EMPTY)
+    if (startOffset == next) {
+      val abortedTransactions =
+        if (isolationLevel == IsolationLevel.READ_COMMITTED) Some(List.empty[AbortedTransaction])
+        else None
+      return FetchDataInfo(currentNextOffsetMetadata, MemoryRecords.EMPTY, firstEntryIncomplete = false,
+        abortedTransactions = abortedTransactions)
+    }
 
     var segmentEntry = segments.floorEntry(startOffset)
 
     // return error on attempt to read beyond the log end offset or read below log start offset
-    if(startOffset > next || segmentEntry == null || startOffset < logStartOffset)
+    if (startOffset > next || segmentEntry == null || startOffset < logStartOffset)
       throw new OffsetOutOfRangeException("Request for offset %d but we only have log segments in the range %d to %d.".format(startOffset, logStartOffset, next))
 
     // Do the read on the segment with a base offset less than the target offset
@@ -981,7 +1018,7 @@ class Log(@volatile var dir: File,
    */
   def convertToOffsetMetadata(offset: Long): LogOffsetMetadata = {
     try {
-      val fetchDataInfo = read(offset, 1)
+      val fetchDataInfo = readUncommitted(offset, 1)
       fetchDataInfo.fetchOffsetMetadata
     } catch {
       case _: OffsetOutOfRangeException => LogOffsetMetadata.UnknownOffsetMetadata

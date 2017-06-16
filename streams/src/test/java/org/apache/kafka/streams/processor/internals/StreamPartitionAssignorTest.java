@@ -24,6 +24,7 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
@@ -44,6 +45,7 @@ import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockStateStoreSupplier;
 import org.apache.kafka.test.MockTimestampExtractor;
 import org.junit.Assert;
+import org.junit.Before;
 import org.junit.Test;
 
 import java.util.ArrayList;
@@ -104,6 +106,12 @@ public class StreamPartitionAssignorTest {
     private final MockClientSupplier mockClientSupplier = new MockClientSupplier();
     private final TopologyBuilder builder = new TopologyBuilder();
     private final StreamsConfig config = new StreamsConfig(configProps());
+    private final StreamThread mockStreamThread = new StreamThread(builder, config,
+                                                                   mockClientSupplier, "appID",
+                                                                   "clientId", UUID.randomUUID(),
+                                                                   new Metrics(), new MockTime(),
+                                                                   null, 1L);
+    private final Map<String, Object> configurationMap = new HashMap<>();
 
     private Properties configProps() {
         return new Properties() {
@@ -114,6 +122,13 @@ public class StreamPartitionAssignorTest {
                 setProperty(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, MockTimestampExtractor.class.getName());
             }
         };
+    }
+
+    @Before
+    public void setUp() {
+        configurationMap.put(StreamsConfig.InternalConfig.STREAM_THREAD_INSTANCE, mockStreamThread);
+        configurationMap.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 0);
+        partitionAssignor.configure(configurationMap);
     }
 
     @SuppressWarnings("unchecked")

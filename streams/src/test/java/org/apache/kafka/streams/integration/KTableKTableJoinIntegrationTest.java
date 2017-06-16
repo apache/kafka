@@ -71,10 +71,7 @@ public class KTableKTableJoinIntegrationTest {
 
     @BeforeClass
     public static void beforeTest() throws Exception {
-        CLUSTER.createTopic(TABLE_1);
-        CLUSTER.createTopic(TABLE_2);
-        CLUSTER.createTopic(TABLE_3);
-        CLUSTER.createTopic(OUTPUT);
+        CLUSTER.createTopics(TABLE_1, TABLE_2, TABLE_3, OUTPUT);
 
         streamsConfig = new Properties();
         streamsConfig.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());

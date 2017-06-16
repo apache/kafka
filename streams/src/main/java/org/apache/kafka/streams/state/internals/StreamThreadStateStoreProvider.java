@@ -23,6 +23,7 @@ import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.state.QueryableStoreType;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -40,6 +41,9 @@ public class StreamThreadStateStoreProvider implements StateStoreProvider {
     @SuppressWarnings("unchecked")
     @Override
     public <T> List<T> stores(final String storeName, final QueryableStoreType<T> queryableStoreType) {
+        if (streamThread.state() == StreamThread.State.DEAD) {
+            return Collections.emptyList();
+        }
         if (!streamThread.isInitialized()) {
             throw new InvalidStateStoreException("the state store, " + storeName + ", may have migrated to another instance.");
         }

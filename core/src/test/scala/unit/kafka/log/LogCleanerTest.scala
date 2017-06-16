@@ -19,7 +19,7 @@ package kafka.log
 
 import java.io.File
 import java.nio._
-import java.nio.file.Paths
+import java.nio.file.{Files, Paths}
 import java.util.Properties
 
 import kafka.common._
@@ -39,7 +39,7 @@ import scala.collection._
  * Unit tests for the log cleaning logic
  */
 class LogCleanerTest extends JUnitSuite {
-  
+
   val tmpdir = TestUtils.tempDir()
   val dir = TestUtils.randomPartitionLogDir(tmpdir)
   val logProps = new Properties()
@@ -50,12 +50,12 @@ class LogCleanerTest extends JUnitSuite {
   val logConfig = LogConfig(logProps)
   val time = new MockTime()
   val throttler = new Throttler(desiredRatePerSec = Double.MaxValue, checkIntervalMs = Long.MaxValue, time = time)
-  
+
   @After
   def teardown(): Unit = {
     Utils.delete(tmpdir)
   }
-  
+
   /**
    * Test simple log cleaning
    */
@@ -86,6 +86,66 @@ class LogCleanerTest extends JUnitSuite {
     val shouldRemain = keysInLog(log).filter(!keys.contains(_))
     assertEquals(shouldRemain, keysInLog(log))
     assertEquals(expectedBytesRead, stats.bytesRead)
+  }
+
+  @Test
+  def testDuplicateCheckAfterCleaning(): Unit = {
+    val cleaner = makeCleaner(Int.MaxValue)
+    val logProps = new Properties()
+    logProps.put(LogConfig.SegmentBytesProp, 2048: java.lang.Integer)
+    var log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
+
+    val producerEpoch = 0.toShort
+    val pid1 = 1
+    val pid2 = 2
+    val pid3 = 3
+    val pid4 = 4
+
+    appendIdempotentAsLeader(log, pid1, producerEpoch)(Seq(1, 2, 3))
+    appendIdempotentAsLeader(log, pid2, producerEpoch)(Seq(3, 1, 4))
+    appendIdempotentAsLeader(log, pid3, producerEpoch)(Seq(1, 4))
+
+    log.roll()
+    cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 0L, log.activeSegment.baseOffset))
+    assertEquals(List(2, 3, 3, 4, 1, 4), keysInLog(log))
+    assertEquals(List(1, 2, 3, 5, 6, 7), offsetsInLog(log))
+
+    // we have to reload the log to validate that the cleaner maintained sequence numbers correctly
+    def reloadLog(): Unit = {
+      log.close()
+      log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps), recoveryPoint = 0L)
+    }
+
+    reloadLog()
+
+    // check duplicate append from producer 1
+    var logAppendInfo = appendIdempotentAsLeader(log, pid1, producerEpoch)(Seq(1, 2, 3))
+    assertEquals(0L, logAppendInfo.firstOffset)
+    assertEquals(2L, logAppendInfo.lastOffset)
+
+    // check duplicate append from producer 3
+    logAppendInfo = appendIdempotentAsLeader(log, pid3, producerEpoch)(Seq(1, 4))
+    assertEquals(6L, logAppendInfo.firstOffset)
+    assertEquals(7L, logAppendInfo.lastOffset)
+
+    // check duplicate append from producer 2
+    logAppendInfo = appendIdempotentAsLeader(log, pid2, producerEpoch)(Seq(3, 1, 4))
+    assertEquals(3L, logAppendInfo.firstOffset)
+    assertEquals(5L, logAppendInfo.lastOffset)
+
+    // do one more append and a round of cleaning to force another deletion from producer 1's batch
+    appendIdempotentAsLeader(log, pid4, producerEpoch)(Seq(2))
+    log.roll()
+    cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 0L, log.activeSegment.baseOffset))
+    assertEquals(List(3, 3, 4, 1, 4, 2), keysInLog(log))
+    assertEquals(List(2, 3, 5, 6, 7, 8), offsetsInLog(log))
+
+    reloadLog()
+
+    // duplicate append from producer1 should still be fine
+    logAppendInfo = appendIdempotentAsLeader(log, pid1, producerEpoch)(Seq(1, 2, 3))
+    assertEquals(0L, logAppendInfo.firstOffset)
+    assertEquals(2L, logAppendInfo.lastOffset)
   }
 
   @Test
@@ -974,8 +1034,8 @@ class LogCleanerTest extends JUnitSuite {
   private def messageWithOffset(key: Int, value: Int, offset: Long): MemoryRecords =
     messageWithOffset(key.toString.getBytes, value.toString.getBytes, offset)
 
-  private def makeLog(dir: File = dir, config: LogConfig = logConfig) =
-    new Log(dir = dir, config = config, logStartOffset = 0L, recoveryPoint = 0L, scheduler = time.scheduler,
+  private def makeLog(dir: File = dir, config: LogConfig = logConfig, recoveryPoint: Long = 0L) =
+    new Log(dir = dir, config = config, logStartOffset = 0L, recoveryPoint = recoveryPoint, scheduler = time.scheduler,
       time = time, brokerTopicStats = new BrokerTopicStats)
 
   private def noOpCheckDone(topicPartition: TopicPartition) { /* do nothing */  }
@@ -1006,23 +1066,25 @@ class LogCleanerTest extends JUnitSuite {
       partitionLeaderEpoch, new SimpleRecord(key.toString.getBytes, value.toString.getBytes))
   }
 
-  private def transactionalRecords(records: Seq[SimpleRecord],
-                           producerId: Long,
-                           producerEpoch: Short,
-                           sequence: Int): MemoryRecords = {
-    MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId, producerEpoch, sequence, records: _*)
+  private def appendTransactionalAsLeader(log: Log, producerId: Long, producerEpoch: Short = 0): Seq[Int] => LogAppendInfo = {
+    appendIdempotentAsLeader(log, producerId, producerEpoch, isTransactional = true)
   }
 
-  private def appendTransactionalAsLeader(log: Log, producerId: Long, producerEpoch: Short = 0): Seq[Int] => Unit = {
+  private def appendIdempotentAsLeader(log: Log, producerId: Long,
+                                       producerEpoch: Short = 0,
+                                       isTransactional: Boolean = false): Seq[Int] => LogAppendInfo = {
     var sequence = 0
     keys: Seq[Int] => {
       val simpleRecords = keys.map { key =>
         val keyBytes = key.toString.getBytes
-        new SimpleRecord(keyBytes, keyBytes) // the value doesn't matter too much since we validate offsets
+        new SimpleRecord(time.milliseconds(), keyBytes, keyBytes) // the value doesn't matter since we validate offsets
       }
-      val records = transactionalRecords(simpleRecords, producerId, producerEpoch, sequence)
-      log.appendAsLeader(records, leaderEpoch = 0)
+      val records = if (isTransactional)
+        MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId, producerEpoch, sequence, simpleRecords: _*)
+      else
+        MemoryRecords.withIdempotentRecords(CompressionType.NONE, producerId, producerEpoch, sequence, simpleRecords: _*)
       sequence += simpleRecords.size
+      log.appendAsLeader(records, leaderEpoch = 0)
     }
   }
 

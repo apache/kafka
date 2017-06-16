@@ -50,7 +50,7 @@ public class Bytes implements Comparable<Bytes> {
 
     /**
      * Get the data from the Bytes.
-     * @return The data is only valid between offset and offset+length.
+     * @return The underlying byte array
      */
     public byte[] get() {
         return this.bytes;
@@ -139,9 +139,9 @@ public class Bytes implements Comparable<Bytes> {
     /**
      * A byte array comparator based on lexicograpic ordering.
      */
-    public final static Comparator<byte[]> BYTES_LEXICO_COMPARATOR = new LexicographicByteArrayComparator();
+    public final static ByteArrayComparator BYTES_LEXICO_COMPARATOR = new LexicographicByteArrayComparator();
 
-    private interface ByteArrayComparator extends Comparator<byte[]>, Serializable {
+    public interface ByteArrayComparator extends Comparator<byte[]>, Serializable {
 
         int compare(final byte[] buffer1, int offset1, int length1,
                     final byte[] buffer2, int offset2, int length2);

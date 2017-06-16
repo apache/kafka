@@ -19,14 +19,15 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.state.StateSerdes;
 
 import java.nio.ByteBuffer;
 
 public class WindowStoreUtils {
 
-    private static final int SEQNUM_SIZE = 4;
-    private static final int TIMESTAMP_SIZE = 8;
+    static final int SEQNUM_SIZE = 4;
+    static final int TIMESTAMP_SIZE = 8;
 
     /** Inner byte array serde used for segments */
     static final Serde<Bytes> INNER_KEY_SERDE = Serdes.Bytes();
@@ -72,5 +73,14 @@ public class WindowStoreUtils {
 
     static int sequenceNumberFromBinaryKey(byte[] binaryKey) {
         return ByteBuffer.wrap(binaryKey).getInt(binaryKey.length - SEQNUM_SIZE);
+    }
+
+    /**
+     * Safely construct a time window of the given size,
+     * taking care of bounding endMs to Long.MAX_VALUE if necessary
+     */
+    static TimeWindow timeWindowForSize(final long startMs, final long windowSize) {
+        final long endMs = startMs + windowSize;
+        return new TimeWindow(startMs, endMs < 0 ? Long.MAX_VALUE : endMs);
     }
 }

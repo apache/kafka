@@ -50,7 +50,7 @@ case class LeaderAndIsr(leader: Int,
   }
 }
 
-case class PartitionStateInfo(leaderIsrAndControllerEpoch: LeaderIsrAndControllerEpoch, allReplicas: Set[Int]) {
+case class PartitionStateInfo(leaderIsrAndControllerEpoch: LeaderIsrAndControllerEpoch, allReplicas: Seq[Int]) {
 
   override def toString: String = {
     val partitionStateInfo = new StringBuilder

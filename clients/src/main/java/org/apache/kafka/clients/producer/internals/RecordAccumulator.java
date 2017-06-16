@@ -31,6 +31,7 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.record.AbstractRecords;
+import org.apache.kafka.common.record.CompressionRatioEstimator;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.RecordBatch;
@@ -99,8 +100,8 @@ public final class RecordAccumulator {
      * @param metrics The metrics
      * @param time The time instance to use
      * @param apiVersions Request API versions for current connected brokers
-     * @param transactionManager The shared transaction state object which tracks Pids, epochs, and sequence numbers per
-     *                         partition.
+     * @param transactionManager The shared transaction state object which tracks producer IDs, epochs, and sequence
+     *                           numbers per partition.
      */
     public RecordAccumulator(int batchSize,
                              long totalSize,
@@ -237,10 +238,7 @@ public final class RecordAccumulator {
             throw new UnsupportedVersionException("Attempting to use idempotence with a broker which does not " +
                     "support the required message format (v2). The broker must be version 0.11 or later.");
         }
-        boolean isTransactional = false;
-        if (transactionManager != null)
-            isTransactional = transactionManager.isInTransaction();
-        return MemoryRecords.builder(buffer, maxUsableMagic, compression, TimestampType.CREATE_TIME, 0L, isTransactional);
+        return MemoryRecords.builder(buffer, maxUsableMagic, compression, TimestampType.CREATE_TIME, 0L);
     }
 
     /**
@@ -265,12 +263,10 @@ public final class RecordAccumulator {
     }
 
     /**
-     * Abort the batches that have been sitting in RecordAccumulator for more than the configured requestTimeout
-     * due to metadata being unavailable
+     * Get a list of batches which have been sitting in the accumulator too long and need to be expired.
      */
-    public List<ProducerBatch> abortExpiredBatches(int requestTimeout, long now) {
+    public List<ProducerBatch> expiredBatches(int requestTimeout, long now) {
         List<ProducerBatch> expiredBatches = new ArrayList<>();
-        int count = 0;
         for (Map.Entry<TopicPartition, Deque<ProducerBatch>> entry : this.batches.entrySet()) {
             Deque<ProducerBatch> dq = entry.getValue();
             TopicPartition tp = entry.getKey();
@@ -292,7 +288,6 @@ public final class RecordAccumulator {
                         // callbacks are invoked.
                         if (batch.maybeExpire(requestTimeout, retryBackoffMs, now, this.lingerMs, isFull)) {
                             expiredBatches.add(batch);
-                            count++;
                             batchIterator.remove();
                         } else {
                             // Stop at the first batch that has not expired.
@@ -302,14 +297,6 @@ public final class RecordAccumulator {
                 }
             }
         }
-        if (!expiredBatches.isEmpty()) {
-            log.trace("Expired {} batches in accumulator", count);
-            for (ProducerBatch batch : expiredBatches) {
-                batch.expirationDone();
-                deallocate(batch);
-            }
-        }
-
         return expiredBatches;
     }
 
@@ -322,6 +309,30 @@ public final class RecordAccumulator {
         synchronized (deque) {
             deque.addFirst(batch);
         }
+    }
+
+    /**
+     * Split the big batch that has been rejected and reenqueue the split batches in to the accumulator.
+     * @return the number of split batches.
+     */
+    public int splitAndReenqueue(ProducerBatch bigBatch) {
+        // Reset the estimated compression ratio to the initial value or the big batch compression ratio, whichever
+        // is bigger. There are several different ways to do the reset. We chose the most conservative one to ensure
+        // the split doesn't happen too often.
+        CompressionRatioEstimator.setEstimation(bigBatch.topicPartition.topic(), compression,
+                                                Math.max(1.0f, (float) bigBatch.compressionRatio()));
+        Deque<ProducerBatch> dq = bigBatch.split(this.batchSize);
+        int numSplitBatches = dq.size();
+        Deque<ProducerBatch> partitionDequeue = getOrCreateDeque(bigBatch.topicPartition);
+        while (!dq.isEmpty()) {
+            ProducerBatch batch = dq.pollLast();
+            incomplete.add(batch);
+            // We treat the newly split batches as if they are not even tried.
+            synchronized (partitionDequeue) {
+                partitionDequeue.addFirst(batch);
+            }
+        }
+        return numSplitBatches;
     }
 
     /**
@@ -388,9 +399,9 @@ public final class RecordAccumulator {
     }
 
     /**
-     * @return Whether there is any unsent record in the accumulator.
+     * Check whether there are any batches which haven't been drained
      */
-    public boolean hasUnsent() {
+    public boolean hasUndrained() {
         for (Map.Entry<TopicPartition, Deque<ProducerBatch>> entry : this.batches.entrySet()) {
             Deque<ProducerBatch> deque = entry.getValue();
             synchronized (deque) {
@@ -445,11 +456,17 @@ public final class RecordAccumulator {
                                         break;
                                     } else {
                                         ProducerIdAndEpoch producerIdAndEpoch = null;
+                                        boolean isTransactional = false;
                                         if (transactionManager != null) {
+                                            if (!transactionManager.isSendToPartitionAllowed(tp))
+                                                break;
+
                                             producerIdAndEpoch = transactionManager.producerIdAndEpoch();
                                             if (!producerIdAndEpoch.isValid())
                                                 // we cannot send the batch until we have refreshed the producer id
                                                 break;
+
+                                            isTransactional = transactionManager.isTransactional();
                                         }
 
                                         ProducerBatch batch = deque.pollFirst();
@@ -460,10 +477,10 @@ public final class RecordAccumulator {
                                             // the producer id and sequence here, this attempt will also be accepted,
                                             // causing a duplicate.
                                             int sequenceNumber = transactionManager.sequenceNumber(batch.topicPartition);
-                                            log.debug("Dest: {} : producerId: {}, epoch: {}, Assigning sequence for {}: {}",
-                                                    node, producerIdAndEpoch.producerId, producerIdAndEpoch.epoch,
-                                                    batch.topicPartition, sequenceNumber);
-                                            batch.setProducerState(producerIdAndEpoch, sequenceNumber);
+                                            log.debug("Assigning sequence number {} from producer {} to dequeued " +
+                                                            "batch from partition {} bound for {}.",
+                                                    sequenceNumber, producerIdAndEpoch, batch.topicPartition, node);
+                                            batch.setProducerState(producerIdAndEpoch, sequenceNumber, isTransactional);
                                         }
                                         batch.close();
                                         size += batch.sizeInBytes();
@@ -506,7 +523,17 @@ public final class RecordAccumulator {
      */
     public void deallocate(ProducerBatch batch) {
         incomplete.remove(batch);
-        free.deallocate(batch.buffer(), batch.initialCapacity());
+        // Only deallocate the batch if it is not a split batch because split batch are allocated outside the
+        // buffer pool.
+        if (!batch.isSplitBatch())
+            free.deallocate(batch.buffer(), batch.initialCapacity());
+    }
+
+    /**
+     * Package private for unit test. Get the buffer pool remaining size in bytes.
+     */
+    long bufferPoolAvailableMemory() {
+        return free.availableMemory();
     }
 
     /**
@@ -542,19 +569,18 @@ public final class RecordAccumulator {
      */
     public void awaitFlushCompletion() throws InterruptedException {
         try {
-            for (ProducerBatch batch : this.incomplete.all())
+            for (ProducerBatch batch : this.incomplete.copyAll())
                 batch.produceFuture.await();
         } finally {
             this.flushesInProgress.decrementAndGet();
         }
     }
 
-    public boolean hasUnflushedBatches() {
-        for (Map.Entry<TopicPartition, Deque<ProducerBatch>> entry : this.batches().entrySet()) {
-            if (!entry.getValue().isEmpty())
-                return true;
-        }
-        return !this.incomplete.incomplete.isEmpty();
+    /**
+     * Check whether there are any pending batches (whether sent or unsent).
+     */
+    public boolean hasIncomplete() {
+        return !this.incomplete.isEmpty();
     }
 
     /**
@@ -583,16 +609,39 @@ public final class RecordAccumulator {
         abortBatches(new IllegalStateException("Producer is closed forcefully."));
     }
 
+    /**
+     * Abort all incomplete batches (whether they have been sent or not)
+     */
     void abortBatches(final RuntimeException reason) {
-        for (ProducerBatch batch : incomplete.all()) {
+        for (ProducerBatch batch : incomplete.copyAll()) {
             Deque<ProducerBatch> dq = getDeque(batch.topicPartition);
-            // Close the batch before aborting
             synchronized (dq) {
-                batch.abort();
+                batch.abortRecordAppends();
                 dq.remove(batch);
             }
-            batch.done(-1L, RecordBatch.NO_TIMESTAMP, reason);
+            batch.abort(reason);
             deallocate(batch);
+        }
+    }
+
+    /**
+     * Abort any batches which have not been drained
+     */
+    void abortUndrainedBatches(RuntimeException reason) {
+        for (ProducerBatch batch : incomplete.copyAll()) {
+            Deque<ProducerBatch> dq = getDeque(batch.topicPartition);
+            boolean aborted = false;
+            synchronized (dq) {
+                if (!batch.isClosed()) {
+                    aborted = true;
+                    batch.abortRecordAppends();
+                    dq.remove(batch);
+                }
+            }
+            if (aborted) {
+                batch.abort(reason);
+                deallocate(batch);
+            }
         }
     }
 
@@ -638,37 +687,6 @@ public final class RecordAccumulator {
             this.readyNodes = readyNodes;
             this.nextReadyCheckDelayMs = nextReadyCheckDelayMs;
             this.unknownLeaderTopics = unknownLeaderTopics;
-        }
-    }
-
-    /*
-     * A threadsafe helper class to hold batches that haven't been ack'd yet
-     */
-    private final static class IncompleteBatches {
-        private final Set<ProducerBatch> incomplete;
-
-        public IncompleteBatches() {
-            this.incomplete = new HashSet<>();
-        }
-
-        public void add(ProducerBatch batch) {
-            synchronized (incomplete) {
-                this.incomplete.add(batch);
-            }
-        }
-
-        public void remove(ProducerBatch batch) {
-            synchronized (incomplete) {
-                boolean removed = this.incomplete.remove(batch);
-                if (!removed)
-                    throw new IllegalStateException("Remove from the incomplete set failed. This should be impossible.");
-            }
-        }
-
-        public Iterable<ProducerBatch> all() {
-            synchronized (incomplete) {
-                return new ArrayList<>(this.incomplete);
-            }
         }
     }
 

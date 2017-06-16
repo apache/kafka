@@ -71,6 +71,7 @@ versions += [
   zkclient: "0.10",
   zookeeper: "3.4.10",
   jfreechart: "1.0.0",
+  mavenArtifact: "3.5.0",
 ]
 
 libs += [
@@ -112,5 +113,6 @@ libs += [
   snappy: "org.xerial.snappy:snappy-java:$versions.snappy",
   zkclient: "com.101tec:zkclient:$versions.zkclient",
   zookeeper: "org.apache.zookeeper:zookeeper:$versions.zookeeper",
-  jfreechart: "jfreechart:jfreechart:$versions.jfreechart"
+  jfreechart: "jfreechart:jfreechart:$versions.jfreechart",
+  mavenArtifact: "org.apache.maven:maven-artifact:$versions.mavenArtifact"
 ]

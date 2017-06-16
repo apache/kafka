@@ -30,7 +30,7 @@ import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.network.{ListenerName, NetworkSend}
+import org.apache.kafka.common.network.{ListenerName, NetworkSend, Send}
 import org.apache.kafka.common.protocol.{ApiKeys, SecurityProtocol}
 import org.apache.kafka.common.record.{MemoryRecords, RecordBatch}
 import org.apache.kafka.common.requests.{AbstractRequest, ProduceRequest, RequestHeader}
@@ -98,7 +98,7 @@ class SocketServerTest extends JUnitSuite {
     byteBuffer.rewind()
 
     val send = new NetworkSend(request.connectionId, byteBuffer)
-    channel.sendResponse(new RequestChannel.Response(request, send))
+    channel.sendResponse(RequestChannel.Response(request, send))
   }
 
   def connect(s: SocketServer = server, protocol: SecurityProtocol = SecurityProtocol.PLAINTEXT) = {
@@ -173,13 +173,13 @@ class SocketServerTest extends JUnitSuite {
     val plainSocket = connect(protocol = SecurityProtocol.PLAINTEXT)
     val serializedBytes = producerRequestBytes
 
-    for (i <- 0 until 10)
+    for (_ <- 0 until 10)
       sendRequest(plainSocket, serializedBytes)
     plainSocket.close()
-    for (i <- 0 until 10) {
+    for (_ <- 0 until 10) {
       val request = server.requestChannel.receiveRequest(2000)
       assertNotNull("receiveRequest timed out", request)
-      server.requestChannel.noOperation(request.processor, request)
+      server.requestChannel.sendResponse(RequestChannel.Response(request, None, RequestChannel.NoOpAction))
     }
   }
 
@@ -331,9 +331,9 @@ class SocketServerTest extends JUnitSuite {
                                 protocol: SecurityProtocol): Processor = {
         new Processor(id, time, config.socketRequestMaxBytes, requestChannel, connectionQuotas,
           config.connectionsMaxIdleMs, listenerName, protocol, config, metrics, credentialProvider) {
-          override protected[network] def sendResponse(response: RequestChannel.Response) {
+          override protected[network] def sendResponse(response: RequestChannel.Response, responseSend: Send) {
             conn.close()
-            super.sendResponse(response)
+            super.sendResponse(response, responseSend)
           }
         }
       }
@@ -357,7 +357,7 @@ class SocketServerTest extends JUnitSuite {
       // detected. If the buffer is larger than 102400 bytes, a second write is attempted and it fails with an
       // IOException.
       val send = new NetworkSend(request.connectionId, ByteBuffer.allocate(550000))
-      channel.sendResponse(new RequestChannel.Response(request, send))
+      channel.sendResponse(RequestChannel.Response(request, send))
       TestUtils.waitUntilTrue(() => totalTimeHistCount() == expectedTotalTimeCount,
         s"request metrics not updated, expected: $expectedTotalTimeCount, actual: ${totalTimeHistCount()}")
 

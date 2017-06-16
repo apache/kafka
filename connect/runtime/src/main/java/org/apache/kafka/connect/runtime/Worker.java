@@ -24,6 +24,7 @@ import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.ConnectorContext;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.source.SourceRecord;
@@ -65,7 +66,7 @@ public class Worker {
     private final ExecutorService executor;
     private final Time time;
     private final String workerId;
-    private final ConnectorFactory connectorFactory;
+    private final Plugins plugins;
     private final WorkerConfig config;
     private final Converter defaultKeyConverter;
     private final Converter defaultValueConverter;
@@ -78,20 +79,45 @@ public class Worker {
     private final ConcurrentMap<ConnectorTaskId, WorkerTask> tasks = new ConcurrentHashMap<>();
     private SourceTaskOffsetCommitter sourceTaskOffsetCommitter;
 
-    public Worker(String workerId, Time time, ConnectorFactory connectorFactory, WorkerConfig config, OffsetBackingStore offsetBackingStore) {
+    public Worker(
+            String workerId,
+            Time time,
+            Plugins plugins,
+            WorkerConfig config,
+            OffsetBackingStore offsetBackingStore
+    ) {
         this.executor = Executors.newCachedThreadPool();
         this.workerId = workerId;
         this.time = time;
-        this.connectorFactory = connectorFactory;
+        this.plugins = plugins;
         this.config = config;
-        this.defaultKeyConverter = config.getConfiguredInstance(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, Converter.class);
+        // Converters are required properties, thus getClass won't return null.
+        this.defaultKeyConverter = plugins.newConverter(
+                config.getClass(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG).getName(),
+                config
+        );
         this.defaultKeyConverter.configure(config.originalsWithPrefix("key.converter."), true);
-        this.defaultValueConverter = config.getConfiguredInstance(WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, Converter.class);
+        this.defaultValueConverter = plugins.newConverter(
+                config.getClass(WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG).getName(),
+                config
+        );
         this.defaultValueConverter.configure(config.originalsWithPrefix("value.converter."), false);
-        this.internalKeyConverter = config.getConfiguredInstance(WorkerConfig.INTERNAL_KEY_CONVERTER_CLASS_CONFIG, Converter.class);
-        this.internalKeyConverter.configure(config.originalsWithPrefix("internal.key.converter."), true);
-        this.internalValueConverter = config.getConfiguredInstance(WorkerConfig.INTERNAL_VALUE_CONVERTER_CLASS_CONFIG, Converter.class);
-        this.internalValueConverter.configure(config.originalsWithPrefix("internal.value.converter."), false);
+        // Same, internal converters are required properties, thus getClass won't return null.
+        this.internalKeyConverter = plugins.newConverter(
+                config.getClass(WorkerConfig.INTERNAL_KEY_CONVERTER_CLASS_CONFIG).getName(),
+                config
+        );
+        this.internalKeyConverter.configure(
+                config.originalsWithPrefix("internal.key.converter."),
+                true);
+        this.internalValueConverter = plugins.newConverter(
+                config.getClass(WorkerConfig.INTERNAL_VALUE_CONVERTER_CLASS_CONFIG).getName(),
+                config
+        );
+        this.internalValueConverter.configure(
+                config.originalsWithPrefix("internal.value.converter."),
+                false
+        );
 
         this.offsetBackingStore = offsetBackingStore;
         this.offsetBackingStore.configure(config);
@@ -171,17 +197,23 @@ public class Worker {
             throw new ConnectException("Connector with name " + connName + " already exists");
 
         final WorkerConnector workerConnector;
+        ClassLoader savedLoader = plugins.currentThreadLoader();
         try {
-            final ConnectorConfig connConfig = new ConnectorConfig(connProps);
+            final ConnectorConfig connConfig = new ConnectorConfig(plugins, connProps);
             final String connClass = connConfig.getString(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
             log.info("Creating connector {} of type {}", connName, connClass);
-            final Connector connector = connectorFactory.newConnector(connClass);
+            final Connector connector = plugins.newConnector(connClass);
             workerConnector = new WorkerConnector(connName, connector, ctx, statusListener);
             log.info("Instantiated connector {} with version {} of type {}", connName, connector.version(), connector.getClass());
+            savedLoader = plugins.compareAndSwapLoaders(connector);
             workerConnector.initialize(connConfig);
             workerConnector.transitionTo(initialState);
+            Plugins.compareAndSwapLoaders(savedLoader);
         } catch (Throwable t) {
             log.error("Failed to start connector {}", connName, t);
+            // Can't be put in a finally block because it needs to be swapped before the call on
+            // statusListener
+            Plugins.compareAndSwapLoaders(savedLoader);
             statusListener.onFailure(connName, t);
             return false;
         }
@@ -205,7 +237,14 @@ public class Worker {
         WorkerConnector workerConnector = connectors.get(connName);
         if (workerConnector == null)
             throw new ConnectException("Connector " + connName + " not found in this worker.");
-        return workerConnector.isSinkConnector();
+
+        ClassLoader savedLoader = plugins.currentThreadLoader();
+        try {
+            savedLoader = plugins.compareAndSwapLoaders(workerConnector.connector());
+            return workerConnector.isSinkConnector();
+        } finally {
+            Plugins.compareAndSwapLoaders(savedLoader);
+        }
     }
 
     /**
@@ -225,14 +264,23 @@ public class Worker {
 
         Connector connector = workerConnector.connector();
         List<Map<String, String>> result = new ArrayList<>();
-        String taskClassName = connector.taskClass().getName();
-        for (Map<String, String> taskProps : connector.taskConfigs(maxTasks)) {
-            Map<String, String> taskConfig = new HashMap<>(taskProps); // Ensure we don't modify the connector's copy of the config
-            taskConfig.put(TaskConfig.TASK_CLASS_CONFIG, taskClassName);
-            if (sinkTopics != null)
-                taskConfig.put(SinkTask.TOPICS_CONFIG, Utils.join(sinkTopics, ","));
-            result.add(taskConfig);
+        ClassLoader savedLoader = plugins.currentThreadLoader();
+        try {
+            savedLoader = plugins.compareAndSwapLoaders(connector);
+            String taskClassName = connector.taskClass().getName();
+            for (Map<String, String> taskProps : connector.taskConfigs(maxTasks)) {
+                // Ensure we don't modify the connector's copy of the config
+                Map<String, String> taskConfig = new HashMap<>(taskProps);
+                taskConfig.put(TaskConfig.TASK_CLASS_CONFIG, taskClassName);
+                if (sinkTopics != null) {
+                    taskConfig.put(SinkTask.TOPICS_CONFIG, Utils.join(sinkTopics, ","));
+                }
+                result.add(taskConfig);
+            }
+        } finally {
+            Plugins.compareAndSwapLoaders(savedLoader);
         }
+
         return result;
     }
 
@@ -252,13 +300,19 @@ public class Worker {
     public boolean stopConnector(String connName) {
         log.info("Stopping connector {}", connName);
 
-        WorkerConnector connector = connectors.remove(connName);
-        if (connector == null) {
+        WorkerConnector workerConnector = connectors.remove(connName);
+        if (workerConnector == null) {
             log.warn("Ignoring stop request for unowned connector {}", connName);
             return false;
         }
 
-        connector.shutdown();
+        ClassLoader savedLoader = plugins.currentThreadLoader();
+        try {
+            savedLoader = plugins.compareAndSwapLoaders(workerConnector.connector());
+            workerConnector.shutdown();
+        } finally {
+            Plugins.compareAndSwapLoaders(savedLoader);
+        }
 
         log.info("Stopped connector {}", connName);
         return true;
@@ -280,8 +334,8 @@ public class Worker {
      * @return true if the connector is running, false if the connector is not running or is not manages by this worker.
      */
     public boolean isRunning(String connName) {
-        WorkerConnector connector = connectors.get(connName);
-        return connector != null && connector.isRunning();
+        WorkerConnector workerConnector = connectors.get(connName);
+        return workerConnector != null && workerConnector.isRunning();
     }
 
     /**
@@ -307,14 +361,20 @@ public class Worker {
             throw new ConnectException("Task already exists in this worker: " + id);
 
         final WorkerTask workerTask;
+        ClassLoader savedLoader = plugins.currentThreadLoader();
         try {
-            final ConnectorConfig connConfig = new ConnectorConfig(connProps);
+            final ConnectorConfig connConfig = new ConnectorConfig(plugins, connProps);
+            String connType = connConfig.getString(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
+            ClassLoader connectorLoader = plugins.delegatingLoader().connectorLoader(connType);
+            savedLoader = Plugins.compareAndSwapLoaders(connectorLoader);
             final TaskConfig taskConfig = new TaskConfig(taskProps);
-
             final Class<? extends Task> taskClass = taskConfig.getClass(TaskConfig.TASK_CLASS_CONFIG).asSubclass(Task.class);
-            final Task task = connectorFactory.newTask(taskClass);
+            final Task task = plugins.newTask(taskClass);
             log.info("Instantiated task {} with version {} of type {}", id, task.version(), taskClass.getName());
 
+            // By maintaining connector's specific class loader for this thread here, we first
+            // search for converters within the connector dependencies, and if not found the
+            // plugin class loader delegates loading to the delegating classloader.
             Converter keyConverter = connConfig.getConfiguredInstance(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, Converter.class);
             if (keyConverter != null)
                 keyConverter.configure(connConfig.originalsWithPrefix("key.converter."), true);
@@ -326,10 +386,14 @@ public class Worker {
             else
                 valueConverter = defaultValueConverter;
 
-            workerTask = buildWorkerTask(connConfig, id, task, statusListener, initialState, keyConverter, valueConverter);
+            workerTask = buildWorkerTask(connConfig, id, task, statusListener, initialState, keyConverter, valueConverter, connectorLoader);
             workerTask.initialize(taskConfig);
+            Plugins.compareAndSwapLoaders(savedLoader);
         } catch (Throwable t) {
             log.error("Failed to start task {}", id, t);
+            // Can't be put in a finally block because it needs to be swapped before the call on
+            // statusListener
+            Plugins.compareAndSwapLoaders(savedLoader);
             statusListener.onFailure(id, t);
             return false;
         }
@@ -351,7 +415,8 @@ public class Worker {
                                        TaskStatus.Listener statusListener,
                                        TargetState initialState,
                                        Converter keyConverter,
-                                       Converter valueConverter) {
+                                       Converter valueConverter,
+                                       ClassLoader loader) {
         // Decide which type of worker task we need based on the type of task.
         if (task instanceof SourceTask) {
             TransformationChain<SourceRecord> transformationChain = new TransformationChain<>(connConfig.<SourceRecord>transformations());
@@ -361,11 +426,11 @@ public class Worker {
                     internalKeyConverter, internalValueConverter);
             KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(producerProps);
             return new WorkerSourceTask(id, (SourceTask) task, statusListener, initialState, keyConverter,
-                     valueConverter, transformationChain, producer, offsetReader, offsetWriter, config, time);
+                    valueConverter, transformationChain, producer, offsetReader, offsetWriter, config, loader, time);
         } else if (task instanceof SinkTask) {
             TransformationChain<SinkRecord> transformationChain = new TransformationChain<>(connConfig.<SinkRecord>transformations());
             return new WorkerSinkTask(id, (SinkTask) task, statusListener, initialState, config, keyConverter,
-                    valueConverter, transformationChain, time);
+                    valueConverter, transformationChain, loader, time);
         } else {
             log.error("Tasks must be a subclass of either SourceTask or SinkTask", task);
             throw new ConnectException("Tasks must be a subclass of either SourceTask or SinkTask");
@@ -382,7 +447,14 @@ public class Worker {
         log.info("Stopping task {}", task.id());
         if (task instanceof WorkerSourceTask)
             sourceTaskOffsetCommitter.remove(task.id());
-        task.stop();
+
+        ClassLoader savedLoader = plugins.currentThreadLoader();
+        try {
+            savedLoader = Plugins.compareAndSwapLoaders(task.loader());
+            task.stop();
+        } finally {
+            Plugins.compareAndSwapLoaders(savedLoader);
+        }
     }
 
     private void stopTasks(Collection<ConnectorTaskId> ids) {
@@ -457,8 +529,8 @@ public class Worker {
         return internalValueConverter;
     }
 
-    public ConnectorFactory getConnectorFactory() {
-        return connectorFactory;
+    public Plugins getPlugins() {
+        return plugins;
     }
 
     public String workerId() {
@@ -468,14 +540,37 @@ public class Worker {
     public void setTargetState(String connName, TargetState state) {
         log.info("Setting connector {} state to {}", connName, state);
 
-        WorkerConnector connector = connectors.get(connName);
-        if (connector != null)
-            connector.transitionTo(state);
+        WorkerConnector workerConnector = connectors.get(connName);
+        if (workerConnector != null) {
+            ClassLoader connectorLoader =
+                    plugins.delegatingLoader().connectorLoader(workerConnector.connector());
+            transitionTo(workerConnector, state, connectorLoader);
+        }
 
         for (Map.Entry<ConnectorTaskId, WorkerTask> taskEntry : tasks.entrySet()) {
-            if (taskEntry.getKey().connector().equals(connName))
-                taskEntry.getValue().transitionTo(state);
+            if (taskEntry.getKey().connector().equals(connName)) {
+                WorkerTask workerTask = taskEntry.getValue();
+                transitionTo(workerTask, state, workerTask.loader());
+            }
         }
     }
 
+    private void transitionTo(Object connectorOrTask, TargetState state, ClassLoader loader) {
+        ClassLoader savedLoader = plugins.currentThreadLoader();
+        try {
+            savedLoader = Plugins.compareAndSwapLoaders(loader);
+            if (connectorOrTask instanceof WorkerConnector) {
+                ((WorkerConnector) connectorOrTask).transitionTo(state);
+            } else if (connectorOrTask instanceof WorkerTask) {
+                ((WorkerTask) connectorOrTask).transitionTo(state);
+            } else {
+                throw new ConnectException(
+                        "Request for state transition on an object that is neither a "
+                                + "WorkerConnector nor a WorkerTask: "
+                                + connectorOrTask.getClass());
+            }
+        } finally {
+            Plugins.compareAndSwapLoaders(savedLoader);
+        }
+    }
 }

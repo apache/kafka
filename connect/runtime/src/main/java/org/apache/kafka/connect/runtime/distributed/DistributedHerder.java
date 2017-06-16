@@ -954,10 +954,10 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             ConnectorConfig connConfig;
             List<String> sinkTopics = null;
             if (worker.isSinkConnector(connName)) {
-                connConfig = new SinkConnectorConfig(configs);
+                connConfig = new SinkConnectorConfig(plugins(), configs);
                 sinkTopics = connConfig.getList(SinkConnectorConfig.TOPICS_CONFIG);
             } else {
-                connConfig = new SourceConnectorConfig(configs);
+                connConfig = new SourceConnectorConfig(plugins(), configs);
             }
 
             final List<Map<String, String>> taskProps

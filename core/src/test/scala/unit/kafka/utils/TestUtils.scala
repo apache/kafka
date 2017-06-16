@@ -20,9 +20,9 @@ package kafka.utils
 import java.io._
 import java.nio._
 import java.nio.channels._
-import java.nio.charset.Charset
+import java.nio.charset.{Charset, StandardCharsets}
 import java.security.cert.X509Certificate
-import java.util.{ArrayList, Collections, Properties}
+import java.util.{Collections, Properties}
 import java.util.concurrent.{Callable, Executors, TimeUnit}
 import javax.net.ssl.X509TrustManager
 
@@ -40,9 +40,10 @@ import kafka.server._
 import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.utils.ZkUtils._
 import org.apache.kafka.clients.CommonClientConfigs
-import org.apache.kafka.clients.consumer.{ConsumerRecord, KafkaConsumer, RangeAssignor}
+import org.apache.kafka.clients.consumer.{ConsumerRecord, KafkaConsumer, OffsetAndMetadata, RangeAssignor}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.header.Header
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.network.{ListenerName, Mode}
 import org.apache.kafka.common.protocol.SecurityProtocol
@@ -55,8 +56,9 @@ import org.apache.zookeeper.ZooDefs._
 import org.apache.zookeeper.data.ACL
 import org.junit.Assert._
 
+import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
-import scala.collection.Map
+import scala.collection.{Map, mutable}
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 import scala.util.Try
 
@@ -74,6 +76,10 @@ object TestUtils extends Logging {
   val MockZkPort = 1
   /** Zookeeper connection string to use for unit tests that mock/don't require a real ZK server. */
   val MockZkConnect = "127.0.0.1:" + MockZkPort
+
+  private val transactionStatusKey = "transactionStatus"
+  private val committedValue : Array[Byte] = "committed".getBytes(StandardCharsets.UTF_8)
+  private val abortedValue : Array[Byte] = "aborted".getBytes(StandardCharsets.UTF_8)
 
   /**
    * Create a temporary directory
@@ -233,13 +239,17 @@ object TestUtils extends Logging {
     props.put(KafkaConfig.LogCleanerDedupeBufferSizeProp, "2097152")
     props.put(KafkaConfig.LogMessageTimestampDifferenceMaxMsProp, Long.MaxValue.toString)
     props.put(KafkaConfig.OffsetsTopicReplicationFactorProp, "1")
+    if (!props.containsKey(KafkaConfig.OffsetsTopicPartitionsProp))
+      props.put(KafkaConfig.OffsetsTopicPartitionsProp, "5")
+    if (!props.containsKey(KafkaConfig.GroupInitialRebalanceDelayMsProp))
+      props.put(KafkaConfig.GroupInitialRebalanceDelayMsProp, "0")
     rack.foreach(props.put(KafkaConfig.RackProp, _))
 
     if (protocolAndPorts.exists { case (protocol, _) => usesSslTransportLayer(protocol) })
       props.putAll(sslConfigs(Mode.SERVER, false, trustStoreFile, s"server$nodeId"))
 
     if (protocolAndPorts.exists { case (protocol, _) => usesSaslAuthentication(protocol) })
-      props.putAll(saslConfigs(saslProperties))
+      props.putAll(JaasTestUtils.saslConfigs(saslProperties))
 
     interBrokerSecurityProtocol.foreach { protocol =>
       props.put(KafkaConfig.InterBrokerSecurityProtocolProp, protocol.name)
@@ -503,8 +513,9 @@ object TestUtils extends Logging {
     val props = new Properties
     if (usesSslTransportLayer(securityProtocol))
       props.putAll(sslConfigs(mode, securityProtocol == SecurityProtocol.SSL, trustStoreFile, certAlias))
+
     if (usesSaslAuthentication(securityProtocol))
-      props.putAll(saslConfigs(saslProperties))
+      props.putAll(JaasTestUtils.saslConfigs(saslProperties))
     props.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, securityProtocol.name)
     props
   }
@@ -636,16 +647,19 @@ object TestUtils extends Logging {
     props
   }
 
+  @deprecated("This method has been deprecated and will be removed in a future release", "0.11.0.0")
   def getSyncProducerConfig(port: Int): Properties = {
     val props = new Properties()
     props.put("host", "localhost")
     props.put("port", port.toString)
-    props.put("request.timeout.ms", "500")
+    props.put("request.timeout.ms", "10000")
     props.put("request.required.acks", "1")
     props.put("serializer.class", classOf[StringEncoder].getName)
     props
   }
 
+
+  @deprecated("This method has been deprecated and will be removed in a future release.", "0.11.0.0")
   def updateConsumerOffset(config : ConsumerConfig, path : String, offset : Long) = {
     val zkUtils = ZkUtils(config.zkConnect, config.zkSessionTimeoutMs, config.zkConnectionTimeoutMs, false)
     zkUtils.updatePersistentPath(path, offset.toString)
@@ -823,13 +837,36 @@ object TestUtils extends Logging {
   /**
    * Wait until the given condition is true or throw an exception if the given wait time elapses.
    */
-  def waitUntilTrue(condition: () => Boolean, msg: String, waitTime: Long = JTestUtils.DEFAULT_MAX_WAIT_MS, pause: Long = 100L): Boolean = {
+  def waitUntilTrue(condition: () => Boolean, msg: => String,
+                    waitTime: Long = JTestUtils.DEFAULT_MAX_WAIT_MS, pause: Long = 100L): Unit = {
     val startTime = System.currentTimeMillis()
     while (true) {
       if (condition())
-        return true
+        return
       if (System.currentTimeMillis() > startTime + waitTime)
         fail(msg)
+      Thread.sleep(waitTime.min(pause))
+    }
+    // should never hit here
+    throw new RuntimeException("unexpected error")
+  }
+
+  /**
+    * Invoke `compute` until `predicate` is true or `waitTime` elapses.
+    *
+    * Return the last `compute` result and a boolean indicating whether `predicate` succeeded for that value.
+    *
+    * This method is useful in cases where `waitUntilTrue` makes it awkward to provide good error messages.
+    */
+  def computeUntilTrue[T](compute: => T, waitTime: Long = JTestUtils.DEFAULT_MAX_WAIT_MS, pause: Long = 100L)(
+                    predicate: T => Boolean): (T, Boolean) = {
+    val startTime = System.currentTimeMillis()
+    while (true) {
+      val result = compute
+      if (predicate(result))
+        return result -> true
+      if (System.currentTimeMillis() > startTime + waitTime)
+        return result -> false
       Thread.sleep(waitTime.min(pause))
     }
     // should never hit here
@@ -1044,7 +1081,7 @@ object TestUtils extends Logging {
       case -1 => s"test-$x".getBytes
       case _ => new Array[Byte](valueBytes)
     })
-    
+
     val futures = values.map { value =>
       producer.send(new ProducerRecord(topic, value))
     }
@@ -1075,6 +1112,7 @@ object TestUtils extends Logging {
    *                           If not specified, then all available messages will be consumed, and no exception is thrown.
    * @return the list of messages consumed.
    */
+  @deprecated("This method has been deprecated and will be removed in a future release.", "0.11.0.0")
   def getMessages(topicMessageStreams: Map[String, List[KafkaStream[String, String]]],
                      nMessagesPerThread: Int = -1): List[String] = {
 
@@ -1110,7 +1148,7 @@ object TestUtils extends Logging {
   def verifyTopicDeletion(zkUtils: ZkUtils, topic: String, numPartitions: Int, servers: Seq[KafkaServer]) {
     val topicPartitions = (0 until numPartitions).map(new TopicPartition(topic, _))
     // wait until admin path for delete topic is deleted, signaling completion of topic deletion
-    TestUtils.waitUntilTrue(() => !zkUtils.pathExists(getDeleteTopicPath(topic)),
+    TestUtils.waitUntilTrue(() => !zkUtils.isTopicMarkedForDeletion(topic),
       "Admin path /admin/delete_topic/%s path not deleted even after a replica is restarted".format(topic))
     TestUtils.waitUntilTrue(() => !zkUtils.pathExists(getTopicPath(topic)),
       "Topic path /brokers/topics/%s not deleted after /admin/delete_topic/%s path is deleted".format(topic, topic))
@@ -1176,13 +1214,6 @@ object TestUtils extends Logging {
     val sslProps = new Properties()
     sslConfigs.asScala.foreach { case (k, v) => sslProps.put(k, v) }
     sslProps
-  }
-
-  def saslConfigs(saslProperties: Option[Properties]): Properties = {
-    saslProperties match {
-      case Some(properties) => properties
-      case None => new Properties
-    }
   }
 
   // a X509TrustManager to trust self-signed certs for unit tests.
@@ -1330,6 +1361,107 @@ object TestUtils extends Logging {
     assertEquals("Consumed more records than expected", numMessages, records.size)
     records
   }
+
+  def createTransactionalProducer(transactionalId: String, servers: Seq[KafkaServer]) = {
+    val props = new Properties()
+    props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionalId)
+    props.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "1")
+    props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true")
+    TestUtils.createNewProducer(TestUtils.getBrokerListStrFromServers(servers), retries = Integer.MAX_VALUE, acks = -1, props = Some(props))
+  }
+
+  // Seeds the given topic with records with keys and values in the range [0..numRecords)
+  def seedTopicWithNumberedRecords(topic: String, numRecords: Int, servers: Seq[KafkaServer]): Unit = {
+    val props = new Properties()
+    props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true")
+    val producer = TestUtils.createNewProducer(TestUtils.getBrokerListStrFromServers(servers),
+      retries = Integer.MAX_VALUE, acks = -1, props = Some(props))
+    try {
+      for (i <- 0 until numRecords) {
+        producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, asBytes(i.toString), asBytes(i.toString)))
+      }
+      producer.flush()
+    } finally {
+      producer.close()
+    }
+  }
+
+  private def asString(bytes: Array[Byte]) = new String(bytes, StandardCharsets.UTF_8)
+
+  private def asBytes(string: String) = string.getBytes(StandardCharsets.UTF_8)
+
+  // Verifies that the record was intended to be committed by checking the the headers for an expected transaction status
+  // If true, this will return the value as a string. It is expected that the record in question should have been created
+  // by the `producerRecordWithExpectedTransactionStatus` method.
+  def assertCommittedAndGetValue(record: ConsumerRecord[Array[Byte], Array[Byte]]) : String = {
+    record.headers.headers(transactionStatusKey).headOption match {
+      case Some(header) =>
+        assertEquals(s"Got ${asString(header.value)} but expected the value to indicate " +
+          s"committed status.", asString(committedValue), asString(header.value))
+      case None =>
+        fail("expected the record header to include an expected transaction status, but received nothing.")
+    }
+    recordValueAsString(record)
+  }
+
+  def recordValueAsString(record: ConsumerRecord[Array[Byte], Array[Byte]]) : String = {
+    asString(record.value)
+  }
+
+  def producerRecordWithExpectedTransactionStatus(topic: String, key: Array[Byte], value: Array[Byte],
+                                                  willBeCommitted: Boolean) : ProducerRecord[Array[Byte], Array[Byte]] = {
+    val header = new Header {override def key() = transactionStatusKey
+      override def value() = if (willBeCommitted)
+        committedValue
+      else
+        abortedValue
+    }
+    new ProducerRecord[Array[Byte], Array[Byte]](topic, null, key, value, List(header))
+  }
+
+  def producerRecordWithExpectedTransactionStatus(topic: String, key: String, value: String,
+                                                  willBeCommitted: Boolean) : ProducerRecord[Array[Byte], Array[Byte]] = {
+    producerRecordWithExpectedTransactionStatus(topic, asBytes(key), asBytes(value), willBeCommitted)
+  }
+
+  // Collect the current positions for all partition in the consumers current assignment.
+  def consumerPositions(consumer: KafkaConsumer[Array[Byte], Array[Byte]]) : Map[TopicPartition, OffsetAndMetadata]  = {
+    val offsetsToCommit = new mutable.HashMap[TopicPartition, OffsetAndMetadata]()
+    consumer.assignment.foreach{ topicPartition =>
+      offsetsToCommit.put(topicPartition, new OffsetAndMetadata(consumer.position(topicPartition)))
+    }
+    offsetsToCommit.toMap
+  }
+
+  def pollUntilAtLeastNumRecords(consumer: KafkaConsumer[Array[Byte], Array[Byte]], numRecords: Int): Seq[ConsumerRecord[Array[Byte], Array[Byte]]] = {
+    val records = new ArrayBuffer[ConsumerRecord[Array[Byte], Array[Byte]]]()
+    TestUtils.waitUntilTrue(() => {
+      records ++= consumer.poll(50)
+      records.size >= numRecords
+    }, s"Consumed ${records.size} records until timeout, but expected $numRecords records.")
+    records
+  }
+
+  def resetToCommittedPositions(consumer: KafkaConsumer[Array[Byte], Array[Byte]]) = {
+    consumer.assignment.foreach { case(topicPartition) =>
+      val offset = consumer.committed(topicPartition)
+      if (offset != null)
+        consumer.seek(topicPartition, offset.offset)
+      else
+        consumer.seekToBeginning(Collections.singletonList(topicPartition))
+    }
+  }
+
+  /**
+   * Capture the console output during the execution of the provided function.
+   */
+  def grabConsoleOutput(f: => Unit) : String = {
+    val out = new ByteArrayOutputStream
+    try scala.Console.withOut(out)(f)
+    finally scala.Console.out.flush
+    out.toString
+  }
+
 }
 
 class IntEncoder(props: VerifiableProperties = null) extends Encoder[Int] {

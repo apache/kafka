@@ -24,6 +24,7 @@ import org.apache.kafka.common.protocol.types.Struct;
 import java.nio.ByteBuffer;
 
 public abstract class AbstractResponse extends AbstractRequestResponse {
+    public static final String THROTTLE_TIME_KEY_NAME = "throttle_time_ms";
     public static final int DEFAULT_THROTTLE_TIME = 0;
 
     public Send toSend(String destination, RequestHeader requestHeader) {
@@ -108,10 +109,23 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
                 return new WriteTxnMarkersResponse(struct);
             case TXN_OFFSET_COMMIT:
                 return new TxnOffsetCommitResponse(struct);
+            case DESCRIBE_ACLS:
+                return new DescribeAclsResponse(struct);
+            case CREATE_ACLS:
+                return new CreateAclsResponse(struct);
+            case DELETE_ACLS:
+                return new DeleteAclsResponse(struct);
+            case DESCRIBE_CONFIGS:
+                return new DescribeConfigsResponse(struct);
+            case ALTER_CONFIGS:
+                return new AlterConfigsResponse(struct);
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `getResponse`, the " +
                         "code should be updated to do so.", apiKey));
         }
     }
 
+    public String toString(short version) {
+        return toStruct(version).toString();
+    }
 }

@@ -33,7 +33,7 @@ import kafka.server.KafkaConfig
 import kafka.utils._
 import org.apache.kafka.common.errors.InvalidRequestException
 import org.apache.kafka.common.metrics._
-import org.apache.kafka.common.network.{ChannelBuilders, KafkaChannel, ListenerName, Selectable, Selector => KSelector}
+import org.apache.kafka.common.network.{ChannelBuilders, KafkaChannel, ListenerName, Selectable, Send, Selector => KSelector}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.kafka.common.protocol.types.SchemaException
@@ -466,7 +466,9 @@ private[kafka] class Processor(val id: Int,
             if (selector.channel(channelId) != null || selector.closingChannel(channelId) != null)
                 selector.unmute(channelId)
           case RequestChannel.SendAction =>
-            sendResponse(curr)
+            val responseSend = curr.responseSend.getOrElse(
+              throw new IllegalStateException(s"responseSend must be defined for SendAction, response: $curr"))
+            sendResponse(curr, responseSend)
           case RequestChannel.CloseConnectionAction =>
             updateRequestMetrics(curr.request)
             trace("Closing socket connection actively according to the response code.")
@@ -479,16 +481,16 @@ private[kafka] class Processor(val id: Int,
   }
 
   /* `protected` for test usage */
-  protected[network] def sendResponse(response: RequestChannel.Response) {
+  protected[network] def sendResponse(response: RequestChannel.Response, responseSend: Send) {
     trace(s"Socket server received response to send, registering for write and sending data: $response")
-    val channel = selector.channel(response.responseSend.destination)
+    val channel = selector.channel(responseSend.destination)
     // `channel` can be null if the selector closed the connection because it was idle for too long
     if (channel == null) {
       warn(s"Attempting to send response via channel for which there is no open connection, connection id $id")
       response.request.updateRequestMetrics(0L)
     }
     else {
-      selector.send(response.responseSend)
+      selector.send(responseSend)
       inflightResponses += (response.request.connectionId -> response)
     }
   }

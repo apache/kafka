@@ -151,7 +151,7 @@ public class FetchRequest extends AbstractRequest {
         @Override
         public String toString() {
             StringBuilder bld = new StringBuilder();
-            bld.append("(type:FetchRequest").
+            bld.append("(type=FetchRequest").
                     append(", replicaId=").append(replicaId).
                     append(", maxWait=").append(maxWait).
                     append(", minBytes=").append(minBytes).
@@ -160,11 +160,6 @@ public class FetchRequest extends AbstractRequest {
                     append(")");
             return bld.toString();
         }
-    }
-
-    private FetchRequest(short version, int replicaId, int maxWait, int minBytes, int maxBytes,
-                         LinkedHashMap<TopicPartition, PartitionData> fetchData) {
-        this(version, replicaId, maxWait, minBytes, maxBytes, fetchData, IsolationLevel.READ_UNCOMMITTED);
     }
 
     private FetchRequest(short version, int replicaId, int maxWait, int minBytes, int maxBytes,

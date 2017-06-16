@@ -16,17 +16,7 @@
  */
 package org.apache.kafka.test;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
-import java.util.Queue;
-import java.util.Set;
-import java.util.concurrent.atomic.AtomicLong;
+import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
@@ -50,19 +40,28 @@ import org.apache.kafka.streams.processor.internals.GlobalProcessorContextImpl;
 import org.apache.kafka.streams.processor.internals.GlobalStateManagerImpl;
 import org.apache.kafka.streams.processor.internals.GlobalStateUpdateTask;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
+import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorContextImpl;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
-import org.apache.kafka.streams.processor.internals.RecordCollectorImpl;
 import org.apache.kafka.streams.processor.internals.StateDirectory;
 import org.apache.kafka.streams.processor.internals.StoreChangelogReader;
 import org.apache.kafka.streams.processor.internals.StreamTask;
-import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
-
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+import java.util.Queue;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * This class makes it easier to write tests to verify the behavior of topologies created with a {@link TopologyBuilder}.
@@ -140,21 +139,16 @@ import java.io.IOException;
  */
 public class ProcessorTopologyTestDriver {
 
-    private final Serializer<byte[]> bytesSerializer = new ByteArraySerializer();
-
     private final static String APPLICATION_ID = "test-driver-application";
     private final static int PARTITION_ID = 0;
     private final static TaskId TASK_ID = new TaskId(0, PARTITION_ID);
 
     private final ProcessorTopology topology;
-    private final MockConsumer<byte[], byte[]> consumer;
     private final MockProducer<byte[], byte[]> producer;
-    private final MockConsumer<byte[], byte[]> restoreStateConsumer;
     private final Map<String, TopicPartition> partitionsByTopic = new HashMap<>();
     private final Map<TopicPartition, AtomicLong> offsetsByTopicPartition = new HashMap<>();
     private final Map<String, Queue<ProducerRecord<byte[], byte[]>>> outputRecordsByTopic = new HashMap<>();
     private final Set<String> internalTopics = new HashSet<>();
-    private final ProcessorTopology globalTopology;
     private final Map<String, TopicPartition> globalPartitionsByTopic = new HashMap<>();
     private StreamTask task;
     private GlobalStateUpdateTask globalStateTask;
@@ -164,28 +158,29 @@ public class ProcessorTopologyTestDriver {
      * @param config the stream configuration for the topology
      * @param builder the topology builder that will be used to create the topology instance
      */
-    public ProcessorTopologyTestDriver(StreamsConfig config, TopologyBuilder builder) {
+    public ProcessorTopologyTestDriver(final StreamsConfig config,
+                                       final TopologyBuilder builder) {
         topology = builder.setApplicationId(APPLICATION_ID).build(null);
-        globalTopology  = builder.buildGlobalStateTopology();
+        final ProcessorTopology globalTopology  = builder.buildGlobalStateTopology();
 
         // Set up the consumer and producer ...
-        consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
+        final Consumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
+        final Serializer<byte[]> bytesSerializer = new ByteArraySerializer();
         producer = new MockProducer<byte[], byte[]>(true, bytesSerializer, bytesSerializer) {
             @Override
-            public List<PartitionInfo> partitionsFor(String topic) {
+            public List<PartitionInfo> partitionsFor(final String topic) {
                 return Collections.singletonList(new PartitionInfo(topic, PARTITION_ID, null, null, null));
             }
         };
-        restoreStateConsumer = createRestoreConsumer(TASK_ID, topology.storeToChangelogTopic());
 
         // Identify internal topics for forwarding in process ...
-        for (TopologyBuilder.TopicsInfo topicsInfo : builder.topicGroups().values()) {
+        for (final TopologyBuilder.TopicsInfo topicsInfo : builder.topicGroups().values()) {
             internalTopics.addAll(topicsInfo.repartitionSourceTopics.keySet());
         }
 
         // Set up all of the topic+partition information and subscribe the consumer to each ...
-        for (String topic : topology.sourceTopics()) {
-            TopicPartition tp = new TopicPartition(topic, PARTITION_ID);
+        for (final String topic : topology.sourceTopics()) {
+            final TopicPartition tp = new TopicPartition(topic, PARTITION_ID);
             partitionsByTopic.put(topic, tp);
             offsetsByTopicPartition.put(tp, new AtomicLong());
         }
@@ -199,7 +194,7 @@ public class ProcessorTopologyTestDriver {
         if (globalTopology != null) {
             final MockConsumer<byte[], byte[]> globalConsumer = createGlobalConsumer();
             for (final String topicName : globalTopology.sourceTopics()) {
-                List<PartitionInfo> partitionInfos = new ArrayList<>();
+                final List<PartitionInfo> partitionInfos = new ArrayList<>();
                 partitionInfos.add(new PartitionInfo(topicName, 1, null, null, null));
                 globalConsumer.updatePartitions(topicName, partitionInfos);
                 final TopicPartition partition = new TopicPartition(topicName, 1);
@@ -221,12 +216,15 @@ public class ProcessorTopologyTestDriver {
                                   partitionsByTopic.values(),
                                   topology,
                                   consumer,
-                                  new StoreChangelogReader(restoreStateConsumer, Time.SYSTEM, 5000),
+                                  new StoreChangelogReader(
+                                      createRestoreConsumer(topology.storeToChangelogTopic()),
+                                      Time.SYSTEM,
+                                      5000),
                                   config,
                                   streamsMetrics, stateDirectory,
                                   cache,
                                   new MockTime(),
-                                  new RecordCollectorImpl(producer, "id"));
+                                  producer);
         }
     }
 
@@ -238,12 +236,15 @@ public class ProcessorTopologyTestDriver {
      * @param value the raw message value
      * @param timestamp the raw message timestamp
      */
-    private void process(String topicName, byte[] key, byte[] value, long timestamp) {
+    private void process(final String topicName,
+                         final byte[] key,
+                         final byte[] value,
+                         final long timestamp) {
 
-        TopicPartition tp = partitionsByTopic.get(topicName);
+        final TopicPartition tp = partitionsByTopic.get(topicName);
         if (tp != null) {
             // Add the record ...
-            long offset = offsetsByTopicPartition.get(tp).incrementAndGet();
+            final long offset = offsetsByTopicPartition.get(tp).incrementAndGet();
             task.addRecords(tp, records(new ConsumerRecord<>(tp.topic(), tp.partition(), offset, timestamp, TimestampType.CREATE_TIME, 0L, 0, 0, key, value)));
             producer.clear();
 
@@ -253,7 +254,7 @@ public class ProcessorTopologyTestDriver {
             task.commit();
 
             // Capture all the records sent to the producer ...
-            for (ProducerRecord<byte[], byte[]> record : producer.history()) {
+            for (final ProducerRecord<byte[], byte[]> record : producer.history()) {
                 Queue<ProducerRecord<byte[], byte[]>> outputRecords = outputRecordsByTopic.get(record.topic());
                 if (outputRecords == null) {
                     outputRecords = new LinkedList<>();
@@ -284,7 +285,9 @@ public class ProcessorTopologyTestDriver {
      * @param key the raw message key
      * @param value the raw message value
      */
-    public void process(String topicName, byte[] key, byte[] value) {
+    public void process(final String topicName,
+                        final byte[] key,
+                        final byte[] value) {
         process(topicName, key, value, 0L);
     }
 
@@ -297,7 +300,11 @@ public class ProcessorTopologyTestDriver {
      * @param keySerializer the serializer for the key
      * @param valueSerializer the serializer for the value
      */
-    public <K, V> void process(String topicName, K key, V value, Serializer<K> keySerializer, Serializer<V> valueSerializer) {
+    public <K, V> void process(final String topicName,
+                               final K key,
+                               final V value,
+                               final Serializer<K> keySerializer,
+                               final Serializer<V> valueSerializer) {
         process(topicName, keySerializer.serialize(topicName, key), valueSerializer.serialize(topicName, value));
     }
 
@@ -308,9 +315,11 @@ public class ProcessorTopologyTestDriver {
      * @param topic the name of the topic
      * @return the next record on that topic, or null if there is no record available
      */
-    public ProducerRecord<byte[], byte[]> readOutput(String topic) {
-        Queue<ProducerRecord<byte[], byte[]>> outputRecords = outputRecordsByTopic.get(topic);
-        if (outputRecords == null) return null;
+    public ProducerRecord<byte[], byte[]> readOutput(final String topic) {
+        final Queue<ProducerRecord<byte[], byte[]>> outputRecords = outputRecordsByTopic.get(topic);
+        if (outputRecords == null) {
+            return null;
+        }
         return outputRecords.poll();
     }
 
@@ -323,15 +332,19 @@ public class ProcessorTopologyTestDriver {
      * @param valueDeserializer the deserializer for the value type
      * @return the next record on that topic, or null if there is no record available
      */
-    public <K, V> ProducerRecord<K, V> readOutput(String topic, Deserializer<K> keyDeserializer, Deserializer<V> valueDeserializer) {
-        ProducerRecord<byte[], byte[]> record = readOutput(topic);
-        if (record == null) return null;
-        K key = keyDeserializer.deserialize(record.topic(), record.key());
-        V value = valueDeserializer.deserialize(record.topic(), record.value());
-        return new ProducerRecord<K, V>(record.topic(), record.partition(), record.timestamp(), key, value);
+    public <K, V> ProducerRecord<K, V> readOutput(final String topic,
+                                                  final Deserializer<K> keyDeserializer,
+                                                  final Deserializer<V> valueDeserializer) {
+        final ProducerRecord<byte[], byte[]> record = readOutput(topic);
+        if (record == null) {
+            return null;
+        }
+        final K key = keyDeserializer.deserialize(record.topic(), record.key());
+        final V value = valueDeserializer.deserialize(record.topic(), record.value());
+        return new ProducerRecord<>(record.topic(), record.partition(), record.timestamp(), key, value);
     }
 
-    private Iterable<ConsumerRecord<byte[], byte[]>> records(ConsumerRecord<byte[], byte[]> record) {
+    private Iterable<ConsumerRecord<byte[], byte[]>> records(final ConsumerRecord<byte[], byte[]> record) {
         return Collections.singleton(record);
     }
 
@@ -347,7 +360,7 @@ public class ProcessorTopologyTestDriver {
      * @return the state store, or null if no store has been registered with the given name
      * @see #getKeyValueStore(String)
      */
-    public StateStore getStateStore(String name) {
+    public StateStore getStateStore(final String name) {
         return ((ProcessorContextImpl) task.context()).getStateMgr().getStore(name);
     }
 
@@ -365,8 +378,8 @@ public class ProcessorTopologyTestDriver {
      * @see #getStateStore(String)
      */
     @SuppressWarnings("unchecked")
-    public <K, V> KeyValueStore<K, V> getKeyValueStore(String name) {
-        StateStore store = getStateStore(name);
+    public <K, V> KeyValueStore<K, V> getKeyValueStore(final String name) {
+        final StateStore store = getStateStore(name);
         return store instanceof KeyValueStore ? (KeyValueStore<K, V>) getStateStore(name) : null;
     }
 
@@ -375,12 +388,12 @@ public class ProcessorTopologyTestDriver {
      */
     public void close() {
         if (task != null) {
-            task.close();
+            task.close(true);
         }
         if (globalStateTask != null) {
             try {
                 globalStateTask.close();
-            } catch (IOException e) {
+            } catch (final IOException e) {
                 // ignore
             }
         }
@@ -390,35 +403,29 @@ public class ProcessorTopologyTestDriver {
      * Utility method that creates the {@link MockConsumer} used for restoring state, which should not be done by this
      * driver object unless this method is overwritten with a functional consumer.
      *
-     * @param id the ID of the stream task
      * @param storeToChangelogTopic the map of the names of the stores to the changelog topics
      * @return the mock consumer; never null
      */
-    protected MockConsumer<byte[], byte[]> createRestoreConsumer(TaskId id, Map<String, String> storeToChangelogTopic) {
-        MockConsumer<byte[], byte[]> consumer = new MockConsumer<byte[], byte[]>(OffsetResetStrategy.LATEST) {
+    private MockConsumer<byte[], byte[]> createRestoreConsumer(final Map<String, String> storeToChangelogTopic) {
+        final MockConsumer<byte[], byte[]> consumer = new MockConsumer<byte[], byte[]>(OffsetResetStrategy.LATEST) {
             @Override
-            public synchronized void seekToEnd(Collection<TopicPartition> partitions) {
-                // do nothing ...
-            }
+            public synchronized void seekToEnd(final Collection<TopicPartition> partitions) {}
 
             @Override
-            public synchronized void seekToBeginning(Collection<TopicPartition> partitions) {
-                // do nothing ...
-            }
+            public synchronized void seekToBeginning(final Collection<TopicPartition> partitions) {}
 
             @Override
-            public synchronized long position(TopicPartition partition) {
-                // do nothing ...
+            public synchronized long position(final TopicPartition partition) {
                 return 0L;
             }
         };
         // For each store ...
-        for (Map.Entry<String, String> storeAndTopic: storeToChangelogTopic.entrySet()) {
-            String topicName = storeAndTopic.getValue();
+        for (final Map.Entry<String, String> storeAndTopic: storeToChangelogTopic.entrySet()) {
+            final String topicName = storeAndTopic.getValue();
             // Set up the restore-state topic ...
             // consumer.subscribe(new TopicPartition(topicName, 1));
             // Set up the partition that matches the ID (which is what ProcessorStateManager expects) ...
-            List<PartitionInfo> partitionInfos = new ArrayList<>();
+            final List<PartitionInfo> partitionInfos = new ArrayList<>();
             partitionInfos.add(new PartitionInfo(topicName, PARTITION_ID, null, null, null));
             consumer.updatePartitions(topicName, partitionInfos);
             consumer.updateEndOffsets(Collections.singletonMap(new TopicPartition(topicName, PARTITION_ID), 0L));
@@ -426,25 +433,19 @@ public class ProcessorTopologyTestDriver {
         return consumer;
     }
 
-    protected MockConsumer<byte[], byte[]> createGlobalConsumer() {
-        MockConsumer<byte[], byte[]> consumer = new MockConsumer<byte[], byte[]>(OffsetResetStrategy.LATEST) {
+    private MockConsumer<byte[], byte[]> createGlobalConsumer() {
+        return new MockConsumer<byte[], byte[]>(OffsetResetStrategy.LATEST) {
             @Override
-            public synchronized void seekToEnd(Collection<TopicPartition> partitions) {
-                // do nothing ...
-            }
+            public synchronized void seekToEnd(final Collection<TopicPartition> partitions) {}
 
             @Override
-            public synchronized void seekToBeginning(Collection<TopicPartition> partitions) {
-                // do nothing ...
-            }
+            public synchronized void seekToBeginning(final Collection<TopicPartition> partitions) {}
 
             @Override
-            public synchronized long position(TopicPartition partition) {
-                // do nothing ...
+            public synchronized long position(final TopicPartition partition) {
                 return 0L;
             }
         };
-
-        return consumer;
     }
+
 }

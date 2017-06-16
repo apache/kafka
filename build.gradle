@@ -31,6 +31,8 @@ buildscript {
   }
 }
 
+apply from: "$rootDir/gradle/dependencies.gradle"
+
 allprojects {
   apply plugin: 'idea'
   apply plugin: "jacoco"
@@ -52,6 +54,13 @@ allprojects {
           if (rejected) {
             selection.reject('Release candidate')
           }
+        }
+      }
+    }
+    configurations {
+      runtime {
+        resolutionStrategy {
+          force "com.fasterxml.jackson.core:jackson-annotations:$versions.jackson"
         }
       }
     }
@@ -91,7 +100,6 @@ ext {
   generatedDocsDir = new File("${project.rootDir}/docs/generated")
 }
 
-apply from: "$rootDir/gradle/dependencies.gradle"
 apply from: file('wrapper.gradle')
 
 if (new File('.git').exists()) {
@@ -581,6 +589,13 @@ project(':core') {
     standardOutput = new File(generatedDocsDir, "protocol_messages.html").newOutputStream()
   }
 
+  task genAdminClientConfigDocs(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    main = 'org.apache.kafka.clients.admin.AdminClientConfig'
+    if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
+    standardOutput = new File(generatedDocsDir, "admin_client_config.html").newOutputStream()
+  }
+
   task genProducerConfigDocs(type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     main = 'org.apache.kafka.clients.producer.ProducerConfig'
@@ -609,10 +624,18 @@ project(':core') {
     standardOutput = new File(generatedDocsDir, "topic_config.html").newOutputStream()
   }
 
+  task genConsumerMetricsDocs(type: JavaExec) {
+    classpath = sourceSets.test.runtimeClasspath
+    main = 'org.apache.kafka.clients.consumer.internals.ConsumerMetrics'
+    if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
+    standardOutput = new File(generatedDocsDir, "consumer_metrics.html").newOutputStream()
+  }
+
   task siteDocsTar(dependsOn: ['genProtocolErrorDocs', 'genProtocolApiKeyDocs', 'genProtocolMessageDocs',
-                               'genProducerConfigDocs', 'genConsumerConfigDocs', 'genKafkaConfigDocs',
-                               'genTopicConfigDocs', ':connect:runtime:genConnectConfigDocs', ':connect:runtime:genConnectTransformationDocs',
-                               ':streams:genStreamsConfigDocs'], type: Tar) {
+                               'genAdminClientConfigDocs', 'genProducerConfigDocs', 'genConsumerConfigDocs',
+                               'genKafkaConfigDocs', 'genTopicConfigDocs',
+                               ':connect:runtime:genConnectConfigDocs', ':connect:runtime:genConnectTransformationDocs',
+                               ':streams:genStreamsConfigDocs', 'genConsumerMetricsDocs'], type: Tar) {
     classifier = 'site-docs'
     compression = Compression.GZIP
     from project.file("$rootDir/docs")
@@ -752,13 +775,18 @@ project(':clients') {
   }
 
   javadoc {
+    include "**/org/apache/kafka/clients/admin/*"
     include "**/org/apache/kafka/clients/consumer/*"
     include "**/org/apache/kafka/clients/producer/*"
     include "**/org/apache/kafka/common/*"
+    include "**/org/apache/kafka/common/acl/*"
+    include "**/org/apache/kafka/common/annotation/*"
     include "**/org/apache/kafka/common/errors/*"
     include "**/org/apache/kafka/common/header/*"
+    include "**/org/apache/kafka/common/resource/*"
     include "**/org/apache/kafka/common/serialization/*"
     include "**/org/apache/kafka/common/config/*"
+    include "**/org/apache/kafka/server/policy/*"
   }
 }
 
@@ -1056,6 +1084,7 @@ project(':connect:runtime') {
     compile libs.jettyServlet
     compile libs.jettyServlets
     compile(libs.reflections)
+    compile(libs.mavenArtifact)
 
     testCompile project(':clients').sourceSets.test.output
     testCompile libs.easymock

@@ -45,17 +45,14 @@ public class NoOpRecordCollector implements RecordCollector {
                             final StreamPartitioner<? super K, ? super V> partitioner) {}
 
     @Override
-    public void flush() {
-        //no-op
-    }
+    public void flush() {}
 
     @Override
-    public void close() {
-        //no-op
-    }
+    public void close() {}
 
     @Override
     public Map<TopicPartition, Long> offsets() {
         return Collections.emptyMap();
     }
+
 }

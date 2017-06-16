@@ -97,7 +97,7 @@ object DeleteRecordsCommand {
                                  "{\"partitions\":\n  [{\"topic\": \"foo\", \"partition\": 1, \"offset\": 1}],\n \"version\":1\n}"
     val CommandConfigDoc = "A property file containing configs to be passed to Admin Client."
 
-    val parser = new OptionParser
+    val parser = new OptionParser(false)
     val bootstrapServerOpt = parser.accepts("bootstrap-server", BootstrapServerDoc)
                                    .withRequiredArg
                                    .describedAs("server(s) to use for bootstrapping")

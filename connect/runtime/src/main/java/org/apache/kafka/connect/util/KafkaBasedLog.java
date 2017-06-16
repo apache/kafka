@@ -81,6 +81,7 @@ public class KafkaBasedLog<K, V> {
     private Thread thread;
     private boolean stopRequested;
     private Queue<Callback<Void>> readLogEndOffsetCallbacks;
+    private Runnable initializer;
 
     /**
      * Create a new KafkaBasedLog object. This does not start reading the log and writing is not permitted until
@@ -97,12 +98,14 @@ public class KafkaBasedLog<K, V> {
      *                        behavior of this class.
      * @param consumedCallback callback to invoke for each {@link ConsumerRecord} consumed when tailing the log
      * @param time Time interface
+     * @param initializer the component that should be run when this log is {@link #start() started}; may be null
      */
     public KafkaBasedLog(String topic,
                          Map<String, Object> producerConfigs,
                          Map<String, Object> consumerConfigs,
                          Callback<ConsumerRecord<K, V>> consumedCallback,
-                         Time time) {
+                         Time time,
+                         Runnable initializer) {
         this.topic = topic;
         this.producerConfigs = producerConfigs;
         this.consumerConfigs = consumerConfigs;
@@ -110,18 +113,23 @@ public class KafkaBasedLog<K, V> {
         this.stopRequested = false;
         this.readLogEndOffsetCallbacks = new ArrayDeque<>();
         this.time = time;
+        this.initializer = initializer != null ? initializer : new Runnable() {
+            @Override
+            public void run() {
+            }
+        };
     }
 
     public void start() {
         log.info("Starting KafkaBasedLog with topic " + topic);
 
+        initializer.run();
         producer = createProducer();
         consumer = createConsumer();
 
         List<TopicPartition> partitions = new ArrayList<>();
 
-        // Until we have admin utilities we can use to check for the existence of this topic and create it if it is missing,
-        // we rely on topic auto-creation
+        // We expect that the topics will have been created either manually by the user or automatically by the herder
         List<PartitionInfo> partitionInfos = null;
         long started = time.milliseconds();
         while (partitionInfos == null && time.milliseconds() - started < CREATE_TOPIC_TIMEOUT_MS) {

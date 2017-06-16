@@ -31,7 +31,7 @@ import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
 
 /**
- * The AdminClient configuration keys
+ * The AdminClient configuration class, which also contains constants for configuration entry names.
  */
 public class AdminClientConfig extends AbstractConfig {
     private static final ConfigDef CONFIG;
@@ -47,6 +47,12 @@ public class AdminClientConfig extends AbstractConfig {
      */
     public static final String RECONNECT_BACKOFF_MS_CONFIG = CommonClientConfigs.RECONNECT_BACKOFF_MS_CONFIG;
     private static final String RECONNECT_BACKOFF_MS_DOC = CommonClientConfigs.RECONNECT_BACKOFF_MS_DOC;
+
+    /**
+     * <code>reconnect.backoff.max.ms</code>
+     */
+    public static final String RECONNECT_BACKOFF_MAX_MS_CONFIG = CommonClientConfigs.RECONNECT_BACKOFF_MAX_MS_CONFIG;
+    private static final String RECONNECT_BACKOFF_MAX_MS_DOC = CommonClientConfigs.RECONNECT_BACKOFF_MAX_MS_DOC;
 
     /**
      * <code>retry.backoff.ms</code>
@@ -92,6 +98,9 @@ public class AdminClientConfig extends AbstractConfig {
     private static final String SECURITY_PROTOCOL_DOC = CommonClientConfigs.SECURITY_PROTOCOL_DOC;
     private static final String METRICS_RECORDING_LEVEL_DOC = CommonClientConfigs.METRICS_RECORDING_LEVEL_DOC;
 
+    public static final String RETRIES_CONFIG = "retries";
+    private static final String RETRIES_DOC = "The maximum number of times to retry a call before failing it.";
+
     static {
         CONFIG = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG,
                                         Type.LIST,
@@ -107,6 +116,12 @@ public class AdminClientConfig extends AbstractConfig {
                                         atLeast(0L),
                                         Importance.LOW,
                                         RECONNECT_BACKOFF_MS_DOC)
+                                .define(RECONNECT_BACKOFF_MAX_MS_CONFIG,
+                                        Type.LONG,
+                                        1000L,
+                                        atLeast(0L),
+                                        Importance.LOW,
+                                        RECONNECT_BACKOFF_MAX_MS_DOC)
                                 .define(RETRY_BACKOFF_MS_CONFIG,
                                         Type.LONG,
                                         100L,
@@ -124,6 +139,12 @@ public class AdminClientConfig extends AbstractConfig {
                                         5 * 60 * 1000,
                                         Importance.MEDIUM,
                                         CONNECTIONS_MAX_IDLE_MS_DOC)
+                                .define(RETRIES_CONFIG,
+                                        Type.INT,
+                                        5,
+                                        atLeast(0),
+                                        Importance.LOW,
+                                        RETRIES_DOC)
                                 .define(METRICS_SAMPLE_WINDOW_MS_CONFIG,
                                         Type.LONG,
                                         30000,
@@ -148,7 +169,12 @@ public class AdminClientConfig extends AbstractConfig {
                                 .withClientSaslSupport();
     }
 
-    AdminClientConfig(Map<?, ?> props) {
+    @Override
+    protected Map<String, Object> postProcessParsedConfig(final Map<String, Object> parsedValues) {
+        return CommonClientConfigs.postProcessReconnectBackoffConfigs(this, parsedValues);
+    }
+
+    public AdminClientConfig(Map<?, ?> props) {
         super(CONFIG, props);
     }
 

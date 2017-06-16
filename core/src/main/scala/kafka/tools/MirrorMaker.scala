@@ -59,7 +59,7 @@ import org.apache.kafka.common.record.RecordBatch
  *            max.block.ms=max long
  *            max.in.flight.requests.per.connection=1
  *       2. Consumer Settings
- *            auto.commit.enable=false
+ *            enable.auto.commit=false
  *       3. Mirror Maker Setting:
  *            abort.on.send.failure=true
  */
@@ -87,7 +87,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
 
     info("Starting mirror maker")
     try {
-      val parser = new OptionParser
+      val parser = new OptionParser(false)
 
       val consumerConfigOpt = parser.accepts("consumer.config",
         "Embedded consumer config for consuming from the source cluster.")
@@ -650,7 +650,8 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
                          record.timestamp,
                          record.timestampType,
                          record.key,
-                         record.value)
+                         record.value,
+                         record.headers)
     }
 
     override def stop() {
@@ -754,7 +755,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
   private[tools] object defaultMirrorMakerMessageHandler extends MirrorMakerMessageHandler {
     override def handle(record: BaseConsumerRecord): util.List[ProducerRecord[Array[Byte], Array[Byte]]] = {
       val timestamp: java.lang.Long = if (record.timestamp == RecordBatch.NO_TIMESTAMP) null else record.timestamp
-      Collections.singletonList(new ProducerRecord[Array[Byte], Array[Byte]](record.topic, null, timestamp, record.key, record.value))
+      Collections.singletonList(new ProducerRecord(record.topic, null, timestamp, record.key, record.value, record.headers))
     }
   }
 

@@ -17,6 +17,9 @@
 package kafka.utils
 
 import java.io.{File, BufferedWriter, FileWriter}
+import java.util.Properties
+import kafka.server.KafkaConfig
+import org.apache.kafka.common.utils.Java
 
 object JaasTestUtils {
 
@@ -27,15 +30,25 @@ object JaasTestUtils {
                              debug: Boolean,
                              serviceName: Option[String]) extends JaasModule {
 
-    def name = "com.sun.security.auth.module.Krb5LoginModule"
+    def name =
+      if (Java.isIBMJdk)
+        "com.ibm.security.auth.module.Krb5LoginModule"
+      else
+        "com.sun.security.auth.module.Krb5LoginModule"
 
-    def entries: Map[String, String] = Map(
-      "useKeyTab" -> useKeyTab.toString,
-      "storeKey" -> storeKey.toString,
-      "keyTab" -> keyTab,
-      "principal" -> principal
-    ) ++ serviceName.map(s => Map("serviceName" -> s)).getOrElse(Map.empty)
-
+    def entries: Map[String, String] =
+      if (Java.isIBMJdk)
+        Map(
+          "principal" -> principal,
+          "credsType" -> "both"
+        ) ++ (if (useKeyTab) Map("useKeytab" -> s"file:$keyTab") else Map.empty)
+      else
+        Map(
+          "useKeyTab" -> useKeyTab.toString,
+          "storeKey" -> storeKey.toString,
+          "keyTab" -> keyTab,
+          "principal" -> principal
+        ) ++ serviceName.map(s => Map("serviceName" -> s)).getOrElse(Map.empty)
   }
 
   case class PlainLoginModule(username: String,
@@ -120,6 +133,20 @@ object JaasTestUtils {
   val KafkaScramAdmin = "scram-admin"
   val KafkaScramAdminPassword = "scram-admin-secret"
 
+  val serviceName = "kafka"
+
+  def saslConfigs(saslProperties: Option[Properties]): Properties = {
+    val result = saslProperties match {
+      case Some(properties) => properties
+      case None => new Properties
+    }
+    // IBM Kerberos module doesn't support the serviceName JAAS property, hence it needs to be
+    // passed as a Kafka property
+    if (Java.isIBMJdk && !result.contains(KafkaConfig.SaslKerberosServiceNameProp))
+      result.put(KafkaConfig.SaslKerberosServiceNameProp, serviceName)
+    result
+  }
+
   def writeJaasContextsToFile(jaasSections: Seq[JaasSection]): File = {
     val jaasFile = TestUtils.tempFile()
     writeToFile(jaasFile, jaasSections)
@@ -146,7 +173,7 @@ object JaasTestUtils {
           keyTab = keytabLocation.getOrElse(throw new IllegalArgumentException("Keytab location not specified for GSSAPI")).getAbsolutePath,
           principal = KafkaServerPrincipal,
           debug = true,
-          serviceName = Some("kafka"))
+          serviceName = Some(serviceName))
       case "PLAIN" =>
         PlainLoginModule(
           KafkaPlainAdmin,
@@ -180,7 +207,7 @@ object JaasTestUtils {
           keyTab = keytabLocation.getOrElse(throw new IllegalArgumentException("Keytab location not specified for GSSAPI")).getAbsolutePath,
           principal = clientPrincipal,
           debug = true,
-          serviceName = Some("kafka")
+          serviceName = Some(serviceName)
         )
       case "PLAIN" =>
         PlainLoginModule(

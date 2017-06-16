@@ -34,7 +34,7 @@ object GetOffsetShell extends Logging {
   private final val ToolName = this.getClass.getSimpleName.replace("$", "")
 
   def main(args: Array[String]): Unit = {
-    val parser = new OptionParser
+    val parser = new OptionParser(false)
     val bootstrapServersOpt = parser.accepts("bootstrap-servers", "REQUIRED: The list of servers to connect to.")
       .withRequiredArg
       .describedAs("hostname:port,...,hostname:port")

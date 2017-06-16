@@ -27,7 +27,6 @@ import java.util.List;
 import java.util.Map;
 
 public class DeleteTopicsResponse extends AbstractResponse {
-    private static final String THROTTLE_TIME_KEY_NAME = "throttle_time_ms";
     private static final String TOPIC_ERROR_CODES_KEY_NAME = "topic_error_codes";
     private static final String TOPIC_KEY_NAME = "topic";
     private static final String ERROR_CODE_KEY_NAME = "error_code";

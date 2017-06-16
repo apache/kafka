@@ -36,23 +36,24 @@
   <a id="topic-config" href="#topic-config">Topic-level configuration</a>
 
   Configurations pertinent to topics have both a server default as well an optional per-topic override. If no per-topic configuration is given the server default is used. The override can be set at topic creation time by giving one or more <code>--config</code> options. This example creates a topic named <i>my-topic</i> with a custom max message size and flush rate:
-  <pre>
-  <b> &gt; bin/kafka-topics.sh --zookeeper localhost:2181 --create --topic my-topic --partitions 1
-          --replication-factor 1 --config max.message.bytes=64000 --config flush.messages=1</b>
+  <pre class="brush: bash;">
+  &gt; bin/kafka-topics.sh --zookeeper localhost:2181 --create --topic my-topic --partitions 1
+      --replication-factor 1 --config max.message.bytes=64000 --config flush.messages=1
   </pre>
   Overrides can also be changed or set later using the alter configs command. This example updates the max message size for <i>my-topic</i>:
-  <pre>
-  <b> &gt; bin/kafka-configs.sh --zookeeper localhost:2181 --entity-type topics --entity-name my-topic --alter --add-config max.message.bytes=128000</b>
+  <pre class="brush: bash;">
+  &gt; bin/kafka-configs.sh --zookeeper localhost:2181 --entity-type topics --entity-name my-topic
+      --alter --add-config max.message.bytes=128000
   </pre>
 
   To check overrides set on the topic you can do
-  <pre>
-  <b> &gt; bin/kafka-configs.sh --zookeeper localhost:2181 --entity-type topics --entity-name my-topic --describe</b>
+  <pre class="brush: bash;">
+  &gt; bin/kafka-configs.sh --zookeeper localhost:2181 --entity-type topics --entity-name my-topic --describe
   </pre>
 
   To remove an override you can do
-  <pre>
-  <b> &gt; bin/kafka-configs.sh --zookeeper localhost:2181  --entity-type topics --entity-name my-topic --alter --delete-config max.message.bytes</b>
+  <pre class="brush: bash;">
+  &gt; bin/kafka-configs.sh --zookeeper localhost:2181  --entity-type topics --entity-name my-topic --alter --delete-config max.message.bytes
   </pre>
 
   The following are the topic-level configurations. The server's default configuration for this property is given under the Server Default Property heading. A given server default config value only applies to a topic if it does not have an explicit topic config override.
@@ -252,6 +253,10 @@
   <h3><a id="streamsconfigs" href="#streamsconfigs">3.5 Kafka Streams Configs</a></h3>
   Below is the configuration of the Kafka Streams client library.
   <!--#include virtual="generated/streams_config.html" -->
+
+  <h3><a id="adminclientconfigs" href="#adminclientconfigs">3.6 AdminClient Configs</a></h3>
+  Below is the configuration of the Kafka Admin client library.
+  <!--#include virtual="generated/admin_client_config.html" -->
 </script>
 
 <div class="p-configuration"></div>

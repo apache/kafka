@@ -24,7 +24,7 @@ public final class TransactionalRequestResult {
     static final TransactionalRequestResult COMPLETE = new TransactionalRequestResult(new CountDownLatch(0));
 
     private final CountDownLatch latch;
-    private RuntimeException error = null;
+    private volatile RuntimeException error = null;
 
     public TransactionalRequestResult() {
         this(new CountDownLatch(1));

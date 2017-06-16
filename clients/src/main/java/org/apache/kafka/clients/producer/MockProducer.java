@@ -37,8 +37,11 @@ import java.util.Deque;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+
+import static org.apache.kafka.common.serialization.ExtendedSerializer.Wrapper.ensureExtended;
 
 /**
  * A mock of the producer interface you can use for testing code that uses Kafka.
@@ -65,6 +68,8 @@ public class MockProducer<K, V> implements Producer<K, V> {
     private boolean transactionCommitted;
     private boolean transactionAborted;
     private boolean producerFenced;
+    private boolean sentOffsets;
+    private long commitCount = 0L;
 
     /**
      * Create a mock producer
@@ -128,10 +133,6 @@ public class MockProducer<K, V> implements Producer<K, V> {
         this(Cluster.empty(), false, null, null, null);
     }
 
-    private <T> ExtendedSerializer<T> ensureExtended(Serializer<T> serializer) {
-        return serializer instanceof ExtendedSerializer ? (ExtendedSerializer<T>) serializer : new ExtendedSerializer.Wrapper<>(serializer);
-    }
-
     @Override
     public void initTransactions() {
         verifyProducerState();
@@ -148,6 +149,7 @@ public class MockProducer<K, V> implements Producer<K, V> {
         this.transactionInFlight = true;
         this.transactionCommitted = false;
         this.transactionAborted = false;
+        this.sentOffsets = false;
     }
 
     @Override
@@ -156,12 +158,17 @@ public class MockProducer<K, V> implements Producer<K, V> {
         verifyProducerState();
         verifyTransactionsInitialized();
         verifyNoTransactionInFlight();
+        Objects.requireNonNull(consumerGroupId);
+        if (offsets.size() == 0) {
+            return;
+        }
         Map<TopicPartition, OffsetAndMetadata> uncommittedOffsets = this.uncommittedConsumerGroupOffsets.get(consumerGroupId);
         if (uncommittedOffsets == null) {
             uncommittedOffsets = new HashMap<>();
             this.uncommittedConsumerGroupOffsets.put(consumerGroupId, uncommittedOffsets);
         }
         uncommittedOffsets.putAll(offsets);
+        this.sentOffsets = true;
     }
 
     @Override
@@ -182,6 +189,7 @@ public class MockProducer<K, V> implements Producer<K, V> {
         this.transactionAborted = false;
         this.transactionInFlight = false;
 
+        ++this.commitCount;
     }
 
     @Override
@@ -241,11 +249,10 @@ public class MockProducer<K, V> implements Producer<K, V> {
             partition = partition(record, this.cluster);
         TopicPartition topicPartition = new TopicPartition(record.topic(), partition);
         ProduceRequestResult result = new ProduceRequestResult(topicPartition);
-        FutureRecordMetadata future = new FutureRecordMetadata(result, 0, RecordBatch.NO_TIMESTAMP, 0, 0, 0);
+        FutureRecordMetadata future = new FutureRecordMetadata(result, 0, RecordBatch.NO_TIMESTAMP, 0L, 0, 0);
         long offset = nextOffset(topicPartition);
-        Completion completion = new Completion(offset,
-                                               new RecordMetadata(topicPartition, 0, offset, RecordBatch.NO_TIMESTAMP, 0, 0, 0),
-                                               result, callback);
+        Completion completion = new Completion(offset, new RecordMetadata(topicPartition, 0, offset,
+                RecordBatch.NO_TIMESTAMP, Long.valueOf(0L), 0, 0), result, callback);
 
         if (!this.transactionInFlight)
             this.sent.add(record);
@@ -276,6 +283,7 @@ public class MockProducer<K, V> implements Producer<K, V> {
     }
 
     public synchronized void flush() {
+        verifyProducerState();
         while (!this.completions.isEmpty())
             completeNext();
     }
@@ -327,6 +335,18 @@ public class MockProducer<K, V> implements Producer<K, V> {
 
     public boolean transactionAborted() {
         return this.transactionAborted;
+    }
+
+    public boolean flushed() {
+        return this.completions.isEmpty();
+    }
+
+    public boolean sentOffsets() {
+        return this.sentOffsets;
+    }
+
+    public long commitCount() {
+        return this.commitCount;
     }
 
     /**

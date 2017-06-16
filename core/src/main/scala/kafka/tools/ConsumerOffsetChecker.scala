@@ -34,6 +34,7 @@ import kafka.api.PartitionOffsetRequestInfo
 import org.I0Itec.zkclient.exception.ZkNoNodeException
 import org.apache.kafka.common.network.ListenerName
 
+@deprecated("This class has been deprecated and will be removed in a future release.", "0.11.0.0")
 object ConsumerOffsetChecker extends Logging {
 
   private val consumerMap: mutable.Map[Int, Option[SimpleConsumer]] = mutable.Map()
@@ -102,7 +103,7 @@ object ConsumerOffsetChecker extends Logging {
   def main(args: Array[String]) {
     warn("WARNING: ConsumerOffsetChecker is deprecated and will be dropped in releases following 0.9.0. Use ConsumerGroupCommand instead.")
 
-    val parser = new OptionParser()
+    val parser = new OptionParser(false)
 
     val zkConnectOpt = parser.accepts("zookeeper", "ZooKeeper connect string.").
             withRequiredArg().defaultsTo("localhost:2181").ofType(classOf[String])

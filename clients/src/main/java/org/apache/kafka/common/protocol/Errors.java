@@ -53,15 +53,16 @@ import org.apache.kafka.common.errors.NotEnoughReplicasException;
 import org.apache.kafka.common.errors.NotLeaderForPartitionException;
 import org.apache.kafka.common.errors.OffsetMetadataTooLarge;
 import org.apache.kafka.common.errors.OffsetOutOfRangeException;
+import org.apache.kafka.common.errors.OperationNotAttemptedException;
 import org.apache.kafka.common.errors.OutOfOrderSequenceException;
 import org.apache.kafka.common.errors.PolicyViolationException;
 import org.apache.kafka.common.errors.ProducerFencedException;
-import org.apache.kafka.common.errors.ProducerIdAuthorizationException;
 import org.apache.kafka.common.errors.RebalanceInProgressException;
 import org.apache.kafka.common.errors.RecordBatchTooLargeException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.ReplicaNotAvailableException;
 import org.apache.kafka.common.errors.RetriableException;
+import org.apache.kafka.common.errors.SecurityDisabledException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.TopicExistsException;
@@ -427,7 +428,8 @@ public enum Errors {
                 return new DuplicateSequenceNumberException(message);
             }
         }),
-    INVALID_PRODUCER_EPOCH(47, "Producer attempted an operation with an old epoch",
+    INVALID_PRODUCER_EPOCH(47, "Producer attempted an operation with an old epoch. Either there is a newer producer " +
+            "with the same transactionalId, or the producer's transaction has been expired by the broker.",
         new ApiExceptionBuilder() {
             @Override
             public ApiException build(String message) {
@@ -480,17 +482,21 @@ public enum Errors {
             return new TransactionalIdAuthorizationException(message);
         }
     }),
-    PRODUCER_ID_AUTHORIZATION_FAILED(54, "Producer is not authorized to use producer Ids, " +
-            "which is required to write idempotent data.",
-                                             new ApiExceptionBuilder() {
+    SECURITY_DISABLED(54, "Security features are disabled.", new ApiExceptionBuilder() {
         @Override
         public ApiException build(String message) {
-            return new ProducerIdAuthorizationException(message);
+            return new SecurityDisabledException(message);
         }
-    });
+    }),
+    OPERATION_NOT_ATTEMPTED(55, "The broker did not attempt to execute this operation. This may happen for batched RPCs " +
+            "where some operations in the batch failed, causing the broker to respond without trying the rest.",
+        new ApiExceptionBuilder() {
+            @Override
+            public ApiException build(String message) {
+                return new OperationNotAttemptedException(message);
+            }
+        });
 
-
-             
     private interface ApiExceptionBuilder {
         ApiException build(String message);
     }

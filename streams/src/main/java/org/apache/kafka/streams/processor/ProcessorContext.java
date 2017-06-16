@@ -26,7 +26,7 @@ import java.util.Map;
 /**
  * Processor context interface.
  */
-@InterfaceStability.Unstable
+@InterfaceStability.Evolving
 public interface ProcessorContext {
 
     /**

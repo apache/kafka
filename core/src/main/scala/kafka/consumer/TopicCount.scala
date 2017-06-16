@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -21,6 +21,7 @@ import scala.collection._
 import kafka.utils.{Json, ZKGroupDirs, ZkUtils, Logging, CoreUtils}
 import kafka.common.KafkaException
 
+@deprecated("This trait has been deprecated and will be removed in a future release.", "0.11.0.0")
 private[kafka] trait TopicCount {
 
   def getConsumerThreadIdsPerTopic: Map[String, Set[ConsumerThreadId]]
@@ -29,12 +30,14 @@ private[kafka] trait TopicCount {
 
 }
 
+@deprecated("This class has been deprecated and will be removed in a future release.", "0.11.0.0")
 case class ConsumerThreadId(consumer: String, threadId: Int) extends Ordered[ConsumerThreadId] {
   override def toString = "%s-%d".format(consumer, threadId)
 
   def compare(that: ConsumerThreadId) = toString.compare(that.toString)
 }
 
+@deprecated("This object has been deprecated and will be removed in a future release.", "0.11.0.0")
 private[kafka] object TopicCount extends Logging {
   val whiteListPattern = "white_list"
   val blackListPattern = "black_list"
@@ -105,6 +108,7 @@ private[kafka] object TopicCount extends Logging {
 
 }
 
+@deprecated("This class has been deprecated and will be removed in a future release.", "0.11.0.0")
 private[kafka] class StaticTopicCount(val consumerIdString: String,
                                 val topicCountMap: Map[String, Int])
                                 extends TopicCount {
@@ -116,6 +120,7 @@ private[kafka] class StaticTopicCount(val consumerIdString: String,
   def pattern = TopicCount.staticPattern
 }
 
+@deprecated("This class has been deprecated and will be removed in a future release.", "0.11.0.0")
 private[kafka] class WildcardTopicCount(zkUtils: ZkUtils,
                                         consumerIdString: String,
                                         topicFilter: TopicFilter,

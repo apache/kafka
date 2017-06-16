@@ -279,7 +279,7 @@ object ReassignPartitionsCommand extends Logging {
   }
 
   class ReassignPartitionsCommandOptions(args: Array[String]) {
-    val parser = new OptionParser
+    val parser = new OptionParser(false)
 
     val zkConnectOpt = parser.accepts("zookeeper", "REQUIRED: The connection string for the zookeeper connection in the " +
                       "form host:port. Multiple URLS can be given to allow fail-over.")

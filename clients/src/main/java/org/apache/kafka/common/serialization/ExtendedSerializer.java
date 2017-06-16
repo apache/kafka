@@ -20,8 +20,26 @@ import java.util.Map;
 
 import org.apache.kafka.common.header.Headers;
 
+/**
+ * A Serializer that has access to the headers associated with the record.
+ *
+ * Prefer {@link Serializer} if access to the headers is not required. Once Kafka drops support for Java 7, the
+ * {@code serialize()} method introduced by this interface will be added to Serializer with a default implementation
+ * so that backwards compatibility is maintained. This interface may be deprecated once that happens.
+ *
+ * A class that implements this interface is expected to have a constructor with no parameters.
+ * @param <T>
+ */
 public interface ExtendedSerializer<T> extends Serializer<T> {
 
+    /**
+     * Convert {@code data} into a byte array.
+     *
+     * @param topic topic associated with data
+     * @param headers headers associated with the record
+     * @param data typed data
+     * @return serialized bytes
+     */
     byte[] serialize(String topic, Headers headers, T data);
 
     class Wrapper<T> implements ExtendedSerializer<T> {
@@ -50,6 +68,10 @@ public interface ExtendedSerializer<T> extends Serializer<T> {
         @Override
         public void close() {
             serializer.close();
+        }
+
+        public static <T> ExtendedSerializer<T> ensureExtended(Serializer<T> serializer) {
+            return serializer == null ? null : serializer instanceof ExtendedSerializer ? (ExtendedSerializer<T>) serializer : new ExtendedSerializer.Wrapper<>(serializer);
         }
     }
 }

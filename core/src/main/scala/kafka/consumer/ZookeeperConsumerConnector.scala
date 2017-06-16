@@ -80,10 +80,12 @@ import scala.collection.JavaConverters._
  * Each consumer tracks the offset of the latest message consumed for each partition.
  *
  */
+@deprecated("This object has been deprecated and will be removed in a future release.", "0.11.0.0")
 private[kafka] object ZookeeperConsumerConnector {
   val shutdownCommand: FetchedDataChunk = new FetchedDataChunk(null, null, -1L)
 }
 
+@deprecated("This class has been deprecated and will be removed in a future release.", "0.11.0.0")
 private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
                                                 val enableFetcher: Boolean) // for testing only
         extends ConsumerConnector with Logging with KafkaMetricsGroup {

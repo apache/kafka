@@ -27,6 +27,10 @@ if [ -z `which javac` ]; then
     if [ -e "/tmp/oracle-jdk7-installer-cache/" ]; then
         find /tmp/oracle-jdk7-installer-cache/ -not -empty -exec cp '{}' /var/cache/oracle-jdk7-installer/ \;
     fi
+    if [ ! -e "/var/cache/oracle-jdk7-installer/jdk-7u80-linux-x64.tar.gz" ]; then
+        # Grab a copy of the JDK since it has moved and original downloader won't work
+        curl -s -L "https://s3-us-west-2.amazonaws.com/kafka-packages/jdk-7u80-linux-x64.tar.gz" -o /var/cache/oracle-jdk7-installer/jdk-7u80-linux-x64.tar.gz
+    fi
 
     /bin/echo debconf shared/accepted-oracle-license-v1-1 select true | /usr/bin/debconf-set-selections
 
@@ -91,6 +95,8 @@ get_kafka 0.10.0.1 2.11
 chmod a+rw /opt/kafka-0.10.0.1
 get_kafka 0.10.1.1 2.11
 chmod a+rw /opt/kafka-0.10.1.1
+get_kafka 0.10.2.1 2.11
+chmod a+rw /opt/kafka-0.10.2.1
 
 
 # For EC2 nodes, we want to use /mnt, which should have the local disk. On local

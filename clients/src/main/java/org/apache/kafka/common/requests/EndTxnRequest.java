@@ -42,9 +42,25 @@ public class EndTxnRequest extends AbstractRequest {
             this.result = result;
         }
 
+        public TransactionResult result() {
+            return result;
+        }
+
         @Override
         public EndTxnRequest build(short version) {
             return new EndTxnRequest(version, transactionalId, producerId, producerEpoch, result);
+        }
+
+        @Override
+        public String toString() {
+            StringBuilder bld = new StringBuilder();
+            bld.append("(type=EndTxnRequest").
+                    append(", transactionalId=").append(transactionalId).
+                    append(", producerId=").append(producerId).
+                    append(", producerEpoch=").append(producerEpoch).
+                    append(", result=").append(result).
+                    append(")");
+            return bld.toString();
         }
     }
 

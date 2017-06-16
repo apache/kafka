@@ -23,7 +23,7 @@ import kafka.network.SocketServer
 import kafka.utils.TestUtils
 import org.apache.kafka.common.protocol.types.Struct
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.requests.{CreateTopicsRequest, CreateTopicsResponse, MetadataRequest, MetadataResponse}
+import org.apache.kafka.common.requests.{ApiError, CreateTopicsRequest, CreateTopicsResponse, MetadataRequest, MetadataResponse}
 import org.junit.Assert.{assertEquals, assertFalse, assertNotNull, assertTrue}
 
 import scala.collection.JavaConverters._
@@ -43,7 +43,7 @@ class AbstractCreateTopicsRequestTest extends BaseRequestTest {
 
       def verifyMetadata(socketServer: SocketServer) = {
         val metadata = sendMetadataRequest(
-          new MetadataRequest.Builder(List(topic).asJava).build()).topicMetadata.asScala
+          new MetadataRequest.Builder(List(topic).asJava, true).build()).topicMetadata.asScala
         val metadataForTopic = metadata.filter(_.topic == topic).head
 
         val partitions = if (!details.replicasAssignments.isEmpty)
@@ -79,8 +79,8 @@ class AbstractCreateTopicsRequestTest extends BaseRequestTest {
     }
   }
 
-  protected def error(error: Errors, errorMessage: Option[String] = None): CreateTopicsResponse.Error =
-    new CreateTopicsResponse.Error(error, errorMessage.orNull)
+  protected def error(error: Errors, errorMessage: Option[String] = None): ApiError =
+    new ApiError(error, errorMessage.orNull)
 
   protected def toStructWithDuplicateFirstTopic(request: CreateTopicsRequest): Struct = {
     val struct = request.toStruct
@@ -101,7 +101,7 @@ class AbstractCreateTopicsRequestTest extends BaseRequestTest {
   }
 
   protected def validateErrorCreateTopicsRequests(request: CreateTopicsRequest,
-                                                  expectedResponse: Map[String, CreateTopicsResponse.Error],
+                                                  expectedResponse: Map[String, ApiError],
                                                   checkErrorMessage: Boolean = true,
                                                   requestStruct: Option[Struct] = None): Unit = {
     val response = requestStruct.map(sendCreateTopicRequestStruct(_, request.version)).getOrElse(
@@ -127,7 +127,7 @@ class AbstractCreateTopicsRequestTest extends BaseRequestTest {
   protected def validateTopicExists(topic: String): Unit = {
     TestUtils.waitUntilMetadataIsPropagated(servers, topic, 0)
     val metadata = sendMetadataRequest(
-      new MetadataRequest.Builder(List(topic).asJava).build()).topicMetadata.asScala
+      new MetadataRequest.Builder(List(topic).asJava, true).build()).topicMetadata.asScala
     assertTrue("The topic should be created", metadata.exists(p => p.topic.equals(topic) && p.error == Errors.NONE))
   }
 

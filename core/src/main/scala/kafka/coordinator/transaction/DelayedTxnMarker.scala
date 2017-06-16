@@ -45,6 +45,7 @@ private[transaction] class DelayedTxnMarker(txnMetadata: TransactionMetadata,
     throw new IllegalStateException(s"Delayed write txn marker operation for metadata $txnMetadata has timed out, this should never happen.")
   }
 
+  // TODO: if we will always return NONE upon completion, we can remove the error code in the param
   override def onComplete(): Unit = completionCallback(Errors.NONE)
 
 }

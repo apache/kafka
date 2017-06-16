@@ -59,7 +59,7 @@ public class StandbyTask extends AbstractTask {
                 final StreamsConfig config,
                 final StreamsMetrics metrics,
                 final StateDirectory stateDirectory) {
-        super(id, applicationId, partitions, topology, consumer, changelogReader, true, stateDirectory, null);
+        super(id, applicationId, partitions, topology, consumer, changelogReader, true, stateDirectory, null, config);
 
         // initialize the topology with its own context
         processorContext = new StandbyContextImpl(id, applicationId, config, stateMgr, metrics);
@@ -110,8 +110,16 @@ public class StandbyTask extends AbstractTask {
         stateMgr.checkpoint(Collections.<TopicPartition, Long>emptyMap());
     }
 
+    /**
+     * <pre>
+     * - {@link #commit()}
+     * - close state
+     * <pre>
+     * @param clean ignored by {@code StandbyTask} as it can always try to close cleanly
+     *              (ie, commit, flush, and write checkpoint file)
+     */
     @Override
-    public void close() {
+    public void close(final boolean clean) {
         log.debug("{} Closing", logPrefix);
         boolean committedSuccessfully = false;
         try {
@@ -127,7 +135,8 @@ public class StandbyTask extends AbstractTask {
      *
      * @return a list of records not consumed
      */
-    public List<ConsumerRecord<byte[], byte[]>> update(final TopicPartition partition, final List<ConsumerRecord<byte[], byte[]>> records) {
+    public List<ConsumerRecord<byte[], byte[]>> update(final TopicPartition partition,
+                                                       final List<ConsumerRecord<byte[], byte[]>> records) {
         log.debug("{} Updating standby replicas of its state store for partition [{}]", logPrefix, partition);
         return stateMgr.updateStandbyStates(partition, records);
     }

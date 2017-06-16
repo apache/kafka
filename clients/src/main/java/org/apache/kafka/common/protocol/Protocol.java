@@ -68,6 +68,16 @@ public class Protocol {
     /* The v3 metadata request is the same as v1 and v2. An additional field for throttle time has been added to the v3 metadata response */
     public static final Schema METADATA_REQUEST_V3 = METADATA_REQUEST_V2;
 
+    /* The v4 metadata request has an additional field for allowing auto topic creation. The response is the same as v3. */
+    public static final Schema METADATA_REQUEST_V4 = new Schema(new Field("topics",
+                                                                          ArrayOf.nullable(STRING),
+                                                                         "An array of topics to fetch metadata for. If the topics array is null fetch metadata for all topics."),
+                                                                new Field("allow_auto_topic_creation",
+                                                                          BOOLEAN,
+                                                                          "If this and the broker config 'auto.create.topics.enable' are true, " +
+                                                                          "topics that don't exist will be created by the broker. " +
+                                                                          "Otherwise, no topics will be created by the broker."));
+
     public static final Schema METADATA_BROKER_V0 = new Schema(new Field("node_id", INT32, "The broker id."),
                                                    new Field("host", STRING, "The hostname of the broker."),
                                                    new Field("port", INT32,
@@ -142,9 +152,10 @@ public class Protocol {
              "The broker id of the controller broker."),
          new Field("topic_metadata", new ArrayOf(TOPIC_METADATA_V1)));
 
+    public static final Schema METADATA_RESPONSE_V4 = METADATA_RESPONSE_V3;
 
-    public static final Schema[] METADATA_REQUEST = new Schema[] {METADATA_REQUEST_V0, METADATA_REQUEST_V1, METADATA_REQUEST_V2, METADATA_REQUEST_V3};
-    public static final Schema[] METADATA_RESPONSE = new Schema[] {METADATA_RESPONSE_V0, METADATA_RESPONSE_V1, METADATA_RESPONSE_V2, METADATA_RESPONSE_V3};
+    public static final Schema[] METADATA_REQUEST = {METADATA_REQUEST_V0, METADATA_REQUEST_V1, METADATA_REQUEST_V2, METADATA_REQUEST_V3, METADATA_REQUEST_V4};
+    public static final Schema[] METADATA_RESPONSE = {METADATA_RESPONSE_V0, METADATA_RESPONSE_V1, METADATA_RESPONSE_V2, METADATA_RESPONSE_V3, METADATA_RESPONSE_V4};
 
     /* Produce api */
 
@@ -227,8 +238,8 @@ public class Protocol {
                                                                 newThrottleTimeField());
     public static final Schema PRODUCE_RESPONSE_V3 = PRODUCE_RESPONSE_V2;
 
-    public static final Schema[] PRODUCE_REQUEST = new Schema[] {PRODUCE_REQUEST_V0, PRODUCE_REQUEST_V1, PRODUCE_REQUEST_V2, PRODUCE_REQUEST_V3};
-    public static final Schema[] PRODUCE_RESPONSE = new Schema[] {PRODUCE_RESPONSE_V0, PRODUCE_RESPONSE_V1, PRODUCE_RESPONSE_V2, PRODUCE_RESPONSE_V3};
+    public static final Schema[] PRODUCE_REQUEST = {PRODUCE_REQUEST_V0, PRODUCE_REQUEST_V1, PRODUCE_REQUEST_V2, PRODUCE_REQUEST_V3};
+    public static final Schema[] PRODUCE_RESPONSE = {PRODUCE_RESPONSE_V0, PRODUCE_RESPONSE_V1, PRODUCE_RESPONSE_V2, PRODUCE_RESPONSE_V3};
 
     /* Offset commit api */
     public static final Schema OFFSET_COMMIT_REQUEST_PARTITION_V0 = new Schema(new Field("partition",
@@ -337,7 +348,7 @@ public class Protocol {
     public static final Schema OFFSET_COMMIT_RESPONSE_V0 = new Schema(new Field("responses",
                                                                                 new ArrayOf(OFFSET_COMMIT_RESPONSE_TOPIC_V0)));
 
-    public static final Schema[] OFFSET_COMMIT_REQUEST = new Schema[] {OFFSET_COMMIT_REQUEST_V0, OFFSET_COMMIT_REQUEST_V1, OFFSET_COMMIT_REQUEST_V2, OFFSET_COMMIT_REQUEST_V3};
+    public static final Schema[] OFFSET_COMMIT_REQUEST = {OFFSET_COMMIT_REQUEST_V0, OFFSET_COMMIT_REQUEST_V1, OFFSET_COMMIT_REQUEST_V2, OFFSET_COMMIT_REQUEST_V3};
 
     /* The response types for V0, V1 and V2 of OFFSET_COMMIT_REQUEST are the same. */
     public static final Schema OFFSET_COMMIT_RESPONSE_V1 = OFFSET_COMMIT_RESPONSE_V0;
@@ -348,7 +359,7 @@ public class Protocol {
             new Field("responses",
                        new ArrayOf(OFFSET_COMMIT_RESPONSE_TOPIC_V0)));
 
-    public static final Schema[] OFFSET_COMMIT_RESPONSE = new Schema[] {OFFSET_COMMIT_RESPONSE_V0, OFFSET_COMMIT_RESPONSE_V1, OFFSET_COMMIT_RESPONSE_V2, OFFSET_COMMIT_RESPONSE_V3};
+    public static final Schema[] OFFSET_COMMIT_RESPONSE = {OFFSET_COMMIT_RESPONSE_V0, OFFSET_COMMIT_RESPONSE_V1, OFFSET_COMMIT_RESPONSE_V2, OFFSET_COMMIT_RESPONSE_V3};
 
     /* Offset fetch api */
 
@@ -423,8 +434,8 @@ public class Protocol {
             new Field("error_code",
                     INT16));
 
-    public static final Schema[] OFFSET_FETCH_REQUEST = new Schema[] {OFFSET_FETCH_REQUEST_V0, OFFSET_FETCH_REQUEST_V1, OFFSET_FETCH_REQUEST_V2, OFFSET_FETCH_REQUEST_V3};
-    public static final Schema[] OFFSET_FETCH_RESPONSE = new Schema[] {OFFSET_FETCH_RESPONSE_V0, OFFSET_FETCH_RESPONSE_V1, OFFSET_FETCH_RESPONSE_V2, OFFSET_FETCH_RESPONSE_V3};
+    public static final Schema[] OFFSET_FETCH_REQUEST = {OFFSET_FETCH_REQUEST_V0, OFFSET_FETCH_REQUEST_V1, OFFSET_FETCH_REQUEST_V2, OFFSET_FETCH_REQUEST_V3};
+    public static final Schema[] OFFSET_FETCH_RESPONSE = {OFFSET_FETCH_RESPONSE_V0, OFFSET_FETCH_RESPONSE_V1, OFFSET_FETCH_RESPONSE_V2, OFFSET_FETCH_RESPONSE_V3};
 
     /* List offset api */
     public static final Schema LIST_OFFSET_REQUEST_PARTITION_V0 = new Schema(new Field("partition",
@@ -520,8 +531,8 @@ public class Protocol {
             new Field("responses",
                     new ArrayOf(LIST_OFFSET_RESPONSE_TOPIC_V1)));
 
-    public static final Schema[] LIST_OFFSET_REQUEST = new Schema[] {LIST_OFFSET_REQUEST_V0, LIST_OFFSET_REQUEST_V1, LIST_OFFSET_REQUEST_V2};
-    public static final Schema[] LIST_OFFSET_RESPONSE = new Schema[] {LIST_OFFSET_RESPONSE_V0, LIST_OFFSET_RESPONSE_V1, LIST_OFFSET_RESPONSE_V2};
+    public static final Schema[] LIST_OFFSET_REQUEST = {LIST_OFFSET_REQUEST_V0, LIST_OFFSET_REQUEST_V1, LIST_OFFSET_REQUEST_V2};
+    public static final Schema[] LIST_OFFSET_RESPONSE = {LIST_OFFSET_RESPONSE_V0, LIST_OFFSET_RESPONSE_V1, LIST_OFFSET_RESPONSE_V2};
 
     /* Fetch api */
     public static final Schema FETCH_REQUEST_PARTITION_V0 = new Schema(new Field("partition",
@@ -748,8 +759,8 @@ public class Protocol {
             newThrottleTimeField(),
             new Field("responses", new ArrayOf(FETCH_RESPONSE_TOPIC_V5)));
 
-    public static final Schema[] FETCH_REQUEST = new Schema[] {FETCH_REQUEST_V0, FETCH_REQUEST_V1, FETCH_REQUEST_V2, FETCH_REQUEST_V3, FETCH_REQUEST_V4, FETCH_REQUEST_V5};
-    public static final Schema[] FETCH_RESPONSE = new Schema[] {FETCH_RESPONSE_V0, FETCH_RESPONSE_V1, FETCH_RESPONSE_V2, FETCH_RESPONSE_V3, FETCH_RESPONSE_V4, FETCH_RESPONSE_V5};
+    public static final Schema[] FETCH_REQUEST = {FETCH_REQUEST_V0, FETCH_REQUEST_V1, FETCH_REQUEST_V2, FETCH_REQUEST_V3, FETCH_REQUEST_V4, FETCH_REQUEST_V5};
+    public static final Schema[] FETCH_RESPONSE = {FETCH_RESPONSE_V0, FETCH_RESPONSE_V1, FETCH_RESPONSE_V2, FETCH_RESPONSE_V3, FETCH_RESPONSE_V4, FETCH_RESPONSE_V5};
 
     /* List groups api */
     public static final Schema LIST_GROUPS_REQUEST_V0 = new Schema();
@@ -766,8 +777,8 @@ public class Protocol {
             new Field("error_code", INT16),
             new Field("groups", new ArrayOf(LIST_GROUPS_RESPONSE_GROUP_V0)));
 
-    public static final Schema[] LIST_GROUPS_REQUEST = new Schema[] {LIST_GROUPS_REQUEST_V0, LIST_GROUPS_REQUEST_V1};
-    public static final Schema[] LIST_GROUPS_RESPONSE = new Schema[] {LIST_GROUPS_RESPONSE_V0, LIST_GROUPS_RESPONSE_V1};
+    public static final Schema[] LIST_GROUPS_REQUEST = {LIST_GROUPS_REQUEST_V0, LIST_GROUPS_REQUEST_V1};
+    public static final Schema[] LIST_GROUPS_RESPONSE = {LIST_GROUPS_RESPONSE_V0, LIST_GROUPS_RESPONSE_V1};
 
     /* Describe group api */
     public static final Schema DESCRIBE_GROUPS_REQUEST_V0 = new Schema(new Field("group_ids",
@@ -814,8 +825,8 @@ public class Protocol {
             newThrottleTimeField(),
             new Field("groups", new ArrayOf(DESCRIBE_GROUPS_RESPONSE_GROUP_METADATA_V0)));
 
-    public static final Schema[] DESCRIBE_GROUPS_REQUEST = new Schema[] {DESCRIBE_GROUPS_REQUEST_V0, DESCRIBE_GROUPS_REQUEST_V1};
-    public static final Schema[] DESCRIBE_GROUPS_RESPONSE = new Schema[] {DESCRIBE_GROUPS_RESPONSE_V0, DESCRIBE_GROUPS_RESPONSE_V1};
+    public static final Schema[] DESCRIBE_GROUPS_REQUEST = {DESCRIBE_GROUPS_REQUEST_V0, DESCRIBE_GROUPS_REQUEST_V1};
+    public static final Schema[] DESCRIBE_GROUPS_RESPONSE = {DESCRIBE_GROUPS_RESPONSE_V0, DESCRIBE_GROUPS_RESPONSE_V1};
 
     /* Find coordinator api */
     public static final Schema FIND_COORDINATOR_REQUEST_V0 = new Schema(
@@ -853,8 +864,8 @@ public class Protocol {
                     "Host and port information for the coordinator for a consumer group."));
 
 
-    public static final Schema[] FIND_COORDINATOR_REQUEST = new Schema[] {FIND_COORDINATOR_REQUEST_V0, FIND_COORDINATOR_REQUEST_V1};
-    public static final Schema[] FIND_COORDINATOR_RESPONSE = new Schema[] {FIND_COORDINATOR_RESPONSE_V0, FIND_COORDINATOR_RESPONSE_V1};
+    public static final Schema[] FIND_COORDINATOR_REQUEST = {FIND_COORDINATOR_REQUEST_V0, FIND_COORDINATOR_REQUEST_V1};
+    public static final Schema[] FIND_COORDINATOR_RESPONSE = {FIND_COORDINATOR_RESPONSE_V0, FIND_COORDINATOR_RESPONSE_V1};
 
     /* Controlled shutdown api */
     public static final Schema CONTROLLED_SHUTDOWN_REQUEST_V1 = new Schema(new Field("broker_id",
@@ -872,8 +883,8 @@ public class Protocol {
                                                                                       "The partitions that the broker still leads."));
 
     /* V0 is not supported as it would require changes to the request header not to include `clientId` */
-    public static final Schema[] CONTROLLED_SHUTDOWN_REQUEST = new Schema[] {null, CONTROLLED_SHUTDOWN_REQUEST_V1};
-    public static final Schema[] CONTROLLED_SHUTDOWN_RESPONSE = new Schema[] {null, CONTROLLED_SHUTDOWN_RESPONSE_V1};
+    public static final Schema[] CONTROLLED_SHUTDOWN_REQUEST = {null, CONTROLLED_SHUTDOWN_REQUEST_V1};
+    public static final Schema[] CONTROLLED_SHUTDOWN_RESPONSE = {null, CONTROLLED_SHUTDOWN_RESPONSE_V1};
 
     /* Join group api */
     public static final Schema JOIN_GROUP_REQUEST_PROTOCOL_V0 = new Schema(new Field("protocol_name", STRING),
@@ -937,6 +948,7 @@ public class Protocol {
                                                                              new ArrayOf(JOIN_GROUP_RESPONSE_MEMBER_V0)));
 
     public static final Schema JOIN_GROUP_RESPONSE_V1 = JOIN_GROUP_RESPONSE_V0;
+
     public static final Schema JOIN_GROUP_RESPONSE_V2 = new Schema(
             newThrottleTimeField(),
             new Field("error_code", INT16),
@@ -956,8 +968,8 @@ public class Protocol {
                       new ArrayOf(JOIN_GROUP_RESPONSE_MEMBER_V0)));
 
 
-    public static final Schema[] JOIN_GROUP_REQUEST = new Schema[] {JOIN_GROUP_REQUEST_V0, JOIN_GROUP_REQUEST_V1, JOIN_GROUP_REQUEST_V2};
-    public static final Schema[] JOIN_GROUP_RESPONSE = new Schema[] {JOIN_GROUP_RESPONSE_V0, JOIN_GROUP_RESPONSE_V1, JOIN_GROUP_RESPONSE_V2};
+    public static final Schema[] JOIN_GROUP_REQUEST = {JOIN_GROUP_REQUEST_V0, JOIN_GROUP_REQUEST_V1, JOIN_GROUP_REQUEST_V2};
+    public static final Schema[] JOIN_GROUP_RESPONSE = {JOIN_GROUP_RESPONSE_V0, JOIN_GROUP_RESPONSE_V1, JOIN_GROUP_RESPONSE_V2};
 
     /* SyncGroup api */
     public static final Schema SYNC_GROUP_REQUEST_MEMBER_V0 = new Schema(new Field("member_id", STRING),
@@ -976,8 +988,8 @@ public class Protocol {
             newThrottleTimeField(),
             new Field("error_code", INT16),
             new Field("member_assignment", BYTES));
-    public static final Schema[] SYNC_GROUP_REQUEST = new Schema[] {SYNC_GROUP_REQUEST_V0, SYNC_GROUP_REQUEST_V1};
-    public static final Schema[] SYNC_GROUP_RESPONSE = new Schema[] {SYNC_GROUP_RESPONSE_V0, SYNC_GROUP_RESPONSE_V1};
+    public static final Schema[] SYNC_GROUP_REQUEST = {SYNC_GROUP_REQUEST_V0, SYNC_GROUP_REQUEST_V1};
+    public static final Schema[] SYNC_GROUP_RESPONSE = {SYNC_GROUP_RESPONSE_V0, SYNC_GROUP_RESPONSE_V1};
 
     /* Heartbeat api */
     public static final Schema HEARTBEAT_REQUEST_V0 = new Schema(new Field("group_id", STRING, "The group id."),
@@ -996,8 +1008,8 @@ public class Protocol {
             newThrottleTimeField(),
             new Field("error_code", INT16));
 
-    public static final Schema[] HEARTBEAT_REQUEST = new Schema[] {HEARTBEAT_REQUEST_V0, HEARTBEAT_REQUEST_V1};
-    public static final Schema[] HEARTBEAT_RESPONSE = new Schema[] {HEARTBEAT_RESPONSE_V0, HEARTBEAT_RESPONSE_V1};
+    public static final Schema[] HEARTBEAT_REQUEST = {HEARTBEAT_REQUEST_V0, HEARTBEAT_REQUEST_V1};
+    public static final Schema[] HEARTBEAT_RESPONSE = {HEARTBEAT_RESPONSE_V0, HEARTBEAT_RESPONSE_V1};
 
     /* Leave group api */
     public static final Schema LEAVE_GROUP_REQUEST_V0 = new Schema(new Field("group_id", STRING, "The group id."),
@@ -1013,8 +1025,8 @@ public class Protocol {
             newThrottleTimeField(),
             new Field("error_code", INT16));
 
-    public static final Schema[] LEAVE_GROUP_REQUEST = new Schema[] {LEAVE_GROUP_REQUEST_V0, LEAVE_GROUP_REQUEST_V1};
-    public static final Schema[] LEAVE_GROUP_RESPONSE = new Schema[] {LEAVE_GROUP_RESPONSE_V0, LEAVE_GROUP_RESPONSE_V1};
+    public static final Schema[] LEAVE_GROUP_REQUEST = {LEAVE_GROUP_REQUEST_V0, LEAVE_GROUP_REQUEST_V1};
+    public static final Schema[] LEAVE_GROUP_RESPONSE = {LEAVE_GROUP_RESPONSE_V0, LEAVE_GROUP_RESPONSE_V1};
 
     /* Leader and ISR api */
     public static final Schema LEADER_AND_ISR_REQUEST_PARTITION_STATE_V0 =
@@ -1046,8 +1058,8 @@ public class Protocol {
                                                                        new Field("partitions",
                                                                                  new ArrayOf(LEADER_AND_ISR_RESPONSE_PARTITION_V0)));
 
-    public static final Schema[] LEADER_AND_ISR_REQUEST = new Schema[] {LEADER_AND_ISR_REQUEST_V0};
-    public static final Schema[] LEADER_AND_ISR_RESPONSE = new Schema[] {LEADER_AND_ISR_RESPONSE_V0};
+    public static final Schema[] LEADER_AND_ISR_REQUEST = {LEADER_AND_ISR_REQUEST_V0};
+    public static final Schema[] LEADER_AND_ISR_RESPONSE = {LEADER_AND_ISR_RESPONSE_V0};
 
     /* Replica api */
     public static final Schema STOP_REPLICA_REQUEST_PARTITION_V0 = new Schema(new Field("topic", STRING, "Topic name."),
@@ -1068,8 +1080,8 @@ public class Protocol {
                                                                      new Field("partitions",
                                                                                new ArrayOf(STOP_REPLICA_RESPONSE_PARTITION_V0)));
 
-    public static final Schema[] STOP_REPLICA_REQUEST = new Schema[] {STOP_REPLICA_REQUEST_V0};
-    public static final Schema[] STOP_REPLICA_RESPONSE = new Schema[] {STOP_REPLICA_RESPONSE_V0};
+    public static final Schema[] STOP_REPLICA_REQUEST = {STOP_REPLICA_REQUEST_V0};
+    public static final Schema[] STOP_REPLICA_RESPONSE = {STOP_REPLICA_RESPONSE_V0};
 
     /* Update metadata api */
 
@@ -1148,9 +1160,9 @@ public class Protocol {
 
     public static final Schema UPDATE_METADATA_RESPONSE_V3 = UPDATE_METADATA_RESPONSE_V2;
 
-    public static final Schema[] UPDATE_METADATA_REQUEST = new Schema[] {UPDATE_METADATA_REQUEST_V0, UPDATE_METADATA_REQUEST_V1,
+    public static final Schema[] UPDATE_METADATA_REQUEST = {UPDATE_METADATA_REQUEST_V0, UPDATE_METADATA_REQUEST_V1,
         UPDATE_METADATA_REQUEST_V2, UPDATE_METADATA_REQUEST_V3};
-    public static final Schema[] UPDATE_METADATA_RESPONSE = new Schema[] {UPDATE_METADATA_RESPONSE_V0, UPDATE_METADATA_RESPONSE_V1,
+    public static final Schema[] UPDATE_METADATA_RESPONSE = {UPDATE_METADATA_RESPONSE_V0, UPDATE_METADATA_RESPONSE_V1,
         UPDATE_METADATA_RESPONSE_V2, UPDATE_METADATA_RESPONSE_V3};
 
     /* SASL handshake api */
@@ -1161,8 +1173,8 @@ public class Protocol {
             new Field("error_code", INT16),
             new Field("enabled_mechanisms", new ArrayOf(Type.STRING), "Array of mechanisms enabled in the server."));
 
-    public static final Schema[] SASL_HANDSHAKE_REQUEST = new Schema[] {SASL_HANDSHAKE_REQUEST_V0};
-    public static final Schema[] SASL_HANDSHAKE_RESPONSE = new Schema[] {SASL_HANDSHAKE_RESPONSE_V0};
+    public static final Schema[] SASL_HANDSHAKE_REQUEST = {SASL_HANDSHAKE_REQUEST_V0};
+    public static final Schema[] SASL_HANDSHAKE_RESPONSE = {SASL_HANDSHAKE_RESPONSE_V0};
 
     /* ApiVersion api */
     public static final Schema API_VERSIONS_REQUEST_V0 = new Schema();
@@ -1181,12 +1193,12 @@ public class Protocol {
             new Field("api_versions", new ArrayOf(API_VERSIONS_V0), "API versions supported by the broker."),
             newThrottleTimeField());
 
-    public static final Schema[] API_VERSIONS_REQUEST = new Schema[]{API_VERSIONS_REQUEST_V0, API_VERSIONS_REQUEST_V1};
-    public static final Schema[] API_VERSIONS_RESPONSE = new Schema[]{API_VERSIONS_RESPONSE_V0, API_VERSIONS_RESPONSE_V1};
+    public static final Schema[] API_VERSIONS_REQUEST = {API_VERSIONS_REQUEST_V0, API_VERSIONS_REQUEST_V1};
+    public static final Schema[] API_VERSIONS_RESPONSE = {API_VERSIONS_RESPONSE_V0, API_VERSIONS_RESPONSE_V1};
 
     /* Admin requests common */
-    public static final Schema CONFIG_ENTRY = new Schema(new Field("config_key", STRING, "Configuration key name"),
-        new Field("config_value", STRING, "Configuration value"));
+    public static final Schema CONFIG_ENTRY = new Schema(new Field("config_name", STRING, "Configuration name"),
+        new Field("config_value", NULLABLE_STRING, "Configuration value"));
 
     public static final Schema PARTITION_REPLICA_ASSIGNMENT_ENTRY = new Schema(
         new Field("partition_id", INT32),
@@ -1212,7 +1224,7 @@ public class Protocol {
         new Field("replica_assignment",
             new ArrayOf(PARTITION_REPLICA_ASSIGNMENT_ENTRY),
             "Replica assignment among kafka brokers for this topic partitions. If this is set num_partitions and replication_factor must be unset."),
-        new Field("configs",
+        new Field("config_entries",
             new ArrayOf(CONFIG_ENTRY),
             "Topic level configuration for topic to be set."));
 
@@ -1254,8 +1266,8 @@ public class Protocol {
                     new ArrayOf(TOPIC_ERROR),
                     "An array of per topic errors."));
 
-    public static final Schema[] CREATE_TOPICS_REQUEST = new Schema[] {CREATE_TOPICS_REQUEST_V0, CREATE_TOPICS_REQUEST_V1, CREATE_TOPICS_REQUEST_V2};
-    public static final Schema[] CREATE_TOPICS_RESPONSE = new Schema[] {CREATE_TOPICS_RESPONSE_V0, CREATE_TOPICS_RESPONSE_V1, CREATE_TOPICS_RESPONSE_V2};
+    public static final Schema[] CREATE_TOPICS_REQUEST = {CREATE_TOPICS_REQUEST_V0, CREATE_TOPICS_REQUEST_V1, CREATE_TOPICS_REQUEST_V2};
+    public static final Schema[] CREATE_TOPICS_RESPONSE = {CREATE_TOPICS_RESPONSE_V0, CREATE_TOPICS_RESPONSE_V1, CREATE_TOPICS_RESPONSE_V2};
 
     /* DeleteTopic api */
     public static final Schema DELETE_TOPICS_REQUEST_V0 = new Schema(
@@ -1278,8 +1290,8 @@ public class Protocol {
                 new ArrayOf(TOPIC_ERROR_CODE),
                 "An array of per topic error codes."));
 
-    public static final Schema[] DELETE_TOPICS_REQUEST = new Schema[] {DELETE_TOPICS_REQUEST_V0, DELETE_TOPICS_REQUEST_V1};
-    public static final Schema[] DELETE_TOPICS_RESPONSE = new Schema[] {DELETE_TOPICS_RESPONSE_V0, DELETE_TOPICS_RESPONSE_V1};
+    public static final Schema[] DELETE_TOPICS_REQUEST = {DELETE_TOPICS_REQUEST_V0, DELETE_TOPICS_REQUEST_V1};
+    public static final Schema[] DELETE_TOPICS_RESPONSE = {DELETE_TOPICS_RESPONSE_V0, DELETE_TOPICS_RESPONSE_V1};
 
     public static final Schema DELETE_RECORDS_REQUEST_PARTITION_V0 = new Schema(new Field("partition", INT32, "Topic partition id."),
                                                                                 new Field("offset", INT64, "The offset before which the messages will be deleted."));
@@ -1301,8 +1313,8 @@ public class Protocol {
             newThrottleTimeField(),
             new Field("topics", new ArrayOf(DELETE_RECORDS_RESPONSE_TOPIC_V0)));
 
-    public static final Schema[] DELETE_RECORDS_REQUEST = new Schema[] {DELETE_RECORDS_REQUEST_V0};
-    public static final Schema[] DELETE_RECORDS_RESPONSE = new Schema[] {DELETE_RECORDS_RESPONSE_V0};
+    public static final Schema[] DELETE_RECORDS_REQUEST = {DELETE_RECORDS_REQUEST_V0};
+    public static final Schema[] DELETE_RECORDS_RESPONSE = {DELETE_RECORDS_RESPONSE_V0};
 
     /* Transactions API */
     public static final Schema INIT_PRODUCER_ID_REQUEST_V0 = new Schema(
@@ -1327,9 +1339,9 @@ public class Protocol {
                     "The epoch for the producer id. Will always be 0 if no transactional id was specified in the request.")
     );
 
-    public static final Schema[] INIT_PRODUCER_ID_REQUEST = new Schema[] {INIT_PRODUCER_ID_REQUEST_V0};
+    public static final Schema[] INIT_PRODUCER_ID_REQUEST = {INIT_PRODUCER_ID_REQUEST_V0};
 
-    public static final Schema[] INIT_PRODUCER_ID_RESPONSE = new Schema[] {INIT_PRODUCER_ID_RESPONSE_V0};
+    public static final Schema[] INIT_PRODUCER_ID_RESPONSE = {INIT_PRODUCER_ID_RESPONSE_V0};
 
     /* Offsets for Leader Epoch api */
     public static final Schema OFFSET_FOR_LEADER_EPOCH_REQUEST_PARTITION_V0 = new Schema(
@@ -1378,8 +1390,8 @@ public class Protocol {
                     new ArrayOf(OFFSET_FOR_LEADER_EPOCH_RESPONSE_TOPIC_V0),
                     "An array of topics for which we have leader offsets for some requested Partition Leader Epoch"));
 
-    public static final Schema[] OFFSET_FOR_LEADER_EPOCH_REQUEST = new Schema[] {OFFSET_FOR_LEADER_EPOCH_REQUEST_V0};
-    public static final Schema[] OFFSET_FOR_LEADER_EPOCH_RESPONSE = new Schema[] {OFFSET_FOR_LEADER_EPOCH_RESPONSE_V0};
+    public static final Schema[] OFFSET_FOR_LEADER_EPOCH_REQUEST = {OFFSET_FOR_LEADER_EPOCH_REQUEST_V0};
+    public static final Schema[] OFFSET_FOR_LEADER_EPOCH_RESPONSE = {OFFSET_FOR_LEADER_EPOCH_RESPONSE_V0};
 
     public static final Schema ADD_PARTITIONS_TO_TXN_REQUEST_V0 = new Schema(
             new Field("transactional_id",
@@ -1408,8 +1420,8 @@ public class Protocol {
                                                                               INT16)))))))
     );
 
-    public static final Schema[] ADD_PARTITIONS_TO_TXN_REQUEST = new Schema[] {ADD_PARTITIONS_TO_TXN_REQUEST_V0};
-    public static final Schema[] ADD_PARTITIONS_TO_TXN_RESPONSE = new Schema[] {ADD_PARTITIONS_TO_TXN_RESPONSE_V0};
+    public static final Schema[] ADD_PARTITIONS_TO_TXN_REQUEST = {ADD_PARTITIONS_TO_TXN_REQUEST_V0};
+    public static final Schema[] ADD_PARTITIONS_TO_TXN_RESPONSE = {ADD_PARTITIONS_TO_TXN_RESPONSE_V0};
 
     public static final Schema ADD_OFFSETS_TO_TXN_REQUEST_V0 = new Schema(
             new Field("transactional_id",
@@ -1432,8 +1444,8 @@ public class Protocol {
                     "An integer error code.")
     );
 
-    public static final Schema[] ADD_OFFSETS_TO_TXN_REQUEST = new Schema[] {ADD_OFFSETS_TO_TXN_REQUEST_V0};
-    public static final Schema[] ADD_OFFSETS_TO_TXN_RESPONSE = new Schema[] {ADD_OFFSETS_TO_TXN_RESPONSE_V0};
+    public static final Schema[] ADD_OFFSETS_TO_TXN_REQUEST = {ADD_OFFSETS_TO_TXN_REQUEST_V0};
+    public static final Schema[] ADD_OFFSETS_TO_TXN_RESPONSE = {ADD_OFFSETS_TO_TXN_RESPONSE_V0};
 
     public static final Schema END_TXN_REQUEST_V0 = new Schema(
             new Field("transactional_id",
@@ -1457,8 +1469,8 @@ public class Protocol {
                     "An integer error code.")
     );
 
-    public static final Schema[] END_TXN_REQUEST = new Schema[] {END_TXN_REQUEST_V0};
-    public static final Schema[] END_TXN_RESPONSE = new Schema[] {END_TXN_RESPONSE_V0};
+    public static final Schema[] END_TXN_REQUEST = {END_TXN_REQUEST_V0};
+    public static final Schema[] END_TXN_RESPONSE = {END_TXN_RESPONSE_V0};
 
     public static final Schema WRITE_TXN_MARKERS_ENTRY_V0 = new Schema(
             new Field("producer_id",
@@ -1506,8 +1518,8 @@ public class Protocol {
             new Field("transaction_markers", new ArrayOf(WRITE_TXN_MARKERS_ENTRY_RESPONSE_V0), "Errors per partition from writing markers.")
     );
 
-    public static final Schema[] WRITE_TXN_REQUEST = new Schema[] {WRITE_TXN_MARKERS_REQUEST_V0};
-    public static final Schema[] WRITE_TXN_RESPONSE = new Schema[] {WRITE_TXN_MARKERS_RESPONSE_V0};
+    public static final Schema[] WRITE_TXN_REQUEST = {WRITE_TXN_MARKERS_REQUEST_V0};
+    public static final Schema[] WRITE_TXN_RESPONSE = {WRITE_TXN_MARKERS_RESPONSE_V0};
 
     public static final Schema TXN_OFFSET_COMMIT_PARTITION_OFFSET_METADATA_REQUEST_V0 = new Schema(
             new Field("partition", INT32),
@@ -1516,6 +1528,9 @@ public class Protocol {
     );
 
     public static final Schema TXN_OFFSET_COMMIT_REQUEST_V0 = new Schema(
+            new Field("transactional_id",
+                    STRING,
+                    "The transactional id corresponding to the transaction."),
             new Field("consumer_group_id",
                     STRING,
                     "Id of the associated consumer group to commit offsets for."),
@@ -1546,8 +1561,150 @@ public class Protocol {
                     "Errors per partition from writing markers.")
     );
 
-    public static final Schema[] TXN_OFFSET_COMMIT_REQUEST = new Schema[] {TXN_OFFSET_COMMIT_REQUEST_V0};
-    public static final Schema[] TXN_OFFSET_COMMIT_RESPONSE = new Schema[] {TXN_OFFSET_COMMIT_RESPONSE_V0};
+    public static final Schema[] TXN_OFFSET_COMMIT_REQUEST = {TXN_OFFSET_COMMIT_REQUEST_V0};
+    public static final Schema[] TXN_OFFSET_COMMIT_RESPONSE = {TXN_OFFSET_COMMIT_RESPONSE_V0};
+
+    /* DescribeConfigs API */
+
+    public static final Schema DESCRIBE_CONFIGS_REQUEST_RESOURCE_V0 = new Schema(
+            new Field("resource_type", INT8),
+            new Field("resource_name", STRING),
+            new Field("config_names", ArrayOf.nullable(STRING))
+    );
+
+    public static final Schema DESCRIBE_CONFIGS_REQUEST_V0 = new Schema(
+            new Field("resources", new ArrayOf(DESCRIBE_CONFIGS_REQUEST_RESOURCE_V0),
+                    "An array of config resources to be returned."));
+
+    public static final Schema DESCRIBE_CONFIGS_RESPONSE_ENTITY_V0 = new Schema(
+            new Field("error_code", INT16),
+            new Field("error_message", NULLABLE_STRING),
+            new Field("resource_type", INT8),
+            new Field("resource_name", STRING),
+            new Field("config_entries", new ArrayOf(new Schema(
+                    new Field("config_name", STRING),
+                    new Field("config_value", NULLABLE_STRING),
+                    new Field("read_only", BOOLEAN),
+                    new Field("is_default", BOOLEAN),
+                    new Field("is_sensitive", BOOLEAN)
+            ))
+    ));
+
+    public static final Schema DESCRIBE_CONFIGS_RESPONSE_V0 = new Schema(
+            newThrottleTimeField(),
+            new Field("resources", new ArrayOf(DESCRIBE_CONFIGS_RESPONSE_ENTITY_V0)));
+
+    public static final Schema[] DESCRIBE_CONFIGS_REQUEST = {DESCRIBE_CONFIGS_REQUEST_V0};
+    public static final Schema[] DESCRIBE_CONFIGS_RESPONSE = {DESCRIBE_CONFIGS_RESPONSE_V0};
+
+    /* AlterConfigs API */
+
+    public static final Schema ALTER_CONFIGS_REQUEST_RESOURCE_V0 = new Schema(
+            new Field("resource_type", INT8),
+            new Field("resource_name", STRING),
+            new Field("config_entries", new ArrayOf(CONFIG_ENTRY)));
+
+    public static final Schema ALTER_CONFIGS_REQUEST_V0 = new Schema(
+            new Field("resources", new ArrayOf(ALTER_CONFIGS_REQUEST_RESOURCE_V0),
+                    "An array of resources to update with the provided configs."),
+            new Field("validate_only", BOOLEAN));
+
+    public static final Schema ALTER_CONFIGS_RESPONSE_ENTITY_V0 = new Schema(
+            new Field("error_code", INT16),
+            new Field("error_message", NULLABLE_STRING),
+            new Field("resource_type", INT8),
+            new Field("resource_name", STRING));
+
+    public static final Schema ALTER_CONFIGS_RESPONSE_V0 = new Schema(
+            newThrottleTimeField(),
+            new Field("resources", new ArrayOf(ALTER_CONFIGS_RESPONSE_ENTITY_V0)));
+
+    public static final Schema[] ALTER_CONFIGS_REQUEST = {ALTER_CONFIGS_REQUEST_V0};
+    public static final Schema[] ALTER_CONFIGS_RESPONSE = {ALTER_CONFIGS_RESPONSE_V0};
+
+    public static final Schema DESCRIBE_ACLS_REQUEST_V0 = new Schema(
+        new Field("resource_type", INT8, "The filter resource type."),
+        new Field("resource_name", NULLABLE_STRING, "The filter resource name."),
+        new Field("principal", NULLABLE_STRING, "The filter principal name."),
+        new Field("host", NULLABLE_STRING, "The filter ip address."),
+        new Field("operation", INT8, "The filter operation type."),
+        new Field("permission_type", INT8, "The filter permission type.")
+    );
+
+    public static final Schema DESCRIBE_ACLS_RESOURCE = new Schema(
+        new Field("resource_type", INT8, "The resource type"),
+        new Field("resource_name", STRING, "The resource name"),
+        new Field("acls", new ArrayOf(new Schema(
+            new Field("principal", STRING, "The ACL principal"),
+            new Field("host", STRING, "The ACL host"),
+            new Field("operation", INT8, "The ACL operation"),
+            new Field("permission_type", INT8, "The ACL permission type")))));
+
+    public static final Schema DESCRIBE_ACLS_RESPONSE_V0 = new Schema(
+        newThrottleTimeField(),
+        new Field("error_code", INT16, "The error code."),
+        new Field("error_message", NULLABLE_STRING, "The error message."),
+        new Field("resources",
+            new ArrayOf(DESCRIBE_ACLS_RESOURCE),
+            "The resources and their associated ACLs."));
+
+    public static final Schema[] DESCRIBE_ACLS_REQUEST = {DESCRIBE_ACLS_REQUEST_V0};
+    public static final Schema[] DESCRIBE_ACLS_RESPONSE  = {DESCRIBE_ACLS_RESPONSE_V0};
+
+    public static final Schema CREATE_ACLS_REQUEST_V0 = new Schema(
+        new Field("creations",
+            new ArrayOf(new Schema(
+                new Field("resource_type", INT8, "The resource type."),
+                new Field("resource_name", STRING, "The resource name."),
+                new Field("principal", STRING, "The principal."),
+                new Field("host", STRING, "The ip address."),
+                new Field("operation", INT8, "The ACL operation"),
+                new Field("permission_type", INT8, "The ACL permission type")
+            ))));
+
+    public static final Schema CREATE_ACLS_RESPONSE_V0 = new Schema(
+        newThrottleTimeField(),
+        new Field("creation_responses",
+            new ArrayOf(new Schema(
+                new Field("error_code", INT16, "The error code."),
+                new Field("error_message", NULLABLE_STRING, "The error message.")
+            ))));
+
+    public static final Schema[] CREATE_ACLS_REQUEST = {CREATE_ACLS_REQUEST_V0};
+    public static final Schema[] CREATE_ACLS_RESPONSE = {CREATE_ACLS_RESPONSE_V0};
+
+    public static final Schema DELETE_ACLS_REQUEST_V0 = new Schema(
+        new Field("filters",
+            new ArrayOf(new Schema(
+                new Field("resource_type", INT8, "The resource type filter."),
+                new Field("resource_name", NULLABLE_STRING, "The resource name filter."),
+                new Field("principal", NULLABLE_STRING, "The principal filter."),
+                new Field("host", NULLABLE_STRING, "The ip address filter."),
+                new Field("operation", INT8, "The ACL operation filter."),
+                new Field("permission_type", INT8, "The ACL permission type filter.")
+            ))));
+
+    public static final Schema MATCHING_ACL = new Schema(
+        new Field("error_code", INT16, "The error code."),
+        new Field("error_message", NULLABLE_STRING, "The error message."),
+        new Field("resource_type", INT8, "The resource type."),
+        new Field("resource_name", STRING, "The resource name."),
+        new Field("principal", STRING, "The principal."),
+        new Field("host", STRING, "The ip address."),
+        new Field("operation", INT8, "The ACL operation"),
+        new Field("permission_type", INT8, "The ACL permission type")
+    );
+
+    public static final Schema DELETE_ACLS_RESPONSE_V0 = new Schema(
+        newThrottleTimeField(),
+        new Field("filter_responses",
+            new ArrayOf(new Schema(
+                new Field("error_code", INT16, "The error code."),
+                new Field("error_message", NULLABLE_STRING, "The error message."),
+                new Field("matching_acls", new ArrayOf(MATCHING_ACL), "The matching ACLs")))));
+
+    public static final Schema[] DELETE_ACLS_REQUEST = {DELETE_ACLS_REQUEST_V0};
+    public static final Schema[] DELETE_ACLS_RESPONSE = {DELETE_ACLS_RESPONSE_V0};
 
     /* an array of all requests and responses with all schema versions; a null value in the inner array means that the
      * particular version is not supported */
@@ -1588,6 +1745,11 @@ public class Protocol {
         REQUESTS[ApiKeys.END_TXN.id] = END_TXN_REQUEST;
         REQUESTS[ApiKeys.WRITE_TXN_MARKERS.id] = WRITE_TXN_REQUEST;
         REQUESTS[ApiKeys.TXN_OFFSET_COMMIT.id] = TXN_OFFSET_COMMIT_REQUEST;
+        REQUESTS[ApiKeys.DESCRIBE_ACLS.id] = DESCRIBE_ACLS_REQUEST;
+        REQUESTS[ApiKeys.CREATE_ACLS.id] = CREATE_ACLS_REQUEST;
+        REQUESTS[ApiKeys.DELETE_ACLS.id] = DELETE_ACLS_REQUEST;
+        REQUESTS[ApiKeys.DESCRIBE_CONFIGS.id] = DESCRIBE_CONFIGS_REQUEST;
+        REQUESTS[ApiKeys.ALTER_CONFIGS.id] = ALTER_CONFIGS_REQUEST;
 
         RESPONSES[ApiKeys.PRODUCE.id] = PRODUCE_RESPONSE;
         RESPONSES[ApiKeys.FETCH.id] = FETCH_RESPONSE;
@@ -1618,6 +1780,11 @@ public class Protocol {
         RESPONSES[ApiKeys.END_TXN.id] = END_TXN_RESPONSE;
         RESPONSES[ApiKeys.WRITE_TXN_MARKERS.id] = WRITE_TXN_RESPONSE;
         RESPONSES[ApiKeys.TXN_OFFSET_COMMIT.id] = TXN_OFFSET_COMMIT_RESPONSE;
+        RESPONSES[ApiKeys.DESCRIBE_ACLS.id] = DESCRIBE_ACLS_RESPONSE;
+        RESPONSES[ApiKeys.CREATE_ACLS.id] = CREATE_ACLS_RESPONSE;
+        RESPONSES[ApiKeys.DELETE_ACLS.id] = DELETE_ACLS_RESPONSE;
+        RESPONSES[ApiKeys.DESCRIBE_CONFIGS.id] = DESCRIBE_CONFIGS_RESPONSE;
+        RESPONSES[ApiKeys.ALTER_CONFIGS.id] = ALTER_CONFIGS_RESPONSE;
 
         /* set the minimum and maximum version of each api */
         for (ApiKeys api : ApiKeys.values()) {

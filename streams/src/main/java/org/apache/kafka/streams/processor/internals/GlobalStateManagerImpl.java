@@ -229,8 +229,8 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
 
     @Override
     public void checkpoint(final Map<TopicPartition, Long> offsets) {
-        if (!offsets.isEmpty()) {
-            checkpointableOffsets.putAll(offsets);
+        checkpointableOffsets.putAll(offsets);
+        if (!checkpointableOffsets.isEmpty()) {
             try {
                 checkpoint.write(checkpointableOffsets);
             } catch (IOException e) {

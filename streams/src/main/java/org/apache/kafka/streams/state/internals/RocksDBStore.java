@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
@@ -23,7 +24,6 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
-import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
@@ -71,7 +71,6 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
     private static final int TTL_NOT_USED = -1;
 
-    // TODO: these values should be configurable
     private static final CompressionType COMPRESSION_TYPE = CompressionType.NO_COMPRESSION;
     private static final CompactionStyle COMPACTION_STYLE = CompactionStyle.UNIVERSAL;
     private static final long WRITE_BUFFER_SIZE = 16 * 1024 * 1024L;
@@ -96,6 +95,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     private Options options;
     private WriteOptions wOptions;
     private FlushOptions fOptions;
+    private boolean eosEnabled;
 
     protected volatile boolean open = false;
 
@@ -142,7 +142,12 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         fOptions.setWaitForFlush(true);
 
         final Map<String, Object> configs = context.appConfigs();
-        final Class<RocksDBConfigSetter> configSetterClass = (Class<RocksDBConfigSetter>) configs.get(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG);
+        final Object configSetterValue = configs.get(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG);
+        final Class<RocksDBConfigSetter> configSetterClass = (Class<RocksDBConfigSetter>) ConfigDef.parseType(
+                StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG,
+                configSetterValue,
+                ConfigDef.Type.CLASS);
+
         if (configSetterClass != null) {
             final RocksDBConfigSetter configSetter = Utils.newInstance(configSetterClass);
             configSetter.setConfig(name, options, configs);
@@ -158,7 +163,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         try {
             this.db = openDB(this.dbDir, this.options, TTL_SECONDS);
         } catch (IOException e) {
-            throw new StreamsException(e);
+            throw new ProcessorStateException(e);
         }
     }
 
@@ -174,7 +179,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
                 putInternal(key, value);
             }
         });
-
+        eosEnabled = checkForEos(context.appConfigs());
         open = true;
     }
 
@@ -299,6 +304,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     @Override
     public synchronized KeyValueIterator<K, V> range(K from, K to) {
         validateStoreOpen();
+
         // query rocksdb
         final RocksDBRangeIterator rocksDBRangeIterator = new RocksDBRangeIterator(name, db.newIterator(), serdes, from, to);
         openIterators.add(rocksDBRangeIterator);
@@ -350,12 +356,12 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
     @Override
     public synchronized void flush() {
-        if (db == null) {
+        if (db == null || eosEnabled) {
             return;
         }
-        // flush RocksDB
         flushInternal();
     }
+
     /**
      * @throws ProcessorStateException if flushing failed because of any internal store exceptions
      */
@@ -365,6 +371,10 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         } catch (RocksDBException e) {
             throw new ProcessorStateException("Error while executing flush from store " + this.name, e);
         }
+    }
+
+    private boolean checkForEos(Map<String, Object> configs) {
+        return StreamsConfig.EXACTLY_ONCE.equals(configs.get(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
     }
 
     @Override
@@ -471,6 +481,9 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
             super(storeName, iter, serdes);
             iter.seek(serdes.rawKey(from));
             this.rawToKey = serdes.rawKey(to);
+            if (this.rawToKey == null) {
+                throw new NullPointerException("RocksDBRangeIterator: RawToKey is null for key " + to);
+            }
         }
 
         @Override

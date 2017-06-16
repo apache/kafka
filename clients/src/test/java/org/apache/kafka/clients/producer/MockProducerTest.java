@@ -171,6 +171,28 @@ public class MockProducerTest {
         assertFalse(producer.transactionAborted());
     }
 
+    @Test
+    public void shouldCountCommittedTransaction() {
+        producer.initTransactions();
+        producer.beginTransaction();
+
+        assertThat(producer.commitCount(), equalTo(0L));
+        producer.commitTransaction();
+        assertThat(producer.commitCount(), equalTo(1L));
+    }
+
+    @Test
+    public void shouldNotCountAbortedTransaction() {
+        producer.initTransactions();
+
+        producer.beginTransaction();
+        producer.abortTransaction();
+
+        producer.beginTransaction();
+        producer.commitTransaction();
+        assertThat(producer.commitCount(), equalTo(1L));
+    }
+
     @Test(expected = IllegalStateException.class)
     public void shouldThrowOnAbortIfTransactionsNotInitialized() {
         producer.abortTransaction();
@@ -226,6 +248,16 @@ public class MockProducerTest {
         producer.fenceProducer();
         try {
             producer.send(null);
+            fail("Should have thrown as producer is fenced off");
+        } catch (ProducerFencedException e) { }
+    }
+
+    @Test
+    public void shouldThrowOnFlushIfProducerGotFenced() {
+        producer.initTransactions();
+        producer.fenceProducer();
+        try {
+            producer.flush();
             fail("Should have thrown as producer is fenced off");
         } catch (ProducerFencedException e) { }
     }
@@ -374,6 +406,61 @@ public class MockProducerTest {
 
         producer.commitTransaction();
         assertThat(producer.consumerGroupOffsetsHistory(), equalTo(Collections.singletonList(expectedResult)));
+    }
+
+    @Test
+    public void shouldThrowOnNullConsumerGroupIdWhenSendOffsetsToTransaction() {
+        producer.initTransactions();
+        producer.beginTransaction();
+
+        try {
+            producer.sendOffsetsToTransaction(Collections.<TopicPartition, OffsetAndMetadata>emptyMap(), null);
+            fail("Should have thrown NullPointerException");
+        } catch (NullPointerException e) { }
+    }
+
+    @Test
+    public void shouldIgnoreEmptyOffsetsWhenSendOffsetsToTransaction() {
+        producer.initTransactions();
+        producer.beginTransaction();
+        producer.sendOffsetsToTransaction(Collections.<TopicPartition, OffsetAndMetadata>emptyMap(), "groupId");
+        assertFalse(producer.sentOffsets());
+    }
+
+    @Test
+    public void shouldAddOffsetsWhenSendOffsetsToTransaction() {
+        producer.initTransactions();
+        producer.beginTransaction();
+
+        assertFalse(producer.sentOffsets());
+
+        Map<TopicPartition, OffsetAndMetadata> groupCommit = new HashMap<TopicPartition, OffsetAndMetadata>() {
+            {
+                put(new TopicPartition(topic, 0), new OffsetAndMetadata(42L, null));
+            }
+        };
+        producer.sendOffsetsToTransaction(groupCommit, "groupId");
+        assertTrue(producer.sentOffsets());
+    }
+
+    @Test
+    public void shouldResetSentOffsetsFlagOnlyWhenBeginningNewTransaction() {
+        producer.initTransactions();
+        producer.beginTransaction();
+
+        assertFalse(producer.sentOffsets());
+
+        Map<TopicPartition, OffsetAndMetadata> groupCommit = new HashMap<TopicPartition, OffsetAndMetadata>() {
+            {
+                put(new TopicPartition(topic, 0), new OffsetAndMetadata(42L, null));
+            }
+        };
+        producer.sendOffsetsToTransaction(groupCommit, "groupId");
+        producer.commitTransaction(); // commit should not reset "sentOffsets" flag
+        assertTrue(producer.sentOffsets());
+
+        producer.beginTransaction();
+        assertFalse(producer.sentOffsets());
     }
 
     @Test
@@ -526,6 +613,41 @@ public class MockProducerTest {
             producer.fenceProducer();
             fail("Should have thrown as producer is already closed");
         } catch (IllegalStateException e) { }
+    }
+
+    @Test
+    public void shouldThrowOnFlushProducerIfProducerIsClosed() {
+        producer.close();
+        try {
+            producer.flush();
+            fail("Should have thrown as producer is already closed");
+        } catch (IllegalStateException e) { }
+    }
+
+    @Test
+    public void shouldBeFlushedIfNoBufferedRecords() {
+        assertTrue(producer.flushed());
+    }
+
+    @Test
+    public void shouldBeFlushedWithAutoCompleteIfBufferedRecords() {
+        producer.send(record1);
+        assertTrue(producer.flushed());
+    }
+
+    @Test
+    public void shouldNotBeFlushedWithNoAutoCompleteIfBufferedRecords() {
+        MockProducer<byte[], byte[]> producer = new MockProducer<>(false, new MockSerializer(), new MockSerializer());
+        producer.send(record1);
+        assertFalse(producer.flushed());
+    }
+
+    @Test
+    public void shouldNotBeFlushedAfterFlush() {
+        MockProducer<byte[], byte[]> producer = new MockProducer<>(false, new MockSerializer(), new MockSerializer());
+        producer.send(record1);
+        producer.flush();
+        assertTrue(producer.flushed());
     }
 
     private boolean isError(Future<?> future) {

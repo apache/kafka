@@ -21,9 +21,11 @@ import joptsimple.OptionParser
 import org.apache.kafka.common.security._
 import kafka.utils.{CommandLineUtils, Exit, Logging, ZKGroupTopicDirs, ZkUtils}
 
+@deprecated("This class has been deprecated and will be removed in a future release.", "0.11.0.0")
 object VerifyConsumerRebalance extends Logging {
   def main(args: Array[String]) {
-    val parser = new OptionParser()
+    val parser = new OptionParser(false)
+    warn("WARNING: VerifyConsumerRebalance is deprecated and will be dropped in a future release following 0.11.0.0.")
 
     val zkConnectOpt = parser.accepts("zookeeper.connect", "ZooKeeper connect string.").
       withRequiredArg().defaultsTo("localhost:2181").ofType(classOf[String])
