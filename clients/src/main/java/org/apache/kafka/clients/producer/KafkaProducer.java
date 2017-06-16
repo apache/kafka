@@ -155,7 +155,8 @@ import static org.apache.kafka.common.serialization.ExtendedSerializer.Wrapper.e
  * configuration property. If the <code>transactional.id</code> is set, idempotence is automatically enabled along with
  * the producer configs which idempotence depends on. Further, topics which are included in transactions should be configured
  * for durability. In particular, the <code>replication.factor</code> should be at least <code>3</code>, and the
- * <code>min.insync.replicas</code> for these topics should be set to 2.
+ * <code>min.insync.replicas</code> for these topics should be set to 2. Finally, in order for transactional guarantees
+ * to be realized from end-to-end, the consumers must be configured to read only committed messages as well.
  * </p>
  * <p>All the new transactional APIs are blocking and will throw exceptions on failure. The example
  * below illustrates how the new APIs are meant to be used. It is similar to the example above, except that all
