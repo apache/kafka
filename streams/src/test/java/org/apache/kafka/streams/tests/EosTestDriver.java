@@ -434,7 +434,7 @@ public class EosTestDriver extends SmokeTestUtil {
                     final String receivedKey = stringDeserializer.deserialize(receivedRecord.topic(), receivedRecord.key());
                     final int receivedValue = integerDeserializer.deserialize(receivedRecord.topic(), receivedRecord.value());
                     final String key = stringDeserializer.deserialize(input.topic(), input.key());
-                    final Integer value = integerDeserializer.deserialize(input.topic(), input.value());
+                    final int value = integerDeserializer.deserialize(input.topic(), input.value());
 
 
                     Integer max = currentMinPerKey.get(key);
@@ -444,7 +444,7 @@ public class EosTestDriver extends SmokeTestUtil {
                     max = Math.max(max, value);
                     currentMinPerKey.put(key, max);
 
-                    if (!receivedKey.equals(key) || receivedValue != max) {
+                    if (!receivedKey.equals(key) || receivedValue != max.intValue()) {
                         throw new RuntimeException("Result verification failed for " + receivedRecord + " expected <" + key + "," + value + "> but was <" + receivedKey + "," + receivedValue + ">");
                     }
                 }
@@ -474,7 +474,7 @@ public class EosTestDriver extends SmokeTestUtil {
                     final String receivedKey = stringDeserializer.deserialize(receivedRecord.topic(), receivedRecord.key());
                     final long receivedValue = longDeserializer.deserialize(receivedRecord.topic(), receivedRecord.value());
                     final String key = stringDeserializer.deserialize(input.topic(), input.key());
-                    final Integer value = integerDeserializer.deserialize(input.topic(), input.value());
+                    final int value = integerDeserializer.deserialize(input.topic(), input.value());
 
                     Long cnt = currentSumPerKey.get(key);
                     if (cnt == null) {
@@ -482,7 +482,7 @@ public class EosTestDriver extends SmokeTestUtil {
                     }
                     currentSumPerKey.put(key, ++cnt);
 
-                    if (!receivedKey.equals(key) || receivedValue != cnt) {
+                    if (!receivedKey.equals(key) || receivedValue != cnt.longValue()) {
                         throw new RuntimeException("Result verification failed for " + receivedRecord + " expected <" + key + "," + value + "> but was <" + receivedKey + "," + receivedValue + ">");
                     }
                 }
