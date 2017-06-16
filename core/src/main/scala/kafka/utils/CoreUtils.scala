@@ -18,21 +18,19 @@
 package kafka.utils
 
 import java.io._
+import java.lang.management._
 import java.nio._
 import java.nio.channels._
 import java.util.concurrent.locks.{Lock, ReadWriteLock}
-import java.lang.management._
-import java.util.{Properties, UUID}
+import java.util.{Base64, Properties, UUID}
 import javax.management._
-import javax.xml.bind.DatatypeConverter
 
-import org.apache.kafka.common.protocol.SecurityProtocol
-
-import scala.collection._
-import scala.collection.mutable
 import kafka.cluster.EndPoint
 import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.kafka.common.utils.Utils
+
+import scala.collection.{mutable, _}
 
 /**
  * General helper functions!
@@ -291,9 +289,7 @@ object CoreUtils extends Logging {
   }
 
   def urlSafeBase64EncodeNoPadding(data: Array[Byte]): String = {
-    val base64EncodedUUID = DatatypeConverter.printBase64Binary(data)
-    //Convert to URL safe variant by replacing + and / with - and _ respectively.
-    val urlSafeBase64EncodedUUID = base64EncodedUUID.replace("+", "-").replace("/", "_")
+    val urlSafeBase64EncodedUUID = Base64.getUrlEncoder.encodeToString(data)
     // Remove the "==" padding at the end.
     urlSafeBase64EncodedUUID.substring(0, urlSafeBase64EncodedUUID.length - 2)
   }
