@@ -17,6 +17,7 @@
 package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Test;
@@ -150,9 +151,28 @@ public class MemoryRecordsTest {
         MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), magic, compression,
                 TimestampType.CREATE_TIME, 0L);
         builder.append(0L, "a".getBytes(), "1".getBytes());
-        assertTrue(builder.hasRoomFor(1L, "b".getBytes(), "2".getBytes()));
+        assertTrue(builder.hasRoomFor(1L, "b".getBytes(), "2".getBytes(), Record.EMPTY_HEADERS));
         builder.close();
-        assertFalse(builder.hasRoomFor(1L, "b".getBytes(), "2".getBytes()));
+        assertFalse(builder.hasRoomFor(1L, "b".getBytes(), "2".getBytes(), Record.EMPTY_HEADERS));
+    }
+
+    @Test
+    public void testHasRoomForMethodWithHeaders() {
+        if (magic >= RecordBatch.MAGIC_VALUE_V2) {
+            MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(100), magic, compression,
+                    TimestampType.CREATE_TIME, 0L);
+            RecordHeaders headers = new RecordHeaders();
+            headers.add("hello", "world.world".getBytes());
+            headers.add("hello", "world.world".getBytes());
+            headers.add("hello", "world.world".getBytes());
+            headers.add("hello", "world.world".getBytes());
+            headers.add("hello", "world.world".getBytes());
+            builder.append(logAppendTime, "key".getBytes(), "value".getBytes());
+            // Make sure that hasRoomFor accounts for header sizes by letting a record without headers pass, but stopping
+            // a record with a large number of headers.
+            assertTrue(builder.hasRoomFor(logAppendTime, "key".getBytes(), "value".getBytes(), Record.EMPTY_HEADERS));
+            assertFalse(builder.hasRoomFor(logAppendTime, "key".getBytes(), "value".getBytes(), headers.toArray()));
+        }
     }
 
     /**

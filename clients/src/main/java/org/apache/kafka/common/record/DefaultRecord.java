@@ -31,7 +31,6 @@ import java.util.Arrays;
 import java.util.zip.Checksum;
 
 import static org.apache.kafka.common.record.RecordBatch.MAGIC_VALUE_V2;
-import static org.apache.kafka.common.utils.Utils.wrapNullable;
 
 /**
  * This class implements the inner record format for magic 2 and above. The schema is as follows:
@@ -371,13 +370,6 @@ public class DefaultRecord implements Record {
         }
 
         return new DefaultRecord(sizeInBytes, attributes, offset, timestamp, sequence, key, value, headers);
-    }
-
-    public static int sizeInBytes(int offsetDelta,
-                                  long timestampDelta,
-                                  byte[] key,
-                                  byte[] value) {
-        return sizeInBytes(offsetDelta, timestampDelta, wrapNullable(key), wrapNullable(value), Record.EMPTY_HEADERS);
     }
 
     public static int sizeInBytes(int offsetDelta,

@@ -100,7 +100,7 @@ public final class ProducerBatch {
      * @return The RecordSend corresponding to this record or null if there isn't sufficient room.
      */
     public FutureRecordMetadata tryAppend(long timestamp, byte[] key, byte[] value, Header[] headers, Callback callback, long now) {
-        if (!recordsBuilder.hasRoomFor(timestamp, key, value)) {
+        if (!recordsBuilder.hasRoomFor(timestamp, key, value, headers)) {
             return null;
         } else {
             Long checksum = this.recordsBuilder.append(timestamp, key, value, headers);
@@ -123,7 +123,7 @@ public final class ProducerBatch {
      * @return true if the record has been successfully appended, false otherwise.
      */
     private boolean tryAppendForSplit(long timestamp, ByteBuffer key, ByteBuffer value, Header[] headers, Thunk thunk) {
-        if (!recordsBuilder.hasRoomFor(timestamp, key, value)) {
+        if (!recordsBuilder.hasRoomFor(timestamp, key, value, headers)) {
             return false;
         } else {
             // No need to get the CRC.
