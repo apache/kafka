@@ -242,7 +242,6 @@ public class StreamThread extends Thread {
         void retryWithBackoff(final Map<TaskId, Set<TopicPartition>> tasksToBeCreated, final long start) {
             long backoffTimeMs = 50L;
             final Set<TaskId> retryingTasks = new HashSet<>();
-            long nextLoggingTime = System.currentTimeMillis() + 10000;
             while (true) {
                 final Iterator<Map.Entry<TaskId, Set<TopicPartition>>> it = tasksToBeCreated.entrySet().iterator();
                 while (it.hasNext()) {
@@ -255,7 +254,7 @@ public class StreamThread extends Thread {
                         it.remove();
                         backoffTimeMs = 50L;
                         if (retryingTasks.remove(taskId) && log.isWarnEnabled()) {
-                            log.info("{} Created task {}", logPrefix, taskId);
+                            log.trace("{} Created task {}", logPrefix, taskId);
                         }
                     } catch (final LockException e) {
                         // ignore and retry
@@ -276,11 +275,6 @@ public class StreamThread extends Thread {
                     backoffTimeMs = Math.min(backoffTimeMs, MAX_BACKOFF_TIME_MS);
                 } catch (final InterruptedException e) {
                     // ignore
-                }
-
-                if (System.currentTimeMillis() > nextLoggingTime) {
-                    nextLoggingTime += 10000;
-                    log.warn("{} Still retrying to create tasks: {}", logPrefix, retryingTasks);
                 }
             }
         }
@@ -493,7 +487,7 @@ public class StreamThread extends Thread {
         suspendedTasks = new HashMap<>();
         suspendedStandbyTasks = new HashMap<>();
 
-        // standby ktables
+        // standby KTables
         standbyRecords = new HashMap<>();
 
         stateDirectory = new StateDirectory(applicationId, threadClientId, config.getString(StreamsConfig.STATE_DIR_CONFIG), time);
@@ -565,7 +559,7 @@ public class StreamThread extends Thread {
             }
 
             maybeCommit(timerStartedMs);
-            maybeUpdateStandbyTasks();
+            maybeUpdateStandbyTasks(timerStartedMs);
             maybeClean(timerStartedMs);
         }
         log.info("{} Shutting down at user request", logPrefix);
@@ -710,7 +704,13 @@ public class StreamThread extends Thread {
                 maybePunctuate(task);
                 if (task.commitNeeded()) {
                     name = "commit";
+
+                    long beforeCommitMs = time.milliseconds();
+
                     commitOne(task);
+
+                    log.info("{} Committed active task {} in {}ms",
+                            logPrefix, task.id(), timerStartedMs - beforeCommitMs);
                 }
             }
         });
@@ -771,11 +771,14 @@ public class StreamThread extends Thread {
     protected void maybeCommit(final long now) {
 
         if (commitTimeMs >= 0 && lastCommitMs + commitTimeMs < now) {
-
-            log.info("{} Committing all active tasks {} and standby tasks {} because the commit interval {}ms has elapsed by {}ms",
-                logPrefix, activeTasks.keySet(), standbyTasks.keySet(), commitTimeMs, now - lastCommitMs);
+            log.debug("{} Committing all active tasks {} and standby tasks {} since {}ms has elapsed (commit interval is {}ms)",
+                    logPrefix, activeTasks.keySet(), standbyTasks.keySet(), now - lastCommitMs, commitTimeMs);
 
             commitAll();
+
+            log.info("{} Committed all active tasks {} and standby tasks {} in {}ms",
+                    logPrefix, activeTasks.keySet(), standbyTasks.keySet(), timerStartedMs - now);
+
             lastCommitMs = now;
 
             processStandbyRecords = true;
@@ -810,7 +813,6 @@ public class StreamThread extends Thread {
      * Commit the state of a task
      */
     private void commitOne(final AbstractTask task) {
-        log.info("{} Committing task {} {}", logPrefix, task.getClass().getSimpleName(), task.id());
         try {
             task.commit();
         } catch (final CommitFailedException e) {
@@ -825,7 +827,7 @@ public class StreamThread extends Thread {
         streamsMetrics.commitTimeSensor.record(computeLatency(), timerStartedMs);
     }
 
-    private void maybeUpdateStandbyTasks() {
+    private void maybeUpdateStandbyTasks(final long now) {
         if (!standbyTasks.isEmpty()) {
             if (processStandbyRecords) {
                 if (!standbyRecords.isEmpty()) {
@@ -846,6 +848,8 @@ public class StreamThread extends Thread {
                     }
 
                     standbyRecords = remainingStandbyRecords;
+
+                    log.info("{} Updated standby tasks {} in {}ms", logPrefix, standbyTasks.keySet(), time.milliseconds() - now);
                 }
                 processStandbyRecords = false;
             }
@@ -1076,8 +1080,7 @@ public class StreamThread extends Thread {
 
     @SuppressWarnings("ThrowableNotThrown")
     private void shutdownTasksAndState(final boolean cleanRun) {
-        log.debug("{} shutdownTasksAndState: shutting down" +
-                "active tasks {}, standby tasks {}, suspended tasks {}, and suspended standby tasks {}",
+        log.debug("{} Shutting down all active tasks {}, standby tasks {}, suspended tasks {}, and suspended standby tasks {}",
             logPrefix, activeTasks.keySet(), standbyTasks.keySet(),
             suspendedTasks.keySet(), suspendedStandbyTasks.keySet());
 
@@ -1102,7 +1105,7 @@ public class StreamThread extends Thread {
      * soon the tasks will be assigned again
      */
     private void suspendTasksAndState()  {
-        log.debug("{} suspendTasksAndState: suspending all active tasks {} and standby tasks {}",
+        log.debug("{} Suspending all active tasks {} and standby tasks {}",
             logPrefix, activeTasks.keySet(), standbyTasks.keySet());
 
         final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
@@ -1226,7 +1229,7 @@ public class StreamThread extends Thread {
     }
 
     protected StreamTask createStreamTask(final TaskId id, final Collection<TopicPartition> partitions) {
-        log.info("{} Creating active task {} with assigned partitions [{}]", logPrefix, id, partitions);
+        log.trace("{} Creating active task {} with assigned partitions [{}]", logPrefix, id, partitions);
 
         streamsMetrics.taskCreatedSensor.record();
 
@@ -1245,7 +1248,7 @@ public class StreamThread extends Thread {
                 time,
                 createProducer(id));
         } finally {
-            log.info("{} Created active task {} with assigned partitions {}", logPrefix, id, partitions);
+            log.debug("{} Created active task {} with assigned partitions {}", logPrefix, id, partitions);
         }
     }
 
@@ -1277,7 +1280,7 @@ public class StreamThread extends Thread {
         final Map<TaskId, Set<TopicPartition>> newTasks = new HashMap<>();
 
         // collect newly assigned tasks and reopen re-assigned tasks
-        log.info("{} Adding assigned tasks as active {}", logPrefix, partitionAssignor.activeTasks());
+        log.debug("{} Adding assigned tasks as active: {}", logPrefix, partitionAssignor.activeTasks());
         for (final Map.Entry<TaskId, Set<TopicPartition>> entry : partitionAssignor.activeTasks().entrySet()) {
             final TaskId taskId = entry.getKey();
             final Set<TopicPartition> partitions = entry.getValue();
@@ -1314,7 +1317,7 @@ public class StreamThread extends Thread {
     }
 
     private StandbyTask createStandbyTask(final TaskId id, final Collection<TopicPartition> partitions) {
-        log.debug("{} Creating new standby task {} with assigned partitions {}", logPrefix, id, partitions);
+        log.trace("{} Creating new standby task {} with assigned partitions {}", logPrefix, id, partitions);
 
         streamsMetrics.taskCreatedSensor.record();
 
@@ -1324,10 +1327,10 @@ public class StreamThread extends Thread {
             try {
                 return new StandbyTask(id, applicationId, partitions, topology, consumer, storeChangelogReader, config, streamsMetrics, stateDirectory);
             } finally {
-                log.info("{} Created standby task {} with assigned partitions {}", logPrefix, id, partitions);
+                log.debug("{} Created standby task {} with assigned partitions {}", logPrefix, id, partitions);
             }
         } else {
-            log.info("{} Skipped standby task {} with assigned partitions {} since it does not have any state stores to materialize", logPrefix, id, partitions);
+            log.debug("{} Skipped standby task {} with assigned partitions {} since it does not have any state stores to materialize", logPrefix, id, partitions);
 
             return null;
         }
@@ -1342,7 +1345,7 @@ public class StreamThread extends Thread {
 
         final Map<TaskId, Set<TopicPartition>> newStandbyTasks = new HashMap<>();
 
-        log.info("{} Adding assigned standby tasks {}", logPrefix, partitionAssignor.activeTasks());
+        log.debug("{} Adding assigned standby tasks {}", logPrefix, partitionAssignor.activeTasks());
         // collect newly assigned standby tasks and reopen re-assigned standby tasks
         for (final Map.Entry<TaskId, Set<TopicPartition>> entry : partitionAssignor.standbyTasks().entrySet()) {
             final TaskId taskId = entry.getKey();
@@ -1397,14 +1400,14 @@ public class StreamThread extends Thread {
     }
 
     private void updateSuspendedTasks() {
-        log.info("{} Updating suspended tasks to contain active tasks {}", logPrefix, activeTasks.keySet());
+        log.debug("{} Updating suspended tasks to contain active tasks {}", logPrefix, activeTasks.keySet());
         suspendedTasks.clear();
         suspendedTasks.putAll(activeTasks);
         suspendedStandbyTasks.putAll(standbyTasks);
     }
 
     private void removeStreamTasks() {
-        log.info("{} Removing all active tasks {}", logPrefix, activeTasks.keySet());
+        log.debug("{} Removing all active tasks {}", logPrefix, activeTasks.keySet());
 
         try {
             prevActiveTasks.clear();
@@ -1418,7 +1421,7 @@ public class StreamThread extends Thread {
     }
 
     private void removeStandbyTasks() {
-        log.info("{} Removing all standby tasks {}", logPrefix, standbyTasks.keySet());
+        log.debug("{} Removing all standby tasks {}", logPrefix, standbyTasks.keySet());
 
         standbyTasks.clear();
         standbyTasksByPartition.clear();
