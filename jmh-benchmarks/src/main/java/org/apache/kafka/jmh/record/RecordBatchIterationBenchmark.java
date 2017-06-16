@@ -98,7 +98,7 @@ public class RecordBatchIterationBenchmark {
     private ByteBuffer createBatch(int batchSize) {
         byte[] value = new byte[messageSize];
         final ByteBuffer buf = ByteBuffer.allocate(
-            AbstractRecords.sizeInBytesUpperBound(messageVersion, new byte[0], value, new Header[0]) * batchSize
+            AbstractRecords.sizeInBytesUpperBoundEstimate(messageVersion, new byte[0], value, new Header[0]) * batchSize
         );
 
         final MemoryRecordsBuilder builder =

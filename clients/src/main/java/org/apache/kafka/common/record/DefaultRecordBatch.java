@@ -457,9 +457,11 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
     }
 
     /**
-     * Get an upper bound on the size of a batch with only a single record using a given key and value.
+     * Get an upper bound on the size of a batch with only a single record using a given key and value. This
+     * is only an estimate because it does not take into account additional overhead from the compression
+     * algorithm used.
      */
-    static int batchSizeUpperBound(ByteBuffer key, ByteBuffer value, Header[] headers) {
+    static int estimateBatchSizeUpperBound(ByteBuffer key, ByteBuffer value, Header[] headers) {
         return RECORD_BATCH_OVERHEAD + DefaultRecord.recordSizeUpperBound(key, value, headers);
     }
 

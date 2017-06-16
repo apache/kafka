@@ -104,7 +104,8 @@ public final class ProducerBatch {
             return null;
         } else {
             Long checksum = this.recordsBuilder.append(timestamp, key, value, headers);
-            this.maxRecordSize = Math.max(this.maxRecordSize, AbstractRecords.sizeInBytesUpperBound(magic(), key, value, headers));
+            this.maxRecordSize = Math.max(this.maxRecordSize, AbstractRecords.estimateSizeInBytesUpperBound(magic(),
+                    recordsBuilder.compressionType(), key, value, headers));
             this.lastAppendTime = now;
             FutureRecordMetadata future = new FutureRecordMetadata(this.produceFuture, this.recordCount,
                                                                    timestamp, checksum,
@@ -128,8 +129,8 @@ public final class ProducerBatch {
         } else {
             // No need to get the CRC.
             this.recordsBuilder.append(timestamp, key, value);
-            this.maxRecordSize = Math.max(this.maxRecordSize,
-                                          AbstractRecords.sizeInBytesUpperBound(magic(), key, value, headers));
+            this.maxRecordSize = Math.max(this.maxRecordSize, AbstractRecords.estimateSizeInBytesUpperBound(magic(),
+                    recordsBuilder.compressionType(), key, value, headers));
             FutureRecordMetadata future = new FutureRecordMetadata(this.produceFuture, this.recordCount,
                                                                    timestamp, thunk.future.checksumOrNull(),
                                                                    key == null ? -1 : key.remaining(),
@@ -252,8 +253,8 @@ public final class ProducerBatch {
     }
 
     private ProducerBatch createBatchOffAccumulatorForRecord(Record record, int batchSize) {
-        int initialSize = Math.max(AbstractRecords.sizeInBytesUpperBound(magic(),
-                record.key(), record.value(), record.headers()), batchSize);
+        int initialSize = Math.max(AbstractRecords.estimateSizeInBytesUpperBound(magic(),
+                recordsBuilder.compressionType(), record.key(), record.value(), record.headers()), batchSize);
         ByteBuffer buffer = ByteBuffer.allocate(initialSize);
 
         // Note that we intentionally do not set producer state (producerId, epoch, sequence, and isTransactional)
