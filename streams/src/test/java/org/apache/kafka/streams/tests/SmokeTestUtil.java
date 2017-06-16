@@ -55,7 +55,9 @@ public class SmokeTestUtil {
 
                     @Override
                     public void process(final Object key, final Object value) {
-                        if (printOffset) { System.out.println(">>> " + context.offset()); }
+                        if (printOffset) {
+                            System.out.println(">>> " + context.offset());
+                        }
                         numRecordsProcessed++;
                         if (numRecordsProcessed % 100 == 0) {
                             System.out.println("processed " + numRecordsProcessed + " records from topic=" + topic);
@@ -99,7 +101,7 @@ public class SmokeTestUtil {
             };
         }
 
-         Aggregator<String, Long, Long> adder() {
+        Aggregator<String, Long, Long> adder() {
             return new Aggregator<String, Long, Long>() {
                 @Override
                 public Long apply(final String aggKey, final Long value, final Long aggregate) {
