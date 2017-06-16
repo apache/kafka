@@ -35,7 +35,7 @@ class ProducerIdManagerTest {
   def testGetPID() {
     var zkVersion: Int = -1
     var data: String = null
-    EasyMock.expect(zkUtils.readDataAndVersionMaybeNull(EasyMock.anyString()))
+    EasyMock.expect(zkUtils.readDataAndVersion(EasyMock.anyString()))
       .andAnswer(new IAnswer[(Option[String], Int)] {
         override def answer(): (Option[String], Int) = {
           if (zkVersion == -1) {
@@ -88,7 +88,7 @@ class ProducerIdManagerTest {
 
   @Test(expected = classOf[KafkaException])
   def testExceedPIDLimit() {
-    EasyMock.expect(zkUtils.readDataAndVersionMaybeNull(EasyMock.anyString()))
+    EasyMock.expect(zkUtils.readDataAndVersion(EasyMock.anyString()))
       .andAnswer(new IAnswer[(Option[String], Int)] {
         override def answer(): (Option[String], Int) = {
           (Some(ProducerIdManager.generateProducerIdBlockJson(ProducerIdBlock(0,

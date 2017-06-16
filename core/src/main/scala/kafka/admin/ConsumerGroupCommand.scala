@@ -269,7 +269,7 @@ object ConsumerGroupCommand extends Logging {
 
       // mapping of topic partition -> consumer id
       val consumerIdByTopicPartition = topicPartitions.map { topicPartition =>
-        val owner = zkUtils.readDataMaybeNull(new ZKGroupTopicDirs(group, topicPartition.topic).consumerOwnerDir + "/" + topicPartition.partition)._1
+        val owner = zkUtils.readData(new ZKGroupTopicDirs(group, topicPartition.topic).consumerOwnerDir + "/" + topicPartition.partition)
         topicPartition -> owner.map(o => o.substring(0, o.lastIndexOf('-'))).getOrElse(MISSING_COLUMN_VALUE)
       }.toMap
 
@@ -339,12 +339,9 @@ object ConsumerGroupCommand extends Logging {
             val topicDirs = new ZKGroupTopicDirs(group, topicAndPartition.topic)
             // this group may not have migrated off zookeeper for offsets storage (we don't expose the dual-commit option in this tool
             // (meaning the lag may be off until all the consumers in the group have the same setting for offsets storage)
-            try {
-              val offset = zkUtils.readData(topicDirs.consumerOffsetDir + "/" + topicAndPartition.partition)._1.toLong
-              offsetMap.put(topicAndPartition, offset)
-            } catch {
-              case z: ZkNoNodeException =>
-                printError(s"Could not fetch offset from zookeeper for group '$group' partition '$topicAndPartition' due to missing offset data in zookeeper.", Some(z))
+            zkUtils.readData(topicDirs.consumerOffsetDir + "/" + topicAndPartition.partition) match {
+              case Some(offset) => offsetMap.put(topicAndPartition, offset.toLong)
+              case None => printError(s"Could not fetch offset from zookeeper for group '$group' partition '$topicAndPartition' due to missing offset data in zookeeper.")
             }
           case offsetAndMetaData if offsetAndMetaData.error == Errors.NONE =>
             offsetMap.put(topicAndPartition, offsetAndMetadata.offset)

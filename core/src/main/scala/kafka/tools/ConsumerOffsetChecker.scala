@@ -59,7 +59,7 @@ object ConsumerOffsetChecker extends Logging {
     val topicPartition = TopicAndPartition(topic, producerId)
     val offsetOpt = offsetMap.get(topicPartition)
     val groupDirs = new ZKGroupTopicDirs(group, topic)
-    val owner = zkUtils.readDataMaybeNull(groupDirs.consumerOwnerDir + "/%s".format(producerId))._1
+    val owner = zkUtils.readData(groupDirs.consumerOwnerDir + "/%s".format(producerId))
     zkUtils.getLeaderForPartition(topic, producerId) match {
       case Some(bid) =>
         val consumerOpt = consumerMap.getOrElseUpdate(bid, getConsumer(zkUtils, bid))
@@ -163,15 +163,13 @@ object ConsumerOffsetChecker extends Logging {
           val topicDirs = new ZKGroupTopicDirs(group, topicAndPartition.topic)
           // this group may not have migrated off zookeeper for offsets storage (we don't expose the dual-commit option in this tool
           // (meaning the lag may be off until all the consumers in the group have the same setting for offsets storage)
-          try {
-            val offset = zkUtils.readData(topicDirs.consumerOffsetDir + "/%d".format(topicAndPartition.partition))._1.toLong
-            offsetMap.put(topicAndPartition, offset)
-          } catch {
-            case z: ZkNoNodeException =>
+          zkUtils.readData(topicDirs.consumerOffsetDir + "/%d".format(topicAndPartition.partition)) match {
+            case Some(offset) => offsetMap.put(topicAndPartition, offset.toLong)
+            case None =>
               if(zkUtils.pathExists(topicDirs.consumerOffsetDir))
                 offsetMap.put(topicAndPartition,-1)
               else
-                throw z
+                throw new ZkNoNodeException
           }
         }
         else if (offsetAndMetadata.error == Errors.NONE)

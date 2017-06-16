@@ -49,9 +49,7 @@ object ReplicationUtils extends Logging {
 
   private def checkLeaderAndIsrZkData(zkUtils: ZkUtils, path: String, expectedLeaderAndIsrInfo: String): (Boolean, Int) = {
     try {
-      val writtenLeaderAndIsrInfo = zkUtils.readDataMaybeNull(path)
-      val writtenLeaderOpt = writtenLeaderAndIsrInfo._1
-      val writtenStat = writtenLeaderAndIsrInfo._2
+      val (writtenLeaderOpt, writtenStat) = zkUtils.readDataAndStat(path)
       val expectedLeader = parseLeaderAndIsr(expectedLeaderAndIsrInfo, path, writtenStat)
       writtenLeaderOpt.foreach { writtenData =>
         val writtenLeader = parseLeaderAndIsr(writtenData, path, writtenStat)
@@ -70,7 +68,7 @@ object ReplicationUtils extends Logging {
 
   def getLeaderIsrAndEpochForPartition(zkUtils: ZkUtils, topic: String, partition: Int): Option[LeaderIsrAndControllerEpoch] = {
     val leaderAndIsrPath = getTopicPartitionLeaderAndIsrPath(topic, partition)
-    val (leaderAndIsrOpt, stat) = zkUtils.readDataMaybeNull(leaderAndIsrPath)
+    val (leaderAndIsrOpt, stat) = zkUtils.readDataAndStat(leaderAndIsrPath)
     debug(s"Read leaderISR $leaderAndIsrOpt for $topic-$partition")
     leaderAndIsrOpt.flatMap(leaderAndIsrStr => parseLeaderAndIsr(leaderAndIsrStr, leaderAndIsrPath, stat))
   }

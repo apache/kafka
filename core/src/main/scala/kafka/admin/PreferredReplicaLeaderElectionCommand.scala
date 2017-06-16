@@ -108,10 +108,11 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
       println("Created preferred replica election path with %s".format(jsonData))
     } catch {
       case _: ZkNodeExistsException =>
-        val partitionsUndergoingPreferredReplicaElection =
-          PreferredReplicaLeaderElectionCommand.parsePreferredReplicaElectionData(zkUtils.readData(zkPath)._1)
-        throw new AdminOperationException("Preferred replica leader election currently in progress for " +
-          "%s. Aborting operation".format(partitionsUndergoingPreferredReplicaElection))
+        zkUtils.readData(zkPath).foreach { data =>
+          val partitionsUndergoingPreferredReplicaElection = PreferredReplicaLeaderElectionCommand.parsePreferredReplicaElectionData(data)
+          throw new AdminOperationException("Preferred replica leader election currently in progress for " +
+            "%s. Aborting operation".format(partitionsUndergoingPreferredReplicaElection))
+        }
       case e2: Throwable => throw new AdminOperationException(e2.toString)
     }
   }

@@ -105,7 +105,7 @@ object VerifyConsumerRebalance extends Logging {
         }
         // try reading the partition owner path for see if a valid consumer id exists there
         val partitionOwnerPath = topicDirs.consumerOwnerDir + "/" + partition
-        val partitionOwner = zkUtils.readDataMaybeNull(partitionOwnerPath)._1 match {
+        val partitionOwner = zkUtils.readData(partitionOwnerPath) match {
           case Some(m) => m
           case None => null
         }

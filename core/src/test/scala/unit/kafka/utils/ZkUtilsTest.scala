@@ -30,11 +30,11 @@ class ZkUtilsTest extends ZooKeeperTestHarness {
   def testSuccessfulConditionalDeletePath() {
     // Given an existing path
     zkUtils.createPersistentPath(path)
-    val (_, statAfterCreation) = zkUtils.readData(path)
+    val (_, statAfterCreation) = zkUtils.readDataAndStat(path)
 
     // Deletion is successful when the version number matches
     assertTrue("Deletion should be successful", zkUtils.conditionalDeletePath(path, statAfterCreation.getVersion))
-    val (optionalData, _) = zkUtils.readDataMaybeNull(path)
+    val optionalData = zkUtils.readData(path)
     assertTrue("Node should be deleted", optionalData.isEmpty)
 
     // Deletion is successful when the node does not exist too
@@ -60,12 +60,12 @@ class ZkUtilsTest extends ZooKeeperTestHarness {
   def testAbortedConditionalDeletePath() {
     // Given an existing path that gets updated
     zkUtils.createPersistentPath(path)
-    val (_, statAfterCreation) = zkUtils.readData(path)
+    val (_, statAfterCreation) = zkUtils.readDataAndStat(path)
     zkUtils.updatePersistentPath(path, "data")
 
     // Deletion is aborted when the version number does not match
     assertFalse("Deletion should be aborted", zkUtils.conditionalDeletePath(path, statAfterCreation.getVersion))
-    val (optionalData, _) = zkUtils.readDataMaybeNull(path)
+    val optionalData = zkUtils.readData(path)
     assertTrue("Node should still be there", optionalData.isDefined)
   }
 
