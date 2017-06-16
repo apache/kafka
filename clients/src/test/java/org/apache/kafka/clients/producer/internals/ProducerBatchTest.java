@@ -215,9 +215,9 @@ public class ProducerBatchTest {
         ProducerBatch batch = new ProducerBatch(new TopicPartition("topic", 1), memoryRecordsBuilder, now);
         FutureRecordMetadata result0 = batch.tryAppend(now, null, new byte[10], Record.EMPTY_HEADERS, null, now);
         assertNotNull(result0);
-        assertTrue(memoryRecordsBuilder.hasRoomFor(now, null, new byte[10]));
+        assertTrue(memoryRecordsBuilder.hasRoomFor(now, null, new byte[10], Record.EMPTY_HEADERS));
         memoryRecordsBuilder.closeForRecordAppends();
-        assertFalse(memoryRecordsBuilder.hasRoomFor(now, null, new byte[10]));
+        assertFalse(memoryRecordsBuilder.hasRoomFor(now, null, new byte[10], Record.EMPTY_HEADERS));
         assertEquals(null, batch.tryAppend(now + 1, null, new byte[10], Record.EMPTY_HEADERS, null, now + 1));
     }
 }

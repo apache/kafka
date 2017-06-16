@@ -82,7 +82,8 @@ public class RecordAccumulatorTest {
     private MockTime time = new MockTime();
     private byte[] key = "key".getBytes();
     private byte[] value = "value".getBytes();
-    private int msgSize = DefaultRecord.sizeInBytes(0, 0, key, value);
+    private int msgSize = DefaultRecord.sizeInBytes(0, 0, key.length, value.length,
+            Record.EMPTY_HEADERS);
     private Cluster cluster = new Cluster(null, Arrays.asList(node1, node2), Arrays.asList(part1, part2, part3),
             Collections.<String>emptySet(), Collections.<String>emptySet());
     private Metrics metrics = new Metrics(time);
@@ -778,7 +779,8 @@ public class RecordAccumulatorTest {
         int size = 0;
         int offsetDelta = 0;
         while (true) {
-            int recordSize = DefaultRecord.sizeInBytes(offsetDelta, 0, key, value);
+            int recordSize = DefaultRecord.sizeInBytes(offsetDelta, 0, key.length, value.length,
+                    Record.EMPTY_HEADERS);
             if (size + recordSize > batchSize)
                 return offsetDelta;
             offsetDelta += 1;
