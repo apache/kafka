@@ -26,6 +26,7 @@ import org.apache.kafka.common.utils.Utils;
 import java.io.DataInput;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.zip.Checksum;
@@ -314,41 +315,53 @@ public class DefaultRecord implements Record {
                                           long baseTimestamp,
                                           int baseSequence,
                                           Long logAppendTime) {
-        byte attributes = buffer.get();
-        long timestampDelta = ByteUtils.readVarlong(buffer);
-        long timestamp = baseTimestamp + timestampDelta;
-        if (logAppendTime != null)
-            timestamp = logAppendTime;
+        try {
+            int recordStart = buffer.position();
+            byte attributes = buffer.get();
+            long timestampDelta = ByteUtils.readVarlong(buffer);
+            long timestamp = baseTimestamp + timestampDelta;
+            if (logAppendTime != null)
+                timestamp = logAppendTime;
 
-        int offsetDelta = ByteUtils.readVarint(buffer);
-        long offset = baseOffset + offsetDelta;
-        int sequence = baseSequence >= 0 ?
-                DefaultRecordBatch.incrementSequence(baseSequence, offsetDelta) :
-                RecordBatch.NO_SEQUENCE;
+            int offsetDelta = ByteUtils.readVarint(buffer);
+            long offset = baseOffset + offsetDelta;
+            int sequence = baseSequence >= 0 ?
+                    DefaultRecordBatch.incrementSequence(baseSequence, offsetDelta) :
+                    RecordBatch.NO_SEQUENCE;
 
-        ByteBuffer key = null;
-        int keySize = ByteUtils.readVarint(buffer);
-        if (keySize >= 0) {
-            key = buffer.slice();
-            key.limit(keySize);
-            buffer.position(buffer.position() + keySize);
+            ByteBuffer key = null;
+            int keySize = ByteUtils.readVarint(buffer);
+            if (keySize >= 0) {
+                key = buffer.slice();
+                key.limit(keySize);
+                buffer.position(buffer.position() + keySize);
+            }
+
+            ByteBuffer value = null;
+            int valueSize = ByteUtils.readVarint(buffer);
+            if (valueSize >= 0) {
+                value = buffer.slice();
+                value.limit(valueSize);
+                buffer.position(buffer.position() + valueSize);
+            }
+
+            int numHeaders = ByteUtils.readVarint(buffer);
+            if (numHeaders < 0)
+                throw new InvalidRecordException("Found invalid number of record headers " + numHeaders);
+
+            if (numHeaders == 0)
+                return new DefaultRecord(sizeInBytes, attributes, offset, timestamp, sequence, key, value, Record.EMPTY_HEADERS);
+
+            Header[] headers = readHeaders(buffer, numHeaders, recordStart, sizeInBytes);
+
+            return new DefaultRecord(sizeInBytes, attributes, offset, timestamp, sequence, key, value, headers);
+        } catch (BufferUnderflowException | IllegalArgumentException e) {
+            throw new InvalidRecordException("Invalid header data or number of headers declared for the record, reason for failure was "
+                    + e.getMessage());
         }
+    }
 
-        ByteBuffer value = null;
-        int valueSize = ByteUtils.readVarint(buffer);
-        if (valueSize >= 0) {
-            value = buffer.slice();
-            value.limit(valueSize);
-            buffer.position(buffer.position() + valueSize);
-        }
-
-        int numHeaders = ByteUtils.readVarint(buffer);
-        if (numHeaders < 0)
-            throw new InvalidRecordException("Found invalid number of record headers " + numHeaders);
-
-        if (numHeaders == 0)
-            return new DefaultRecord(sizeInBytes, attributes, offset, timestamp, sequence, key, value, Record.EMPTY_HEADERS);
-
+    private static Header[] readHeaders(ByteBuffer buffer, int numHeaders, int recordStart, int sizeInBytes) {
         Header[] headers = new Header[numHeaders];
         for (int i = 0; i < numHeaders; i++) {
             int headerKeySize = ByteUtils.readVarint(buffer);
@@ -369,7 +382,10 @@ public class DefaultRecord implements Record {
             headers[i] = new RecordHeader(headerKey, headerValue);
         }
 
-        return new DefaultRecord(sizeInBytes, attributes, offset, timestamp, sequence, key, value, headers);
+        // validate whether we have read all header bytes in the current record
+        if (buffer.position() - recordStart != sizeInBytes - ByteUtils.sizeOfVarint(sizeInBytes))
+            throw new InvalidRecordException("Invalid header data or number of headers declared for the record");
+        return headers;
     }
 
     public static int sizeInBytes(int offsetDelta,
