@@ -723,6 +723,7 @@ class Log(@volatile var dir: File,
     lock synchronized {
       if (offset > logStartOffset) {
         logStartOffset = offset
+        leaderEpochCache.clearAndFlushEarliest(logStartOffset)
         producerStateManager.truncateHead(logStartOffset)
         updateFirstUnstableOffset()
       }
@@ -1067,9 +1068,7 @@ class Log(@volatile var dir: File,
       lock synchronized {
         // remove the segments for lookups
         deletable.foreach(deleteSegment)
-        val newLogStartOffset = math.max(logStartOffset, segments.firstEntry.getValue.baseOffset)
-        leaderEpochCache.clearAndFlushEarliest(newLogStartOffset)
-        maybeIncrementLogStartOffset(newLogStartOffset)
+        maybeIncrementLogStartOffset(segments.firstEntry.getValue.baseOffset)
       }
     }
     numToDelete
