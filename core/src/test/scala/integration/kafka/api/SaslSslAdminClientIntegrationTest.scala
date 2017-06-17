@@ -124,22 +124,27 @@ class SaslSslAdminClientIntegrationTest extends AdminClientIntegrationTest with 
   @Test
   def testAclOperations2(): Unit = {
     client = AdminClient.create(createConfig())
-    val results = client.createAcls(List(acl2, acl2).asJava)
-    assertEquals(Set(acl2, acl2), results.values.keySet().asScala)
+    val results = client.createAcls(List(acl2, acl2, transactionalIdAcl).asJava)
+    assertEquals(Set(acl2, acl2, transactionalIdAcl), results.values.keySet.asScala)
     results.all.get()
     waitForDescribeAcls(client, acl2.toFilter, Set(acl2))
+    waitForDescribeAcls(client, transactionalIdAcl.toFilter, Set(transactionalIdAcl))
 
     val filterA = new AclBindingFilter(new ResourceFilter(ResourceType.GROUP, null), AccessControlEntryFilter.ANY)
     val filterB = new AclBindingFilter(new ResourceFilter(ResourceType.TOPIC, "mytopic2"), AccessControlEntryFilter.ANY)
+    val filterC = new AclBindingFilter(new ResourceFilter(ResourceType.TRANSACTIONAL_ID, null), AccessControlEntryFilter.ANY)
 
     waitForDescribeAcls(client, filterA, Set())
+    waitForDescribeAcls(client, filterC, Set(transactionalIdAcl))
 
-    val results2 = client.deleteAcls(List(filterA, filterB).asJava, new DeleteAclsOptions())
-    assertEquals(Set(filterA, filterB), results2.values.keySet().asScala)
+    val results2 = client.deleteAcls(List(filterA, filterB, filterC).asJava, new DeleteAclsOptions())
+    assertEquals(Set(filterA, filterB, filterC), results2.values.keySet.asScala)
     assertEquals(Set(), results2.values.get(filterA).get.values.asScala.map(_.binding).toSet)
+    assertEquals(Set(transactionalIdAcl), results2.values.get(filterC).get.values.asScala.map(_.binding).toSet)
     assertEquals(Set(acl2), results2.values.get(filterB).get.values.asScala.map(_.binding).toSet)
 
     waitForDescribeAcls(client, filterB, Set())
+    waitForDescribeAcls(client, filterC, Set())
   }
 
   @Test
@@ -199,7 +204,7 @@ class SaslSslAdminClientIntegrationTest extends AdminClientIntegrationTest with 
             verifyCauseIsClusterAuth(e)
             true
           case Success(_) =>
-            assertEquals(s"Unexpected number of entries in deleteAcls result: $result", 2, result.values.size)
+            assertEquals(Set(fooAcl, transactionalIdAcl), result.values.keySet)
             assertEquals(Set(fooAcl), result.values.get(fooAcl.toFilter).get.values.asScala.map(_.binding).toSet)
             assertEquals(Set(transactionalIdAcl),
               result.values.get(transactionalIdAcl.toFilter).get.values.asScala.map(_.binding).toSet)
