@@ -92,6 +92,8 @@ class SaslSslAdminClientIntegrationTest extends AdminClientIntegrationTest with 
     new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.READ, AclPermissionType.ALLOW))
   val fooAcl = new AclBinding(new Resource(ResourceType.TOPIC, "foobar"),
     new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.READ, AclPermissionType.ALLOW))
+  val transactionalIdAcl = new AclBinding(new Resource(ResourceType.TRANSACTIONAL_ID, "transactional_id"),
+    new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.WRITE, AclPermissionType.ALLOW))
 
   @Test
   override def testAclOperations(): Unit = {
@@ -116,7 +118,7 @@ class SaslSslAdminClientIntegrationTest extends AdminClientIntegrationTest with 
     TestUtils.waitUntilTrue(() => {
       val results = client.describeAcls(filter).values.get()
       acls == results.asScala.toSet
-    }, "timed out waiting for ACLs")
+    }, s"timed out waiting for ACLs $acls")
   }
 
   @Test
@@ -161,7 +163,7 @@ class SaslSslAdminClientIntegrationTest extends AdminClientIntegrationTest with 
 
   private def testAclCreateGetDelete(expectAuth: Boolean): Unit = {
     TestUtils.waitUntilTrue(() => {
-      val result = client.createAcls(List(fooAcl).asJava, new CreateAclsOptions)
+      val result = client.createAcls(List(fooAcl, transactionalIdAcl).asJava, new CreateAclsOptions)
       if (expectAuth) {
         Try(result.all.get) match {
           case Failure(e) =>
@@ -180,9 +182,10 @@ class SaslSslAdminClientIntegrationTest extends AdminClientIntegrationTest with 
     }, "timed out waiting for createAcls to " + (if (expectAuth) "succeed" else "fail"))
     if (expectAuth) {
       waitForDescribeAcls(client, fooAcl.toFilter, Set(fooAcl))
+      waitForDescribeAcls(client, transactionalIdAcl.toFilter, Set(transactionalIdAcl))
     }
     TestUtils.waitUntilTrue(() => {
-      val result = client.deleteAcls(List(fooAcl.toFilter).asJava, new DeleteAclsOptions)
+      val result = client.deleteAcls(List(fooAcl.toFilter, transactionalIdAcl.toFilter).asJava, new DeleteAclsOptions)
       if (expectAuth) {
         Try(result.all.get) match {
           case Failure(e) =>
@@ -196,13 +199,17 @@ class SaslSslAdminClientIntegrationTest extends AdminClientIntegrationTest with 
             verifyCauseIsClusterAuth(e)
             true
           case Success(_) =>
+            assertEquals(s"Unexpected number of entries in deleteAcls result: $result", 2, result.values.size)
             assertEquals(Set(fooAcl), result.values.get(fooAcl.toFilter).get.values.asScala.map(_.binding).toSet)
+            assertEquals(Set(transactionalIdAcl),
+              result.values.get(transactionalIdAcl.toFilter).get.values.asScala.map(_.binding).toSet)
             true
         }
       }
     }, "timed out waiting for deleteAcls to " + (if (expectAuth) "succeed" else "fail"))
     if (expectAuth) {
-      waitForDescribeAcls(client, fooAcl.toFilter, Set())
+      waitForDescribeAcls(client, fooAcl.toFilter, Set.empty)
+      waitForDescribeAcls(client, transactionalIdAcl.toFilter, Set.empty)
     }
   }
 

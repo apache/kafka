@@ -19,7 +19,7 @@ package kafka.security
 
 import kafka.security.auth.{Acl, Operation, PermissionType, Resource, ResourceType}
 import org.apache.kafka.common.acl.{AccessControlEntry, AclBinding, AclBindingFilter}
-import org.apache.kafka.common.resource.{Resource => AdminResource, ResourceType => AdminResourceType}
+import org.apache.kafka.common.resource.{Resource => AdminResource}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 
 import scala.util.Try
@@ -39,7 +39,7 @@ object SecurityUtils {
   }
 
   def convertToAclBinding(resource: Resource, acl: Acl): AclBinding = {
-    val adminResource = new AdminResource(AdminResourceType.fromString(resource.resourceType.toString), resource.name)
+    val adminResource = new AdminResource(resource.resourceType.toJava, resource.name)
     val entry = new AccessControlEntry(acl.principal.toString, acl.host.toString,
       acl.operation.toJava, acl.permissionType.toJava)
     new AclBinding(adminResource, entry)
