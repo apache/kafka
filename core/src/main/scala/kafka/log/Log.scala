@@ -429,17 +429,22 @@ class Log(@volatile var dir: File,
     info(s"Loading producer state from offset $lastOffset for partition $topicPartition with message " +
       s"format version $messageFormatVersion")
 
-    // We want to avoid unnecessary scanning of the log to build the producer state when the broker is being upgraded.
-    // There are two common cases where we can skip loading and write a new snapshot at the log end offset:
+    // We want to avoid unnecessary scanning of the log to build the producer state when the broker is being
+    // upgraded. The basic idea is to use the absence of producer snapshot files to detect the upgrade case,
+    // but we have to be careful not to assume too much in the presence of broker failures. The two most common
+    // upgrade cases in which we expect to find no snapshots are the following:
     //
     // 1. The broker has been upgraded, but the topic is still on the old message format.
     // 2. The broker has been upgraded, the topic is on the new message format, and we had a clean shutdown.
     //
-    // Otherwise, if there is no snapshot file, then we have to rebuild producer state from the first segment.
+    // If we hit either of these cases, we skip producer state loading and write a new snapshot at the log end
+    // offset (see below). The next time the log is reloaded, we will load producer state using this snapshot
+    // (or later snapshots). Otherwise, if there is no snapshot file, then we have to rebuild producer state
+    // from the first segment.
 
     if (producerStateManager.latestSnapshotOffset.isEmpty && (messageFormatVersion < RecordBatch.MAGIC_VALUE_V2 || reloadFromCleanShutdown)) {
-      // To avoid an expensive scan through all of the segments, we take empty snapshots from the start of
-      // the last two segments and the last offset. This avoid the full scan in the case that the log needs
+      // To avoid an expensive scan through all of the segments, we take empty snapshots from the start of the
+      // last two segments and the last offset. This should avoid the full scan in the case that the log needs
       // truncation.
       val nextLatestSegmentBaseOffset = Option(segments.lowerEntry(activeSegment.baseOffset)).map(_.getValue.baseOffset)
       val offsetsToSnapshot = Seq(nextLatestSegmentBaseOffset, Some(activeSegment.baseOffset), Some(lastOffset))
@@ -451,11 +456,12 @@ class Log(@volatile var dir: File,
       val isEmptyBeforeTruncation = producerStateManager.isEmpty && producerStateManager.mapEndOffset >= lastOffset
       producerStateManager.truncateAndReload(logStartOffset, lastOffset, time.milliseconds())
 
-      // Only do the potentially expensive reloading if the last snapshot offset is lower than the
-      // log end offset (which would be the case on first startup) and there were active producers
-      // prior to truncation. If there weren't, then truncating shouldn't change that fact (although it
-      // could cause a producerId to expire earlier than expected), and we can skip the loading.
-      // This is an optimization for users which are not yet using idempotent/transactional features yet.
+      // Only do the potentially expensive reloading if the last snapshot offset is lower than the log end
+      // offset (which would be the case on first startup) and there were active producers prior to truncation
+      // (which could be the case if truncating after initial loading). If there weren't, then truncating
+      // shouldn't change that fact (although it could cause a producerId to expire earlier than expected),
+      // and we can skip the loading. This is an optimization for users which are not yet using
+      // idempotent/transactional features yet.
       if (lastOffset > producerStateManager.mapEndOffset && !isEmptyBeforeTruncation) {
         logSegments(producerStateManager.mapEndOffset, lastOffset).foreach { segment =>
           val startOffset = Utils.max(segment.baseOffset, producerStateManager.mapEndOffset, logStartOffset)
@@ -1066,8 +1072,8 @@ class Log(@volatile var dir: File,
       }
     } else {
       lock synchronized {
-        // The log start offset may now point to the middle of a segment, so we need to truncate the producer
-        // state to ensure that non-retained producers are evicted.
+        // The log start offset may now point to the middle of a segment after record deletion, so we need
+        // to truncate the producer state to ensure that non-retained producers are evicted.
         producerStateManager.truncateHead(logStartOffset)
         updateFirstUnstableOffset()
       }

@@ -207,6 +207,81 @@ class LogTest {
   }
 
   @Test
+  def testSkipLoadingIfEmptyProducerStateBeforeTruncation(): Unit = {
+    val stateManager = EasyMock.mock(classOf[ProducerStateManager])
+
+    // Load the log
+    EasyMock.expect(stateManager.latestSnapshotOffset).andReturn(None)
+
+    stateManager.updateMapEndOffset(0L)
+    EasyMock.expectLastCall().anyTimes()
+
+    EasyMock.expect(stateManager.mapEndOffset).andStubReturn(0L)
+    EasyMock.expect(stateManager.isEmpty).andStubReturn(true)
+
+    stateManager.takeSnapshot()
+    EasyMock.expectLastCall().anyTimes()
+
+    stateManager.truncateAndReload(EasyMock.eq(0L), EasyMock.eq(0L), EasyMock.anyLong)
+    EasyMock.expectLastCall()
+
+    EasyMock.expect(stateManager.firstUnstableOffset).andStubReturn(None)
+
+    EasyMock.replay(stateManager)
+
+    val config = LogConfig(new Properties())
+    val log = new Log(logDir,
+      config,
+      logStartOffset = 0L,
+      recoveryPoint = 0L,
+      scheduler = time.scheduler,
+      brokerTopicStats = brokerTopicStats,
+      time = time,
+      maxProducerIdExpirationMs = 300000,
+      producerIdExpirationCheckIntervalMs = 30000,
+      topicPartition = Log.parseTopicPartitionName(logDir),
+      stateManager)
+
+    EasyMock.verify(stateManager)
+
+    // Append some messages
+    EasyMock.reset(stateManager)
+    EasyMock.expect(stateManager.firstUnstableOffset).andStubReturn(None)
+
+    stateManager.updateMapEndOffset(1L)
+    EasyMock.expectLastCall()
+    stateManager.updateMapEndOffset(2L)
+    EasyMock.expectLastCall()
+
+    EasyMock.replay(stateManager)
+
+    log.appendAsLeader(TestUtils.records(List(new SimpleRecord("a".getBytes))), leaderEpoch = 0)
+    log.appendAsLeader(TestUtils.records(List(new SimpleRecord("b".getBytes))), leaderEpoch = 0)
+
+    EasyMock.verify(stateManager)
+
+    // Now truncate
+    EasyMock.reset(stateManager)
+    EasyMock.expect(stateManager.firstUnstableOffset).andStubReturn(None)
+    EasyMock.expect(stateManager.latestSnapshotOffset).andReturn(None)
+    EasyMock.expect(stateManager.isEmpty).andStubReturn(true)
+    EasyMock.expect(stateManager.mapEndOffset).andReturn(2L)
+    stateManager.truncateAndReload(EasyMock.eq(0L), EasyMock.eq(1L), EasyMock.anyLong)
+    EasyMock.expectLastCall()
+    // Truncation causes the map end offset to reset to 0
+    EasyMock.expect(stateManager.mapEndOffset).andReturn(0L)
+    // We skip directly to updating the map end offset
+    stateManager.updateMapEndOffset(1L)
+    EasyMock.expectLastCall()
+
+    EasyMock.replay(stateManager)
+
+    log.truncateTo(1L)
+
+    EasyMock.verify(stateManager)
+  }
+
+  @Test
   def testSkipTruncateAndReloadIfOldMessageFormatAndNoCleanShutdown(): Unit = {
     val stateManager = EasyMock.mock(classOf[ProducerStateManager])
 
@@ -2882,7 +2957,6 @@ class LogTest {
     records.batches.asScala.foreach(_.setPartitionLeaderEpoch(leaderEpoch))
     log.appendAsFollower(records)
   }
-
 
   private def createCleanShutdownFile(): File = {
     val parentLogDir = logDir.getParentFile
