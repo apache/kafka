@@ -19,27 +19,32 @@ package kafka.security
 
 import kafka.security.auth.{Acl, Operation, PermissionType, Resource, ResourceType}
 import org.apache.kafka.common.acl.{AccessControlEntry, AclBinding, AclBindingFilter}
-import org.apache.kafka.common.resource.{Resource => AdminResource, ResourceType => AdminResourceType}
+import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.requests.ApiError
+import org.apache.kafka.common.resource.{Resource => AdminResource}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 
-import scala.util.Try
+import scala.util.{Failure, Success, Try}
 
 
 object SecurityUtils {
 
-  def convertToResourceAndAcl(filter: AclBindingFilter): Try[(Resource, Acl)] = {
-    for {
+  def convertToResourceAndAcl(filter: AclBindingFilter): Either[ApiError, (Resource, Acl)] = {
+    (for {
       resourceType <- Try(ResourceType.fromJava(filter.resourceFilter.resourceType))
       principal <- Try(KafkaPrincipal.fromString(filter.entryFilter.principal))
       operation <- Try(Operation.fromJava(filter.entryFilter.operation))
       permissionType <- Try(PermissionType.fromJava(filter.entryFilter.permissionType))
       resource = Resource(resourceType, filter.resourceFilter.name)
       acl = Acl(principal, permissionType, filter.entryFilter.host, operation)
-    } yield (resource, acl)
+    } yield (resource, acl)) match {
+      case Failure(throwable) => Left(new ApiError(Errors.INVALID_REQUEST, throwable.getMessage))
+      case Success(s) => Right(s)
+    }
   }
 
   def convertToAclBinding(resource: Resource, acl: Acl): AclBinding = {
-    val adminResource = new AdminResource(AdminResourceType.fromString(resource.resourceType.toString), resource.name)
+    val adminResource = new AdminResource(resource.resourceType.toJava, resource.name)
     val entry = new AccessControlEntry(acl.principal.toString, acl.host.toString,
       acl.operation.toJava, acl.permissionType.toJava)
     new AclBinding(adminResource, entry)
