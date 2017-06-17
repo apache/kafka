@@ -17,7 +17,6 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
@@ -26,23 +25,21 @@ import java.util.List;
 
 public class CreateAclsResponse extends AbstractResponse {
     private final static String CREATION_RESPONSES = "creation_responses";
-    private final static String ERROR_CODE = "error_code";
-    private final static String ERROR_MESSAGE = "error_message";
 
     public static class AclCreationResponse {
-        private final Throwable throwable;
+        private final ApiError error;
 
-        public AclCreationResponse(Throwable throwable) {
-            this.throwable = throwable;
+        public AclCreationResponse(ApiError error) {
+            this.error = error;
         }
 
-        public Throwable throwable() {
-            return throwable;
+        public ApiError error() {
+            return error;
         }
 
         @Override
         public String toString() {
-            return "(" + throwable + ")";
+            return "(" + error + ")";
         }
     }
 
@@ -60,14 +57,8 @@ public class CreateAclsResponse extends AbstractResponse {
         this.aclCreationResponses = new ArrayList<>();
         for (Object responseStructObj : struct.getArray(CREATION_RESPONSES)) {
             Struct responseStruct = (Struct) responseStructObj;
-            short errorCode = responseStruct.getShort(ERROR_CODE);
-            String errorMessage = responseStruct.getString(ERROR_MESSAGE);
-            if (errorCode != 0) {
-                this.aclCreationResponses.add(new AclCreationResponse(
-                        Errors.forCode(errorCode).exception(errorMessage)));
-            } else {
-                this.aclCreationResponses.add(new AclCreationResponse(null));
-            }
+            ApiError error = new ApiError(responseStruct);
+            this.aclCreationResponses.add(new AclCreationResponse(error));
         }
     }
 
@@ -78,13 +69,7 @@ public class CreateAclsResponse extends AbstractResponse {
         List<Struct> responseStructs = new ArrayList<>();
         for (AclCreationResponse response : aclCreationResponses) {
             Struct responseStruct = struct.instance(CREATION_RESPONSES);
-            if (response.throwable() == null) {
-                responseStruct.set(ERROR_CODE, (short) 0);
-            } else {
-                Errors errors = Errors.forException(response.throwable());
-                responseStruct.set(ERROR_CODE, errors.code());
-                responseStruct.set(ERROR_MESSAGE, response.throwable().getMessage());
-            }
+            response.error.write(responseStruct);
             responseStructs.add(responseStruct);
         }
         struct.set(CREATION_RESPONSES, responseStructs.toArray());

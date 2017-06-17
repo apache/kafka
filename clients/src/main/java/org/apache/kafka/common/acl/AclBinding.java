@@ -48,7 +48,7 @@ public class AclBinding {
     /**
      * Return true if this binding has any UNKNOWN components.
      */
-    public boolean unknown() {
+    public boolean isUnknown() {
         return resource.isUnknown() || entry.isUnknown();
     }
 
