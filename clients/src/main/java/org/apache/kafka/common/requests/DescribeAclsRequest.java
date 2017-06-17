@@ -73,7 +73,8 @@ public class DescribeAclsRequest extends AbstractRequest {
         short versionId = version();
         switch (versionId) {
             case 0:
-                return new DescribeAclsResponse(throttleTimeMs, throwable, Collections.<AclBinding>emptySet());
+                return new DescribeAclsResponse(throttleTimeMs, ApiError.fromThrowable(throwable),
+                        Collections.<AclBinding>emptySet());
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
                         versionId, this.getClass().getSimpleName(), ApiKeys.DESCRIBE_ACLS.latestVersion()));

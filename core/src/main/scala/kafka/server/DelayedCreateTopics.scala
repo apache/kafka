@@ -48,7 +48,7 @@ class DelayedCreateTopics(delayMs: Long,
   override def tryComplete() : Boolean = {
     trace(s"Trying to complete operation for $createMetadata")
 
-    val leaderlessPartitionCount = createMetadata.filter(_.error.is(Errors.NONE))
+    val leaderlessPartitionCount = createMetadata.filter(_.error.isSuccess)
       .foldLeft(0) { case (topicCounter, metadata) =>
         topicCounter + missingLeaderCount(metadata.topic, metadata.replicaAssignments.keySet)
       }
@@ -69,7 +69,7 @@ class DelayedCreateTopics(delayMs: Long,
     trace(s"Completing operation for $createMetadata")
     val results = createMetadata.map { metadata =>
       // ignore topics that already have errors
-      if (metadata.error.is(Errors.NONE) && missingLeaderCount(metadata.topic, metadata.replicaAssignments.keySet) > 0)
+      if (metadata.error.isSuccess && missingLeaderCount(metadata.topic, metadata.replicaAssignments.keySet) > 0)
         (metadata.topic, new ApiError(Errors.REQUEST_TIMED_OUT, null))
       else
         (metadata.topic, metadata.error)
