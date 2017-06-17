@@ -186,7 +186,7 @@ public class DefaultRecordTest {
     }
 
     @Test(expected = InvalidRecordException.class)
-    public void testUnderflowReadingVarint() {
+    public void testUnderflowReadingVarlong() {
         byte attributes = 0;
         int sizeOfBodyInBytes = 2; // one byte for attributes, one byte for partial timestamp
         ByteBuffer buf = ByteBuffer.allocate(sizeOfBodyInBytes + ByteUtils.sizeOfVarint(sizeOfBodyInBytes) + 1);
