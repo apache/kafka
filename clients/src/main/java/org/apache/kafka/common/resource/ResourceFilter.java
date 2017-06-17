@@ -70,7 +70,7 @@ public class ResourceFilter {
     /**
      * Return true if this ResourceFilter has any UNKNOWN components.
      */
-    public boolean unknown() {
+    public boolean isUnknown() {
         return resourceType.isUnknown();
     }
 
