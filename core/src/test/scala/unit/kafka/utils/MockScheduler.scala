@@ -16,7 +16,7 @@
  */
 package kafka.utils
 
-import scala.collection.mutable.PriorityQueue
+import scala.collection.mutable.{ListBuffer, PriorityQueue}
 import java.util.concurrent.TimeUnit
 
 import org.apache.kafka.common.utils.Time
@@ -64,7 +64,7 @@ class MockScheduler(val time: Time) extends Scheduler {
         curr.fun()
         /* if the task is periodic, reschedule it and re-enqueue */
         if(curr.periodic) {
-          curr.nextExecution += curr.period
+          curr.nextExecution = now + curr.period
           this.tasks += curr
         }
       }

@@ -207,7 +207,7 @@ class LogTest {
   }
 
   @Test
-  def testSkipTruncateAndReloadIfOldMessageFormat(): Unit = {
+  def testSkipTruncateAndReloadIfOldMessageFormatAndNoCleanShutdown(): Unit = {
     val stateManager = EasyMock.mock(classOf[ProducerStateManager])
 
     EasyMock.expect(stateManager.latestSnapshotOffset).andReturn(None)
@@ -236,6 +236,41 @@ class LogTest {
       stateManager)
 
     EasyMock.verify(stateManager)
+  }
+
+  @Test
+  def testSkipTruncateAndReloadIfOldMessageFormatAndCleanShutdown(): Unit = {
+    val stateManager = EasyMock.mock(classOf[ProducerStateManager])
+
+    EasyMock.expect(stateManager.latestSnapshotOffset).andReturn(None)
+
+    stateManager.updateMapEndOffset(0L)
+    EasyMock.expectLastCall().anyTimes()
+
+    stateManager.takeSnapshot()
+    EasyMock.expectLastCall().anyTimes()
+
+    EasyMock.replay(stateManager)
+
+    val cleanShutdownFile = createCleanShutdownFile()
+
+    val logProps = new Properties()
+    logProps.put(LogConfig.MessageFormatVersionProp, "0.10.2")
+    val config = LogConfig(logProps)
+    new Log(logDir,
+      config,
+      logStartOffset = 0L,
+      recoveryPoint = 0L,
+      scheduler = time.scheduler,
+      brokerTopicStats = brokerTopicStats,
+      time = time,
+      maxProducerIdExpirationMs = 300000,
+      producerIdExpirationCheckIntervalMs = 30000,
+      topicPartition = Log.parseTopicPartitionName(logDir),
+      stateManager)
+
+    EasyMock.verify(stateManager)
+    cleanShutdownFile.delete()
   }
 
   @Test
