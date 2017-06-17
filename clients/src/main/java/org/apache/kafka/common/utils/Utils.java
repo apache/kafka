@@ -137,8 +137,8 @@ public class Utils {
     /**
      * Get the minimum of some long values.
      * @param first Used to ensure at least one value
-     * @param rest The rest of longs to compare
-     * @return The minimum of all passed argument.
+     * @param rest The remaining values to compare
+     * @return The minimum of all passed values
      */
     public static long min(long first, long ... rest) {
         long min = first;
@@ -152,8 +152,8 @@ public class Utils {
     /**
      * Get the maximum of some long values.
      * @param first Used to ensure at least one value
-     * @param rest The rest of longs to compare
-     * @return The maximum of all passed argument.
+     * @param rest The remaining values to compare
+     * @return The maximum of all passed values
      */
     public static long max(long first, long ... rest) {
         long max = first;
