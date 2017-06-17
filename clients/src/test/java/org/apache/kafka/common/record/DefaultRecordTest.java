@@ -158,7 +158,7 @@ public class DefaultRecordTest {
         long timestampDelta = 2;
         int offsetDelta = 1;
         int sizeOfBodyInBytes = 100;
-        int valueSize = 105; // use a key size larger than the full message
+        int valueSize = 105; // use a value size larger than the full message
 
         ByteBuffer buf = ByteBuffer.allocate(sizeOfBodyInBytes + ByteUtils.sizeOfVarint(sizeOfBodyInBytes));
         ByteUtils.writeVarint(sizeOfBodyInBytes, buf);
