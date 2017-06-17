@@ -156,7 +156,7 @@ import static org.apache.kafka.common.serialization.ExtendedSerializer.Wrapper.e
  * be de-duplicated. As such, if an application enables idempotence, it is recommended to leave the <code>retries</code>
  * config unset, as it will be defaulted to <code>Integer.MAX_VALUE</code>. Additionally, if a {@link #send(ProducerRecord)}
  * returns an error even with infinite retries (for instance if the message expires in the buffer before being sent),
- * then it is recommended to shut down the producer and check the contents of the last produced messages to ensure that
+ * then it is recommended to shut down the producer and check the contents of the last produced message to ensure that
  * it is not duplicated. Finally, the producer can only guarantee idempotence for messages sent within a single session.
  * </p>
  * <p>To use the transactional producer and the attendant APIs, you must set the <code>transactional.id</code>
