@@ -184,14 +184,16 @@ public class StreamTask extends AbstractTask implements Punctuator {
             final ProcessorNode currNode = recordInfo.node();
             final TopicPartition partition = recordInfo.partition();
 
-            if (log.isTraceEnabled())
+            if (log.isTraceEnabled()) {
                 log.trace("{} Start processing one record [{}]", logPrefix, record);
+            }
 
             updateProcessorContext(record, currNode);
             currNode.process(record.key(), record.value());
 
-            if (log.isTraceEnabled())
+            if (log.isTraceEnabled()) {
                 log.trace("{} Completed processing one record [{}]", logPrefix, record);
+            }
 
             // update the consumed offset map after processing is done
             consumedOffsets.put(partition, record.offset());
@@ -228,8 +230,9 @@ public class StreamTask extends AbstractTask implements Punctuator {
 
         updateProcessorContext(new StampedRecord(DUMMY_RECORD, timestamp), node);
 
-        if (log.isTraceEnabled())
+        if (log.isTraceEnabled()) {
             log.trace("{} Punctuating processor {} with timestamp {}", logPrefix, node.name(), timestamp);
+        }
 
         try {
             node.punctuate(timestamp);
@@ -468,8 +471,9 @@ public class StreamTask extends AbstractTask implements Punctuator {
         final int oldQueueSize = partitionGroup.numBuffered(partition);
         final int newQueueSize = partitionGroup.addRawRecords(partition, records);
 
-        if (log.isTraceEnabled())
+        if (log.isTraceEnabled()) {
             log.trace("{} Added records into the buffered queue of partition {}, new queue size is {}", logPrefix, partition, newQueueSize);
+        }
 
         // if after adding these records, its partition queue's buffered size has been
         // increased beyond the threshold, we can then pause the consumption for this partition
