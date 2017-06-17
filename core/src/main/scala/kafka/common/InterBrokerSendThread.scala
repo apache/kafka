@@ -27,24 +27,27 @@ import org.apache.kafka.common.utils.Time
 /**
  *  Class for inter-broker send thread that utilize a non-blocking network client.
  */
-class InterBrokerSendThread(name: String,
-                            networkClient: NetworkClient,
-                            requestGenerator: () => Iterable[RequestAndCompletionHandler],
-                            time: Time,
-                            isInterruptible: Boolean = true)
+abstract class InterBrokerSendThread(name: String,
+                                     networkClient: NetworkClient,
+                                     time: Time,
+                                     isInterruptible: Boolean = true)
   extends ShutdownableThread(name, isInterruptible) {
 
-  // visible for testing
-  def generateRequests(): Iterable[RequestAndCompletionHandler] = requestGenerator()
+  def generateRequests(): Iterable[RequestAndCompletionHandler]
+
+  override def shutdown(): Unit = {
+    initiateShutdown()
+    // wake up the thread in case it is blocked inside poll
+    networkClient.wakeup()
+    awaitShutdown()
+  }
 
   override def doWork() {
     val now = time.milliseconds()
     var pollTimeout = Long.MaxValue
 
     try {
-      val requestsToSend: Iterable[RequestAndCompletionHandler] = requestGenerator()
-
-      for (request: RequestAndCompletionHandler <- requestsToSend) {
+      for (request: RequestAndCompletionHandler <- generateRequests()) {
         val destination = Integer.toString(request.destination.id())
         val completionHandler = request.handler
         val clientRequest = networkClient.newClientRequest(destination,
@@ -79,6 +82,10 @@ class InterBrokerSendThread(name: String,
         throw new FatalExitError()
     }
   }
+
+  def wakeup(): Unit = networkClient.wakeup()
+
 }
 
-case class RequestAndCompletionHandler(destination: Node, request: AbstractRequest.Builder[_ <: AbstractRequest], handler: RequestCompletionHandler)
+case class RequestAndCompletionHandler(destination: Node, request: AbstractRequest.Builder[_ <: AbstractRequest],
+                                       handler: RequestCompletionHandler)
