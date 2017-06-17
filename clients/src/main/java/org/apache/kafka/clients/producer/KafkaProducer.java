@@ -151,12 +151,25 @@ import static org.apache.kafka.common.serialization.ExtendedSerializer.Wrapper.e
  * and <code>acks</code> config will be defaulted to <code>all</code>. There are no API changes for the idempotent
  * producer, so existing applications will not need to be modified to take advantage of this feature.
  * </p>
+ * <p>
+ * To take advantage of the idempotent producer, it is imperative to avoid application level re-sends since these cannot
+ * be de-duplicated. As such, if an application enables idempotence, it is recommended to leave the <code>retries</code>
+ * config unset, as it will be defaulted to <code>Integer.MAX_VALUE</code>. Additionally, if a {@link #send(ProducerRecord)}
+ * returns an error even with infinite retries (for instance if the message expires in the buffer before being sent),
+ * then it is recommended to shut down the producer and check the contents of the last produced messages to ensure that
+ * it is not duplicated. Finally, the producer can only guarantee idempotence for messages sent within a single session.
+ * </p>
  * <p>To use the transactional producer and the attendant APIs, you must set the <code>transactional.id</code>
  * configuration property. If the <code>transactional.id</code> is set, idempotence is automatically enabled along with
  * the producer configs which idempotence depends on. Further, topics which are included in transactions should be configured
  * for durability. In particular, the <code>replication.factor</code> should be at least <code>3</code>, and the
  * <code>min.insync.replicas</code> for these topics should be set to 2. Finally, in order for transactional guarantees
  * to be realized from end-to-end, the consumers must be configured to read only committed messages as well.
+ * </p>
+ * <p>
+ * The purpose of the <code>transactional.id</code> is to enable transaction recovery across multiple sessions of a
+ * single producer instance. It would typically be derived from the shard identifier in a partitioned, stateful, application.
+ * As such, it should be unique to each producer instance running within a partitioned application.
  * </p>
  * <p>All the new transactional APIs are blocking and will throw exceptions on failure. The example
  * below illustrates how the new APIs are meant to be used. It is similar to the example above, except that all
@@ -186,6 +199,11 @@ import static org.apache.kafka.common.serialization.ExtendedSerializer.Wrapper.e
  * }
  * producer.close();
  * } </pre>
+ * </p>
+ * <p>
+ * As is hinted at in the example, there can be only one open transaction per producer. All messages sent between the
+ * {@link #beginTransaction()} and {@link #commitTransaction()} calls will be part of a single transaction. When the
+ * <code>transactional.id</code> is specified, all messages sent by the producer must be part of a transaction.
  * </p>
  * <p>
  * The transactional producer uses exceptions to communicate error states. In particular, it is not required

@@ -429,12 +429,14 @@ import java.util.regex.Pattern;
  * <p>
  * In <code>read_committed</code> mode, the consumer will read only those transactional messages which have been
  * successfully committed. It will continue to read non-transactional messages as before. There is no client-side
- * buffering in <code>read_committed</code> mode. Instead, the end offset of partition for a <code>read_committed</code>
+ * buffering in <code>read_committed</code> mode. Instead, the end offset of a partition for a <code>read_committed</code>
  * consumer would be the offset of the first message in the partition belonging to an open transaction. This offset
  * is known as the 'Last Stable Offset'(LSO).</p>
  *
  * <p>A </p><code>read_committed</code> consumer will only read up till the LSO and filter out any transactional
- * messages which have been aborted.</p>
+ * messages which have been aborted. The LSO also affects the behavior of {@link #seekToEnd(Collection)} and
+ * {@link #endOffsets(Collection)} for <code>read_committed</code> consumers, details of which are in each method's documentation.
+ * Finally, the fetch lag metrics are also adjusted to be relative to the LSO for <code>read_committed</code> consumers.</p>
  *
  * <p>Partitions with transactional messages will include commit or abort markers which indicate the result of a transaction.
  * There markers are not returned to applications, yet have an offset in the log. As a result, applications reading from
