@@ -344,18 +344,19 @@ public class EosTestDriver extends SmokeTestUtil {
 
         final HashMap<String, Integer> currentMinPerKey = new HashMap<>();
         for (final Map.Entry<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> partitionRecords : minPerTopicPerPartition.entrySet()) {
-            try {
-                final TopicPartition inputTopicPartition = new TopicPartition("data", partitionRecords.getKey().partition());
-                final Iterator<ConsumerRecord<byte[], byte[]>> inputRecords = inputPerTopicPerPartition.get(inputTopicPartition).iterator();
+            final TopicPartition inputTopicPartition = new TopicPartition("data", partitionRecords.getKey().partition());
+            final List<ConsumerRecord<byte[], byte[]>> partitionInput = inputPerTopicPerPartition.get(inputTopicPartition);
+            final List<ConsumerRecord<byte[], byte[]>> partitionMin = partitionRecords.getValue();
 
-                for (final ConsumerRecord<byte[], byte[]> receivedRecord : partitionRecords.getValue()) {
-                    final ConsumerRecord<byte[], byte[]> input = inputRecords.next();
+            if (partitionInput.size() != partitionMin.size()) {
+                throw new RuntimeException("Result verification failed: expected " + partitionInput.size() + " records for "
+                    +  partitionRecords.getKey() + " but received " + partitionMin.size());
+            }
 
-                    final String receivedKey = stringDeserializer.deserialize(receivedRecord.topic(), receivedRecord.key());
-                    final int receivedValue = integerDeserializer.deserialize(receivedRecord.topic(), receivedRecord.value());
-                    final String key = stringDeserializer.deserialize(input.topic(), input.key());
-                    final int value = integerDeserializer.deserialize(input.topic(), input.value());
+            final Iterator<ConsumerRecord<byte[], byte[]>> inputRecords = partitionInput.iterator();
 
+            for (final ConsumerRecord<byte[], byte[]> receivedRecord : partitionMin) {
+                final ConsumerRecord<byte[], byte[]> input = inputRecords.next();
 
                     Integer min = currentMinPerKey.get(key);
                     if (min == null) {
@@ -369,10 +370,6 @@ public class EosTestDriver extends SmokeTestUtil {
                         throw new RuntimeException("Result verification failed for " + receivedRecord + " expected <" + key + "," + min + "> but was <" + receivedKey + "," + receivedValue + ">");
                     }
                 }
-            } catch (final NullPointerException e) {
-                System.err.println(inputPerTopicPerPartition);
-                e.printStackTrace(System.err);
-                throw e;
             }
         }
     }
@@ -385,17 +382,16 @@ public class EosTestDriver extends SmokeTestUtil {
 
         final HashMap<String, Long> currentSumPerKey = new HashMap<>();
         for (final Map.Entry<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> partitionRecords : minPerTopicPerPartition.entrySet()) {
-            try {
-                final TopicPartition inputTopicPartition = new TopicPartition("data", partitionRecords.getKey().partition());
-                final Iterator<ConsumerRecord<byte[], byte[]>> inputRecords = inputPerTopicPerPartition.get(inputTopicPartition).iterator();
+            final TopicPartition inputTopicPartition = new TopicPartition("data", partitionRecords.getKey().partition());
+            final List<ConsumerRecord<byte[], byte[]>> partitionInput = inputPerTopicPerPartition.get(inputTopicPartition);
+            final List<ConsumerRecord<byte[], byte[]>> partitionSum = partitionRecords.getValue();
 
-                for (final ConsumerRecord<byte[], byte[]> receivedRecord : partitionRecords.getValue()) {
-                    final ConsumerRecord<byte[], byte[]> input = inputRecords.next();
+            if (partitionInput.size() != partitionSum.size()) {
+                throw new RuntimeException("Result verification failed: expected " + partitionInput.size() + " records for "
+                    +  partitionRecords.getKey() + " but received " + partitionSum.size());
+            }
 
-                    final String receivedKey = stringDeserializer.deserialize(receivedRecord.topic(), receivedRecord.key());
-                    final long receivedValue = longDeserializer.deserialize(receivedRecord.topic(), receivedRecord.value());
-                    final String key = stringDeserializer.deserialize(input.topic(), input.key());
-                    final int value = integerDeserializer.deserialize(input.topic(), input.value());
+            final Iterator<ConsumerRecord<byte[], byte[]>> inputRecords = partitionInput.iterator();
 
                     Long sum = currentSumPerKey.get(key);
                     if (sum == null) {
@@ -409,10 +405,6 @@ public class EosTestDriver extends SmokeTestUtil {
                         throw new RuntimeException("Result verification failed for " + receivedRecord + " expected <" + key + "," + sum + "> but was <" + receivedKey + "," + receivedValue + ">");
                     }
                 }
-            } catch (final NullPointerException e) {
-                System.err.println(inputPerTopicPerPartition);
-                e.printStackTrace(System.err);
-                throw e;
             }
         }
     }
@@ -424,34 +416,36 @@ public class EosTestDriver extends SmokeTestUtil {
 
         final HashMap<String, Integer> currentMinPerKey = new HashMap<>();
         for (final Map.Entry<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> partitionRecords : maxPerTopicPerPartition.entrySet()) {
-            try {
-                final TopicPartition inputTopicPartition = new TopicPartition("repartition", partitionRecords.getKey().partition());
-                final Iterator<ConsumerRecord<byte[], byte[]>> inputRecords = inputPerTopicPerPartition.get(inputTopicPartition).iterator();
+            final TopicPartition inputTopicPartition = new TopicPartition("repartition", partitionRecords.getKey().partition());
+            final List<ConsumerRecord<byte[], byte[]>> partitionInput = inputPerTopicPerPartition.get(inputTopicPartition);
+            final List<ConsumerRecord<byte[], byte[]>> partitionMax = partitionRecords.getValue();
 
-                for (final ConsumerRecord<byte[], byte[]> receivedRecord : partitionRecords.getValue()) {
-                    final ConsumerRecord<byte[], byte[]> input = inputRecords.next();
+            if (partitionInput.size() != partitionMax.size()) {
+                throw new RuntimeException("Result verification failed: expected " + partitionInput.size() + " records for "
+                    +  partitionRecords.getKey() + " but received " + partitionMax.size());
+            }
 
-                    final String receivedKey = stringDeserializer.deserialize(receivedRecord.topic(), receivedRecord.key());
-                    final int receivedValue = integerDeserializer.deserialize(receivedRecord.topic(), receivedRecord.value());
-                    final String key = stringDeserializer.deserialize(input.topic(), input.key());
-                    final int value = integerDeserializer.deserialize(input.topic(), input.value());
+            final Iterator<ConsumerRecord<byte[], byte[]>> inputRecords = partitionInput.iterator();
+
+            for (final ConsumerRecord<byte[], byte[]> receivedRecord : partitionMax) {
+                final ConsumerRecord<byte[], byte[]> input = inputRecords.next();
+
+                final String receivedKey = stringDeserializer.deserialize(receivedRecord.topic(), receivedRecord.key());
+                final int receivedValue = integerDeserializer.deserialize(receivedRecord.topic(), receivedRecord.value());
+                final String key = stringDeserializer.deserialize(input.topic(), input.key());
+                final int value = integerDeserializer.deserialize(input.topic(), input.value());
 
 
-                    Integer max = currentMinPerKey.get(key);
-                    if (max == null) {
-                        max = value;
-                    }
-                    max = Math.max(max, value);
-                    currentMinPerKey.put(key, max);
-
-                    if (!receivedKey.equals(key) || receivedValue != max.intValue()) {
-                        throw new RuntimeException("Result verification failed for " + receivedRecord + " expected <" + key + "," + value + "> but was <" + receivedKey + "," + receivedValue + ">");
-                    }
+                Integer max = currentMinPerKey.get(key);
+                if (max == null) {
+                    max = Integer.MIN_VALUE;
                 }
-            } catch (final NullPointerException e) {
-                System.err.println(inputPerTopicPerPartition);
-                e.printStackTrace(System.err);
-                throw e;
+                max = Math.max(max, value);
+                currentMinPerKey.put(key, max);
+
+                if (!receivedKey.equals(key) || receivedValue != max.intValue()) {
+                    throw new RuntimeException("Result verification failed for " + receivedRecord + " expected <" + key + "," + max + "> but was <" + receivedKey + "," + receivedValue + ">");
+                }
             }
         }
     }
@@ -464,32 +458,34 @@ public class EosTestDriver extends SmokeTestUtil {
 
         final HashMap<String, Long> currentSumPerKey = new HashMap<>();
         for (final Map.Entry<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> partitionRecords : cntPerTopicPerPartition.entrySet()) {
-            try {
-                final TopicPartition inputTopicPartition = new TopicPartition("repartition", partitionRecords.getKey().partition());
-                final Iterator<ConsumerRecord<byte[], byte[]>> inputRecords = inputPerTopicPerPartition.get(inputTopicPartition).iterator();
+            final TopicPartition inputTopicPartition = new TopicPartition("repartition", partitionRecords.getKey().partition());
+            final List<ConsumerRecord<byte[], byte[]>> partitionInput = inputPerTopicPerPartition.get(inputTopicPartition);
+            final List<ConsumerRecord<byte[], byte[]>> partitionCnt = partitionRecords.getValue();
 
-                for (final ConsumerRecord<byte[], byte[]> receivedRecord : partitionRecords.getValue()) {
-                    final ConsumerRecord<byte[], byte[]> input = inputRecords.next();
+            if (partitionInput.size() != partitionCnt.size()) {
+                throw new RuntimeException("Result verification failed: expected " + partitionInput.size() + " records for "
+                    +  partitionRecords.getKey() + " but received " + partitionCnt.size());
+            }
 
-                    final String receivedKey = stringDeserializer.deserialize(receivedRecord.topic(), receivedRecord.key());
-                    final long receivedValue = longDeserializer.deserialize(receivedRecord.topic(), receivedRecord.value());
-                    final String key = stringDeserializer.deserialize(input.topic(), input.key());
-                    final int value = integerDeserializer.deserialize(input.topic(), input.value());
+            final Iterator<ConsumerRecord<byte[], byte[]>> inputRecords = partitionInput.iterator();
 
-                    Long cnt = currentSumPerKey.get(key);
-                    if (cnt == null) {
-                        cnt = 0L;
-                    }
-                    currentSumPerKey.put(key, ++cnt);
+            for (final ConsumerRecord<byte[], byte[]> receivedRecord : partitionCnt) {
+                final ConsumerRecord<byte[], byte[]> input = inputRecords.next();
 
-                    if (!receivedKey.equals(key) || receivedValue != cnt.longValue()) {
-                        throw new RuntimeException("Result verification failed for " + receivedRecord + " expected <" + key + "," + value + "> but was <" + receivedKey + "," + receivedValue + ">");
-                    }
+                final String receivedKey = stringDeserializer.deserialize(receivedRecord.topic(), receivedRecord.key());
+                final long receivedValue = longDeserializer.deserialize(receivedRecord.topic(), receivedRecord.value());
+                final String key = stringDeserializer.deserialize(input.topic(), input.key());
+                final int value = integerDeserializer.deserialize(input.topic(), input.value());
+
+                Long cnt = currentSumPerKey.get(key);
+                if (cnt == null) {
+                    cnt = 0L;
                 }
-            } catch (final NullPointerException e) {
-                System.err.println(inputPerTopicPerPartition);
-                e.printStackTrace(System.err);
-                throw e;
+                currentSumPerKey.put(key, ++cnt);
+
+                if (!receivedKey.equals(key) || receivedValue != cnt.longValue()) {
+                    throw new RuntimeException("Result verification failed for " + receivedRecord + " expected <" + key + "," + cnt + "> but was <" + receivedKey + "," + receivedValue + ">");
+                }
             }
         }
     }
