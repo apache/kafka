@@ -36,7 +36,7 @@ class AbstractCreateTopicsRequestTest extends BaseRequestTest {
   protected def validateValidCreateTopicsRequests(request: CreateTopicsRequest): Unit = {
     val response = sendCreateTopicRequest(request)
 
-    val error = response.errors.values.asScala.find(!_.is(Errors.NONE))
+    val error = response.errors.values.asScala.find(_.isFailure)
     assertTrue(s"There should be no errors, found ${response.errors.asScala}", error.isEmpty)
 
     request.topics.asScala.foreach { case (topic, details) =>
@@ -118,7 +118,7 @@ class AbstractCreateTopicsRequestTest extends BaseRequestTest {
         assertEquals(expected.messageWithFallback, actual.messageWithFallback)
       }
       // If no error validate topic exists
-      if (expectedError.is(Errors.NONE) && !request.validateOnly) {
+      if (expectedError.isSuccess && !request.validateOnly) {
         validateTopicExists(topic)
       }
     }

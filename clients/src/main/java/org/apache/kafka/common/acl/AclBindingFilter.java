@@ -56,8 +56,8 @@ public class AclBindingFilter {
     /**
      * Return true if this filter has any UNKNOWN components.
      */
-    public boolean unknown() {
-        return resourceFilter.unknown() || entryFilter.isUnknown();
+    public boolean isUnknown() {
+        return resourceFilter.isUnknown() || entryFilter.isUnknown();
     }
 
     /**
