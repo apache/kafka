@@ -73,6 +73,64 @@ public class DefaultRecordTest {
         }
     }
 
+    @Test(expected = InvalidRecordException.class)
+    public void testBasicSerdeInvalidHeaderCountTooHigh() throws IOException {
+        Header[] headers = new Header[] {
+            new RecordHeader("foo", "value".getBytes()),
+            new RecordHeader("bar", (byte[]) null),
+            new RecordHeader("\"A\\u00ea\\u00f1\\u00fcC\"", "value".getBytes())
+        };
+
+        SimpleRecord record = new SimpleRecord(15L, "hi".getBytes(), "there".getBytes(), headers);
+
+        int baseSequence = 723;
+        long baseOffset = 37;
+        int offsetDelta = 10;
+        long baseTimestamp = System.currentTimeMillis();
+        long timestampDelta = 323;
+
+        ByteBufferOutputStream out = new ByteBufferOutputStream(1024);
+        DefaultRecord.writeTo(new DataOutputStream(out), offsetDelta, timestampDelta, record.key(), record.value(),
+                record.headers());
+        ByteBuffer buffer = out.buffer();
+        buffer.flip();
+        buffer.put(14, (byte) 8);
+
+        DefaultRecord logRecord = DefaultRecord.readFrom(buffer, baseOffset, baseTimestamp, baseSequence, null);
+        // force iteration through the record to validate the number of headers
+        assertEquals(DefaultRecord.sizeInBytes(offsetDelta, timestampDelta, record.key(), record.value(),
+                record.headers()), logRecord.sizeInBytes());
+    }
+
+    @Test(expected = InvalidRecordException.class)
+    public void testBasicSerdeInvalidHeaderCountTooLow() throws IOException {
+        Header[] headers = new Header[] {
+            new RecordHeader("foo", "value".getBytes()),
+            new RecordHeader("bar", (byte[]) null),
+            new RecordHeader("\"A\\u00ea\\u00f1\\u00fcC\"", "value".getBytes())
+        };
+
+        SimpleRecord record = new SimpleRecord(15L, "hi".getBytes(), "there".getBytes(), headers);
+
+        int baseSequence = 723;
+        long baseOffset = 37;
+        int offsetDelta = 10;
+        long baseTimestamp = System.currentTimeMillis();
+        long timestampDelta = 323;
+
+        ByteBufferOutputStream out = new ByteBufferOutputStream(1024);
+        DefaultRecord.writeTo(new DataOutputStream(out), offsetDelta, timestampDelta, record.key(), record.value(),
+                record.headers());
+        ByteBuffer buffer = out.buffer();
+        buffer.flip();
+        buffer.put(14, (byte) 4);
+
+        DefaultRecord logRecord = DefaultRecord.readFrom(buffer, baseOffset, baseTimestamp, baseSequence, null);
+        // force iteration through the record to validate the number of headers
+        assertEquals(DefaultRecord.sizeInBytes(offsetDelta, timestampDelta, record.key(), record.value(),
+                record.headers()), logRecord.sizeInBytes());
+    }
+
     @Test
     public void testSerdeNoSequence() throws IOException {
         ByteBuffer key = ByteBuffer.wrap("hi".getBytes());
