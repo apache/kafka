@@ -2782,6 +2782,54 @@ class LogTest {
   }
 
   @Test
+  def testFirstUnstableOffsetDoesNotExceedLogStartOffsetMidSegment(): Unit = {
+    val log = createLog(1024 * 1024)
+    val epoch = 0.toShort
+    val pid = 1L
+    val appendPid = appendTransactionalAsLeader(log, pid, epoch)
+
+    appendPid(5)
+    appendNonTransactionalAsLeader(log, 3)
+    assertEquals(8L, log.logEndOffset)
+
+    log.roll()
+    assertEquals(2, log.logSegments.size)
+    appendPid(5)
+
+    assertEquals(Some(0L), log.firstUnstableOffset.map(_.messageOffset))
+
+    log.maybeIncrementLogStartOffset(5L)
+
+    // the first unstable offset should be lower bounded by the log start offset
+    assertEquals(Some(5L), log.firstUnstableOffset.map(_.messageOffset))
+  }
+
+  @Test
+  def testFirstUnstableOffsetDoesNotExceedLogStartOffsetAfterSegmentDeletion(): Unit = {
+    val log = createLog(1024 * 1024)
+    val epoch = 0.toShort
+    val pid = 1L
+    val appendPid = appendTransactionalAsLeader(log, pid, epoch)
+
+    appendPid(5)
+    appendNonTransactionalAsLeader(log, 3)
+    assertEquals(8L, log.logEndOffset)
+
+    log.roll()
+    assertEquals(2, log.logSegments.size)
+    appendPid(5)
+
+    assertEquals(Some(0L), log.firstUnstableOffset.map(_.messageOffset))
+
+    log.maybeIncrementLogStartOffset(8L)
+    log.deleteOldSegments()
+    assertEquals(1, log.logSegments.size)
+
+    // the first unstable offset should be lower bounded by the log start offset
+    assertEquals(Some(8L), log.firstUnstableOffset.map(_.messageOffset))
+  }
+
+  @Test
   def testLastStableOffsetWithMixedProducerData() {
     val log = createLog(1024 * 1024)
 

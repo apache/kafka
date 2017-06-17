@@ -155,7 +155,17 @@ class Log(@volatile var dir: File,
 
   @volatile private var nextOffsetMetadata: LogOffsetMetadata = _
 
-  /* The earliest offset which is part of an incomplete transaction. This is used to compute the LSO. */
+  /* The earliest offset which is part of an incomplete transaction. This is used to compute the
+   * last stable offset (LSO) in ReplicaManager. Note that it is possible that the "true" first unstable offset
+   * gets removed from the log (through record or segment deletion). In this case, the first unstable offset
+   * will point to the log start offset, which may actually be either part of a completed transaction or not
+   * part of a transaction at all. However, since we only use the LSO for the purpose of restricting the
+   * read_committed consumer to fetching decided data (i.e. committed, aborted, or non-transactional), this
+   * temporary abuse seems justifiable and saves us from scanning the log after deletion to find the first offsets
+   * of each ongoing transaction in order to compute a new first unstable offset. It is possible, however,
+   * that this could result in disagreement between replicas depending on when they began replicating the log.
+   * In the worst case, the LSO could be seen by a consumer to go backwards. 
+   */
   @volatile var firstUnstableOffset: Option[LogOffsetMetadata] = None
 
   /* the actual segments of the log */
@@ -699,8 +709,8 @@ class Log(@volatile var dir: File,
 
   private def updateFirstUnstableOffset(): Unit = lock synchronized {
     val updatedFirstStableOffset = producerStateManager.firstUnstableOffset match {
-      case Some(logOffsetMetadata) if logOffsetMetadata.messageOffsetOnly =>
-        val offset = logOffsetMetadata.messageOffset
+      case Some(logOffsetMetadata) if logOffsetMetadata.messageOffsetOnly || logOffsetMetadata.messageOffset < logStartOffset =>
+        val offset = math.max(logOffsetMetadata.messageOffset, logStartOffset)
         val segment = segments.floorEntry(offset).getValue
         val position  = segment.translateOffset(offset)
         Some(LogOffsetMetadata(offset, segment.baseOffset, position.position))
