@@ -35,7 +35,7 @@ class LogManagerTest {
 
   val time: MockTime = new MockTime()
   val maxRollInterval = 100
-  val maxLogAgeMs = 10*60*60*1000
+  val maxLogAgeMs = 10*60*1000
   val logProps = new Properties()
   logProps.put(LogConfig.SegmentBytesProp, 1024: java.lang.Integer)
   logProps.put(LogConfig.SegmentIndexBytesProp, 4096: java.lang.Integer)
@@ -51,7 +51,7 @@ class LogManagerTest {
   def setUp() {
     logDir = TestUtils.tempDir()
     logManager = createLogManager()
-    logManager.startup
+    logManager.startup()
     logDir = logManager.logDirs(0)
   }
 
@@ -105,8 +105,8 @@ class LogManagerTest {
     assertEquals("Now there should only be only one segment in the index.", 1, log.numberOfSegments)
     time.sleep(log.config.fileDeleteDelayMs + 1)
 
-    // there should be a log file, two indexes, and the leader epoch checkpoint
-    assertEquals("Files should have been deleted", log.numberOfSegments * 3 + 1, log.dir.list.length)
+    // there should be a log file, two indexes, one producer snapshot, and the leader epoch checkpoint
+    assertEquals("Files should have been deleted", log.numberOfSegments * 4 + 1, log.dir.list.length)
     assertEquals("Should get empty fetch off new log.", 0, log.readUncommitted(offset+1, 1024).records.sizeInBytes)
 
     try {
@@ -132,7 +132,7 @@ class LogManagerTest {
     val config = LogConfig.fromProps(logConfig.originals, logProps)
 
     logManager = createLogManager()
-    logManager.startup
+    logManager.startup()
 
     // create a log
     val log = logManager.createLog(new TopicPartition(name, 0), config)
@@ -203,7 +203,7 @@ class LogManagerTest {
     val config = LogConfig.fromProps(logConfig.originals, logProps)
 
     logManager = createLogManager()
-    logManager.startup
+    logManager.startup()
     val log = logManager.createLog(new TopicPartition(name, 0), config)
     val lastFlush = log.lastFlushTime
     for (_ <- 0 until 200) {
@@ -265,7 +265,7 @@ class LogManagerTest {
     logDir = TestUtils.tempDir()
     logManager = TestUtils.createLogManager(
       logDirs = Array(new File(logDir.getAbsolutePath + File.separator)))
-    logManager.startup
+    logManager.startup()
     verifyCheckpointRecovery(Seq(new TopicPartition("test-a", 1)), logManager)
   }
 
@@ -279,7 +279,7 @@ class LogManagerTest {
     logDir.mkdirs()
     logDir.deleteOnExit()
     logManager = createLogManager()
-    logManager.startup
+    logManager.startup()
     verifyCheckpointRecovery(Seq(new TopicPartition("test-a", 1)), logManager)
   }
 

@@ -169,7 +169,7 @@ class LogManager(val logDirs: Array[File],
           val logRecoveryPoint = recoveryPoints.getOrElse(topicPartition, 0L)
           val logStartOffset = logStartOffsets.getOrElse(topicPartition, 0L)
 
-          val current = new Log(
+          val current = Log(
             dir = logDir,
             config = config,
             logStartOffset = logStartOffset,
@@ -414,7 +414,7 @@ class LogManager(val logDirs: Array[File],
         val dir = new File(dataDir, topicPartition.topic + "-" + topicPartition.partition)
         Files.createDirectories(dir.toPath)
 
-        val log = new Log(
+        val log = Log(
           dir = dir,
           config = config,
           logStartOffset = 0L,
