@@ -230,7 +230,7 @@ class LogCleanerManagerTest extends JUnitSuite with Logging {
 
     val config = LogConfig(logProps)
     val partitionDir = new File(logDir, "log-0")
-    val log = new Log(partitionDir,
+    val log = Log(partitionDir,
       config,
       logStartOffset = 0L,
       recoveryPoint = 0L,
@@ -241,7 +241,7 @@ class LogCleanerManagerTest extends JUnitSuite with Logging {
   }
 
   private def makeLog(dir: File = logDir, config: LogConfig = logConfig) =
-    new Log(dir = dir, config = config, logStartOffset = 0L, recoveryPoint = 0L, scheduler = time.scheduler,
+    Log(dir = dir, config = config, logStartOffset = 0L, recoveryPoint = 0L, scheduler = time.scheduler,
       time = time, brokerTopicStats = new BrokerTopicStats)
 
   private def records(key: Int, value: Int, timestamp: Long) =

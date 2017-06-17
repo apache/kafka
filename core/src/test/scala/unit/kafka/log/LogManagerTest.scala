@@ -51,7 +51,7 @@ class LogManagerTest {
   def setUp() {
     logDir = TestUtils.tempDir()
     logManager = createLogManager()
-    logManager.startup
+    logManager.startup()
     logDir = logManager.logDirs(0)
   }
 
@@ -132,7 +132,7 @@ class LogManagerTest {
     val config = LogConfig.fromProps(logConfig.originals, logProps)
 
     logManager = createLogManager()
-    logManager.startup
+    logManager.startup()
 
     // create a log
     val log = logManager.createLog(new TopicPartition(name, 0), config)
@@ -203,7 +203,7 @@ class LogManagerTest {
     val config = LogConfig.fromProps(logConfig.originals, logProps)
 
     logManager = createLogManager()
-    logManager.startup
+    logManager.startup()
     val log = logManager.createLog(new TopicPartition(name, 0), config)
     val lastFlush = log.lastFlushTime
     for (_ <- 0 until 200) {
@@ -265,7 +265,7 @@ class LogManagerTest {
     logDir = TestUtils.tempDir()
     logManager = TestUtils.createLogManager(
       logDirs = Array(new File(logDir.getAbsolutePath + File.separator)))
-    logManager.startup
+    logManager.startup()
     verifyCheckpointRecovery(Seq(new TopicPartition("test-a", 1)), logManager)
   }
 
@@ -279,7 +279,7 @@ class LogManagerTest {
     logDir.mkdirs()
     logDir.deleteOnExit()
     logManager = createLogManager()
-    logManager.startup
+    logManager.startup()
     verifyCheckpointRecovery(Seq(new TopicPartition("test-a", 1)), logManager)
   }
 
