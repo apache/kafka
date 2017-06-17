@@ -1012,6 +1012,7 @@ object TestUtils extends Logging {
                        time: MockTime = new MockTime(),
                        brokerId: Int = 0): LogManager = {
     new LogManager(logDirs = logDirs,
+                   initialOfflineDirs = Array.empty[File],
                    topicConfigs = Map(),
                    defaultConfig = defaultConfig,
                    cleanerConfig = cleanerConfig,

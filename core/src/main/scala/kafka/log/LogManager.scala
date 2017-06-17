@@ -21,8 +21,10 @@ import java.io._
 import java.nio.file.Files
 import java.util.concurrent._
 
+import com.yammer.metrics.core.Gauge
 import kafka.admin.AdminUtils
 import kafka.common.{KafkaException, KafkaStorageException}
+import kafka.metrics.KafkaMetricsGroup
 import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.server.{BrokerState, RecoveringFromUncleanShutdown, _}
 import kafka.utils._
@@ -45,6 +47,7 @@ import scala.collection.mutable.ArrayBuffer
  */
 @threadsafe
 class LogManager(private val logDirs: Array[File],
+                 private val initialOfflineDirs: Array[File],
                  val topicConfigs: Map[String, LogConfig], // note that this doesn't get updated after creation
                  val defaultConfig: LogConfig,
                  val cleanerConfig: CleanerConfig,
@@ -59,7 +62,7 @@ class LogManager(private val logDirs: Array[File],
                  brokerTopicStats: BrokerTopicStats,
                  val zkUtils: ZkUtils,
                  val brokerId: Int,
-                 time: Time) extends Logging {
+                 time: Time) extends Logging with KafkaMetricsGroup {
   val RecoveryPointCheckpointFile = "recovery-point-offset-checkpoint"
   val LogStartOffsetCheckpointFile = "log-start-offset-checkpoint"
   val LockFile = ".lock"
@@ -69,7 +72,7 @@ class LogManager(private val logDirs: Array[File],
   private val logs = new Pool[TopicPartition, Log]()
   private val logsToBeDeleted = new LinkedBlockingQueue[Log]()
 
-  val liveLogDirs: ArrayBuffer[File] = createAndValidateLogDirs(logDirs)
+  val liveLogDirs: ArrayBuffer[File] = createAndValidateLogDirs(logDirs, initialOfflineDirs)
   @volatile private var recoveryPointCheckpoints = liveLogDirs.map(dir => (dir, new OffsetCheckpointFile(new File(dir, RecoveryPointCheckpointFile)))).toMap
   @volatile private var logStartOffsetCheckpoints = liveLogDirs.map(dir => (dir, new OffsetCheckpointFile(new File(dir, LogStartOffsetCheckpointFile)))).toMap
 
@@ -86,6 +89,12 @@ class LogManager(private val logDirs: Array[File],
     else
       null
 
+  val offlineLogDirectoryCount = newGauge(
+    "OfflineLogDirectoryCount",
+    new Gauge[Int] {
+      def value = offlineLogDirs.length
+    }
+  )
 
   /**
    * Create and check validity of the given directories, specifically:
@@ -95,13 +104,13 @@ class LogManager(private val logDirs: Array[File],
    * <li> Check that each path is a readable directory
    * </ol>
    */
-  private def createAndValidateLogDirs(dirs: Seq[File]): ArrayBuffer[File] = {
+  private def createAndValidateLogDirs(dirs: Seq[File], initialOfflineDirs: Seq[File]): ArrayBuffer[File] = {
     if(dirs.map(_.getCanonicalPath).toSet.size < dirs.size)
       throw new KafkaException("Duplicate log directory found: " + dirs.mkString(", "))
 
     val liveLogDirs = ArrayBuffer.empty[File]
 
-    for (dir <- dirs) {
+    for (dir <- dirs if !initialOfflineDirs.contains(dir)) {
       try {
         if (!dir.exists) {
           info("Log directory '" + dir.getAbsolutePath + "' not found, creating it.")
@@ -677,6 +686,7 @@ class LogManager(private val logDirs: Array[File],
 
 object LogManager {
   def apply(config: KafkaConfig,
+            initialOfflineDirs: Seq[String],
             zkUtils: ZkUtils,
             brokerState: BrokerState,
             kafkaScheduler: KafkaScheduler,
@@ -700,6 +710,7 @@ object LogManager {
       enableCleaner = config.logCleanerEnable)
 
     new LogManager(logDirs = config.logDirs.map(new File(_)).toArray,
+      initialOfflineDirs = initialOfflineDirs.map(new File(_)).toArray,
       topicConfigs = topicConfigs,
       defaultConfig = defaultLogConfig,
       cleanerConfig = cleanerConfig,

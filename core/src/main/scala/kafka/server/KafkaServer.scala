@@ -47,7 +47,7 @@ import org.apache.kafka.common.utils.{AppInfoParser, Time}
 import org.apache.kafka.common.{ClusterResource, Node}
 
 import scala.collection.JavaConverters._
-import scala.collection.{Map, mutable}
+import scala.collection.{Seq, Map, mutable}
 
 object KafkaServer {
   // Copy the subset of properties that are relevant to Logs
@@ -195,7 +195,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         info(s"Cluster ID = $clusterId")
 
         /* generate brokerId */
-        config.brokerId =  getBrokerId
+        val (brokerId, initialOfflineDirs) = getBrokerIdAndOfflineDirs
+        config.brokerId = brokerId
         this.logIdent = "[Kafka Server " + config.brokerId + "], "
 
         /* create and configure metrics */
@@ -212,7 +213,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         notifyClusterListeners(kafkaMetricsReporters ++ reporters.asScala)
 
         /* start log manager */
-        logManager = LogManager(config, zkUtils, brokerState, kafkaScheduler, time, brokerTopicStats)
+        logManager = LogManager(config, initialOfflineDirs, zkUtils, brokerState, kafkaScheduler, time, brokerTopicStats)
         logManager.startup()
 
         metadataCache = new MetadataCache(config.brokerId)
@@ -655,9 +656,10 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
     *
     * @return A brokerId.
     */
-  private def getBrokerId: Int =  {
+  private def getBrokerIdAndOfflineDirs: (Int, Seq[String]) =  {
     var brokerId = config.brokerId
     val brokerIdSet = mutable.HashSet[Int]()
+    val offlineDirs = mutable.ArrayBuffer.empty[String]
 
     for (logDir <- config.logDirs) {
       try {
@@ -667,6 +669,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         }
       } catch {
         case e : IOException =>
+          offlineDirs += logDir
           error(s"Fail to read ${brokerMetaPropsFile} under log directory ${logDir}", e)
       }
     }
@@ -685,20 +688,22 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
     else if(brokerIdSet.size == 1) // pick broker.id from meta.properties
       brokerId = brokerIdSet.last
 
-    brokerId
+
+    (brokerId, offlineDirs)
   }
 
   private def checkpointBrokerId(brokerId: Int) {
-    for (logDir <- config.logDirs) {
-      try {
-        val checkpoint = brokerMetadataCheckpoints(logDir)
-        val brokerMetadataOpt = checkpoint.read()
-        if (brokerMetadataOpt.isEmpty)
-          checkpoint.write(BrokerMetadata(brokerId))
-      } catch {
-        case e : IOException =>
-          error(s"Fail to checkpoint brokerId in ${brokerMetaPropsFile} under log directory ${logDir}", e)
-      }
+    var logDirsWithoutMetaProps: List[String] = List()
+
+    for (logDir <- config.logDirs if logManager.liveLogDirs.contains(new File(logDir))) {
+      val brokerMetadataOpt = brokerMetadataCheckpoints(logDir).read()
+      if(brokerMetadataOpt.isEmpty)
+        logDirsWithoutMetaProps ++= List(logDir)
+    }
+
+    for(logDir <- logDirsWithoutMetaProps) {
+      val checkpoint = brokerMetadataCheckpoints(logDir)
+      checkpoint.write(BrokerMetadata(brokerId))
     }
   }
 

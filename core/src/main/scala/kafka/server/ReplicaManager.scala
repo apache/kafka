@@ -974,6 +974,7 @@ class ReplicaManager(val config: KafkaConfig,
             stateChangeLogger.error(("Broker %d skipped the become-leader state change with correlation id %d from " +
               "controller %d epoch %d for partition %s since the replica for the partition is offline due to disk error %s.")
               .format(localBrokerId, correlationId, controllerId, epoch, partition.topicPartition, e))
+            getLogDir(new TopicPartition(partition.topic, partition.partitionId)).foreach(handleLogDirFailure)
             responseMap.put(new TopicPartition(partition.topic, partition.partitionId), Errors.KAFKA_STORAGE_ERROR)
         }
       }
@@ -1065,6 +1066,7 @@ class ReplicaManager(val config: KafkaConfig,
               "controller %d epoch %d for partition [%s,%d] since the replica for the partition is offline due to disk error %s")
               .format(localBrokerId, correlationId, controllerId, partitionStateInfo.controllerEpoch,
                 partition.topic, partition.partitionId, e))
+            getLogDir(new TopicPartition(partition.topic, partition.partitionId)).foreach(handleLogDirFailure)
             responseMap.put(new TopicPartition(partition.topic, partition.partitionId), Errors.KAFKA_STORAGE_ERROR)
         }
       }
