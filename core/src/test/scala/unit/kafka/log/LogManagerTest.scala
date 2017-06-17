@@ -35,7 +35,7 @@ class LogManagerTest {
 
   val time: MockTime = new MockTime()
   val maxRollInterval = 100
-  val maxLogAgeMs = 10*60*60*1000
+  val maxLogAgeMs = 10*60*1000
   val logProps = new Properties()
   logProps.put(LogConfig.SegmentBytesProp, 1024: java.lang.Integer)
   logProps.put(LogConfig.SegmentIndexBytesProp, 4096: java.lang.Integer)
