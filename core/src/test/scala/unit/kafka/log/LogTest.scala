@@ -522,7 +522,6 @@ class LogTest {
     assertEquals(2, log.activeProducers.size)
 
     log.maybeIncrementLogStartOffset(1L)
-    log.deleteOldSegments()
 
     assertEquals(1, log.activeProducers.size)
     val retainedEntryOpt = log.activeProducers.get(pid2)

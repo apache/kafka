@@ -723,6 +723,8 @@ class Log(@volatile var dir: File,
     lock synchronized {
       if (offset > logStartOffset) {
         logStartOffset = offset
+        producerStateManager.truncateHead(logStartOffset)
+        updateFirstUnstableOffset()
       }
     }
   }
@@ -1065,17 +1067,9 @@ class Log(@volatile var dir: File,
       lock synchronized {
         // remove the segments for lookups
         deletable.foreach(deleteSegment)
-        logStartOffset = math.max(logStartOffset, segments.firstEntry.getValue.baseOffset)
-        leaderEpochCache.clearAndFlushEarliest(logStartOffset)
-        producerStateManager.truncateHead(logStartOffset)
-        updateFirstUnstableOffset()
-      }
-    } else {
-      lock synchronized {
-        // The log start offset may now point to the middle of a segment after record deletion, so we need
-        // to truncate the producer state to ensure that non-retained producers are evicted.
-        producerStateManager.truncateHead(logStartOffset)
-        updateFirstUnstableOffset()
+        val newLogStartOffset = math.max(logStartOffset, segments.firstEntry.getValue.baseOffset)
+        leaderEpochCache.clearAndFlushEarliest(newLogStartOffset)
+        maybeIncrementLogStartOffset(newLogStartOffset)
       }
     }
     numToDelete
