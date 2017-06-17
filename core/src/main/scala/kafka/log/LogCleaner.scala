@@ -362,9 +362,10 @@ private[log] class Cleaner(val id: Int,
     // this is the lower of the last active segment and the compaction lag
     val cleanableHorizonMs = log.logSegments(0, cleanable.firstUncleanableOffset).lastOption.map(_.lastModified).getOrElse(0L)
 
+
     // group the segments and clean the groups
     info("Cleaning log %s (cleaning prior to %s, discarding tombstones prior to %s)...".format(log.name, new Date(cleanableHorizonMs), new Date(deleteHorizonMs)))
-    for (group <- groupSegmentsBySize(log.logSegments(0, endOffset), log.config.segmentSize, log.config.maxIndexSize))
+    for (group <- groupSegmentsBySize(log.logSegments(0, endOffset), log.config.segmentSize, log.config.maxIndexSize, cleanable.firstUncleanableOffset))
       cleanSegments(log, group, offsetMap, deleteHorizonMs, stats)
 
     // record buffer utilization
@@ -616,7 +617,7 @@ private[log] class Cleaner(val id: Int,
    *
    * @return A list of grouped segments
    */
-  private[log] def groupSegmentsBySize(segments: Iterable[LogSegment], maxSize: Int, maxIndexSize: Int): List[Seq[LogSegment]] = {
+  private[log] def groupSegmentsBySize(segments: Iterable[LogSegment], maxSize: Int, maxIndexSize: Int, firstUncleanableOffset: Long): List[Seq[LogSegment]] = {
     var grouped = List[List[LogSegment]]()
     var segs = segments.toList
     while(segs.nonEmpty) {
@@ -629,7 +630,7 @@ private[log] class Cleaner(val id: Int,
             logSize + segs.head.size <= maxSize &&
             indexSize + segs.head.index.sizeInBytes <= maxIndexSize &&
             timeIndexSize + segs.head.timeIndex.sizeInBytes <= maxIndexSize &&
-            estimateLastOffset(segs) - group.last.index.baseOffset <= Int.MaxValue) {
+            estimateLastOffset(segs, firstUncleanableOffset) - group.last.index.baseOffset <= Int.MaxValue) {
         group = segs.head :: group
         logSize += segs.head.size
         indexSize += segs.head.index.sizeInBytes
@@ -648,15 +649,14 @@ private[log] class Cleaner(val id: Int,
    *
    * @return The estimated last offset in this segment
    */
-  private def estimateLastOffset(segs: List[LogSegment]): Long = {
+  private def estimateLastOffset(segs: List[LogSegment], firstUncleanableOffset: Long): Long = {
     if (segs.size > 1) {
       /* if there is a next segment, use its base offset as the bounding offset to guarantee we know 
        * the worst case offset */
       segs(1).index.baseOffset - 1
     } else {
-      /* if this is the last segment, then just assume worst case and place into a group
-       * of its own. */
-      segs.head.baseOffset + Int.MaxValue - 1
+      //for the last segment in the list, use the first offset of the first uncleanable segment
+      firstUncleanableOffset - 1
     }
   }
 
