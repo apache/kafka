@@ -259,7 +259,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
                 try {
                     return inputStream.read() == -1;
                 } catch (IOException e) {
-                    return false;
+                    throw new KafkaException("Error checking for remaining bytes after reading batch", e);
                 }
             }
 
