@@ -56,21 +56,21 @@ public class InternalTopicManagerTest {
 
     @Test
     public void shouldReturnCorrectPartitionCounts() throws Exception {
-        InternalTopicManager internalTopicManager = new InternalTopicManager(streamsKafkaClient, 1,
+        InternalTopicManager internalTopicManager = new InternalTopicManager(streamsKafkaClient, 1, 1,
             WINDOW_CHANGE_LOG_ADDITIONAL_RETENTION_DEFAULT, time);
         Assert.assertEquals(Collections.singletonMap(topic, 1), internalTopicManager.getNumPartitions(Collections.singleton(topic)));
     }
 
     @Test
     public void shouldCreateRequiredTopics() throws Exception {
-        InternalTopicManager internalTopicManager = new InternalTopicManager(streamsKafkaClient, 1,
+        InternalTopicManager internalTopicManager = new InternalTopicManager(streamsKafkaClient, 1, null,
             WINDOW_CHANGE_LOG_ADDITIONAL_RETENTION_DEFAULT, time);
         internalTopicManager.makeReady(Collections.singletonMap(new InternalTopicConfig(topic, Collections.singleton(InternalTopicConfig.CleanupPolicy.compact), null), 1));
     }
 
     @Test
     public void shouldNotCreateTopicIfExistsWithDifferentPartitions() throws Exception {
-        InternalTopicManager internalTopicManager = new InternalTopicManager(streamsKafkaClient, 1,
+        InternalTopicManager internalTopicManager = new InternalTopicManager(streamsKafkaClient, 1, null,
             WINDOW_CHANGE_LOG_ADDITIONAL_RETENTION_DEFAULT, time);
         boolean exceptionWasThrown = false;
         try {
@@ -100,7 +100,7 @@ public class InternalTopicManagerTest {
 
         @Override
         public void createTopics(final Map<InternalTopicConfig, Integer> topicsMap, final int replicationFactor,
-                                 final long windowChangeLogAdditionalRetention, final MetadataResponse metadata) {
+                                 final long windowChangeLogAdditionalRetention, final MetadataResponse metadata, final Integer minInsyncReplicas) {
             // do nothing
         }
 

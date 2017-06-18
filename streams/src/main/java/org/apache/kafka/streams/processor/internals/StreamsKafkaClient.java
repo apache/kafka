@@ -153,8 +153,11 @@ public class StreamsKafkaClient {
     /**
      * Create a set of new topics using batch request.
      */
-    public void createTopics(final Map<InternalTopicConfig, Integer> topicsMap, final int replicationFactor,
-                             final long windowChangeLogAdditionalRetention, final MetadataResponse metadata) {
+    public void createTopics(final Map<InternalTopicConfig, Integer> topicsMap,
+                             final int replicationFactor,
+                             final long windowChangeLogAdditionalRetention,
+                             final MetadataResponse metadata,
+                             final Integer minInsyncReplicas) {
 
         final Map<String, CreateTopicsRequest.TopicDetails> topicRequestDetails = new HashMap<>();
         for (Map.Entry<InternalTopicConfig, Integer> entry : topicsMap.entrySet()) {
@@ -162,6 +165,9 @@ public class StreamsKafkaClient {
             Integer partitions = entry.getValue();
             final Properties topicProperties = internalTopicConfig.toProperties(windowChangeLogAdditionalRetention);
             final Map<String, String> topicConfig = new HashMap<>();
+            if (minInsyncReplicas != null) {
+                topicConfig.put(StreamsConfig.MIN_IN_SYNC_REPLICAS_CONFIG, minInsyncReplicas.toString());
+            }
             for (String key : topicProperties.stringPropertyNames()) {
                 topicConfig.put(key, topicProperties.getProperty(key));
             }

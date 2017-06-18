@@ -41,6 +41,7 @@ import static org.apache.kafka.common.requests.IsolationLevel.READ_UNCOMMITTED;
 import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE;
 import static org.apache.kafka.streams.StreamsConfig.consumerPrefix;
 import static org.apache.kafka.streams.StreamsConfig.producerPrefix;
+import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.core.IsEqual.equalTo;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
@@ -388,6 +389,51 @@ public class StreamsConfigTest {
         final StreamsConfig streamsConfig = new StreamsConfig(props);
 
         assertThat(streamsConfig.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG), equalTo(commitIntervalMs));
+    }
+
+    @Test
+    public void shouldOverrideMinInSyncReplicasConfigWhenReplicationFactorIsLower() throws Exception {
+        props.put(StreamsConfig.MIN_IN_SYNC_REPLICAS_CONFIG, 3);
+        props.put(StreamsConfig.REPLICATION_FACTOR_CONFIG, 1);
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
+        assertThat(streamsConfig.getInt(StreamsConfig.MIN_IN_SYNC_REPLICAS_CONFIG), equalTo(1));
+    }
+
+    @Test
+    public void shouldNotOverrideMinInSyncReplicasConfigWhenItIsNull() throws Exception {
+        props.put(StreamsConfig.REPLICATION_FACTOR_CONFIG, 1);
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
+        assertThat(streamsConfig.getInt(StreamsConfig.MIN_IN_SYNC_REPLICAS_CONFIG), nullValue());
+    }
+
+    @Test
+    public void shouldNotOverrideMinInSyncReplicasConfigWhenItIsEqualToReplicationFactor() throws Exception {
+        props.put(StreamsConfig.REPLICATION_FACTOR_CONFIG, 2);
+        props.put(StreamsConfig.MIN_IN_SYNC_REPLICAS_CONFIG, 2);
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
+        assertThat(streamsConfig.getInt(StreamsConfig.MIN_IN_SYNC_REPLICAS_CONFIG), equalTo(2));
+    }
+
+    @Test
+    public void shouldNotOverrideMinInSyncReplicasConfigWhenItIsLessThanToReplicationFactor() throws Exception {
+        props.put(StreamsConfig.REPLICATION_FACTOR_CONFIG, 2);
+        props.put(StreamsConfig.MIN_IN_SYNC_REPLICAS_CONFIG, 1);
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
+        assertThat(streamsConfig.getInt(StreamsConfig.MIN_IN_SYNC_REPLICAS_CONFIG), equalTo(1));
+    }
+
+    @Test
+    public void shouldOverrideMinInsyncReplicasConfigToOneIfIsNotPositive() throws Exception {
+        props.put(StreamsConfig.MIN_IN_SYNC_REPLICAS_CONFIG, 0);
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
+        assertThat(streamsConfig.getInt(StreamsConfig.MIN_IN_SYNC_REPLICAS_CONFIG), equalTo(1));
+    }
+
+    @Test
+    public void shouldOverrideReplicationFactorToOneIfItIsNotPositive() throws Exception {
+        props.put(StreamsConfig.REPLICATION_FACTOR_CONFIG, 0);
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
+        assertThat(streamsConfig.getInt(StreamsConfig.REPLICATION_FACTOR_CONFIG), equalTo(1));
     }
 
     static class MisconfiguredSerde implements Serde {
