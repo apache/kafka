@@ -35,7 +35,9 @@ import static org.apache.kafka.common.protocol.CommonFields.RESOURCE_NAME;
 import static org.apache.kafka.common.protocol.CommonFields.RESOURCE_NAME_FILTER;
 import static org.apache.kafka.common.protocol.CommonFields.RESOURCE_TYPE;
 
-class RequestUtils {
+final class RequestUtils {
+
+    private RequestUtils() {}
 
     static Resource resourceFromStructFields(Struct struct) {
         byte resourceType = struct.get(RESOURCE_TYPE);
