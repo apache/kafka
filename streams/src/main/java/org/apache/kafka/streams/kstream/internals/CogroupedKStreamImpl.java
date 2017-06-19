@@ -25,6 +25,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
+import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Initializer;
@@ -54,21 +55,15 @@ class CogroupedKStreamImpl<K, V> implements CogroupedKStream<K, V> {
 
     private final KStreamBuilder topology;
     private final Serde<K> keySerde;
-    private final Serde<V> aggValueSerde;
-    private final Initializer<V> initializer;
     private final Map<KGroupedStream, Aggregator> pairs = new HashMap<>();
     private final Map<KGroupedStreamImpl, String> repartitionNames = new HashMap<>();
 
     <T> CogroupedKStreamImpl(final KStreamBuilder topology,
                              final KGroupedStream<K, T> groupedStream,
                              final Serde<K> keySerde,
-                             final Serde<V> aggValueSerde,
-                             final Initializer<V> initializer,
                              final Aggregator<? super K, ? super T, V> aggregator) {
         this.topology = topology;
         this.keySerde = keySerde;
-        this.aggValueSerde = aggValueSerde;
-        this.initializer = initializer;
         cogroup(groupedStream, aggregator);
     }
 
@@ -82,52 +77,71 @@ class CogroupedKStreamImpl<K, V> implements CogroupedKStream<K, V> {
     }
 
     @Override
-    public KTable<K, V> aggregate(final String storeName) {
-        return aggregate(AbstractStream.keyValueStore(keySerde, aggValueSerde, storeName));
+    public KTable<K, V> aggregate(final Initializer<V> initializer,
+                                  final Serde<V> valueSerde,
+                                  final String storeName) {
+        return aggregate(initializer, AbstractStream.keyValueStore(keySerde, valueSerde, storeName));
     }
 
     @Override
-    public KTable<K, V> aggregate(final StateStoreSupplier<KeyValueStore> storeSupplier) {
+    public KTable<K, V> aggregate(final Initializer<V> initializer,
+                                  final StateStoreSupplier<KeyValueStore> storeSupplier) {
+        Objects.requireNonNull(initializer, "initializer can't be null");
         Objects.requireNonNull(storeSupplier, "storeSupplier can't be null");
-        return doAggregate(AggregateType.AGGREGATE, storeSupplier, null, null, null);
+        return doAggregate(AggregateType.AGGREGATE, initializer, storeSupplier, null, null, null);
     }
 
     @SuppressWarnings("unchecked")
     @Override
-    public KTable<Windowed<K>, V> aggregate(final Merger<? super K, V> sessionMerger, final SessionWindows sessionWindows, final String storeName) {
-        // TODO: Create storeSupplier.
-        return aggregate(sessionMerger, sessionWindows, AbstractStream.storeFactory(keySerde, aggValueSerde, storeName).sessionWindowed(sessionWindows.maintainMs()).build());
+    public KTable<Windowed<K>, V> aggregate(final Initializer<V> initializer,
+                                            final Merger<? super K, V> sessionMerger,
+                                            final SessionWindows sessionWindows,
+                                            final Serde<V> valueSerde,
+                                            final String storeName) {
+        Objects.requireNonNull(storeName, "storeName can't be null");
+        Topic.validate(storeName);
+        return aggregate(initializer, sessionMerger, sessionWindows, AbstractStream.storeFactory(keySerde, valueSerde, storeName).sessionWindowed(sessionWindows.maintainMs()).build());
     }
 
     @SuppressWarnings("unchecked")
     @Override
-    public KTable<Windowed<K>, V> aggregate(final Merger<? super K, V> sessionMerger, final SessionWindows sessionWindows, final StateStoreSupplier<SessionStore> storeSupplier) {
+    public KTable<Windowed<K>, V> aggregate(final Initializer<V> initializer,
+                                            final Merger<? super K, V> sessionMerger,
+                                            final SessionWindows sessionWindows,
+                                            final StateStoreSupplier<SessionStore> storeSupplier) {
+        Objects.requireNonNull(initializer, "initializer can't be null");
         Objects.requireNonNull(sessionMerger, "sessionMerger can't be null");
         Objects.requireNonNull(sessionWindows, "sessionWindows can't be null");
         Objects.requireNonNull(storeSupplier, "storeSupplier can't be null");
-        return (KTable<Windowed<K>, V>) doAggregate(AggregateType.SESSION_WINDOW_AGGREGATE, storeSupplier, sessionMerger, sessionWindows, null);
+        return (KTable<Windowed<K>, V>) doAggregate(AggregateType.SESSION_WINDOW_AGGREGATE, initializer, storeSupplier, sessionMerger, sessionWindows, null);
     }
 
     @Override
-    public <W extends Window> KTable<Windowed<K>, V> aggregate(final Windows<W> windows, final String storeName) {
-        // TODO: Create storeSupplier.
-        return aggregate(windows, AbstractStream.windowedStore(keySerde, aggValueSerde, windows, storeName));
+    public <W extends Window> KTable<Windowed<K>, V> aggregate(final Initializer<V> initializer,
+                                                               final Windows<W> windows,
+                                                               final Serde<V> valueSerde,
+                                                               final String storeName) {
+        return aggregate(initializer, windows, AbstractStream.windowedStore(keySerde, valueSerde, windows, storeName));
     }
 
     @SuppressWarnings("unchecked")
     @Override
-    public <W extends Window> KTable<Windowed<K>, V> aggregate(final Windows<W> windows, final StateStoreSupplier<WindowStore> storeSupplier) {
+    public <W extends Window> KTable<Windowed<K>, V> aggregate(final Initializer<V> initializer,
+                                                               final Windows<W> windows,
+                                                               final StateStoreSupplier<WindowStore> storeSupplier) {
+        Objects.requireNonNull(initializer, "initializer can't be null");
         Objects.requireNonNull(windows, "windows can't be null");
         Objects.requireNonNull(storeSupplier, "storeSupplier can't be null");
-        return (KTable<Windowed<K>, V>) doAggregate(AggregateType.WINDOW_AGGREGATE, storeSupplier, null, null, windows);
+        return (KTable<Windowed<K>, V>) doAggregate(AggregateType.WINDOW_AGGREGATE, initializer, storeSupplier, null, null, windows);
     }
 
     @SuppressWarnings("unchecked")
     private <W extends Window> KTable<K, V> doAggregate(final AggregateType aggregateType,
-                                     final StateStoreSupplier storeSupplier,
-                                     final Merger<? super K, V> sessionMerger,
-                                     final SessionWindows sessionWindows,
-                                     final Windows<W> windows) {
+                                                        final Initializer<V> initializer,
+                                                        final StateStoreSupplier storeSupplier,
+                                                        final Merger<? super K, V> sessionMerger,
+                                                        final SessionWindows sessionWindows,
+                                                        final Windows<W> windows) {
         final Set<String> sourceNodes = new HashSet<>();
         final Collection<KStreamAggProcessorSupplier> processors = new ArrayList<>();
         final List<String> processorNames = new ArrayList<>();
@@ -143,7 +157,7 @@ class CogroupedKStreamImpl<K, V> implements CogroupedKStream<K, V> {
             final KStreamAggProcessorSupplier processor;
             switch (aggregateType) {
                 case AGGREGATE:
-                    processor = new KStreamAggregate("name", initializer, pair.getValue());
+                    processor = new KStreamAggregate(storeSupplier.name(), initializer, pair.getValue());
                     break;
                 case SESSION_WINDOW_AGGREGATE:
                     processor = new KStreamSessionWindowAggregate(sessionWindows, storeSupplier.name(), initializer, pair.getValue(), sessionMerger);

@@ -342,12 +342,9 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
     }
 
     @Override
-    public <T> CogroupedKStream<K, T> cogroup(final Initializer<T> initializer,
-                                              final Aggregator<? super K, ? super V, T> aggregator,
-                                              final Serde<T> aggValueSerde) {
-        Objects.requireNonNull(initializer, "initializer can't be null");
+    public <T> CogroupedKStream<K, T> cogroup(final Aggregator<? super K, ? super V, T> aggregator) {
         Objects.requireNonNull(aggregator, "aggregator can't be null");
-        return new CogroupedKStreamImpl<>(topology, this, keySerde, aggValueSerde, initializer, aggregator);
+        return new CogroupedKStreamImpl<>(topology, this, keySerde, aggregator);
     }
 
     /**

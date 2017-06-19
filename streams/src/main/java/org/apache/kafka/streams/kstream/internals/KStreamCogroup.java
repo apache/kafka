@@ -57,10 +57,8 @@ class KStreamCogroup<K, V> implements KStreamAggProcessorSupplier<K, K, Change<V
 
     @Override
     public void enableSendingOldValues() {
-        if (!sendOldValues) {
-            for (KStreamAggProcessorSupplier parent : parents) {
-                parent.enableSendingOldValues();
-            }
+        for (KStreamAggProcessorSupplier parent : parents) {
+            parent.enableSendingOldValues();
         }
         sendOldValues = true;
     }

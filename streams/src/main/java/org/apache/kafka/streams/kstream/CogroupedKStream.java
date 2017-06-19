@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -42,28 +43,33 @@ import org.apache.kafka.streams.state.WindowStore;
 @InterfaceStability.Unstable
 public interface CogroupedKStream<K, V> {
 
-    /**
-     * 
-     * @param groupedStream
-     * @param aggregator
-     * @return
-     */
     <T> CogroupedKStream<K, V> cogroup(final KGroupedStream<K, T> groupedStream,
-                                           final Aggregator<? super K, ? super T, V> aggregator);
+                                       final Aggregator<? super K, ? super T, V> aggregator);
 
-    /**
-     * 
-     * @return
-     */
-    KTable<K, V> aggregate(final String storeName);
+    KTable<K, V> aggregate(final Initializer<V> initializer,
+                           final Serde<V> valueSerde,
+                           final String storeName);
     
-    KTable<K, V> aggregate(final StateStoreSupplier<KeyValueStore> storeSupplier);
+    KTable<K, V> aggregate(final Initializer<V> initializer,
+                           final StateStoreSupplier<KeyValueStore> storeSupplier);
 
-    KTable<Windowed<K>, V> aggregate(final Merger<? super K, V> sessionMerger, final SessionWindows sessionWindows, final String storeName);
+    KTable<Windowed<K>, V> aggregate(final Initializer<V> initializer,
+                                     final Merger<? super K, V> sessionMerger,
+                                     final SessionWindows sessionWindows,
+                                     final Serde<V> valueSerde,
+                                     final String storeName);
 
-    KTable<Windowed<K>, V> aggregate(final Merger<? super K, V> sessionMerger, final SessionWindows sessionWindows, final StateStoreSupplier<SessionStore> storeSupplier);
+    KTable<Windowed<K>, V> aggregate(final Initializer<V> initializer,
+                                     final Merger<? super K, V> sessionMerger,
+                                     final SessionWindows sessionWindows,
+                                     final StateStoreSupplier<SessionStore> storeSupplier);
 
-    <W extends Window> KTable<Windowed<K>, V> aggregate(final Windows<W> windows, final String storeName);
+    <W extends Window> KTable<Windowed<K>, V> aggregate(final Initializer<V> initializer,
+                                                        final Windows<W> windows,
+                                                        final Serde<V> valueSerde,
+                                                        final String storeName);
 
-    <W extends Window> KTable<Windowed<K>, V> aggregate(final Windows<W> windows, final StateStoreSupplier<WindowStore> storeSupplier);
+    <W extends Window> KTable<Windowed<K>, V> aggregate(final Initializer<V> initializer,
+                                                        final Windows<W> windows,
+                                                        final StateStoreSupplier<WindowStore> storeSupplier);
 }

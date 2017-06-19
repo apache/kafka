@@ -951,7 +951,5 @@ public interface KGroupedStream<K, V> {
                                          final Serde<T> aggValueSerde,
                                          final StateStoreSupplier<SessionStore> storeSupplier);
 
-    <T> CogroupedKStream<K, T> cogroup(final Initializer<T> initializer,
-                                       final Aggregator<? super K, ? super V, T> aggregator,
-                                       final Serde<T> aggValueSerde);
+    <T> CogroupedKStream<K, T> cogroup(final Aggregator<? super K, ? super V, T> aggregator);
 }
