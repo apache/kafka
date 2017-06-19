@@ -109,8 +109,8 @@ public class ProducerConfig extends AbstractConfig {
 
     /** <code>max.request.size</code> */
     public static final String MAX_REQUEST_SIZE_CONFIG = "max.request.size";
-    private static final String MAX_REQUEST_SIZE_DOC = "The maximum size of a request in bytes. This is also effectively a cap on the maximum record size. Note that the server "
-                                                       + "has its own cap on record size which may be different from this. This setting will limit the number of record "
+    private static final String MAX_REQUEST_SIZE_DOC = "The maximum size of a request in bytes. This is also effectively a cap on the maximum record batch size. Note that the server "
+                                                       + "has its own cap on record batch size which may be different from this. This setting will limit the number of record "
                                                        + "batches the producer will send in a single request to avoid sending huge requests.";
 
     /** <code>reconnect.backoff.ms</code> */

@@ -74,7 +74,7 @@ public class TopicConfig {
         "their data.";
 
     public static final String MAX_MESSAGE_BYTES_CONFIG = "max.message.bytes";
-    public static final String MAX_MESSAGE_BYTES_DOC = "This is largest message size Kafka will allow to be " +
+    public static final String MAX_MESSAGE_BYTES_DOC = "This is largest record batch size Kafka will allow to be " +
         "appended. Note that if you increase this size you must also increase your consumer's fetch size so " +
         "they can fetch messages this large.";
 
