@@ -707,7 +707,7 @@ public class StreamThread extends Thread {
 
                     commitOne(task);
 
-                    log.debug("{} Committed active task {} in {}ms",
+                    log.info("{} Committed active task {} per user request in {}ms",
                             logPrefix, task.id(), timerStartedMs - beforeCommitMs);
                 }
             }
@@ -768,12 +768,12 @@ public class StreamThread extends Thread {
      */
     protected void maybeCommit(final long now) {
         if (commitTimeMs >= 0 && lastCommitMs + commitTimeMs < now) {
-            log.trace("{} Committing all active tasks {} and standby tasks {} since {}ms has elapsed (commit interval is {}ms)",
+            log.debug("{} Committing all active tasks {} and standby tasks {} since {}ms has elapsed (commit interval is {}ms)",
                     logPrefix, activeTasks.keySet(), standbyTasks.keySet(), now - lastCommitMs, commitTimeMs);
 
             commitAll();
 
-            log.debug("{} Committed all active tasks {} and standby tasks {} in {}ms",
+            log.info("{} Committed all active tasks {} and standby tasks {} in {}ms",
                     logPrefix, activeTasks.keySet(), standbyTasks.keySet(), timerStartedMs - now);
 
             lastCommitMs = now;
