@@ -55,7 +55,9 @@ public class MemoryRecordsBuilder {
     private final int partitionLeaderEpoch;
     private final int writeLimit;
 
-    private volatile float estimatedCompressionRatio;
+    // Use a conservative estimate of the compression ratio. The producer overrides this using statistics
+    // from previous batches before appending any records.
+    private volatile float estimatedCompressionRatio = 1.0F;
 
     private boolean appendStreamIsClosed = false;
     private boolean isTransactional;
@@ -662,7 +664,7 @@ public class MemoryRecordsBuilder {
      */
     private int estimatedBytesWritten() {
         if (compressionType == CompressionType.NONE) {
-            return buffer().position();
+            return buffer().position() - initialPosition;
         } else {
             // estimate the written bytes to the underlying byte buffer based on uncompressed written bytes
             return (int) (writtenUncompressed * estimatedCompressionRatio * COMPRESSION_RATE_ESTIMATION_FACTOR);
@@ -723,7 +725,11 @@ public class MemoryRecordsBuilder {
         return appendStreamIsClosed || (this.numRecords > 0 && this.writeLimit <= estimatedBytesWritten());
     }
 
-    public int sizeInBytes() {
+    /**
+     * Get an estimate of the number of bytes written to the underlying buffer. The returned value
+     * is exactly correct if the record set is not compressed or if the builder has been closed.
+     */
+    public int estimatedSizeInBytes() {
         return builtRecords != null ? builtRecords.sizeInBytes() : estimatedBytesWritten();
     }
 

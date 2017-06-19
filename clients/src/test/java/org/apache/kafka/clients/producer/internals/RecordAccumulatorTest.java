@@ -777,7 +777,7 @@ public class RecordAccumulatorTest {
                 for (ProducerBatch batch : batchList) {
                     batchDrained = true;
                     numBatches++;
-                    if (batch.sizeInBytes() > batchSize + DefaultRecordBatch.RECORD_BATCH_OVERHEAD) {
+                    if (batch.estimatedSizeInBytes() > batchSize + DefaultRecordBatch.RECORD_BATCH_OVERHEAD) {
                         accum.splitAndReenqueue(batch);
                         // release the resource of the original big batch.
                         numSplit++;
