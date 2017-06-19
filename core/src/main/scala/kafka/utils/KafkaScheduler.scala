@@ -19,7 +19,7 @@ package kafka.utils
 
 import java.util.concurrent._
 import atomic._
-import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.utils.KafkaThread
 
 /**
  * A scheduler for running jobs
@@ -81,7 +81,7 @@ class KafkaScheduler(val threads: Int,
       executor.setExecuteExistingDelayedTasksAfterShutdownPolicy(false)
       executor.setThreadFactory(new ThreadFactory() {
                                   def newThread(runnable: Runnable): Thread = 
-                                    Utils.newThread(threadNamePrefix + schedulerThreadId.getAndIncrement(), runnable, daemon)
+                                    new KafkaThread(threadNamePrefix + schedulerThreadId.getAndIncrement(), runnable, daemon)
                                 })
     }
   }

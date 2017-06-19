@@ -26,6 +26,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.powermock.api.easymock.PowerMock;
 
+import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -131,6 +132,24 @@ public class FileStreamSourceTaskTest {
 
         config.remove(FileStreamSourceConnector.TOPIC_CONFIG);
         task.start(config);
+    }
+
+    @Test
+    public void testMissingFile() throws InterruptedException {
+        replay();
+
+        String data = "line\n";
+        System.setIn(new ByteArrayInputStream(data.getBytes()));
+
+        config.remove(FileStreamSourceConnector.FILE_CONFIG);
+        task.start(config);
+
+        List<SourceRecord> records = task.poll();
+        assertEquals(1, records.size());
+        assertEquals(TOPIC, records.get(0).topic());
+        assertEquals("line", records.get(0).value());
+
+        task.stop();
     }
 
     public void testInvalidFile() throws InterruptedException {

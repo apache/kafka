@@ -170,7 +170,7 @@ public class Sender implements Runnable {
         // okay we stopped accepting requests but there may still be
         // requests in the accumulator or waiting for acknowledgment,
         // wait until these are completed.
-        while (!forceClose && (this.accumulator.hasUnsent() || this.client.inFlightRequestCount() > 0)) {
+        while (!forceClose && (this.accumulator.hasUndrained() || this.client.inFlightRequestCount() > 0)) {
             try {
                 run(time.milliseconds());
             } catch (Exception e) {
@@ -201,7 +201,7 @@ public class Sender implements Runnable {
             if (!transactionManager.isTransactional()) {
                 // this is an idempotent producer, so make sure we have a producer id
                 maybeWaitForProducerId();
-            } else if (transactionManager.hasInflightRequest() || maybeSendTransactionalRequest(now)) {
+            } else if (transactionManager.hasInFlightRequest() || maybeSendTransactionalRequest(now)) {
                 // as long as there are outstanding transactional requests, we simply wait for them to return
                 client.poll(retryBackoffMs, now);
                 return;
@@ -209,12 +209,14 @@ public class Sender implements Runnable {
 
             // do not continue sending if the transaction manager is in a failed state or if there
             // is no producer id (for the idempotent case).
-            if (transactionManager.hasError() || !transactionManager.hasProducerId()) {
+            if (transactionManager.hasFatalError() || !transactionManager.hasProducerId()) {
                 RuntimeException lastError = transactionManager.lastError();
                 if (lastError != null)
                     maybeAbortBatches(lastError);
                 client.poll(retryBackoffMs, now);
                 return;
+            } else if (transactionManager.hasAbortableError()) {
+                accumulator.abortUndrainedBatches(transactionManager.lastError());
             }
         }
 
@@ -260,7 +262,6 @@ public class Sender implements Runnable {
         }
 
         List<ProducerBatch> expiredBatches = this.accumulator.expiredBatches(this.requestTimeout, now);
-
         boolean needsTransactionStateReset = false;
         // Reset the producer id if an expired batch has previously been sent to the broker. Also update the metrics
         // for expired batches. see the documentation of @TransactionState.resetProducerId to understand why
@@ -298,17 +299,12 @@ public class Sender implements Runnable {
         sendProduceRequests(batches, now);
 
         return pollTimeout;
-
     }
 
     private boolean maybeSendTransactionalRequest(long now) {
-        if (transactionManager.isCompletingTransaction() &&
-                !transactionManager.hasPartitionsToAdd() &&
-                accumulator.hasUnflushedBatches()) {
-
-            // If the transaction is being aborted, then we can clear any unsent produce requests
+        if (transactionManager.isCompleting() && accumulator.hasIncomplete()) {
             if (transactionManager.isAborting())
-                accumulator.abortUnclosedBatches(new KafkaException("Failing batch since transaction was aborted"));
+                accumulator.abortUndrainedBatches(new KafkaException("Failing batch since transaction was aborted"));
 
             // There may still be requests left which are being retried. Since we do not know whether they had
             // been successfully appended to the broker log, we must resend them until their final status is clear.
@@ -316,13 +312,9 @@ public class Sender implements Runnable {
             // be correct which would lead to an OutOfSequenceException.
             if (!accumulator.flushInProgress())
                 accumulator.beginFlush();
-
-            // Do not send the EndTxn until all pending batches have been completed
-            if (accumulator.hasUnflushedBatches())
-                return false;
         }
 
-        TransactionManager.TxnRequestHandler nextRequestHandler = transactionManager.nextRequestHandler();
+        TransactionManager.TxnRequestHandler nextRequestHandler = transactionManager.nextRequestHandler(accumulator.hasIncomplete());
         if (nextRequestHandler == null)
             return false;
 
@@ -377,8 +369,11 @@ public class Sender implements Runnable {
     }
 
     private void maybeAbortBatches(RuntimeException exception) {
-        if (accumulator.hasUnflushedBatches()) {
-            log.error("Aborting producer batches due to fatal error", exception);
+        if (accumulator.hasIncomplete()) {
+            String logPrefix = "";
+            if (transactionManager != null)
+                logPrefix = transactionManager.logPrefix;
+            log.error("{}Aborting producer batches due to fatal error", logPrefix, exception);
             accumulator.abortBatches(exception);
         }
     }
@@ -553,7 +548,6 @@ public class Sender implements Runnable {
 
         } else {
             completeBatch(batch, response);
-
         }
 
         // Unmute the completed partition.

@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.jmh.record;
 
-import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.record.AbstractRecords;
 import org.apache.kafka.common.record.BufferSupplier;
 import org.apache.kafka.common.record.CompressionType;
@@ -59,7 +58,7 @@ public class RecordBatchIterationBenchmark {
     }
 
     @Param(value = {"LZ4", "SNAPPY", "NONE"})
-    private CompressionType type = CompressionType.NONE;
+    private CompressionType compressionType = CompressionType.NONE;
 
     @Param(value = {"1", "2"})
     private byte messageVersion = CURRENT_MAGIC_VALUE;
@@ -98,11 +97,12 @@ public class RecordBatchIterationBenchmark {
     private ByteBuffer createBatch(int batchSize) {
         byte[] value = new byte[messageSize];
         final ByteBuffer buf = ByteBuffer.allocate(
-            AbstractRecords.sizeInBytesUpperBound(messageVersion, new byte[0], value, new Header[0]) * batchSize
+            AbstractRecords.estimateSizeInBytesUpperBound(messageVersion, compressionType, new byte[0], value,
+                    Record.EMPTY_HEADERS) * batchSize
         );
 
         final MemoryRecordsBuilder builder =
-            MemoryRecords.builder(buf, messageVersion, type, TimestampType.CREATE_TIME, startingOffset);
+            MemoryRecords.builder(buf, messageVersion, compressionType, TimestampType.CREATE_TIME, startingOffset);
 
         for (int i = 0; i < batchSize; ++i) {
             switch (bytes) {

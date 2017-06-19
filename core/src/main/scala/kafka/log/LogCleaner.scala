@@ -424,7 +424,7 @@ private[log] class Cleaner(val id: Int,
         info("Cleaning segment %s in log %s (largest timestamp %s) into %s, %s deletes."
           .format(startOffset, log.name, new Date(oldSegmentOpt.largestTimestamp), cleaned.baseOffset, if(retainDeletes) "retaining" else "discarding"))
         cleanInto(log.topicPartition, oldSegmentOpt, cleaned, map, retainDeletes, log.config.maxMessageSize, transactionMetadata,
-          log.activePids, stats)
+          log.activeProducers, stats)
 
         currentSegmentOpt = nextSegmentOpt
       }

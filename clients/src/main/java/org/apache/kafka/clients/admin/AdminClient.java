@@ -17,7 +17,6 @@
 
 package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.common.Node;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.annotation.InterfaceStability;
@@ -29,12 +28,16 @@ import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 
 /**
- * The public interface for the {@link KafkaAdminClient}, which supports managing and inspecting topics,
- * brokers, and configurations.
+ * The administrative client for Kafka, which supports managing and inspecting topics, brokers, configurations and ACLs.
  *
- * @see KafkaAdminClient
+ * The minimum broker version required is 0.10.0.0. Methods with stricter requirements will specify the minimum broker
+ * version required.
+ *
+ * This client was introduced in 0.11.0.0 and the API is still evolving. We will try to evolve the API in a compatible
+ * manner, but we reserve the right to make breaking changes in minor releases, if necessary. We will update the
+ * {@code InterfaceStability} annotation and this notice once the API is considered stable.
  */
-@InterfaceStability.Unstable
+@InterfaceStability.Evolving
 public abstract class AdminClient implements AutoCloseable {
 
     /**
@@ -83,6 +86,8 @@ public abstract class AdminClient implements AutoCloseable {
     /**
      * Create a batch of new topics with the default options.
      *
+     * This operation is supported by brokers with version 0.10.1.0 or higher.
+     *
      * @param newTopics         The new topics to create.
      * @return                  The CreateTopicsResult.
      */
@@ -98,6 +103,9 @@ public abstract class AdminClient implements AutoCloseable {
      * During this time, AdminClient#listTopics and AdminClient#describeTopics
      * may not return information about the new topics.
      *
+     * This operation is supported by brokers with version 0.10.1.0 or higher. The validateOnly option is supported
+     * from version 0.10.2.0.
+     *
      * @param newTopics         The new topics to create.
      * @param options           The options to use when creating the new topics.
      * @return                  The CreateTopicsResult.
@@ -108,6 +116,8 @@ public abstract class AdminClient implements AutoCloseable {
     /**
      * Similar to #{@link AdminClient#deleteTopics(Collection<String>, DeleteTopicsOptions)},
      * but uses the default options.
+     *
+     * This operation is supported by brokers with version 0.10.1.0 or higher.
      *
      * @param topics            The topic names to delete.
      * @return                  The DeleteTopicsResult.
@@ -127,6 +137,8 @@ public abstract class AdminClient implements AutoCloseable {
      * If delete.topic.enable is false on the brokers, deleteTopics will mark
      * the topics for deletion, but not actually delete them.  The futures will
      * return successfully in this case.
+     *
+     * This operation is supported by brokers with version 0.10.1.0 or higher.
      *
      * @param topics            The topic names to delete.
      * @param options           The options to use when deleting the topics.
@@ -193,28 +205,10 @@ public abstract class AdminClient implements AutoCloseable {
     public abstract DescribeClusterResult describeCluster(DescribeClusterOptions options);
 
     /**
-     * Get information about the api versions of nodes in the cluster with the default options.
-     * See {@link AdminClient#apiVersions(Collection<Node>, ApiVersionsOptions)}
-     *
-     * @param nodes             The nodes to get information about, or null to get information about all nodes.
-     * @return                  The ApiVersionsResult.
-     */
-    public ApiVersionsResult apiVersions(Collection<Node> nodes) {
-        return apiVersions(nodes, new ApiVersionsOptions());
-    }
-
-    /**
-     * Get information about the api versions of nodes in the cluster.
-     *
-     * @param nodes             The nodes to get information about, or null to get information about all nodes.
-     * @param options           The options to use when getting api versions of the nodes.
-     * @return                  The ApiVersionsResult.
-     */
-    public abstract ApiVersionsResult apiVersions(Collection<Node> nodes, ApiVersionsOptions options);
-
-    /**
      * Similar to #{@link AdminClient#describeAcls(AclBindingFilter, DescribeAclsOptions)},
      * but uses the default options.
+     *
+     * This operation is supported by brokers with version 0.11.0.0 or higher.
      *
      * @param filter            The filter to use.
      * @return                  The DeleteAclsResult.
@@ -229,6 +223,8 @@ public abstract class AdminClient implements AutoCloseable {
      * Note: it may take some time for changes made by createAcls or deleteAcls to be reflected
      * in the output of describeAcls.
      *
+     * This operation is supported by brokers with version 0.11.0.0 or higher.
+     *
      * @param filter            The filter to use.
      * @param options           The options to use when listing the ACLs.
      * @return                  The DeleteAclsResult.
@@ -238,6 +234,8 @@ public abstract class AdminClient implements AutoCloseable {
     /**
      * Similar to #{@link AdminClient#createAcls(Collection<AclBinding>, CreateAclsOptions)},
      * but uses the default options.
+     *
+     * This operation is supported by brokers with version 0.11.0.0 or higher.
      *
      * @param acls              The ACLs to create
      * @return                  The CreateAclsResult.
@@ -252,6 +250,8 @@ public abstract class AdminClient implements AutoCloseable {
      * If you attempt to add an ACL that duplicates an existing ACL, no error will be raised, but
      * no changes will be made.
      *
+     * This operation is supported by brokers with version 0.11.0.0 or higher.
+     *
      * @param acls              The ACLs to create
      * @param options           The options to use when creating the ACLs.
      * @return                  The CreateAclsResult.
@@ -262,6 +262,8 @@ public abstract class AdminClient implements AutoCloseable {
      * Similar to #{@link AdminClient#deleteAcls(Collection<AclBinding>, DeleteAclsOptions)},
      * but uses the default options.
      *
+     * This operation is supported by brokers with version 0.11.0.0 or higher.
+     *
      * @param filters           The filters to use.
      * @return                  The DeleteAclsResult.
      */
@@ -271,6 +273,8 @@ public abstract class AdminClient implements AutoCloseable {
 
     /**
      * Deletes access control lists (ACLs) according to the supplied filters.
+     *
+     * This operation is supported by brokers with version 0.11.0.0 or higher.
      *
      * @param filters           The filters to use.
      * @param options           The options to use when deleting the ACLs.
@@ -283,6 +287,8 @@ public abstract class AdminClient implements AutoCloseable {
      * Get the configuration for the specified resources with the default options.
      *
      * See {@link #describeConfigs(Collection, DescribeConfigsOptions)} for more details.
+      *
+      * This operation is supported by brokers with version 0.11.0.0 or higher.
      *
      * @param resources         The resources (topic and broker resource types are currently supported)
      * @return                  The DescribeConfigsResult
@@ -302,6 +308,8 @@ public abstract class AdminClient implements AutoCloseable {
      *
      * Config entries where isReadOnly() is true cannot be updated.
      *
+     * This operation is supported by brokers with version 0.11.0.0 or higher.
+     *
      * @param resources         The resources (topic and broker resource types are currently supported)
      * @param options           The options to use when describing configs
      * @return                  The DescribeConfigsResult
@@ -313,6 +321,8 @@ public abstract class AdminClient implements AutoCloseable {
      * Update the configuration for the specified resources with the default options.
      *
      * See {@link #alterConfigs(Map, AlterConfigsOptions)} for more details.
+     *
+     * This operation is supported by brokers with version 0.11.0.0 or higher.
      *
      * @param configs         The resources with their configs (topic is the only resource type with configs that can
      *                        be updated currently)
@@ -327,6 +337,8 @@ public abstract class AdminClient implements AutoCloseable {
      *
      * Updates are not transactional so they may succeed for some resources while fail for others. The configs for
      * a particular resource are updated atomically.
+     *
+     * This operation is supported by brokers with version 0.11.0.0 or higher.
      *
      * @param configs         The resources with their configs (topic is the only resource type with configs that can
      *                        be updated currently)

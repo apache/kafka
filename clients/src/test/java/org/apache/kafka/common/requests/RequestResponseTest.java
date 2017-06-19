@@ -24,7 +24,6 @@ import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.NotCoordinatorException;
 import org.apache.kafka.common.errors.NotEnoughReplicasException;
 import org.apache.kafka.common.errors.SecurityDisabledException;
@@ -226,7 +225,7 @@ public class RequestResponseTest {
         checkResponse(createTxnOffsetCommitResponse(), 0);
         checkRequest(createListAclsRequest());
         checkErrorResponse(createListAclsRequest(), new SecurityDisabledException("Security is not enabled."));
-        checkResponse(createListAclsResponse(), ApiKeys.DESCRIBE_ACLS.latestVersion());
+        checkResponse(createDescribeAclsResponse(), ApiKeys.DESCRIBE_ACLS.latestVersion());
         checkRequest(createCreateAclsRequest());
         checkErrorResponse(createCreateAclsRequest(), new SecurityDisabledException("Security is not enabled."));
         checkResponse(createCreateAclsResponse(), ApiKeys.CREATE_ACLS.latestVersion());
@@ -1001,8 +1000,8 @@ public class RequestResponseTest {
                 new AccessControlEntryFilter(null, null, AclOperation.ANY, AclPermissionType.ANY))).build();
     }
 
-    private DescribeAclsResponse createListAclsResponse() {
-        return new DescribeAclsResponse(0, null, Collections.singleton(new AclBinding(
+    private DescribeAclsResponse createDescribeAclsResponse() {
+        return new DescribeAclsResponse(0, ApiError.NONE, Collections.singleton(new AclBinding(
             new Resource(ResourceType.TOPIC, "mytopic"),
             new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.WRITE, AclPermissionType.ALLOW))));
     }
@@ -1019,8 +1018,8 @@ public class RequestResponseTest {
     }
 
     private CreateAclsResponse createCreateAclsResponse() {
-        return new CreateAclsResponse(0, Arrays.asList(new AclCreationResponse(null),
-            new AclCreationResponse(new InvalidRequestException("Foo bar"))));
+        return new CreateAclsResponse(0, Arrays.asList(new AclCreationResponse(ApiError.NONE),
+            new AclCreationResponse(new ApiError(Errors.INVALID_REQUEST, "Foo bar"))));
     }
 
     private DeleteAclsRequest createDeleteAclsRequest() {
@@ -1036,16 +1035,14 @@ public class RequestResponseTest {
 
     private DeleteAclsResponse createDeleteAclsResponse() {
         List<AclFilterResponse> responses = new ArrayList<>();
-        responses.add(new AclFilterResponse(null,
-            new HashSet<AclDeletionResult>() {{
-                    add(new AclDeletionResult(null, new AclBinding(
+        responses.add(new AclFilterResponse(Utils.mkSet(
+                new AclDeletionResult(new AclBinding(
                         new Resource(ResourceType.TOPIC, "mytopic3"),
-                        new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.DESCRIBE, AclPermissionType.ALLOW))));
-                    add(new AclDeletionResult(null, new AclBinding(
+                        new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.DESCRIBE, AclPermissionType.ALLOW))),
+                new AclDeletionResult(new AclBinding(
                         new Resource(ResourceType.TOPIC, "mytopic4"),
-                        new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.DESCRIBE, AclPermissionType.DENY))));
-                }}));
-        responses.add(new AclFilterResponse(new SecurityDisabledException("No security"),
+                        new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.DESCRIBE, AclPermissionType.DENY))))));
+        responses.add(new AclFilterResponse(new ApiError(Errors.SECURITY_DISABLED, "No security"),
             Collections.<AclDeletionResult>emptySet()));
         return new DeleteAclsResponse(0, responses);
     }
@@ -1071,9 +1068,9 @@ public class RequestResponseTest {
                 new DescribeConfigsResponse.ConfigEntry("another_name", "another value", true, false, true)
         );
         configs.put(new org.apache.kafka.common.requests.Resource(org.apache.kafka.common.requests.ResourceType.BROKER, "0"), new DescribeConfigsResponse.Config(
-                new ApiError(Errors.NONE, null), configEntries));
+                ApiError.NONE, configEntries));
         configs.put(new org.apache.kafka.common.requests.Resource(org.apache.kafka.common.requests.ResourceType.TOPIC, "topic"), new DescribeConfigsResponse.Config(
-                new ApiError(Errors.NONE, null), Collections.<DescribeConfigsResponse.ConfigEntry>emptyList()));
+                ApiError.NONE, Collections.<DescribeConfigsResponse.ConfigEntry>emptyList()));
         return new DescribeConfigsResponse(200, configs);
     }
 
@@ -1091,7 +1088,7 @@ public class RequestResponseTest {
 
     private AlterConfigsResponse createAlterConfigsResponse() {
         Map<org.apache.kafka.common.requests.Resource, ApiError> errors = new HashMap<>();
-        errors.put(new org.apache.kafka.common.requests.Resource(org.apache.kafka.common.requests.ResourceType.BROKER, "0"), new ApiError(Errors.NONE, null));
+        errors.put(new org.apache.kafka.common.requests.Resource(org.apache.kafka.common.requests.ResourceType.BROKER, "0"), ApiError.NONE);
         errors.put(new org.apache.kafka.common.requests.Resource(org.apache.kafka.common.requests.ResourceType.TOPIC, "topic"), new ApiError(Errors.INVALID_REQUEST, "This request is invalid"));
         return new AlterConfigsResponse(20, errors);
     }

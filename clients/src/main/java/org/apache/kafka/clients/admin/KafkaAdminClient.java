@@ -24,7 +24,6 @@ import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NetworkClient;
-import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.admin.DeleteAclsResult.FilterResult;
 import org.apache.kafka.clients.admin.DeleteAclsResult.FilterResults;
 import org.apache.kafka.common.Cluster;
@@ -59,8 +58,6 @@ import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.AlterConfigsRequest;
 import org.apache.kafka.common.requests.AlterConfigsResponse;
-import org.apache.kafka.common.requests.ApiVersionsRequest;
-import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.requests.CreateAclsRequest;
 import org.apache.kafka.common.requests.CreateAclsRequest.AclCreation;
 import org.apache.kafka.common.requests.CreateAclsResponse;
@@ -92,13 +89,13 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.TreeMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -106,17 +103,14 @@ import java.util.concurrent.atomic.AtomicLong;
 import static org.apache.kafka.common.utils.Utils.closeQuietly;
 
 /**
- * An administrative client for Kafka which supports managing and inspecting topics, brokers,
- * and configurations.
+ * The default implementation of {@link AdminClient}. An instance of this class is created by invoking one of the
+ * {@code create()} methods in {@code AdminClient}. Users should not refer to this class directly.
+ *
+ * The API of this class is evolving, see {@link AdminClient} for details.
  */
-@InterfaceStability.Unstable
+@InterfaceStability.Evolving
 public class KafkaAdminClient extends AdminClient {
     private static final Logger log = LoggerFactory.getLogger(KafkaAdminClient.class);
-
-    /**
-     * The maximum number of times to retry a call before failing it.
-     */
-    private static final int MAX_CALL_RETRIES = 5;
 
     /**
      * The next integer to use to name a KafkaAdminClient which the user hasn't specified an explicit name for.
@@ -183,6 +177,8 @@ public class KafkaAdminClient extends AdminClient {
      * A factory which creates TimeoutProcessors for the RPC thread.
      */
     private final TimeoutProcessorFactory timeoutProcessorFactory;
+
+    private final int maxRetries;
 
     /**
      * Get or create a list value from a map.
@@ -358,6 +354,7 @@ public class KafkaAdminClient extends AdminClient {
         this.thread = new KafkaThread(threadName, runnable, false);
         this.timeoutProcessorFactory = (timeoutProcessorFactory == null) ?
             new TimeoutProcessorFactory() : timeoutProcessorFactory;
+        this.maxRetries = config.getInt(AdminClientConfig.RETRIES_CONFIG);
         config.logUnused();
         log.debug("Created Kafka admin client {}", this.clientId);
         thread.start();
@@ -418,22 +415,6 @@ public class KafkaAdminClient extends AdminClient {
         @Override
         public Node provide() {
             return metadata.fetch().nodeById(nodeId);
-        }
-    }
-
-    /**
-     * Provides a constant node which is known at construction time.
-     */
-    private static class ConstantNodeProvider implements NodeProvider {
-        private final Node node;
-
-        ConstantNodeProvider(Node node) {
-            this.node = node;
-        }
-
-        @Override
-        public Node provide() {
-            return node;
         }
     }
 
@@ -507,7 +488,7 @@ public class KafkaAdminClient extends AdminClient {
                 return;
             }
             // If we are out of retries, fail.
-            if (tries > MAX_CALL_RETRIES) {
+            if (tries > maxRetries) {
                 if (log.isDebugEnabled()) {
                     log.debug("{} failed after {} attempt(s)", this, tries,
                         new Exception(prettyPrintException(throwable)));
@@ -1032,7 +1013,7 @@ public class KafkaAdminClient extends AdminClient {
 
             @Override
             public AbstractRequest.Builder createRequest(int timeoutMs) {
-                return new CreateTopicsRequest.Builder(topicsMap, timeoutMs, options.validateOnly());
+                return new CreateTopicsRequest.Builder(topicsMap, timeoutMs, options.shouldValidateOnly());
             }
 
             @Override
@@ -1142,7 +1123,7 @@ public class KafkaAdminClient extends AdminClient {
                 Map<String, TopicListing> topicListing = new HashMap<>();
                 for (String topicName : cluster.topics()) {
                     boolean internal = cluster.internalTopics().contains(topicName);
-                    if (!internal || options.listInternal())
+                    if (!internal || options.shouldListInternal())
                         topicListing.put(topicName, new TopicListing(topicName, internal));
                 }
                 topicListingFuture.complete(topicListing);
@@ -1198,17 +1179,29 @@ public class KafkaAdminClient extends AdminClient {
                         continue;
                     }
                     boolean isInternal = cluster.internalTopics().contains(topicName);
-                    TreeMap<Integer, TopicPartitionInfo> partitions = new TreeMap<>();
                     List<PartitionInfo> partitionInfos = cluster.partitionsForTopic(topicName);
+                    List<TopicPartitionInfo> partitions = new ArrayList<>(partitionInfos.size());
                     for (PartitionInfo partitionInfo : partitionInfos) {
                         TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(
-                            partitionInfo.partition(), partitionInfo.leader(), Arrays.asList(partitionInfo.replicas()),
+                            partitionInfo.partition(), leader(partitionInfo), Arrays.asList(partitionInfo.replicas()),
                             Arrays.asList(partitionInfo.inSyncReplicas()));
-                        partitions.put(partitionInfo.partition(), topicPartitionInfo);
+                        partitions.add(topicPartitionInfo);
                     }
+                    Collections.sort(partitions, new Comparator<TopicPartitionInfo>() {
+                        @Override
+                        public int compare(TopicPartitionInfo tp1, TopicPartitionInfo tp2) {
+                            return Integer.compare(tp1.partition(), tp2.partition());
+                        }
+                    });
                     TopicDescription topicDescription = new TopicDescription(topicName, isInternal, partitions);
                     future.complete(topicDescription);
                 }
+            }
+
+            private Node leader(PartitionInfo partitionInfo) {
+                if (partitionInfo.leader() == null || partitionInfo.leader().id() == Node.noNode().id())
+                    return null;
+                return partitionInfo.leader();
             }
 
             @Override
@@ -1248,8 +1241,14 @@ public class KafkaAdminClient extends AdminClient {
             void handleResponse(AbstractResponse abstractResponse) {
                 MetadataResponse response = (MetadataResponse) abstractResponse;
                 describeClusterFuture.complete(response.brokers());
-                controllerFuture.complete(response.controller());
+                controllerFuture.complete(controller(response));
                 clusterIdFuture.complete(response.clusterId());
+            }
+
+            private Node controller(MetadataResponse response) {
+                if (response.controller() == null || response.controller().id() == MetadataResponse.NO_CONTROLLER_ID)
+                    return null;
+                return response.controller();
             }
 
             @Override
@@ -1261,38 +1260,6 @@ public class KafkaAdminClient extends AdminClient {
         }, now);
 
         return new DescribeClusterResult(describeClusterFuture, controllerFuture, clusterIdFuture);
-    }
-
-    @Override
-    public ApiVersionsResult apiVersions(Collection<Node> nodes, ApiVersionsOptions options) {
-        final long now = time.milliseconds();
-        final long deadlineMs = calcDeadlineMs(now, options.timeoutMs());
-        Map<Node, KafkaFuture<NodeApiVersions>> nodeFutures = new HashMap<>();
-        for (final Node node : nodes) {
-            if (nodeFutures.get(node) != null)
-                continue;
-            final KafkaFutureImpl<NodeApiVersions> nodeFuture = new KafkaFutureImpl<>();
-            nodeFutures.put(node, nodeFuture);
-            runnable.call(new Call("apiVersions", deadlineMs, new ConstantNodeProvider(node)) {
-                    @Override
-                    public AbstractRequest.Builder createRequest(int timeoutMs) {
-                        return new ApiVersionsRequest.Builder();
-                    }
-
-                    @Override
-                    public void handleResponse(AbstractResponse abstractResponse) {
-                        ApiVersionsResponse response = (ApiVersionsResponse) abstractResponse;
-                        nodeFuture.complete(new NodeApiVersions(response.apiVersions()));
-                    }
-
-                    @Override
-                    public void handleFailure(Throwable throwable) {
-                        nodeFuture.completeExceptionally(throwable);
-                    }
-                }, now);
-        }
-        return new ApiVersionsResult(nodeFutures);
-
     }
 
     @Override
@@ -1310,8 +1277,8 @@ public class KafkaAdminClient extends AdminClient {
             @Override
             void handleResponse(AbstractResponse abstractResponse) {
                 DescribeAclsResponse response = (DescribeAclsResponse) abstractResponse;
-                if (response.throwable() != null) {
-                    future.completeExceptionally(response.throwable());
+                if (response.error().isFailure()) {
+                    future.completeExceptionally(response.error().exception());
                 } else {
                     future.complete(response.acls());
                 }
@@ -1363,8 +1330,8 @@ public class KafkaAdminClient extends AdminClient {
                             "The broker reported no creation result for the given ACL."));
                     } else {
                         AclCreationResponse creation = iter.next();
-                        if (creation.throwable() != null) {
-                            future.completeExceptionally(creation.throwable());
+                        if (creation.error().isFailure()) {
+                            future.completeExceptionally(creation.error().exception());
                         } else {
                             future.complete(null);
                         }
@@ -1411,12 +1378,12 @@ public class KafkaAdminClient extends AdminClient {
                             "The broker reported no deletion result for the given filter."));
                     } else {
                         AclFilterResponse deletion = iter.next();
-                        if (deletion.throwable() != null) {
-                            future.completeExceptionally(deletion.throwable());
+                        if (deletion.error().isFailure()) {
+                            future.completeExceptionally(deletion.error().exception());
                         } else {
                             List<FilterResult> filterResults = new ArrayList<>();
                             for (AclDeletionResult deletionResult : deletion.deletions()) {
-                                filterResults.add(new FilterResult(deletionResult.acl(), deletionResult.exception()));
+                                filterResults.add(new FilterResult(deletionResult.acl(), deletionResult.error().exception()));
                             }
                             future.complete(new FilterResults(filterResults));
                         }
@@ -1466,7 +1433,7 @@ public class KafkaAdminClient extends AdminClient {
                     ConfigResource configResource = entry.getKey();
                     KafkaFutureImpl<Config> future = entry.getValue();
                     DescribeConfigsResponse.Config config = response.config(configResourceToResource(configResource));
-                    if (!config.error().is(Errors.NONE)) {
+                    if (config.error().isFailure()) {
                         future.completeExceptionally(config.error().exception());
                         continue;
                     }
@@ -1502,7 +1469,7 @@ public class KafkaAdminClient extends AdminClient {
                     DescribeConfigsResponse response = (DescribeConfigsResponse) abstractResponse;
                     DescribeConfigsResponse.Config config = response.configs().get(resource);
 
-                    if (!config.error().is(Errors.NONE))
+                    if (config.error().isFailure())
                         brokerFuture.completeExceptionally(config.error().exception());
                     else {
                         List<ConfigEntry> configEntries = new ArrayList<>();
@@ -1563,7 +1530,7 @@ public class KafkaAdminClient extends AdminClient {
 
             @Override
             public AbstractRequest.Builder createRequest(int timeoutMs) {
-                return new AlterConfigsRequest.Builder(requestMap, options.isValidateOnly());
+                return new AlterConfigsRequest.Builder(requestMap, options.shouldValidateOnly());
             }
 
             @Override

@@ -350,11 +350,11 @@ public class MemoryRecordsBuilderTest {
                 RecordBatch.NO_SEQUENCE, false, false, RecordBatch.NO_PARTITION_LEADER_EPOCH, writeLimit);
 
         assertFalse(builder.isFull());
-        assertTrue(builder.hasRoomFor(0L, key, value));
+        assertTrue(builder.hasRoomFor(0L, key, value, Record.EMPTY_HEADERS));
         builder.append(0L, key, value);
 
         assertTrue(builder.isFull());
-        assertFalse(builder.hasRoomFor(0L, key, value));
+        assertFalse(builder.hasRoomFor(0L, key, value, Record.EMPTY_HEADERS));
 
         MemoryRecords memRecords = builder.build();
         List<Record> records = TestUtils.toList(memRecords.records());
@@ -378,7 +378,7 @@ public class MemoryRecordsBuilderTest {
         builder.append(0L, "a".getBytes(), "1".getBytes());
         builder.append(1L, "b".getBytes(), "2".getBytes());
 
-        assertFalse(builder.hasRoomFor(2L, "c".getBytes(), "3".getBytes()));
+        assertFalse(builder.hasRoomFor(2L, "c".getBytes(), "3".getBytes(), Record.EMPTY_HEADERS));
         builder.append(2L, "c".getBytes(), "3".getBytes());
         MemoryRecords records = builder.build();
 

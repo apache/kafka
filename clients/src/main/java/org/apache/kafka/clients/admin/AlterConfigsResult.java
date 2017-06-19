@@ -23,7 +23,12 @@ import org.apache.kafka.common.config.ConfigResource;
 
 import java.util.Map;
 
-@InterfaceStability.Unstable
+/**
+ * The result of the {@link AdminClient#alterConfigs(Map)} call.
+ *
+ * The API of this class is evolving, see {@link AdminClient} for details.
+ */
+@InterfaceStability.Evolving
 public class AlterConfigsResult {
 
     private final Map<ConfigResource, KafkaFuture<Void>> futures;
@@ -32,10 +37,16 @@ public class AlterConfigsResult {
         this.futures = futures;
     }
 
-    public Map<ConfigResource, KafkaFuture<Void>> results() {
+    /**
+     * Return a map from resources to futures which can be used to check the status of the operation on each resource.
+     */
+    public Map<ConfigResource, KafkaFuture<Void>> values() {
         return futures;
     }
 
+    /**
+     * Return a future which succeeds only if all the alter configs operations succeed.
+     */
     public KafkaFuture<Void> all() {
         return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0]));
     }

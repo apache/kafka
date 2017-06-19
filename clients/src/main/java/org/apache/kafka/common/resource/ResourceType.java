@@ -17,12 +17,17 @@
 
 package org.apache.kafka.common.resource;
 
+import org.apache.kafka.common.annotation.InterfaceStability;
+
 import java.util.HashMap;
 import java.util.Locale;
 
 /**
  * Represents a type of resource which an ACL can be applied to.
+ *
+ * The API for this class is still evolving and we may break compatibility in minor releases, if necessary.
  */
+@InterfaceStability.Evolving
 public enum ResourceType {
     /**
      * Represents any ResourceType which this client cannot understand,
@@ -78,6 +83,9 @@ public enum ResourceType {
         }
     }
 
+    /**
+     * Return the ResourceType with the provided code or `ResourceType.UNKNOWN` if one cannot be found.
+     */
     public static ResourceType fromCode(byte code) {
         ResourceType resourceType = CODE_TO_VALUE.get(code);
         if (resourceType == null) {
@@ -92,11 +100,17 @@ public enum ResourceType {
         this.code = code;
     }
 
+    /**
+     * Return the code of this resource.
+     */
     public byte code() {
         return code;
     }
 
-    public boolean unknown() {
+    /**
+     * Return whether this resource type is UNKNOWN.
+     */
+    public boolean isUnknown() {
         return this == UNKNOWN;
     }
 }

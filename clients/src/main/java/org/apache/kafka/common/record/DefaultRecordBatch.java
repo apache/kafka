@@ -24,7 +24,9 @@ import org.apache.kafka.common.utils.CloseableIterator;
 import org.apache.kafka.common.utils.Crc32C;
 
 import java.io.DataInputStream;
+import java.io.EOFException;
 import java.io.IOException;
+import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.util.ArrayList;
@@ -124,7 +126,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
     public void ensureValid() {
         if (sizeInBytes() < RECORD_BATCH_OVERHEAD)
             throw new InvalidRecordException("Record batch is corrupt (the size " + sizeInBytes() +
-                    "is smaller than the minimum allowed overhead " + RECORD_BATCH_OVERHEAD + ")");
+                    " is smaller than the minimum allowed overhead " + RECORD_BATCH_OVERHEAD + ")");
 
         if (!isValid())
             throw new InvalidRecordException("Record is corrupt (stored crc = " + checksum()
@@ -235,7 +237,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
     }
 
     private CloseableIterator<Record> compressedIterator(BufferSupplier bufferSupplier) {
-        ByteBuffer buffer = this.buffer.duplicate();
+        final ByteBuffer buffer = this.buffer.duplicate();
         buffer.position(RECORDS_OFFSET);
         final DataInputStream inputStream = new DataInputStream(compressionType().wrapForInput(buffer, magic(),
                 bufferSupplier));
@@ -245,8 +247,19 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
             protected Record readNext(long baseOffset, long baseTimestamp, int baseSequence, Long logAppendTime) {
                 try {
                     return DefaultRecord.readFrom(inputStream, baseOffset, baseTimestamp, baseSequence, logAppendTime);
+                } catch (EOFException e) {
+                    throw new InvalidRecordException("Incorrect declared batch size, premature EOF reached");
                 } catch (IOException e) {
                     throw new KafkaException("Failed to decompress record stream", e);
+                }
+            }
+
+            @Override
+            protected boolean ensureNoneRemaining() {
+                try {
+                    return inputStream.read() == -1;
+                } catch (IOException e) {
+                    throw new KafkaException("Error checking for remaining bytes after reading batch", e);
                 }
             }
 
@@ -267,7 +280,15 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
         return new RecordIterator() {
             @Override
             protected Record readNext(long baseOffset, long baseTimestamp, int baseSequence, Long logAppendTime) {
-                return DefaultRecord.readFrom(buffer, baseOffset, baseTimestamp, baseSequence, logAppendTime);
+                try {
+                    return DefaultRecord.readFrom(buffer, baseOffset, baseTimestamp, baseSequence, logAppendTime);
+                } catch (BufferUnderflowException e) {
+                    throw new InvalidRecordException("Incorrect declared batch size, premature EOF reached");
+                }
+            }
+            @Override
+            protected boolean ensureNoneRemaining() {
+                return !buffer.hasRemaining();
             }
             @Override
             public void close() {}
@@ -457,9 +478,11 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
     }
 
     /**
-     * Get an upper bound on the size of a batch with only a single record using a given key and value.
+     * Get an upper bound on the size of a batch with only a single record using a given key and value. This
+     * is only an estimate because it does not take into account additional overhead from the compression
+     * algorithm used.
      */
-    static int batchSizeUpperBound(ByteBuffer key, ByteBuffer value, Header[] headers) {
+    static int estimateBatchSizeUpperBound(ByteBuffer key, ByteBuffer value, Header[] headers) {
         return RECORD_BATCH_OVERHEAD + DefaultRecord.recordSizeUpperBound(key, value, headers);
     }
 
@@ -500,10 +523,20 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
                 throw new NoSuchElementException();
 
             readRecords++;
-            return readNext(baseOffset, baseTimestamp, baseSequence, logAppendTime);
+            Record rec = readNext(baseOffset, baseTimestamp, baseSequence, logAppendTime);
+            if (readRecords == numRecords) {
+                // Validate that the actual size of the batch is equal to declared size
+                // by checking that after reading declared number of items, there no items left
+                // (overflow case, i.e. reading past buffer end is checked elsewhere).
+                if (!ensureNoneRemaining())
+                    throw new InvalidRecordException("Incorrect declared batch size, records still remaining in file");
+            }
+            return rec;
         }
 
         protected abstract Record readNext(long baseOffset, long baseTimestamp, int baseSequence, Long logAppendTime);
+
+        protected abstract boolean ensureNoneRemaining();
 
         @Override
         public void remove() {

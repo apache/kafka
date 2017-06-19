@@ -180,13 +180,23 @@ public abstract class AbstractRecords implements Records {
         return compressionType == CompressionType.NONE ? size : Math.min(Math.max(size / 2, 1024), 1 << 16);
     }
 
-    public static int sizeInBytesUpperBound(byte magic, byte[] key, byte[] value, Header[] headers) {
-        return sizeInBytesUpperBound(magic, Utils.wrapNullable(key), Utils.wrapNullable(value), headers);
+    /**
+     * Get an upper bound estimate on the batch size needed to hold a record with the given fields. This is only
+     * an estimate because it does not take into account overhead from the compression algorithm.
+     */
+    public static int estimateSizeInBytesUpperBound(byte magic, CompressionType compressionType, byte[] key, byte[] value, Header[] headers) {
+        return estimateSizeInBytesUpperBound(magic, compressionType, Utils.wrapNullable(key), Utils.wrapNullable(value), headers);
     }
 
-    public static int sizeInBytesUpperBound(byte magic, ByteBuffer key, ByteBuffer value, Header[] headers) {
+    /**
+     * Get an upper bound estimate on the batch size needed to hold a record with the given fields. This is only
+     * an estimate because it does not take into account overhead from the compression algorithm.
+     */
+    public static int estimateSizeInBytesUpperBound(byte magic, CompressionType compressionType, ByteBuffer key, ByteBuffer value, Header[] headers) {
         if (magic >= RecordBatch.MAGIC_VALUE_V2)
-            return DefaultRecordBatch.batchSizeUpperBound(key, value, headers);
+            return DefaultRecordBatch.estimateBatchSizeUpperBound(key, value, headers);
+        else if (compressionType != CompressionType.NONE)
+            return Records.LOG_OVERHEAD + LegacyRecord.recordOverhead(magic) + LegacyRecord.recordSize(magic, key, value);
         else
             return Records.LOG_OVERHEAD + LegacyRecord.recordSize(magic, key, value);
     }

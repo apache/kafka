@@ -19,18 +19,30 @@ package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
 
+import java.util.Collection;
+
 /**
- * Options for describeConfigs.
+ * Options for {@link AdminClient#describeConfigs(Collection)}.
+ *
+ * The API of this class is evolving, see {@link AdminClient} for details.
  */
-@InterfaceStability.Unstable
+@InterfaceStability.Evolving
 public class DescribeConfigsOptions {
     private Integer timeoutMs = null;
 
+    /**
+     * Set the request timeout in milliseconds for this operation or {@code null} if the default request timeout for the
+     * AdminClient should be used.
+     */
     public DescribeConfigsOptions timeoutMs(Integer timeoutMs) {
         this.timeoutMs = timeoutMs;
         return this;
     }
 
+    /**
+     * The request timeout in milliseconds for this operation or {@code null} if the default request timeout for the
+     * AdminClient should be used.
+     */
     public Integer timeoutMs() {
         return timeoutMs;
     }

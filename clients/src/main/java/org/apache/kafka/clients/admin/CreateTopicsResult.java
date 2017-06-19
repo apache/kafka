@@ -19,12 +19,15 @@ package org.apache.kafka.clients.admin;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
+import java.util.Collection;
 import java.util.Map;
 
 /**
- * The result of newTopics.
+ * The result of {@link AdminClient#createTopics(Collection)}.
+ *
+ * The API of this class is evolving, see {@link AdminClient} for details.
  */
-@InterfaceStability.Unstable
+@InterfaceStability.Evolving
 public class CreateTopicsResult {
     private final Map<String, KafkaFuture<Void>> futures;
 
@@ -36,7 +39,7 @@ public class CreateTopicsResult {
      * Return a map from topic names to futures, which can be used to check the status of individual
      * topic creations.
      */
-    public Map<String, KafkaFuture<Void>> results() {
+    public Map<String, KafkaFuture<Void>> values() {
         return futures;
     }
 

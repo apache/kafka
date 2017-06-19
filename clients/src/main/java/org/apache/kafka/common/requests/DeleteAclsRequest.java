@@ -96,7 +96,7 @@ public class DeleteAclsRequest extends AbstractRequest {
                 List<DeleteAclsResponse.AclFilterResponse> responses = new ArrayList<>();
                 for (int i = 0; i < filters.size(); i++) {
                     responses.add(new DeleteAclsResponse.AclFilterResponse(
-                        throwable, Collections.<DeleteAclsResponse.AclDeletionResult>emptySet()));
+                        ApiError.fromThrowable(throwable), Collections.<DeleteAclsResponse.AclDeletionResult>emptySet()));
                 }
                 return new DeleteAclsResponse(throttleTimeMs, responses);
             default:

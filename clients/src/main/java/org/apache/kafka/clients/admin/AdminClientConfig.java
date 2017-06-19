@@ -31,7 +31,7 @@ import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
 
 /**
- * The AdminClient configuration keys
+ * The AdminClient configuration class, which also contains constants for configuration entry names.
  */
 public class AdminClientConfig extends AbstractConfig {
     private static final ConfigDef CONFIG;
@@ -98,6 +98,9 @@ public class AdminClientConfig extends AbstractConfig {
     private static final String SECURITY_PROTOCOL_DOC = CommonClientConfigs.SECURITY_PROTOCOL_DOC;
     private static final String METRICS_RECORDING_LEVEL_DOC = CommonClientConfigs.METRICS_RECORDING_LEVEL_DOC;
 
+    public static final String RETRIES_CONFIG = "retries";
+    private static final String RETRIES_DOC = "The maximum number of times to retry a call before failing it.";
+
     static {
         CONFIG = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG,
                                         Type.LIST,
@@ -136,6 +139,12 @@ public class AdminClientConfig extends AbstractConfig {
                                         5 * 60 * 1000,
                                         Importance.MEDIUM,
                                         CONNECTIONS_MAX_IDLE_MS_DOC)
+                                .define(RETRIES_CONFIG,
+                                        Type.INT,
+                                        5,
+                                        atLeast(0),
+                                        Importance.LOW,
+                                        RETRIES_DOC)
                                 .define(METRICS_SAMPLE_WINDOW_MS_CONFIG,
                                         Type.LONG,
                                         30000,

@@ -70,6 +70,9 @@ private[log] case class ProducerIdEntry(producerId: Long, producerEpoch: Short, 
       s"producerEpoch=$producerEpoch, " +
       s"firstSequence=$firstSeq, " +
       s"lastSequence=$lastSeq, " +
+      s"firstOffset=$firstOffset, " +
+      s"lastOffset=$lastOffset, " +
+      s"timestamp=$timestamp, " +
       s"currentTxnFirstOffset=$currentTxnFirstOffset, " +
       s"coordinatorEpoch=$coordinatorEpoch)"
   }
@@ -369,7 +372,7 @@ object ProducerStateManager {
 @nonthreadsafe
 class ProducerStateManager(val topicPartition: TopicPartition,
                            val logDir: File,
-                           val maxPidExpirationMs: Int = 60 * 60 * 1000) extends Logging {
+                           val maxProducerIdExpirationMs: Int = 60 * 60 * 1000) extends Logging {
   import ProducerStateManager._
   import java.util
 
@@ -434,7 +437,10 @@ class ProducerStateManager(val topicPartition: TopicPartition,
         case Some(file) =>
           try {
             info(s"Loading producer state from snapshot file ${file.getName} for partition $topicPartition")
-            readSnapshot(file).filter(!isExpired(currentTime, _)).foreach(loadProducerEntry)
+            val loadedProducers = readSnapshot(file).filter { producerEntry =>
+              isProducerRetained(producerEntry, logStartOffset) && !isProducerExpired(currentTime, producerEntry)
+            }
+            loadedProducers.foreach(loadProducerEntry)
             lastSnapOffset = offsetFromFilename(file.getName)
             lastMapOffset = lastSnapOffset
             return
@@ -460,15 +466,15 @@ class ProducerStateManager(val topicPartition: TopicPartition,
     }
   }
 
-  private def isExpired(currentTimeMs: Long, producerIdEntry: ProducerIdEntry): Boolean =
-    producerIdEntry.currentTxnFirstOffset.isEmpty && currentTimeMs - producerIdEntry.timestamp >= maxPidExpirationMs
+  private def isProducerExpired(currentTimeMs: Long, producerIdEntry: ProducerIdEntry): Boolean =
+    producerIdEntry.currentTxnFirstOffset.isEmpty && currentTimeMs - producerIdEntry.timestamp >= maxProducerIdExpirationMs
 
   /**
    * Expire any producer ids which have been idle longer than the configured maximum expiration timeout.
    */
   def removeExpiredProducers(currentTimeMs: Long) {
     producers.retain { case (producerId, lastEntry) =>
-      !isExpired(currentTimeMs, lastEntry)
+      !isProducerExpired(currentTimeMs, lastEntry)
     }
   }
 
@@ -479,9 +485,8 @@ class ProducerStateManager(val topicPartition: TopicPartition,
    */
   def truncateAndReload(logStartOffset: Long, logEndOffset: Long, currentTimeMs: Long) {
     // remove all out of range snapshots
-    deleteSnapshotFiles { file =>
-      val offset = offsetFromFilename(file.getName)
-      offset > logEndOffset || offset <= logStartOffset
+    deleteSnapshotFiles { snapOffset =>
+      snapOffset > logEndOffset || snapOffset <= logStartOffset
     }
 
     if (logEndOffset != mapEndOffset) {
@@ -493,7 +498,7 @@ class ProducerStateManager(val topicPartition: TopicPartition,
       unreplicatedTxns.clear()
       loadFromSnapshot(logStartOffset, currentTimeMs)
     } else {
-      evictUnretainedProducers(logStartOffset)
+      truncateHead(logStartOffset)
     }
   }
 
@@ -551,21 +556,33 @@ class ProducerStateManager(val topicPartition: TopicPartition,
    */
   def oldestSnapshotOffset: Option[Long] = oldestSnapshotFile.map(file => offsetFromFilename(file.getName))
 
+  private def isProducerRetained(producerIdEntry: ProducerIdEntry, logStartOffset: Long): Boolean = {
+    producerIdEntry.lastOffset >= logStartOffset
+  }
+
   /**
    * When we remove the head of the log due to retention, we need to clean up the id map. This method takes
-   * the new start offset and removes all producerIds which have a smaller last written offset.
+   * the new start offset and removes all producerIds which have a smaller last written offset. Additionally,
+   * we remove snapshots older than the new log start offset.
+   *
+   * Note that snapshots from offsets greater than the log start offset may have producers included which
+   * should no longer be retained: these producers will be removed if and when we need to load state from
+   * the snapshot.
    */
-  def evictUnretainedProducers(logStartOffset: Long) {
-    val evictedProducerEntries = producers.filter(_._2.lastOffset < logStartOffset)
+  def truncateHead(logStartOffset: Long) {
+    val evictedProducerEntries = producers.filter { case (_, producerIdEntry) =>
+      !isProducerRetained(producerIdEntry, logStartOffset)
+    }
     val evictedProducerIds = evictedProducerEntries.keySet
 
     producers --= evictedProducerIds
     removeEvictedOngoingTransactions(evictedProducerIds)
     removeUnreplicatedTransactions(logStartOffset)
 
-    deleteSnapshotFiles(file => offsetFromFilename(file.getName) <= logStartOffset)
     if (lastMapOffset < logStartOffset)
       lastMapOffset = logStartOffset
+
+    deleteSnapshotsBefore(logStartOffset)
     lastSnapOffset = latestSnapshotOffset.getOrElse(logStartOffset)
   }
 
@@ -604,12 +621,12 @@ class ProducerStateManager(val topicPartition: TopicPartition,
    * Complete the transaction and return the last stable offset.
    */
   def completeTxn(completedTxn: CompletedTxn): Long = {
-    val txnMetdata = ongoingTxns.remove(completedTxn.firstOffset)
-    if (txnMetdata == null)
+    val txnMetadata = ongoingTxns.remove(completedTxn.firstOffset)
+    if (txnMetadata == null)
       throw new IllegalArgumentException("Attempted to complete a transaction which was not started")
 
-    txnMetdata.lastOffset = Some(completedTxn.lastOffset)
-    unreplicatedTxns.put(completedTxn.firstOffset, txnMetdata)
+    txnMetadata.lastOffset = Some(completedTxn.lastOffset)
+    unreplicatedTxns.put(completedTxn.firstOffset, txnMetadata)
 
     val lastStableOffset = firstUndecidedOffset.getOrElse(completedTxn.lastOffset + 1)
     lastStableOffset
@@ -617,7 +634,7 @@ class ProducerStateManager(val topicPartition: TopicPartition,
 
   @threadsafe
   def deleteSnapshotsBefore(offset: Long): Unit = {
-    deleteSnapshotFiles(file => offsetFromFilename(file.getName) < offset)
+    deleteSnapshotFiles(_ < offset)
   }
 
   private def listSnapshotFiles: List[File] = {
@@ -643,8 +660,9 @@ class ProducerStateManager(val topicPartition: TopicPartition,
       None
   }
 
-  private def deleteSnapshotFiles(predicate: File => Boolean = _ => true) {
-    listSnapshotFiles.filter(predicate).foreach(file => Files.deleteIfExists(file.toPath))
+  private def deleteSnapshotFiles(predicate: Long => Boolean = _ => true) {
+    listSnapshotFiles.filter(file => predicate(offsetFromFilename(file.getName)))
+      .foreach(file => Files.deleteIfExists(file.toPath))
   }
 
 }

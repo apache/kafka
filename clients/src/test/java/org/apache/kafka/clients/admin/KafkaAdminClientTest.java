@@ -48,8 +48,6 @@ import org.junit.rules.Timeout;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -60,6 +58,7 @@ import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 
+import static java.util.Arrays.asList;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
@@ -178,7 +177,7 @@ public class KafkaAdminClientTest {
             env.kafkaClient().setNode(new Node(0, "localhost", 8121));
             env.kafkaClient().prepareResponse(new CreateTopicsResponse(Collections.singletonMap("myTopic", new ApiError(Errors.NONE, ""))));
             KafkaFuture<Void> future = env.adminClient().createTopics(
-                    Collections.singleton(new NewTopic("myTopic", Collections.singletonMap(Integer.valueOf(0), Arrays.asList(new Integer[]{0, 1, 2})))),
+                    Collections.singleton(new NewTopic("myTopic", Collections.singletonMap(Integer.valueOf(0), asList(new Integer[]{0, 1, 2})))),
                     new CreateTopicsOptions().timeoutMs(1000)).all();
             assertFutureError(future, TimeoutException.class);
         }
@@ -192,7 +191,7 @@ public class KafkaAdminClientTest {
             env.kafkaClient().setNode(env.cluster().controller());
             env.kafkaClient().prepareResponse(new CreateTopicsResponse(Collections.singletonMap("myTopic", new ApiError(Errors.NONE, ""))));
             KafkaFuture<Void> future = env.adminClient().createTopics(
-                    Collections.singleton(new NewTopic("myTopic", Collections.singletonMap(Integer.valueOf(0), Arrays.asList(new Integer[]{0, 1, 2})))),
+                    Collections.singleton(new NewTopic("myTopic", Collections.singletonMap(Integer.valueOf(0), asList(new Integer[]{0, 1, 2})))),
                     new CreateTopicsOptions().timeoutMs(10000)).all();
             future.get();
         }
@@ -215,22 +214,19 @@ public class KafkaAdminClientTest {
             env.kafkaClient().setNode(env.cluster().controller());
 
             // Test a call where we get back ACL1 and ACL2.
-            env.kafkaClient().prepareResponse(new DescribeAclsResponse(0, null,
-                new ArrayList<AclBinding>() {{
-                        add(ACL1);
-                        add(ACL2);
-                    }}));
-            assertCollectionIs(env.adminClient().describeAcls(FILTER1).all().get(), ACL1, ACL2);
+            env.kafkaClient().prepareResponse(new DescribeAclsResponse(0, ApiError.NONE,
+                    asList(ACL1, ACL2)));
+            assertCollectionIs(env.adminClient().describeAcls(FILTER1).values().get(), ACL1, ACL2);
 
             // Test a call where we get back no results.
-            env.kafkaClient().prepareResponse(new DescribeAclsResponse(0, null,
+            env.kafkaClient().prepareResponse(new DescribeAclsResponse(0, ApiError.NONE,
                 Collections.<AclBinding>emptySet()));
-            assertTrue(env.adminClient().describeAcls(FILTER2).all().get().isEmpty());
+            assertTrue(env.adminClient().describeAcls(FILTER2).values().get().isEmpty());
 
             // Test a call where we get back an error.
             env.kafkaClient().prepareResponse(new DescribeAclsResponse(0,
-                new SecurityDisabledException("Security is disabled"), Collections.<AclBinding>emptySet()));
-            assertFutureError(env.adminClient().describeAcls(FILTER2).all(), SecurityDisabledException.class);
+                new ApiError(Errors.SECURITY_DISABLED, "Security is disabled"), Collections.<AclBinding>emptySet()));
+            assertFutureError(env.adminClient().describeAcls(FILTER2).values(), SecurityDisabledException.class);
         }
     }
 
@@ -243,33 +239,22 @@ public class KafkaAdminClientTest {
 
             // Test a call where we successfully create two ACLs.
             env.kafkaClient().prepareResponse(new CreateAclsResponse(0,
-                new ArrayList<AclCreationResponse>() {{
-                        add(new AclCreationResponse(null));
-                        add(new AclCreationResponse(null));
-                    }}));
-            CreateAclsResult results = env.adminClient().createAcls(new ArrayList<AclBinding>() {{
-                        add(ACL1);
-                        add(ACL2);
-                    }});
-            assertCollectionIs(results.results().keySet(), ACL1, ACL2);
-            for (KafkaFuture<Void> future : results.results().values()) {
+                asList(new AclCreationResponse(ApiError.NONE), new AclCreationResponse(ApiError.NONE))));
+            CreateAclsResult results = env.adminClient().createAcls(asList(ACL1, ACL2));
+            assertCollectionIs(results.values().keySet(), ACL1, ACL2);
+            for (KafkaFuture<Void> future : results.values().values())
                 future.get();
-            }
             results.all().get();
 
             // Test a call where we fail to create one ACL.
-            env.kafkaClient().prepareResponse(new CreateAclsResponse(0,
-                    new ArrayList<AclCreationResponse>() {{
-                        add(new AclCreationResponse(new SecurityDisabledException("Security is disabled")));
-                        add(new AclCreationResponse(null));
-                    }}));
-            results = env.adminClient().createAcls(new ArrayList<AclBinding>() {{
-                    add(ACL1);
-                    add(ACL2);
-                }});
-            assertCollectionIs(results.results().keySet(), ACL1, ACL2);
-            assertFutureError(results.results().get(ACL1), SecurityDisabledException.class);
-            results.results().get(ACL2).get();
+            env.kafkaClient().prepareResponse(new CreateAclsResponse(0, asList(
+                new AclCreationResponse(new ApiError(Errors.SECURITY_DISABLED, "Security is disabled")),
+                new AclCreationResponse(ApiError.NONE))
+            ));
+            results = env.adminClient().createAcls(asList(ACL1, ACL2));
+            assertCollectionIs(results.values().keySet(), ACL1, ACL2);
+            assertFutureError(results.values().get(ACL1), SecurityDisabledException.class);
+            results.values().get(ACL2).get();
             assertFutureError(results.all(), SecurityDisabledException.class);
         }
     }
@@ -282,61 +267,34 @@ public class KafkaAdminClientTest {
             env.kafkaClient().setNode(env.cluster().controller());
 
             // Test a call where one filter has an error.
-            env.kafkaClient().prepareResponse(new DeleteAclsResponse(0, new ArrayList<AclFilterResponse>() {{
-                    add(new AclFilterResponse(null,
-                            new ArrayList<AclDeletionResult>() {{
-                                add(new AclDeletionResult(null, ACL1));
-                                add(new AclDeletionResult(null, ACL2));
-                            }}));
-                    add(new AclFilterResponse(new SecurityDisabledException("No security"),
-                        Collections.<AclDeletionResult>emptySet()));
-                }}));
-            DeleteAclsResult results = env.adminClient().deleteAcls(new ArrayList<AclBindingFilter>() {{
-                        add(FILTER1);
-                        add(FILTER2);
-                    }});
-            Map<AclBindingFilter, KafkaFuture<FilterResults>> filterResults = results.results();
+            env.kafkaClient().prepareResponse(new DeleteAclsResponse(0, asList(
+                    new AclFilterResponse(asList(new AclDeletionResult(ACL1), new AclDeletionResult(ACL2))),
+                    new AclFilterResponse(new ApiError(Errors.SECURITY_DISABLED, "No security"),
+                            Collections.<AclDeletionResult>emptySet()))));
+            DeleteAclsResult results = env.adminClient().deleteAcls(asList(FILTER1, FILTER2));
+            Map<AclBindingFilter, KafkaFuture<FilterResults>> filterResults = results.values();
             FilterResults filter1Results = filterResults.get(FILTER1).get();
-            assertEquals(null, filter1Results.acls().get(0).exception());
-            assertEquals(ACL1, filter1Results.acls().get(0).acl());
-            assertEquals(null, filter1Results.acls().get(1).exception());
-            assertEquals(ACL2, filter1Results.acls().get(1).acl());
+            assertEquals(null, filter1Results.values().get(0).exception());
+            assertEquals(ACL1, filter1Results.values().get(0).binding());
+            assertEquals(null, filter1Results.values().get(1).exception());
+            assertEquals(ACL2, filter1Results.values().get(1).binding());
             assertFutureError(filterResults.get(FILTER2), SecurityDisabledException.class);
             assertFutureError(results.all(), SecurityDisabledException.class);
 
             // Test a call where one deletion result has an error.
-            env.kafkaClient().prepareResponse(new DeleteAclsResponse(0, new ArrayList<AclFilterResponse>() {{
-                    add(new AclFilterResponse(null,
-                        new ArrayList<AclDeletionResult>() {{
-                                add(new AclDeletionResult(null, ACL1));
-                                add(new AclDeletionResult(new SecurityDisabledException("No security"), ACL2));
-                            }}));
-                    add(new AclFilterResponse(null, Collections.<AclDeletionResult>emptySet()));
-                }}));
-            results = env.adminClient().deleteAcls(
-                    new ArrayList<AclBindingFilter>() {{
-                            add(FILTER1);
-                            add(FILTER2);
-                        }});
-            assertTrue(results.results().get(FILTER2).get().acls().isEmpty());
+            env.kafkaClient().prepareResponse(new DeleteAclsResponse(0, asList(
+                    new AclFilterResponse(asList(new AclDeletionResult(ACL1),
+                            new AclDeletionResult(new ApiError(Errors.SECURITY_DISABLED, "No security"), ACL2))),
+                    new AclFilterResponse(Collections.<AclDeletionResult>emptySet()))));
+            results = env.adminClient().deleteAcls(asList(FILTER1, FILTER2));
+            assertTrue(results.values().get(FILTER2).get().values().isEmpty());
             assertFutureError(results.all(), SecurityDisabledException.class);
 
             // Test a call where there are no errors.
-            env.kafkaClient().prepareResponse(new DeleteAclsResponse(0, new ArrayList<AclFilterResponse>() {{
-                    add(new AclFilterResponse(null,
-                        new ArrayList<AclDeletionResult>() {{
-                                add(new AclDeletionResult(null, ACL1));
-                            }}));
-                    add(new AclFilterResponse(null,
-                        new ArrayList<AclDeletionResult>() {{
-                                add(new AclDeletionResult(null, ACL2));
-                            }}));
-                }}));
-            results = env.adminClient().deleteAcls(
-                    new ArrayList<AclBindingFilter>() {{
-                        add(FILTER1);
-                        add(FILTER2);
-                    }});
+            env.kafkaClient().prepareResponse(new DeleteAclsResponse(0, asList(
+                    new AclFilterResponse(asList(new AclDeletionResult(ACL1))),
+                    new AclFilterResponse(asList(new AclDeletionResult(ACL2))))));
+            results = env.adminClient().deleteAcls(asList(FILTER1, FILTER2));
             Collection<AclBinding> deleted = results.all().get();
             assertCollectionIs(deleted, ACL1, ACL2);
         }

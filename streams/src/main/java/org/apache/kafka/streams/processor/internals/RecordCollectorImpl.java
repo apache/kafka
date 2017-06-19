@@ -22,6 +22,7 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Utils;
@@ -106,7 +107,11 @@ public class RecordCollectorImpl implements RecordCollector {
                         } else {
                             if (sendException == null) {
                                 sendException = exception;
-                                log.error("{} Error sending record to topic {}. No more offsets will be recorded for this task and the exception will eventually be thrown", logPrefix, topic, exception);
+                                if (sendException instanceof ProducerFencedException) {
+                                    log.error("{} Error sending record to topic {}. No more offsets will be recorded for this task and it will be closed as it is a zombie.", logPrefix, topic, exception);
+                                } else {
+                                    log.error("{} Error sending record to topic {}. No more offsets will be recorded for this task and the exception will eventually be thrown", logPrefix, topic, exception);
+                                }
                             }
                         }
                     }
@@ -125,6 +130,9 @@ public class RecordCollectorImpl implements RecordCollector {
 
     private void checkForException() {
         if (sendException != null) {
+            if (sendException instanceof ProducerFencedException) {
+                throw (ProducerFencedException) sendException;
+            }
             throw new StreamsException(String.format("%s exception caught when producing", logPrefix), sendException);
         }
     }

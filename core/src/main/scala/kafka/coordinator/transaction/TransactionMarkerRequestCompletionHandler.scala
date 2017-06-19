@@ -30,6 +30,9 @@ class TransactionMarkerRequestCompletionHandler(brokerId: Int,
                                                 txnStateManager: TransactionStateManager,
                                                 txnMarkerChannelManager: TransactionMarkerChannelManager,
                                                 txnIdAndMarkerEntries: java.util.List[TxnIdAndMarkerEntry]) extends RequestCompletionHandler with Logging {
+
+  this.logIdent = "[Transaction Marker Request Completion Handler " + brokerId + "]: "
+
   override def onComplete(response: ClientResponse): Unit = {
     val requestHeader = response.requestHeader
     val correlationId = requestHeader.correlationId
@@ -54,6 +57,9 @@ class TransactionMarkerRequestCompletionHandler(brokerId: Int,
               s"cancel sending transaction markers $txnMarker to the brokers")
 
             txnMarkerChannelManager.removeMarkersForTxnId(transactionalId)
+
+          case Left(unexpectedError) =>
+            throw new IllegalStateException(s"Unhandled error $unexpectedError when fetching current transaction state")
 
           case Right(None) =>
             throw new IllegalStateException(s"The coordinator still owns the transaction partition for $transactionalId, but there is " +
@@ -81,7 +87,7 @@ class TransactionMarkerRequestCompletionHandler(brokerId: Int,
         }
       }
     } else {
-      trace(s"Received response $response from node ${response.destination} with correlation id $correlationId")
+      debug(s"Received WriteTxnMarker response $response from node ${response.destination} with correlation id $correlationId")
 
       val writeTxnMarkerResponse = response.responseBody.asInstanceOf[WriteTxnMarkersResponse]
 
@@ -105,6 +111,9 @@ class TransactionMarkerRequestCompletionHandler(brokerId: Int,
 
             txnMarkerChannelManager.removeMarkersForTxnId(transactionalId)
 
+          case Left(unexpectedError) =>
+            throw new IllegalStateException(s"Unhandled error $unexpectedError when fetching current transaction state")
+
           case Right(None) =>
             throw new IllegalStateException(s"The coordinator still owns the transaction partition for $transactionalId, but there is " +
               s"no metadata in the cache; this is not expected")
@@ -126,7 +135,6 @@ class TransactionMarkerRequestCompletionHandler(brokerId: Int,
                 for ((topicPartition: TopicPartition, error: Errors) <- errors) {
                   error match {
                     case Errors.NONE =>
-
                       txnMetadata.removePartition(topicPartition)
 
                     case Errors.CORRUPT_MESSAGE |
