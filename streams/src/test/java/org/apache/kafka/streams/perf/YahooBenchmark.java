@@ -27,7 +27,6 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KafkaStreams;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
@@ -37,7 +36,6 @@ import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
-import org.apache.kafka.streams.kstream.Windowed;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -58,22 +56,22 @@ public class YahooBenchmark {
     private final String campaignsTopic;
     private final String eventsTopic;
 
-    static public class ProjectedEvent {
+    private static class ProjectedEvent {
         /* main fields */
-        public String eventType;
-        public String adID;
+        String eventType;
+        String adID;
 
         /* other fields */
-        public long eventTime;
-        public String userID;
-        public String pageID;
-        public String addType;
-        public String ipAddress;
+        long eventTime;
+        String userID = UUID.randomUUID().toString(); // not used
+        String pageID = UUID.randomUUID().toString(); // not used
+        String addType = "banner78";  // not used
+        String ipAddress = "1.2.3.4"; // not used
     }
 
-    static public class CampaignAd {
-        public String adID;
-        public String campaignID;
+    private static class CampaignAd {
+        String adID;
+        String campaignID;
     }
 
     public YahooBenchmark(final SimpleBenchmark parent, final String campaignsTopic, final String eventsTopic) {
@@ -87,8 +85,7 @@ public class YahooBenchmark {
                                              final boolean skipIfAllTests,
                                              final int numCampaigns, final int adsPerCampaign,
                                              final String[] ads) throws Exception {
-        parent.processedRecords.set(0);
-        parent.processedBytes = 0;
+        parent.resetStats();
         // initialize topics
         if (parent.loadPhase) {
             if (skipIfAllTests) {
@@ -100,8 +97,6 @@ public class YahooBenchmark {
             }
             System.out.println("Initializing topic " + topic);
 
-            parent.processedRecords.set(0);
-            parent.processedBytes = 0;
             Properties props = new Properties();
             props.put(ProducerConfig.CLIENT_ID_CONFIG, clientId);
             props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, parent.kafka);
@@ -131,8 +126,7 @@ public class YahooBenchmark {
     private boolean maybeSetupPhaseEvents(final String topic, final String clientId,
                                           final boolean skipIfAllTests, final int numRecords,
                                           final String[] ads) throws Exception {
-        parent.processedRecords.set(0);
-        parent.processedBytes = 0;
+        parent.resetStats();
         String[] eventTypes = new String[]{"view", "click", "purchase"};
         Random rand = new Random();
         // initialize topics
@@ -159,10 +153,6 @@ public class YahooBenchmark {
             long startTime = System.currentTimeMillis();
 
             ProjectedEvent event = new ProjectedEvent();
-            event.userID = UUID.randomUUID().toString(); // not used
-            event.pageID = UUID.randomUUID().toString(); // not used
-            event.addType = "banner78";  // not used
-            event.ipAddress = "1.2.3.4"; // not used
 
             Map<String, Object> serdeProps = new HashMap<>();
             final Serializer<ProjectedEvent> projectedEventSerializer = new JsonPOJOSerializer<>();
@@ -204,9 +194,6 @@ public class YahooBenchmark {
 
         CountDownLatch latch = new CountDownLatch(1);
         Properties props = parent.setStreamProperties("simple-benchmark-yahoo" + new Random().nextInt());
-        props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, Runtime.getRuntime().availableProcessors());
-        //props.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
-        //props.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000L);
 
         final KafkaStreams streams = createYahooBenchmarkStreams(props, campaignsTopic, eventsTopic, latch, parent.numRecords);
         parent.runGenericBenchmark(streams, "Streams Yahoo Performance [records/latency/rec-sec/MB-sec counted]: ", latch);
@@ -366,7 +353,7 @@ public class YahooBenchmark {
             });
 
         // calculate windowed counts
-        KTable<Windowed<String>, Long> counts = keyedByCampaign
+        keyedByCampaign
             .groupByKey(Serdes.String(), Serdes.String())
             .count(TimeWindows.of(10 * 1000), "time-windows");
 
