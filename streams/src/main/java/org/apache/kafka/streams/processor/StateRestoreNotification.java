@@ -17,20 +17,11 @@
 
 package org.apache.kafka.streams.processor;
 
-public abstract class AbstractBatchingRestoreCallback implements BatchingStateRestoreCallback, StateRestoreNotification {
 
-    @Override
-    public void restore(byte[] key, byte[] value) {
-        throw new UnsupportedOperationException("Single restore not supported");
-    }
+public interface StateRestoreNotification {
 
-    @Override
-    public void restoreStart() {
+    void restoreStart();
 
-    }
+    void restoreEnd();
 
-    @Override
-    public void restoreEnd() {
-
-    }
 }

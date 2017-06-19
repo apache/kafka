@@ -33,7 +33,7 @@ public class MockStateRestoreListener implements StateRestoreListener {
     }
 
     @Override
-    public void onRestoreEnd(String storeName, long endOffset, long totalRestored) {
+    public void onRestoreEnd(String storeName, long totalRestored) {
 
     }
 }

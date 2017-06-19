@@ -24,6 +24,6 @@ public interface StateRestoreListener {
 
     void onBatchRestored(String storeName, long batchEndOffset, long numRestored);
 
-    void onRestoreEnd(String storeName, long endOffset, long totalRestored);
+    void onRestoreEnd(String storeName, long totalRestored);
 
 }

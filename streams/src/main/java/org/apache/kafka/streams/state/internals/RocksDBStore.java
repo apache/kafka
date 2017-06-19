@@ -99,6 +99,8 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     private FlushOptions fOptions;
 
     protected volatile boolean open = false;
+    protected volatile boolean prepareForBulkload = false;
+    private ProcessorContext internalProcessorContext;
 
     RocksDBStore(String name, Serde<K> keySerde, Serde<V> valueSerde) {
         this(name, DB_FILE_DIR, keySerde, valueSerde);
@@ -136,6 +138,10 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         // (this could be a bug in the RocksDB code and their devs have been contacted).
         options.setIncreaseParallelism(Math.max(Runtime.getRuntime().availableProcessors(), 2));
 
+        if (prepareForBulkload) {
+            options.prepareForBulkLoad();
+        }
+
         wOptions = new WriteOptions();
         wOptions.setDisableWAL(true);
 
@@ -170,6 +176,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
     public void init(ProcessorContext context, StateStore root) {
         // open the DB dir
+        this.internalProcessorContext = context;
         openDB(context);
 
         // value getter should always read directly from rocksDB
@@ -178,6 +185,16 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
             @Override
             public void restoreAll(Collection<KeyValue<byte[], byte[]>> records) {
                 restoreAllInternal(records);
+            }
+
+            @Override
+            public void restoreStart() {
+                toggleDbForBulkLoading(true);
+            }
+
+            @Override
+            public void restoreEnd() {
+                toggleDbForBulkLoading(false);
             }
         });
 
@@ -240,6 +257,14 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         }
     }
 
+    private void toggleDbForBulkLoading(boolean prepareForBulkload) {
+        close();
+        this.prepareForBulkload = prepareForBulkload;
+        openDB(internalProcessorContext);
+        open = true;
+    }
+
+    @SuppressWarnings("unchecked")
     @Override
     public synchronized void put(K key, V value) {
         Objects.requireNonNull(key, "key cannot be null");
