@@ -92,7 +92,9 @@ public class StandbyTask extends AbstractTask {
     public void commit() {
         log.trace("{} Committing", logPrefix);
         stateMgr.flush();
-        stateMgr.checkpoint(Collections.<TopicPartition, Long>emptyMap());
+        if (!eosEnabled) {
+            stateMgr.checkpoint(Collections.<TopicPartition, Long>emptyMap());
+        }
         // reinitialize offset limits
         updateOffsetLimits();
     }
