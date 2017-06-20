@@ -101,20 +101,18 @@ public class StandbyTask extends AbstractTask {
 
     /**
      * <pre>
-     * - flush store
-     * - checkpoint store
+     * - {@link #commit()}
      * </pre>
      */
     @Override
     public void suspend() {
         log.debug("{} Suspending", logPrefix);
-        stateMgr.flush();
-        stateMgr.checkpoint(Collections.<TopicPartition, Long>emptyMap());
+        commit();
     }
 
     /**
      * <pre>
-     * - {@link #commit()}
+     * - {@link #suspend()}
      * - close state
      * <pre>
      * @param clean ignored by {@code StandbyTask} as it can always try to close cleanly
@@ -125,7 +123,7 @@ public class StandbyTask extends AbstractTask {
         log.debug("{} Closing", logPrefix);
         boolean committedSuccessfully = false;
         try {
-            commit();
+            suspend();
             committedSuccessfully = true;
         } finally {
             closeStateManager(committedSuccessfully);

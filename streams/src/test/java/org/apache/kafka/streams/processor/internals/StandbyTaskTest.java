@@ -60,6 +60,7 @@ import static java.util.Collections.singleton;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 
 public class StandbyTaskTest {
@@ -113,6 +114,10 @@ public class StandbyTaskTest {
     private StateDirectory stateDirectory;
 
     private StreamsConfig createConfig(final File baseDir) throws Exception {
+        return createConfig(baseDir, StreamsConfig.AT_LEAST_ONCE);
+    }
+
+    private StreamsConfig createConfig(final File baseDir, final String eos) throws Exception {
         return new StreamsConfig(new Properties() {
             {
                 setProperty(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
@@ -120,6 +125,7 @@ public class StandbyTaskTest {
                 setProperty(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG, "3");
                 setProperty(StreamsConfig.STATE_DIR_CONFIG, baseDir.getCanonicalPath());
                 setProperty(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, MockTimestampExtractor.class.getName());
+                setProperty(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, eos);
             }
         });
     }
@@ -377,7 +383,49 @@ public class StandbyTaskTest {
         final Map<TopicPartition, Long> checkpoint = new OffsetCheckpoint(new File(stateDirectory.directoryForTask(taskId),
                                                                                    ProcessorStateManager.CHECKPOINT_FILE_NAME)).read();
         assertThat(checkpoint, equalTo(Collections.singletonMap(ktable, 51L)));
+    }
 
+    @Test
+    public void shouldNotCheckpointStoreOffsetsOnCommitIfEosIsEnabled() throws Exception {
+        final StreamsConfig config = createConfig(baseDir, StreamsConfig.EXACTLY_ONCE);
+
+        consumer.assign(Utils.mkList(ktable));
+        final Map<TopicPartition, OffsetAndMetadata> committedOffsets = new HashMap<>();
+        committedOffsets.put(new TopicPartition(ktable.topic(), ktable.partition()), new OffsetAndMetadata(100L));
+        consumer.commitSync(committedOffsets);
+
+        restoreStateConsumer.updatePartitions("ktable1", Utils.mkList(
+            new PartitionInfo("ktable1", 0, Node.noNode(), new Node[0], new Node[0])));
+
+        final TaskId taskId = new TaskId(0, 0);
+        final MockTime time = new MockTime();
+        final StandbyTask task = new StandbyTask(taskId,
+            applicationId,
+            ktablePartitions,
+            ktableTopology,
+            consumer,
+            changelogReader,
+            config,
+            null,
+            stateDirectory
+        );
+
+
+        restoreStateConsumer.assign(new ArrayList<>(task.checkpointedOffsets().keySet()));
+
+        final byte[] serializedValue = Serdes.Integer().serializer().serialize("", 1);
+        task.update(ktable, Collections.singletonList(new ConsumerRecord<>(ktable.topic(),
+            ktable.partition(),
+            50L,
+            serializedValue,
+            serializedValue)));
+
+        time.sleep(config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG));
+        task.commit();
+
+        final File checkpointFile = new File(stateDirectory.directoryForTask(taskId),
+                                             ProcessorStateManager.CHECKPOINT_FILE_NAME);
+        assertFalse(checkpointFile.exists());
     }
 
     private List<ConsumerRecord<byte[], byte[]>> records(ConsumerRecord<byte[], byte[]>... recs) {

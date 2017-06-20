@@ -339,12 +339,13 @@ public class EosTestDriver extends SmokeTestUtil {
 
                     Integer min = currentMinPerKey.get(key);
                     if (min == null) {
-                        min = Integer.MAX_VALUE;
+                        min = value;
+                    } else {
+                        min = Math.min(min, value);
                     }
-                    min = Math.min(min, value);
                     currentMinPerKey.put(key, min);
 
-                    if (!receivedKey.equals(key) || receivedValue != min.intValue()) {
+                    if (!receivedKey.equals(key) || receivedValue != min) {
                         throw new RuntimeException("Result verification failed for " + receivedRecord + " expected <" + key + "," + min + "> but was <" + receivedKey + "," + receivedValue + ">");
                     }
                 }
@@ -378,12 +379,13 @@ public class EosTestDriver extends SmokeTestUtil {
 
                     Long sum = currentSumPerKey.get(key);
                     if (sum == null) {
-                        sum = 0L;
+                        sum = (long) value;
+                    } else {
+                        sum += value;
                     }
-                    sum += value;
                     currentSumPerKey.put(key, sum);
 
-                    if (!receivedKey.equals(key) || receivedValue != sum.longValue()) {
+                    if (!receivedKey.equals(key) || receivedValue != sum) {
                         throw new RuntimeException("Result verification failed for " + receivedRecord + " expected <" + key + "," + sum + "> but was <" + receivedKey + "," + receivedValue + ">");
                     }
                 }
