@@ -21,15 +21,17 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.BatchingStateRestoreCallback;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
+import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.StateRestoreNotification;
 
 import java.util.Collection;
 
-class RestoreCallbackAdapter implements BatchingStateRestoreCallback, StateRestoreNotification {
+class RestoreCallbackAdapter implements BatchingStateRestoreCallback, StateRestoreListener {
 
     private final StateRestoreCallback stateRestoreCallback;
     private final BatchingStateRestoreCallback batchingStateRestoreCallback;
     private final StateRestoreNotification stateRestoreNotification;
+    private StateRestoreListener stateRestoreListener;
 
     RestoreCallbackAdapter(StateRestoreCallback stateRestoreCallback) {
         this.stateRestoreCallback = stateRestoreCallback;
@@ -46,12 +48,19 @@ class RestoreCallbackAdapter implements BatchingStateRestoreCallback, StateResto
     }
 
     @Override
-    public void restoreStart() {
+    public void onRestoreStart(String storeName, long startingOffset, long endingOffset) {
+        stateRestoreListener.onRestoreStart(storeName, startingOffset, endingOffset);
         stateRestoreNotification.restoreStart();
     }
 
     @Override
-    public void restoreEnd() {
+    public void onBatchRestored(String storeName, long batchEndOffset, long numRestored) {
+        stateRestoreListener.onBatchRestored(storeName, batchEndOffset, numRestored);
+    }
+
+    @Override
+    public void onRestoreEnd(String storeName, long totalRestored) {
+        stateRestoreListener.onRestoreEnd(storeName, totalRestored);
         stateRestoreNotification.restoreEnd();
     }
 
@@ -64,6 +73,10 @@ class RestoreCallbackAdapter implements BatchingStateRestoreCallback, StateResto
                 restore(record.key, record.value);
             }
         }
+    }
+
+    void setStateRestoreListener(StateRestoreListener stateRestoreListener) {
+        this.stateRestoreListener = (stateRestoreListener != null) ? stateRestoreListener : new NoOpStateRestoreListener();
     }
 
     @Override
@@ -80,6 +93,24 @@ class RestoreCallbackAdapter implements BatchingStateRestoreCallback, StateResto
 
         @Override
         public void restoreEnd() {
+
+        }
+    }
+
+    private static final class NoOpStateRestoreListener implements StateRestoreListener {
+
+        @Override
+        public void onRestoreStart(String storeName, long startingOffset, long endingOffset) {
+
+        }
+
+        @Override
+        public void onBatchRestored(String storeName, long batchEndOffset, long numRestored) {
+
+        }
+
+        @Override
+        public void onRestoreEnd(String storeName, long totalRestored) {
 
         }
     }

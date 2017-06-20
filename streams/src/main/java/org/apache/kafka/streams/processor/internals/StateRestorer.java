@@ -32,7 +32,6 @@ public class StateRestorer {
     private final boolean persistent;
     private final TopicPartition partition;
     private final String storeName;
-    private StateRestoreListener stateRestoreListener;
     private final RestoreCallbackAdapter callbackAdapter;
     private long restoredOffset;
     private long startingOffset;
@@ -62,26 +61,18 @@ public class StateRestorer {
 
     void maybeNotifyRestoreStarted(long startingOffset, long endingOffset) {
         if (!restoreStarted) {
-            if (stateRestoreListener != null) {
-                stateRestoreListener.onRestoreStart(storeName, startingOffset, endingOffset);
-            }
-            callbackAdapter.restoreStart();
+            callbackAdapter.onRestoreStart(storeName, startingOffset, endingOffset);
             restoreStarted = true;
         }
     }
 
     void restoreDone() {
-        if (stateRestoreListener != null) {
-            stateRestoreListener.onRestoreEnd(storeName, restoredNumRecords());
-        }
-        callbackAdapter.restoreEnd();
+        callbackAdapter.onRestoreEnd(storeName, restoredNumRecords());
         restoreStarted = false;
     }
 
     void restoreBatchCompleted(long currentRestoredOffset, int numRestored) {
-        if (stateRestoreListener != null) {
-            stateRestoreListener.onBatchRestored(storeName, currentRestoredOffset, numRestored);
-        }
+        callbackAdapter.onBatchRestored(storeName, currentRestoredOffset, numRestored);
     }
 
     void restore(final Collection<KeyValue<byte[], byte[]>> records) {
@@ -93,7 +84,7 @@ public class StateRestorer {
     }
 
     void setStateRestoreListener(StateRestoreListener stateRestoreListener) {
-        this.stateRestoreListener = stateRestoreListener;
+        this.callbackAdapter.setStateRestoreListener(stateRestoreListener);
     }
 
     void setRestoredOffset(final long restoredOffset) {
