@@ -320,6 +320,50 @@ public class TransactionManagerTest {
         assertFalse(transactionManager.isPartitionPendingAdd(partition));
     }
 
+    @Test
+    public void testMaybeAddPartitionToTransactionOverridesRetryBackoffForConcurrentTransactions() {
+        long pid = 13131L;
+        short epoch = 1;
+        TopicPartition partition = new TopicPartition("foo", 0);
+        doInitTransactions(pid, epoch);
+        transactionManager.beginTransaction();
+
+        transactionManager.maybeAddPartitionToTransaction(partition);
+        assertTrue(transactionManager.hasPartitionsToAdd());
+        assertFalse(transactionManager.isPartitionAdded(partition));
+        assertTrue(transactionManager.isPartitionPendingAdd(partition));
+
+        prepareAddPartitionsToTxn(partition, Errors.CONCURRENT_TRANSACTIONS);
+        sender.run(time.milliseconds());
+
+        TransactionManager.TxnRequestHandler handler = transactionManager.nextRequestHandler(false);
+        assertNotNull(handler);
+        assertEquals(5, handler.retryBackoffMs());
+
+    }
+
+    @Test
+    public void testMaybeAddPartitionToTransactionRetainsRetryBackoffForRegularRetriableError() {
+        long pid = 13131L;
+        short epoch = 1;
+        TopicPartition partition = new TopicPartition("foo", 0);
+        doInitTransactions(pid, epoch);
+        transactionManager.beginTransaction();
+
+        transactionManager.maybeAddPartitionToTransaction(partition);
+        assertTrue(transactionManager.hasPartitionsToAdd());
+        assertFalse(transactionManager.isPartitionAdded(partition));
+        assertTrue(transactionManager.isPartitionPendingAdd(partition));
+
+        prepareAddPartitionsToTxn(partition, Errors.COORDINATOR_NOT_AVAILABLE);
+        sender.run(time.milliseconds());
+
+        TransactionManager.TxnRequestHandler handler = transactionManager.nextRequestHandler(false);
+        assertEquals(-1, handler.retryBackoffMs());
+
+    }
+
+
     @Test(expected = IllegalStateException.class)
     public void testMaybeAddPartitionToTransactionBeforeInitTransactions() {
         transactionManager.maybeAddPartitionToTransaction(new TopicPartition("foo", 0));

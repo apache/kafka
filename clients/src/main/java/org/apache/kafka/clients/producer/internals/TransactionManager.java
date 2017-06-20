@@ -611,6 +611,10 @@ public class TransactionManager {
             }
         }
 
+        long retryBackoffMs() {
+            return -1;
+        }
+
         @Override
         @SuppressWarnings("unchecked")
         public void onComplete(ClientResponse response) {
@@ -711,9 +715,11 @@ public class TransactionManager {
 
     private class AddPartitionsToTxnHandler extends TxnRequestHandler {
         private final AddPartitionsToTxnRequest.Builder builder;
+        private long retryBackoffMs;
 
         private AddPartitionsToTxnHandler(AddPartitionsToTxnRequest.Builder builder) {
             this.builder = builder;
+            retryBackoffMs = -1;
         }
 
         @Override
@@ -732,6 +738,7 @@ public class TransactionManager {
             Map<TopicPartition, Errors> errors = addPartitionsToTxnResponse.errors();
             boolean hasPartitionErrors = false;
             Set<String> unauthorizedTopics = new HashSet<>();
+            retryBackoffMs = -1;
 
             for (Map.Entry<TopicPartition, Errors> topicPartitionErrorEntry : errors.entrySet()) {
                 TopicPartition topicPartition = topicPartitionErrorEntry.getKey();
@@ -743,8 +750,11 @@ public class TransactionManager {
                     lookupCoordinator(FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
                     reenqueue();
                     return;
-                } else if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS || error == Errors.CONCURRENT_TRANSACTIONS
-                        || error == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
+                } else if (error == Errors.CONCURRENT_TRANSACTIONS) {
+                    retryBackoffMs = 5;
+                    reenqueue();
+                    return;
+                } else if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS || error == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
                     reenqueue();
                     return;
                 } else if (error == Errors.INVALID_PRODUCER_EPOCH) {
@@ -787,6 +797,11 @@ public class TransactionManager {
                 transactionStarted = true;
                 result.done();
             }
+        }
+
+        @Override
+        public long retryBackoffMs() {
+            return retryBackoffMs;
         }
     }
 
