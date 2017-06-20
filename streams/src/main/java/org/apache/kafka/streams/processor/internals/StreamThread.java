@@ -1342,7 +1342,7 @@ public class StreamThread extends Thread {
 
         final Map<TaskId, Set<TopicPartition>> newStandbyTasks = new HashMap<>();
 
-        log.info("{} Adding assigned standby tasks {}", logPrefix, partitionAssignor.activeTasks());
+        log.info("{} Adding assigned standby tasks {}", logPrefix, partitionAssignor.standbyTasks());
         // collect newly assigned standby tasks and reopen re-assigned standby tasks
         for (final Map.Entry<TaskId, Set<TopicPartition>> entry : partitionAssignor.standbyTasks().entrySet()) {
             final TaskId taskId = entry.getKey();
