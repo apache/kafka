@@ -896,7 +896,7 @@ $ java -cp path-to-app-fatjar.jar com.example.MyStreamsApp
 
         <p> Metrics using exactly-once semantics: </p>
         <p>
-            If exactly-once processing is enabled via parameter <code>processing.guarantees</code>, internally Streams switches from a producer per thread to a producer per task runtime model.
+            If exactly-once processing is enabled via the <code>processing.guarantees</code> parameter, internally Streams switches from a producer per thread to a producer per task runtime model.
             In order to distinguish the different producers, the producer's <code>client.id</code> additionally encodes the task-ID for this case.
             Because the producer's <code>client.id</code> is used to report JMX metrics, it might be required to update tools that receive those metrics.
         </p>
@@ -905,7 +905,7 @@ $ java -cp path-to-app-fatjar.jar com.example.MyStreamsApp
             <li> at-least-once (default): <code>[client.Id]-StreamThread-[sequence-number]</code> </li>
             <li> exactly-once: <code>[client.Id]-StreamThread-[sequence-number]-[taskId]</code> </li>
         </ul>
-        <p> With <code>[client.Id]</code> is either set via Streams configuration parameter <code>client.id<code> or defaults to <code>[application.id]-[processId]</code> (<code>[processId]</code> is a random UUID). </p>
+        <p> <code>[client.Id]</code> is either set via Streams configuration parameter <code>client.id<code> or defaults to <code>[application.id]-[processId]</code> (<code>[processId]</code> is a random UUID). </p>
 
         <h3><a id="streams_api_changes_01021" href="#streams_api_changes_01021">Notable changes in 0.10.2.1</a></h3>
 
