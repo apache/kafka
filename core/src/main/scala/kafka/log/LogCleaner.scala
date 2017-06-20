@@ -630,7 +630,7 @@ private[log] class Cleaner(val id: Int,
             logSize + segs.head.size <= maxSize &&
             indexSize + segs.head.index.sizeInBytes <= maxIndexSize &&
             timeIndexSize + segs.head.timeIndex.sizeInBytes <= maxIndexSize &&
-        lastOffsetForFirstSegment(segs, firstUncleanableOffset) - group.last.baseOffset <= Int.MaxValue) {
+            lastOffsetForFirstSegment(segs, firstUncleanableOffset) - group.last.baseOffset <= Int.MaxValue) {
         group = segs.head :: group
         logSize += segs.head.size
         indexSize += segs.head.index.sizeInBytes
@@ -650,8 +650,8 @@ private[log] class Cleaner(val id: Int,
     * the base offset of the next segment in the list.
     * If the next segment doesn't exist, first Uncleanable Offset will be used.
     *
-    * @param segs - remaining segments to group. The current head is segment were estimating the lastOffset for.
-    * @return The estimated last offset => The upper bound of the last offset
+    * @param segs - remaining segments to group.
+    * @return The estimated last offset for the first segment in segs
     */
   private def lastOffsetForFirstSegment(segs: List[LogSegment], firstUncleanableOffset: Long): Long = {
     if (segs.size > 1) {
@@ -663,7 +663,6 @@ private[log] class Cleaner(val id: Int,
       firstUncleanableOffset - 1
     }
   }
-
 
   /**
    * Build a map of key_hash => offset for the keys in the cleanable dirty portion of the log to use in cleaning.
