@@ -1,5 +1,3 @@
-#!/usr/bin/env bash
-
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.
@@ -15,16 +13,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-KAFKA_NUM_CONTAINERS=${KAFKA_NUM_CONTAINERS:-14}
-TC_PATHS=${TC_PATHS:-./kafkatest/}
-
-die() {
-    echo $@
-    exit 1
-}
-
-if ${SCRIPT_DIR}/ducker-ak ssh | grep -q '(none)'; then
-    ${SCRIPT_DIR}/ducker-ak up -n "${KAFKA_NUM_CONTAINERS}" || die "ducker-ak up failed"
-fi
-${SCRIPT_DIR}/ducker-ak test ${TC_PATHS} || die "ducker-ak test failed"
+Host *
+  ControlMaster auto
+  ControlPath ~/.ssh/master-%r@%h:%p
+  StrictHostKeyChecking no
+  ConnectTimeout=10
+  IdentityFile ~/.ssh/id_rsa
