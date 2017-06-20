@@ -115,7 +115,7 @@ public class TransactionManagerTest {
         int batchSize = 16 * 1024;
         MetricConfig metricConfig = new MetricConfig().tags(metricTags);
         this.brokerNode = new Node(0, "localhost", 2211);
-        this.transactionManager = new TransactionManager(transactionalId, transactionTimeoutMs);
+        this.transactionManager = new TransactionManager(transactionalId, transactionTimeoutMs, 100);
         Metrics metrics = new Metrics(metricConfig, time);
         this.accumulator = new RecordAccumulator(batchSize, 1024 * 1024, CompressionType.NONE, 0L, 0L, metrics, time, apiVersions, transactionManager);
         this.sender = new Sender(this.client, this.metadata, this.accumulator, true, MAX_REQUEST_SIZE, ACKS_ALL,
@@ -338,7 +338,7 @@ public class TransactionManagerTest {
 
         TransactionManager.TxnRequestHandler handler = transactionManager.nextRequestHandler(false);
         assertNotNull(handler);
-        assertEquals(15, handler.retryBackoffMs());
+        assertEquals(20, handler.retryBackoffMs());
     }
 
     @Test
@@ -359,7 +359,7 @@ public class TransactionManagerTest {
 
         TransactionManager.TxnRequestHandler handler = transactionManager.nextRequestHandler(false);
         assertNotNull(handler);
-        assertEquals(-1, handler.retryBackoffMs());
+        assertEquals(100, handler.retryBackoffMs());
     }
 
     @Test
@@ -385,7 +385,7 @@ public class TransactionManagerTest {
         prepareAddPartitionsToTxn(otherPartition, Errors.CONCURRENT_TRANSACTIONS);
         TransactionManager.TxnRequestHandler handler = transactionManager.nextRequestHandler(false);
         assertNotNull(handler);
-        assertEquals(-1, handler.retryBackoffMs());
+        assertEquals(100, handler.retryBackoffMs());
     }
 
     @Test(expected = IllegalStateException.class)
