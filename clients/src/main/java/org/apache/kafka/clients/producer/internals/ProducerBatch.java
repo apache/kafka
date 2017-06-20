@@ -366,12 +366,6 @@ public final class ProducerBatch {
         return recordsBuilder.estimatedSizeInBytes();
     }
 
-    public int sizeInBytes() {
-        if (!recordsBuilder.isClosed())
-            throw new IllegalArgumentException("Cannot get an exact size of the batch until it has been closed");
-        return records().sizeInBytes();
-    }
-
     public double compressionRatio() {
         return recordsBuilder.compressionRatio();
     }

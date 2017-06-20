@@ -483,7 +483,7 @@ public final class RecordAccumulator {
                                             batch.setProducerState(producerIdAndEpoch, sequenceNumber, isTransactional);
                                         }
                                         batch.close();
-                                        size += batch.sizeInBytes();
+                                        size += batch.records().sizeInBytes();
                                         ready.add(batch);
                                         batch.drained(now);
                                     }
