@@ -338,7 +338,7 @@ public class TransactionManagerTest {
 
         TransactionManager.TxnRequestHandler handler = transactionManager.nextRequestHandler(false);
         assertNotNull(handler);
-        assertEquals(5, handler.retryBackoffMs());
+        assertEquals(15, handler.retryBackoffMs());
     }
 
     @Test
@@ -362,6 +362,31 @@ public class TransactionManagerTest {
         assertEquals(-1, handler.retryBackoffMs());
     }
 
+    @Test
+    public void testAddPartitionToTransactionRetainsRetryBackoffWhenPartitionsAlreadyAdded() {
+        long pid = 13131L;
+        short epoch = 1;
+        TopicPartition partition = new TopicPartition("foo", 0);
+        doInitTransactions(pid, epoch);
+        transactionManager.beginTransaction();
+
+        transactionManager.maybeAddPartitionToTransaction(partition);
+        assertTrue(transactionManager.hasPartitionsToAdd());
+        assertFalse(transactionManager.isPartitionAdded(partition));
+        assertTrue(transactionManager.isPartitionPendingAdd(partition));
+
+        prepareAddPartitionsToTxn(partition, Errors.NONE);
+        sender.run(time.milliseconds());
+        assertTrue(transactionManager.isPartitionAdded(partition));
+
+        TopicPartition otherPartition = new TopicPartition("foo", 1);
+        transactionManager.maybeAddPartitionToTransaction(otherPartition);
+
+        prepareAddPartitionsToTxn(otherPartition, Errors.CONCURRENT_TRANSACTIONS);
+        TransactionManager.TxnRequestHandler handler = transactionManager.nextRequestHandler(false);
+        assertNotNull(handler);
+        assertEquals(-1, handler.retryBackoffMs());
+    }
 
     @Test(expected = IllegalStateException.class)
     public void testMaybeAddPartitionToTransactionBeforeInitTransactions() {

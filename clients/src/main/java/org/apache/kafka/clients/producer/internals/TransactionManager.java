@@ -751,7 +751,7 @@ public class TransactionManager {
                     reenqueue();
                     return;
                 } else if (error == Errors.CONCURRENT_TRANSACTIONS) {
-                    retryBackoffMs = 5;
+                    maybeOverrideRetryBackoffMs();
                     reenqueue();
                     return;
                 } else if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS || error == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
@@ -802,6 +802,11 @@ public class TransactionManager {
         @Override
         public long retryBackoffMs() {
             return retryBackoffMs;
+        }
+
+        private void maybeOverrideRetryBackoffMs() {
+            if (partitionsInTransaction.isEmpty())
+                retryBackoffMs = 15;
         }
     }
 
