@@ -55,6 +55,7 @@
         <code>inter.broker.protocol.version</code> is 0.11.0 or earlier, the broker will not create this replica and the replica will
         be offline until the log failure on that broker is fixed. In order to make sure that new topics not be created with offline replicas,
         user can use upgrade <code>inter.broker.protocol.version</code> to 0.11.1 or simply shutdown the broker before the hardware issue is fixed.</li>
+    <li>Added KafkaStorageException which is a retriable exception.</li>
 </ul>
 
 <h5><a id="upgrade_1110_new_protocols" href="#upgrade_1110_new_protocols">New Protocol Versions</a></h5>

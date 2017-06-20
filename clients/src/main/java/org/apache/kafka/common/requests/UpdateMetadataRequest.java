@@ -216,11 +216,12 @@ public class UpdateMetadataRequest extends AbstractRequest {
             for (Object r : replicasArray)
                 replicas.add((Integer) r);
 
-            Object[] offlineReplicasArray = partitionStateData.hasField(OFFLINE_REPLICAS_KEY_NAME) ?
-                partitionStateData.getArray(OFFLINE_REPLICAS_KEY_NAME) : new Object[0];
-            List<Integer> offlineReplicas = new ArrayList<>(offlineReplicasArray.length);
-            for (Object r : offlineReplicasArray)
-                offlineReplicas.add((Integer) r);
+            List<Integer> offlineReplicas = new ArrayList<>();
+            if (partitionStateData.hasField(OFFLINE_REPLICAS_KEY_NAME)) {
+                Object[] offlineReplicasArray = partitionStateData.getArray(OFFLINE_REPLICAS_KEY_NAME);
+                for (Object r : offlineReplicasArray)
+                    offlineReplicas.add((Integer) r);
+            }
 
             UpdateMetadataRequestPartitionState partitionState =
                 new UpdateMetadataRequestPartitionState(controllerEpoch, leader, leaderEpoch, isr, zkVersion, replicas, offlineReplicas);

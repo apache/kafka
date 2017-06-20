@@ -19,7 +19,7 @@ package org.apache.kafka.common.errors;
 /**
  * Miscellaneous disk-related IOException occurred when handling a request.
  */
-public class KafkaStorageException extends ApiException {
+public class KafkaStorageException extends RetriableException {
 
     private static final long serialVersionUID = 1L;
 

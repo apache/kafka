@@ -17,7 +17,7 @@
 package kafka.common
 
 /**
- * Kafka exception caused by real IOs.
+ * Kafka exception caused by disk-related IOException
 */
 class KafkaStorageException(message: String, t: Throwable) extends RuntimeException(message, t) {
   def this(message: String) = this(message, null)
