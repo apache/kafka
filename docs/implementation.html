@@ -20,26 +20,7 @@
 
     <h4><a id="impl_producer" href="#impl_producer">Producer APIs</a></h4>
 
-    <p>
-    The Producer API that wraps the 2 low-level producers - <code>kafka.producer.SyncProducer</code> and <code>kafka.producer.async.AsyncProducer</code>.
-    <pre class="brush: java;">
-    class Producer&lt;T&gt; {
-
-    /* Sends the data, partitioned by key to the topic using either the */
-    /* synchronous or the asynchronous producer */
-    public void send(kafka.javaapi.producer.ProducerData&lt;K,V&gt; producerData);
-
-    /* Sends a list of data, partitioned by key to the topic using either */
-    /* the synchronous or the asynchronous producer */
-    public void send(java.util.List&lt;kafka.javaapi.producer.ProducerData&lt;K,V&gt;&gt; producerData);
-
-    /* Closes the producer and cleans up */
-    public void close();
-
-    }
-    </pre>
-
-    The goal is to expose all the producer functionality through a single API to the client.
+    <p>The goal is to expose all the producer functionality through a single API to the client.
 
     The Kafka producer
     <ul>
