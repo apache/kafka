@@ -341,7 +341,6 @@ public class Sender implements Runnable {
                     if (nextRequestHandler.isRetry())
                         time.sleep(Math.min(retryBackoffMs, nextRequestHandler.retryBackoffMs()));
 
-
                     ClientRequest clientRequest = client.newClientRequest(targetNode.idString(),
                             requestBuilder, now, true, nextRequestHandler);
                     transactionManager.setInFlightRequestCorrelationId(clientRequest.correlationId());
