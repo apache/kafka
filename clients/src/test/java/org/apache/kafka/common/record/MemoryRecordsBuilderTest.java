@@ -231,6 +231,30 @@ public class MemoryRecordsBuilderTest {
     }
 
     @Test
+    public void testEstimatedSizeInBytes() {
+        ByteBuffer buffer = ByteBuffer.allocate(1024);
+        buffer.position(bufferOffset);
+
+        MemoryRecordsBuilder builder = new MemoryRecordsBuilder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, compressionType,
+                TimestampType.CREATE_TIME, 0L, 0L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE,
+                false, false, RecordBatch.NO_PARTITION_LEADER_EPOCH, buffer.capacity());
+
+        int previousEstimate = 0;
+        for (int i = 0; i < 10; i++) {
+            builder.append(new SimpleRecord(i, ("" + i).getBytes()));
+            int currentEstimate = builder.estimatedSizeInBytes();
+            assertTrue(currentEstimate > previousEstimate);
+            previousEstimate = currentEstimate;
+        }
+
+        int bytesWrittenBeforeClose = builder.estimatedSizeInBytes();
+        MemoryRecords records = builder.build();
+        assertEquals(records.sizeInBytes(), builder.estimatedSizeInBytes());
+        if (compressionType == CompressionType.NONE)
+            assertEquals(records.sizeInBytes(), bytesWrittenBeforeClose);
+    }
+
+    @Test
     public void testCompressionRateV1() {
         ByteBuffer buffer = ByteBuffer.allocate(1024);
         buffer.position(bufferOffset);
