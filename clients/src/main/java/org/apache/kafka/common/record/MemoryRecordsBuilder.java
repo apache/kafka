@@ -64,7 +64,7 @@ public class MemoryRecordsBuilder {
     private long producerId;
     private short producerEpoch;
     private int baseSequence;
-    private int writtenUncompressed = 0;
+    private int writtenUncompressed = 0; // Number of bytes (excluding the header) written before compression
     private int batchHeaderSize;
     private int numRecords = 0;
     private float actualCompressionRatio = 1;
