@@ -72,6 +72,10 @@ public class TransactionManager {
     private final Set<TopicPartition> pendingPartitionsInTransaction;
     private final Set<TopicPartition> partitionsInTransaction;
     private final Map<TopicPartition, CommittedOffset> pendingTxnOffsetCommits;
+
+    // This is used by the TxnRequestHandlers to control how long to back off before a given request is retried.
+    // For instance, this value is lowered by the AddPartitionsToTxnHandler when it receives a CONCURRENT_TRANSACTIONS
+    // error for the first AddPartitionsRequest in a transaction.
     private final long retryBackoffMs;
 
     private int inFlightRequestCorrelationId = NO_INFLIGHT_REQUEST_CORRELATION_ID;
@@ -804,13 +808,16 @@ public class TransactionManager {
 
         @Override
         public long retryBackoffMs() {
-            return this.retryBackoffMs;
+            return Math.min(TransactionManager.this.retryBackoffMs, this.retryBackoffMs);
         }
 
         private void maybeOverrideRetryBackoffMs() {
             // We only want to reduce the backoff when retrying the first AddPartition which errored out due to a
             // CONCURRENT_TRANSACTIONS error since this means that the previous transaction is still completeing and
             // we don't want to wait too long before trying to start the new one.
+            //
+            // This is only a temporary fix, the long term solution is being tracked in
+            // https://issues.apache.org/jira/browse/KAFKA-5482
             if (partitionsInTransaction.isEmpty())
                 this.retryBackoffMs = 20L;
         }

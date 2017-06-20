@@ -339,7 +339,7 @@ public class Sender implements Runnable {
 
                 if (targetNode != null) {
                     if (nextRequestHandler.isRetry())
-                        time.sleep(Math.min(retryBackoffMs, nextRequestHandler.retryBackoffMs()));
+                        time.sleep(nextRequestHandler.retryBackoffMs());
 
                     ClientRequest clientRequest = client.newClientRequest(targetNode.idString(),
                             requestBuilder, now, true, nextRequestHandler);
