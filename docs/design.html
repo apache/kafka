@@ -302,8 +302,9 @@
     Only committed messages are ever given out to the consumer. This means that the consumer need not worry about potentially seeing a message that could be lost if the leader fails. Producers, on the other hand, 
     have the option of either waiting for the message to be committed or not, depending on their preference for tradeoff between latency and durability. This preference is controlled by the acks setting that the 
     producer uses.
-    Note that the producer's acks setting also determines whether a message can be committed or not. Topics have a setting for a "minimum number" of in sync replicas, that is checked only when the producer requests 
-    the acknowledgment that the message is written to the full in-sync replica set. If not, the message can be committed, and consumed, even if the leader is the only member of the in-sync replica set.
+    Note that topics have a setting for the "minimum number" of in-sync replicas, that is checked only when the producer requests the acknowledgment that the message 
+    is written to the full set of in-sync replicas. If a less stringent acknowledgement is requested bt the producer, then the message can be committed, and consumed, 
+    even if the leader is the only member of the in-sync replica set.
     <p>
     The guarantee that Kafka offers is that a committed message will not be lost, as long as there is at least one in sync replica alive, at all times.
     <p>
