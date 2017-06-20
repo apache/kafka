@@ -630,7 +630,7 @@ private[log] class Cleaner(val id: Int,
             logSize + segs.head.size <= maxSize &&
             indexSize + segs.head.index.sizeInBytes <= maxIndexSize &&
             timeIndexSize + segs.head.timeIndex.sizeInBytes <= maxIndexSize &&
-            estimateLastOffset(segs, firstUncleanableOffset) - group.last.index.baseOffset <= Int.MaxValue) {
+        lastOffsetForFirstSegment(segs, firstUncleanableOffset) - group.last.baseOffset <= Int.MaxValue) {
         group = segs.head :: group
         logSize += segs.head.size
         indexSize += segs.head.index.sizeInBytes
@@ -643,22 +643,27 @@ private[log] class Cleaner(val id: Int,
   }
 
   /**
-   * Estimate what the last offset is for the current segment because we can't be sure
-   * that the index is returning a valid value in all cases.
-   *    @param segs - remaining segments to group. The current head is segment were estimating the lastOffset for.
-   *
-   * @return The estimated last offset in this segment
-   */
-  private def estimateLastOffset(segs: List[LogSegment], firstUncleanableOffset: Long): Long = {
+    * We want to get the last offset in the first log segment in segs.
+    * LogSegment.nextOffset() gives the exact last offset in a segment, but can be expensive since it requires
+    * scanning the segment from the last index entry.
+    * Therefore, we estimate the last offset of the first log segment by using
+    * the base offset of the next segment in the list.
+    * If the next segment doesn't exist, first Uncleanable Offset will be used.
+    *
+    * @param segs - remaining segments to group. The current head is segment were estimating the lastOffset for.
+    * @return The estimated last offset => The upper bound of the last offset
+    */
+  private def lastOffsetForFirstSegment(segs: List[LogSegment], firstUncleanableOffset: Long): Long = {
     if (segs.size > 1) {
-      /* if there is a next segment, use its base offset as the bounding offset to guarantee we know 
+      /* if there is a next segment, use its base offset as the bounding offset to guarantee we know
        * the worst case offset */
-      segs(1).index.baseOffset - 1
+      segs(1).baseOffset - 1
     } else {
-      //for the last segment in the list, use the first offset of the first uncleanable segment
+      //for the last segment in the list, use the first uncleanable offset.
       firstUncleanableOffset - 1
     }
   }
+
 
   /**
    * Build a map of key_hash => offset for the keys in the cleanable dirty portion of the log to use in cleaning.
