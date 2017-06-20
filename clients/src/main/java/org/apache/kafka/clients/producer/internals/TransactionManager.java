@@ -813,7 +813,7 @@ public class TransactionManager {
 
         private void maybeOverrideRetryBackoffMs() {
             // We only want to reduce the backoff when retrying the first AddPartition which errored out due to a
-            // CONCURRENT_TRANSACTIONS error since this means that the previous transaction is still completeing and
+            // CONCURRENT_TRANSACTIONS error since this means that the previous transaction is still completing and
             // we don't want to wait too long before trying to start the new one.
             //
             // This is only a temporary fix, the long term solution is being tracked in
