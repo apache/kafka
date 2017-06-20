@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.perf;
 import com.fasterxml.jackson.databind.ObjectMapper;
-
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -56,22 +55,24 @@ public class YahooBenchmark {
     private final String campaignsTopic;
     private final String eventsTopic;
 
-    private static class ProjectedEvent {
-        /* main fields */
-        String eventType;
-        String adID;
+    static class ProjectedEvent {
+        /* attributes need to be public for serializer to work */
+        /* main attributes */
+        public String eventType;
+        public String adID;
 
-        /* other fields */
-        long eventTime;
-        String userID = UUID.randomUUID().toString(); // not used
-        String pageID = UUID.randomUUID().toString(); // not used
-        String addType = "banner78";  // not used
-        String ipAddress = "1.2.3.4"; // not used
+        /* other attributes */
+        public long eventTime;
+        public String userID = UUID.randomUUID().toString(); // not used
+        public String pageID = UUID.randomUUID().toString(); // not used
+        public String addType = "banner78";  // not used
+        public String ipAddress = "1.2.3.4"; // not used
     }
 
-    private static class CampaignAd {
-        String adID;
-        String campaignID;
+    static class CampaignAd {
+        /* attributes need to be public for serializer to work */
+        public String adID;
+        public String campaignID;
     }
 
     public YahooBenchmark(final SimpleBenchmark parent, final String campaignsTopic, final String eventsTopic) {
