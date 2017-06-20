@@ -321,7 +321,7 @@ public class TransactionManagerTest {
     }
 
     @Test
-    public void testMaybeAddPartitionToTransactionOverridesRetryBackoffForConcurrentTransactions() {
+    public void testAddPartitionToTransactionOverridesRetryBackoffForConcurrentTransactions() {
         long pid = 13131L;
         short epoch = 1;
         TopicPartition partition = new TopicPartition("foo", 0);
@@ -339,11 +339,10 @@ public class TransactionManagerTest {
         TransactionManager.TxnRequestHandler handler = transactionManager.nextRequestHandler(false);
         assertNotNull(handler);
         assertEquals(5, handler.retryBackoffMs());
-
     }
 
     @Test
-    public void testMaybeAddPartitionToTransactionRetainsRetryBackoffForRegularRetriableError() {
+    public void testAddPartitionToTransactionRetainsRetryBackoffForRegularRetriableError() {
         long pid = 13131L;
         short epoch = 1;
         TopicPartition partition = new TopicPartition("foo", 0);
@@ -359,8 +358,8 @@ public class TransactionManagerTest {
         sender.run(time.milliseconds());
 
         TransactionManager.TxnRequestHandler handler = transactionManager.nextRequestHandler(false);
+        assertNotNull(handler);
         assertEquals(-1, handler.retryBackoffMs());
-
     }
 
 
