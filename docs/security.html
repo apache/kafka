@@ -664,18 +664,20 @@
     </ol>
 
     <h3><a id="security_authz" href="#security_authz">7.4 Authorization and ACLs</a></h3>
-    Kafka ships with a pluggable Authorizer and an out-of-box authorizer implementation that uses zookeeper to store all the acls. Kafka acls are defined in the general format of "Principal P is [Allowed/Denied] Operation O From Host H On Resource R". You can read more about the acl structure on KIP-11. In order to add, remove or list acls you can use the Kafka authorizer CLI. By default, if a Resource R has no associated acls, no one other than super users is allowed to access R. If you want to change that behavior, you can include the following in broker.properties.
+    Kafka ships with pluggable authorization (in the form of <code>kafka.security.auth.Authorizer</code>) and an out-of-box authorizer implementation that uses zookeeper to store all the access control lists (ACLs). Authorization is disabled by default and is enabled via the <code>authorizer.class.name</code> setting in broker.properties. Thus, to enable the built-in authorization your broker.properties should include the following:
+    <pre>authorizer.class.name=kafka.security.auth.SimpleAclAuthorizer</pre>
+    Kafka ACLs are defined in the general format of "Principal P is [Allowed/Denied] Operation O From Host H On Resource R". You can read more about the ACL structure on <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-11+-+Authorization+Interface">KIP-11</a>. In order to add, remove or list ACLs you can use the Kafka authorizer CLI, <a href="#security_authz_cli"><code>kafka-acls.sh</code></a>. By default, if a Resource R has no associated ACLs, no one other than super users is allowed to access R. If you want to change that behavior, you can include the following in broker.properties.
     <pre>allow.everyone.if.no.acl.found=true</pre>
     One can also add super users in broker.properties like the following (note that the delimiter is semicolon since SSL user names may contain comma).
     <pre>super.users=User:Bob;User:Alice</pre>
     By default, the SSL user name will be of the form "CN=writeuser,OU=Unknown,O=Unknown,L=Unknown,ST=Unknown,C=Unknown". One can change that by setting a customized PrincipalBuilder in broker.properties like the following.
     <pre>principal.builder.class=CustomizedPrincipalBuilderClass</pre>
     By default, the SASL user name will be the primary part of the Kerberos principal. One can change that by setting <code>sasl.kerberos.principal.to.local.rules</code> to a customized rule in broker.properties.
-    The format of <code>sasl.kerberos.principal.to.local.rules</code> is a list where each rule works in the same way as the auth_to_local in <a href="http://web.mit.edu/Kerberos/krb5-latest/doc/admin/conf_files/krb5_conf.html">Kerberos configuration file (krb5.conf)</a>. Each rules starts with RULE: and contains an expression in the format [n:string](regexp)s/pattern/replacement/g. See the kerberos documentation for more details. An example of adding a rule to properly translate user@MYDOMAIN.COM to user while also keeping the default rule in place is:
+The format of <code>sasl.kerberos.principal.to.local.rules</code> is a list where each rule works in the same way as the auth_to_local in <a href="http://web.mit.edu/Kerberos/krb5-latest/doc/admin/conf_files/krb5_conf.html">Kerberos configuration file (<code>krb5.conf</code>)</a>. Each rule starts with <code>RULE:</code> and contains an expression in the format <code>[n:string](regexp)s/pattern/replacement/g</code>. See the kerberos documentation for more details. An example of adding a rule to properly translate <code>user@MYDOMAIN.COM</code> to <code>user</code> while also keeping the default rule in place is:
     <pre>sasl.kerberos.principal.to.local.rules=RULE:[1:$1@$0](.*@MYDOMAIN.COM)s/@.*//,DEFAULT</pre>
 
     <h4><a id="security_authz_cli" href="#security_authz_cli">Command Line Interface</a></h4>
-    Kafka Authorization management CLI can be found under bin directory with all the other CLIs. The CLI script is called <b>kafka-acls.sh</b>. Following lists all the options that the script supports:
+    Kafka Authorization management CLI can be found under the <code>bin</code> directory with all the other CLIs. The CLI script is called <b>kafka-acls.sh</b>. The following lists all the options that the script supports:
     <p></p>
     <table class="data-table">
         <tr>
@@ -686,19 +688,19 @@
         </tr>
         <tr>
             <td>--add</td>
-            <td>Indicates to the script that user is trying to add an acl.</td>
+            <td>Indicates to the script that user is trying to add an ACL.</td>
             <td></td>
             <td>Action</td>
         </tr>
         <tr>
             <td>--remove</td>
-            <td>Indicates to the script that user is trying to remove an acl.</td>
+            <td>Indicates to the script that user is trying to remove an ACL.</td>
             <td></td>
             <td>Action</td>
         </tr>
         <tr>
             <td>--list</td>
-            <td>Indicates to the script that user is trying to list acls.</td>
+            <td>Indicates to the script that user is trying to list ACLs.</td>
             <td></td>
             <td>Action</td>
         </tr>
@@ -765,14 +767,14 @@
         </tr>
         <tr>
             <td>--producer</td>
-            <td> Convenience option to add/remove acls for producer role. This will generate acls that allows WRITE,
+            <td> Convenience option to add/remove ACLs for producer role. This will generate ACLs that allows WRITE,
                 DESCRIBE on topic and CREATE on cluster.</td>
             <td></td>
             <td>Convenience</td>
         </tr>
         <tr>
             <td>--consumer</td>
-            <td> Convenience option to add/remove acls for consumer role. This will generate acls that allows READ,
+            <td> Convenience option to add/remove ACLs for consumer role. This will generate ACLs that allows READ,
                 DESCRIBE on topic and READ on consumer-group.</td>
             <td></td>
             <td>Convenience</td>
@@ -788,23 +790,23 @@
     <h4><a id="security_authz_examples" href="#security_authz_examples">Examples</a></h4>
     <ul>
         <li><b>Adding Acls</b><br>
-    Suppose you want to add an acl "Principals User:Bob and User:Alice are allowed to perform Operation Read and Write on Topic Test-Topic from IP 198.51.100.0 and IP 198.51.100.1". You can do that by executing the CLI with following options:
+    Suppose we want to add an ACL "Principals User:Bob and User:Alice are allowed to perform Operations Read and Write on Topic Test-topic from IP 198.51.100.0 and IP 198.51.100.1". We can do that by executing the CLI with following options:
             <pre class="brush: bash;">bin/kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --add --allow-principal User:Bob --allow-principal User:Alice --allow-host 198.51.100.0 --allow-host 198.51.100.1 --operation Read --operation Write --topic Test-topic</pre>
-            By default, all principals that don't have an explicit acl that allows access for an operation to a resource are denied. In rare cases where an allow acl is defined that allows access to all but some principal we will have to use the --deny-principal and --deny-host option. For example, if we want to allow all users to Read from Test-topic but only deny User:BadBob from IP 198.51.100.3 we can do so using following commands:
+            By default, all principals that don't have an explicit ACL that allows access for an operation to a resource are denied. In rare cases where an allow ACL is defined that allows access to all but some principal we will have to use the --deny-principal and --deny-host option. For example, if we want to allow all users to Read from Test-topic but only deny User:BadBob from IP 198.51.100.3 we can do so using following commands:
             <pre class="brush: bash;">bin/kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --add --allow-principal User:* --allow-host * --deny-principal User:BadBob --deny-host 198.51.100.3 --operation Read --topic Test-topic</pre>
-            Note that ``--allow-host`` and ``deny-host`` only support IP addresses (hostnames are not supported).
-            Above examples add acls to a topic by specifying --topic [topic-name] as the resource option. Similarly user can add acls to cluster by specifying --cluster and to a consumer group by specifying --group [group-name].</li>
+            Note that <code>--allow-host</code> and <code>deny-host</code> only support IP addresses (hostnames are not supported).
+            Above examples add ACLs to a topic by specifying --topic [topic-name] as the resource option. Similarly we can add ACLs to the cluster by specifying --cluster and to a consumer group by specifying --group [group-name].</li>
 
         <li><b>Removing Acls</b><br>
-                Removing acls is pretty much the same. The only difference is instead of --add option users will have to specify --remove option. To remove the acls added by the first example above we can execute the CLI with following options:
+                Removing ACLs is pretty much the same. The only difference is instead of --add option we have to specify --remove option. To remove the ACLs added by the first example above we can execute the CLI with following options:
             <pre class="brush: bash;"> bin/kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --remove --allow-principal User:Bob --allow-principal User:Alice --allow-host 198.51.100.0 --allow-host 198.51.100.1 --operation Read --operation Write --topic Test-topic </pre></li>
 
         <li><b>List Acls</b><br>
-                We can list acls for any resource by specifying the --list option with the resource. To list all acls for Test-topic we can execute the CLI with following options:
+                We can list ACLs for any resource by specifying the --list option with the resource. To list all ACLs for Test-topic we can execute the CLI with following options:
                 <pre class="brush: bash;">bin/kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --list --topic Test-topic</pre></li>
 
         <li><b>Adding or removing a principal as producer or consumer</b><br>
-                The most common use case for acl management are adding/removing a principal as producer or consumer so we added convenience options to handle these cases. In order to add User:Bob as a producer of  Test-topic we can execute the following command:
+                The most common use case for ACL management are adding/removing a principal as producer or consumer so convenience options are provided to handle these cases. In order to add User:Bob as a producer of  Test-topic we can execute the following command:
             <pre class="brush: bash;"> bin/kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --add --allow-principal User:Bob --producer --topic Test-topic</pre>
                 Similarly to add Alice as a consumer of Test-topic with consumer group Group-1 we just have to pass --consumer option:
             <pre class="brush: bash;"> bin/kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --add --allow-principal User:Bob --consumer --topic Test-topic --group Group-1 </pre>
