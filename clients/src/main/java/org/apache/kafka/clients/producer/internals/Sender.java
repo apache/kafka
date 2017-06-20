@@ -817,7 +817,7 @@ public class Sender implements Runnable {
                     // per-topic bytes send rate
                     String topicByteRateName = "topic." + topic + ".bytes";
                     Sensor topicByteRate = Utils.notNull(this.metrics.getSensor(topicByteRateName));
-                    topicByteRate.record(batch.sizeInBytes());
+                    topicByteRate.record(batch.estimatedSizeInBytes());
 
                     // per-topic compression rate
                     String topicCompressionRateName = "topic." + topic + ".compression-rate";
@@ -825,7 +825,7 @@ public class Sender implements Runnable {
                     topicCompressionRate.record(batch.compressionRatio());
 
                     // global metrics
-                    this.batchSizeSensor.record(batch.sizeInBytes(), now);
+                    this.batchSizeSensor.record(batch.estimatedSizeInBytes(), now);
                     this.queueTimeSensor.record(batch.queueTimeMs(), now);
                     this.compressionRateSensor.record(batch.compressionRatio());
                     this.maxRecordSizeSensor.record(batch.maxRecordSize, now);

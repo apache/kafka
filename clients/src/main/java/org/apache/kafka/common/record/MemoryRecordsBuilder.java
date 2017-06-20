@@ -55,14 +55,17 @@ public class MemoryRecordsBuilder {
     private final int partitionLeaderEpoch;
     private final int writeLimit;
 
-    private volatile float estimatedCompressionRatio;
+    // Use a conservative estimate of the compression ratio. The producer overrides this using statistics
+    // from previous batches before appending any records.
+    private float estimatedCompressionRatio = 1.0F;
 
     private boolean appendStreamIsClosed = false;
     private boolean isTransactional;
     private long producerId;
     private short producerEpoch;
     private int baseSequence;
-    private long writtenUncompressed = 0;
+    private int writtenUncompressed = 0; // Number of bytes (excluding the header) written before compression
+    private int batchHeaderSize;
     private int numRecords = 0;
     private float actualCompressionRatio = 1;
     private long maxTimestamp = RecordBatch.NO_TIMESTAMP;
@@ -111,17 +114,19 @@ public class MemoryRecordsBuilder {
         this.isControlBatch = isControlBatch;
         this.partitionLeaderEpoch = partitionLeaderEpoch;
         this.writeLimit = writeLimit;
-
         this.initialPosition = bufferStream.position();
 
         if (magic > RecordBatch.MAGIC_VALUE_V1) {
-            bufferStream.position(initialPosition + DefaultRecordBatch.RECORDS_OFFSET);
+            batchHeaderSize = DefaultRecordBatch.RECORDS_OFFSET;
         } else if (compressionType != CompressionType.NONE) {
             // for compressed records, leave space for the header and the shallow message metadata
             // and move the starting position to the value payload offset
-            bufferStream.position(initialPosition + Records.LOG_OVERHEAD + LegacyRecord.recordOverhead(magic));
+            batchHeaderSize = Records.LOG_OVERHEAD + LegacyRecord.recordOverhead(magic);
+        } else {
+            batchHeaderSize = 0;
         }
 
+        bufferStream.position(initialPosition + batchHeaderSize);
         this.bufferStream = bufferStream;
         this.appendStream = new DataOutputStream(compressionType.wrapForOutput(this.bufferStream, magic));
     }
@@ -662,10 +667,10 @@ public class MemoryRecordsBuilder {
      */
     private int estimatedBytesWritten() {
         if (compressionType == CompressionType.NONE) {
-            return buffer().position();
+            return batchHeaderSize + writtenUncompressed;
         } else {
             // estimate the written bytes to the underlying byte buffer based on uncompressed written bytes
-            return (int) (writtenUncompressed * estimatedCompressionRatio * COMPRESSION_RATE_ESTIMATION_FACTOR);
+            return batchHeaderSize + (int) (writtenUncompressed * estimatedCompressionRatio * COMPRESSION_RATE_ESTIMATION_FACTOR);
         }
     }
 
@@ -723,7 +728,11 @@ public class MemoryRecordsBuilder {
         return appendStreamIsClosed || (this.numRecords > 0 && this.writeLimit <= estimatedBytesWritten());
     }
 
-    public int sizeInBytes() {
+    /**
+     * Get an estimate of the number of bytes written to the underlying buffer. The returned value
+     * is exactly correct if the record set is not compressed or if the builder has been closed.
+     */
+    public int estimatedSizeInBytes() {
         return builtRecords != null ? builtRecords.sizeInBytes() : estimatedBytesWritten();
     }
 
