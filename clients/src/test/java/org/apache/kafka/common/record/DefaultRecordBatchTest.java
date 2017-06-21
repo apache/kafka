@@ -35,6 +35,41 @@ import static org.junit.Assert.assertTrue;
 public class DefaultRecordBatchTest {
 
     @Test
+    public void testWriteEmptyHeader() {
+        long producerId = 23423L;
+        short producerEpoch = 145;
+        int baseSequence = 983;
+        long baseOffset = 15L;
+        long lastOffset = 37;
+        int partitionLeaderEpoch = 15;
+        long timestamp = System.currentTimeMillis();
+
+        for (TimestampType timestampType : Arrays.asList(TimestampType.CREATE_TIME, TimestampType.LOG_APPEND_TIME)) {
+            for (boolean isTransactional : Arrays.asList(true, false)) {
+                for (boolean isControlBatch : Arrays.asList(true, false)) {
+                    ByteBuffer buffer = ByteBuffer.allocate(2048);
+                    DefaultRecordBatch.writeEmptyHeader(buffer, RecordBatch.CURRENT_MAGIC_VALUE, producerId,
+                            producerEpoch, baseSequence, baseOffset, lastOffset, partitionLeaderEpoch, timestampType,
+                            timestamp, isTransactional, isControlBatch);
+                    buffer.flip();
+                    DefaultRecordBatch batch = new DefaultRecordBatch(buffer);
+                    assertEquals(producerId, batch.producerId());
+                    assertEquals(producerEpoch, batch.producerEpoch());
+                    assertEquals(baseSequence, batch.baseSequence());
+                    assertEquals(baseSequence + ((int) (lastOffset - baseOffset)), batch.lastSequence());
+                    assertEquals(baseOffset, batch.baseOffset());
+                    assertEquals(lastOffset, batch.lastOffset());
+                    assertEquals(partitionLeaderEpoch, batch.partitionLeaderEpoch());
+                    assertEquals(isTransactional, batch.isTransactional());
+                    assertEquals(timestampType, batch.timestampType());
+                    assertEquals(timestamp, batch.maxTimestamp());
+                    assertEquals(isControlBatch, batch.isControlBatch());
+                }
+            }
+        }
+    }
+
+    @Test
     public void buildDefaultRecordBatch() {
         ByteBuffer buffer = ByteBuffer.allocate(2048);
 

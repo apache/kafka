@@ -1669,6 +1669,35 @@ public class FetcherTest {
     }
 
     @Test
+    public void testUpdatePositionOnEmptyBatch() {
+        long producerId = 1;
+        short producerEpoch = 0;
+        int sequence = 1;
+        long baseOffset = 37;
+        long lastOffset = 54;
+        int partitionLeaderEpoch = 7;
+        ByteBuffer buffer = ByteBuffer.allocate(DefaultRecordBatch.RECORD_BATCH_OVERHEAD);
+        DefaultRecordBatch.writeEmptyHeader(buffer, RecordBatch.CURRENT_MAGIC_VALUE, producerId, producerEpoch,
+                sequence, baseOffset, lastOffset, partitionLeaderEpoch, TimestampType.CREATE_TIME,
+                System.currentTimeMillis(), false, false);
+        buffer.flip();
+        MemoryRecords recordsWithEmptyBatch = MemoryRecords.readableRecords(buffer);
+
+        subscriptions.assignFromUser(singleton(tp1));
+        subscriptions.seek(tp1, 0);
+        assertEquals(1, fetcher.sendFetches());
+        client.prepareResponse(fetchResponse(tp1, recordsWithEmptyBatch, Errors.NONE, 100L, 0));
+        consumerClient.poll(0);
+        assertTrue(fetcher.hasCompletedFetches());
+
+        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> allFetchedRecords = fetcher.fetchedRecords();
+        assertTrue(allFetchedRecords.isEmpty());
+
+        // The next offset should point to the next batch
+        assertEquals(lastOffset + 1, subscriptions.position(tp1).longValue());
+    }
+
+    @Test
     public void testReadCommittedWithCompactedTopic() {
         Fetcher<String, String> fetcher = createFetcher(subscriptions, new Metrics(), new StringDeserializer(),
                 new StringDeserializer(), Integer.MAX_VALUE, IsolationLevel.READ_COMMITTED);

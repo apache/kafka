@@ -1061,6 +1061,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                     }
 
                     records = currentBatch.streamingIterator(decompressionBufferSupplier);
+                    continue;
                 }
 
                 Record record = records.next();
