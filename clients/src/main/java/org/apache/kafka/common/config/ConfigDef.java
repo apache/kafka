@@ -26,6 +26,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Locale;
@@ -82,13 +83,13 @@ public class ConfigDef {
     private Set<String> configsWithNoParent;
 
     public ConfigDef() {
-        configKeys = new HashMap<>();
+        configKeys = new LinkedHashMap<>();
         groups = new LinkedList<>();
         configsWithNoParent = null;
     }
 
     public ConfigDef(ConfigDef base) {
-        configKeys = new HashMap<>(base.configKeys);
+        configKeys = new LinkedHashMap<>(base.configKeys);
         groups = new LinkedList<>(base.groups);
         configsWithNoParent = base.configsWithNoParent == null ? null : new HashSet<>(base.configsWithNoParent);
     }
