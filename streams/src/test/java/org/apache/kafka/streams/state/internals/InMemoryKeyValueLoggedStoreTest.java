@@ -62,17 +62,4 @@ public class InMemoryKeyValueLoggedStoreTest extends AbstractKeyValueStoreTest {
         assertEquals(store.get(1), "1");
         assertEquals(store.get(2), "2");
     }
-
-    @Test
-    public void shouldCreatePersistentStore() {
-        assertEquals(store.persistent(), false);
-
-        StateStoreSupplier supplier = Stores.create("my-store").withKeys(context.keySerde()).
-                withValues(context.valueSerde())
-                .persistent().enableLogging(Collections.singletonMap("retention.ms", "1000")).build();
-        KeyValueStore<Integer, String> persistentStore = (KeyValueStore<Integer, String>) supplier.get();
-        persistentStore.init(context, persistentStore);
-
-        assertEquals(persistentStore.persistent(), true);
-    }
 }
