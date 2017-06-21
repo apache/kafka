@@ -26,6 +26,14 @@ public class SourceConnectorConfig extends ConnectorConfig {
     private static ConfigDef config = configDef();
 
     public SourceConnectorConfig(Plugins plugins, Map<String, String> props) {
-        super(plugins, config, props);
+        this(plugins, props, true);
+    }
+
+    public SourceConnectorConfig(
+            Plugins plugins,
+            Map<String, String> props,
+            boolean requireFullConfig
+    ) {
+        super(plugins, config, props, requireFullConfig);
     }
 }
