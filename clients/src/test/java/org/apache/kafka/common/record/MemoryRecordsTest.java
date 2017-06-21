@@ -26,6 +26,7 @@ import org.junit.runners.Parameterized;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 
@@ -239,6 +240,58 @@ public class MemoryRecordsTest {
     }
 
     @Test
+    public void testFilterToEmptyBatchRetention() {
+        if (magic >= RecordBatch.MAGIC_VALUE_V2) {
+            for (boolean isTransactional : Arrays.asList(true, false)) {
+                ByteBuffer buffer = ByteBuffer.allocate(2048);
+                long producerId = 23L;
+                short producerEpoch = 5;
+                long baseOffset = 3L;
+                int baseSequence = 10;
+                int partitionLeaderEpoch = 293;
+
+                MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME,
+                        baseOffset, RecordBatch.NO_TIMESTAMP, producerId, producerEpoch, baseSequence, isTransactional,
+                        partitionLeaderEpoch);
+                builder.append(11L, "2".getBytes(), "b".getBytes());
+                builder.append(12L, "3".getBytes(), "c".getBytes());
+                builder.close();
+
+                ByteBuffer filtered = ByteBuffer.allocate(2048);
+                builder.build().filterTo(new TopicPartition("foo", 0), new MemoryRecords.RecordFilter() {
+                    @Override
+                    protected BatchFilterCommand handleBatch(RecordBatch batch) {
+                        // retain all batches
+                        return BatchFilterCommand.RETAIN;
+                    }
+
+                    @Override
+                    protected boolean shouldRetain(RecordBatch recordBatch, Record record) {
+                        // delete the records
+                        return false;
+                    }
+                }, filtered, Integer.MAX_VALUE, BufferSupplier.NO_CACHING);
+
+                filtered.flip();
+                MemoryRecords filteredRecords = MemoryRecords.readableRecords(filtered);
+
+                List<MutableRecordBatch> batches = TestUtils.toList(filteredRecords.batches());
+                assertEquals(1, batches.size());
+
+                MutableRecordBatch batch = batches.get(0);
+                assertEquals(0, batch.countOrNull().intValue());
+                assertEquals(12L, batch.maxTimestamp());
+                assertEquals(TimestampType.CREATE_TIME, batch.timestampType());
+                assertEquals(baseOffset, batch.baseOffset());
+                assertEquals(baseOffset + 1, batch.lastOffset());
+                assertEquals(baseSequence, batch.baseSequence());
+                assertEquals(baseSequence + 1, batch.lastSequence());
+                assertEquals(isTransactional, batch.isTransactional());
+            }
+        }
+    }
+
+    @Test
     public void testBuildEndTxnMarker() {
         if (magic >= RecordBatch.MAGIC_VALUE_V2) {
             long producerId = 73;
@@ -303,9 +356,11 @@ public class MemoryRecordsTest {
             ByteBuffer filtered = ByteBuffer.allocate(2048);
             MemoryRecords.readableRecords(buffer).filterTo(new TopicPartition("foo", 0), new MemoryRecords.RecordFilter() {
                 @Override
-                protected boolean shouldDiscard(RecordBatch batch) {
+                protected BatchFilterCommand handleBatch(RecordBatch batch) {
                     // discard the second and fourth batches
-                    return batch.lastOffset() == 2L || batch.lastOffset() == 6L;
+                    if (batch.lastOffset() == 2L || batch.lastOffset() == 6L)
+                        return BatchFilterCommand.DELETE;
+                    return BatchFilterCommand.NONE;
                 }
 
                 @Override

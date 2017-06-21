@@ -105,7 +105,7 @@ public class ByteBufferOutputStream extends OutputStream {
         return initialCapacity;
     }
 
-    private void maybeExpandBuffer(int remainingRequired) {
+    public void maybeExpandBuffer(int remainingRequired) {
         if (remainingRequired > buffer.remaining())
             expandBuffer(remainingRequired);
     }

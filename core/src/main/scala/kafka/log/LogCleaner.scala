@@ -30,6 +30,7 @@ import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter
+import org.apache.kafka.common.record.MemoryRecords.RecordFilter.BatchFilterCommand
 
 import scala.collection.mutable
 import scala.collection.JavaConverters._
@@ -478,10 +479,9 @@ private[log] class Cleaner(val id: Int,
                              activeProducers: Map[Long, ProducerIdEntry],
                              stats: CleanerStats) {
     val logCleanerFilter = new RecordFilter {
-      var retainLastBatchSequence: Boolean = false
       var discardBatchRecords: Boolean = false
 
-      override def shouldDiscard(batch: RecordBatch): Boolean = {
+      override def handleBatch(batch: RecordBatch): BatchFilterCommand = {
         // we piggy-back on the tombstone retention logic to delay deletion of transaction markers.
         // note that we will never delete a marker until all the records from that transaction are removed.
         discardBatchRecords = shouldDiscardBatch(batch, transactionMetadata, retainTxnMarkers = retainDeletes)
@@ -489,20 +489,18 @@ private[log] class Cleaner(val id: Int,
         // check if the batch contains the last sequence number for the producer. if so, we cannot
         // remove the batch just yet or the producer may see an out of sequence error.
         if (batch.hasProducerId && activeProducers.get(batch.producerId).exists(_.lastSeq == batch.lastSequence)) {
-          retainLastBatchSequence = true
-          false
+          BatchFilterCommand.RETAIN
         } else {
-          retainLastBatchSequence = false
-          discardBatchRecords
+          if (discardBatchRecords)
+            BatchFilterCommand.DELETE
+          else
+            BatchFilterCommand.NONE
         }
       }
 
       override def shouldRetain(batch: RecordBatch, record: Record): Boolean = {
-        if (retainLastBatchSequence && batch.lastSequence == record.sequence)
-          // always retain the record with the last sequence number
-          true
-        else if (discardBatchRecords)
-          // remove the record if the batch would have otherwise been discarded
+        if (discardBatchRecords)
+        // remove the record if the batch would have otherwise been discarded
           false
         else
           shouldRetainRecord(source, map, retainDeletes, batch, record, stats)

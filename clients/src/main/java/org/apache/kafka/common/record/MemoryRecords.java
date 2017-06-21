@@ -17,6 +17,7 @@
 package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.record.MemoryRecords.RecordFilter.BatchFilterCommand;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.CloseableIterator;
 import org.slf4j.Logger;
@@ -151,7 +152,8 @@ public class MemoryRecords extends AbstractRecords {
         for (MutableRecordBatch batch : batches) {
             bytesRead += batch.sizeInBytes();
 
-            if (filter.shouldDiscard(batch))
+            BatchFilterCommand batchFilterCommand = filter.handleBatch(batch);
+            if (batchFilterCommand == BatchFilterCommand.DELETE)
                 continue;
 
             // We use the absolute offset to decide whether to retain the message or not. Due to KAFKA-4298, we have to
@@ -211,6 +213,15 @@ public class MemoryRecords extends AbstractRecords {
                     maxTimestamp = info.maxTimestamp;
                     shallowOffsetOfMaxTimestamp = info.shallowOffsetOfMaxTimestamp;
                 }
+            } else if (batchFilterCommand == BatchFilterCommand.RETAIN) {
+                if (batchMagic < RecordBatch.MAGIC_VALUE_V2)
+                    throw new IllegalStateException("Empty batches are only supported for magic v2 and above");
+
+                bufferOutputStream.maybeExpandBuffer(DefaultRecordBatch.RECORD_BATCH_OVERHEAD);
+                DefaultRecordBatch.writeEmptyHeader(bufferOutputStream.buffer(), batchMagic, batch.producerId(),
+                        batch.producerEpoch(), batch.baseSequence(), batch.baseOffset(), batch.lastOffset(),
+                        batch.partitionLeaderEpoch(), batch.timestampType(), batch.maxTimestamp(),
+                        batch.isTransactional(), batch.isControlBatch());
             }
 
             // If we had to allocate a new buffer to fit the filtered output (see KAFKA-5316), return early to
@@ -300,17 +311,19 @@ public class MemoryRecords extends AbstractRecords {
     }
 
     public static abstract class RecordFilter {
+        public enum BatchFilterCommand { DELETE, RETAIN, NONE }
+
         /**
          * Check whether the full batch can be discarded (i.e. whether we even need to
          * check the records individually).
          */
-        protected boolean shouldDiscard(RecordBatch batch) {
-            return false;
+        protected BatchFilterCommand handleBatch(RecordBatch batch) {
+            return BatchFilterCommand.NONE;
         }
 
         /**
          * Check whether a record should be retained in the log. Only records from
-         * batches which were not discarded with {@link #shouldDiscard(RecordBatch)}
+         * batches which were not discarded with {@link #handleBatch(RecordBatch)}
          * will be considered.
          */
         protected abstract boolean shouldRetain(RecordBatch recordBatch, Record record);

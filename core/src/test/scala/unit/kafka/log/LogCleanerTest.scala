@@ -107,8 +107,9 @@ class LogCleanerTest extends JUnitSuite {
 
     log.roll()
     cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 0L, log.activeSegment.baseOffset))
-    assertEquals(List(2, 3, 3, 4, 1, 4), keysInLog(log))
-    assertEquals(List(1, 2, 3, 5, 6, 7), offsetsInLog(log))
+    assertEquals(Map(pid1 -> 2, pid2 -> 2, pid3 -> 1), lastSequencesInLog(log))
+    assertEquals(List(2, 3, 1, 4), keysInLog(log))
+    assertEquals(List(1, 3, 6, 7), offsetsInLog(log))
 
     // we have to reload the log to validate that the cleaner maintained sequence numbers correctly
     def reloadLog(): Unit = {
@@ -137,8 +138,8 @@ class LogCleanerTest extends JUnitSuite {
     appendIdempotentAsLeader(log, pid4, producerEpoch)(Seq(2))
     log.roll()
     cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 0L, log.activeSegment.baseOffset))
-    assertEquals(List(3, 3, 4, 1, 4, 2), keysInLog(log))
-    assertEquals(List(2, 3, 5, 6, 7, 8), offsetsInLog(log))
+    assertEquals(List(3, 1, 4, 2), keysInLog(log))
+    assertEquals(List(3, 6, 7, 8), offsetsInLog(log))
 
     reloadLog()
 
@@ -404,8 +405,9 @@ class LogCleanerTest extends JUnitSuite {
     log.roll()
 
     cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 0L, log.activeSegment.baseOffset))
-    assertEquals(List(0, 0, 1), keysInLog(log))
-    assertEquals(List(1, 3, 4), offsetsInLog(log))
+    assertEquals(Map(1L -> 0, 2L -> 1, 3L -> 0), lastSequencesInLog(log))
+    assertEquals(List(0, 1), keysInLog(log))
+    assertEquals(List(3, 4), offsetsInLog(log))
   }
 
   @Test
@@ -425,8 +427,9 @@ class LogCleanerTest extends JUnitSuite {
     log.roll()
 
     cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 0L, log.activeSegment.baseOffset))
-    assertEquals(List(3), keysInLog(log))
-    assertEquals(List(2, 3), offsetsInLog(log))
+    assertEquals(Map(producerId -> 2), lastSequencesInLog(log))
+    assertEquals(List(), keysInLog(log))
+    assertEquals(List(3), offsetsInLog(log))
   }
 
   @Test
@@ -586,6 +589,12 @@ class LogCleanerTest extends JUnitSuite {
          batch <- segment.log.batches.asScala if !batch.isControlBatch;
          record <- batch.asScala if record.hasValue && record.hasKey)
       yield TestUtils.readString(record.key).toInt
+  }
+
+  def lastSequencesInLog(log: Log): Map[Long, Int] = {
+    (for (segment <- log.logSegments;
+          batch <- segment.log.batches.asScala if !batch.isControlBatch && batch.hasProducerId)
+      yield batch.producerId -> batch.lastSequence).toMap
   }
 
   /* extract all the offsets from a log */
