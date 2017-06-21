@@ -41,6 +41,8 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Random;
 import java.util.UUID;
+import java.util.List;
+import java.util.ArrayList;
 import java.util.concurrent.CountDownLatch;
 
 
@@ -85,7 +87,7 @@ public class YahooBenchmark {
     private boolean maybeSetupPhaseCampaigns(final String topic, final String clientId,
                                              final boolean skipIfAllTests,
                                              final int numCampaigns, final int adsPerCampaign,
-                                             final String[] ads) throws Exception {
+                                             final List<String> ads) throws Exception {
         parent.resetStats();
         // initialize topics
         if (parent.loadPhase) {
@@ -105,15 +107,13 @@ public class YahooBenchmark {
             props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
 
             KafkaProducer<String, String> producer = new KafkaProducer<>(props);
-            int arrayIndex = 0;
             for (int c = 0; c < numCampaigns; c++) {
                 String campaignID = UUID.randomUUID().toString();
                 for (int a = 0; a < adsPerCampaign; a++) {
                     String adId = UUID.randomUUID().toString();
                     String concat = adId + ":" + campaignID;
                     producer.send(new ProducerRecord<>(topic, adId, concat));
-                    ads[arrayIndex] = adId;
-                    arrayIndex++;
+                    ads.add(adId);
                     parent.processedRecords.getAndIncrement();
                     parent.processedBytes += concat.length() + adId.length();
                 }
@@ -126,7 +126,7 @@ public class YahooBenchmark {
     // just for Yahoo benchmark
     private boolean maybeSetupPhaseEvents(final String topic, final String clientId,
                                           final boolean skipIfAllTests, final int numRecords,
-                                          final String[] ads) throws Exception {
+                                          final List<String> ads) throws Exception {
         parent.resetStats();
         String[] eventTypes = new String[]{"view", "click", "purchase"};
         Random rand = new Random();
@@ -141,8 +141,6 @@ public class YahooBenchmark {
             }
             System.out.println("Initializing topic " + topic);
 
-            parent.processedRecords.set(0);
-            parent.processedBytes = 0;
             Properties props = new Properties();
             props.put(ProducerConfig.CLIENT_ID_CONFIG, clientId);
             props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, parent.kafka);
@@ -162,7 +160,7 @@ public class YahooBenchmark {
 
             for (int i = 0; i < numRecords; i++) {
                 event.eventType = eventTypes[rand.nextInt(eventTypes.length - 1)];
-                event.adID = ads[rand.nextInt(ads.length - 1)];
+                event.adID = ads.get(rand.nextInt(ads.size() - 1));
                 event.eventTime = System.currentTimeMillis();
                 byte[] value = projectedEventSerializer.serialize(topic, event);
                 producer.send(new ProducerRecord<>(topic, event.adID, value));
@@ -185,7 +183,7 @@ public class YahooBenchmark {
         int numCampaigns = 100;
         int adsPerCampaign = 10;
 
-        String[] ads = new String[numCampaigns * adsPerCampaign];
+        List<String> ads = new ArrayList<>(numCampaigns * adsPerCampaign);
         if (maybeSetupPhaseCampaigns(campaignsTopic, "simple-benchmark-produce-campaigns", false,
             numCampaigns, adsPerCampaign, ads)) {
             maybeSetupPhaseEvents(eventsTopic, "simple-benchmark-produce-events", false,
