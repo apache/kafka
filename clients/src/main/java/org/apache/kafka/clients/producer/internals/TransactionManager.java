@@ -64,6 +64,7 @@ public class TransactionManager {
 
     private final String transactionalId;
     private final int transactionTimeoutMs;
+
     public final String logPrefix;
 
     private final Map<TopicPartition, Integer> sequenceNumbers;
@@ -77,6 +78,10 @@ public class TransactionManager {
     // For instance, this value is lowered by the AddPartitionsToTxnHandler when it receives a CONCURRENT_TRANSACTIONS
     // error for the first AddPartitionsRequest in a transaction.
     private final long retryBackoffMs;
+
+    // The retryBackoff is overridden to the following value if the first AddPartitions receives a
+    // CONCURRENT_TRANSACTIONS error.
+    private static final long ADD_PARTITIONS_RETRY_BACKOFF_MS = 20L;
 
     private int inFlightRequestCorrelationId = NO_INFLIGHT_REQUEST_CORRELATION_ID;
     private Node transactionCoordinator;
@@ -819,7 +824,7 @@ public class TransactionManager {
             // This is only a temporary fix, the long term solution is being tracked in
             // https://issues.apache.org/jira/browse/KAFKA-5482
             if (partitionsInTransaction.isEmpty())
-                this.retryBackoffMs = 20L;
+                this.retryBackoffMs = ADD_PARTITIONS_RETRY_BACKOFF_MS;
         }
     }
 
