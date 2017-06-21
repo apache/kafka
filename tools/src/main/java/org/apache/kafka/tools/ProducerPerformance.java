@@ -59,6 +59,7 @@ public class ProducerPerformance {
             List<String> producerProps = res.getList("producerConfig");
             String producerConfig = res.getString("producerConfigFile");
             String payloadFilePath = res.getString("payloadFile");
+            String transactionalId = res.getString("transactionalId");
             boolean shouldPrintMetrics = res.getBoolean("printMetrics");
             long transactionDurationMs = res.getLong("transactionDurationMs");
             boolean transactionsEnabled =  0 < transactionDurationMs;
@@ -102,7 +103,7 @@ public class ProducerPerformance {
             props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
             props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
             if (transactionsEnabled)
-                props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "producer-perf-transactional-id");
+                props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionalId);
 
             KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(props);
 
