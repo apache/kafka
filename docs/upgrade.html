@@ -80,10 +80,12 @@
     <li> Similarly, when compressing data with gzip, the producer and broker will use 8 KB instead of 1 KB as the buffer size. The default
          for gzip is excessively low (512 bytes). </li>
     <li>The broker configuration <code>max.message.bytes</code> now applies to the total size of a batch of messages.
-        Previously the setting applied to batches of compressed messages, or to non-compressed messages individually. In practice,
-        the change is minor since a message batch may consist of only a single message, so the limitation on the size of
-        individual messages is only reduced by the overhead of the batch format. This similarly affects the
-        producer's <code>batch.size</code> configuration.</li>
+        Previously the setting applied to batches of compressed messages, or to non-compressed messages individually.
+        A message batch may consist of only a single message, so in most cases, the limitation on the size of
+        individual messages is only reduced by the overhead of the batch format. However, there are some subtle implications
+        for message format conversion (see <a href="#upgrade_11_message_format">below</a> for more detail). Note also
+        that while previously the broker would ensure that at least one message is returned in each fetch request (regardless of the
+        total and partition-level fetch sizes), the same behavior now applies to one message batch.</li> 
     <li>GC log rotation is enabled by default, see KAFKA-3754 for details.</li>
     <li>Deprecated constructors of RecordMetadata, MetricName and Cluster classes have been removed.</li>
     <li>Added user headers support through a new Headers interface providing user headers read and write access.</li>
@@ -148,6 +150,18 @@
   batches, however, there may be a small performance impact. See <a href="bit.ly/kafka-eos-perf">here</a> for the results of our
   initial performance analysis of the new message format. You can also find more detail on the message format in the
   <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-98+-+Exactly+Once+Delivery+and+Transactional+Messaging#KIP-98-ExactlyOnceDeliveryandTransactionalMessaging-MessageFormat">KIP-98</a> proposal.
+</p>
+<p>One of the notable differences in the new message format is that even uncompressed messages are stored together as a single batch.
+  This has a few implications for the broker configuration <code>max.message.bytes</code>, which limits the size of a single batch. First,
+  if an older client produces messages to a topic partition using the old format, and the messages are individually smaller than
+  <code>max.message.bytes</code>, the broker may still reject them after they are merged into a single batch during the up-conversion process.
+  Generally this can happen when the aggregate size of the individual messages is larger than <code>max.message.bytes</code>. There is a similar
+  effect for older consumers reading messages down-converted from the new format: if the fetch size is not set at least as large as
+  <code>max.message.bytes</code>, the consumer may not be able to make progress even if the individual uncompressed messages are smaller
+  than the configured fetch size. This behavior does not impact the Java client for 0.10.1.0 and later since it uses an updated fetch protocol
+  which ensures that at least one message can be returned even if it exceeds the fetch size. To get around these problems, you should ensure
+  1) that the producer's batch size is not set larger than <code>max.message.bytes</code>, and 2) that the consumer's fetch size is set at
+  least as large as <code>max.message.bytes</code>.
 </p>
 <p>Most of the discussion on the performance impact of <a href="#upgrade_10_performance_impact">upgrading to the 0.10.0 message format</a>
   remains pertinent to the 0.11.0 upgrade. This mainly affects clusters that are not secured with TLS since "zero-copy" transfer
