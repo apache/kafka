@@ -125,6 +125,7 @@ object ProducerPerformance extends Logging {
       .describedAs("metrics directory")
       .ofType(classOf[java.lang.String])
     val useNewProducerOpt = parser.accepts("new-producer", "Use the new producer implementation.")
+    val useTransactionsOpt = parser.accepts("use-transactions", "Use the transactional producer. Must be set with appropriate producer config")
 
     val options = parser.parse(args: _*)
     CommandLineUtils.checkRequiredArgs(parser, options, topicsOpt, brokerListOpt, numMessagesOpt)
@@ -152,6 +153,7 @@ object ProducerPerformance extends Logging {
     val producerNumRetries = options.valueOf(producerNumRetriesOpt).intValue()
     val producerRetryBackoffMs = options.valueOf(producerRetryBackOffMsOpt).intValue()
     val useNewProducer = options.has(useNewProducerOpt)
+    val useTransactions = options.has(useTransactionsOpt)
 
     val csvMetricsReporterEnabled = options.has(csvMetricsReporterEnabledOpt)
 
@@ -219,6 +221,9 @@ object ProducerPerformance extends Logging {
         props.put("serializer.class", classOf[DefaultEncoder].getName)
         props.put("key.serializer.class", classOf[NullEncoder[Long]].getName)
         new OldProducer(props)
+      }
+      if (config.useTransactions) {
+        producer.initTransactions()
       }
 
     // generate the sequential message ID

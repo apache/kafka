@@ -25,6 +25,7 @@ import java.util.Properties
             "Please use org.apache.kafka.clients.producer.KafkaProducer instead.", "0.10.0.0")
 trait BaseProducer {
   def send(topic: String, key: Array[Byte], value: Array[Byte])
+  def initTransactions()
   def close()
 }
 
@@ -49,6 +50,10 @@ class NewShinyProducer(producerProps: Properties) extends BaseProducer {
     }
   }
 
+  override def initTransactions() {
+    this.producer.initTransactions()
+  }
+
   override def close() {
     this.producer.close()
   }
@@ -65,6 +70,10 @@ class OldProducer(producerProps: Properties) extends BaseProducer {
 
   override def send(topic: String, key: Array[Byte], value: Array[Byte]) {
     this.producer.send(new KeyedMessage[Array[Byte], Array[Byte]](topic, key, value))
+  }
+
+  override def initTransactions() {
+    throw new UnsupportedOperationException
   }
 
   override def close() {
