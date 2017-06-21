@@ -245,34 +245,19 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             ConfigDef basicConfigDef = (connector instanceof SourceConnector)
                                        ? SourceConnectorConfig.configDef()
                                        : SinkConnectorConfig.configDef();
-            Map<String, ConfigValue> validatedConnectorConfig = validateBasicConnectorConfig(
-                    connector,
-                    basicConfigDef,
-                    connectorConfig
-            );
-            configValues.addAll(validatedConnectorConfig.values());
-            configKeys.putAll(basicConfigDef.configKeys());
-            allGroups.addAll(basicConfigDef.groups());
 
-            ConnectorConfig connectorConfigToEnrich = (connector instanceof SourceConnector)
-                    ? new SourceConnectorConfig(plugins(), connectorConfig, false)
-                    : new SinkConnectorConfig(plugins(), connectorConfig, false);
-            final ConfigDef connectorConfigDef = connectorConfigToEnrich.enrich(
+            ConfigDef newDef = new ConfigDef(basicConfigDef);
+            newDef.embed("", "", configValues.size(), connector.config());
+            ConfigDef connectorConfigDef = ConnectorConfig.enrich(
                     plugins(),
                     basicConfigDef,
                     connectorConfig,
                     false
             );
 
-            // Override is required here after the enriched ConfigDef has been created successfully
+            Config config = new Config(connectorConfigDef.validate(connectorConfig));
             configKeys.putAll(connectorConfigDef.configKeys());
             allGroups.addAll(connectorConfigDef.groups());
-
-            // do custom connector-specific validation
-            Config config = connector.validate(connectorConfig);
-            ConfigDef configDef = connector.config();
-            configKeys.putAll(configDef.configKeys());
-            allGroups.addAll(configDef.groups());
             configValues.addAll(config.configValues());
             return generateResult(connType, configKeys, configValues, new ArrayList<>(allGroups));
         } catch (ConfigException e) {
