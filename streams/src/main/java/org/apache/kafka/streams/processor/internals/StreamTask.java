@@ -391,33 +391,8 @@ public class StreamTask extends AbstractTask implements Punctuator {
         }
     }
 
-    /**
-     * <pre>
-     * - {@link #suspend(boolean) suspend(clean)}
-     *   - close topology
-     *   - if (clean) {@link #commit()}
-     *     - flush state and producer
-     *     - commit offsets
-     * - close state
-     *   - if (clean) write checkpoint
-     * - if (eos) close producer
-     * </pre>
-     * @param clean shut down cleanly (ie, incl. flush and commit) if {@code true} --
-     *              otherwise, just close open resources
-     */
-    @Override
-    public void close(boolean clean) {
-        log.debug("{} Closing", logPrefix);
-
-        RuntimeException firstException = null;
-        try {
-            suspend(clean);
-        } catch (final RuntimeException e) {
-            clean = false;
-            firstException = e;
-            log.error("{} Could not close task: ", logPrefix, e);
-        }
-
+    // helper to avoid calling suspend() twice if a suspended task gets not reassigned and closed
+    void closeSuspended(boolean clean, RuntimeException firstException) {
         try {
             closeStateManager(clean);
         } catch (final RuntimeException e) {
@@ -452,6 +427,36 @@ public class StreamTask extends AbstractTask implements Punctuator {
         if (firstException != null) {
             throw firstException;
         }
+    }
+
+        /**
+         * <pre>
+         * - {@link #suspend(boolean) suspend(clean)}
+         *   - close topology
+         *   - if (clean) {@link #commit()}
+         *     - flush state and producer
+         *     - commit offsets
+         * - close state
+         *   - if (clean) write checkpoint
+         * - if (eos) close producer
+         * </pre>
+         * @param clean shut down cleanly (ie, incl. flush and commit) if {@code true} --
+         *              otherwise, just close open resources
+         */
+    @Override
+    public void close(boolean clean) {
+        log.debug("{} Closing", logPrefix);
+
+        RuntimeException firstException = null;
+        try {
+            suspend(clean);
+        } catch (final RuntimeException e) {
+            clean = false;
+            firstException = e;
+            log.error("{} Could not close task: ", logPrefix, e);
+        }
+
+        closeSuspended(clean, firstException);
     }
 
     /**

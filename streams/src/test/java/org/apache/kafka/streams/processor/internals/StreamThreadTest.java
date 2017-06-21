@@ -205,8 +205,8 @@ public class StreamThreadTest {
         protected void updateOffsetLimits() {}
 
         @Override
-        public void close(final boolean clean) {
-            super.close(clean);
+        public void closeSuspended(final boolean clean, final RuntimeException firstException) {
+            super.closeSuspended(clean, firstException);
             closed = true;
         }
 
