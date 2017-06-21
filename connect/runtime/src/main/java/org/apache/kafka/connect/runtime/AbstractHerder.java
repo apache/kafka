@@ -46,9 +46,12 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -232,11 +235,11 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             throw new BadRequestException("Connector config " + connectorConfig + " contains no connector type");
 
         List<ConfigValue> configValues = new ArrayList<>();
-        Map<String, ConfigKey> configKeys = new HashMap<>();
-        List<String> allGroups = new ArrayList<>();
+        Map<String, ConfigKey> configKeys = new LinkedHashMap<>();
+        Set<String> allGroups = new LinkedHashSet<>();
 
         Connector connector = getConnector(connType);
-        ClassLoader savedLoader = worker.getPlugins().compareAndSwapLoaders(connector);
+        ClassLoader savedLoader = plugins().compareAndSwapLoaders(connector);
         try {
             // do basic connector validation (name, connector type, etc.)
             ConfigDef basicConfigDef = (connector instanceof SourceConnector)
@@ -271,10 +274,10 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             configKeys.putAll(configDef.configKeys());
             allGroups.addAll(configDef.groups());
             configValues.addAll(config.configValues());
-            return generateResult(connType, configKeys, configValues, allGroups);
+            return generateResult(connType, configKeys, configValues, new ArrayList<>(allGroups));
         } catch (ConfigException e) {
             // Basic validation must have failed. Return the result.
-            return generateResult(connType, configKeys, configValues, allGroups);
+            return generateResult(connType, configKeys, configValues, new ArrayList<>(allGroups));
         } finally {
             Plugins.compareAndSwapLoaders(savedLoader);
         }
@@ -353,7 +356,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         if (tempConnectors.containsKey(connType)) {
             return tempConnectors.get(connType);
         } else {
-            Connector connector = worker.getPlugins().newConnector(connType);
+            Connector connector = plugins().newConnector(connType);
             tempConnectors.put(connType, connector);
             return connector;
         }
