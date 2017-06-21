@@ -440,7 +440,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         if (idempotenceEnabled) {
             String transactionalId = config.getString(ProducerConfig.TRANSACTIONAL_ID_CONFIG);
             int transactionTimeoutMs = config.getInt(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG);
-            transactionManager = new TransactionManager(transactionalId, transactionTimeoutMs);
+            long retryBackoffMs = config.getLong(ProducerConfig.RETRY_BACKOFF_MS_CONFIG);
+            transactionManager = new TransactionManager(transactionalId, transactionTimeoutMs, retryBackoffMs);
             if (transactionManager.isTransactional())
                 log.info("Instantiated a transactional producer.");
             else
