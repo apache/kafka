@@ -17,19 +17,45 @@
 package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.common.config.ConfigDef;
-import org.apache.kafka.connect.runtime.isolation.Plugins;
+import org.apache.kafka.connect.connector.Task;
+import org.apache.kafka.connect.sink.SinkConnector;
 
+import java.util.List;
 import java.util.Map;
 
-public class SourceConnectorConfig extends ConnectorConfig {
+public class TestSinkConnector extends SinkConnector {
 
-    private static ConfigDef config = ConnectorConfig.configDef();
+    public static final String VERSION = "some great version";
 
-    public static ConfigDef configDef() {
-        return config;
+    @Override
+    public String version() {
+        return VERSION;
     }
 
-    public SourceConnectorConfig(Plugins plugins, Map<String, String> props) {
-        super(plugins, config, props);
+    @Override
+    public void start(Map<String, String> props) {
+
+    }
+
+    @Override
+    public Class<? extends Task> taskClass() {
+        return null;
+    }
+
+    @Override
+    public List<Map<String, String>> taskConfigs(int maxTasks) {
+        return null;
+    }
+
+    @Override
+    public void stop() {
+
+    }
+
+    @Override
+    public ConfigDef config() {
+        return new ConfigDef()
+                .define("required", ConfigDef.Type.STRING, ConfigDef.Importance.HIGH, "required docs")
+                .define("optional", ConfigDef.Type.STRING, "defaultVal", ConfigDef.Importance.HIGH, "optional docs");
     }
 }
