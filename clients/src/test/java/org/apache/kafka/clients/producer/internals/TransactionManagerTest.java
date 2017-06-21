@@ -91,6 +91,7 @@ public class TransactionManagerTest {
     private static final String CLIENT_ID = "clientId";
     private static final int MAX_BLOCK_TIMEOUT = 1000;
     private static final int REQUEST_TIMEOUT = 1000;
+    private static final long DEFAULT_RETRY_BACKOFF_MS = 100L;
     private final String transactionalId = "foobar";
     private final int transactionTimeoutMs = 1121;
 
@@ -115,7 +116,7 @@ public class TransactionManagerTest {
         int batchSize = 16 * 1024;
         MetricConfig metricConfig = new MetricConfig().tags(metricTags);
         this.brokerNode = new Node(0, "localhost", 2211);
-        this.transactionManager = new TransactionManager(transactionalId, transactionTimeoutMs);
+        this.transactionManager = new TransactionManager(transactionalId, transactionTimeoutMs, DEFAULT_RETRY_BACKOFF_MS);
         Metrics metrics = new Metrics(metricConfig, time);
         this.accumulator = new RecordAccumulator(batchSize, 1024 * 1024, CompressionType.NONE, 0L, 0L, metrics, time, apiVersions, transactionManager);
         this.sender = new Sender(this.client, this.metadata, this.accumulator, true, MAX_REQUEST_SIZE, ACKS_ALL,
@@ -318,6 +319,74 @@ public class TransactionManagerTest {
         assertFalse(transactionManager.hasPartitionsToAdd());
         assertTrue(transactionManager.isPartitionAdded(partition));
         assertFalse(transactionManager.isPartitionPendingAdd(partition));
+    }
+
+    @Test
+    public void testAddPartitionToTransactionOverridesRetryBackoffForConcurrentTransactions() {
+        long pid = 13131L;
+        short epoch = 1;
+        TopicPartition partition = new TopicPartition("foo", 0);
+        doInitTransactions(pid, epoch);
+        transactionManager.beginTransaction();
+
+        transactionManager.maybeAddPartitionToTransaction(partition);
+        assertTrue(transactionManager.hasPartitionsToAdd());
+        assertFalse(transactionManager.isPartitionAdded(partition));
+        assertTrue(transactionManager.isPartitionPendingAdd(partition));
+
+        prepareAddPartitionsToTxn(partition, Errors.CONCURRENT_TRANSACTIONS);
+        sender.run(time.milliseconds());
+
+        TransactionManager.TxnRequestHandler handler = transactionManager.nextRequestHandler(false);
+        assertNotNull(handler);
+        assertEquals(20, handler.retryBackoffMs());
+    }
+
+    @Test
+    public void testAddPartitionToTransactionRetainsRetryBackoffForRegularRetriableError() {
+        long pid = 13131L;
+        short epoch = 1;
+        TopicPartition partition = new TopicPartition("foo", 0);
+        doInitTransactions(pid, epoch);
+        transactionManager.beginTransaction();
+
+        transactionManager.maybeAddPartitionToTransaction(partition);
+        assertTrue(transactionManager.hasPartitionsToAdd());
+        assertFalse(transactionManager.isPartitionAdded(partition));
+        assertTrue(transactionManager.isPartitionPendingAdd(partition));
+
+        prepareAddPartitionsToTxn(partition, Errors.COORDINATOR_NOT_AVAILABLE);
+        sender.run(time.milliseconds());
+
+        TransactionManager.TxnRequestHandler handler = transactionManager.nextRequestHandler(false);
+        assertNotNull(handler);
+        assertEquals(DEFAULT_RETRY_BACKOFF_MS, handler.retryBackoffMs());
+    }
+
+    @Test
+    public void testAddPartitionToTransactionRetainsRetryBackoffWhenPartitionsAlreadyAdded() {
+        long pid = 13131L;
+        short epoch = 1;
+        TopicPartition partition = new TopicPartition("foo", 0);
+        doInitTransactions(pid, epoch);
+        transactionManager.beginTransaction();
+
+        transactionManager.maybeAddPartitionToTransaction(partition);
+        assertTrue(transactionManager.hasPartitionsToAdd());
+        assertFalse(transactionManager.isPartitionAdded(partition));
+        assertTrue(transactionManager.isPartitionPendingAdd(partition));
+
+        prepareAddPartitionsToTxn(partition, Errors.NONE);
+        sender.run(time.milliseconds());
+        assertTrue(transactionManager.isPartitionAdded(partition));
+
+        TopicPartition otherPartition = new TopicPartition("foo", 1);
+        transactionManager.maybeAddPartitionToTransaction(otherPartition);
+
+        prepareAddPartitionsToTxn(otherPartition, Errors.CONCURRENT_TRANSACTIONS);
+        TransactionManager.TxnRequestHandler handler = transactionManager.nextRequestHandler(false);
+        assertNotNull(handler);
+        assertEquals(DEFAULT_RETRY_BACKOFF_MS, handler.retryBackoffMs());
     }
 
     @Test(expected = IllegalStateException.class)
