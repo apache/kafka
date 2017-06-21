@@ -1,3 +1,20 @@
+/**
+  * Licensed to the Apache Software Foundation (ASF) under one or more
+  * contributor license agreements.  See the NOTICE file distributed with
+  * this work for additional information regarding copyright ownership.
+  * The ASF licenses this file to You under the Apache License, Version 2.0
+  * (the "License"); you may not use this file except in compliance with
+  * the License.  You may obtain a copy of the License at
+  *
+  * http://www.apache.org/licenses/LICENSE-2.0
+  *
+  * Unless required by applicable law or agreed to in writing, software
+  * distributed under the License is distributed on an "AS IS" BASIS,
+  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  * See the License for the specific language governing permissions and
+  * limitations under the License.
+  */
+
 package kafka.admin
 
 import joptsimple.OptionParser
@@ -314,7 +331,7 @@ object ClusterBalanceCommand extends Logging {
     * make the leader numbers on every broker balanced
     * during doing it we should make sure the target broker
     * should in AR of the TP we want to move.
-   */
+    */
   def executeLeaderBalance(zkUtils: ZkUtils, opts: kafkaBalanceCommandOptions,
                            TPMap: mutable.Map[TopicAndPartition, mutable.ListBuffer[Int]]
                           ): Unit = {
@@ -339,14 +356,14 @@ object ClusterBalanceCommand extends Logging {
               .foreach(
                 tp=> if (isFinishMove(fromBroker.rn2mv,targetBroker.rn2mv,0))
                 {
-                TPMap(tp) -= targetBroker.brokerid
-                TPMap(tp).insert(0, targetBroker.brokerid)
-                BrokerLeaderMap(fromBroker.brokerid).remove(tp)
-                BrokerLeaderMap(targetBroker.brokerid).add(tp)
-                fromBroker.rn2mv -= 1
-                targetBroker.rn2mv += 1
+                  TPMap(tp) -= targetBroker.brokerid
+                  TPMap(tp).insert(0, targetBroker.brokerid)
+                  BrokerLeaderMap(fromBroker.brokerid).remove(tp)
+                  BrokerLeaderMap(targetBroker.brokerid).add(tp)
+                  fromBroker.rn2mv -= 1
+                  targetBroker.rn2mv += 1
                 }
-            )
+              )
         }
       )
     )
@@ -392,5 +409,7 @@ object ClusterBalanceCommand extends Logging {
   }
 
 }
+
+
 
 
