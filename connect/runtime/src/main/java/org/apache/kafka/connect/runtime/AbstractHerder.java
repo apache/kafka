@@ -246,8 +246,6 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
                                        ? SourceConnectorConfig.configDef()
                                        : SinkConnectorConfig.configDef();
 
-            ConfigDef newDef = new ConfigDef(basicConfigDef);
-            newDef.embed("", "", configValues.size(), connector.config());
             ConfigDef connectorConfigDef = ConnectorConfig.enrich(
                     plugins(),
                     basicConfigDef,
@@ -255,10 +253,16 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
                     false
             );
 
-            Config config = new Config(connectorConfigDef.validate(connectorConfig));
+            connectorConfigDef.embed("", "", configValues.size(), connector.config());
+            Map<String, ConfigValue> validatedConnectorConfig = validateBasicConnectorConfig(
+                    connector,
+                    connectorConfigDef,
+                    connectorConfig
+            );
+
+            configValues.addAll(validatedConnectorConfig.values());
             configKeys.putAll(connectorConfigDef.configKeys());
             allGroups.addAll(connectorConfigDef.groups());
-            configValues.addAll(config.configValues());
             return generateResult(connType, configKeys, configValues, new ArrayList<>(allGroups));
         } catch (ConfigException e) {
             // Basic validation must have failed. Return the result.
