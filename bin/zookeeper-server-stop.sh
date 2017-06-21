@@ -16,12 +16,16 @@
 
 # Which jps to use
 if [ -z "$JAVA_HOME" ]; then
-  JPS="jps"
+  JPS="$(which jps)"
 else
   JPS="$JAVA_HOME/bin/jps"
 fi
 
-PIDS=$(${JPS} -vl | grep -i QuorumPeerMain | awk '{print $1}')
+if [ -x "$JPS" ]; then
+  PIDS=$(${JPS} -vl | grep -i QuorumPeerMain | awk '{print $1}')
+else
+  PIDS=$(ps ax | grep java | grep -i QuorumPeerMain | grep -v grep | awk '{print $1}')
+fi
 
 if [ -z "$PIDS" ]; then
   echo "No zookeeper server to stop"
