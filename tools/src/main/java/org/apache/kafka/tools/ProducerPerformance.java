@@ -143,7 +143,7 @@ public class ProducerPerformance {
                 producer.send(record, cb);
 
                 currentTransactionSize++;
-                if (transactionsEnabled && transactionDurationMs <= (sendStartMs - transactionStartTime) ) {
+                if (transactionsEnabled && transactionDurationMs <= (sendStartMs - transactionStartTime)) {
                     producer.commitTransaction();
                     currentTransactionSize = 0;
                 }
