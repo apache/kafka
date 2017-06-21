@@ -40,6 +40,14 @@ public class SinkConnectorConfig extends ConnectorConfig {
     }
 
     public SinkConnectorConfig(Plugins plugins, Map<String, String> props) {
-        super(plugins, config, props);
+        this(plugins, props, true);
+    }
+
+    public SinkConnectorConfig(
+            Plugins plugins,
+            Map<String, String> props,
+            boolean requireFullConfig
+    ) {
+        super(plugins, config, props, requireFullConfig);
     }
 }

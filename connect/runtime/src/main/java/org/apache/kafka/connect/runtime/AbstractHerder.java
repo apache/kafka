@@ -255,8 +255,8 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             allGroups.addAll(basicConfigDef.groups());
 
             ConnectorConfig connectorConfigToEnrich = (connector instanceof SourceConnector)
-                    ? new SourceConnectorConfig(plugins(), connectorConfig)
-                    : new SinkConnectorConfig(plugins(), connectorConfig);
+                    ? new SourceConnectorConfig(plugins(), connectorConfig, false)
+                    : new SinkConnectorConfig(plugins(), connectorConfig, false);
             final ConfigDef connectorConfigDef = connectorConfigToEnrich.enrich(
                     plugins(),
                     basicConfigDef,

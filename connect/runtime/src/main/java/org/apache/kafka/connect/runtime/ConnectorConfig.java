@@ -118,13 +118,18 @@ public class ConnectorConfig extends AbstractConfig {
     }
 
     public ConnectorConfig(Plugins plugins, Map<String, String> props) {
-        this(plugins, configDef(), props);
+        this(plugins, configDef(), props, true);
     }
 
-    public ConnectorConfig(Plugins plugins, ConfigDef configDef, Map<String, String> props) {
+    public ConnectorConfig(
+            Plugins plugins,
+            ConfigDef configDef,
+            Map<String, String> props,
+            boolean requireFullConfig
+    ) {
         super(configDef, props);
         enrichedConfig = new EnrichedConnectorConfig(
-                enrich(plugins, configDef, props, true),
+                enrich(plugins, configDef, props, requireFullConfig),
                 props
         );
     }
@@ -164,7 +169,7 @@ public class ConnectorConfig extends AbstractConfig {
      * <p>
      * {@code requireFullConfig} specifies whether required config values that are missing should cause an exception to be thrown.
      */
-    public ConfigDef enrich(Plugins plugins, ConfigDef baseConfigDef, Map<String, String> props, boolean requireFullConfig) {
+    public ConfigDef enrich(Plugins plugins, ConfigDef baseConfigDef, Map<String, String> props, final boolean requireFullConfig) {
         Object transformAliases = ConfigDef.parseType(TRANSFORMS_CONFIG, props.get(TRANSFORMS_CONFIG), Type.LIST);
         if (!(transformAliases instanceof List)) {
             return baseConfigDef;
@@ -186,15 +191,19 @@ public class ConnectorConfig extends AbstractConfig {
             final ConfigDef.Validator typeValidator = new ConfigDef.Validator() {
                 @Override
                 public void ensureValid(String name, Object value) {
+                    if (!requireFullConfig && value == null) {
+                        return;
+                    }
                     getConfigDefFromTransformation(transformationTypeConfig, (Class) value);
                 }
             };
-            newDef.define(transformationTypeConfig, Type.CLASS, ConfigDef.NO_DEFAULT_VALUE, typeValidator, Importance.HIGH,
-                    "Class for the '" + alias + "' transformation.", group, orderInGroup++, Width.LONG, "Transformation type for " + alias,
-                    Collections.<String>emptyList(), new TransformationClassRecommender(plugins));
-
             final ConfigDef transformationConfigDef;
             try {
+                newDef.define(transformationTypeConfig, Type.CLASS, null, typeValidator,
+                        Importance.HIGH,
+                        "Class for the '" + alias + "' transformation.", group, orderInGroup++, Width.LONG, "Transformation type for " + alias,
+                        Collections.<String>emptyList(), new TransformationClassRecommender(plugins));
+
                 final String className = props.get(transformationTypeConfig);
                 final Class<?> cls = (Class<?>) ConfigDef.parseType(transformationTypeConfig, className, Type.CLASS);
                 transformationConfigDef = getConfigDefFromTransformation(transformationTypeConfig, cls);
