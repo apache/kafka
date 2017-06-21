@@ -277,8 +277,8 @@ public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
     @Test
     public void shouldPutAll() {
         List<KeyValue<String, String>> entries = new ArrayList<>();
-        entries.add(new KeyValue<String, String>("a", "1"));
-        entries.add(new KeyValue<String, String>("b", "2"));
+        entries.add(new KeyValue<>("a", "1"));
+        entries.add(new KeyValue<>("b", "2"));
         store.putAll(entries);
         assertEquals(store.get("a"), "1");
         assertEquals(store.get("b"), "2");
