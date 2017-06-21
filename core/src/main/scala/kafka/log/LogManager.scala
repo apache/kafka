@@ -162,6 +162,7 @@ class LogManager(private val logDirs: Array[File],
         }
         info(s"Removed $topicPartition from log cache because it is in the failed log dir $dir")
       })
+      dirLocks.filter(_.file.getParent == dir).foreach(_.destroy())
       recoveryPointCheckpoints = recoveryPointCheckpoints.filterKeys(file => file.getAbsolutePath != dir)
       logStartOffsetCheckpoints = logStartOffsetCheckpoints.filterKeys(file => file.getAbsolutePath != dir)
 
