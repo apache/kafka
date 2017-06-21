@@ -91,28 +91,31 @@ public class StandbyTask extends AbstractTask {
     @Override
     public void commit() {
         log.trace("{} Committing", logPrefix);
-        stateMgr.flush();
-        if (!eosEnabled) {
-            stateMgr.checkpoint(Collections.<TopicPartition, Long>emptyMap());
-        }
+        flushAndCheckpointState();
         // reinitialize offset limits
         updateOffsetLimits();
     }
 
     /**
      * <pre>
-     * - {@link #commit()}
+     * - flush store
+     * - checkpoint store
      * </pre>
      */
     @Override
     public void suspend() {
         log.debug("{} Suspending", logPrefix);
-        commit();
+        flushAndCheckpointState();
+    }
+
+    private void flushAndCheckpointState() {
+        stateMgr.flush();
+        stateMgr.checkpoint(Collections.<TopicPartition, Long>emptyMap());
     }
 
     /**
      * <pre>
-     * - {@link #suspend()}
+     * - {@link #commit()}
      * - close state
      * <pre>
      * @param clean ignored by {@code StandbyTask} as it can always try to close cleanly
@@ -123,7 +126,7 @@ public class StandbyTask extends AbstractTask {
         log.debug("{} Closing", logPrefix);
         boolean committedSuccessfully = false;
         try {
-            suspend();
+            commit();
             committedSuccessfully = true;
         } finally {
             closeStateManager(committedSuccessfully);
