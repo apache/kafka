@@ -400,7 +400,6 @@ class TransactionCoordinator(brokerId: Int,
               preSendResult match {
                 case Left(err) =>
                   info(s"Aborting sending of transaction markers after appended $txnMarkerResult to transaction log and returning $err error to client for $transactionalId's EndTransaction request")
-
                   responseCallback(err)
 
                 case Right((txnMetadata, newPreSendMetadata)) =>
@@ -435,7 +434,7 @@ class TransactionCoordinator(brokerId: Int,
         TransactionResult.ABORT,
         (error: Errors) => error match {
           case Errors.NONE =>
-            debug(s"Completed rollback ongoing transaction of transactionalId: ${txnIdAndPidEpoch.transactionalId} due to timeout")
+            info(s"Completed rollback ongoing transaction of transactionalId: ${txnIdAndPidEpoch.transactionalId} due to timeout")
           case Errors.INVALID_PRODUCER_ID_MAPPING |
                Errors.INVALID_PRODUCER_EPOCH |
                Errors.CONCURRENT_TRANSACTIONS =>
