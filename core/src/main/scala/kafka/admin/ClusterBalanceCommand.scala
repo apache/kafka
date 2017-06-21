@@ -5,8 +5,8 @@ import kafka.common.TopicAndPartition
 import kafka.utils._
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.utils.Utils
-
 import scala.collection.{Seq, mutable}
+
 /**
   * a command make the number of replicas and leaders on every broker is balance
   */
