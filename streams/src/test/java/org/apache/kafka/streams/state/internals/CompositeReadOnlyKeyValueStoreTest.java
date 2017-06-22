@@ -100,38 +100,47 @@ public class CompositeReadOnlyKeyValueStoreTest {
     }
 
     @Test
-    public void shouldThrowNoSuchElementException() {
+    public void shouldThrowNoSuchElementExceptionWhileNext() {
         stubOneUnderlying.put("a", "1");
         KeyValueIterator<String, String> keyValueIterator = theStore.range("a", "b");
+        keyValueIterator.next();
         try {
-            keyValueIterator.next();
             keyValueIterator.next();
             fail("Should have thrown NoSuchElementException with next()");
         } catch (NoSuchElementException e) { }
+    }
 
-        keyValueIterator = theStore.range("a", "b");
-
+    @Test
+    public void shouldThrowNoSuchElementExceptionWhilePeekNext() {
+        stubOneUnderlying.put("a", "1");
+        KeyValueIterator<String, String> keyValueIterator = theStore.range("a", "b");
+        keyValueIterator.next();
         try {
-            keyValueIterator.next();
             keyValueIterator.peekNextKey();
             fail("Should have thrown NoSuchElementException with peekNextKey()");
         } catch (NoSuchElementException e) { }
     }
 
     @Test
-    public void shouldThrowUnsupportedOperationException() {
+    public void shouldThrowUnsupportedOperationExceptionWhileRemove() {
+        KeyValueIterator<String, String> keyValueIterator = theStore.all();
         try {
-            theStore.all().remove();
-            fail("Should have thrown UnsupportedOperationException");
-        } catch (UnsupportedOperationException e) { }
-
-        stubOneUnderlying.put("a", "1");
-        stubOneUnderlying.put("b", "1");
-        try {
-            theStore.range("a", "b").remove();
+            keyValueIterator.remove();
             fail("Should have thrown UnsupportedOperationException");
         } catch (UnsupportedOperationException e) { }
     }
+
+    @Test
+    public void shouldThrowUnsupportedOperationExceptionWhileRange() {
+        stubOneUnderlying.put("a", "1");
+        stubOneUnderlying.put("b", "1");
+        KeyValueIterator<String, String> keyValueIterator = theStore.range("a", "b");
+        try {
+            keyValueIterator.remove();
+            fail("Should have thrown UnsupportedOperationException");
+        } catch (UnsupportedOperationException e) { }
+    }
+
 
     @SuppressWarnings("unchecked")
     @Test
