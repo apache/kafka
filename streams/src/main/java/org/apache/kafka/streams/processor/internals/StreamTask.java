@@ -316,7 +316,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
                 try {
                     consumer.commitSync(consumedOffsetsAndMetadata);
                 } catch (final CommitFailedException e) {
-                    log.warn("{} Failed offset commits {} due to {}", logPrefix, consumedOffsetsAndMetadata, e.getMessage());
+                    log.warn("{} Failed offset commits {}: ", logPrefix, consumedOffsetsAndMetadata, e);
                     throw e;
                 }
             }
@@ -419,7 +419,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
         } catch (final RuntimeException e) {
             clean = false;
             firstException = e;
-            log.error("{} Could not close task due to {}", logPrefix, e);
+            log.error("{} Could not close task: ", logPrefix, e);
         }
 
         try {
@@ -429,7 +429,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
             if (firstException == null) {
                 firstException = e;
             }
-            log.error("{} Could not close state manager due to {}", logPrefix, e);
+            log.error("{} Could not close state manager: ", logPrefix, e);
         }
 
         try {

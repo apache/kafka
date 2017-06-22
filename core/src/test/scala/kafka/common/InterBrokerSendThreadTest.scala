@@ -34,7 +34,9 @@ class InterBrokerSendThreadTest {
 
   @Test
   def shouldNotSendAnythingWhenNoRequests(): Unit = {
-    val sendThread = new InterBrokerSendThread("name", networkClient, () => mutable.Iterable.empty, time)
+    val sendThread = new InterBrokerSendThread("name", networkClient, time) {
+      override def generateRequests() = mutable.Iterable.empty
+    }
 
     // poll is always called but there should be no further invocations on NetworkClient
     EasyMock.expect(networkClient.poll(EasyMock.anyLong(), EasyMock.anyLong()))
@@ -52,9 +54,9 @@ class InterBrokerSendThreadTest {
     val request = new StubRequestBuilder()
     val node = new Node(1, "", 8080)
     val handler = RequestAndCompletionHandler(node, request, completionHandler)
-    val sendThread = new InterBrokerSendThread("name", networkClient, () => {
-      List[RequestAndCompletionHandler](handler)
-    }, time)
+    val sendThread = new InterBrokerSendThread("name", networkClient, time) {
+      override def generateRequests() = List[RequestAndCompletionHandler](handler)
+    }
 
     val clientRequest = new ClientRequest("dest", request, 0, "1", 0, true, handler.handler)
 
@@ -86,9 +88,9 @@ class InterBrokerSendThreadTest {
     val request = new StubRequestBuilder
     val node = new Node(1, "", 8080)
     val requestAndCompletionHandler = RequestAndCompletionHandler(node, request, completionHandler)
-    val sendThread = new InterBrokerSendThread("name", networkClient, () => {
-      List[RequestAndCompletionHandler](requestAndCompletionHandler)
-    }, time)
+    val sendThread = new InterBrokerSendThread("name", networkClient, time) {
+      override def generateRequests() = List[RequestAndCompletionHandler](requestAndCompletionHandler)
+    }
 
     val clientRequest = new ClientRequest("dest", request, 0, "1", 0, true, requestAndCompletionHandler.handler)
 

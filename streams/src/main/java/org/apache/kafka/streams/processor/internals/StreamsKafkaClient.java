@@ -193,7 +193,7 @@ public class StreamsKafkaClient {
 
         for (InternalTopicConfig internalTopicConfig : topicsMap.keySet()) {
             ApiError error = createTopicsResponse.errors().get(internalTopicConfig.name());
-            if (!error.is(Errors.NONE) && !error.is(Errors.TOPIC_ALREADY_EXISTS)) {
+            if (error.isFailure() && !error.is(Errors.TOPIC_ALREADY_EXISTS)) {
                 throw new StreamsException("Could not create topic: " + internalTopicConfig.name() + " due to " + error.messageWithFallback());
             }
         }

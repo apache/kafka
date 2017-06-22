@@ -21,11 +21,6 @@ import org.apache.kafka.common.acl.AclPermissionType
 
 import scala.util.{Failure, Success, Try}
 
-/**
- * PermissionType.
- */
-
-
 sealed trait PermissionType extends BaseEnum {
   val toJava: AclPermissionType
 }

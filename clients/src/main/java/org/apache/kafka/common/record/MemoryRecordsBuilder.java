@@ -55,14 +55,17 @@ public class MemoryRecordsBuilder {
     private final int partitionLeaderEpoch;
     private final int writeLimit;
 
-    private volatile float estimatedCompressionRatio;
+    // Use a conservative estimate of the compression ratio. The producer overrides this using statistics
+    // from previous batches before appending any records.
+    private float estimatedCompressionRatio = 1.0F;
 
     private boolean appendStreamIsClosed = false;
     private boolean isTransactional;
     private long producerId;
     private short producerEpoch;
     private int baseSequence;
-    private long writtenUncompressed = 0;
+    private int writtenUncompressed = 0; // Number of bytes (excluding the header) written before compression
+    private int batchHeaderSize;
     private int numRecords = 0;
     private float actualCompressionRatio = 1;
     private long maxTimestamp = RecordBatch.NO_TIMESTAMP;
@@ -111,17 +114,19 @@ public class MemoryRecordsBuilder {
         this.isControlBatch = isControlBatch;
         this.partitionLeaderEpoch = partitionLeaderEpoch;
         this.writeLimit = writeLimit;
-
         this.initialPosition = bufferStream.position();
 
         if (magic > RecordBatch.MAGIC_VALUE_V1) {
-            bufferStream.position(initialPosition + DefaultRecordBatch.RECORDS_OFFSET);
+            batchHeaderSize = DefaultRecordBatch.RECORDS_OFFSET;
         } else if (compressionType != CompressionType.NONE) {
             // for compressed records, leave space for the header and the shallow message metadata
             // and move the starting position to the value payload offset
-            bufferStream.position(initialPosition + Records.LOG_OVERHEAD + LegacyRecord.recordOverhead(magic));
+            batchHeaderSize = Records.LOG_OVERHEAD + LegacyRecord.recordOverhead(magic);
+        } else {
+            batchHeaderSize = 0;
         }
 
+        bufferStream.position(initialPosition + batchHeaderSize);
         this.bufferStream = bufferStream;
         this.appendStream = new DataOutputStream(compressionType.wrapForOutput(this.bufferStream, magic));
     }
@@ -662,10 +667,10 @@ public class MemoryRecordsBuilder {
      */
     private int estimatedBytesWritten() {
         if (compressionType == CompressionType.NONE) {
-            return buffer().position();
+            return batchHeaderSize + writtenUncompressed;
         } else {
             // estimate the written bytes to the underlying byte buffer based on uncompressed written bytes
-            return (int) (writtenUncompressed * estimatedCompressionRatio * COMPRESSION_RATE_ESTIMATION_FACTOR);
+            return batchHeaderSize + (int) (writtenUncompressed * estimatedCompressionRatio * COMPRESSION_RATE_ESTIMATION_FACTOR);
         }
     }
 
@@ -677,27 +682,28 @@ public class MemoryRecordsBuilder {
     }
 
     /**
-     * Check if we have room for a new record containing the given key/value pair
+     * Check if we have room for a new record containing the given key/value pair. If no records have been
+     * appended, then this returns true.
      */
-    public boolean hasRoomFor(long timestamp, byte[] key, byte[] value) {
-        return hasRoomFor(timestamp, wrapNullable(key), wrapNullable(value));
+    public boolean hasRoomFor(long timestamp, byte[] key, byte[] value, Header[] headers) {
+        return hasRoomFor(timestamp, wrapNullable(key), wrapNullable(value), headers);
     }
 
     /**
-     * Check if we have room for a new record containing the given key/value pair
+     * Check if we have room for a new record containing the given key/value pair. If no records have been
+     * appended, then this returns true.
      *
      * Note that the return value is based on the estimate of the bytes written to the compressor, which may not be
-     * accurate if compression is really used. When this happens, the following append may cause dynamic buffer
+     * accurate if compression is used. When this happens, the following append may cause dynamic buffer
      * re-allocation in the underlying byte buffer stream.
-     *
-     * There is an exceptional case when appending a single message whose size is larger than the batch size, the
-     * capacity will be the message size which is larger than the write limit, i.e. the batch size. In this case
-     * the checking should be based on the capacity of the initialized buffer rather than the write limit in order
-     * to accept this single record.
      */
-    public boolean hasRoomFor(long timestamp, ByteBuffer key, ByteBuffer value) {
+    public boolean hasRoomFor(long timestamp, ByteBuffer key, ByteBuffer value, Header[] headers) {
         if (isFull())
             return false;
+
+        // We always allow at least one record to be appended (the ByteBufferOutputStream will grow as needed)
+        if (numRecords == 0)
+            return true;
 
         final int recordSize;
         if (magic < RecordBatch.MAGIC_VALUE_V2) {
@@ -705,13 +711,11 @@ public class MemoryRecordsBuilder {
         } else {
             int nextOffsetDelta = lastOffset == null ? 0 : (int) (lastOffset - baseOffset + 1);
             long timestampDelta = baseTimestamp == null ? 0 : timestamp - baseTimestamp;
-            recordSize = DefaultRecord.sizeInBytes(nextOffsetDelta, timestampDelta, key, value, Record.EMPTY_HEADERS);
+            recordSize = DefaultRecord.sizeInBytes(nextOffsetDelta, timestampDelta, key, value, headers);
         }
 
         // Be conservative and not take compression of the new record into consideration.
-        return numRecords == 0 ?
-                bufferStream.remaining() >= recordSize :
-                this.writeLimit >= estimatedBytesWritten() + recordSize;
+        return this.writeLimit >= estimatedBytesWritten() + recordSize;
     }
 
     public boolean isClosed() {
@@ -724,7 +728,11 @@ public class MemoryRecordsBuilder {
         return appendStreamIsClosed || (this.numRecords > 0 && this.writeLimit <= estimatedBytesWritten());
     }
 
-    public int sizeInBytes() {
+    /**
+     * Get an estimate of the number of bytes written to the underlying buffer. The returned value
+     * is exactly correct if the record set is not compressed or if the builder has been closed.
+     */
+    public int estimatedSizeInBytes() {
         return builtRecords != null ? builtRecords.sizeInBytes() : estimatedBytesWritten();
     }
 

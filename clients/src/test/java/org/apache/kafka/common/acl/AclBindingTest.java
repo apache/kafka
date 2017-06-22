@@ -92,13 +92,13 @@ public class AclBindingTest {
 
     @Test
     public void testUnknowns() throws Exception {
-        assertFalse(ACL1.unknown());
-        assertFalse(ACL2.unknown());
-        assertFalse(ACL3.unknown());
-        assertFalse(ANY_ANONYMOUS.unknown());
-        assertFalse(ANY_DENY.unknown());
-        assertFalse(ANY_MYTOPIC.unknown());
-        assertTrue(UNKNOWN_ACL.unknown());
+        assertFalse(ACL1.isUnknown());
+        assertFalse(ACL2.isUnknown());
+        assertFalse(ACL3.isUnknown());
+        assertFalse(ANY_ANONYMOUS.isUnknown());
+        assertFalse(ANY_DENY.isUnknown());
+        assertFalse(ANY_MYTOPIC.isUnknown());
+        assertTrue(UNKNOWN_ACL.isUnknown());
     }
 
     @Test

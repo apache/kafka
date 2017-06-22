@@ -57,15 +57,6 @@ if [ -h /opt/kafka-dev ]; then
 fi
 ln -s /vagrant /opt/kafka-dev
 
-# Verification to catch provisioning errors.
-if [[ ! -x /opt/kafka-dev/bin/kafka-run-class.sh ]]; then
-    echo "ERROR: kafka-run-class.sh not found/executable in /opt/kafka-dev/bin"
-    find /opt/kafka-dev
-    ls -la /opt/kafka-dev/bin/kafka-run-class.sh || true
-    exit 1
-fi
-
-
 
 get_kafka() {
     version=$1

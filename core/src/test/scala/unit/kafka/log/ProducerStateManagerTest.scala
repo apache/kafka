@@ -393,12 +393,12 @@ class ProducerStateManagerTest extends JUnitSuite {
     append(stateManager, producerId, epoch, sequence, offset = 99, isTransactional = true)
     assertEquals(Some(99), stateManager.firstUnstableOffset.map(_.messageOffset))
     append(stateManager, 2L, epoch, 0, offset = 106, isTransactional = true)
-    stateManager.evictUnretainedProducers(100)
+    stateManager.truncateHead(100)
     assertEquals(Some(106), stateManager.firstUnstableOffset.map(_.messageOffset))
   }
 
   @Test
-  def testEvictUnretainedPids(): Unit = {
+  def testTruncateHead(): Unit = {
     val epoch = 0.toShort
 
     append(stateManager, producerId, epoch, 0, 0L)
@@ -411,8 +411,8 @@ class ProducerStateManagerTest extends JUnitSuite {
     stateManager.takeSnapshot()
     assertEquals(Set(2, 4), currentSnapshotOffsets)
 
-    stateManager.evictUnretainedProducers(2)
-    assertEquals(Set(4), currentSnapshotOffsets)
+    stateManager.truncateHead(2)
+    assertEquals(Set(2, 4), currentSnapshotOffsets)
     assertEquals(Set(anotherPid), stateManager.activeProducers.keySet)
     assertEquals(None, stateManager.lastEntry(producerId))
 
@@ -420,15 +420,36 @@ class ProducerStateManagerTest extends JUnitSuite {
     assertTrue(maybeEntry.isDefined)
     assertEquals(3L, maybeEntry.get.lastOffset)
 
-    stateManager.evictUnretainedProducers(3)
+    stateManager.truncateHead(3)
     assertEquals(Set(anotherPid), stateManager.activeProducers.keySet)
     assertEquals(Set(4), currentSnapshotOffsets)
     assertEquals(4, stateManager.mapEndOffset)
 
-    stateManager.evictUnretainedProducers(5)
+    stateManager.truncateHead(5)
     assertEquals(Set(), stateManager.activeProducers.keySet)
     assertEquals(Set(), currentSnapshotOffsets)
     assertEquals(5, stateManager.mapEndOffset)
+  }
+
+  @Test
+  def testLoadFromSnapshotRemovesNonRetainedProducers(): Unit = {
+    val epoch = 0.toShort
+    val pid1 = 1L
+    val pid2 = 2L
+
+    append(stateManager, pid1, epoch, 0, 0L)
+    append(stateManager, pid2, epoch, 0, 1L)
+    stateManager.takeSnapshot()
+    assertEquals(2, stateManager.activeProducers.size)
+
+    stateManager.truncateAndReload(1L, 2L, time.milliseconds())
+    assertEquals(1, stateManager.activeProducers.size)
+    assertEquals(None, stateManager.lastEntry(pid1))
+
+    val entry = stateManager.lastEntry(pid2)
+    assertTrue(entry.isDefined)
+    assertEquals(0, entry.get.lastSeq)
+    assertEquals(1L, entry.get.lastOffset)
   }
 
   @Test
