@@ -1143,7 +1143,9 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, time: Time, met
 
     override def process(): Unit = {
       if (!isActive) return
-      val curBrokers = currentBrokerList.map(_.toInt).toSet.flatMap(zkUtils.getBrokerInfo)
+      // Read the current broker list from ZK again instead of using currentBrokerList to increase
+      // the odds of processing recent broker changes in a single ControllerEvent (KAFKA-5502).
+      val curBrokers = zkUtils.getAllBrokersInCluster().toSet
       val curBrokerIds = curBrokers.map(_.id)
       val liveOrShuttingDownBrokerIds = controllerContext.liveOrShuttingDownBrokerIds
       val newBrokerIds = curBrokerIds -- liveOrShuttingDownBrokerIds
