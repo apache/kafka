@@ -107,9 +107,9 @@ public class RocksDBStoreTest {
     @Test
     public void shouldPutAll() {
         List<KeyValue<String, String>> entries = new ArrayList<>();
-        entries.add(new KeyValue<String, String>("1", "a"));
-        entries.add(new KeyValue<String, String>("2", "b"));
-        entries.add(new KeyValue<String, String>("3", "c"));
+        entries.add(new KeyValue<>("1", "a"));
+        entries.add(new KeyValue<>("2", "b"));
+        entries.add(new KeyValue<>("3", "c"));
 
         subject.init(context, subject);
         subject.putAll(entries);

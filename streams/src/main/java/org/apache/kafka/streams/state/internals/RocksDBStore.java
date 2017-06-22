@@ -308,8 +308,8 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
     @Override
     public synchronized KeyValueIterator<K, V> range(K from, K to) {
-        Objects.requireNonNull(from, "<from> cannot be null");
-        Objects.requireNonNull(to, "<to> cannot be null");
+        Objects.requireNonNull(from, "from cannot be null");
+        Objects.requireNonNull(to, "to cannot be null");
         validateStoreOpen();
 
         // query rocksdb
