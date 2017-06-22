@@ -25,7 +25,7 @@ import time
 
 class StreamsUpgradeTest(Test):
     """
-    Simple test of Kafka Streams.
+    Tests rolling upgrades and downgrades of the Kafka Streams library.
     """
 
     def __init__(self, test_context):
@@ -59,8 +59,13 @@ class StreamsUpgradeTest(Test):
 
     def perform_upgrade(self, to_version):
         self.logger.info("First pass bounce - rolling upgrade")
+
+        # get the node running the streams app
         node = self.processor1.node
         self.processor1.stop()
+
+        # change it's version. This will automatically make it pick up a different
+        # JAR when it starts again
         node.version = KafkaVersion(to_version)
         self.processor1.start()
         
