@@ -56,8 +56,8 @@ public class InMemoryKeyValueLoggedStoreTest extends AbstractKeyValueStoreTest {
     @Test
     public void shouldPutAll() {
         List<KeyValue<Integer, String>> entries = new ArrayList<>();
-        entries.add(new KeyValue<Integer, String>(1, "1"));
-        entries.add(new KeyValue<Integer, String>(2, "2"));
+        entries.add(new KeyValue<>(1, "1"));
+        entries.add(new KeyValue<>(2, "2"));
         store.putAll(entries);
         assertEquals(store.get(1), "1");
         assertEquals(store.get(2), "2");
