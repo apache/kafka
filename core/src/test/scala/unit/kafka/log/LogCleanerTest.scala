@@ -107,6 +107,7 @@ class LogCleanerTest extends JUnitSuite {
 
     log.roll()
     cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 0L, log.activeSegment.baseOffset))
+    assertEquals(List(2, 5, 7), lastBatchOffsetsInLog(log))
     assertEquals(Map(pid1 -> 2, pid2 -> 2, pid3 -> 1), lastSequencesInLog(log))
     assertEquals(List(2, 3, 1, 4), keysInLog(log))
     assertEquals(List(1, 3, 6, 7), offsetsInLog(log))
@@ -138,6 +139,8 @@ class LogCleanerTest extends JUnitSuite {
     appendIdempotentAsLeader(log, pid4, producerEpoch)(Seq(2))
     log.roll()
     cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 0L, log.activeSegment.baseOffset))
+    assertEquals(Map(pid1 -> 2, pid2 -> 2, pid3 -> 1, pid4 -> 0), lastSequencesInLog(log))
+    assertEquals(List(2, 5, 7, 8), lastBatchOffsetsInLog(log))
     assertEquals(List(3, 1, 4, 2), keysInLog(log))
     assertEquals(List(3, 6, 7, 8), offsetsInLog(log))
 
@@ -405,6 +408,7 @@ class LogCleanerTest extends JUnitSuite {
     log.roll()
 
     cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 0L, log.activeSegment.baseOffset))
+    assertEquals(List(1, 3, 4), lastBatchOffsetsInLog(log))
     assertEquals(Map(1L -> 0, 2L -> 1, 3L -> 0), lastSequencesInLog(log))
     assertEquals(List(0, 1), keysInLog(log))
     assertEquals(List(3, 4), offsetsInLog(log))
@@ -427,9 +431,20 @@ class LogCleanerTest extends JUnitSuite {
     log.roll()
 
     cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 0L, log.activeSegment.baseOffset))
+    assertEquals(List(2, 3), lastBatchOffsetsInLog(log))
     assertEquals(Map(producerId -> 2), lastSequencesInLog(log))
     assertEquals(List(), keysInLog(log))
     assertEquals(List(3), offsetsInLog(log))
+
+    // Append a new entry from the producer and verify that the empty batch is cleaned up
+    appendProducer(Seq(1, 5))
+    log.roll()
+    cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 0L, log.activeSegment.baseOffset))
+
+    assertEquals(List(3, 5), lastBatchOffsetsInLog(log))
+    assertEquals(Map(producerId -> 4), lastSequencesInLog(log))
+    assertEquals(List(1, 5), keysInLog(log))
+    assertEquals(List(3, 4, 5), offsetsInLog(log))
   }
 
   @Test
@@ -589,6 +604,11 @@ class LogCleanerTest extends JUnitSuite {
          batch <- segment.log.batches.asScala if !batch.isControlBatch;
          record <- batch.asScala if record.hasValue && record.hasKey)
       yield TestUtils.readString(record.key).toInt
+  }
+
+  def lastBatchOffsetsInLog(log: Log): Iterable[Long] = {
+    for (segment <- log.logSegments; batch <- segment.log.batches.asScala)
+      yield batch.lastOffset
   }
 
   def lastSequencesInLog(log: Log): Map[Long, Int] = {
