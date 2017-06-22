@@ -91,8 +91,7 @@ public class StandbyTask extends AbstractTask {
     @Override
     public void commit() {
         log.trace("{} Committing", logPrefix);
-        stateMgr.flush();
-        stateMgr.checkpoint(Collections.<TopicPartition, Long>emptyMap());
+        flushAndCheckpointState();
         // reinitialize offset limits
         updateOffsetLimits();
     }
@@ -106,6 +105,10 @@ public class StandbyTask extends AbstractTask {
     @Override
     public void suspend() {
         log.debug("{} Suspending", logPrefix);
+        flushAndCheckpointState();
+    }
+
+    private void flushAndCheckpointState() {
         stateMgr.flush();
         stateMgr.checkpoint(Collections.<TopicPartition, Long>emptyMap());
     }
