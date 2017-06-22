@@ -184,16 +184,12 @@ public class StreamTask extends AbstractTask implements Punctuator {
             final ProcessorNode currNode = recordInfo.node();
             final TopicPartition partition = recordInfo.partition();
 
-            if (log.isTraceEnabled()) {
-                log.trace("{} Start processing one record [{}]", logPrefix, record);
-            }
+            log.trace("{} Start processing one record [{}]", logPrefix, record);
 
             updateProcessorContext(record, currNode);
             currNode.process(record.key(), record.value());
 
-            if (log.isTraceEnabled()) {
-                log.trace("{} Completed processing one record [{}]", logPrefix, record);
-            }
+            log.trace("{} Completed processing one record [{}]", logPrefix, record);
 
             // update the consumed offset map after processing is done
             consumedOffsets.put(partition, record.offset());
