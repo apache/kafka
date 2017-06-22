@@ -348,7 +348,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
     @Override
     public void suspend() {
         log.debug("{} Suspending", logPrefix);
-        suspend(true);
+        suspendImpl(true);
     }
 
     /**
@@ -360,7 +360,8 @@ public class StreamTask extends AbstractTask implements Punctuator {
      *   - commit offsets
      * </pre>
      */
-    private void suspend(final boolean clean) {
+    // visible for testing
+    void suspendImpl(final boolean clean) {
         closeTopology(); // should we call this only on clean suspend?
         if (clean) {
             commitImpl(false);
@@ -391,7 +392,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
         }
     }
 
-    // helper to avoid calling suspend() twice if a suspended task gets not reassigned and closed
+    // helper to avoid calling suspend() twice if a suspended task is not reassigned and closed
     void closeSuspended(boolean clean, RuntimeException firstException) {
         try {
             closeStateManager(clean);
@@ -431,7 +432,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
 
         /**
          * <pre>
-         * - {@link #suspend(boolean) suspend(clean)}
+         * - {@link #suspendImpl(boolean) suspendImpl(clean)}
          *   - close topology
          *   - if (clean) {@link #commit()}
          *     - flush state and producer
@@ -449,7 +450,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
 
         RuntimeException firstException = null;
         try {
-            suspend(clean);
+            suspendImpl(clean);
         } catch (final RuntimeException e) {
             clean = false;
             firstException = e;
