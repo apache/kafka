@@ -32,6 +32,7 @@ import kafka.server.{BrokerTopicStats, KafkaConfig}
 import kafka.server.epoch.{EpochEntry, LeaderEpochFileCache}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter
+import org.apache.kafka.common.record.MemoryRecords.RecordFilter.BatchRetention
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
 import org.apache.kafka.common.requests.IsolationLevel
@@ -401,7 +402,8 @@ class LogTest {
 
     val filtered = ByteBuffer.allocate(2048)
     records.filterTo(new TopicPartition("foo", 0), new RecordFilter {
-      override def shouldRetain(recordBatch: RecordBatch, record: Record): Boolean = !record.hasKey
+      override def checkBatchRetention(batch: RecordBatch): BatchRetention = RecordFilter.BatchRetention.DELETE_EMPTY
+      override def shouldRetainRecord(recordBatch: RecordBatch, record: Record): Boolean = !record.hasKey
     }, filtered, Int.MaxValue, BufferSupplier.NO_CACHING)
     filtered.flip()
     val filteredRecords = MemoryRecords.readableRecords(filtered)
@@ -443,8 +445,8 @@ class LogTest {
 
     val filtered = ByteBuffer.allocate(2048)
     records.filterTo(new TopicPartition("foo", 0), new RecordFilter {
-      override def handleBatch(batch: RecordBatch): RecordFilter.BatchFilterCommand = RecordFilter.BatchFilterCommand.RETAIN
-      override def shouldRetain(recordBatch: RecordBatch, record: Record): Boolean = false
+      override def checkBatchRetention(batch: RecordBatch): BatchRetention = RecordFilter.BatchRetention.RETAIN_EMPTY
+      override def shouldRetainRecord(recordBatch: RecordBatch, record: Record): Boolean = false
     }, filtered, Int.MaxValue, BufferSupplier.NO_CACHING)
     filtered.flip()
     val filteredRecords = MemoryRecords.readableRecords(filtered)
@@ -488,7 +490,8 @@ class LogTest {
 
     val filtered = ByteBuffer.allocate(2048)
     records.filterTo(new TopicPartition("foo", 0), new RecordFilter {
-      override def shouldRetain(recordBatch: RecordBatch, record: Record): Boolean = !record.hasKey
+      override def checkBatchRetention(batch: RecordBatch): BatchRetention = RecordFilter.BatchRetention.DELETE_EMPTY
+      override def shouldRetainRecord(recordBatch: RecordBatch, record: Record): Boolean = !record.hasKey
     }, filtered, Int.MaxValue, BufferSupplier.NO_CACHING)
     filtered.flip()
     val filteredRecords = MemoryRecords.readableRecords(filtered)

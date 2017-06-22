@@ -260,13 +260,13 @@ public class MemoryRecordsTest {
                 ByteBuffer filtered = ByteBuffer.allocate(2048);
                 builder.build().filterTo(new TopicPartition("foo", 0), new MemoryRecords.RecordFilter() {
                     @Override
-                    protected BatchFilterCommand handleBatch(RecordBatch batch) {
+                    protected BatchRetention checkBatchRetention(RecordBatch batch) {
                         // retain all batches
-                        return BatchFilterCommand.RETAIN;
+                        return BatchRetention.RETAIN_EMPTY;
                     }
 
                     @Override
-                    protected boolean shouldRetain(RecordBatch recordBatch, Record record) {
+                    protected boolean shouldRetainRecord(RecordBatch recordBatch, Record record) {
                         // delete the records
                         return false;
                     }
@@ -356,15 +356,15 @@ public class MemoryRecordsTest {
             ByteBuffer filtered = ByteBuffer.allocate(2048);
             MemoryRecords.readableRecords(buffer).filterTo(new TopicPartition("foo", 0), new MemoryRecords.RecordFilter() {
                 @Override
-                protected BatchFilterCommand handleBatch(RecordBatch batch) {
+                protected BatchRetention checkBatchRetention(RecordBatch batch) {
                     // discard the second and fourth batches
                     if (batch.lastOffset() == 2L || batch.lastOffset() == 6L)
-                        return BatchFilterCommand.DELETE;
-                    return BatchFilterCommand.NONE;
+                        return BatchRetention.DELETE;
+                    return BatchRetention.DELETE_EMPTY;
                 }
 
                 @Override
-                protected boolean shouldRetain(RecordBatch recordBatch, Record record) {
+                protected boolean shouldRetainRecord(RecordBatch recordBatch, Record record) {
                     return true;
                 }
             }, filtered, Integer.MAX_VALUE, BufferSupplier.NO_CACHING);
@@ -738,7 +738,12 @@ public class MemoryRecordsTest {
 
     private static class RetainNonNullKeysFilter extends MemoryRecords.RecordFilter {
         @Override
-        public boolean shouldRetain(RecordBatch batch, Record record) {
+        protected BatchRetention checkBatchRetention(RecordBatch batch) {
+            return BatchRetention.DELETE_EMPTY;
+        }
+
+        @Override
+        public boolean shouldRetainRecord(RecordBatch batch, Record record) {
             return record.hasKey();
         }
     }

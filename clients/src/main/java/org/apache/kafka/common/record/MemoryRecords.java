@@ -17,7 +17,7 @@
 package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.record.MemoryRecords.RecordFilter.BatchFilterCommand;
+import org.apache.kafka.common.record.MemoryRecords.RecordFilter.BatchRetention;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.CloseableIterator;
 import org.slf4j.Logger;
@@ -152,8 +152,8 @@ public class MemoryRecords extends AbstractRecords {
         for (MutableRecordBatch batch : batches) {
             bytesRead += batch.sizeInBytes();
 
-            BatchFilterCommand batchFilterCommand = filter.handleBatch(batch);
-            if (batchFilterCommand == BatchFilterCommand.DELETE)
+            BatchRetention batchRetention = filter.checkBatchRetention(batch);
+            if (batchRetention == BatchRetention.DELETE)
                 continue;
 
             // We use the absolute offset to decide whether to retain the message or not. Due to KAFKA-4298, we have to
@@ -170,7 +170,7 @@ public class MemoryRecords extends AbstractRecords {
                     Record record = iterator.next();
                     messagesRead += 1;
 
-                    if (filter.shouldRetain(batch, record)) {
+                    if (filter.shouldRetainRecord(batch, record)) {
                         // Check for log corruption due to KAFKA-4298. If we find it, make sure that we overwrite
                         // the corrupted batch with correct data.
                         if (!record.hasMagic(batchMagic))
@@ -213,7 +213,7 @@ public class MemoryRecords extends AbstractRecords {
                     maxTimestamp = info.maxTimestamp;
                     shallowOffsetOfMaxTimestamp = info.shallowOffsetOfMaxTimestamp;
                 }
-            } else if (batchFilterCommand == BatchFilterCommand.RETAIN) {
+            } else if (batchRetention == BatchRetention.RETAIN_EMPTY) {
                 if (batchMagic < RecordBatch.MAGIC_VALUE_V2)
                     throw new IllegalStateException("Empty batches are only supported for magic v2 and above");
 
@@ -311,22 +311,24 @@ public class MemoryRecords extends AbstractRecords {
     }
 
     public static abstract class RecordFilter {
-        public enum BatchFilterCommand { DELETE, RETAIN, NONE }
+        public enum BatchRetention {
+            DELETE, // Delete the batch without inspecting records
+            RETAIN_EMPTY, // Retain the batch even if it is empty
+            DELETE_EMPTY  // Delete the batch if it is empty
+        }
 
         /**
          * Check whether the full batch can be discarded (i.e. whether we even need to
          * check the records individually).
          */
-        protected BatchFilterCommand handleBatch(RecordBatch batch) {
-            return BatchFilterCommand.NONE;
-        }
+        protected abstract BatchRetention checkBatchRetention(RecordBatch batch);
 
         /**
          * Check whether a record should be retained in the log. Only records from
-         * batches which were not discarded with {@link #handleBatch(RecordBatch)}
+         * batches which were not discarded with {@link #checkBatchRetention(RecordBatch)}
          * will be considered.
          */
-        protected abstract boolean shouldRetain(RecordBatch recordBatch, Record record);
+        protected abstract boolean shouldRetainRecord(RecordBatch recordBatch, Record record);
     }
 
     public static class FilterResult {

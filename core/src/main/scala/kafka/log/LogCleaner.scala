@@ -30,7 +30,7 @@ import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter
-import org.apache.kafka.common.record.MemoryRecords.RecordFilter.BatchFilterCommand
+import org.apache.kafka.common.record.MemoryRecords.RecordFilter.BatchRetention
 
 import scala.collection.mutable
 import scala.collection.JavaConverters._
@@ -481,7 +481,7 @@ private[log] class Cleaner(val id: Int,
     val logCleanerFilter = new RecordFilter {
       var discardBatchRecords: Boolean = false
 
-      override def handleBatch(batch: RecordBatch): BatchFilterCommand = {
+      override def checkBatchRetention(batch: RecordBatch): BatchRetention = {
         // we piggy-back on the tombstone retention logic to delay deletion of transaction markers.
         // note that we will never delete a marker until all the records from that transaction are removed.
         discardBatchRecords = shouldDiscardBatch(batch, transactionMetadata, retainTxnMarkers = retainDeletes)
@@ -489,21 +489,21 @@ private[log] class Cleaner(val id: Int,
         // check if the batch contains the last sequence number for the producer. if so, we cannot
         // remove the batch just yet or the producer may see an out of sequence error.
         if (batch.hasProducerId && activeProducers.get(batch.producerId).exists(_.lastSeq == batch.lastSequence)) {
-          BatchFilterCommand.RETAIN
+          BatchRetention.RETAIN_EMPTY
         } else {
           if (discardBatchRecords)
-            BatchFilterCommand.DELETE
+            BatchRetention.DELETE
           else
-            BatchFilterCommand.NONE
+            BatchRetention.DELETE_EMPTY
         }
       }
 
-      override def shouldRetain(batch: RecordBatch, record: Record): Boolean = {
+      override def shouldRetainRecord(batch: RecordBatch, record: Record): Boolean = {
         if (discardBatchRecords)
-        // remove the record if the batch would have otherwise been discarded
+          // remove the record if the batch would have otherwise been discarded
           false
         else
-          shouldRetainRecord(source, map, retainDeletes, batch, record, stats)
+          Cleaner.this.shouldRetainRecord(source, map, retainDeletes, batch, record, stats)
       }
     }
 
