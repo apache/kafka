@@ -25,6 +25,7 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
 import java.io.File;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
@@ -98,6 +99,20 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
         }
         Objects.requireNonNull(store, "store must not be null");
         stateManager.register(store, loggingEnabled, stateRestoreCallback);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Override
+    public <K, V> void forward(K key, V value) {
+        final ProcessorNode previousNode = currentNode();
+        try {
+            for (ProcessorNode child : (List<ProcessorNode>) currentNode().children()) {
+                setCurrentNode(child);
+                child.process(key, value);
+            }
+        } finally {
+            setCurrentNode(previousNode);
+        }
     }
 
     /**
