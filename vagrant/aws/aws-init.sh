@@ -29,9 +29,12 @@ sudo apt-get install -y \
 
 base_dir=`dirname $0`/../..
 
-wget https://releases.hashicorp.com/vagrant/1.9.3/vagrant_1.9.3_x86_64.deb
-sudo dpkg -i vagrant_1.9.3_x86_64.deb
-rm -f vagrant_1.9.3_x86_64.deb
+if [ -z `which vagrant` ]; then
+    echo "Installing vagrant..."
+    wget https://releases.hashicorp.com/vagrant/1.9.3/vagrant_1.9.3_x86_64.deb
+    sudo dpkg -i vagrant_1.9.3_x86_64.deb
+    rm -f vagrant_1.9.3_x86_64.deb
+fi
 
 # Install necessary vagrant plugins
 # Note: Do NOT install vagrant-cachier since it doesn't work on AWS and only
