@@ -135,7 +135,7 @@ public class ProcessorNode<K, V> {
         this.nodeMetrics.metrics.measureLatencyNs(time, processDelegate, nodeMetrics.nodeProcessTimeSensor);
     }
 
-    public void punctuate(long timestamp, Punctuator punctuator) {
+    public void punctuate(final long timestamp, final Punctuator punctuator) {
         this.timestamp = timestamp;
         this.punctuator = punctuator;
         this.nodeMetrics.metrics.measureLatencyNs(time, punctuateDelegate, nodeMetrics.nodePunctuateTimeSensor);

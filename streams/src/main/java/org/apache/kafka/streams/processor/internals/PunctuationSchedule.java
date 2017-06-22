@@ -21,18 +21,14 @@ import org.apache.kafka.streams.processor.Punctuator;
 
 public class PunctuationSchedule extends Stamped<ProcessorNode> {
 
-    final long interval;
-    final Punctuator punctuator;
-    boolean isCancelled = false;
+    private final long interval;
+    private final Punctuator punctuator;
+    private boolean isCancelled = false;
     // this Cancellable will be re-pointed at the successor schedule in next()
     private final RepointableCancellable cancellable;
 
-    public PunctuationSchedule(ProcessorNode node, long interval, Punctuator punctuator) {
-        this(node, 0L, interval, punctuator);
-    }
-
-    public PunctuationSchedule(ProcessorNode node, long time, long interval, Punctuator punctuator) {
-        this(node, time, interval, punctuator, new RepointableCancellable());
+    PunctuationSchedule(ProcessorNode node, long interval, Punctuator punctuator) {
+        this(node, 0L, interval, punctuator, new RepointableCancellable());
         cancellable.setSchedule(this);
     }
 
@@ -55,8 +51,12 @@ public class PunctuationSchedule extends Stamped<ProcessorNode> {
         return cancellable;
     }
 
-    public void markCancelled() {
+    void markCancelled() {
         isCancelled = true;
+    }
+
+    boolean isCancelled() {
+        return isCancelled;
     }
 
     public PunctuationSchedule next(long currTimestamp) {
@@ -68,7 +68,7 @@ public class PunctuationSchedule extends Stamped<ProcessorNode> {
         else
             nextSchedule = new PunctuationSchedule(value, timestamp + interval, interval, punctuator, cancellable);
 
-        cancellable.setSchedule(nextSchedule); // update previous cancellable to point to the current schedule
+        cancellable.setSchedule(nextSchedule);
 
         return nextSchedule;
     }

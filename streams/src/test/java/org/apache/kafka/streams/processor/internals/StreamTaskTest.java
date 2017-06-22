@@ -372,55 +372,20 @@ public class StreamTaskTest {
         assertTrue(task.maybePunctuateStreamTime());
 
         assertTrue(task.process());
-        assertEquals(5, task.numBuffered());
-        assertEquals(1, source1.numReceived);
-        assertEquals(0, source2.numReceived);
 
         assertFalse(task.maybePunctuateStreamTime());
 
         assertTrue(task.process());
-        assertEquals(4, task.numBuffered());
-        assertEquals(1, source1.numReceived);
-        assertEquals(1, source2.numReceived);
 
         processorStreamTime.supplier.scheduleCancellable.cancel();
 
-        assertFalse(task.maybePunctuateStreamTime());
-
-        assertTrue(task.process());
-        assertEquals(3, task.numBuffered());
-        assertEquals(2, source1.numReceived);
-        assertEquals(1, source2.numReceived);
-
-        assertFalse(task.maybePunctuateStreamTime());
-
-        assertTrue(task.process());
-        assertEquals(2, task.numBuffered());
-        assertEquals(2, source1.numReceived);
-        assertEquals(2, source2.numReceived);
-
-        assertFalse(task.maybePunctuateStreamTime());
-
-        assertTrue(task.process());
-        assertEquals(1, task.numBuffered());
-        assertEquals(3, source1.numReceived);
-        assertEquals(2, source2.numReceived);
-
-        assertFalse(task.maybePunctuateStreamTime());
-
-        assertTrue(task.process());
-        assertEquals(0, task.numBuffered());
-        assertEquals(3, source1.numReceived);
-        assertEquals(3, source2.numReceived);
-
-        assertFalse(task.process());
         assertFalse(task.maybePunctuateStreamTime());
 
         processorStreamTime.supplier.checkAndClearPunctuateResult(PunctuationType.STREAM_TIME, 20L);
     }
 
     @Test
-    public void testMaybePunctuateSystemTime() throws Exception {
+    public void shouldPunctuateSystemTimeWhenIntervalElapsed() throws Exception {
         long now = time.milliseconds();
         time.sleep(10);
         assertTrue(task.maybePunctuateSystemTime());
@@ -432,13 +397,20 @@ public class StreamTaskTest {
     }
 
     @Test
+    public void shouldNotPunctuateSystemTimeWhenIntervalNotElapsed() throws Exception {
+        long now = time.milliseconds();
+        assertTrue(task.maybePunctuateSystemTime()); // first time we always punctuate
+        time.sleep(9);
+        assertFalse(task.maybePunctuateSystemTime());
+        processorSystemTime.supplier.checkAndClearPunctuateResult(PunctuationType.SYSTEM_TIME, now);
+    }
+
+    @Test
     public void testCancelPunctuateSystemTime() throws Exception {
         long now = time.milliseconds();
         time.sleep(10);
         assertTrue(task.maybePunctuateSystemTime());
         processorSystemTime.supplier.scheduleCancellable.cancel();
-        time.sleep(10);
-        assertFalse(task.maybePunctuateSystemTime());
         time.sleep(10);
         assertFalse(task.maybePunctuateSystemTime());
         processorSystemTime.supplier.checkAndClearPunctuateResult(PunctuationType.SYSTEM_TIME, now + 10);

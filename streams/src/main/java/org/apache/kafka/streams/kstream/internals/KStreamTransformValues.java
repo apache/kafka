@@ -101,7 +101,7 @@ public class KStreamTransformValues<K, V, R> implements ProcessorSupplier<K, V> 
                     }
 
                     @Override
-                    public Cancellable schedule(long interval, PunctuationType type, Punctuator callback) {
+                    public Cancellable schedule(final long interval, final PunctuationType type, final Punctuator callback) {
                         return context.schedule(interval, type, callback);
                     }
 

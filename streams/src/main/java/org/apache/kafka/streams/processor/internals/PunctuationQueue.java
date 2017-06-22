@@ -38,7 +38,7 @@ public class PunctuationQueue {
         }
     }
 
-    public boolean mayPunctuate(long timestamp, PunctuationType type, ProcessorNodePunctuator processorNodePunctuator) {
+    public boolean mayPunctuate(final long timestamp, final PunctuationType type, final ProcessorNodePunctuator processorNodePunctuator) {
         synchronized (pq) {
             boolean punctuated = false;
             PunctuationSchedule top = pq.peek();
@@ -46,7 +46,7 @@ public class PunctuationQueue {
                 PunctuationSchedule sched = top;
                 pq.poll();
 
-                if (!sched.isCancelled) {
+                if (!sched.isCancelled()) {
                     processorNodePunctuator.punctuate(sched.node(), timestamp, type, sched.punctuator());
                     pq.add(sched.next(timestamp));
                     punctuated = true;

@@ -71,7 +71,6 @@ public class MockProcessorSupplier<K, V> implements ProcessorSupplier<K, V> {
                 scheduleCancellable = context.schedule(scheduleInterval, punctuationType, new Punctuator() {
                     @Override
                     public void punctuate(long timestamp) {
-                        System.err.println("punctuate " + timestamp + " type " + punctuationType);
                         if (punctuationType == PunctuationType.STREAM_TIME) {
                             assertEquals(timestamp, context().timestamp());
                         }
@@ -118,4 +117,5 @@ public class MockProcessorSupplier<K, V> implements ProcessorSupplier<K, V> {
 
         processed.clear();
     }
+
 }

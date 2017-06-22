@@ -737,15 +737,13 @@ public class StreamThread extends Thread {
 
     private void maybePunctuateSystemTime() {
         final RuntimeException e = performOnStreamTasks(new StreamTaskAction() {
-            private String name;
             @Override
             public String name() {
-                return name;
+                return "punctuate";
             }
 
             @Override
             public void apply(final StreamTask task) {
-                name = "punctuate";
                 try {
                     // check whether we should punctuate based on system timestamp
                     if (task.maybePunctuateSystemTime()) {
