@@ -74,9 +74,12 @@ public class TopicConfig {
         "their data.";
 
     public static final String MAX_MESSAGE_BYTES_CONFIG = "max.message.bytes";
-    public static final String MAX_MESSAGE_BYTES_DOC = "This is largest record batch size Kafka will allow to be " +
+    public static final String MAX_MESSAGE_BYTES_DOC = "<p>This is largest record batch size Kafka will allow to be " +
         "appended. Note that if you increase this size you must also increase your consumer's fetch size so " +
-        "they can fetch messages this large.";
+        "they can fetch messages this large. </p> " +
+        "<p>Messages are grouped in batches for efficiency. In previous releases, this applied only if compression was " +
+        "enabled, but it is generally true in the latest message format version. This configuration limits the maximum " +
+        "size of of a single uncompressed message for older formats and the size of a single message batch otherwise. </p>";
 
     public static final String INDEX_INTERVAL_BYTES_CONFIG = "index.interval.bytes";
     public static final String INDEX_INTERVAL_BYTES_DOCS = "This setting controls how frequently " +

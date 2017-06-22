@@ -416,7 +416,8 @@ object KafkaConfig {
   "start from " + MaxReservedBrokerIdProp + " + 1."
   val MessageMaxBytesDoc = "The maximum message size that the server can receive. Note that this limit also applies " +
     "to the total size of a compressed batch of messages (when compression is enabled). Additionally, in versions " +
-    "0.11 and later, all messages are written as batches and this setting applies to the total size of the batch."
+    "0.11 and later, all messages are written as batches and this setting applies to the total size of the batch. " +
+    "This can be set per topic with the topic level <code>max.message.bytes</code> config."
   val NumNetworkThreadsDoc = "The number of threads that the server uses for receiving requests from the network and sending responses to the network"
   val NumIoThreadsDoc = "The number of threads that the server uses for processing requests, which may include disk I/O"
   val BackgroundThreadsDoc = "The number of threads to use for various background processing tasks"
@@ -543,15 +544,16 @@ object KafkaConfig {
   val ReplicaSocketReceiveBufferBytesDoc = "The socket receive buffer for network requests"
   val ReplicaFetchMaxBytesDoc = "The number of bytes of messages to attempt to fetch for each partition. This is not an absolute maximum, " +
     "if the first record batch in the first non-empty partition of the fetch is larger than this value, the record batch will still be returned " +
-    "to ensure that progress can be made. The maximum message size accepted by the broker is defined via " +
+    "to ensure that progress can be made. The maximum record batch size accepted by the broker is defined via " +
     "<code>message.max.bytes</code> (broker config) or <code>max.message.bytes</code> (topic config)."
   val ReplicaFetchWaitMaxMsDoc = "max wait time for each fetcher request issued by follower replicas. This value should always be less than the " +
   "replica.lag.time.max.ms at all times to prevent frequent shrinking of ISR for low throughput topics"
   val ReplicaFetchMinBytesDoc = "Minimum bytes expected for each fetch response. If not enough bytes, wait up to replicaMaxWaitTimeMs"
-  val ReplicaFetchResponseMaxBytesDoc = "Maximum bytes expected for the entire fetch response. This is not an absolute maximum, " +
-    "if the first message in the first non-empty partition of the fetch is larger than this value, the message will still be returned " +
-    "to ensure that progress can be made. The maximum message size accepted by the broker is defined via " +
-    "<code>message.max.bytes</code> (broker config) or <code>max.message.bytes</code> (topic config)."
+  val ReplicaFetchResponseMaxBytesDoc = "Maximum bytes expected for the entire fetch response. Records are fetched in batches, " +
+    "and if the first record batch in the first non-empty partition of the fetch is larger than this value, the record batch " +
+    "will still be returned to ensure that progress can be made. As such, this is not a absolute maximum. The maximum " +
+    "record batch size accepted by the broker is defined via <code>message.max.bytes</code> (broker config) or " +
+    "<code>max.message.bytes</code> (topic config)."
   val NumReplicaFetchersDoc = "Number of fetcher threads used to replicate messages from a source broker. " +
   "Increasing this value can increase the degree of I/O parallelism in the follower broker."
   val ReplicaFetchBackoffMsDoc = "The amount of time to sleep when fetch partition error occurs."
