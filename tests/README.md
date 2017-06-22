@@ -434,13 +434,6 @@ the test driver machine.
 
         $ cd kafka
         $ ./vagrant/aws/aws-init.sh
-
-* Add your AWS keys and load them (https://aws.amazon.com/blogs/security/wheres-my-secret-access-key/):
-
-        # Add these lines to your .bashrc
-        export AWS_ACCESS_KEY_ID=<YOUR_ACCESS_ID>
-        export AWS_SECRET_ACCESS_KEY=<YOUR_SECRET_ACCESS_KEY>
-
         $ . ~/.bashrc
 
 * An example Vagrantfile.local has been created by aws-init.sh which looks something like:
