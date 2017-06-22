@@ -157,8 +157,8 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore i
 
     @Override
     public KeyValueIterator<Windowed<K>, AGG> fetch(K from, K to) {
-        Objects.requireNonNull(from, "<from> cannot be null");
-        Objects.requireNonNull(to, "<to> cannot be null");
+        Objects.requireNonNull(from, "from cannot be null");
+        Objects.requireNonNull(to, "to cannot be null");
         return findSessions(from, to, 0, Long.MAX_VALUE);
     }
 
