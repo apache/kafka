@@ -91,7 +91,9 @@ public class ConfigDef {
     public ConfigDef(ConfigDef base) {
         configKeys = new LinkedHashMap<>(base.configKeys);
         groups = new LinkedList<>(base.groups);
-        configsWithNoParent = base.configsWithNoParent == null ? null : new HashSet<>(base.configsWithNoParent);
+        // It is not safe to copy this from the parent because we may subsequently add to the set of configs and
+        // invalidate this
+        configsWithNoParent = null;
     }
 
     /**
@@ -528,7 +530,8 @@ public class ConfigDef {
         return new ArrayList<>(undefinedConfigKeys);
     }
 
-    private Set<String> getConfigsWithNoParent() {
+    // package accessible for testing
+    Set<String> getConfigsWithNoParent() {
         if (this.configsWithNoParent != null) {
             return this.configsWithNoParent;
         }
