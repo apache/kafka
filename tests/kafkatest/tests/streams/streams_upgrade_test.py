@@ -31,28 +31,29 @@ class StreamsUpgradeTest(Test):
     def __init__(self, test_context):
         super(StreamsUpgradeTest, self).__init__(test_context)
         self.replication = 3
-        self.partitions = 3
+        self.partitions = 1
+        self.isr = 2
         self.topics = {
             'echo' : { 'partitions': self.partitions, 'replication-factor': self.replication,
-                       'configs': {"min.insync.replicas": 2}},
+                       'configs': {"min.insync.replicas": self.isr}},
             'data' : { 'partitions': self.partitions, 'replication-factor': self.replication,
-                       'configs': {"min.insync.replicas": 2} },
+                       'configs': {"min.insync.replicas": self.isr} },
             'min' : { 'partitions': self.partitions, 'replication-factor': self.replication,
-                      'configs': {"min.insync.replicas": 2} },
+                      'configs': {"min.insync.replicas": self.isr} },
             'max' : { 'partitions': self.partitions, 'replication-factor': self.replication,
-                      'configs': {"min.insync.replicas": 2} },
+                      'configs': {"min.insync.replicas": self.isr} },
             'sum' : { 'partitions': self.partitions, 'replication-factor': self.replication,
-                      'configs': {"min.insync.replicas": 2} },
+                      'configs': {"min.insync.replicas": self.isr} },
             'dif' : { 'partitions': self.partitions, 'replication-factor': self.replication,
-                      'configs': {"min.insync.replicas": 2} },
+                      'configs': {"min.insync.replicas": self.isr} },
             'cnt' : { 'partitions': self.partitions, 'replication-factor': self.replication,
-                      'configs': {"min.insync.replicas": 2} },
+                      'configs': {"min.insync.replicas": self.isr} },
             'avg' : { 'partitions': self.partitions, 'replication-factor': self.replication,
-                      'configs': {"min.insync.replicas": 2} },
+                      'configs': {"min.insync.replicas": self.isr} },
             'wcnt' : { 'partitions': self.partitions, 'replication-factor': self.replication,
-                       'configs': {"min.insync.replicas": 2} },
+                       'configs': {"min.insync.replicas": self.isr} },
             'tagg' : { 'partitions': self.partitions, 'replication-factor': self.replication,
-                       'configs': {"min.insync.replicas": 2} }
+                       'configs': {"min.insync.replicas": self.isr} }
         }
         
 
@@ -64,20 +65,30 @@ class StreamsUpgradeTest(Test):
         self.processor1.start()
         
     @cluster(num_nodes=6)
-    @parametrize(from_version=str(DEV_BRANCH), to_version=str(LATEST_0_10_1))
+    @parametrize(from_version=str(LATEST_0_10_1), to_version=str(DEV_BRANCH))
     @parametrize(from_version=str(LATEST_0_10_2), to_version=str(DEV_BRANCH))
-    def test_upgrade(self, from_version, to_version):
+    @parametrize(from_version=str(DEV_BRANCH), to_version=str(LATEST_0_10_2))
+    def test_upgrade_downgrade(self, from_version, to_version):
         """
         Start a smoke test client, then abort (kill -9) and restart it a few times.
         Ensure that all records are delivered.
+
+        Note, that just like tests/core/upgrade_test.py, a prerequisite for this test to succeed
+        if the inclusion of all parametrized versions of kafka in kafka/vagrant/base.sh 
+        (search for get_kafka()). For streams in particular, that means that someone has manually
+        copies the kafka-stream-$version-test.jar in the right S3 bucket as shown in base.sh.
         """
         # Setup phase
         self.zk = ZookeeperService(self.test_context, num_nodes=1)
         self.zk.start()
-        
-        self.kafka = KafkaService(self.test_context, num_nodes=self.replication,
+
+        # number of nodes needs to be >= 3 for the smoke test
+        self.kafka = KafkaService(self.test_context, num_nodes=3,
                                   zk=self.zk, version=KafkaVersion(from_version), topics=self.topics)
         self.kafka.start()
+        
+        # allow some time for topics to be created
+        time.sleep(10)
         
         self.driver = StreamsSmokeTestDriverService(self.test_context, self.kafka)
         self.processor1 = StreamsSmokeTestJobRunnerService(self.test_context, self.kafka)
