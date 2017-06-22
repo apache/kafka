@@ -192,7 +192,7 @@ public class KStreamImplTest {
                 Serdes.String(),
                 Serdes.String(),
                 Serdes.String())
-                .to(Serdes.String(), Serdes.String(), "de");
+                .to(Serdes.String(), Serdes.String(), "output-topic");
 
         ProcessorTopology processorTopology = builder.setApplicationId("X").build(null);
         SourceNode originalSourceNode = processorTopology.source("topic-1");
