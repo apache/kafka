@@ -430,6 +430,13 @@ the test driver machine.
 
         $ git clone https://git-wip-us.apache.org/repos/asf/kafka.git kafka
 
+* Update your AWS credentials:
+
+        export AWS_IAM_ROLE=$(curl -s http://169.254.169.254/latest/meta-data/iam/info | grep InstanceProfileArn | cut -d '"' -f 4 | cut -d '/' -f 2)
+        export AWS_ACCESS_KEY=$(curl -s http://169.254.169.254/latest/meta-data/iam/security-credentials/$AWS_IAM_ROLE | grep AccessKeyId | awk -F\" '{ print $4 }')
+        export AWS_SECRET_KEY=$(curl -s http://169.254.169.254/latest/meta-data/iam/security-credentials/$AWS_IAM_ROLE | grep SecretAccessKey | awk -F\" '{ print $4 }')
+        export AWS_SESSION_TOKEN=$(curl -s http://169.254.169.254/latest/meta-data/iam/security-credentials/$AWS_IAM_ROLE | grep Token | awk -F\" '{ print $4 }')
+
 * Install some dependencies:
 
         $ cd kafka
