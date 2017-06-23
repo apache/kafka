@@ -27,17 +27,18 @@ import kafka.api.{ControlledShutdownRequest, RequestOrResponse}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.QuotaId
 import kafka.utils.{Logging, NotNothing}
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{ApiKey, TopicPartition}
 import org.apache.kafka.common.errors.InvalidRequestException
 import org.apache.kafka.common.network.{ListenerName, Send}
-import org.apache.kafka.common.protocol.{ApiKeys, Protocol, SecurityProtocol}
-import org.apache.kafka.common.record.{RecordBatch, MemoryRecords}
+import org.apache.kafka.common.protocol.{Protocol, SecurityProtocol}
+import org.apache.kafka.common.record.{MemoryRecords, RecordBatch}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.Time
 import org.apache.log4j.Logger
 
 import scala.reflect.ClassTag
+import scala.collection.JavaConverters._
 
 object RequestChannel extends Logging {
   val AllDone = Request(processor = 1, connectionId = "2", Session(KafkaPrincipal.ANONYMOUS, InetAddress.getLocalHost),
@@ -48,7 +49,7 @@ object RequestChannel extends Logging {
   private def shutdownReceive: ByteBuffer = {
     val emptyProduceRequest = new ProduceRequest.Builder(RecordBatch.CURRENT_MAGIC_VALUE, 0, 0,
       Collections.emptyMap[TopicPartition, MemoryRecords]).build()
-    val emptyRequestHeader = new RequestHeader(ApiKeys.PRODUCE.id, emptyProduceRequest.version, "", 0)
+    val emptyRequestHeader = new RequestHeader(ApiKey.PRODUCE.id, emptyProduceRequest.version, "", 0)
     emptyProduceRequest.serialize(emptyRequestHeader)
   }
 
@@ -71,7 +72,7 @@ object RequestChannel extends Logging {
 
     // TODO: this will be removed once we remove support for v0 of ControlledShutdownRequest (which
     // depends on a non-standard request header)
-    val requestObj: RequestOrResponse = if (requestId == ApiKeys.CONTROLLED_SHUTDOWN_KEY.id)
+    val requestObj: RequestOrResponse = if (requestId == ApiKey.CONTROLLED_SHUTDOWN_KEY.id)
       ControlledShutdownRequest.readFrom(buffer)
     else
       null
@@ -92,7 +93,7 @@ object RequestChannel extends Logging {
       if (requestObj == null)
         try {
           // For unsupported version of ApiVersionsRequest, create a dummy request to enable an error response to be returned later
-          if (header.apiKey == ApiKeys.API_VERSIONS.id && !Protocol.apiVersionSupported(header.apiKey, header.apiVersion)) {
+          if (header.apiKey == ApiKey.API_VERSIONS.id && !Protocol.apiVersionSupported(header.apiKey, header.apiVersion)) {
             new RequestAndSize(new ApiVersionsRequest.Builder().build(), 0)
           }
           else
@@ -151,7 +152,7 @@ object RequestChannel extends Logging {
       val responseSendTime = nanosToMs(endTimeNanos - responseDequeueTimeNanos)
       val totalTime = nanosToMs(endTimeNanos - startTimeNanos)
       val fetchMetricNames =
-        if (requestId == ApiKeys.FETCH.id) {
+        if (requestId == ApiKey.FETCH.id) {
           val isFromFollower = body[FetchRequest].isFromFollower
           Seq(
             if (isFromFollower) RequestMetrics.followFetchMetricName
@@ -159,7 +160,7 @@ object RequestChannel extends Logging {
           )
         }
         else Seq.empty
-      val metricNames = fetchMetricNames :+ ApiKeys.forId(requestId).name
+      val metricNames = fetchMetricNames :+ ApiKey.fromId(requestId).title
       metricNames.foreach { metricName =>
         val m = RequestMetrics.metricsMap(metricName)
         m.requestRate.mark()
@@ -291,10 +292,10 @@ class RequestChannel(val numProcessors: Int, val queueSize: Int) extends KafkaMe
 
 object RequestMetrics {
   val metricsMap = new scala.collection.mutable.HashMap[String, RequestMetrics]
-  val consumerFetchMetricName = ApiKeys.FETCH.name + "Consumer"
-  val followFetchMetricName = ApiKeys.FETCH.name + "Follower"
-  (ApiKeys.values().toList.map(e => e.name)
-    ++ List(consumerFetchMetricName, followFetchMetricName)).foreach(name => metricsMap.put(name, new RequestMetrics(name)))
+  val consumerFetchMetricName = ApiKey.FETCH.title + "Consumer"
+  val followFetchMetricName = ApiKey.FETCH.title + "Follower"
+  (ApiKey.VALUES.asScala.map(e => e.title)
+    ++ List(consumerFetchMetricName, followFetchMetricName)).foreach(title => metricsMap.put(title, new RequestMetrics(title)))
 }
 
 class RequestMetrics(name: String) extends KafkaMetricsGroup {

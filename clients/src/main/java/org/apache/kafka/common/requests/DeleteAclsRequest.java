@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.ApiKey;
 import org.apache.kafka.common.acl.AccessControlEntryFilter;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -28,8 +29,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-import static org.apache.kafka.common.protocol.ApiKeys.DELETE_ACLS;
-
 public class DeleteAclsRequest extends AbstractRequest {
     private final static String FILTERS = "filters";
 
@@ -37,7 +36,7 @@ public class DeleteAclsRequest extends AbstractRequest {
         private final List<AclBindingFilter> filters;
 
         public Builder(List<AclBindingFilter> filters) {
-            super(DELETE_ACLS);
+            super(ApiKey.DELETE_ACLS);
             this.filters = filters;
         }
 
@@ -76,7 +75,7 @@ public class DeleteAclsRequest extends AbstractRequest {
 
     @Override
     protected Struct toStruct() {
-        Struct struct = new Struct(DELETE_ACLS.requestSchema(version()));
+        Struct struct = new Struct(ApiKeys.requestSchema(ApiKey.DELETE_ACLS, version()));
         List<Struct> filterStructs = new ArrayList<>();
         for (AclBindingFilter filter : filters) {
             Struct filterStruct = struct.instance(FILTERS);
@@ -101,11 +100,11 @@ public class DeleteAclsRequest extends AbstractRequest {
                 return new DeleteAclsResponse(throttleTimeMs, responses);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                    versionId, this.getClass().getSimpleName(), ApiKeys.DELETE_ACLS.latestVersion()));
+                    versionId, this.getClass().getSimpleName(), ApiKey.DELETE_ACLS.supportedRange().highest()));
         }
     }
 
     public static DeleteAclsRequest parse(ByteBuffer buffer, short version) {
-        return new DeleteAclsRequest(DELETE_ACLS.parseRequest(version, buffer), version);
+        return new DeleteAclsRequest(ApiKeys.parseRequest(ApiKey.DELETE_ACLS, version, buffer), version);
     }
 }

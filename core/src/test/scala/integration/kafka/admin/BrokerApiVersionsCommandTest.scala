@@ -24,9 +24,10 @@ import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.NodeApiVersions
-import org.apache.kafka.common.protocol.ApiKeys
+import org.apache.kafka.common.ApiKey
 import org.junit.Assert.{assertEquals, assertFalse, assertNotNull, assertTrue}
 import org.junit.Test
+import scala.collection.JavaConverters._
 
 class BrokerApiVersionsCommandTest extends KafkaServerTestHarness {
 
@@ -42,15 +43,15 @@ class BrokerApiVersionsCommandTest extends KafkaServerTestHarness {
     assertTrue(lineIter.hasNext)
     assertEquals(s"$brokerList (id: 0 rack: null) -> (", lineIter.next)
     val nodeApiVersions = NodeApiVersions.create
-    for (apiKey <- ApiKeys.values) {
+    for (apiKey <- ApiKey.VALUES.asScala) {
       val apiVersion = nodeApiVersions.apiVersion(apiKey)
       assertNotNull(apiVersion)
       val versionRangeStr =
         if (apiVersion.minVersion == apiVersion.maxVersion) apiVersion.minVersion.toString
         else s"${apiVersion.minVersion} to ${apiVersion.maxVersion}"
-      val terminator = if (apiKey == ApiKeys.values.last) "" else ","
+      val terminator = if (apiKey == ApiKey.VALUES.asScala.last) "" else ","
       val usableVersion = nodeApiVersions.usableVersion(apiKey)
-      val line = s"\t${apiKey.name}(${apiKey.id}): $versionRangeStr [usable: $usableVersion]$terminator"
+      val line = s"\t${apiKey.title}(${apiKey.id}): $versionRangeStr [usable: $usableVersion]$terminator"
       assertTrue(lineIter.hasNext)
       assertEquals(line, lineIter.next)
     }

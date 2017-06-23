@@ -16,14 +16,15 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.ApiKey;
+import org.apache.kafka.common.Node;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AccessControlEntryFilter;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
-import org.apache.kafka.common.Node;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.NotCoordinatorException;
 import org.apache.kafka.common.errors.NotEnoughReplicasException;
 import org.apache.kafka.common.errors.SecurityDisabledException;
@@ -223,15 +224,13 @@ public class RequestResponseTest {
         checkRequest(createTxnOffsetCommitRequest());
         checkErrorResponse(createTxnOffsetCommitRequest(), new UnknownServerException());
         checkResponse(createTxnOffsetCommitResponse(), 0);
-        checkRequest(createListAclsRequest());
-        checkErrorResponse(createListAclsRequest(), new SecurityDisabledException("Security is not enabled."));
-        checkResponse(createDescribeAclsResponse(), ApiKeys.DESCRIBE_ACLS.latestVersion());
+        checkResponse(createDescribeAclsResponse(), ApiKey.DESCRIBE_ACLS.supportedRange().highest());
         checkRequest(createCreateAclsRequest());
         checkErrorResponse(createCreateAclsRequest(), new SecurityDisabledException("Security is not enabled."));
-        checkResponse(createCreateAclsResponse(), ApiKeys.CREATE_ACLS.latestVersion());
+        checkResponse(createCreateAclsResponse(), ApiKey.CREATE_ACLS.supportedRange().highest());
         checkRequest(createDeleteAclsRequest());
         checkErrorResponse(createDeleteAclsRequest(), new SecurityDisabledException("Security is not enabled."));
-        checkResponse(createDeleteAclsResponse(), ApiKeys.DELETE_ACLS.latestVersion());
+        checkResponse(createDeleteAclsResponse(), ApiKey.DELETE_ACLS.supportedRange().highest());
         checkRequest(createAlterConfigsRequest());
         checkErrorResponse(createAlterConfigsRequest(), new UnknownServerException());
         checkResponse(createAlterConfigsResponse(), 0);
@@ -261,7 +260,7 @@ public class RequestResponseTest {
     }
 
     private void checkOlderFetchVersions() throws Exception {
-        int latestVersion = ApiKeys.FETCH.latestVersion();
+        int latestVersion = ApiKey.FETCH.supportedRange().highest();
         for (int i = 0; i < latestVersion; ++i) {
             checkErrorResponse(createFetchRequest(i), new UnknownServerException());
             checkRequest(createFetchRequest(i));
@@ -310,7 +309,7 @@ public class RequestResponseTest {
 
     @Test
     public void produceRequestToStringTest() {
-        ProduceRequest request = createProduceRequest(ApiKeys.PRODUCE.latestVersion());
+        ProduceRequest request = createProduceRequest(ApiKey.PRODUCE.supportedRange().highest());
         assertEquals(1, request.partitionRecordsOrFail().size());
         assertFalse(request.toString(false).contains("partitionSizes"));
         assertTrue(request.toString(false).contains("numPartitions=1"));
@@ -334,7 +333,7 @@ public class RequestResponseTest {
 
     @Test
     public void produceRequestGetErrorResponseTest() {
-        ProduceRequest request = createProduceRequest(ApiKeys.PRODUCE.latestVersion());
+        ProduceRequest request = createProduceRequest(ApiKey.PRODUCE.supportedRange().highest());
         Set<TopicPartition> partitions = new HashSet<>(request.partitionRecordsOrFail().keySet());
 
         ProduceResponse errorResponse = (ProduceResponse) request.getErrorResponse(new NotEnoughReplicasException());
@@ -366,11 +365,11 @@ public class RequestResponseTest {
         assertEquals("Throttle time must be zero", 0, v0Response.getThrottleTime());
         assertEquals("Throttle time must be 10", 10, v1Response.getThrottleTime());
         assertEquals("Throttle time must be 10", 10, v2Response.getThrottleTime());
-        assertEquals("Should use schema version 0", ApiKeys.PRODUCE.responseSchema((short) 0),
+        assertEquals("Should use schema version 0", ApiKeys.responseSchema(ApiKey.PRODUCE, (short) 0),
                 v0Response.toStruct((short) 0).schema());
-        assertEquals("Should use schema version 1", ApiKeys.PRODUCE.responseSchema((short) 1),
+        assertEquals("Should use schema version 1", ApiKeys.responseSchema(ApiKey.PRODUCE, (short) 1),
                 v1Response.toStruct((short) 1).schema());
-        assertEquals("Should use schema version 2", ApiKeys.PRODUCE.responseSchema((short) 2),
+        assertEquals("Should use schema version 2", ApiKeys.responseSchema(ApiKey.PRODUCE, (short) 2),
                 v2Response.toStruct((short) 2).schema());
         assertEquals("Response data does not match", responseData, v0Response.responses());
         assertEquals("Response data does not match", responseData, v1Response.responses());
@@ -439,9 +438,9 @@ public class RequestResponseTest {
         FetchResponse v1Response = new FetchResponse(responseData, 10);
         assertEquals("Throttle time must be zero", 0, v0Response.throttleTimeMs());
         assertEquals("Throttle time must be 10", 10, v1Response.throttleTimeMs());
-        assertEquals("Should use schema version 0", ApiKeys.FETCH.responseSchema((short) 0),
+        assertEquals("Should use schema version 0", ApiKeys.responseSchema(ApiKey.FETCH, (short) 0),
                 v0Response.toStruct((short) 0).schema());
-        assertEquals("Should use schema version 1", ApiKeys.FETCH.responseSchema((short) 1),
+        assertEquals("Should use schema version 1", ApiKeys.responseSchema(ApiKey.FETCH, (short) 1),
                 v1Response.toStruct((short) 1).schema());
         assertEquals("Response data does not match", responseData, v0Response.responseData());
         assertEquals("Response data does not match", responseData, v1Response.responseData());
@@ -472,7 +471,7 @@ public class RequestResponseTest {
     @Test
     public void verifyFetchResponseFullWrite() throws Exception {
         FetchResponse fetchResponse = createFetchResponse();
-        RequestHeader header = new RequestHeader(ApiKeys.FETCH.id, ApiKeys.FETCH.latestVersion(),
+        RequestHeader header = new RequestHeader(ApiKey.FETCH.id(), ApiKey.FETCH.supportedRange().highest(),
                 "client", 15);
 
         Send send = fetchResponse.toSend("1", header);
@@ -491,7 +490,7 @@ public class RequestResponseTest {
         assertEquals(header.correlationId(), responseHeader.correlationId());
 
         // read the body
-        Struct responseBody = ApiKeys.FETCH.responseSchema(header.apiVersion()).read(buf);
+        Struct responseBody = ApiKeys.responseSchema(ApiKey.FETCH, header.apiVersion()).read(buf);
         assertEquals(fetchResponse.toStruct(header.apiVersion()), responseBody);
 
         assertEquals(size, responseHeader.sizeOf() + responseBody.sizeOf());
@@ -500,7 +499,7 @@ public class RequestResponseTest {
     @Test
     public void testControlledShutdownResponse() {
         ControlledShutdownResponse response = createControlledShutdownResponse();
-        short version = ApiKeys.CONTROLLED_SHUTDOWN_KEY.latestVersion();
+        short version = ApiKey.CONTROLLED_SHUTDOWN_KEY.supportedRange().highest();
         Struct struct = response.toStruct(version);
         ByteBuffer buffer = toBuffer(struct);
         ControlledShutdownResponse deserialized = ControlledShutdownResponse.parse(buffer, version);
@@ -992,12 +991,6 @@ public class RequestResponseTest {
         final Map<TopicPartition, Errors> errorPerPartitions = new HashMap<>();
         errorPerPartitions.put(new TopicPartition("topic", 73), Errors.NONE);
         return new TxnOffsetCommitResponse(0, errorPerPartitions);
-    }
-
-    private DescribeAclsRequest createListAclsRequest() {
-        return new DescribeAclsRequest.Builder(new AclBindingFilter(
-                new ResourceFilter(ResourceType.TOPIC, "mytopic"),
-                new AccessControlEntryFilter(null, null, AclOperation.ANY, AclPermissionType.ANY))).build();
     }
 
     private DescribeAclsResponse createDescribeAclsResponse() {

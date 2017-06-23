@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.security.authenticator;
 
+import org.apache.kafka.common.ApiKey;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.errors.AuthenticationException;
@@ -29,7 +30,6 @@ import org.apache.kafka.common.network.NetworkReceive;
 import org.apache.kafka.common.network.NetworkSend;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.network.TransportLayer;
-import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Protocol;
 import org.apache.kafka.common.protocol.types.SchemaException;
@@ -297,14 +297,14 @@ public class SaslServerAuthenticator implements Authenticator {
         try {
             ByteBuffer requestBuffer = ByteBuffer.wrap(requestBytes);
             RequestHeader requestHeader = RequestHeader.parse(requestBuffer);
-            ApiKeys apiKey = ApiKeys.forId(requestHeader.apiKey());
+            ApiKey apiKey = ApiKey.fromId(requestHeader.apiKey());
             // A valid Kafka request header was received. SASL authentication tokens are now expected only
             // following a SaslHandshakeRequest since this is not a GSSAPI client token from a Kafka 0.9.0.x client.
             setSaslState(SaslState.HANDSHAKE_REQUEST);
             isKafkaRequest = true;
 
             if (!Protocol.apiVersionSupported(requestHeader.apiKey(), requestHeader.apiVersion())) {
-                if (apiKey == ApiKeys.API_VERSIONS)
+                if (apiKey == ApiKey.API_VERSIONS)
                     sendKafkaResponse(ApiVersionsResponse.unsupportedVersionSend(node, requestHeader));
                 else
                     throw new UnsupportedVersionException("Version " + requestHeader.apiVersion() + " is not supported for apiKey " + apiKey);

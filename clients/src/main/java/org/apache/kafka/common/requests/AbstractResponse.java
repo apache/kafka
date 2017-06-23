@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.ApiKey;
 import org.apache.kafka.common.network.NetworkSend;
 import org.apache.kafka.common.network.Send;
-import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
@@ -49,8 +49,8 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
 
     protected abstract Struct toStruct(short version);
 
-    public static AbstractResponse getResponse(ApiKeys apiKey, Struct struct) {
-        switch (apiKey) {
+    public static AbstractResponse getResponse(ApiKey api, Struct struct) {
+        switch (api) {
             case PRODUCE:
                 return new ProduceResponse(struct);
             case FETCH:
@@ -121,7 +121,7 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
                 return new AlterConfigsResponse(struct);
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `getResponse`, the " +
-                        "code should be updated to do so.", apiKey));
+                        "code should be updated to do so.", api));
         }
     }
 

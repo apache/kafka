@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.ApiKey;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.types.Struct;
 
@@ -64,7 +65,7 @@ public class CreateAclsResponse extends AbstractResponse {
 
     @Override
     protected Struct toStruct(short version) {
-        Struct struct = new Struct(ApiKeys.CREATE_ACLS.responseSchema(version));
+        Struct struct = new Struct(ApiKeys.responseSchema(ApiKey.CREATE_ACLS, version));
         struct.set(THROTTLE_TIME_KEY_NAME, throttleTimeMs);
         List<Struct> responseStructs = new ArrayList<>();
         for (AclCreationResponse response : aclCreationResponses) {
@@ -85,6 +86,6 @@ public class CreateAclsResponse extends AbstractResponse {
     }
 
     public static CreateAclsResponse parse(ByteBuffer buffer, short version) {
-        return new CreateAclsResponse(ApiKeys.CREATE_ACLS.responseSchema(version).read(buffer));
+        return new CreateAclsResponse(ApiKeys.responseSchema(ApiKey.CREATE_ACLS, version).read(buffer));
     }
 }

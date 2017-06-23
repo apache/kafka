@@ -20,6 +20,7 @@ import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.List;
 
+import org.apache.kafka.common.ApiKey;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -44,7 +45,7 @@ public class SaslHandshakeRequest extends AbstractRequest {
         private final String mechanism;
 
         public Builder(String mechanism) {
-            super(ApiKeys.SASL_HANDSHAKE);
+            super(ApiKey.SASL_HANDSHAKE);
             this.mechanism = mechanism;
         }
 
@@ -64,7 +65,7 @@ public class SaslHandshakeRequest extends AbstractRequest {
     }
 
     public SaslHandshakeRequest(String mechanism) {
-        super(ApiKeys.SASL_HANDSHAKE.latestVersion());
+        super(ApiKey.SASL_HANDSHAKE.supportedRange().highest());
         this.mechanism = mechanism;
     }
 
@@ -86,17 +87,17 @@ public class SaslHandshakeRequest extends AbstractRequest {
                 return new SaslHandshakeResponse(Errors.forException(e), enabledMechanisms);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                        versionId, this.getClass().getSimpleName(), ApiKeys.SASL_HANDSHAKE.latestVersion()));
+                        versionId, this.getClass().getSimpleName(), ApiKey.SASL_HANDSHAKE.supportedRange().highest()));
         }
     }
 
     public static SaslHandshakeRequest parse(ByteBuffer buffer, short version) {
-        return new SaslHandshakeRequest(ApiKeys.SASL_HANDSHAKE.parseRequest(version, buffer), version);
+        return new SaslHandshakeRequest(ApiKeys.parseRequest(ApiKey.SASL_HANDSHAKE, version, buffer), version);
     }
 
     @Override
     protected Struct toStruct() {
-        Struct struct = new Struct(ApiKeys.SASL_HANDSHAKE.requestSchema(version()));
+        Struct struct = new Struct(ApiKeys.requestSchema(ApiKey.SASL_HANDSHAKE, version()));
         struct.set(MECHANISM_KEY_NAME, mechanism);
         return struct;
     }

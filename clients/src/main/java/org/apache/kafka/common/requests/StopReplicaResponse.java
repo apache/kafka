@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.ApiKey;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -72,12 +73,12 @@ public class StopReplicaResponse extends AbstractResponse {
     }
 
     public static StopReplicaResponse parse(ByteBuffer buffer, short version) {
-        return new StopReplicaResponse(ApiKeys.STOP_REPLICA.parseResponse(version, buffer));
+        return new StopReplicaResponse(ApiKeys.parseResponse(ApiKey.STOP_REPLICA, version, buffer));
     }
 
     @Override
     protected Struct toStruct(short version) {
-        Struct struct = new Struct(ApiKeys.STOP_REPLICA.responseSchema(version));
+        Struct struct = new Struct(ApiKeys.responseSchema(ApiKey.STOP_REPLICA, version));
 
         List<Struct> responseDatas = new ArrayList<>(responses.size());
         for (Map.Entry<TopicPartition, Errors> response : responses.entrySet()) {

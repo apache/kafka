@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients;
 
+import org.apache.kafka.common.ApiKey;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
@@ -235,15 +236,15 @@ public class NetworkClient implements KafkaClient {
     @Override
     public void disconnect(String nodeId) {
         selector.close(nodeId);
-        List<ApiKeys> requestTypes = new ArrayList<>();
+        List<ApiKey> requestTypes = new ArrayList<>();
         long now = time.milliseconds();
         for (InFlightRequest request : inFlightRequests.clearAll(nodeId)) {
             if (request.isInternalRequest) {
-                if (request.header.apiKey() == ApiKeys.METADATA.id) {
+                if (request.header.apiKey() == ApiKey.METADATA.id()) {
                     metadataUpdater.handleDisconnection(request.destination);
                 }
             } else {
-                requestTypes.add(ApiKeys.forId(request.header.apiKey()));
+                requestTypes.add(ApiKey.fromId(request.header.apiKey()));
                 abortedSends.add(new ClientResponse(request.header,
                         request.callback, request.destination, request.createdTimeMs, now,
                         true, null, null));
@@ -267,7 +268,7 @@ public class NetworkClient implements KafkaClient {
     public void close(String nodeId) {
         selector.close(nodeId);
         for (InFlightRequest request : inFlightRequests.clearAll(nodeId))
-            if (request.isInternalRequest && request.header.apiKey() == ApiKeys.METADATA.id)
+            if (request.isInternalRequest && request.header.apiKey() == ApiKey.METADATA.id())
                 metadataUpdater.handleDisconnection(request.destination);
         connectionStates.remove(nodeId);
     }
@@ -361,9 +362,9 @@ public class NetworkClient implements KafkaClient {
                 version = builder.desiredOrLatestVersion();
                 if (discoverBrokerVersions && log.isTraceEnabled())
                     log.trace("No version information found when sending message of type {} to node {}. " +
-                            "Assuming version {}.", clientRequest.apiKey(), nodeId, version);
+                            "Assuming version {}.", clientRequest.api(), nodeId, version);
             } else {
-                version = versionInfo.usableVersion(clientRequest.apiKey(), builder.desiredVersion());
+                version = versionInfo.usableVersion(clientRequest.api(), builder.desiredVersion());
             }
             // The call to build may also throw UnsupportedVersionException, if there are essential
             // fields that cannot be represented in the chosen version.
@@ -384,12 +385,12 @@ public class NetworkClient implements KafkaClient {
         String nodeId = clientRequest.destination();
         RequestHeader header = clientRequest.makeHeader(request.version());
         if (log.isDebugEnabled()) {
-            int latestClientVersion = clientRequest.apiKey().latestVersion();
+            int latestClientVersion = clientRequest.api().supportedRange().highest();
             if (header.apiVersion() == latestClientVersion) {
-                log.trace("Sending {} {} to node {}.", clientRequest.apiKey(), request, nodeId);
+                log.trace("Sending {} {} to node {}.", clientRequest.api(), request, nodeId);
             } else {
                 log.debug("Using older server API v{} to send {} {} to node {}.",
-                        header.apiVersion(), clientRequest.apiKey(), request, nodeId);
+                        header.apiVersion(), clientRequest.api(), request, nodeId);
             }
         }
         Send send = request.toSend(nodeId, header);
@@ -555,8 +556,8 @@ public class NetworkClient implements KafkaClient {
                                                                     Sensor throttleTimeSensor, long now) {
         ResponseHeader responseHeader = ResponseHeader.parse(responseBuffer);
         // Always expect the response version id to be the same as the request version id
-        ApiKeys apiKey = ApiKeys.forId(requestHeader.apiKey());
-        Struct responseBody = apiKey.parseResponse(requestHeader.apiVersion(), responseBuffer);
+        ApiKey api = ApiKey.fromId(requestHeader.apiKey());
+        Struct responseBody = ApiKeys.parseResponse(api, requestHeader.apiVersion(), responseBuffer);
         correlate(requestHeader, responseHeader);
         if (throttleTimeSensor != null && responseBody.hasField(AbstractResponse.THROTTLE_TIME_KEY_NAME))
             throttleTimeSensor.record(responseBody.getInt(AbstractResponse.THROTTLE_TIME_KEY_NAME), now);
@@ -564,7 +565,7 @@ public class NetworkClient implements KafkaClient {
     }
 
     private static AbstractResponse createResponse(Struct responseStruct, RequestHeader requestHeader) {
-        ApiKeys apiKey = ApiKeys.forId(requestHeader.apiKey());
+        ApiKey apiKey = ApiKey.fromId(requestHeader.apiKey());
         return AbstractResponse.getResponse(apiKey, responseStruct);
     }
 
@@ -592,7 +593,7 @@ public class NetworkClient implements KafkaClient {
         }
         for (InFlightRequest request : this.inFlightRequests.clearAll(nodeId)) {
             log.trace("Cancelled request {} due to node {} being disconnected", request.request, nodeId);
-            if (request.isInternalRequest && request.header.apiKey() == ApiKeys.METADATA.id)
+            if (request.isInternalRequest && request.header.apiKey() == ApiKey.METADATA.id())
                 metadataUpdater.handleDisconnection(request.destination);
             else
                 responses.add(request.disconnected(now));

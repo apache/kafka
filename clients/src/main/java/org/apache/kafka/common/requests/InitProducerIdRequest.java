@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.ApiKey;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -40,7 +41,7 @@ public class InitProducerIdRequest extends AbstractRequest {
         }
 
         public Builder(String transactionalId, int transactionTimeoutMs) {
-            super(ApiKeys.INIT_PRODUCER_ID);
+            super(ApiKey.INIT_PRODUCER_ID);
 
             if (transactionTimeoutMs <= 0)
                 throw new IllegalArgumentException("transaction timeout value is not positive: " + transactionTimeoutMs);
@@ -82,7 +83,7 @@ public class InitProducerIdRequest extends AbstractRequest {
     }
 
     public static InitProducerIdRequest parse(ByteBuffer buffer, short version) {
-        return new InitProducerIdRequest(ApiKeys.INIT_PRODUCER_ID.parseRequest(version, buffer), version);
+        return new InitProducerIdRequest(ApiKeys.parseRequest(ApiKey.INIT_PRODUCER_ID, version, buffer), version);
     }
 
     public String transactionalId() {
@@ -95,7 +96,7 @@ public class InitProducerIdRequest extends AbstractRequest {
 
     @Override
     protected Struct toStruct() {
-        Struct struct = new Struct(ApiKeys.INIT_PRODUCER_ID.requestSchema(version()));
+        Struct struct = new Struct(ApiKeys.requestSchema(ApiKey.INIT_PRODUCER_ID, version()));
         struct.set(TRANSACTIONAL_ID_KEY_NAME, transactionalId);
         struct.set(TRANSACTION_TIMEOUT_KEY_NAME, transactionTimeoutMs);
         return struct;

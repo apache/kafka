@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.ApiKey;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -62,7 +63,7 @@ public class LeaveGroupResponse extends AbstractResponse {
 
     @Override
     public Struct toStruct(short version) {
-        Struct struct = new Struct(ApiKeys.LEAVE_GROUP.responseSchema(version));
+        Struct struct = new Struct(ApiKeys.responseSchema(ApiKey.LEAVE_GROUP, version));
         if (struct.hasField(THROTTLE_TIME_KEY_NAME))
             struct.set(THROTTLE_TIME_KEY_NAME, throttleTimeMs);
         struct.set(ERROR_CODE_KEY_NAME, error.code());
@@ -70,7 +71,7 @@ public class LeaveGroupResponse extends AbstractResponse {
     }
 
     public static LeaveGroupResponse parse(ByteBuffer buffer, short versionId) {
-        return new LeaveGroupResponse(ApiKeys.LEAVE_GROUP.parseResponse(versionId, buffer));
+        return new LeaveGroupResponse(ApiKeys.parseResponse(ApiKey.LEAVE_GROUP, versionId, buffer));
     }
 
 }

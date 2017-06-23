@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.ApiKey;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.network.ListenerName;
@@ -42,7 +43,7 @@ public class UpdateMetadataRequest extends AbstractRequest {
 
         public Builder(short version, int controllerId, int controllerEpoch,
                        Map<TopicPartition, PartitionState> partitionStates, Set<Broker> liveBrokers) {
-            super(ApiKeys.UPDATE_METADATA_KEY, version);
+            super(ApiKey.UPDATE_METADATA_KEY, version);
             this.controllerId = controllerId;
             this.controllerEpoch = controllerEpoch;
             this.partitionStates = partitionStates;
@@ -228,7 +229,7 @@ public class UpdateMetadataRequest extends AbstractRequest {
     @Override
     protected Struct toStruct() {
         short version = version();
-        Struct struct = new Struct(ApiKeys.UPDATE_METADATA_KEY.requestSchema(version));
+        Struct struct = new Struct(ApiKeys.requestSchema(ApiKey.UPDATE_METADATA_KEY, version));
         struct.set(CONTROLLER_ID_KEY_NAME, controllerId);
         struct.set(CONTROLLER_EPOCH_KEY_NAME, controllerEpoch);
 
@@ -290,7 +291,7 @@ public class UpdateMetadataRequest extends AbstractRequest {
             return new UpdateMetadataResponse(Errors.forException(e));
         else
             throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                    versionId, this.getClass().getSimpleName(), ApiKeys.UPDATE_METADATA_KEY.latestVersion()));
+                    versionId, this.getClass().getSimpleName(), ApiKey.UPDATE_METADATA_KEY.supportedRange().highest()));
     }
 
     public int controllerId() {
@@ -310,7 +311,7 @@ public class UpdateMetadataRequest extends AbstractRequest {
     }
 
     public static UpdateMetadataRequest parse(ByteBuffer buffer, short version) {
-        return new UpdateMetadataRequest(ApiKeys.UPDATE_METADATA_KEY.parseRequest(version, buffer), version);
+        return new UpdateMetadataRequest(ApiKeys.parseRequest(ApiKey.UPDATE_METADATA_KEY, version, buffer), version);
     }
 
 }

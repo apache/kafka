@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.ApiKey;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -35,7 +36,7 @@ public class FindCoordinatorRequest extends AbstractRequest {
         private final short minVersion;
 
         public Builder(CoordinatorType coordinatorType, String coordinatorKey) {
-            super(ApiKeys.FIND_COORDINATOR);
+            super(ApiKey.FIND_COORDINATOR);
             this.coordinatorType = coordinatorType;
             this.coordinatorKey = coordinatorKey;
             this.minVersion = coordinatorType == CoordinatorType.TRANSACTION ? (short) 1 : (short) 0;
@@ -102,7 +103,7 @@ public class FindCoordinatorRequest extends AbstractRequest {
 
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                        versionId, this.getClass().getSimpleName(), ApiKeys.FIND_COORDINATOR.latestVersion()));
+                        versionId, this.getClass().getSimpleName(), ApiKey.FIND_COORDINATOR.supportedRange().highest()));
         }
     }
 
@@ -115,12 +116,12 @@ public class FindCoordinatorRequest extends AbstractRequest {
     }
 
     public static FindCoordinatorRequest parse(ByteBuffer buffer, short version) {
-        return new FindCoordinatorRequest(ApiKeys.FIND_COORDINATOR.parseRequest(version, buffer), version);
+        return new FindCoordinatorRequest(ApiKeys.parseRequest(ApiKey.FIND_COORDINATOR, version, buffer), version);
     }
 
     @Override
     protected Struct toStruct() {
-        Struct struct = new Struct(ApiKeys.FIND_COORDINATOR.requestSchema(version()));
+        Struct struct = new Struct(ApiKeys.requestSchema(ApiKey.FIND_COORDINATOR, version()));
         if (struct.hasField(GROUP_ID_KEY_NAME))
             struct.set(GROUP_ID_KEY_NAME, coordinatorKey);
         else

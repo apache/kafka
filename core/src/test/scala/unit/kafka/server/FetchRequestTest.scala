@@ -24,9 +24,9 @@ import kafka.log.LogConfig
 import kafka.utils.TestUtils
 import kafka.utils.TestUtils._
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
-import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.{ApiKey, TopicPartition}
 import org.apache.kafka.common.record.{Record, RecordBatch}
+import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, IsolationLevel}
 import org.apache.kafka.common.serialization.StringSerializer
 import org.junit.Assert._
@@ -63,7 +63,7 @@ class FetchRequestTest extends BaseRequestTest {
   }
 
   private def sendFetchRequest(leaderId: Int, request: FetchRequest): FetchResponse = {
-    val response = connectAndSend(request, ApiKeys.FETCH, destination = brokerSocketServer(leaderId))
+    val response = connectAndSend(request, ApiKey.FETCH, destination = brokerSocketServer(leaderId))
     FetchResponse.parse(response, request.version)
   }
 

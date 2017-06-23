@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.ApiKey;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -112,7 +113,7 @@ public class ProduceResponse extends AbstractResponse {
 
     @Override
     protected Struct toStruct(short version) {
-        Struct struct = new Struct(ApiKeys.PRODUCE.responseSchema(version));
+        Struct struct = new Struct(ApiKeys.responseSchema(ApiKey.PRODUCE, version));
 
         Map<String, Map<Integer, PartitionResponse>> responseByTopic = CollectionUtils.groupDataByTopic(responses);
         List<Struct> topicDatas = new ArrayList<>(responseByTopic.size());
@@ -179,7 +180,7 @@ public class ProduceResponse extends AbstractResponse {
     }
 
     public static ProduceResponse parse(ByteBuffer buffer, short version) {
-        return new ProduceResponse(ApiKeys.PRODUCE.responseSchema(version).read(buffer));
+        return new ProduceResponse(ApiKeys.responseSchema(ApiKey.PRODUCE, version).read(buffer));
     }
 
 }

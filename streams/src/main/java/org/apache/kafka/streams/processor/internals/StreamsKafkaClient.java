@@ -26,6 +26,7 @@ import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.ApiKey;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.config.AbstractConfig;
@@ -36,7 +37,6 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.network.ChannelBuilder;
 import org.apache.kafka.common.network.Selector;
-import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.requests.ApiVersionsRequest;
@@ -337,7 +337,7 @@ public class StreamsKafkaClient {
 
         final ApiVersionsResponse apiVersionsResponse =  (ApiVersionsResponse) clientResponse.responseBody();
 
-        if (apiVersionsResponse.apiVersion(ApiKeys.CREATE_TOPICS.id) == null) {
+        if (apiVersionsResponse.apiVersion(ApiKey.CREATE_TOPICS.id()) == null) {
             throw new StreamsException("Kafka Streams requires broker version 0.10.1.x or higher.");
         }
 
@@ -347,12 +347,12 @@ public class StreamsKafkaClient {
     }
 
     private boolean brokerSupportsTransactions(final ApiVersionsResponse apiVersionsResponse) {
-        return apiVersionsResponse.apiVersion(ApiKeys.INIT_PRODUCER_ID.id) != null
-            && apiVersionsResponse.apiVersion(ApiKeys.ADD_PARTITIONS_TO_TXN.id) != null
-            && apiVersionsResponse.apiVersion(ApiKeys.ADD_OFFSETS_TO_TXN.id) != null
-            && apiVersionsResponse.apiVersion(ApiKeys.END_TXN.id) != null
-            && apiVersionsResponse.apiVersion(ApiKeys.WRITE_TXN_MARKERS.id) != null
-            && apiVersionsResponse.apiVersion(ApiKeys.TXN_OFFSET_COMMIT.id) != null;
+        return apiVersionsResponse.apiVersion(ApiKey.INIT_PRODUCER_ID.id()) != null
+            && apiVersionsResponse.apiVersion(ApiKey.ADD_PARTITIONS_TO_TXN.id()) != null
+            && apiVersionsResponse.apiVersion(ApiKey.ADD_OFFSETS_TO_TXN.id()) != null
+            && apiVersionsResponse.apiVersion(ApiKey.END_TXN.id()) != null
+            && apiVersionsResponse.apiVersion(ApiKey.WRITE_TXN_MARKERS.id()) != null
+            && apiVersionsResponse.apiVersion(ApiKey.TXN_OFFSET_COMMIT.id()) != null;
     }
 
 }

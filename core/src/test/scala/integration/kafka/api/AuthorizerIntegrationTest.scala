@@ -31,8 +31,7 @@ import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer._
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic.GROUP_METADATA_TOPIC_NAME
-import org.apache.kafka.common.KafkaException
-import org.apache.kafka.common.protocol.{ApiKeys, Errors, SecurityProtocol}
+import org.apache.kafka.common.protocol.{Errors, SecurityProtocol}
 import org.apache.kafka.common.requests.{Resource => RResource, ResourceType => RResourceType, _}
 import org.apache.kafka.common.acl.{AccessControlEntry, AccessControlEntryFilter, AclBinding, AclBindingFilter, AclOperation, AclPermissionType}
 import org.apache.kafka.common.network.ListenerName
@@ -41,7 +40,7 @@ import org.apache.kafka.common.requests.CreateAclsRequest.AclCreation
 import org.apache.kafka.common.requests.CreateTopicsRequest.TopicDetails
 import org.apache.kafka.common.resource.{ResourceFilter, Resource => AdminResource, ResourceType => AdminResourceType}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
-import org.apache.kafka.common.{Node, TopicPartition, requests}
+import org.apache.kafka.common.{ApiKey, KafkaException, Node, TopicPartition, requests}
 import org.junit.Assert._
 import org.junit.{After, Assert, Before, Test}
 
@@ -104,102 +103,102 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     properties.put(KafkaConfig.TransactionsTopicMinISRProp, "1")
   }
 
-  val requestKeyToResponseDeserializer: Map[ApiKeys, Class[_ <: Any]] =
-    Map(ApiKeys.METADATA -> classOf[requests.MetadataResponse],
-      ApiKeys.PRODUCE -> classOf[requests.ProduceResponse],
-      ApiKeys.FETCH -> classOf[requests.FetchResponse],
-      ApiKeys.LIST_OFFSETS -> classOf[requests.ListOffsetResponse],
-      ApiKeys.OFFSET_COMMIT -> classOf[requests.OffsetCommitResponse],
-      ApiKeys.OFFSET_FETCH -> classOf[requests.OffsetFetchResponse],
-      ApiKeys.FIND_COORDINATOR -> classOf[FindCoordinatorResponse],
-      ApiKeys.UPDATE_METADATA_KEY -> classOf[requests.UpdateMetadataResponse],
-      ApiKeys.JOIN_GROUP -> classOf[JoinGroupResponse],
-      ApiKeys.SYNC_GROUP -> classOf[SyncGroupResponse],
-      ApiKeys.HEARTBEAT -> classOf[HeartbeatResponse],
-      ApiKeys.LEAVE_GROUP -> classOf[LeaveGroupResponse],
-      ApiKeys.LEADER_AND_ISR -> classOf[requests.LeaderAndIsrResponse],
-      ApiKeys.STOP_REPLICA -> classOf[requests.StopReplicaResponse],
-      ApiKeys.CONTROLLED_SHUTDOWN_KEY -> classOf[requests.ControlledShutdownResponse],
-      ApiKeys.CREATE_TOPICS -> classOf[CreateTopicsResponse],
-      ApiKeys.DELETE_TOPICS -> classOf[requests.DeleteTopicsResponse],
-      ApiKeys.OFFSET_FOR_LEADER_EPOCH -> classOf[OffsetsForLeaderEpochResponse],
-      ApiKeys.DESCRIBE_CONFIGS -> classOf[DescribeConfigsResponse],
-      ApiKeys.ALTER_CONFIGS -> classOf[AlterConfigsResponse],
-      ApiKeys.INIT_PRODUCER_ID -> classOf[InitProducerIdResponse],
-      ApiKeys.WRITE_TXN_MARKERS -> classOf[WriteTxnMarkersResponse],
-      ApiKeys.ADD_PARTITIONS_TO_TXN -> classOf[AddPartitionsToTxnResponse],
-      ApiKeys.ADD_OFFSETS_TO_TXN -> classOf[AddOffsetsToTxnResponse],
-      ApiKeys.END_TXN -> classOf[EndTxnResponse],
-      ApiKeys.TXN_OFFSET_COMMIT -> classOf[TxnOffsetCommitResponse],
-      ApiKeys.CREATE_ACLS -> classOf[CreateAclsResponse],
-      ApiKeys.DELETE_ACLS -> classOf[DeleteAclsResponse],
-      ApiKeys.DESCRIBE_ACLS -> classOf[DescribeAclsResponse]
+  val requestKeyToResponseDeserializer: Map[ApiKey, Class[_ <: Any]] =
+    Map(ApiKey.METADATA -> classOf[requests.MetadataResponse],
+      ApiKey.PRODUCE -> classOf[requests.ProduceResponse],
+      ApiKey.FETCH -> classOf[requests.FetchResponse],
+      ApiKey.LIST_OFFSETS -> classOf[requests.ListOffsetResponse],
+      ApiKey.OFFSET_COMMIT -> classOf[requests.OffsetCommitResponse],
+      ApiKey.OFFSET_FETCH -> classOf[requests.OffsetFetchResponse],
+      ApiKey.FIND_COORDINATOR -> classOf[FindCoordinatorResponse],
+      ApiKey.UPDATE_METADATA_KEY -> classOf[requests.UpdateMetadataResponse],
+      ApiKey.JOIN_GROUP -> classOf[JoinGroupResponse],
+      ApiKey.SYNC_GROUP -> classOf[SyncGroupResponse],
+      ApiKey.HEARTBEAT -> classOf[HeartbeatResponse],
+      ApiKey.LEAVE_GROUP -> classOf[LeaveGroupResponse],
+      ApiKey.LEADER_AND_ISR -> classOf[requests.LeaderAndIsrResponse],
+      ApiKey.STOP_REPLICA -> classOf[requests.StopReplicaResponse],
+      ApiKey.CONTROLLED_SHUTDOWN_KEY -> classOf[requests.ControlledShutdownResponse],
+      ApiKey.CREATE_TOPICS -> classOf[CreateTopicsResponse],
+      ApiKey.DELETE_TOPICS -> classOf[requests.DeleteTopicsResponse],
+      ApiKey.OFFSET_FOR_LEADER_EPOCH -> classOf[OffsetsForLeaderEpochResponse],
+      ApiKey.DESCRIBE_CONFIGS -> classOf[DescribeConfigsResponse],
+      ApiKey.ALTER_CONFIGS -> classOf[AlterConfigsResponse],
+      ApiKey.INIT_PRODUCER_ID -> classOf[InitProducerIdResponse],
+      ApiKey.WRITE_TXN_MARKERS -> classOf[WriteTxnMarkersResponse],
+      ApiKey.ADD_PARTITIONS_TO_TXN -> classOf[AddPartitionsToTxnResponse],
+      ApiKey.ADD_OFFSETS_TO_TXN -> classOf[AddOffsetsToTxnResponse],
+      ApiKey.END_TXN -> classOf[EndTxnResponse],
+      ApiKey.TXN_OFFSET_COMMIT -> classOf[TxnOffsetCommitResponse],
+      ApiKey.CREATE_ACLS -> classOf[CreateAclsResponse],
+      ApiKey.DELETE_ACLS -> classOf[DeleteAclsResponse],
+      ApiKey.DESCRIBE_ACLS -> classOf[DescribeAclsResponse]
   )
 
-  val requestKeyToError = Map[ApiKeys, Nothing => Errors](
-    ApiKeys.METADATA -> ((resp: requests.MetadataResponse) => resp.errors.asScala.find(_._1 == topic).getOrElse(("test", Errors.NONE))._2),
-    ApiKeys.PRODUCE -> ((resp: requests.ProduceResponse) => resp.responses.asScala.find(_._1 == tp).get._2.error),
-    ApiKeys.FETCH -> ((resp: requests.FetchResponse) => resp.responseData.asScala.find(_._1 == tp).get._2.error),
-    ApiKeys.LIST_OFFSETS -> ((resp: requests.ListOffsetResponse) => resp.responseData.asScala.find(_._1 == tp).get._2.error),
-    ApiKeys.OFFSET_COMMIT -> ((resp: requests.OffsetCommitResponse) => resp.responseData.asScala.find(_._1 == tp).get._2),
-    ApiKeys.OFFSET_FETCH -> ((resp: requests.OffsetFetchResponse) => resp.error),
-    ApiKeys.FIND_COORDINATOR -> ((resp: FindCoordinatorResponse) => resp.error),
-    ApiKeys.UPDATE_METADATA_KEY -> ((resp: requests.UpdateMetadataResponse) => resp.error),
-    ApiKeys.JOIN_GROUP -> ((resp: JoinGroupResponse) => resp.error),
-    ApiKeys.SYNC_GROUP -> ((resp: SyncGroupResponse) => resp.error),
-    ApiKeys.HEARTBEAT -> ((resp: HeartbeatResponse) => resp.error),
-    ApiKeys.LEAVE_GROUP -> ((resp: LeaveGroupResponse) => resp.error),
-    ApiKeys.LEADER_AND_ISR -> ((resp: requests.LeaderAndIsrResponse) => resp.responses.asScala.find(_._1 == tp).get._2),
-    ApiKeys.STOP_REPLICA -> ((resp: requests.StopReplicaResponse) => resp.responses.asScala.find(_._1 == tp).get._2),
-    ApiKeys.CONTROLLED_SHUTDOWN_KEY -> ((resp: requests.ControlledShutdownResponse) => resp.error),
-    ApiKeys.CREATE_TOPICS -> ((resp: CreateTopicsResponse) => resp.errors.asScala.find(_._1 == createTopic).get._2.error),
-    ApiKeys.DELETE_TOPICS -> ((resp: requests.DeleteTopicsResponse) => resp.errors.asScala.find(_._1 == deleteTopic).get._2),
-    ApiKeys.OFFSET_FOR_LEADER_EPOCH -> ((resp: OffsetsForLeaderEpochResponse) => resp.responses.get(tp).error),
-    ApiKeys.DESCRIBE_CONFIGS -> ((resp: DescribeConfigsResponse) =>
+  val requestKeyToError = Map[ApiKey, Nothing => Errors](
+    ApiKey.METADATA -> ((resp: requests.MetadataResponse) => resp.errors.asScala.find(_._1 == topic).getOrElse(("test", Errors.NONE))._2),
+    ApiKey.PRODUCE -> ((resp: requests.ProduceResponse) => resp.responses.asScala.find(_._1 == tp).get._2.error),
+    ApiKey.FETCH -> ((resp: requests.FetchResponse) => resp.responseData.asScala.find(_._1 == tp).get._2.error),
+    ApiKey.LIST_OFFSETS -> ((resp: requests.ListOffsetResponse) => resp.responseData.asScala.find(_._1 == tp).get._2.error),
+    ApiKey.OFFSET_COMMIT -> ((resp: requests.OffsetCommitResponse) => resp.responseData.asScala.find(_._1 == tp).get._2),
+    ApiKey.OFFSET_FETCH -> ((resp: requests.OffsetFetchResponse) => resp.error),
+    ApiKey.FIND_COORDINATOR -> ((resp: FindCoordinatorResponse) => resp.error),
+    ApiKey.UPDATE_METADATA_KEY -> ((resp: requests.UpdateMetadataResponse) => resp.error),
+    ApiKey.JOIN_GROUP -> ((resp: JoinGroupResponse) => resp.error),
+    ApiKey.SYNC_GROUP -> ((resp: SyncGroupResponse) => resp.error),
+    ApiKey.HEARTBEAT -> ((resp: HeartbeatResponse) => resp.error),
+    ApiKey.LEAVE_GROUP -> ((resp: LeaveGroupResponse) => resp.error),
+    ApiKey.LEADER_AND_ISR -> ((resp: requests.LeaderAndIsrResponse) => resp.responses.asScala.find(_._1 == tp).get._2),
+    ApiKey.STOP_REPLICA -> ((resp: requests.StopReplicaResponse) => resp.responses.asScala.find(_._1 == tp).get._2),
+    ApiKey.CONTROLLED_SHUTDOWN_KEY -> ((resp: requests.ControlledShutdownResponse) => resp.error),
+    ApiKey.CREATE_TOPICS -> ((resp: CreateTopicsResponse) => resp.errors.asScala.find(_._1 == createTopic).get._2.error),
+    ApiKey.DELETE_TOPICS -> ((resp: requests.DeleteTopicsResponse) => resp.errors.asScala.find(_._1 == deleteTopic).get._2),
+    ApiKey.OFFSET_FOR_LEADER_EPOCH -> ((resp: OffsetsForLeaderEpochResponse) => resp.responses.get(tp).error),
+    ApiKey.DESCRIBE_CONFIGS -> ((resp: DescribeConfigsResponse) =>
       resp.configs.get(new RResource(RResourceType.TOPIC, tp.topic)).error.error),
-    ApiKeys.ALTER_CONFIGS -> ((resp: AlterConfigsResponse) =>
+    ApiKey.ALTER_CONFIGS -> ((resp: AlterConfigsResponse) =>
       resp.errors.get(new RResource(RResourceType.TOPIC, tp.topic)).error),
-    ApiKeys.INIT_PRODUCER_ID -> ((resp: InitProducerIdResponse) => resp.error),
-    ApiKeys.WRITE_TXN_MARKERS -> ((resp: WriteTxnMarkersResponse) => resp.errors(producerId).get(tp)),
-    ApiKeys.ADD_PARTITIONS_TO_TXN -> ((resp: AddPartitionsToTxnResponse) => resp.errors.get(tp)),
-    ApiKeys.ADD_OFFSETS_TO_TXN -> ((resp: AddOffsetsToTxnResponse) => resp.error),
-    ApiKeys.END_TXN -> ((resp: EndTxnResponse) => resp.error),
-    ApiKeys.TXN_OFFSET_COMMIT -> ((resp: TxnOffsetCommitResponse) => resp.errors.get(tp)),
-    ApiKeys.CREATE_ACLS -> ((resp: CreateAclsResponse) => resp.aclCreationResponses.asScala.head.error.error),
-    ApiKeys.DESCRIBE_ACLS -> ((resp: DescribeAclsResponse) => resp.error.error),
-    ApiKeys.DELETE_ACLS -> ((resp: DeleteAclsResponse) => resp.responses.asScala.head.error.error)
+    ApiKey.INIT_PRODUCER_ID -> ((resp: InitProducerIdResponse) => resp.error),
+    ApiKey.WRITE_TXN_MARKERS -> ((resp: WriteTxnMarkersResponse) => resp.errors(producerId).get(tp)),
+    ApiKey.ADD_PARTITIONS_TO_TXN -> ((resp: AddPartitionsToTxnResponse) => resp.errors.get(tp)),
+    ApiKey.ADD_OFFSETS_TO_TXN -> ((resp: AddOffsetsToTxnResponse) => resp.error),
+    ApiKey.END_TXN -> ((resp: EndTxnResponse) => resp.error),
+    ApiKey.TXN_OFFSET_COMMIT -> ((resp: TxnOffsetCommitResponse) => resp.errors.get(tp)),
+    ApiKey.CREATE_ACLS -> ((resp: CreateAclsResponse) => resp.aclCreationResponses.asScala.head.error.error),
+    ApiKey.DESCRIBE_ACLS -> ((resp: DescribeAclsResponse) => resp.error.error),
+    ApiKey.DELETE_ACLS -> ((resp: DeleteAclsResponse) => resp.responses.asScala.head.error.error)
   )
 
-  val requestKeysToAcls = Map[ApiKeys, Map[Resource, Set[Acl]]](
-    ApiKeys.METADATA -> topicDescribeAcl,
-    ApiKeys.PRODUCE -> (topicWriteAcl ++ transactionIdWriteAcl ++ clusterIdempotentWriteAcl),
-    ApiKeys.FETCH -> topicReadAcl,
-    ApiKeys.LIST_OFFSETS -> topicDescribeAcl,
-    ApiKeys.OFFSET_COMMIT -> (topicReadAcl ++ groupReadAcl),
-    ApiKeys.OFFSET_FETCH -> (topicReadAcl ++ groupReadAcl),
-    ApiKeys.FIND_COORDINATOR -> (topicReadAcl ++ groupDescribeAcl ++ transactionalIdDescribeAcl),
-    ApiKeys.UPDATE_METADATA_KEY -> clusterAcl,
-    ApiKeys.JOIN_GROUP -> groupReadAcl,
-    ApiKeys.SYNC_GROUP -> groupReadAcl,
-    ApiKeys.HEARTBEAT -> groupReadAcl,
-    ApiKeys.LEAVE_GROUP -> groupReadAcl,
-    ApiKeys.LEADER_AND_ISR -> clusterAcl,
-    ApiKeys.STOP_REPLICA -> clusterAcl,
-    ApiKeys.CONTROLLED_SHUTDOWN_KEY -> clusterAcl,
-    ApiKeys.CREATE_TOPICS -> clusterCreateAcl,
-    ApiKeys.DELETE_TOPICS -> topicDeleteAcl,
-    ApiKeys.OFFSET_FOR_LEADER_EPOCH -> clusterAcl,
-    ApiKeys.DESCRIBE_CONFIGS -> topicDescribeConfigsAcl,
-    ApiKeys.ALTER_CONFIGS -> topicAlterConfigsAcl,
-    ApiKeys.INIT_PRODUCER_ID -> (transactionIdWriteAcl ++ clusterIdempotentWriteAcl),
-    ApiKeys.WRITE_TXN_MARKERS -> clusterAcl,
-    ApiKeys.ADD_PARTITIONS_TO_TXN -> (topicWriteAcl ++ transactionIdWriteAcl),
-    ApiKeys.ADD_OFFSETS_TO_TXN -> (groupReadAcl ++ transactionIdWriteAcl),
-    ApiKeys.END_TXN -> transactionIdWriteAcl,
-    ApiKeys.TXN_OFFSET_COMMIT -> (groupReadAcl ++ transactionIdWriteAcl),
-    ApiKeys.CREATE_ACLS -> clusterAlterAcl,
-    ApiKeys.DESCRIBE_ACLS -> clusterDescribeAcl,
-    ApiKeys.DELETE_ACLS -> clusterAlterAcl
+  val requestKeysToAcls = Map[ApiKey, Map[Resource, Set[Acl]]](
+    ApiKey.METADATA -> topicDescribeAcl,
+    ApiKey.PRODUCE -> (topicWriteAcl ++ transactionIdWriteAcl ++ clusterIdempotentWriteAcl),
+    ApiKey.FETCH -> topicReadAcl,
+    ApiKey.LIST_OFFSETS -> topicDescribeAcl,
+    ApiKey.OFFSET_COMMIT -> (topicReadAcl ++ groupReadAcl),
+    ApiKey.OFFSET_FETCH -> (topicReadAcl ++ groupReadAcl),
+    ApiKey.FIND_COORDINATOR -> (topicReadAcl ++ groupDescribeAcl ++ transactionalIdDescribeAcl),
+    ApiKey.UPDATE_METADATA_KEY -> clusterAcl,
+    ApiKey.JOIN_GROUP -> groupReadAcl,
+    ApiKey.SYNC_GROUP -> groupReadAcl,
+    ApiKey.HEARTBEAT -> groupReadAcl,
+    ApiKey.LEAVE_GROUP -> groupReadAcl,
+    ApiKey.LEADER_AND_ISR -> clusterAcl,
+    ApiKey.STOP_REPLICA -> clusterAcl,
+    ApiKey.CONTROLLED_SHUTDOWN_KEY -> clusterAcl,
+    ApiKey.CREATE_TOPICS -> clusterCreateAcl,
+    ApiKey.DELETE_TOPICS -> topicDeleteAcl,
+    ApiKey.OFFSET_FOR_LEADER_EPOCH -> clusterAcl,
+    ApiKey.DESCRIBE_CONFIGS -> topicDescribeConfigsAcl,
+    ApiKey.ALTER_CONFIGS -> topicAlterConfigsAcl,
+    ApiKey.INIT_PRODUCER_ID -> (transactionIdWriteAcl ++ clusterIdempotentWriteAcl),
+    ApiKey.WRITE_TXN_MARKERS -> clusterAcl,
+    ApiKey.ADD_PARTITIONS_TO_TXN -> (topicWriteAcl ++ transactionIdWriteAcl),
+    ApiKey.ADD_OFFSETS_TO_TXN -> (groupReadAcl ++ transactionIdWriteAcl),
+    ApiKey.END_TXN -> transactionIdWriteAcl,
+    ApiKey.TXN_OFFSET_COMMIT -> (groupReadAcl ++ transactionIdWriteAcl),
+    ApiKey.CREATE_ACLS -> clusterAlterAcl,
+    ApiKey.DESCRIBE_ACLS -> clusterDescribeAcl,
+    ApiKey.DELETE_ACLS -> clusterAlterAcl
   )
 
   @Before
@@ -249,7 +248,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   private def createFetchRequest = {
     val partitionMap = new util.LinkedHashMap[TopicPartition, requests.FetchRequest.PartitionData]
     partitionMap.put(tp, new requests.FetchRequest.PartitionData(0, 0, 100))
-    val version = ApiKeys.FETCH.latestVersion
+    val version = ApiKey.FETCH.supportedRange().highest()
     requests.FetchRequest.Builder.forReplica(version, 5000, 100, Int.MaxValue, partitionMap).build()
   }
 
@@ -277,7 +276,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     val brokers = Set(new requests.UpdateMetadataRequest.Broker(brokerId,
       Seq(new requests.UpdateMetadataRequest.EndPoint("localhost", 0, securityProtocol,
         ListenerName.forSecurityProtocol(securityProtocol))).asJava, null)).asJava
-    val version = ApiKeys.UPDATE_METADATA_KEY.latestVersion
+    val version = ApiKey.UPDATE_METADATA_KEY.supportedRange().highest()
     new requests.UpdateMetadataRequest.Builder(version, brokerId, Int.MaxValue, partitionState, brokers).build()
   }
 
@@ -342,30 +341,30 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
 
   @Test
   def testAuthorizationWithTopicExisting() {
-    val requestKeyToRequest = mutable.LinkedHashMap[ApiKeys, AbstractRequest](
-      ApiKeys.METADATA -> createMetadataRequest(allowAutoTopicCreation = true),
-      ApiKeys.PRODUCE -> createProduceRequest,
-      ApiKeys.FETCH -> createFetchRequest,
-      ApiKeys.LIST_OFFSETS -> createListOffsetsRequest,
-      ApiKeys.OFFSET_FETCH -> createOffsetFetchRequest,
-      ApiKeys.FIND_COORDINATOR -> createFindCoordinatorRequest,
-      ApiKeys.UPDATE_METADATA_KEY -> createUpdateMetadataRequest,
-      ApiKeys.JOIN_GROUP -> createJoinGroupRequest,
-      ApiKeys.SYNC_GROUP -> createSyncGroupRequest,
-      ApiKeys.OFFSET_COMMIT -> createOffsetCommitRequest,
-      ApiKeys.HEARTBEAT -> heartbeatRequest,
-      ApiKeys.LEAVE_GROUP -> leaveGroupRequest,
-      ApiKeys.LEADER_AND_ISR -> leaderAndIsrRequest,
-      ApiKeys.STOP_REPLICA -> stopReplicaRequest,
-      ApiKeys.CONTROLLED_SHUTDOWN_KEY -> controlledShutdownRequest,
-      ApiKeys.CREATE_TOPICS -> createTopicsRequest,
-      ApiKeys.DELETE_TOPICS -> deleteTopicsRequest,
-      ApiKeys.OFFSET_FOR_LEADER_EPOCH -> offsetsForLeaderEpochRequest,
-      ApiKeys.DESCRIBE_CONFIGS -> describeConfigsRequest,
-      ApiKeys.ALTER_CONFIGS -> alterConfigsRequest,
-      ApiKeys.CREATE_ACLS -> createAclsRequest,
-      ApiKeys.DELETE_ACLS -> deleteAclsRequest,
-      ApiKeys.DESCRIBE_ACLS -> describeAclsRequest
+    val requestKeyToRequest = mutable.LinkedHashMap[ApiKey, AbstractRequest](
+      ApiKey.METADATA -> createMetadataRequest(allowAutoTopicCreation = true),
+      ApiKey.PRODUCE -> createProduceRequest,
+      ApiKey.FETCH -> createFetchRequest,
+      ApiKey.LIST_OFFSETS -> createListOffsetsRequest,
+      ApiKey.OFFSET_FETCH -> createOffsetFetchRequest,
+      ApiKey.FIND_COORDINATOR -> createFindCoordinatorRequest,
+      ApiKey.UPDATE_METADATA_KEY -> createUpdateMetadataRequest,
+      ApiKey.JOIN_GROUP -> createJoinGroupRequest,
+      ApiKey.SYNC_GROUP -> createSyncGroupRequest,
+      ApiKey.OFFSET_COMMIT -> createOffsetCommitRequest,
+      ApiKey.HEARTBEAT -> heartbeatRequest,
+      ApiKey.LEAVE_GROUP -> leaveGroupRequest,
+      ApiKey.LEADER_AND_ISR -> leaderAndIsrRequest,
+      ApiKey.STOP_REPLICA -> stopReplicaRequest,
+      ApiKey.CONTROLLED_SHUTDOWN_KEY -> controlledShutdownRequest,
+      ApiKey.CREATE_TOPICS -> createTopicsRequest,
+      ApiKey.DELETE_TOPICS -> deleteTopicsRequest,
+      ApiKey.OFFSET_FOR_LEADER_EPOCH -> offsetsForLeaderEpochRequest,
+      ApiKey.DESCRIBE_CONFIGS -> describeConfigsRequest,
+      ApiKey.ALTER_CONFIGS -> alterConfigsRequest,
+      ApiKey.CREATE_ACLS -> createAclsRequest,
+      ApiKey.DELETE_ACLS -> deleteAclsRequest,
+      ApiKey.DESCRIBE_ACLS -> describeAclsRequest
     )
 
     for ((key, request) <- requestKeyToRequest) {
@@ -398,15 +397,15 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     AdminUtils.deleteTopic(zkUtils, deleteTopic)
     TestUtils.verifyTopicDeletion(zkUtils, deleteTopic, 1, servers)
 
-    val requestKeyToRequest = mutable.LinkedHashMap[ApiKeys, AbstractRequest](
-      ApiKeys.METADATA -> createMetadataRequest(allowAutoTopicCreation = true),
-      ApiKeys.METADATA -> createMetadataRequest(allowAutoTopicCreation = false),
-      ApiKeys.PRODUCE -> createProduceRequest,
-      ApiKeys.FETCH -> createFetchRequest,
-      ApiKeys.LIST_OFFSETS -> createListOffsetsRequest,
-      ApiKeys.OFFSET_COMMIT -> createOffsetCommitRequest,
-      ApiKeys.OFFSET_FETCH -> createOffsetFetchRequest,
-      ApiKeys.DELETE_TOPICS -> deleteTopicsRequest
+    val requestKeyToRequest = mutable.LinkedHashMap[ApiKey, AbstractRequest](
+      ApiKey.METADATA -> createMetadataRequest(allowAutoTopicCreation = true),
+      ApiKey.METADATA -> createMetadataRequest(allowAutoTopicCreation = false),
+      ApiKey.PRODUCE -> createProduceRequest,
+      ApiKey.FETCH -> createFetchRequest,
+      ApiKey.LIST_OFFSETS -> createListOffsetsRequest,
+      ApiKey.OFFSET_COMMIT -> createOffsetCommitRequest,
+      ApiKey.OFFSET_FETCH -> createOffsetFetchRequest,
+      ApiKey.DELETE_TOPICS -> deleteTopicsRequest
     )
 
     for ((key, request) <- requestKeyToRequest) {
@@ -858,8 +857,8 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
 
   @Test
   def testUnauthorizedDeleteWithoutDescribe() {
-    val response = connectAndSend(deleteTopicsRequest, ApiKeys.DELETE_TOPICS)
-    val version = ApiKeys.DELETE_TOPICS.latestVersion
+    val response = connectAndSend(deleteTopicsRequest, ApiKey.DELETE_TOPICS)
+    val version = ApiKey.DELETE_TOPICS.supportedRange().highest()
     val deleteResponse = DeleteTopicsResponse.parse(response, version)
     assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, deleteResponse.errors.asScala.head._2)
   }
@@ -867,8 +866,8 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   @Test
   def testUnauthorizedDeleteWithDescribe() {
     addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Describe)), deleteTopicResource)
-    val response = connectAndSend(deleteTopicsRequest, ApiKeys.DELETE_TOPICS)
-    val version = ApiKeys.DELETE_TOPICS.latestVersion
+    val response = connectAndSend(deleteTopicsRequest, ApiKey.DELETE_TOPICS)
+    val version = ApiKey.DELETE_TOPICS.supportedRange().highest()
     val deleteResponse = DeleteTopicsResponse.parse(response, version)
 
     assertEquals(Errors.TOPIC_AUTHORIZATION_FAILED, deleteResponse.errors.asScala.head._2)
@@ -877,8 +876,8 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   @Test
   def testDeleteWithWildCardAuth() {
     addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Delete)), new Resource(Topic, "*"))
-    val response = connectAndSend(deleteTopicsRequest, ApiKeys.DELETE_TOPICS)
-    val version = ApiKeys.DELETE_TOPICS.latestVersion
+    val response = connectAndSend(deleteTopicsRequest, ApiKey.DELETE_TOPICS)
+    val version = ApiKey.DELETE_TOPICS.supportedRange().highest()
     val deleteResponse = DeleteTopicsResponse.parse(response, version)
 
     assertEquals(Errors.NONE, deleteResponse.errors.asScala.head._2)
@@ -1118,7 +1117,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     }
   }
 
-  def sendRequestAndVerifyResponseError(apiKey: ApiKeys,
+  def sendRequestAndVerifyResponseError(apiKey: ApiKey,
                                         request: AbstractRequest,
                                         resources: Set[ResourceType],
                                         isAuthorized: Boolean,
@@ -1195,7 +1194,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
 
   private def sendOffsetFetchRequest(request: requests.OffsetFetchRequest,
                                      socketServer: SocketServer): requests.OffsetFetchResponse = {
-    val response = connectAndSend(request, ApiKeys.OFFSET_FETCH, socketServer)
+    val response = connectAndSend(request, ApiKey.OFFSET_FETCH, socketServer)
     requests.OffsetFetchResponse.parse(response, request.version)
   }
 

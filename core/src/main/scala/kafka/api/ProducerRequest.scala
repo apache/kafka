@@ -22,9 +22,10 @@ import java.nio._
 import kafka.api.ApiUtils._
 import kafka.common._
 import kafka.message._
-import kafka.network.{RequestOrResponseSend, RequestChannel}
+import kafka.network.{RequestChannel, RequestOrResponseSend}
 import kafka.network.RequestChannel.Response
-import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.ApiKey
+import org.apache.kafka.common.protocol.Errors
 
 object ProducerRequest {
   val CurrentVersion = 2.shortValue
@@ -60,7 +61,7 @@ case class ProducerRequest(versionId: Short = ProducerRequest.CurrentVersion,
                            requiredAcks: Short,
                            ackTimeoutMs: Int,
                            data: collection.mutable.Map[TopicAndPartition, ByteBufferMessageSet])
-    extends RequestOrResponse(Some(ApiKeys.PRODUCE.id)) {
+    extends RequestOrResponse(Some(ApiKey.PRODUCE.id)) {
 
   /**
    * Partitions the data into a map of maps (one for each topic).

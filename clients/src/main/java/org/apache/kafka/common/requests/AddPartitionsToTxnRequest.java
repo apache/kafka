@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.ApiKey;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -43,7 +44,7 @@ public class AddPartitionsToTxnRequest extends AbstractRequest {
         private final List<TopicPartition> partitions;
 
         public Builder(String transactionalId, long producerId, short producerEpoch, List<TopicPartition> partitions) {
-            super(ApiKeys.ADD_PARTITIONS_TO_TXN);
+            super(ApiKey.ADD_PARTITIONS_TO_TXN);
             this.transactionalId = transactionalId;
             this.producerId = producerId;
             this.producerEpoch = producerEpoch;
@@ -122,7 +123,7 @@ public class AddPartitionsToTxnRequest extends AbstractRequest {
 
     @Override
     protected Struct toStruct() {
-        Struct struct = new Struct(ApiKeys.ADD_PARTITIONS_TO_TXN.requestSchema(version()));
+        Struct struct = new Struct(ApiKeys.requestSchema(ApiKey.ADD_PARTITIONS_TO_TXN, version()));
         struct.set(TRANSACTIONAL_ID_KEY_NAME, transactionalId);
         struct.set(PRODUCER_ID_KEY_NAME, producerId);
         struct.set(PRODUCER_EPOCH_KEY_NAME, producerEpoch);
@@ -151,7 +152,7 @@ public class AddPartitionsToTxnRequest extends AbstractRequest {
     }
 
     public static AddPartitionsToTxnRequest parse(ByteBuffer buffer, short version) {
-        return new AddPartitionsToTxnRequest(ApiKeys.ADD_PARTITIONS_TO_TXN.parseRequest(version, buffer), version);
+        return new AddPartitionsToTxnRequest(ApiKeys.parseRequest(ApiKey.ADD_PARTITIONS_TO_TXN, version, buffer), version);
     }
 
 }

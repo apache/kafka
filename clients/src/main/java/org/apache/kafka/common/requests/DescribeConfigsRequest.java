@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.ApiKey;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.types.Struct;
 
@@ -38,7 +39,7 @@ public class DescribeConfigsRequest extends AbstractRequest {
         private final Map<Resource, Collection<String>> resourceToConfigNames;
 
         public Builder(Map<Resource, Collection<String>> resourceToConfigNames) {
-            super(ApiKeys.DESCRIBE_CONFIGS);
+            super(ApiKey.DESCRIBE_CONFIGS);
             this.resourceToConfigNames = resourceToConfigNames;
         }
 
@@ -101,7 +102,7 @@ public class DescribeConfigsRequest extends AbstractRequest {
 
     @Override
     protected Struct toStruct() {
-        Struct struct = new Struct(ApiKeys.DESCRIBE_CONFIGS.requestSchema(version()));
+        Struct struct = new Struct(ApiKeys.requestSchema(ApiKey.DESCRIBE_CONFIGS, version()));
         List<Struct> resourceStructs = new ArrayList<>(resources().size());
         for (Map.Entry<Resource, Collection<String>> entry : resourceToConfigNames.entrySet()) {
             Resource resource = entry.getKey();
@@ -132,11 +133,11 @@ public class DescribeConfigsRequest extends AbstractRequest {
                 return new DescribeConfigsResponse(throttleTimeMs, errors);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                        version, this.getClass().getSimpleName(), ApiKeys.DESCRIBE_CONFIGS.latestVersion()));
+                        version, this.getClass().getSimpleName(), ApiKey.DESCRIBE_CONFIGS.supportedRange().highest()));
         }
     }
 
     public static DescribeConfigsRequest parse(ByteBuffer buffer, short version) {
-        return new DescribeConfigsRequest(ApiKeys.DESCRIBE_CONFIGS.parseRequest(version, buffer), version);
+        return new DescribeConfigsRequest(ApiKeys.parseRequest(ApiKey.DESCRIBE_CONFIGS, version, buffer), version);
     }
 }

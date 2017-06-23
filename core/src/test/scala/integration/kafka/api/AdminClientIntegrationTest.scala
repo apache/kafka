@@ -21,6 +21,7 @@ import java.util.{Collections, Properties}
 import java.util.concurrent.{ExecutionException, TimeUnit}
 
 import org.apache.kafka.clients.admin.KafkaAdminClientTest
+import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.utils.{Time, Utils}
 import kafka.integration.KafkaServerTestHarness
 import kafka.log.LogConfig
@@ -28,11 +29,10 @@ import kafka.server.{Defaults, KafkaConfig, KafkaServer}
 import org.apache.kafka.clients.admin._
 import kafka.utils.{Logging, TestUtils, ZkUtils}
 import org.apache.kafka.clients.admin.NewTopic
-import org.apache.kafka.common.KafkaFuture
 import org.apache.kafka.common.acl.{AccessControlEntry, AclBinding, AclBindingFilter, AclOperation, AclPermissionType}
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors.{InvalidRequestException, SecurityDisabledException, TimeoutException, TopicExistsException, UnknownTopicOrPartitionException}
-import org.apache.kafka.common.protocol.ApiKeys
+import org.apache.kafka.common.{ApiKey, KafkaFuture}
 import org.junit.{After, Before, Rule, Test}
 import org.apache.kafka.common.requests.MetadataResponse
 import org.apache.kafka.common.resource.{Resource, ResourceType}
@@ -212,6 +212,25 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
     for (node <- nodes.asScala) {
       val hostStr = s"${node.host}:${node.port}"
       assertTrue(s"Unknown host:port pair $hostStr in brokerVersionInfos", brokers.contains(hostStr))
+    }
+  }
+
+  @Test
+  def testGetBrokerVersions(): Unit = {
+    client = AdminClient.create(createConfig())
+    val nodes = client.describeCluster.nodes.get()
+    val clusterId = client.describeCluster().clusterId().get()
+    assertEquals(servers.head.apis.clusterId, clusterId)
+    val controller = client.describeCluster().controller().get()
+    assertEquals(servers.head.apis.metadataCache.getControllerId.
+      getOrElse(MetadataResponse.NO_CONTROLLER_ID), controller.id())
+    val nodesToVersions = client.apiVersions(nodes).all().get()
+    val brokers = brokerList.split(",")
+    assertEquals(brokers.size, nodes.size)
+    assert(brokers.size == nodesToVersions.size())
+    for ((node, brokerVersionInfo) <- nodesToVersions.asScala) {
+      val hostStr = s"${node.host}:${node.port}"
+      assertEquals(1, brokerVersionInfo.usableVersion(ApiKey.API_VERSIONS))
     }
   }
 

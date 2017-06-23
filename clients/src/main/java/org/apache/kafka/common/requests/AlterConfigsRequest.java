@@ -17,6 +17,7 @@
 
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.ApiKey;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.types.Struct;
 
@@ -75,7 +76,7 @@ public class AlterConfigsRequest extends AbstractRequest {
         private final boolean validateOnly;
 
         public Builder(Map<Resource, Config> configs, boolean validateOnly) {
-            super(ApiKeys.ALTER_CONFIGS);
+            super(ApiKey.ALTER_CONFIGS);
             this.configs = configs;
             this.validateOnly = validateOnly;
         }
@@ -130,7 +131,7 @@ public class AlterConfigsRequest extends AbstractRequest {
 
     @Override
     protected Struct toStruct() {
-        Struct struct = new Struct(ApiKeys.ALTER_CONFIGS.requestSchema(version()));
+        Struct struct = new Struct(ApiKeys.requestSchema(ApiKey.ALTER_CONFIGS, version()));
         struct.set(VALIDATE_ONLY_KEY_NAME, validateOnly);
         List<Struct> resourceStructs = new ArrayList<>(configs.size());
         for (Map.Entry<Resource, Config> entry : configs.entrySet()) {
@@ -168,12 +169,12 @@ public class AlterConfigsRequest extends AbstractRequest {
                 return new AlterConfigsResponse(throttleTimeMs, errors);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                        version, this.getClass().getSimpleName(), ApiKeys.ALTER_CONFIGS.latestVersion()));
+                        version, this.getClass().getSimpleName(), ApiKey.ALTER_CONFIGS.supportedRange().highest()));
         }
     }
 
     public static AlterConfigsRequest parse(ByteBuffer buffer, short version) {
-        return new AlterConfigsRequest(ApiKeys.ALTER_CONFIGS.parseRequest(version, buffer), version);
+        return new AlterConfigsRequest(ApiKeys.parseRequest(ApiKey.ALTER_CONFIGS, version, buffer), version);
     }
 
 }

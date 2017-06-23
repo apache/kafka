@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.ApiKey;
 import org.apache.kafka.common.acl.AccessControlEntryFilter;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
@@ -31,7 +32,7 @@ public class DescribeAclsRequest extends AbstractRequest {
         private final AclBindingFilter filter;
 
         public Builder(AclBindingFilter filter) {
-            super(ApiKeys.DESCRIBE_ACLS);
+            super(ApiKey.DESCRIBE_ACLS);
             this.filter = filter;
         }
 
@@ -62,7 +63,7 @@ public class DescribeAclsRequest extends AbstractRequest {
 
     @Override
     protected Struct toStruct() {
-        Struct struct = new Struct(ApiKeys.DESCRIBE_ACLS.requestSchema(version()));
+        Struct struct = new Struct(ApiKeys.requestSchema(ApiKey.DESCRIBE_ACLS, version()));
         RequestUtils.resourceFilterSetStructFields(filter.resourceFilter(), struct);
         RequestUtils.aceFilterSetStructFields(filter.entryFilter(), struct);
         return struct;
@@ -77,12 +78,12 @@ public class DescribeAclsRequest extends AbstractRequest {
                         Collections.<AclBinding>emptySet());
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                        versionId, this.getClass().getSimpleName(), ApiKeys.DESCRIBE_ACLS.latestVersion()));
+                        versionId, this.getClass().getSimpleName(), ApiKey.DESCRIBE_ACLS.supportedRange().highest()));
         }
     }
 
     public static DescribeAclsRequest parse(ByteBuffer buffer, short version) {
-        return new DescribeAclsRequest(ApiKeys.DESCRIBE_ACLS.parseRequest(version, buffer), version);
+        return new DescribeAclsRequest(ApiKeys.parseRequest(ApiKey.DESCRIBE_ACLS, version, buffer), version);
     }
 
     public AclBindingFilter filter() {

@@ -22,13 +22,12 @@ import kafka.api.ApiUtils._
 import kafka.common.TopicAndPartition
 import kafka.consumer.ConsumerConfig
 import kafka.network.RequestChannel
-import kafka.message.MessageSet
 import java.util.concurrent.atomic.AtomicInteger
 import java.nio.ByteBuffer
 import java.util
 
-import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.{ApiKey, TopicPartition}
+import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.requests.{FetchResponse => JFetchResponse}
 
@@ -100,7 +99,7 @@ case class FetchRequest(versionId: Short = FetchRequest.CurrentVersion,
                         minBytes: Int = FetchRequest.DefaultMinBytes,
                         maxBytes: Int = FetchRequest.DefaultMaxBytes,
                         requestInfo: Seq[(TopicAndPartition, PartitionFetchInfo)])
-        extends RequestOrResponse(Some(ApiKeys.FETCH.id)) {
+        extends RequestOrResponse(Some(ApiKey.FETCH.id)) {
 
   /**
     * Partitions the request info into a list of lists (one for each topic) while preserving request info ordering

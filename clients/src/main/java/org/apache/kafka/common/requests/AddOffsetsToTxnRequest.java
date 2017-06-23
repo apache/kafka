@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.ApiKey;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -35,7 +36,7 @@ public class AddOffsetsToTxnRequest extends AbstractRequest {
         private final String consumerGroupId;
 
         public Builder(String transactionalId, long producerId, short producerEpoch, String consumerGroupId) {
-            super(ApiKeys.ADD_OFFSETS_TO_TXN);
+            super(ApiKey.ADD_OFFSETS_TO_TXN);
             this.transactionalId = transactionalId;
             this.producerId = producerId;
             this.producerEpoch = producerEpoch;
@@ -103,7 +104,7 @@ public class AddOffsetsToTxnRequest extends AbstractRequest {
 
     @Override
     protected Struct toStruct() {
-        Struct struct = new Struct(ApiKeys.ADD_OFFSETS_TO_TXN.requestSchema(version()));
+        Struct struct = new Struct(ApiKeys.requestSchema(ApiKey.ADD_OFFSETS_TO_TXN, version()));
         struct.set(TRANSACTIONAL_ID_KEY_NAME, transactionalId);
         struct.set(PRODUCER_ID_KEY_NAME, producerId);
         struct.set(EPOCH_KEY_NAME, producerEpoch);
@@ -117,7 +118,7 @@ public class AddOffsetsToTxnRequest extends AbstractRequest {
     }
 
     public static AddOffsetsToTxnRequest parse(ByteBuffer buffer, short version) {
-        return new AddOffsetsToTxnRequest(ApiKeys.ADD_OFFSETS_TO_TXN.parseRequest(version, buffer), version);
+        return new AddOffsetsToTxnRequest(ApiKeys.parseRequest(ApiKey.ADD_OFFSETS_TO_TXN, version, buffer), version);
     }
 
 }

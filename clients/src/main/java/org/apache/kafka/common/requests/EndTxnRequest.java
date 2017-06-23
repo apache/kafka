@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.ApiKey;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -35,7 +36,7 @@ public class EndTxnRequest extends AbstractRequest {
         private final TransactionResult result;
 
         public Builder(String transactionalId, long producerId, short producerEpoch, TransactionResult result) {
-            super(ApiKeys.END_TXN);
+            super(ApiKey.END_TXN);
             this.transactionalId = transactionalId;
             this.producerId = producerId;
             this.producerEpoch = producerEpoch;
@@ -103,7 +104,7 @@ public class EndTxnRequest extends AbstractRequest {
 
     @Override
     protected Struct toStruct() {
-        Struct struct = new Struct(ApiKeys.END_TXN.requestSchema(version()));
+        Struct struct = new Struct(ApiKeys.requestSchema(ApiKey.END_TXN, version()));
         struct.set(TRANSACTIONAL_ID_KEY_NAME, transactionalId);
         struct.set(PRODUCER_ID_KEY_NAME, producerId);
         struct.set(PRODUCER_EPOCH_KEY_NAME, producerEpoch);
@@ -117,7 +118,7 @@ public class EndTxnRequest extends AbstractRequest {
     }
 
     public static EndTxnRequest parse(ByteBuffer buffer, short version) {
-        return new EndTxnRequest(ApiKeys.END_TXN.parseRequest(version, buffer), version);
+        return new EndTxnRequest(ApiKeys.parseRequest(ApiKey.END_TXN, version, buffer), version);
     }
 
 }

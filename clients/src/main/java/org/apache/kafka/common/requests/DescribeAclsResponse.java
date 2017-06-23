@@ -17,6 +17,7 @@
 
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.ApiKey;
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -61,7 +62,7 @@ public class DescribeAclsResponse extends AbstractResponse {
 
     @Override
     protected Struct toStruct(short version) {
-        Struct struct = new Struct(ApiKeys.DESCRIBE_ACLS.responseSchema(version));
+        Struct struct = new Struct(ApiKeys.responseSchema(ApiKey.DESCRIBE_ACLS, version));
         struct.set(THROTTLE_TIME_KEY_NAME, throttleTimeMs);
         error.write(struct);
 
@@ -106,6 +107,6 @@ public class DescribeAclsResponse extends AbstractResponse {
     }
 
     public static DescribeAclsResponse parse(ByteBuffer buffer, short version) {
-        return new DescribeAclsResponse(ApiKeys.DESCRIBE_ACLS.responseSchema(version).read(buffer));
+        return new DescribeAclsResponse(ApiKeys.responseSchema(ApiKey.DESCRIBE_ACLS, version).read(buffer));
     }
 }

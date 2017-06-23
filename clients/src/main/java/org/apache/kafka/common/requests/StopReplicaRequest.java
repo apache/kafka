@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.ApiKey;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -46,7 +47,7 @@ public class StopReplicaRequest extends AbstractRequest {
 
         public Builder(int controllerId, int controllerEpoch, boolean deletePartitions,
                        Set<TopicPartition> partitions) {
-            super(ApiKeys.STOP_REPLICA);
+            super(ApiKey.STOP_REPLICA);
             this.controllerId = controllerId;
             this.controllerEpoch = controllerEpoch;
             this.deletePartitions = deletePartitions;
@@ -115,7 +116,7 @@ public class StopReplicaRequest extends AbstractRequest {
                 return new StopReplicaResponse(Errors.NONE, responses);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                        versionId, this.getClass().getSimpleName(), ApiKeys.STOP_REPLICA.latestVersion()));
+                        versionId, this.getClass().getSimpleName(), ApiKey.STOP_REPLICA.supportedRange().highest()));
         }
     }
 
@@ -136,12 +137,12 @@ public class StopReplicaRequest extends AbstractRequest {
     }
 
     public static StopReplicaRequest parse(ByteBuffer buffer, short version) {
-        return new StopReplicaRequest(ApiKeys.STOP_REPLICA.parseRequest(version, buffer), version);
+        return new StopReplicaRequest(ApiKeys.parseRequest(ApiKey.STOP_REPLICA, version, buffer), version);
     }
 
     @Override
     protected Struct toStruct() {
-        Struct struct = new Struct(ApiKeys.STOP_REPLICA.requestSchema(version()));
+        Struct struct = new Struct(ApiKeys.requestSchema(ApiKey.STOP_REPLICA, version()));
 
         struct.set(CONTROLLER_ID_KEY_NAME, controllerId);
         struct.set(CONTROLLER_EPOCH_KEY_NAME, controllerEpoch);

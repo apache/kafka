@@ -23,14 +23,16 @@ import kafka.admin.AdminClient
 import kafka.admin.AdminClient.DeleteRecordsResult
 import kafka.server.KafkaConfig
 import java.lang.{Long => JLong}
+
 import kafka.utils.{Logging, TestUtils}
-import org.apache.kafka.clients.consumer.{KafkaConsumer, ConsumerConfig}
-import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord, ProducerConfig}
-import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.protocol.{Errors, ApiKeys}
+import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
+import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
+import org.apache.kafka.common.{ApiKey, TopicPartition}
+import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.DeleteRecordsRequest
 import org.junit.{After, Before, Test}
 import org.junit.Assert._
+
 import scala.collection.JavaConverters._
 
 /**
@@ -210,7 +212,7 @@ class LegacyAdminClientTest extends IntegrationTestHarness with Logging {
       val hostStr = s"${node.host}:${node.port}"
       assertTrue(s"Unknown host:port pair $hostStr in brokerVersionInfos", brokers.contains(hostStr))
       val brokerVersionInfo = tryBrokerVersionInfo.get
-      assertEquals(1, brokerVersionInfo.usableVersion(ApiKeys.API_VERSIONS))
+      assertEquals(1, brokerVersionInfo.usableVersion(ApiKey.API_VERSIONS))
     }
   }
 

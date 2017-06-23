@@ -17,6 +17,7 @@
 package org.apache.kafka.common.security.authenticator;
 
 import org.apache.kafka.clients.NetworkClient;
+import org.apache.kafka.common.ApiKey;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.types.Password;
@@ -30,7 +31,6 @@ import org.apache.kafka.common.network.NetworkTestUtils;
 import org.apache.kafka.common.network.NioEchoServer;
 import org.apache.kafka.common.network.Selector;
 import org.apache.kafka.common.network.Send;
-import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.SecurityProtocol;
 import org.apache.kafka.common.requests.AbstractRequest;
@@ -392,7 +392,7 @@ public class SaslAuthenticatorTest {
         // Send ApiVersionsRequest with unsupported version and validate error response.
         String node = "1";
         createClientConnection(SecurityProtocol.PLAINTEXT, node);
-        RequestHeader header = new RequestHeader(ApiKeys.API_VERSIONS.id, Short.MAX_VALUE, "someclient", 1);
+        RequestHeader header = new RequestHeader(ApiKey.API_VERSIONS.id(), Short.MAX_VALUE, "someclient", 1);
         ApiVersionsRequest request = new ApiVersionsRequest.Builder().build();
         selector.send(request.toSend(node, header));
         ByteBuffer responseBuffer = waitForResponse();
@@ -425,7 +425,7 @@ public class SaslAuthenticatorTest {
         String node1 = "invalid1";
         createClientConnection(SecurityProtocol.PLAINTEXT, node1);
         SaslHandshakeRequest request = new SaslHandshakeRequest("PLAIN");
-        RequestHeader header = new RequestHeader(ApiKeys.SASL_HANDSHAKE.id, Short.MAX_VALUE, "someclient", 2);
+        RequestHeader header = new RequestHeader(ApiKey.SASL_HANDSHAKE.id(), Short.MAX_VALUE, "someclient", 2);
         selector.send(request.toSend(node1, header));
         NetworkTestUtils.waitForChannelClose(selector, node1, ChannelState.READY);
         selector.close();
@@ -490,7 +490,7 @@ public class SaslAuthenticatorTest {
         sendHandshakeRequestReceiveResponse(node1);
 
         ApiVersionsRequest request = new ApiVersionsRequest.Builder().build();
-        RequestHeader versionsHeader = new RequestHeader(ApiKeys.API_VERSIONS.id,
+        RequestHeader versionsHeader = new RequestHeader(ApiKey.API_VERSIONS.id(),
                 request.version(), "someclient", 2);
         selector.send(request.toSend(node1, versionsHeader));
         NetworkTestUtils.waitForChannelClose(selector, node1, ChannelState.READY);
@@ -556,7 +556,7 @@ public class SaslAuthenticatorTest {
         createClientConnection(SecurityProtocol.PLAINTEXT, node1);
         MetadataRequest metadataRequest1 = new MetadataRequest.Builder(Collections.singletonList("sometopic"),
                 true).build();
-        RequestHeader metadataRequestHeader1 = new RequestHeader(ApiKeys.METADATA.id, metadataRequest1.version(),
+        RequestHeader metadataRequestHeader1 = new RequestHeader(ApiKey.METADATA.id(), metadataRequest1.version(),
                 "someclient", 1);
         selector.send(metadataRequest1.toSend(node1, metadataRequestHeader1));
         NetworkTestUtils.waitForChannelClose(selector, node1, ChannelState.READY);
@@ -570,7 +570,7 @@ public class SaslAuthenticatorTest {
         createClientConnection(SecurityProtocol.PLAINTEXT, node2);
         sendHandshakeRequestReceiveResponse(node2);
         MetadataRequest metadataRequest2 = new MetadataRequest.Builder(Collections.singletonList("sometopic"), true).build();
-        RequestHeader metadataRequestHeader2 = new RequestHeader(ApiKeys.METADATA.id,
+        RequestHeader metadataRequestHeader2 = new RequestHeader(ApiKey.METADATA.id(),
                 metadataRequest2.version(), "someclient", 2);
         selector.send(metadataRequest2.toSend(node2, metadataRequestHeader2));
         NetworkTestUtils.waitForChannelClose(selector, node2, ChannelState.READY);
@@ -760,8 +760,10 @@ public class SaslAuthenticatorTest {
 
         // Send ApiVersionsRequest and check response
         ApiVersionsResponse versionsResponse = sendVersionRequestReceiveResponse(node);
-        assertEquals(ApiKeys.SASL_HANDSHAKE.oldestVersion(), versionsResponse.apiVersion(ApiKeys.SASL_HANDSHAKE.id).minVersion);
-        assertEquals(ApiKeys.SASL_HANDSHAKE.latestVersion(), versionsResponse.apiVersion(ApiKeys.SASL_HANDSHAKE.id).maxVersion);
+        assertEquals(ApiKey.SASL_HANDSHAKE.supportedRange().lowest(),
+            versionsResponse.apiVersion(ApiKey.SASL_HANDSHAKE.id()).minVersion);
+        assertEquals(ApiKey.SASL_HANDSHAKE.supportedRange().highest(),
+            versionsResponse.apiVersion(ApiKey.SASL_HANDSHAKE.id()).maxVersion);
 
         // Send SaslHandshakeRequest and check response
         SaslHandshakeResponse handshakeResponse = sendHandshakeRequestReceiveResponse(node);
@@ -828,9 +830,9 @@ public class SaslAuthenticatorTest {
         selector = null;
     }
 
-    private AbstractResponse sendKafkaRequestReceiveResponse(String node, ApiKeys apiKey, AbstractRequest request) throws IOException {
+    private AbstractResponse sendKafkaRequestReceiveResponse(String node, ApiKey api, AbstractRequest request) throws IOException {
         RequestHeader header =
-                new RequestHeader(apiKey.id, request.version(), "someclient", 1);
+                new RequestHeader(api.id(), request.version(), "someclient", 1);
         Send send = request.toSend(node, header);
         selector.send(send);
         ByteBuffer responseBuffer = waitForResponse();
@@ -839,14 +841,14 @@ public class SaslAuthenticatorTest {
 
     private SaslHandshakeResponse sendHandshakeRequestReceiveResponse(String node) throws Exception {
         SaslHandshakeRequest handshakeRequest = new SaslHandshakeRequest("PLAIN");
-        SaslHandshakeResponse response = (SaslHandshakeResponse) sendKafkaRequestReceiveResponse(node, ApiKeys.SASL_HANDSHAKE, handshakeRequest);
+        SaslHandshakeResponse response = (SaslHandshakeResponse) sendKafkaRequestReceiveResponse(node, ApiKey.SASL_HANDSHAKE, handshakeRequest);
         assertEquals(Errors.NONE, response.error());
         return response;
     }
 
     private ApiVersionsResponse sendVersionRequestReceiveResponse(String node) throws Exception {
         ApiVersionsRequest handshakeRequest = new ApiVersionsRequest.Builder().build();
-        ApiVersionsResponse response =  (ApiVersionsResponse) sendKafkaRequestReceiveResponse(node, ApiKeys.API_VERSIONS, handshakeRequest);
+        ApiVersionsResponse response =  (ApiVersionsResponse) sendKafkaRequestReceiveResponse(node, ApiKey.API_VERSIONS, handshakeRequest);
         assertEquals(Errors.NONE, response.error());
         return response;
     }

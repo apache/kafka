@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.ApiKey;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -45,11 +46,11 @@ public class OffsetsForLeaderEpochRequest extends AbstractRequest {
         private Map<TopicPartition, Integer> epochsByPartition = new HashMap();
 
         public Builder() {
-            super(ApiKeys.OFFSET_FOR_LEADER_EPOCH);
+            super(ApiKey.OFFSET_FOR_LEADER_EPOCH);
         }
 
         public Builder(Map<TopicPartition, Integer> epochsByPartition) {
-            super(ApiKeys.OFFSET_FOR_LEADER_EPOCH);
+            super(ApiKey.OFFSET_FOR_LEADER_EPOCH);
             this.epochsByPartition = epochsByPartition;
         }
 
@@ -64,7 +65,7 @@ public class OffsetsForLeaderEpochRequest extends AbstractRequest {
         }
 
         public static OffsetsForLeaderEpochRequest parse(ByteBuffer buffer, short version) {
-            return new OffsetsForLeaderEpochRequest(ApiKeys.OFFSET_FOR_LEADER_EPOCH.parseRequest(version, buffer), version);
+            return new OffsetsForLeaderEpochRequest(ApiKeys.parseRequest(ApiKey.OFFSET_FOR_LEADER_EPOCH, version, buffer), version);
         }
 
         @Override
@@ -99,12 +100,12 @@ public class OffsetsForLeaderEpochRequest extends AbstractRequest {
     }
 
     public static OffsetsForLeaderEpochRequest parse(ByteBuffer buffer, short versionId) {
-        return new OffsetsForLeaderEpochRequest(ApiKeys.OFFSET_FOR_LEADER_EPOCH.parseRequest(versionId, buffer), versionId);
+        return new OffsetsForLeaderEpochRequest(ApiKeys.parseRequest(ApiKey.OFFSET_FOR_LEADER_EPOCH, versionId, buffer), versionId);
     }
 
     @Override
     protected Struct toStruct() {
-        Struct requestStruct = new Struct(ApiKeys.OFFSET_FOR_LEADER_EPOCH.requestSchema(version()));
+        Struct requestStruct = new Struct(ApiKeys.requestSchema(ApiKey.OFFSET_FOR_LEADER_EPOCH, version()));
 
         Map<String, Map<Integer, Integer>> topicsToPartitionEpochs = CollectionUtils.groupDataByTopic(epochsByPartition);
 

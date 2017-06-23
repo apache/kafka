@@ -24,6 +24,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.kafka.common.ApiKey;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -158,12 +159,12 @@ public class OffsetFetchResponse extends AbstractResponse {
     }
 
     public static OffsetFetchResponse parse(ByteBuffer buffer, short version) {
-        return new OffsetFetchResponse(ApiKeys.OFFSET_FETCH.parseResponse(version, buffer));
+        return new OffsetFetchResponse(ApiKeys.parseResponse(ApiKey.OFFSET_FETCH, version, buffer));
     }
 
     @Override
     protected Struct toStruct(short version) {
-        Struct struct = new Struct(ApiKeys.OFFSET_FETCH.responseSchema(version));
+        Struct struct = new Struct(ApiKeys.responseSchema(ApiKey.OFFSET_FETCH, version));
         if (struct.hasField(THROTTLE_TIME_KEY_NAME))
             struct.set(THROTTLE_TIME_KEY_NAME, throttleTimeMs);
 

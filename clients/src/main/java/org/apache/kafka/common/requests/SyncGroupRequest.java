@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.ApiKey;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -42,7 +43,7 @@ public class SyncGroupRequest extends AbstractRequest {
 
         public Builder(String groupId, int generationId, String memberId,
                        Map<String, ByteBuffer> groupAssignment) {
-            super(ApiKeys.SYNC_GROUP);
+            super(ApiKey.SYNC_GROUP);
             this.groupId = groupId;
             this.generationId = generationId;
             this.memberId = memberId;
@@ -112,7 +113,7 @@ public class SyncGroupRequest extends AbstractRequest {
                         ByteBuffer.wrap(new byte[]{}));
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                        versionId, this.getClass().getSimpleName(), ApiKeys.SYNC_GROUP.latestVersion()));
+                        versionId, this.getClass().getSimpleName(), ApiKey.SYNC_GROUP.supportedRange().highest()));
         }
     }
 
@@ -133,12 +134,12 @@ public class SyncGroupRequest extends AbstractRequest {
     }
 
     public static SyncGroupRequest parse(ByteBuffer buffer, short version) {
-        return new SyncGroupRequest(ApiKeys.SYNC_GROUP.parseRequest(version, buffer), version);
+        return new SyncGroupRequest(ApiKeys.parseRequest(ApiKey.SYNC_GROUP, version, buffer), version);
     }
 
     @Override
     protected Struct toStruct() {
-        Struct struct = new Struct(ApiKeys.SYNC_GROUP.requestSchema(version()));
+        Struct struct = new Struct(ApiKeys.requestSchema(ApiKey.SYNC_GROUP, version()));
         struct.set(GROUP_ID_KEY_NAME, groupId);
         struct.set(GENERATION_ID_KEY_NAME, generationId);
         struct.set(MEMBER_ID_KEY_NAME, memberId);

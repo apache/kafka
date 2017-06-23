@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.ApiKey;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -86,7 +87,7 @@ public class OffsetCommitResponse extends AbstractResponse {
 
     @Override
     public Struct toStruct(short version) {
-        Struct struct = new Struct(ApiKeys.OFFSET_COMMIT.responseSchema(version));
+        Struct struct = new Struct(ApiKeys.responseSchema(ApiKey.OFFSET_COMMIT, version));
         if (struct.hasField(THROTTLE_TIME_KEY_NAME))
             struct.set(THROTTLE_TIME_KEY_NAME, throttleTimeMs);
 
@@ -119,7 +120,7 @@ public class OffsetCommitResponse extends AbstractResponse {
     }
 
     public static OffsetCommitResponse parse(ByteBuffer buffer, short version) {
-        return new OffsetCommitResponse(ApiKeys.OFFSET_COMMIT.parseResponse(version, buffer));
+        return new OffsetCommitResponse(ApiKeys.parseResponse(ApiKey.OFFSET_COMMIT, version, buffer));
     }
 
 }

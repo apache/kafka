@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.ApiKey;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -32,7 +33,7 @@ public class DescribeGroupsRequest extends AbstractRequest {
         private final List<String> groupIds;
 
         public Builder(List<String> groupIds) {
-            super(ApiKeys.DESCRIBE_GROUPS);
+            super(ApiKey.DESCRIBE_GROUPS);
             this.groupIds = groupIds;
         }
 
@@ -67,7 +68,7 @@ public class DescribeGroupsRequest extends AbstractRequest {
 
     @Override
     protected Struct toStruct() {
-        Struct struct = new Struct(ApiKeys.DESCRIBE_GROUPS.requestSchema(version()));
+        Struct struct = new Struct(ApiKeys.requestSchema(ApiKey.DESCRIBE_GROUPS, version()));
         struct.set(GROUP_IDS_KEY_NAME, groupIds.toArray());
         return struct;
     }
@@ -83,11 +84,11 @@ public class DescribeGroupsRequest extends AbstractRequest {
 
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                        version, this.getClass().getSimpleName(), ApiKeys.DESCRIBE_GROUPS.latestVersion()));
+                        version, this.getClass().getSimpleName(), ApiKey.DESCRIBE_GROUPS.supportedRange().highest()));
         }
     }
 
     public static DescribeGroupsRequest parse(ByteBuffer buffer, short version) {
-        return new DescribeGroupsRequest(ApiKeys.DESCRIBE_GROUPS.parseRequest(version, buffer), version);
+        return new DescribeGroupsRequest(ApiKeys.parseRequest(ApiKey.DESCRIBE_GROUPS, version, buffer), version);
     }
 }

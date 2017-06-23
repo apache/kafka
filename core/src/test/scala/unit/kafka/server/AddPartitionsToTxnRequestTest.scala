@@ -20,8 +20,8 @@ package kafka.server
 import java.util.Properties
 
 import kafka.utils.TestUtils
-import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.{ApiKey, TopicPartition}
+import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AddPartitionsToTxnRequest, AddPartitionsToTxnResponse}
 import org.junit.{Before, Test}
 import org.junit.Assert._
@@ -62,7 +62,7 @@ class AddPartitionsToTxnRequestTest extends BaseRequestTest {
   }
 
   private def sendAddPartitionsRequest(leaderId: Int, request: AddPartitionsToTxnRequest) : AddPartitionsToTxnResponse = {
-    val response = connectAndSend(request, ApiKeys.ADD_PARTITIONS_TO_TXN, destination = brokerSocketServer(leaderId))
+    val response = connectAndSend(request, ApiKey.ADD_PARTITIONS_TO_TXN, destination = brokerSocketServer(leaderId))
     AddPartitionsToTxnResponse.parse(response, request.version)
   }
 

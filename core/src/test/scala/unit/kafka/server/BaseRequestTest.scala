@@ -25,6 +25,7 @@ import java.util.Properties
 import kafka.integration.KafkaServerTestHarness
 import kafka.network.SocketServer
 import kafka.utils._
+import org.apache.kafka.common.ApiKey
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.types.Struct
 import org.apache.kafka.common.protocol.{ApiKeys, SecurityProtocol}
@@ -102,12 +103,12 @@ abstract class BaseRequestTest extends KafkaServerTestHarness {
     * @param protocol An optional SecurityProtocol to use. If not set, PLAINTEXT is used.
     * @return A ByteBuffer containing the response (without the response header)
     */
-  def connectAndSend(request: AbstractRequest, apiKey: ApiKeys,
+  def connectAndSend(request: AbstractRequest, api: ApiKey,
                      destination: SocketServer = anySocketServer,
                      apiVersion: Option[Short] = None,
                      protocol: SecurityProtocol = SecurityProtocol.PLAINTEXT): ByteBuffer = {
     val socket = connect(destination, protocol)
-    try send(request, apiKey, socket, apiVersion)
+    try send(request, api, socket, apiVersion)
     finally socket.close()
   }
 
@@ -116,11 +117,11 @@ abstract class BaseRequestTest extends KafkaServerTestHarness {
     * @param protocol An optional SecurityProtocol to use. If not set, PLAINTEXT is used.
     * @return A ByteBuffer containing the response (without the response header).
     */
-  def connectAndSendStruct(requestStruct: Struct, apiKey: ApiKeys, apiVersion: Short,
+  def connectAndSendStruct(requestStruct: Struct, api: ApiKey, apiVersion: Short,
                            destination: SocketServer = anySocketServer,
                            protocol: SecurityProtocol = SecurityProtocol.PLAINTEXT): ByteBuffer = {
     val socket = connect(destination, protocol)
-    try sendStruct(requestStruct, apiKey, socket, apiVersion)
+    try sendStruct(requestStruct, api, socket, apiVersion)
     finally socket.close()
   }
 
@@ -128,8 +129,8 @@ abstract class BaseRequestTest extends KafkaServerTestHarness {
     * Serializes and sends the request to the given api.
     * A ByteBuffer containing the response is returned.
     */
-  def send(request: AbstractRequest, apiKey: ApiKeys, socket: Socket, apiVersion: Option[Short] = None): ByteBuffer = {
-    val header = nextRequestHeader(apiKey, apiVersion.getOrElse(request.version))
+  def send(request: AbstractRequest, api: ApiKey, socket: Socket, apiVersion: Option[Short] = None): ByteBuffer = {
+    val header = nextRequestHeader(api, apiVersion.getOrElse(request.version))
     val serializedBytes = request.serialize(header).array
     val response = requestAndReceive(socket, serializedBytes)
     skipResponseHeader(response)
@@ -139,8 +140,8 @@ abstract class BaseRequestTest extends KafkaServerTestHarness {
     * Serializes and sends the requestStruct to the given api.
     * A ByteBuffer containing the response (without the response header) is returned.
     */
-  def sendStruct(requestStruct: Struct, apiKey: ApiKeys, socket: Socket, apiVersion: Short): ByteBuffer = {
-    val header = nextRequestHeader(apiKey, apiVersion)
+  def sendStruct(requestStruct: Struct, api: ApiKey, socket: Socket, apiVersion: Short): ByteBuffer = {
+    val header = nextRequestHeader(api, apiVersion)
     val serializedBytes = AbstractRequestResponse.serialize(header.toStruct, requestStruct).array
     val response = requestAndReceive(socket, serializedBytes)
     skipResponseHeader(response)
@@ -153,9 +154,9 @@ abstract class BaseRequestTest extends KafkaServerTestHarness {
     responseBuffer
   }
 
-  def nextRequestHeader(apiKey: ApiKeys, apiVersion: Short): RequestHeader = {
+  def nextRequestHeader(api: ApiKey, apiVersion: Short): RequestHeader = {
     correlationId += 1
-    new RequestHeader(apiKey.id, apiVersion, "client-id", correlationId)
+    new RequestHeader(api.id, apiVersion, "client-id", correlationId)
   }
 
 }

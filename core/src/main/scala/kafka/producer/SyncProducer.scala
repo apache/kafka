@@ -21,10 +21,10 @@ import java.util.Random
 import java.util.concurrent.TimeUnit
 
 import kafka.api._
-import kafka.network.{RequestOrResponseSend, BlockingChannel}
+import kafka.network.{BlockingChannel, RequestOrResponseSend}
 import kafka.utils._
+import org.apache.kafka.common.ApiKey
 import org.apache.kafka.common.network.NetworkReceive
-import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.utils.Utils._
 
 @deprecated("This object has been deprecated and will be removed in a future release. " +
@@ -60,7 +60,7 @@ class SyncProducer(val config: SyncProducerConfig) extends Logging {
       val buffer = new RequestOrResponseSend("", request).buffer
       trace("verifying sendbuffer of size " + buffer.limit)
       val requestTypeId = buffer.getShort()
-      if(requestTypeId == ApiKeys.PRODUCE.id) {
+      if(requestTypeId == ApiKey.PRODUCE.id) {
         val request = ProducerRequest.readFrom(buffer)
         trace(request.toString)
       }

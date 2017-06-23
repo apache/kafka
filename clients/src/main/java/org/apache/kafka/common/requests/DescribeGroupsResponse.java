@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.ApiKey;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -208,7 +209,7 @@ public class DescribeGroupsResponse extends AbstractResponse {
 
     @Override
     protected Struct toStruct(short version) {
-        Struct struct = new Struct(ApiKeys.DESCRIBE_GROUPS.responseSchema(version));
+        Struct struct = new Struct(ApiKeys.responseSchema(ApiKey.DESCRIBE_GROUPS, version));
         if (struct.hasField(THROTTLE_TIME_KEY_NAME))
             struct.set(THROTTLE_TIME_KEY_NAME, throttleTimeMs);
 
@@ -240,6 +241,6 @@ public class DescribeGroupsResponse extends AbstractResponse {
     }
 
     public static DescribeGroupsResponse parse(ByteBuffer buffer, short version) {
-        return new DescribeGroupsResponse(ApiKeys.DESCRIBE_GROUPS.parseResponse(version, buffer));
+        return new DescribeGroupsResponse(ApiKeys.parseResponse(ApiKey.DESCRIBE_GROUPS, version, buffer));
     }
 }

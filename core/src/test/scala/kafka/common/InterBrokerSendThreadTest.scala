@@ -19,8 +19,7 @@ package kafka.common
 import org.junit.{Assert, Test}
 import kafka.utils.MockTime
 import org.apache.kafka.clients.{ClientRequest, ClientResponse, NetworkClient, RequestCompletionHandler}
-import org.apache.kafka.common.Node
-import org.apache.kafka.common.protocol.ApiKeys
+import org.apache.kafka.common.{ApiKey, Node}
 import org.apache.kafka.common.requests.AbstractRequest
 import org.apache.kafka.common.utils.Utils
 import org.easymock.EasyMock
@@ -119,7 +118,7 @@ class InterBrokerSendThreadTest {
   }
 
 
-  private class StubRequestBuilder extends AbstractRequest.Builder(ApiKeys.END_TXN) {
+  private class StubRequestBuilder extends AbstractRequest.Builder(ApiKey.END_TXN) {
     override def build(version: Short): Nothing = ???
   }
 

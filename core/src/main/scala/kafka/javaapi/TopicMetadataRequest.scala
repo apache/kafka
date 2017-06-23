@@ -19,7 +19,7 @@ package kafka.javaapi
 import java.nio.ByteBuffer
 
 import kafka.api._
-import org.apache.kafka.common.protocol.ApiKeys
+import org.apache.kafka.common.ApiKey
 
 import scala.collection.JavaConverters._
 
@@ -27,7 +27,7 @@ class TopicMetadataRequest(val versionId: Short,
                            val correlationId: Int,
                            val clientId: String,
                            val topics: java.util.List[String])
-    extends RequestOrResponse(Some(ApiKeys.METADATA.id)) {
+    extends RequestOrResponse(Some(ApiKey.METADATA.id)) {
 
   val underlying: kafka.api.TopicMetadataRequest = new kafka.api.TopicMetadataRequest(versionId, correlationId, clientId, topics.asScala)
 

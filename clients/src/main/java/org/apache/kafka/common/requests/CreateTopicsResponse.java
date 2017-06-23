@@ -17,6 +17,7 @@
 package org.apache.kafka.common.requests;
 
 
+import org.apache.kafka.common.ApiKey;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.types.Struct;
 
@@ -72,7 +73,7 @@ public class CreateTopicsResponse extends AbstractResponse {
 
     @Override
     protected Struct toStruct(short version) {
-        Struct struct = new Struct(ApiKeys.CREATE_TOPICS.responseSchema(version));
+        Struct struct = new Struct(ApiKeys.responseSchema(ApiKey.CREATE_TOPICS, version));
         if (struct.hasField(THROTTLE_TIME_KEY_NAME))
             struct.set(THROTTLE_TIME_KEY_NAME, throttleTimeMs);
 
@@ -96,6 +97,6 @@ public class CreateTopicsResponse extends AbstractResponse {
     }
 
     public static CreateTopicsResponse parse(ByteBuffer buffer, short version) {
-        return new CreateTopicsResponse(ApiKeys.CREATE_TOPICS.responseSchema(version).read(buffer));
+        return new CreateTopicsResponse(ApiKeys.responseSchema(ApiKey.CREATE_TOPICS, version).read(buffer));
     }
 }

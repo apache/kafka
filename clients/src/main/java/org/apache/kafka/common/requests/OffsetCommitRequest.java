@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.ApiKey;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -105,7 +106,7 @@ public class OffsetCommitRequest extends AbstractRequest {
         private long retentionTime = DEFAULT_RETENTION_TIME;
 
         public Builder(String groupId, Map<TopicPartition, PartitionData> offsetData) {
-            super(ApiKeys.OFFSET_COMMIT);
+            super(ApiKey.OFFSET_COMMIT);
             this.groupId = groupId;
             this.offsetData = offsetData;
         }
@@ -212,7 +213,7 @@ public class OffsetCommitRequest extends AbstractRequest {
     @Override
     public Struct toStruct() {
         short version = version();
-        Struct struct = new Struct(ApiKeys.OFFSET_COMMIT.requestSchema(version));
+        Struct struct = new Struct(ApiKeys.requestSchema(ApiKey.OFFSET_COMMIT, version));
         struct.set(GROUP_ID_KEY_NAME, groupId);
 
         Map<String, Map<Integer, PartitionData>> topicsData = CollectionUtils.groupDataByTopic(offsetData);
@@ -262,7 +263,7 @@ public class OffsetCommitRequest extends AbstractRequest {
                 return new OffsetCommitResponse(throttleTimeMs, responseData);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                        versionId, this.getClass().getSimpleName(), ApiKeys.OFFSET_COMMIT.latestVersion()));
+                        versionId, this.getClass().getSimpleName(), ApiKey.OFFSET_COMMIT.supportedRange().highest()));
         }
     }
 
@@ -287,7 +288,7 @@ public class OffsetCommitRequest extends AbstractRequest {
     }
 
     public static OffsetCommitRequest parse(ByteBuffer buffer, short version) {
-        Schema schema = ApiKeys.OFFSET_COMMIT.requestSchema(version);
+        Schema schema = ApiKeys.requestSchema(ApiKey.OFFSET_COMMIT, version);
         return new OffsetCommitRequest(schema.read(buffer), version);
     }
 }

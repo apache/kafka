@@ -21,10 +21,11 @@ import java.nio.ByteBuffer
 
 import kafka.api.ApiUtils._
 import kafka.common.{OffsetAndMetadata, TopicAndPartition}
-import kafka.network.{RequestOrResponseSend, RequestChannel}
+import kafka.network.{RequestChannel, RequestOrResponseSend}
 import kafka.network.RequestChannel.Response
 import kafka.utils.Logging
-import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.ApiKey
+import org.apache.kafka.common.protocol.Errors
 
 import scala.collection._
 
@@ -96,7 +97,7 @@ case class OffsetCommitRequest(groupId: String,
                                groupGenerationId: Int = org.apache.kafka.common.requests.OffsetCommitRequest.DEFAULT_GENERATION_ID,
                                memberId: String =  org.apache.kafka.common.requests.OffsetCommitRequest.DEFAULT_MEMBER_ID,
                                retentionMs: Long = org.apache.kafka.common.requests.OffsetCommitRequest.DEFAULT_RETENTION_TIME)
-    extends RequestOrResponse(Some(ApiKeys.OFFSET_COMMIT.id)) {
+    extends RequestOrResponse(Some(ApiKey.OFFSET_COMMIT.id)) {
 
   assert(versionId == 0 || versionId == 1 || versionId == 2,
          "Version " + versionId + " is invalid for OffsetCommitRequest. Valid versions are 0, 1 or 2.")

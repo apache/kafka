@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.ApiKey;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -80,7 +81,7 @@ public class ListOffsetRequest extends AbstractRequest {
         }
 
         private Builder(short minVersion, Short desiredVersion, int replicaId, IsolationLevel isolationLevel) {
-            super(ApiKeys.LIST_OFFSETS, desiredVersion);
+            super(ApiKey.LIST_OFFSETS, desiredVersion);
             this.minVersion = minVersion;
             this.replicaId = replicaId;
             this.isolationLevel = isolationLevel;
@@ -239,7 +240,7 @@ public class ListOffsetRequest extends AbstractRequest {
                 return new ListOffsetResponse(throttleTimeMs, responseData);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                        versionId, this.getClass().getSimpleName(), ApiKeys.LIST_OFFSETS.latestVersion()));
+                        versionId, this.getClass().getSimpleName(), ApiKey.LIST_OFFSETS.supportedRange().highest()));
         }
     }
 
@@ -265,13 +266,13 @@ public class ListOffsetRequest extends AbstractRequest {
     }
 
     public static ListOffsetRequest parse(ByteBuffer buffer, short version) {
-        return new ListOffsetRequest(ApiKeys.LIST_OFFSETS.parseRequest(version, buffer), version);
+        return new ListOffsetRequest(ApiKeys.parseRequest(ApiKey.LIST_OFFSETS, version, buffer), version);
     }
 
     @Override
     protected Struct toStruct() {
         short version = version();
-        Struct struct = new Struct(ApiKeys.LIST_OFFSETS.requestSchema(version));
+        Struct struct = new Struct(ApiKeys.requestSchema(ApiKey.LIST_OFFSETS, version));
 
         Map<TopicPartition, ?> targetTimes = partitionTimestamps == null ? offsetData : partitionTimestamps;
         Map<String, Map<Integer, Object>> topicsData = CollectionUtils.groupDataByTopic(targetTimes);

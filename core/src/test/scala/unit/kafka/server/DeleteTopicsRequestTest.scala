@@ -19,7 +19,8 @@ package kafka.server
 
 import kafka.network.SocketServer
 import kafka.utils._
-import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.ApiKey
+import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{DeleteTopicsRequest, DeleteTopicsResponse, MetadataRequest, MetadataResponse}
 import org.junit.Assert._
 import org.junit.Test
@@ -112,12 +113,12 @@ class DeleteTopicsRequestTest extends BaseRequestTest {
   }
 
   private def sendDeleteTopicsRequest(request: DeleteTopicsRequest, socketServer: SocketServer = controllerSocketServer): DeleteTopicsResponse = {
-    val response = connectAndSend(request, ApiKeys.DELETE_TOPICS, socketServer)
+    val response = connectAndSend(request, ApiKey.DELETE_TOPICS, socketServer)
     DeleteTopicsResponse.parse(response, request.version)
   }
 
   private def sendMetadataRequest(request: MetadataRequest): MetadataResponse = {
-    val response = connectAndSend(request, ApiKeys.METADATA)
+    val response = connectAndSend(request, ApiKey.METADATA)
     MetadataResponse.parse(response, request.version)
   }
 }

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.ApiKey;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -62,7 +63,7 @@ public class ProduceRequest extends AbstractRequest {
                        int timeout,
                        Map<TopicPartition, MemoryRecords> partitionRecords,
                        String transactionalId) {
-            super(ApiKeys.PRODUCE, (short) (magic == RecordBatch.MAGIC_VALUE_V2 ? 3 : 2));
+            super(ApiKey.PRODUCE, (short) (magic == RecordBatch.MAGIC_VALUE_V2 ? 3 : 2));
             this.magic = magic;
             this.acks = acks;
             this.timeout = timeout;
@@ -184,7 +185,7 @@ public class ProduceRequest extends AbstractRequest {
         // Store it in a local variable to protect against concurrent updates
         Map<TopicPartition, MemoryRecords> partitionRecords = partitionRecordsOrFail();
         short version = version();
-        Struct struct = new Struct(ApiKeys.PRODUCE.requestSchema(version));
+        Struct struct = new Struct(ApiKeys.requestSchema(ApiKey.PRODUCE, version));
         Map<String, Map<Integer, MemoryRecords>> recordsByTopic = CollectionUtils.groupDataByTopic(partitionRecords);
         struct.set(ACKS_KEY_NAME, acks);
         struct.set(TIMEOUT_KEY_NAME, timeout);
@@ -249,7 +250,7 @@ public class ProduceRequest extends AbstractRequest {
                 return new ProduceResponse(responseMap, throttleTimeMs);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                        versionId, this.getClass().getSimpleName(), ApiKeys.PRODUCE.latestVersion()));
+                        versionId, this.getClass().getSimpleName(), ApiKey.PRODUCE.supportedRange().highest()));
         }
     }
 
@@ -294,7 +295,7 @@ public class ProduceRequest extends AbstractRequest {
     }
 
     public static ProduceRequest parse(ByteBuffer buffer, short version) {
-        return new ProduceRequest(ApiKeys.PRODUCE.parseRequest(version, buffer), version);
+        return new ProduceRequest(ApiKeys.parseRequest(ApiKey.PRODUCE, version, buffer), version);
     }
 
     public static byte requiredMagicForVersion(short produceRequestVersion) {
