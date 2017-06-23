@@ -81,6 +81,31 @@ public class InternalTopicManagerTest {
         Assert.assertTrue(exceptionWasThrown);
     }
 
+    @Test
+    public void shouldNotThrowExceptionIfExistsWithDifferentReplication() throws Exception {
+
+        // create topic the first time with replication 2
+        InternalTopicManager internalTopicManager = new InternalTopicManager(streamsKafkaClient, 2,
+            WINDOW_CHANGE_LOG_ADDITIONAL_RETENTION_DEFAULT, time);
+        internalTopicManager.makeReady(Collections.singletonMap(new InternalTopicConfig(topic, Collections.singleton(InternalTopicConfig.CleanupPolicy.compact), null), 1));
+
+        // attempt to create it again with replication 1
+        InternalTopicManager internalTopicManager2 = new InternalTopicManager(streamsKafkaClient, 1,
+            WINDOW_CHANGE_LOG_ADDITIONAL_RETENTION_DEFAULT, time);
+        try {
+            internalTopicManager2.makeReady(Collections.singletonMap(new InternalTopicConfig(topic, Collections.singleton(InternalTopicConfig.CleanupPolicy.compact), null), 1));
+        } catch (StreamsException e) {
+            Assert.fail("did not expect an exception since topic is already there.");
+        }
+    }
+
+    @Test
+    public void shouldNotThrowExceptionForEmptyTopicMap() throws Exception {
+        InternalTopicManager internalTopicManager = new InternalTopicManager(streamsKafkaClient, 1,
+            WINDOW_CHANGE_LOG_ADDITIONAL_RETENTION_DEFAULT, time);
+        internalTopicManager.makeReady(Collections.EMPTY_MAP);
+    }
+
     private Properties configProps() {
         return new Properties() {
             {
