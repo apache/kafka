@@ -47,6 +47,7 @@ import org.rocksdb.WriteOptions;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
@@ -82,7 +83,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
     private final String name;
     private final String parentDir;
-    private final Set<KeyValueIterator> openIterators = new HashSet<>();
+    private final Set<KeyValueIterator> openIterators = Collections.synchronizedSet(new HashSet<KeyValueIterator>());
 
     File dbDir;
     private StateSerdes<K, V> serdes;
@@ -126,9 +127,13 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         options.setErrorIfExists(false);
         options.setInfoLogLevel(InfoLogLevel.ERROR_LEVEL);
         // this is the recommended way to increase parallelism in RocksDb
-        // note that the current implementation increases the number of compaction threads
-        // but not flush threads.
-        options.setIncreaseParallelism(Runtime.getRuntime().availableProcessors());
+        // note that the current implementation of setIncreaseParallelism affects the number
+        // of compaction threads but not flush threads (the latter remains one). Also
+        // the parallelism value needs to be at least two because of the code in
+        // https://github.com/facebook/rocksdb/blob/62ad0a9b19f0be4cefa70b6b32876e764b7f3c11/util/options.cc#L580
+        // subtracts one from the value passed to determine the number of compaction threads
+        // (this could be a bug in the RocksDB code and their devs have been contacted).
+        options.setIncreaseParallelism(Math.max(Runtime.getRuntime().availableProcessors(), 2));
 
         wOptions = new WriteOptions();
         wOptions.setDisableWAL(true);
@@ -382,10 +387,13 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     }
 
     private void closeOpenIterators() {
-        for (KeyValueIterator iterator : new HashSet<>(openIterators)) {
+        HashSet<KeyValueIterator> iterators = null;
+        synchronized (openIterators) {
+            iterators = new HashSet<>(openIterators);
+        }
+        for (KeyValueIterator iterator : iterators) {
             iterator.close();
         }
-        openIterators.clear();
     }
 
     private class RocksDbIterator implements KeyValueIterator<K, V> {

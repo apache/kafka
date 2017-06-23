@@ -47,19 +47,18 @@ object ZKEphemeralTest {
 
 @RunWith(value = classOf[Parameterized])
 class ZKEphemeralTest(val secure: Boolean) extends ZooKeeperTestHarness {
-  val jaasFile = kafka.utils.JaasTestUtils.writeZkFile()
+  val jaasFile = kafka.utils.JaasTestUtils.writeJaasContextsToFile(kafka.utils.JaasTestUtils.zkSections)
   val authProvider = "zookeeper.authProvider.1"
   var zkSessionTimeoutMs = 1000
   
   @Before
   override def setUp() {
-    if(secure) {
+    if (secure) {
+      System.setProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM, jaasFile.getAbsolutePath)
       Configuration.setConfiguration(null)
-      System.setProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM, jaasFile)
       System.setProperty(authProvider, "org.apache.zookeeper.server.auth.SASLAuthenticationProvider")
-      if(!JaasUtils.isZkSecurityEnabled()) {
+      if (!JaasUtils.isZkSecurityEnabled)
         fail("Secure access not enabled")
-     }
     }
     super.setUp
   }

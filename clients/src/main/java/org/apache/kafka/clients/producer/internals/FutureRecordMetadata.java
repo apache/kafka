@@ -34,6 +34,7 @@ public final class FutureRecordMetadata implements Future<RecordMetadata> {
     private final long checksum;
     private final int serializedKeySize;
     private final int serializedValueSize;
+    private volatile FutureRecordMetadata nextRecordMetadata = null;
 
     public FutureRecordMetadata(ProduceRequestResult result, long relativeOffset, long createTimestamp,
                                 long checksum, int serializedKeySize, int serializedValueSize) {
@@ -58,15 +59,34 @@ public final class FutureRecordMetadata implements Future<RecordMetadata> {
     @Override
     public RecordMetadata get() throws InterruptedException, ExecutionException {
         this.result.await();
+        if (nextRecordMetadata != null)
+            return nextRecordMetadata.get();
         return valueOrError();
     }
 
     @Override
     public RecordMetadata get(long timeout, TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException {
+        // Handle overflow.
+        long now = System.currentTimeMillis();
+        long deadline = Long.MAX_VALUE - timeout < now ? Long.MAX_VALUE : now + timeout;
         boolean occurred = this.result.await(timeout, unit);
+        if (nextRecordMetadata != null)
+            return nextRecordMetadata.get(deadline - System.currentTimeMillis(), TimeUnit.MILLISECONDS);
         if (!occurred)
             throw new TimeoutException("Timeout after waiting for " + TimeUnit.MILLISECONDS.convert(timeout, unit) + " ms.");
         return valueOrError();
+    }
+
+    /**
+     * This method is used when we have to split a large batch in smaller ones. A chained metadata will allow the
+     * future that has already returned to the users to wait on the newly created split batches even after the
+     * old big batch has been deemed as done.
+     */
+    void chain(FutureRecordMetadata futureRecordMetadata) {
+        if (nextRecordMetadata == null)
+            nextRecordMetadata = futureRecordMetadata;
+        else
+            nextRecordMetadata.chain(futureRecordMetadata);
     }
 
     RecordMetadata valueOrError() throws ExecutionException {
@@ -75,8 +95,18 @@ public final class FutureRecordMetadata implements Future<RecordMetadata> {
         else
             return value();
     }
-    
+
+    long checksum() {
+        return this.checksum;
+    }
+
+    long relativeOffset() {
+        return this.relativeOffset;
+    }
+
     RecordMetadata value() {
+        if (nextRecordMetadata != null)
+            return nextRecordMetadata.value();
         return new RecordMetadata(result.topicPartition(), this.result.baseOffset(), this.relativeOffset,
                                   timestamp(), this.checksum, this.serializedKeySize, this.serializedValueSize);
     }
@@ -87,6 +117,8 @@ public final class FutureRecordMetadata implements Future<RecordMetadata> {
 
     @Override
     public boolean isDone() {
+        if (nextRecordMetadata != null)
+            return nextRecordMetadata.isDone();
         return this.result.completed();
     }
 

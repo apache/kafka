@@ -279,6 +279,12 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
         }
 
         @Override
+        public boolean isControlBatch() {
+            loadUnderlyingRecordBatch();
+            return underlying.isControlBatch();
+        }
+
+        @Override
         public int partitionLeaderEpoch() {
             loadUnderlyingRecordBatch();
             return underlying.partitionLeaderEpoch();

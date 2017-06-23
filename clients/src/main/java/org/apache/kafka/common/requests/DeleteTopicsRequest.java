@@ -86,7 +86,7 @@ public class DeleteTopicsRequest extends AbstractRequest {
     }
 
     @Override
-    public AbstractResponse getErrorResponse(Throwable e) {
+    public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         Map<String, Errors> topicErrors = new HashMap<>();
         for (String topic : topics)
             topicErrors.put(topic, Errors.forException(e));
@@ -94,6 +94,8 @@ public class DeleteTopicsRequest extends AbstractRequest {
         switch (version()) {
             case 0:
                 return new DeleteTopicsResponse(topicErrors);
+            case 1:
+                return new DeleteTopicsResponse(throttleTimeMs, topicErrors);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
                     version(), this.getClass().getSimpleName(), ApiKeys.DELETE_TOPICS.latestVersion()));

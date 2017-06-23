@@ -46,11 +46,23 @@ class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
     public KeyValueIterator<Bytes, byte[]> fetch(final Bytes key, final long from, final long to) {
         final List<Segment> searchSpace = keySchema.segmentsToSearch(segments, from, to);
 
-        final Bytes binaryFrom = keySchema.lowerRange(key, from);
-        final Bytes binaryTo = keySchema.upperRange(key, to);
+        final Bytes binaryFrom = keySchema.lowerRangeFixedSize(key, from);
+        final Bytes binaryTo = keySchema.upperRangeFixedSize(key, to);
 
         return new SegmentIterator(searchSpace.iterator(),
-                                   keySchema.hasNextCondition(key, from, to),
+                                   keySchema.hasNextCondition(key, key, from, to),
+                                   binaryFrom, binaryTo);
+    }
+
+    @Override
+    public KeyValueIterator<Bytes, byte[]> fetch(final Bytes keyFrom, Bytes keyTo, final long from, final long to) {
+        final List<Segment> searchSpace = keySchema.segmentsToSearch(segments, from, to);
+
+        final Bytes binaryFrom = keySchema.lowerRange(keyFrom, from);
+        final Bytes binaryTo = keySchema.upperRange(keyTo, to);
+
+        return new SegmentIterator(searchSpace.iterator(),
+                                   keySchema.hasNextCondition(keyFrom, keyTo, from, to),
                                    binaryFrom, binaryTo);
     }
 

@@ -66,8 +66,8 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
 
   @After
   override def tearDown() {
-    brokers.par.foreach(_.shutdown())
     producer.close()
+    TestUtils.shutdownServers(brokers)
     super.tearDown()
   }
 

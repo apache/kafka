@@ -98,13 +98,8 @@ object ConfigCommand extends Config {
     configs.putAll(configsToBeAdded)
     configsToBeDeleted.foreach(configs.remove(_))
 
-    entityType match {
-      case ConfigType.Topic => utils.changeTopicConfig(zkUtils, entityName, configs)
-      case ConfigType.Client => utils.changeClientIdConfig(zkUtils, entityName, configs)
-      case ConfigType.User => utils.changeUserOrUserClientIdConfig(zkUtils, entityName, configs)
-      case ConfigType.Broker => utils.changeBrokerConfig(zkUtils, Seq(parseBroker(entityName)), configs)
-      case _ => throw new IllegalArgumentException(s"$entityType is not a known entityType. Should be one of ${ConfigType.Topic}, ${ConfigType.Client}, ${ConfigType.Broker}")
-    }
+    utils.changeConfigs(zkUtils, entityType, entityName, configs)
+
     println(s"Completed Updating config for entity: $entity.")
   }
 
@@ -126,14 +121,6 @@ object ConfigCommand extends Config {
         case value =>
           configsToBeAdded.setProperty(mechanism.mechanismName, scramCredential(mechanism, value))
       }
-    }
-  }
-
-  private def parseBroker(broker: String): Int = {
-    try broker.toInt
-    catch {
-      case _: NumberFormatException =>
-        throw new IllegalArgumentException(s"Error parsing broker $broker. The broker's Entity Name must be a single integer value")
     }
   }
 

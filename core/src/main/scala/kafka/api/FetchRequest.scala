@@ -208,7 +208,7 @@ case class FetchRequest(versionId: Short = FetchRequest.CurrentVersion,
     }
     val errorResponse = new JFetchResponse(responseData, 0)
     // Magic value does not matter here because the message set is empty
-    requestChannel.sendResponse(new RequestChannel.Response(request, errorResponse))
+    requestChannel.sendResponse(RequestChannel.Response(request, errorResponse))
   }
 
   override def describe(details: Boolean): String = {

@@ -26,6 +26,7 @@ import java.nio.channels.SocketChannel;
 import java.nio.channels.UnresolvedAddressException;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -79,7 +80,7 @@ import org.slf4j.LoggerFactory;
  *
  * This class is not thread safe!
  */
-public class Selector implements Selectable {
+public class Selector implements Selectable, AutoCloseable {
 
     public static final long NO_IDLE_TIMEOUT_MS = -1;
     private static final Logger log = LoggerFactory.getLogger(Selector.class);
@@ -91,16 +92,14 @@ public class Selector implements Selectable {
     private final Map<KafkaChannel, Deque<NetworkReceive>> stagedReceives;
     private final Set<SelectionKey> immediatelyConnectedKeys;
     private final Map<String, KafkaChannel> closingChannels;
-    private final List<String> disconnected;
+    private final Map<String, ChannelState> disconnected;
     private final List<String> connected;
     private final List<String> failedSends;
     private final Time time;
     private final SelectorMetrics sensors;
-    private final String metricGrpPrefix;
-    private final Map<String, String> metricTags;
     private final ChannelBuilder channelBuilder;
     private final int maxReceiveSize;
-    private final boolean metricsPerConnection;
+    private final boolean recordTimePerConnection;
     private final IdleExpiryManager idleExpiryManager;
 
     /**
@@ -122,6 +121,7 @@ public class Selector implements Selectable {
                     String metricGrpPrefix,
                     Map<String, String> metricTags,
                     boolean metricsPerConnection,
+                    boolean recordTimePerConnection,
                     ChannelBuilder channelBuilder) {
         try {
             this.nioSelector = java.nio.channels.Selector.open();
@@ -130,8 +130,6 @@ public class Selector implements Selectable {
         }
         this.maxReceiveSize = maxReceiveSize;
         this.time = time;
-        this.metricGrpPrefix = metricGrpPrefix;
-        this.metricTags = metricTags;
         this.channels = new HashMap<>();
         this.completedSends = new ArrayList<>();
         this.completedReceives = new ArrayList<>();
@@ -139,16 +137,27 @@ public class Selector implements Selectable {
         this.immediatelyConnectedKeys = new HashSet<>();
         this.closingChannels = new HashMap<>();
         this.connected = new ArrayList<>();
-        this.disconnected = new ArrayList<>();
+        this.disconnected = new HashMap<>();
         this.failedSends = new ArrayList<>();
-        this.sensors = new SelectorMetrics(metrics);
+        this.sensors = new SelectorMetrics(metrics, metricGrpPrefix, metricTags, metricsPerConnection);
         this.channelBuilder = channelBuilder;
-        this.metricsPerConnection = metricsPerConnection;
+        this.recordTimePerConnection = recordTimePerConnection;
         this.idleExpiryManager = connectionMaxIdleMs < 0 ? null : new IdleExpiryManager(time, connectionMaxIdleMs);
     }
 
+    public Selector(int maxReceiveSize,
+            long connectionMaxIdleMs,
+            Metrics metrics,
+            Time time,
+            String metricGrpPrefix,
+            Map<String, String> metricTags,
+            boolean metricsPerConnection,
+            ChannelBuilder channelBuilder) {
+        this(maxReceiveSize, connectionMaxIdleMs, metrics, time, metricGrpPrefix, metricTags, metricsPerConnection, false, channelBuilder);
+    }
+
     public Selector(long connectionMaxIdleMS, Metrics metrics, Time time, String metricGrpPrefix, ChannelBuilder channelBuilder) {
-        this(NetworkReceive.UNLIMITED, connectionMaxIdleMS, metrics, time, metricGrpPrefix, new HashMap<String, String>(), true, channelBuilder);
+        this(NetworkReceive.UNLIMITED, connectionMaxIdleMS, metrics, time, metricGrpPrefix, Collections.<String, String>emptyMap(), true, channelBuilder);
     }
 
     /**
@@ -326,6 +335,7 @@ public class Selector implements Selectable {
             SelectionKey key = iterator.next();
             iterator.remove();
             KafkaChannel channel = channel(key);
+            long channelStartTimeNanos = recordTimePerConnection ? time.nanoseconds() : 0;
 
             // register all per-connection metrics at once
             sensors.maybeRegisterConnectionMetrics(channel.id());
@@ -380,8 +390,16 @@ public class Selector implements Selectable {
                 else
                     log.warn("Unexpected error from {}; closing connection", desc, e);
                 close(channel, true);
+            } finally {
+                maybeRecordTimePerConnection(channel, channelStartTimeNanos);
             }
         }
+    }
+
+    // Record time spent in pollSelectionKeys for channel (moved into a method to keep checkstyle happy)
+    private void maybeRecordTimePerConnection(KafkaChannel channel, long startTimeNanos) {
+        if (recordTimePerConnection)
+            channel.addNetworkThreadTimeNanos(time.nanoseconds() - startTimeNanos);
     }
 
     @Override
@@ -395,7 +413,7 @@ public class Selector implements Selectable {
     }
 
     @Override
-    public List<String> disconnected() {
+    public Map<String, ChannelState> disconnected() {
         return this.disconnected;
     }
 
@@ -448,6 +466,7 @@ public class Selector implements Selectable {
                 if (log.isTraceEnabled())
                     log.trace("About to close the idle connection from {} due to being idle for {} millis",
                             connectionId, (currentTimeNanos - expiredConnection.getValue()) / 1000 / 1000);
+                channel.state(ChannelState.EXPIRED);
                 close(channel, true);
             }
         }
@@ -471,7 +490,12 @@ public class Selector implements Selectable {
                 it.remove();
             }
         }
-        this.disconnected.addAll(this.failedSends);
+        for (String channel : this.failedSends) {
+            KafkaChannel failedChannel = closingChannels.get(channel);
+            if (failedChannel != null)
+                failedChannel.state(ChannelState.FAILED_SEND);
+            this.disconnected.put(channel, ChannelState.FAILED_SEND);
+        }
         this.failedSends.clear();
     }
 
@@ -498,8 +522,12 @@ public class Selector implements Selectable {
      */
     public void close(String id) {
         KafkaChannel channel = this.channels.get(id);
-        if (channel != null)
+        if (channel != null) {
+            // There is no disconnect notification for local close, but updating
+            // channel state here anyway to avoid confusion.
+            channel.state(ChannelState.LOCAL_CLOSE);
             close(channel, false);
+        }
     }
 
     /**
@@ -548,7 +576,7 @@ public class Selector implements Selectable {
         this.sensors.connectionClosed.record();
         this.stagedReceives.remove(channel);
         if (notifyDisconnect)
-            this.disconnected.add(channel.id());
+            this.disconnected.put(channel.id(), channel.state());
     }
 
     /**
@@ -656,6 +684,10 @@ public class Selector implements Selectable {
 
     private class SelectorMetrics {
         private final Metrics metrics;
+        private final String metricGrpPrefix;
+        private final Map<String, String> metricTags;
+        private final boolean metricsPerConnection;
+
         public final Sensor connectionClosed;
         public final Sensor connectionCreated;
         public final Sensor bytesTransferred;
@@ -668,8 +700,11 @@ public class Selector implements Selectable {
         private final List<MetricName> topLevelMetricNames = new ArrayList<>();
         private final List<Sensor> sensors = new ArrayList<>();
 
-        public SelectorMetrics(Metrics metrics) {
+        public SelectorMetrics(Metrics metrics, String metricGrpPrefix, Map<String, String> metricTags, boolean metricsPerConnection) {
             this.metrics = metrics;
+            this.metricGrpPrefix = metricGrpPrefix;
+            this.metricTags = metricTags;
+            this.metricsPerConnection = metricsPerConnection;
             String metricGrpName = metricGrpPrefix + "-metrics";
             StringBuilder tagsSuffix = new StringBuilder();
 

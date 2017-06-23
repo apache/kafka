@@ -35,7 +35,7 @@ public interface Deserializer<T> extends Closeable {
      * @param isKey whether is for key or value
      */
     public void configure(Map<String, ?> configs, boolean isKey);
-    
+
     /**
      * Deserialize a record value from a bytearray into a value or object.
      * @param topic topic associated with the data

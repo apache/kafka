@@ -23,6 +23,8 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.test.MockProcessorContext;
+import org.junit.After;
+import org.junit.Before;
 import org.junit.Test;
 
 import static org.hamcrest.CoreMatchers.containsString;
@@ -31,17 +33,25 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.fail;
 
 public class SinkNodeTest {
+    private final Serializer anySerializer = Serdes.Bytes().serializer();
+    private final StateSerdes anyStateSerde = StateSerdes.withBuiltinTypes("anyName", Bytes.class, Bytes.class);
+    private final MockProcessorContext context = new MockProcessorContext(anyStateSerde,
+        new RecordCollectorImpl(new MockProducer<byte[], byte[]>(true, anySerializer, anySerializer), null));
+    private final SinkNode sink = new SinkNode<>("anyNodeName", "any-output-topic", anySerializer, anySerializer, null);
+
+    @Before
+    public void before() {
+        sink.init(context);
+    }
+
+    @After
+    public void after() {
+        context.close();
+    }
 
     @Test
     @SuppressWarnings("unchecked")
     public void shouldThrowStreamsExceptionOnInputRecordWithInvalidTimestamp() {
-        // Given
-        final Serializer anySerializer = Serdes.Bytes().serializer();
-        final StateSerdes anyStateSerde = StateSerdes.withBuiltinTypes("anyName", Bytes.class, Bytes.class);
-        final MockProcessorContext context = new MockProcessorContext(anyStateSerde,
-            new RecordCollectorImpl(new MockProducer<byte[], byte[]>(true, anySerializer, anySerializer), null));
-        final SinkNode sink = new SinkNode<>("anyNodeName", "any-output-topic", anySerializer, anySerializer, null);
-        sink.init(context);
         final Bytes anyKey = new Bytes("any key".getBytes());
         final Bytes anyValue = new Bytes("any value".getBytes());
 
@@ -51,24 +61,18 @@ public class SinkNodeTest {
             sink.process(anyKey, anyValue);
             fail("Should have thrown StreamsException");
         } catch (final StreamsException ignored) {
+            // expected
         }
     }
 
     @Test
     @SuppressWarnings("unchecked")
     public void shouldThrowStreamsExceptionOnKeyValueTypeSerializerMismatch() {
-        // Given
-        final Serializer anySerializer = Serdes.Bytes().serializer();
-        final StateSerdes anyStateSerde = StateSerdes.withBuiltinTypes("anyName", Bytes.class, Bytes.class);
-        final MockProcessorContext context = new MockProcessorContext(anyStateSerde,
-            new RecordCollectorImpl(new MockProducer<byte[], byte[]>(true, anySerializer, anySerializer), null));
-        context.setTime(0);
-        final SinkNode sink = new SinkNode<>("anyNodeName", "any-output-topic", anySerializer, anySerializer, null);
-        sink.init(context);
         final String keyOfDifferentTypeThanSerializer = "key with different type";
         final String valueOfDifferentTypeThanSerializer = "value with different type";
 
         // When/Then
+        context.setTime(0);
         try {
             sink.process(keyOfDifferentTypeThanSerializer, valueOfDifferentTypeThanSerializer);
             fail("Should have thrown StreamsException");
@@ -80,17 +84,10 @@ public class SinkNodeTest {
     @Test
     @SuppressWarnings("unchecked")
     public void shouldHandleNullKeysWhenThrowingStreamsExceptionOnKeyValueTypeSerializerMismatch() {
-        // Given
-        final Serializer anySerializer = Serdes.Bytes().serializer();
-        final StateSerdes anyStateSerde = StateSerdes.withBuiltinTypes("anyName", Bytes.class, Bytes.class);
-        final MockProcessorContext context = new MockProcessorContext(anyStateSerde,
-            new RecordCollectorImpl(new MockProducer<byte[], byte[]>(true, anySerializer, anySerializer), null));
-        context.setTime(1);
-        final SinkNode sink = new SinkNode<>("anyNodeName", "any-output-topic", anySerializer, anySerializer, null);
-        sink.init(context);
         final String invalidValueToTriggerSerializerMismatch = "";
 
         // When/Then
+        context.setTime(1);
         try {
             sink.process(null, invalidValueToTriggerSerializerMismatch);
             fail("Should have thrown StreamsException");
@@ -103,17 +100,10 @@ public class SinkNodeTest {
     @Test
     @SuppressWarnings("unchecked")
     public void shouldHandleNullValuesWhenThrowingStreamsExceptionOnKeyValueTypeSerializerMismatch() {
-        // Given
-        final Serializer anySerializer = Serdes.Bytes().serializer();
-        final StateSerdes anyStateSerde = StateSerdes.withBuiltinTypes("anyName", Bytes.class, Bytes.class);
-        final MockProcessorContext context = new MockProcessorContext(anyStateSerde,
-            new RecordCollectorImpl(new MockProducer<byte[], byte[]>(true, anySerializer, anySerializer), null));
-        context.setTime(1);
-        final SinkNode sink = new SinkNode<>("anyNodeName", "any-output-topic", anySerializer, anySerializer, null);
-        sink.init(context);
         final String invalidKeyToTriggerSerializerMismatch = "";
 
         // When/Then
+        context.setTime(1);
         try {
             sink.process(invalidKeyToTriggerSerializerMismatch, null);
             fail("Should have thrown StreamsException");

@@ -99,7 +99,7 @@ class KafkaScheduler(val threads: Int,
     }
   }
 
-  def schedule(name: String, fun: ()=>Unit, delay: Long, period: Long, unit: TimeUnit) = {
+  def schedule(name: String, fun: ()=>Unit, delay: Long, period: Long, unit: TimeUnit) {
     debug("Scheduling task %s with initial delay %d ms and period %d ms."
         .format(name, TimeUnit.MILLISECONDS.convert(delay, unit), TimeUnit.MILLISECONDS.convert(period, unit)))
     this synchronized {

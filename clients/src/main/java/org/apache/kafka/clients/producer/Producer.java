@@ -19,6 +19,9 @@ package org.apache.kafka.clients.producer;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.PartitionInfo;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.ProducerFencedException;
 
 import java.io.Closeable;
 import java.util.List;
@@ -26,13 +29,38 @@ import java.util.Map;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
-
 /**
  * The interface for the {@link KafkaProducer}
  * @see KafkaProducer
  * @see MockProducer
  */
 public interface Producer<K, V> extends Closeable {
+
+    /**
+     * See {@link KafkaProducer#initTransactions()}
+     */
+    void initTransactions();
+
+    /**
+     * See {@link KafkaProducer#beginTransaction()}
+     */
+    void beginTransaction() throws ProducerFencedException;
+
+    /**
+     * See {@link KafkaProducer#sendOffsetsToTransaction(Map, String)}
+     */
+    void sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets,
+                                  String consumerGroupId) throws ProducerFencedException;
+
+    /**
+     * See {@link KafkaProducer#commitTransaction()}
+     */
+    void commitTransaction() throws ProducerFencedException;
+
+    /**
+     * See {@link KafkaProducer#abortTransaction()}
+     */
+    void abortTransaction() throws ProducerFencedException;
 
     /**
      * Send the given record asynchronously and return a future which will eventually contain the response information.

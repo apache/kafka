@@ -154,7 +154,7 @@ public class SslSelectorTest extends SelectorTest {
         List<String> disconnected = new ArrayList<>();
         while (!disconnected.contains(node) && System.currentTimeMillis() < expiryTime) {
             selector.poll(10);
-            disconnected.addAll(selector.disconnected());
+            disconnected.addAll(selector.disconnected().keySet());
         }
         assertTrue("Renegotiation should cause disconnection", disconnected.contains(node));
 

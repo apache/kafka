@@ -21,6 +21,7 @@ import kafka.utils.JaasTestUtils
 import kafka.admin.ConfigCommand
 import kafka.utils.ZkUtils
 import scala.collection.JavaConverters._
+import org.junit.Before
 
 class SaslScramSslEndToEndAuthorizationTest extends SaslEndToEndAuthorizationTest {
   override protected def kafkaClientSaslMechanism = "SCRAM-SHA-256"
@@ -33,16 +34,23 @@ class SaslScramSslEndToEndAuthorizationTest extends SaslEndToEndAuthorizationTes
   override def configureSecurityBeforeServersStart() {
     super.configureSecurityBeforeServersStart()
     zkUtils.makeSurePersistentPathExists(ZkUtils.ConfigChangesPath)
-
-    def configCommandArgs(username: String, password: String) : Array[String] = {
-      val credentials = kafkaServerSaslMechanisms.map(m => s"$m=[iterations=4096,password=$password]")
-      Array("--zookeeper", zkConnect,
-            "--alter", "--add-config", credentials.mkString(","),
-            "--entity-type", "users",
-            "--entity-name", username)
-    }
+    // Create broker credentials before starting brokers
     ConfigCommand.main(configCommandArgs(kafkaPrincipal, kafkaPassword))
+  }
+
+  @Before
+  override def setUp() {
+    super.setUp()
+    // Create client credentials after starting brokers so that dynamic credential creation is also tested
     ConfigCommand.main(configCommandArgs(clientPrincipal, clientPassword))
     ConfigCommand.main(configCommandArgs(JaasTestUtils.KafkaScramUser2, JaasTestUtils.KafkaScramPassword2))
+  }
+
+  private def configCommandArgs(username: String, password: String) : Array[String] = {
+    val credentials = kafkaServerSaslMechanisms.map(m => s"$m=[iterations=4096,password=$password]")
+    Array("--zookeeper", zkConnect,
+          "--alter", "--add-config", credentials.mkString(","),
+          "--entity-type", "users",
+          "--entity-name", username)
   }
 }

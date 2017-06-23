@@ -29,41 +29,46 @@ import org.apache.kafka.streams.state.StateSerdes;
  * @param <K>
  * @param <AGG>
  */
-class MergedSortedCacheSessionStoreIterator<K, AGG> extends AbstractMergedSortedCacheStoreIterator<Windowed<K>, Windowed<Bytes>, AGG> {
-    private final StateSerdes<K, AGG> rawSerdes;
+class MergedSortedCacheSessionStoreIterator<K, AGG> extends AbstractMergedSortedCacheStoreIterator<Windowed<K>, Windowed<Bytes>, AGG, byte[]> {
 
+    private final StateSerdes<K, AGG> serdes;
+    private final SegmentedCacheFunction cacheFunction;
 
     MergedSortedCacheSessionStoreIterator(final PeekingKeyValueIterator<Bytes, LRUCacheEntry> cacheIterator,
                                           final KeyValueIterator<Windowed<Bytes>, byte[]> storeIterator,
-                                          final StateSerdes<K, AGG> serdes) {
-        super(cacheIterator, storeIterator, new StateSerdes<>(serdes.topic(),
-                                                              new SessionKeySerde<>(serdes.keySerde()),
-                                                              serdes.valueSerde()));
-
-        rawSerdes = serdes;
+                                          final StateSerdes<K, AGG> serdes,
+                                          final SegmentedCacheFunction cacheFunction) {
+        super(cacheIterator, storeIterator);
+        this.serdes = serdes;
+        this.cacheFunction = cacheFunction;
     }
 
     @Override
-    public KeyValue<Windowed<K>, AGG> deserializeStorePair(KeyValue<Windowed<Bytes>, byte[]> pair) {
-        final K key = rawSerdes.keyFrom(pair.key.key().get());
-        return KeyValue.pair(new Windowed<>(key, pair.key.window()), serdes.valueFrom(pair.value));
+    public KeyValue<Windowed<K>, AGG> deserializeStorePair(final KeyValue<Windowed<Bytes>, byte[]> pair) {
+        return KeyValue.pair(deserializeStoreKey(pair.key), serdes.valueFrom(pair.value));
     }
 
     @Override
     Windowed<K> deserializeCacheKey(final Bytes cacheKey) {
-        return SessionKeySerde.from(cacheKey.get(), rawSerdes.keyDeserializer(), rawSerdes.topic());
+        byte[] binaryKey = cacheFunction.key(cacheKey).get();
+        return SessionKeySerde.from(binaryKey, serdes.keyDeserializer(), serdes.topic());
+    }
+
+
+    @Override
+    AGG deserializeCacheValue(final LRUCacheEntry cacheEntry) {
+        return serdes.valueFrom(cacheEntry.value);
     }
 
     @Override
-    public Windowed<K> deserializeStoreKey(Windowed<Bytes> key) {
-        final K originalKey = rawSerdes.keyFrom(key.key().get());
+    public Windowed<K> deserializeStoreKey(final Windowed<Bytes> key) {
+        final K originalKey = serdes.keyFrom(key.key().get());
         return new Windowed<>(originalKey, key.window());
     }
 
     @Override
-    public int compare(Bytes cacheKey, Windowed<Bytes> storeKey) {
+    public int compare(final Bytes cacheKey, final Windowed<Bytes> storeKey) {
         Bytes storeKeyBytes = SessionKeySerde.bytesToBinary(storeKey);
-        return cacheKey.compareTo(storeKeyBytes);
+        return cacheFunction.compareSegmentedKeys(cacheKey, storeKeyBytes);
     }
 }
-

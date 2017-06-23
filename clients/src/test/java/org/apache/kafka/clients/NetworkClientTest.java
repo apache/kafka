@@ -54,6 +54,7 @@ public class NetworkClientTest {
     protected final Cluster cluster = TestUtils.singletonCluster("test", nodeId);
     protected final Node node = cluster.nodes().get(0);
     protected final long reconnectBackoffMsTest = 10 * 1000;
+    protected final long reconnectBackoffMaxTest = 10 * 1000;
     protected final NetworkClient client = createNetworkClient();
 
     private final NetworkClient clientWithStaticNodes = createNetworkClientWithStaticNodes();
@@ -61,18 +62,20 @@ public class NetworkClientTest {
     private final NetworkClient clientWithNoVersionDiscovery = createNetworkClientWithNoVersionDiscovery();
 
     private NetworkClient createNetworkClient() {
-        return new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE, reconnectBackoffMsTest,
+        return new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
+                reconnectBackoffMsTest, reconnectBackoffMaxTest,
                 64 * 1024, 64 * 1024, requestTimeoutMs, time, true, new ApiVersions());
     }
 
     private NetworkClient createNetworkClientWithStaticNodes() {
         return new NetworkClient(selector, new ManualMetadataUpdater(Arrays.asList(node)),
-                "mock-static", Integer.MAX_VALUE, 0, 64 * 1024, 64 * 1024, requestTimeoutMs,
+                "mock-static", Integer.MAX_VALUE, 0, 0, 64 * 1024, 64 * 1024, requestTimeoutMs,
                 time, true, new ApiVersions());
     }
 
     private NetworkClient createNetworkClientWithNoVersionDiscovery() {
-        return new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE, reconnectBackoffMsTest,
+        return new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
+                reconnectBackoffMsTest, reconnectBackoffMaxTest,
                 64 * 1024, 64 * 1024, requestTimeoutMs, time, false, new ApiVersions());
     }
 
@@ -158,7 +161,8 @@ public class NetworkClientTest {
     }
 
     private void maybeSetExpectedApiVersionsResponse() {
-        ByteBuffer buffer = ApiVersionsResponse.API_VERSIONS_RESPONSE.serialize((short) 0, new ResponseHeader(0));
+        short apiVersionsResponseVersion = ApiVersionsResponse.API_VERSIONS_RESPONSE.apiVersion(ApiKeys.API_VERSIONS.id).maxVersion;
+        ByteBuffer buffer = ApiVersionsResponse.API_VERSIONS_RESPONSE.serialize(apiVersionsResponseVersion, new ResponseHeader(0));
         selector.delayedReceive(new DelayedReceive(node.idString(), new NetworkReceive(node.idString(), buffer)));
     }
 
@@ -184,8 +188,8 @@ public class NetworkClientTest {
         // sleeping to make sure that the time since last send is greater than requestTimeOut
         time.sleep(3000);
         client.poll(3000, time.milliseconds());
-        String disconnectedNode = selector.disconnected().get(0);
-        assertEquals(node.idString(), disconnectedNode);
+        assertEquals(1, selector.disconnected().size());
+        assertTrue("Node not found in disconnected map", selector.disconnected().containsKey(node.idString()));
     }
 
     @Test

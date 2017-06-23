@@ -91,10 +91,7 @@ class ProducerTest extends ZooKeeperTestHarness with Logging{
     if (consumer2 != null)
       consumer2.close()
 
-    server1.shutdown
-    server2.shutdown
-    CoreUtils.delete(server1.config.logDirs)
-    CoreUtils.delete(server2.config.logDirs)
+    TestUtils.shutdownServers(Seq(server1, server2))
     super.tearDown()
   }
 

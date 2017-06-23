@@ -14,14 +14,14 @@
  See the License for the specific language governing permissions and
  limitations under the License.
 -->
-
 <script id="api-template" type="text/x-handlebars-template">
-	Kafka includes four core apis:
+	Kafka includes five core apis:
 	<ol>
 	<li>The <a href="#producerapi">Producer</a> API allows applications to send streams of data to topics in the Kafka cluster.
 	<li>The <a href="#consumerapi">Consumer</a> API allows applications to read streams of data from topics in the Kafka cluster.
 	<li>The <a href="#streamsapi">Streams</a> API allows transforming streams of data from input topics to output topics.
 	<li>The <a href="#connectapi">Connect</a> API allows implementing connectors that continually pull from some source system or application into Kafka or push from Kafka into some sink system or application.
+	<li>The <a href="#adminapi">AdminClient</a> API allows managing and inspecting topics, brokers, and other Kafka objects.
 	</ol>
 
 	Kafka exposes all its functionality over a language independent protocol which has clients available in many programming languages. However only the Java clients are maintained as part of the main Kafka project, the others are available as independent open source projects. A list of non-Java clients is available <a href="https://cwiki.apache.org/confluence/display/KAFKA/Clients">here</a>.
@@ -31,7 +31,7 @@
 	The Producer API allows applications to send streams of data to topics in the Kafka cluster.
 	<p>
 	Examples showing how to use the producer are given in the
-	<a href="/{{version}}/javadoc/index.html?org/apache/kafka/clients/producer/KafkaProducer.html" title="Kafka 0.10.2 Javadoc">javadocs</a>.
+	<a href="/{{version}}/javadoc/index.html?org/apache/kafka/clients/producer/KafkaProducer.html" title="Kafka {{dotVersion}} Javadoc">javadocs</a>.
 	<p>
 	To use the producer, you can use the following maven dependency:
 
@@ -39,7 +39,7 @@
 		&lt;dependency&gt;
 			&lt;groupId&gt;org.apache.kafka&lt;/groupId&gt;
 			&lt;artifactId&gt;kafka-clients&lt;/artifactId&gt;
-			&lt;version&gt;0.10.2.0&lt;/version&gt;
+			&lt;version&gt;{{dotVersion}}.0&lt;/version&gt;
 		&lt;/dependency&gt;
 	</pre>
 
@@ -48,14 +48,14 @@
 	The Consumer API allows applications to read streams of data from topics in the Kafka cluster.
 	<p>
 	Examples showing how to use the consumer are given in the
-	<a href="/{{version}}/javadoc/index.html?org/apache/kafka/clients/consumer/KafkaConsumer.html" title="Kafka 0.10.2 Javadoc">javadocs</a>.
+	<a href="/{{version}}/javadoc/index.html?org/apache/kafka/clients/consumer/KafkaConsumer.html" title="Kafka {{dotVersion}} Javadoc">javadocs</a>.
 	<p>
 	To use the consumer, you can use the following maven dependency:
 	<pre>
 		&lt;dependency&gt;
 			&lt;groupId&gt;org.apache.kafka&lt;/groupId&gt;
 			&lt;artifactId&gt;kafka-clients&lt;/artifactId&gt;
-			&lt;version&gt;0.10.2.0&lt;/version&gt;
+			&lt;version&gt;{{dotVersion}}.0&lt;/version&gt;
 		&lt;/dependency&gt;
 	</pre>
 
@@ -64,7 +64,7 @@
 	The <a href="#streamsapi">Streams</a> API allows transforming streams of data from input topics to output topics.
 	<p>
 	Examples showing how to use this library are given in the
-	<a href="/{{version}}/javadoc/index.html?org/apache/kafka/streams/KafkaStreams.html" title="Kafka 0.10.2 Javadoc">javadocs</a>
+	<a href="/{{version}}/javadoc/index.html?org/apache/kafka/streams/KafkaStreams.html" title="Kafka {{dotVersion}} Javadoc">javadocs</a>
 	<p>
 	Additional documentation on using the Streams API is available <a href="/{{version}}/documentation/streams">here</a>.
 	<p>
@@ -74,7 +74,7 @@
 		&lt;dependency&gt;
 			&lt;groupId&gt;org.apache.kafka&lt;/groupId&gt;
 			&lt;artifactId&gt;kafka-streams&lt;/artifactId&gt;
-			&lt;version&gt;0.10.2.0&lt;/version&gt;
+			&lt;version&gt;{{dotVersion}}.0&lt;/version&gt;
 		&lt;/dependency&gt;
 	</pre>
 
@@ -84,10 +84,25 @@
 	<p>
 	Many users of Connect won't need to use this API directly, though, they can use pre-built connectors without needing to write any code. Additional information on using Connect is available <a href="/documentation.html#connect">here</a>.
 	<p>
-	Those who want to implement custom connectors can see the <a href="/{{version}}/javadoc/index.html?org/apache/kafka/connect" title="Kafka 0.10.2 Javadoc">javadoc</a>.
+	Those who want to implement custom connectors can see the <a href="/{{version}}/javadoc/index.html?org/apache/kafka/connect" title="Kafka {{dotVersion}} Javadoc">javadoc</a>.
 	<p>
 
-	<h3><a id="legacyapis" href="#streamsapi">2.5 Legacy APIs</a></h3>
+	<h3><a id="adminapi" href="#adminapi">2.5 AdminClient API</a></h3>
+
+	The AdminClient API supports managing and inspecting topics, brokers, acls, and other Kafka objects.
+	<p>
+	To use the AdminClient API, add the following Maven dependency:
+	<pre>
+		&lt;dependency&gt;
+			&lt;groupId&gt;org.apache.kafka&lt;/groupId&gt;
+			&lt;artifactId&gt;kafka-clients&lt;/artifactId&gt;
+			&lt;version&gt;{{dotVersion}}.0&lt;/version&gt;
+		&lt;/dependency&gt;
+	</pre>
+	For more information about the AdminClient APIs, see the <a href="/{{version}}/javadoc/index.html?org/apache/kafka/clients/admin/AdminClient.html" title="Kafka {{dotVersion}} Javadoc">javadoc</a>.
+	<p>
+
+	<h3><a id="legacyapis" href="#streamsapi">2.6 Legacy APIs</a></h3>
 
 	<p>
 	A more limited legacy producer and consumer api is also included in Kafka. These old Scala APIs are deprecated and only still available for compatibility purposes. Information on them can be found here <a href="/081/documentation.html#producerapi"  title="Kafka 0.8.1 Docs">

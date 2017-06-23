@@ -126,7 +126,7 @@ object SimpleConsumerShell extends Logging {
                        .minBytes(ConsumerConfig.MinFetchBytes)
 
     // getting topic metadata
-    info("Getting topic metatdata...")
+    info("Getting topic metadata...")
     val brokerList = options.valueOf(brokerListOpt)
     ToolsUtils.validatePortOrDie(parser,brokerList)
     val metadataTargetBrokers = ClientUtils.parseBrokerList(brokerList)

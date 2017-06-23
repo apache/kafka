@@ -153,7 +153,8 @@ public class MockClient implements KafkaClient {
             short version = nodeApiVersions.usableVersion(request.apiKey(), builder.desiredVersion());
             AbstractRequest abstractRequest = request.requestBuilder().build(version);
             if (!futureResp.requestMatcher.matches(abstractRequest))
-                throw new IllegalStateException("Next in line response did not match expected request");
+                throw new IllegalStateException("Next in line response did not match expected request, request: "
+                        + abstractRequest);
             ClientResponse resp = new ClientResponse(request.makeHeader(version), request.callback(), request.destination(),
                     request.createdTimeMs(), time.milliseconds(), futureResp.disconnected, null, futureResp.responseBody);
             responses.add(resp);

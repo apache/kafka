@@ -165,7 +165,7 @@ case class OffsetCommitRequest(groupId: String,
     val commitStatus = requestInfo.mapValues(_ => error)
     val commitResponse = OffsetCommitResponse(commitStatus, correlationId)
 
-    requestChannel.sendResponse(new Response(request, new RequestOrResponseSend(request.connectionId, commitResponse)))
+    requestChannel.sendResponse(Response(request, new RequestOrResponseSend(request.connectionId, commitResponse)))
   }
 
   override def describe(details: Boolean): String = {

@@ -27,6 +27,7 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -120,24 +121,26 @@ public class StoreChangelogReader implements ChangelogReader {
             log.info("{} Starting restoring state stores from changelog topics {}", logPrefix, needsRestoring.keySet());
 
             consumer.assign(needsRestoring.keySet());
-
+            final List<StateRestorer> needsPositionUpdate = new ArrayList<>();
             for (final StateRestorer restorer : needsRestoring.values()) {
                 if (restorer.checkpoint() != StateRestorer.NO_CHECKPOINT) {
                     consumer.seek(restorer.partition(), restorer.checkpoint());
                     logRestoreOffsets(restorer.partition(),
                                       restorer.checkpoint(),
                                       endOffsets.get(restorer.partition()));
+                    restorer.setStartingOffset(consumer.position(restorer.partition()));
                 } else {
                     consumer.seekToBeginning(Collections.singletonList(restorer.partition()));
-                    logRestoreOffsets(restorer.partition(),
-                                      consumer.position(restorer.partition()),
-                                      endOffsets.get(restorer.partition()));
+                    needsPositionUpdate.add(restorer);
                 }
-                // TODO: each consumer.position() call after seekToBeginning will cause
-                // a blocking round trip to reset the position for that partition; we should
-                // batch them into a single round trip to reset for all necessary partitions
+            }
 
-                restorer.setStartingOffset(consumer.position(restorer.partition()));
+            for (final StateRestorer restorer : needsPositionUpdate) {
+                final long position = consumer.position(restorer.partition());
+                restorer.setStartingOffset(position);
+                logRestoreOffsets(restorer.partition(),
+                                  position,
+                                  endOffsets.get(restorer.partition()));
             }
 
             final Set<TopicPartition> partitions = new HashSet<>(needsRestoring.keySet());
@@ -154,12 +157,12 @@ public class StoreChangelogReader implements ChangelogReader {
         }
     }
 
-    private void logRestoreOffsets(final TopicPartition partition, final long checkpoint, final Long aLong) {
+    private void logRestoreOffsets(final TopicPartition partition, final long startingOffset, final Long endOffset) {
         log.debug("{} Restoring partition {} from offset {} to endOffset {}",
                   logPrefix,
                   partition,
-                  checkpoint,
-                  aLong);
+                  startingOffset,
+                  endOffset);
     }
 
     @Override
@@ -209,7 +212,9 @@ public class StoreChangelogReader implements ChangelogReader {
             if (restorer.hasCompleted(offset, endOffset)) {
                 return offset;
             }
-            restorer.restore(record.key(), record.value());
+            if (record.key() != null) {
+                restorer.restore(record.key(), record.value());
+            }
         }
         return consumer.position(restorer.partition());
     }

@@ -103,7 +103,7 @@ public class ThreadCacheTest {
     public void cacheOverheadsSmallValues() {
         Runtime runtime = Runtime.getRuntime();
         double factor = 0.05;
-        double systemFactor = 2.5;
+        double systemFactor = 3; // if I ask for a cache size of 10 MB, accept an overhead of 3x, i.e., 30 MBs might be allocated
         long desiredCacheSize = Math.min(100 * 1024 * 1024L, runtime.maxMemory());
         int keySizeBytes = 8;
         int valueSizeBytes = 100;
@@ -115,7 +115,7 @@ public class ThreadCacheTest {
     public void cacheOverheadsLargeValues() {
         Runtime runtime = Runtime.getRuntime();
         double factor = 0.05;
-        double systemFactor = 1.5;
+        double systemFactor = 2; // if I ask for a cache size of 10 MB, accept an overhead of 2x, i.e., 20 MBs might be allocated
         long desiredCacheSize = Math.min(100 * 1024 * 1024L, runtime.maxMemory());
         int keySizeBytes = 8;
         int valueSizeBytes = 1000;

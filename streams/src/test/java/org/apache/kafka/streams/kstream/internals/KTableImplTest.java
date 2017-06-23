@@ -25,8 +25,10 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
+import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.processor.internals.SinkNode;
 import org.apache.kafka.streams.processor.internals.SourceNode;
+import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockAggregator;
 import org.apache.kafka.test.MockInitializer;
@@ -419,13 +421,13 @@ public class KTableImplTest {
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullTopicInThrough() throws Exception {
-        table.through(null, "store");
+    public void shouldAllowNullTopicInThrough() throws Exception {
+        table.through((String) null, "store");
     }
 
-    @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullStoreInThrough() throws Exception {
-        table.through("topic", null);
+    @Test
+    public void shouldAllowNullStoreInThrough() throws Exception {
+        table.through("topic", (String) null);
     }
 
     @Test(expected = NullPointerException.class)
@@ -436,6 +438,26 @@ public class KTableImplTest {
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullOtherTableOnJoin() throws Exception {
         table.join(null, MockValueJoiner.TOSTRING_JOINER);
+    }
+
+    @Test
+    public void shouldAllowNullStoreInJoin() throws Exception {
+        table.join(table, MockValueJoiner.TOSTRING_JOINER, null, (String) null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAllowNullStoreSupplierInJoin() throws Exception {
+        table.join(table, MockValueJoiner.TOSTRING_JOINER, (StateStoreSupplier<KeyValueStore>) null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAllowNullStoreSupplierInLeftJoin() throws Exception {
+        table.leftJoin(table, MockValueJoiner.TOSTRING_JOINER, (StateStoreSupplier<KeyValueStore>) null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAllowNullStoreSupplierInOuterJoin() throws Exception {
+        table.outerJoin(table, MockValueJoiner.TOSTRING_JOINER, (StateStoreSupplier<KeyValueStore>) null);
     }
 
     @Test(expected = NullPointerException.class)

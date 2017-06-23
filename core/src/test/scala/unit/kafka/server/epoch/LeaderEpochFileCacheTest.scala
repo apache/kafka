@@ -401,7 +401,7 @@ class LeaderEpochFileCacheTest {
     cache.assign(epoch = 4, offset = 11)
 
     //When clear latest on epoch boundary
-    cache.clearLatest(offset = 8)
+    cache.clearAndFlushLatest(offset = 8)
 
     //Then should remove two latest epochs (remove is inclusive)
     assertEquals(ListBuffer(EpochEntry(2, 6)), cache.epochEntries)
@@ -418,7 +418,7 @@ class LeaderEpochFileCacheTest {
     cache.assign(epoch = 4, offset = 11)
 
     //When reset to offset ON epoch boundary
-    cache.clearEarliest(offset = 8)
+    cache.clearAndFlushEarliest(offset = 8)
 
     //Then should preserve (3, 8)
     assertEquals(ListBuffer(EpochEntry(3, 8), EpochEntry(4, 11)), cache.epochEntries)
@@ -435,7 +435,7 @@ class LeaderEpochFileCacheTest {
     cache.assign(epoch = 4, offset = 11)
 
     //When reset to offset BETWEEN epoch boundaries
-    cache.clearEarliest(offset = 9)
+    cache.clearAndFlushEarliest(offset = 9)
 
     //Then we should retain epoch 3, but update it's offset to 9 as 8 has been removed
     assertEquals(ListBuffer(EpochEntry(3, 9), EpochEntry(4, 11)), cache.epochEntries)
@@ -452,7 +452,7 @@ class LeaderEpochFileCacheTest {
     cache.assign(epoch = 4, offset = 11)
 
     //When reset to offset before first epoch offset
-    cache.clearEarliest(offset = 1)
+    cache.clearAndFlushEarliest(offset = 1)
 
     //Then nothing should change
     assertEquals(ListBuffer(EpochEntry(2, 6),EpochEntry(3, 8), EpochEntry(4, 11)), cache.epochEntries)
@@ -469,7 +469,7 @@ class LeaderEpochFileCacheTest {
     cache.assign(epoch = 4, offset = 11)
 
     //When reset to offset on earliest epoch boundary
-    cache.clearEarliest(offset = 6)
+    cache.clearAndFlushEarliest(offset = 6)
 
     //Then nothing should change
     assertEquals(ListBuffer(EpochEntry(2, 6),EpochEntry(3, 8), EpochEntry(4, 11)), cache.epochEntries)
@@ -486,7 +486,7 @@ class LeaderEpochFileCacheTest {
     cache.assign(epoch = 4, offset = 11)
 
     //When
-    cache.clearEarliest(offset = 11)
+    cache.clearAndFlushEarliest(offset = 11)
 
     //Then retain the last
     assertEquals(ListBuffer(EpochEntry(4, 11)), cache.epochEntries)
@@ -503,7 +503,7 @@ class LeaderEpochFileCacheTest {
     cache.assign(epoch = 4, offset = 11)
 
     //When we clear from a postition between offset 8 & offset 11
-    cache.clearEarliest(offset = 9)
+    cache.clearAndFlushEarliest(offset = 9)
 
     //Then we should update the middle epoch entry's offset
     assertEquals(ListBuffer(EpochEntry(3, 9), EpochEntry(4, 11)), cache.epochEntries)
@@ -520,7 +520,7 @@ class LeaderEpochFileCacheTest {
     cache.assign(epoch = 2, offset = 10)
 
     //When we clear from a postition between offset 0 & offset 7
-    cache.clearEarliest(offset = 5)
+    cache.clearAndFlushEarliest(offset = 5)
 
     //Then we should keeep epoch 0 but update the offset appropriately
     assertEquals(ListBuffer(EpochEntry(0,5), EpochEntry(1, 7), EpochEntry(2, 10)), cache.epochEntries)
@@ -537,7 +537,7 @@ class LeaderEpochFileCacheTest {
     cache.assign(epoch = 4, offset = 11)
 
     //When reset to offset beyond last epoch
-    cache.clearEarliest(offset = 15)
+    cache.clearAndFlushEarliest(offset = 15)
 
     //Then update the last
     assertEquals(ListBuffer(EpochEntry(4, 15)), cache.epochEntries)
@@ -554,7 +554,7 @@ class LeaderEpochFileCacheTest {
     cache.assign(epoch = 4, offset = 11)
 
     //When reset to offset BETWEEN epoch boundaries
-    cache.clearLatest(offset = 9)
+    cache.clearAndFlushLatest(offset = 9)
 
     //Then should keep the preceding epochs
     assertEquals(3, cache.latestEpoch())
@@ -572,7 +572,7 @@ class LeaderEpochFileCacheTest {
     cache.assign(epoch = 4, offset = 11)
 
     //When 
-    cache.clear()
+    cache.clearAndFlush()
 
     //Then 
     assertEquals(0, cache.epochEntries.size)
@@ -589,7 +589,7 @@ class LeaderEpochFileCacheTest {
     cache.assign(epoch = 4, offset = 11)
 
     //When reset to offset on epoch boundary
-    cache.clearLatest(offset = UNDEFINED_EPOCH_OFFSET)
+    cache.clearAndFlushLatest(offset = UNDEFINED_EPOCH_OFFSET)
 
     //Then should do nothing
     assertEquals(3, cache.epochEntries.size)
@@ -606,7 +606,7 @@ class LeaderEpochFileCacheTest {
     cache.assign(epoch = 4, offset = 11)
 
     //When reset to offset on epoch boundary
-    cache.clearEarliest(offset = UNDEFINED_EPOCH_OFFSET)
+    cache.clearAndFlushEarliest(offset = UNDEFINED_EPOCH_OFFSET)
 
     //Then should do nothing
     assertEquals(3, cache.epochEntries.size)
@@ -645,7 +645,7 @@ class LeaderEpochFileCacheTest {
     val cache = new LeaderEpochFileCache(tp, () => leoFinder, checkpoint)
 
     //Then
-    cache.clearEarliest(7)
+    cache.clearAndFlushEarliest(7)
   }
 
   @Test
@@ -657,7 +657,7 @@ class LeaderEpochFileCacheTest {
     val cache = new LeaderEpochFileCache(tp, () => leoFinder, checkpoint)
 
     //Then
-    cache.clearLatest(7)
+    cache.clearAndFlushLatest(7)
   }
 
   @Before

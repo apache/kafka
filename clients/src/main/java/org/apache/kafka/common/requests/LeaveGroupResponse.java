@@ -24,6 +24,7 @@ import java.nio.ByteBuffer;
 
 public class LeaveGroupResponse extends AbstractResponse {
 
+    private static final String THROTTLE_TIME_KEY_NAME = "throttle_time_ms";
     private static final String ERROR_CODE_KEY_NAME = "error_code";
 
     /**
@@ -36,13 +37,24 @@ public class LeaveGroupResponse extends AbstractResponse {
      * GROUP_AUTHORIZATION_FAILED (30)
      */
     private final Errors error;
+    private final int throttleTimeMs;
 
     public LeaveGroupResponse(Errors error) {
+        this(DEFAULT_THROTTLE_TIME, error);
+    }
+
+    public LeaveGroupResponse(int throttleTimeMs, Errors error) {
+        this.throttleTimeMs = throttleTimeMs;
         this.error = error;
     }
 
     public LeaveGroupResponse(Struct struct) {
+        this.throttleTimeMs = struct.hasField(THROTTLE_TIME_KEY_NAME) ? struct.getInt(THROTTLE_TIME_KEY_NAME) : DEFAULT_THROTTLE_TIME;
         error = Errors.forCode(struct.getShort(ERROR_CODE_KEY_NAME));
+    }
+
+    public int throttleTimeMs() {
+        return throttleTimeMs;
     }
 
     public Errors error() {
@@ -52,6 +64,8 @@ public class LeaveGroupResponse extends AbstractResponse {
     @Override
     public Struct toStruct(short version) {
         Struct struct = new Struct(ApiKeys.LEAVE_GROUP.responseSchema(version));
+        if (struct.hasField(THROTTLE_TIME_KEY_NAME))
+            struct.set(THROTTLE_TIME_KEY_NAME, throttleTimeMs);
         struct.set(ERROR_CODE_KEY_NAME, error.code());
         return struct;
     }

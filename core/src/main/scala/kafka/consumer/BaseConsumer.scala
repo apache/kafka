@@ -26,6 +26,8 @@ import kafka.message.Message
 import org.apache.kafka.clients.consumer.internals.NoOpConsumerRebalanceListener
 import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.header.Headers
+import org.apache.kafka.common.header.internals.RecordHeaders
 
 /**
  * A base consumer used to abstract both old and new consumer
@@ -45,7 +47,8 @@ case class BaseConsumerRecord(topic: String,
                               timestamp: Long = Message.NoTimestamp,
                               timestampType: TimestampType = TimestampType.NO_TIMESTAMP_TYPE,
                               key: Array[Byte],
-                              value: Array[Byte])
+                              value: Array[Byte],
+                              headers: Headers = new RecordHeaders())
 
 class NewShinyConsumer(topic: Option[String], partitionId: Option[Int], offset: Option[Long], whitelist: Option[String], consumerProps: Properties, val timeoutMs: Long = Long.MaxValue) extends BaseConsumer {
   import org.apache.kafka.clients.consumer.KafkaConsumer
@@ -97,7 +100,8 @@ class NewShinyConsumer(topic: Option[String], partitionId: Option[Int], offset: 
                        record.timestamp,
                        record.timestampType,
                        record.key,
-                       record.value)
+                       record.value,
+                       record.headers)
   }
 
   override def stop() {
@@ -132,7 +136,8 @@ class OldConsumer(topicFilter: TopicFilter, consumerProps: Properties) extends B
                        messageAndMetadata.timestamp,
                        messageAndMetadata.timestampType,
                        messageAndMetadata.key,
-                       messageAndMetadata.message)
+                       messageAndMetadata.message, 
+                       new RecordHeaders())
   }
 
   override def stop() {

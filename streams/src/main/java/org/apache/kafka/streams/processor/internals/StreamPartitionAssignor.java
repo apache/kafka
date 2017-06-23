@@ -206,7 +206,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         }
 
         streamThread = (StreamThread) o;
-        streamThread.partitionAssignor(this);
+        streamThread.setPartitionAssignor(this);
 
         String userEndPoint = (String) configs.get(StreamsConfig.APPLICATION_SERVER_CONFIG);
         if (userEndPoint != null && !userEndPoint.isEmpty()) {

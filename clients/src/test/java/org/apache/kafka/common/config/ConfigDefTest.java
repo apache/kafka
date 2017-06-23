@@ -115,6 +115,7 @@ public class ConfigDefTest {
         testBadInputs(Type.STRING, new Object());
         testBadInputs(Type.LIST, 53, new Object());
         testBadInputs(Type.BOOLEAN, "hello", "truee", "fals");
+        testBadInputs(Type.CLASS, "ClassDoesNotExist");
     }
 
     private void testBadInputs(Type type, Object... values) {
@@ -139,6 +140,13 @@ public class ConfigDefTest {
     @Test(expected = ConfigException.class)
     public void testInvalidDefaultString() {
         new ConfigDef().define("name", Type.STRING, "bad", ValidString.in("valid", "values"), Importance.HIGH, "docs");
+    }
+
+    @Test
+    public void testNestedClass() {
+        // getName(), not getSimpleName() or getCanonicalName(), is the version that should be able to locate the class
+        Map<String, Object> props = Collections.<String, Object>singletonMap("name", NestedClass.class.getName());
+        new ConfigDef().define("name", Type.CLASS, Importance.HIGH, "docs").parse(props);
     }
 
     @Test
@@ -491,4 +499,63 @@ public class ConfigDefTest {
         assertEquals(expectedRst, def.toEnrichedRst());
     }
 
+    @Test
+    public void testConvertValueToStringBoolean() {
+        assertEquals("true", ConfigDef.convertToString(true, Type.BOOLEAN));
+    }
+
+    @Test
+    public void testConvertValueToStringShort() {
+        assertEquals("32767", ConfigDef.convertToString(Short.MAX_VALUE, Type.SHORT));
+    }
+
+    @Test
+    public void testConvertValueToStringInt() {
+        assertEquals("2147483647", ConfigDef.convertToString(Integer.MAX_VALUE, Type.INT));
+    }
+
+    @Test
+    public void testConvertValueToStringLong() {
+        assertEquals("9223372036854775807", ConfigDef.convertToString(Long.MAX_VALUE, Type.LONG));
+    }
+
+    @Test
+    public void testConvertValueToStringDouble() {
+        assertEquals("3.125", ConfigDef.convertToString(3.125, Type.DOUBLE));
+    }
+
+    @Test
+    public void testConvertValueToStringString() {
+        assertEquals("foobar", ConfigDef.convertToString("foobar", Type.STRING));
+    }
+
+    @Test
+    public void testConvertValueToStringPassword() {
+        assertEquals(Password.HIDDEN, ConfigDef.convertToString(new Password("foobar"), Type.PASSWORD));
+        assertEquals("foobar", ConfigDef.convertToString("foobar", Type.PASSWORD));
+    }
+
+    @Test
+    public void testConvertValueToStringList() {
+        assertEquals("a,bc,d", ConfigDef.convertToString(Arrays.asList("a", "bc", "d"), Type.LIST));
+    }
+
+    @Test
+    public void testConvertValueToStringClass() throws ClassNotFoundException {
+        String actual = ConfigDef.convertToString(ConfigDefTest.class, Type.CLASS);
+        assertEquals("org.apache.kafka.common.config.ConfigDefTest", actual);
+        // Additionally validate that we can look up this class by this name
+        assertEquals(ConfigDefTest.class, Class.forName(actual));
+    }
+
+    @Test
+    public void testConvertValueToStringNestedClass() throws ClassNotFoundException {
+        String actual = ConfigDef.convertToString(NestedClass.class, Type.CLASS);
+        assertEquals("org.apache.kafka.common.config.ConfigDefTest$NestedClass", actual);
+        // Additionally validate that we can look up this class by this name
+        assertEquals(NestedClass.class, Class.forName(actual));
+    }
+
+    private class NestedClass {
+    }
 }

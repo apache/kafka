@@ -28,6 +28,7 @@ public interface TimestampExtractor {
     /**
      * Extracts a timestamp from a record. The timestamp must be positive to be considered a valid timestamp.
      * Returning a negative timestamp will cause the record not to be processed but rather silently skipped.
+     * The timestamp extractor implementation must be stateless.
      * <p>
      * The extracted timestamp MUST represent the milliseconds since midnight, January 1, 1970 UTC.
      * <p>

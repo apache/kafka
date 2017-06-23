@@ -18,6 +18,7 @@ package org.apache.kafka.streams.state;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
+import org.apache.kafka.streams.kstream.Windowed;
 
 /**
  * A window store that only supports read operations
@@ -59,4 +60,17 @@ public interface ReadOnlyWindowStore<K, V> {
      * @throws InvalidStateStoreException if the store is not initialized
      */
     WindowStoreIterator<V> fetch(K key, long timeFrom, long timeTo);
+
+    /**
+     * Get all the key-value pairs in the given key range and time range from all
+     * the existing windows.
+     *
+     * @param from      the first key in the range
+     * @param to        the last key in the range
+     * @param timeFrom  time range start (inclusive)
+     * @param timeTo    time range end (inclusive)
+     * @return an iterator over windowed key-value pairs {@code <Windowed<K>, value>}
+     * @throws InvalidStateStoreException if the store is not initialized
+     */
+    KeyValueIterator<Windowed<K>, V> fetch(K from, K to, long timeFrom, long timeTo);
 }

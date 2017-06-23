@@ -28,6 +28,7 @@ import java.util.Map;
 
 public class JoinGroupResponse extends AbstractResponse {
 
+    private static final String THROTTLE_TIME_KEY_NAME = "throttle_time_ms";
     private static final String ERROR_CODE_KEY_NAME = "error_code";
 
     /**
@@ -54,6 +55,7 @@ public class JoinGroupResponse extends AbstractResponse {
     public static final int UNKNOWN_GENERATION_ID = -1;
     public static final String UNKNOWN_MEMBER_ID = "";
 
+    private final int throttleTimeMs;
     private final Errors error;
     private final int generationId;
     private final String groupProtocol;
@@ -67,6 +69,17 @@ public class JoinGroupResponse extends AbstractResponse {
                              String memberId,
                              String leaderId,
                              Map<String, ByteBuffer> groupMembers) {
+        this(DEFAULT_THROTTLE_TIME, error, generationId, groupProtocol, memberId, leaderId, groupMembers);
+    }
+
+    public JoinGroupResponse(int throttleTimeMs,
+            Errors error,
+            int generationId,
+            String groupProtocol,
+            String memberId,
+            String leaderId,
+            Map<String, ByteBuffer> groupMembers) {
+        this.throttleTimeMs = throttleTimeMs;
         this.error = error;
         this.generationId = generationId;
         this.groupProtocol = groupProtocol;
@@ -76,6 +89,7 @@ public class JoinGroupResponse extends AbstractResponse {
     }
 
     public JoinGroupResponse(Struct struct) {
+        this.throttleTimeMs = struct.hasField(THROTTLE_TIME_KEY_NAME) ? struct.getInt(THROTTLE_TIME_KEY_NAME) : DEFAULT_THROTTLE_TIME;
         members = new HashMap<>();
 
         for (Object memberDataObj : struct.getArray(MEMBERS_KEY_NAME)) {
@@ -89,6 +103,10 @@ public class JoinGroupResponse extends AbstractResponse {
         groupProtocol = struct.getString(GROUP_PROTOCOL_KEY_NAME);
         memberId = struct.getString(MEMBER_ID_KEY_NAME);
         leaderId = struct.getString(LEADER_ID_KEY_NAME);
+    }
+
+    public int throttleTimeMs() {
+        return throttleTimeMs;
     }
 
     public Errors error() {
@@ -126,6 +144,8 @@ public class JoinGroupResponse extends AbstractResponse {
     @Override
     protected Struct toStruct(short version) {
         Struct struct = new Struct(ApiKeys.JOIN_GROUP.responseSchema(version));
+        if (struct.hasField(THROTTLE_TIME_KEY_NAME))
+            struct.set(THROTTLE_TIME_KEY_NAME, throttleTimeMs);
 
         struct.set(ERROR_CODE_KEY_NAME, error.code());
         struct.set(GENERATION_ID_KEY_NAME, generationId);

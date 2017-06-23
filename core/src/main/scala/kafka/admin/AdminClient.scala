@@ -19,7 +19,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.{ConcurrentLinkedQueue, TimeUnit, Future}
 import kafka.admin.AdminClient.DeleteRecordsResult
 import kafka.common.KafkaException
-import kafka.coordinator.GroupOverview
+import kafka.coordinator.group.GroupOverview
 import kafka.utils.Logging
 
 import org.apache.kafka.clients._
@@ -40,6 +40,11 @@ import org.apache.kafka.common.{Cluster, Node, TopicPartition}
 import scala.collection.JavaConverters._
 import scala.util.Try
 
+/**
+  * A Scala administrative client for Kafka which supports managing and inspecting topics, brokers,
+  * and configurations.  This client is deprecated, and will be replaced by KafkaAdminClient.
+  * @see KafkaAdminClient
+  */
 class AdminClient(val time: Time,
                   val requestTimeoutMs: Int,
                   val retryBackoffMs: Long,
@@ -368,6 +373,7 @@ object AdminClient {
   val DefaultRequestTimeoutMs = 5000
   val DefaultMaxInFlightRequestsPerConnection = 100
   val DefaultReconnectBackoffMs = 50
+  val DefaultReconnectBackoffMax = 50
   val DefaultSendBufferBytes = 128 * 1024
   val DefaultReceiveBufferBytes = 32 * 1024
   val DefaultRetryBackoffMs = 100
@@ -442,6 +448,7 @@ object AdminClient {
       "admin-" + AdminClientIdSequence.getAndIncrement(),
       DefaultMaxInFlightRequestsPerConnection,
       DefaultReconnectBackoffMs,
+      DefaultReconnectBackoffMax,
       DefaultSendBufferBytes,
       DefaultReceiveBufferBytes,
       requestTimeoutMs,

@@ -30,8 +30,9 @@ trait LeaderEpochCache {
   def assign(leaderEpoch: Int, offset: Long)
   def latestEpoch(): Int
   def endOffsetFor(epoch: Int): Long
-  def clearLatest(offset: Long)
-  def clearEarliest(offset: Long)
+  def clearAndFlushLatest(offset: Long)
+  def clearAndFlushEarliest(offset: Long)
+  def clearAndFlush()
   def clear()
 }
 
@@ -111,7 +112,7 @@ class LeaderEpochFileCache(topicPartition: TopicPartition, leo: () => LogOffsetM
     *
     * @param offset
     */
-  override def clearLatest(offset: Long): Unit = {
+  override def clearAndFlushLatest(offset: Long): Unit = {
     inWriteLock(lock) {
       val before = epochs
       if (offset >= 0 && offset <= latestOffset()) {
@@ -130,7 +131,7 @@ class LeaderEpochFileCache(topicPartition: TopicPartition, leo: () => LogOffsetM
     *
     * @param offset the offset to clear up to
     */
-  override def clearEarliest(offset: Long): Unit = {
+  override def clearAndFlushEarliest(offset: Long): Unit = {
     inWriteLock(lock) {
       val before = epochs
       if (offset >= 0 && earliestOffset() < offset) {
@@ -150,10 +151,16 @@ class LeaderEpochFileCache(topicPartition: TopicPartition, leo: () => LogOffsetM
   /**
     * Delete all entries.
     */
-  override def clear() = {
+  override def clearAndFlush() = {
     inWriteLock(lock) {
       epochs.clear()
       flush()
+    }
+  }
+
+  override def clear() = {
+    inWriteLock(lock) {
+      epochs.clear()
     }
   }
 
@@ -173,7 +180,7 @@ class LeaderEpochFileCache(topicPartition: TopicPartition, leo: () => LogOffsetM
     checkpoint.write(epochs)
   }
 
-  def epochChangeMsg(epoch: Int, offset: Long) = s"New: {epoch:$epoch, offset:$offset}, Latest: {epoch:$latestEpoch, offset$latestOffset} for Partition: $topicPartition"
+  def epochChangeMsg(epoch: Int, offset: Long) = s"New: {epoch:$epoch, offset:$offset}, Current: {epoch:$latestEpoch, offset$latestOffset} for Partition: $topicPartition"
 
   def validateAndMaybeWarn(epoch: Int, offset: Long) = {
     assert(epoch >= 0, s"Received a PartitionLeaderEpoch assignment for an epoch < 0. This should not happen. ${epochChangeMsg(epoch, offset)}")

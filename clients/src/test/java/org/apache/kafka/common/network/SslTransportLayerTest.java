@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.network;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import java.io.ByteArrayOutputStream;
@@ -27,6 +29,7 @@ import java.nio.channels.Channels;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.Map;
 
 import javax.net.ssl.SSLContext;
@@ -40,6 +43,7 @@ import org.apache.kafka.common.security.ssl.SslFactory;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.SecurityProtocol;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
@@ -115,7 +119,7 @@ public class SslTransportLayerTest {
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
 
-        NetworkTestUtils.waitForChannelClose(selector, node);
+        NetworkTestUtils.waitForChannelClose(selector, node, ChannelState.AUTHENTICATE);
     }
     
     /**
@@ -180,7 +184,7 @@ public class SslTransportLayerTest {
         sslClientConfigs.remove(SslConfigs.SSL_KEY_PASSWORD_CONFIG);
         createSelector(sslClientConfigs);
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
-        NetworkTestUtils.waitForChannelClose(selector, node);
+        NetworkTestUtils.waitForChannelClose(selector, node, ChannelState.AUTHENTICATE);
         selector.close();
         server.close();
 
@@ -208,7 +212,7 @@ public class SslTransportLayerTest {
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
 
-        NetworkTestUtils.waitForChannelClose(selector, node);
+        NetworkTestUtils.waitForChannelClose(selector, node, ChannelState.AUTHENTICATE);
     }
     
     /**
@@ -228,7 +232,7 @@ public class SslTransportLayerTest {
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
 
-        NetworkTestUtils.waitForChannelClose(selector, node);
+        NetworkTestUtils.waitForChannelClose(selector, node, ChannelState.AUTHENTICATE);
     }
     
     /**
@@ -380,7 +384,7 @@ public class SslTransportLayerTest {
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
 
-        NetworkTestUtils.waitForChannelClose(selector, node);
+        NetworkTestUtils.waitForChannelClose(selector, node, ChannelState.AUTHENTICATE);
     }
     
     /**
@@ -397,7 +401,7 @@ public class SslTransportLayerTest {
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
 
-        NetworkTestUtils.waitForChannelClose(selector, node);
+        NetworkTestUtils.waitForChannelClose(selector, node, ChannelState.AUTHENTICATE);
     }
     
     /**
@@ -415,7 +419,7 @@ public class SslTransportLayerTest {
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
 
-        NetworkTestUtils.waitForChannelClose(selector, node);
+        NetworkTestUtils.waitForChannelClose(selector, node, ChannelState.AUTHENTICATE);
     }
 
     /**
@@ -458,6 +462,41 @@ public class SslTransportLayerTest {
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
 
         NetworkTestUtils.checkClientConnection(selector, node, 64000, 10);
+    }
+
+    /**
+     * Tests that time spent on the network thread is accumulated on each channel
+     */
+    @Test
+    public void testNetworkThreadTimeRecorded() throws Exception {
+        selector.close();
+        this.selector = new Selector(NetworkReceive.UNLIMITED, 5000, new Metrics(), Time.SYSTEM,
+                "MetricGroup", new HashMap<String, String>(), false, true, channelBuilder);
+
+        String node = "0";
+        server = createEchoServer(SecurityProtocol.SSL);
+        InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
+        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
+
+        String message = TestUtils.randomString(10 * 1024);
+        NetworkTestUtils.waitForChannelReady(selector, node);
+        KafkaChannel channel = selector.channel(node);
+        assertTrue("SSL handshake time not recorded", channel.getAndResetNetworkThreadTimeNanos() > 0);
+        assertEquals("Time not reset", 0, channel.getAndResetNetworkThreadTimeNanos());
+
+        selector.mute(node);
+        selector.send(new NetworkSend(node, ByteBuffer.wrap(message.getBytes())));
+        while (selector.completedSends().isEmpty()) {
+            selector.poll(100L);
+        }
+        assertTrue("Send time not recorded", channel.getAndResetNetworkThreadTimeNanos() > 0);
+        assertEquals("Time not reset", 0, channel.getAndResetNetworkThreadTimeNanos());
+
+        selector.unmute(node);
+        while (selector.completedReceives().isEmpty()) {
+            selector.poll(100L);
+        }
+        assertTrue("Receive time not recorded", channel.getAndResetNetworkThreadTimeNanos() > 0);
     }
 
     @Test

@@ -44,7 +44,7 @@ public enum CompressionType {
         }
     },
 
-    GZIP(1, "gzip", 0.5f) {
+    GZIP(1, "gzip", 1.0f) {
         @Override
         public OutputStream wrapForOutput(ByteBufferOutputStream buffer, byte messageVersion, int bufferSize) {
             try {
@@ -64,7 +64,7 @@ public enum CompressionType {
         }
     },
 
-    SNAPPY(2, "snappy", 0.5f) {
+    SNAPPY(2, "snappy", 1.0f) {
         @Override
         public OutputStream wrapForOutput(ByteBufferOutputStream buffer, byte messageVersion, int bufferSize) {
             try {
@@ -84,7 +84,7 @@ public enum CompressionType {
         }
     },
 
-    LZ4(3, "lz4", 0.5f) {
+    LZ4(3, "lz4", 1.0f) {
         @Override
         public OutputStream wrapForOutput(ByteBufferOutputStream buffer, byte messageVersion, int bufferSize) {
             try {

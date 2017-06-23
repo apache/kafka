@@ -138,7 +138,7 @@ object ConsoleConsumer extends Logging {
       messageCount += 1
       try {
         formatter.writeTo(new ConsumerRecord(msg.topic, msg.partition, msg.offset, msg.timestamp,
-                                             msg.timestampType, 0, 0, 0, msg.key, msg.value), output)
+                                             msg.timestampType, 0, 0, 0, msg.key, msg.value, msg.headers), output)
       } catch {
         case e: Throwable =>
           if (skipMessageOnError) {

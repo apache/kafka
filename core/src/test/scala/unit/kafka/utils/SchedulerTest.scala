@@ -37,11 +37,11 @@ class SchedulerTest {
   def teardown() {
     scheduler.shutdown()
   }
-  
+
   @Test
   def testMockSchedulerNonPeriodicTask() {
-    mockTime.scheduler.schedule("test1", counter1.getAndIncrement, delay=1)
-    mockTime.scheduler.schedule("test2", counter2.getAndIncrement, delay=100)
+    mockTime.scheduler.schedule("test1", counter1.getAndIncrement _, delay=1)
+    mockTime.scheduler.schedule("test2", counter2.getAndIncrement _, delay=100)
     assertEquals("Counter1 should not be incremented prior to task running.", 0, counter1.get)
     assertEquals("Counter2 should not be incremented prior to task running.", 0, counter2.get)
     mockTime.sleep(1)
@@ -51,11 +51,11 @@ class SchedulerTest {
     assertEquals("More sleeping should not result in more incrementing on counter1.", 1, counter1.get)
     assertEquals("Counter2 should now be incremented.", 1, counter2.get)
   }
-  
+
   @Test
   def testMockSchedulerPeriodicTask() {
-    mockTime.scheduler.schedule("test1", counter1.getAndIncrement, delay=1, period=1)
-    mockTime.scheduler.schedule("test2", counter2.getAndIncrement, delay=100, period=100)
+    mockTime.scheduler.schedule("test1", counter1.getAndIncrement _, delay=1, period=1)
+    mockTime.scheduler.schedule("test2", counter2.getAndIncrement _, delay=100, period=100)
     assertEquals("Counter1 should not be incremented prior to task running.", 0, counter1.get)
     assertEquals("Counter2 should not be incremented prior to task running.", 0, counter2.get)
     mockTime.sleep(1)
@@ -65,45 +65,45 @@ class SchedulerTest {
     assertEquals("Counter1 should be incremented 101 times", 101, counter1.get)
     assertEquals("Counter2 should not be incremented once", 1, counter2.get)
   }
-  
+
   @Test
   def testReentrantTaskInMockScheduler() {
-    mockTime.scheduler.schedule("test1", () => mockTime.scheduler.schedule("test2", counter2.getAndIncrement, delay=0), delay=1)
+    mockTime.scheduler.schedule("test1", () => mockTime.scheduler.schedule("test2", counter2.getAndIncrement _, delay=0), delay=1)
     mockTime.sleep(1)
     assertEquals(1, counter2.get)
   }
-  
+
   @Test
   def testNonPeriodicTask() {
-    scheduler.schedule("test", counter1.getAndIncrement, delay = 0)
+    scheduler.schedule("test", counter1.getAndIncrement _, delay = 0)
     retry(30000) {
       assertEquals(counter1.get, 1)
     }
     Thread.sleep(5)
     assertEquals("Should only run once", 1, counter1.get)
   }
-  
+
   @Test
   def testPeriodicTask() {
-    scheduler.schedule("test", counter1.getAndIncrement, delay = 0, period = 5)
+    scheduler.schedule("test", counter1.getAndIncrement _, delay = 0, period = 5)
     retry(30000){
       assertTrue("Should count to 20", counter1.get >= 20)
     }
   }
-  
+
   @Test
   def testRestart() {
     // schedule a task to increment a counter
-    mockTime.scheduler.schedule("test1", counter1.getAndIncrement, delay=1)
+    mockTime.scheduler.schedule("test1", counter1.getAndIncrement _, delay=1)
     mockTime.sleep(1)
     assertEquals(1, counter1.get())
-    
+
     // restart the scheduler
     mockTime.scheduler.shutdown()
     mockTime.scheduler.startup()
-    
+
     // schedule another task to increment the counter
-    mockTime.scheduler.schedule("test1", counter1.getAndIncrement, delay=1)
+    mockTime.scheduler.schedule("test1", counter1.getAndIncrement _, delay=1)
     mockTime.sleep(1)
     assertEquals(2, counter1.get())
   }

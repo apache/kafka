@@ -17,7 +17,7 @@ import kafka.common.{AdminCommandFailedException, TopicAndPartition}
 import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils.TestUtils._
 import kafka.utils.ZkUtils._
-import kafka.utils.{CoreUtils, Logging, TestUtils, ZkUtils}
+import kafka.utils.{Logging, TestUtils, ZkUtils}
 import kafka.zk.ZooKeeperTestHarness
 import org.junit.Assert.{assertEquals, assertTrue}
 import org.junit.{After, Before, Test}
@@ -44,8 +44,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
 
   @After
   override def tearDown() {
-    servers.par.foreach(_.shutdown())
-    servers.par.foreach(server => CoreUtils.delete(server.config.logDirs))
+    TestUtils.shutdownServers(servers)
     super.tearDown()
   }
 
@@ -287,6 +286,28 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
 
     //When we execute an assignment that includes an invalid partition (1:101 in this case)
     val topicJson = s"""{"version":1,"partitions":[{"topic":"$topicName","partition":1,"replicas":[101]}]}"""
+    ReassignPartitionsCommand.executeAssignment(zkUtils, topicJson, NoThrottle)
+  }
+
+  @Test(expected = classOf[AdminCommandFailedException])
+  def shouldFailIfProposedHasEmptyReplicaList() {
+    //Given a single replica on server 100
+    startBrokers(Seq(100, 101))
+    createTopic(zkUtils, topicName, Map(0 -> Seq(100)), servers = servers)
+
+    //When we execute an assignment that specifies an empty replica list (0: empty list in this case)
+    val topicJson = s"""{"version":1,"partitions":[{"topic":"$topicName","partition":0,"replicas":[]}]}"""
+    ReassignPartitionsCommand.executeAssignment(zkUtils, topicJson, NoThrottle)
+  }
+
+  @Test(expected = classOf[AdminCommandFailedException])
+  def shouldFailIfProposedHasInvalidBrokerID() {
+    //Given a single replica on server 100
+    startBrokers(Seq(100, 101))
+    createTopic(zkUtils, topicName, Map(0 -> Seq(100)), servers = servers)
+
+    //When we execute an assignment that specifies an invalid brokerID (102: invalid broker ID in this case)
+    val topicJson = s"""{"version":1,"partitions":[{"topic":"$topicName","partition":0,"replicas":[101, 102]}]}"""
     ReassignPartitionsCommand.executeAssignment(zkUtils, topicJson, NoThrottle)
   }
 

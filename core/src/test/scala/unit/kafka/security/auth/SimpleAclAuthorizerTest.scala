@@ -61,6 +61,7 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
   override def tearDown(): Unit = {
     simpleAclAuthorizer.close()
     simpleAclAuthorizer2.close()
+    super.tearDown()
   }
 
   @Test
@@ -189,9 +190,13 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
     props.put(SimpleAclAuthorizer.AllowEveryoneIfNoAclIsFoundProp, "true")
 
     val cfg = KafkaConfig.fromProps(props)
-    val testAuthoizer: SimpleAclAuthorizer = new SimpleAclAuthorizer
-    testAuthoizer.configure(cfg.originals)
-    assertTrue("when acls = null or [],  authorizer should fail open with allow.everyone = true.", testAuthoizer.authorize(session, Read, resource))
+    val testAuthorizer = new SimpleAclAuthorizer
+    try {
+      testAuthorizer.configure(cfg.originals)
+      assertTrue("when acls = null or [],  authorizer should fail open with allow.everyone = true.", testAuthorizer.authorize(session, Read, resource))
+    } finally {
+      testAuthorizer.close()
+    }
   }
 
   @Test
@@ -255,10 +260,14 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
 
     zkUtils.deletePathRecursive(SimpleAclAuthorizer.AclChangedZkPath)
     val authorizer = new SimpleAclAuthorizer
-    authorizer.configure(config.originals)
+    try {
+      authorizer.configure(config.originals)
 
-    assertEquals(acls, authorizer.getAcls(resource))
-    assertEquals(acls1, authorizer.getAcls(resource1))
+      assertEquals(acls, authorizer.getAcls(resource))
+      assertEquals(acls1, authorizer.getAcls(resource1))
+    } finally {
+      authorizer.close()
+    }
   }
 
   @Test

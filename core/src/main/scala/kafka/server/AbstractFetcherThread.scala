@@ -147,12 +147,12 @@ abstract class AbstractFetcherThread(name: String,
     var responseData: Seq[(TopicPartition, PD)] = Seq.empty
 
     try {
-      trace("Issuing to broker %d of fetch request %s".format(sourceBroker.id, fetchRequest))
+      trace(s"Issuing fetch to broker ${sourceBroker.id}, request: $fetchRequest")
       responseData = fetch(fetchRequest)
     } catch {
       case t: Throwable =>
         if (isRunning.get) {
-          warn(s"Error in fetch $fetchRequest", t)
+          warn(s"Error in fetch to broker ${sourceBroker.id}, request ${fetchRequest}", t)
           inLock(partitionMapLock) {
             partitionStates.partitionSet.asScala.foreach(updatePartitionsWithError)
             // there is an error occurred while fetching partitions, sleep a while

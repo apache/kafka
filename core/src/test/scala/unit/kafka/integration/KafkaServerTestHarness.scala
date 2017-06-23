@@ -97,8 +97,7 @@ abstract class KafkaServerTestHarness extends ZooKeeperTestHarness {
   @After
   override def tearDown() {
     if (servers != null) {
-      servers.foreach(_.shutdown())
-      servers.foreach(server => CoreUtils.delete(server.config.logDirs))
+      TestUtils.shutdownServers(servers)
     }
     super.tearDown
   }

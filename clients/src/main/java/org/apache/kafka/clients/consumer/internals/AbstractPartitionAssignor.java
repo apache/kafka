@@ -43,7 +43,7 @@ public abstract class AbstractPartitionAssignor implements PartitionAssignor {
      * @return Map from each member to the list of partitions assigned to them.
      */
     public abstract Map<String, List<TopicPartition>> assign(Map<String, Integer> partitionsPerTopic,
-                                                             Map<String, List<String>> subscriptions);
+                                                             Map<String, Subscription> subscriptions);
 
     @Override
     public Subscription subscription(Set<String> topics) {
@@ -53,12 +53,8 @@ public abstract class AbstractPartitionAssignor implements PartitionAssignor {
     @Override
     public Map<String, Assignment> assign(Cluster metadata, Map<String, Subscription> subscriptions) {
         Set<String> allSubscribedTopics = new HashSet<>();
-        Map<String, List<String>> topicSubscriptions = new HashMap<>();
-        for (Map.Entry<String, Subscription> subscriptionEntry : subscriptions.entrySet()) {
-            List<String> topics = subscriptionEntry.getValue().topics();
-            allSubscribedTopics.addAll(topics);
-            topicSubscriptions.put(subscriptionEntry.getKey(), topics);
-        }
+        for (Map.Entry<String, Subscription> subscriptionEntry : subscriptions.entrySet())
+            allSubscribedTopics.addAll(subscriptionEntry.getValue().topics());
 
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
         for (String topic : allSubscribedTopics) {
@@ -69,9 +65,9 @@ public abstract class AbstractPartitionAssignor implements PartitionAssignor {
                 log.debug("Skipping assignment for topic {} since no metadata is available", topic);
         }
 
-        Map<String, List<TopicPartition>> rawAssignments = assign(partitionsPerTopic, topicSubscriptions);
+        Map<String, List<TopicPartition>> rawAssignments = assign(partitionsPerTopic, subscriptions);
 
-        // this class has maintains no user data, so just wrap the results
+        // this class maintains no user data, so just wrap the results
         Map<String, Assignment> assignments = new HashMap<>();
         for (Map.Entry<String, List<TopicPartition>> assignmentEntry : rawAssignments.entrySet())
             assignments.put(assignmentEntry.getKey(), new Assignment(assignmentEntry.getValue()));

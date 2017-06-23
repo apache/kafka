@@ -26,7 +26,7 @@ import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.Record
-import org.apache.kafka.common.requests.{FetchRequest, FetchResponse}
+import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, IsolationLevel}
 import org.apache.kafka.common.serialization.StringSerializer
 import org.junit.Assert._
 import org.junit.Test
@@ -156,8 +156,8 @@ class FetchRequestTest extends BaseRequestTest {
     val (topicPartition, leaderId) = createTopics(numTopics = 1, numPartitions = 1).head
     producer.send(new ProducerRecord(topicPartition.topic, topicPartition.partition,
       "key", new String(new Array[Byte](maxPartitionBytes + 1)))).get
-    val fetchRequest = FetchRequest.Builder.forConsumer(Int.MaxValue, 0,
-      createPartitionMap(maxPartitionBytes, Seq(topicPartition))).build(2)
+    val fetchRequest = FetchRequest.Builder.forConsumer(Int.MaxValue, 0, createPartitionMap(maxPartitionBytes,
+      Seq(topicPartition))).build(2)
     val fetchResponse = sendFetchRequest(leaderId, fetchRequest, version = 2)
     val partitionData = fetchResponse.responseData.get(topicPartition)
     assertEquals(Errors.NONE, partitionData.error)
@@ -214,7 +214,7 @@ class FetchRequestTest extends BaseRequestTest {
     topics.flatMap { topic =>
       val partitionToLeader = createTopic(zkUtils, topic, numPartitions = numPartitions, replicationFactor = 2,
         servers = servers, topicConfig = topicConfig)
-      partitionToLeader.map { case (partition, leader) => new TopicPartition(topic, partition) -> leader.get }
+      partitionToLeader.map { case (partition, leader) => new TopicPartition(topic, partition) -> leader }
     }.toMap
   }
 

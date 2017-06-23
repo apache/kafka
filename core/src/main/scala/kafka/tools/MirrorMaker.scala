@@ -43,6 +43,7 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable.HashMap
 import scala.util.control.ControlThrowable
 import org.apache.kafka.clients.consumer.{ConsumerConfig => NewConsumerConfig}
+import org.apache.kafka.common.header.internals.RecordHeaders
 import org.apache.kafka.common.record.RecordBatch
 
 /**
@@ -58,7 +59,7 @@ import org.apache.kafka.common.record.RecordBatch
  *            max.block.ms=max long
  *            max.in.flight.requests.per.connection=1
  *       2. Consumer Settings
- *            auto.commit.enable=false
+ *            enable.auto.commit=false
  *       3. Mirror Maker Setting:
  *            abort.on.send.failure=true
  */
@@ -559,7 +560,8 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
                          messageAndMetadata.timestamp,
                          messageAndMetadata.timestampType,
                          messageAndMetadata.key,
-                         messageAndMetadata.message)
+                         messageAndMetadata.message,
+                         new RecordHeaders())
     }
 
     override def stop() {

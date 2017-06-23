@@ -21,7 +21,7 @@ import java.io._
 import java.nio.ByteBuffer
 
 import joptsimple.OptionParser
-import kafka.coordinator.{GroupMetadataKey, GroupMetadataManager, OffsetKey}
+import kafka.coordinator.group.{GroupMetadataKey, GroupMetadataManager, OffsetKey}
 import kafka.log._
 import kafka.serializer.Decoder
 import kafka.utils._
@@ -92,15 +92,23 @@ object DumpLogSegments {
 
     for(arg <- files) {
       val file = new File(arg)
-      if(file.getName.endsWith(Log.LogFileSuffix)) {
-        println("Dumping " + file)
-        dumpLog(file, printDataLog, nonConsecutivePairsForLogFilesMap, isDeepIteration, maxMessageSize , messageParser)
-      } else if(file.getName.endsWith(Log.IndexFileSuffix)) {
-        println("Dumping " + file)
-        dumpIndex(file, indexSanityOnly, verifyOnly, misMatchesForIndexFilesMap, maxMessageSize)
-      } else if(file.getName.endsWith(Log.TimeIndexFileSuffix)) {
-        println("Dumping " + file)
-        dumpTimeIndex(file, indexSanityOnly, verifyOnly, timeIndexDumpErrors, maxMessageSize)
+      println(s"Dumping $file")
+
+      val filename = file.getName
+      val suffix = filename.substring(filename.lastIndexOf("."))
+      suffix match {
+        case Log.LogFileSuffix =>
+          dumpLog(file, printDataLog, nonConsecutivePairsForLogFilesMap, isDeepIteration, maxMessageSize , messageParser)
+        case Log.IndexFileSuffix =>
+          dumpIndex(file, indexSanityOnly, verifyOnly, misMatchesForIndexFilesMap, maxMessageSize)
+        case Log.TimeIndexFileSuffix =>
+          dumpTimeIndex(file, indexSanityOnly, verifyOnly, timeIndexDumpErrors, maxMessageSize)
+        case Log.PidSnapshotFileSuffix =>
+          dumpPidSnapshot(file)
+        case Log.TxnIndexFileSuffix =>
+          dumpTxnIndex(file)
+        case _ =>
+          System.err.println(s"Ignoring unknown file $file")
       }
     }
 
@@ -117,11 +125,32 @@ object DumpLogSegments {
 
     nonConsecutivePairsForLogFilesMap.foreach {
       case (fileName, listOfNonConsecutivePairs) => {
-        System.err.println("Non-secutive offsets in :" + fileName)
+        System.err.println("Non-consecutive offsets in :" + fileName)
         listOfNonConsecutivePairs.foreach(m => {
           System.err.println("  %d is followed by %d".format(m._1, m._2))
         })
       }
+    }
+  }
+
+  private def dumpTxnIndex(file: File): Unit = {
+    val index = new TransactionIndex(Log.offsetFromFilename(file.getName), file)
+    for (abortedTxn <- index.allAbortedTxns) {
+      println(s"version: ${abortedTxn.version} producerId: ${abortedTxn.producerId} firstOffset: ${abortedTxn.firstOffset} " +
+        s"lastOffset: ${abortedTxn.lastOffset} lastStableOffset: ${abortedTxn.lastStableOffset}")
+    }
+  }
+
+  private def dumpPidSnapshot(file: File): Unit = {
+    try {
+      ProducerStateManager.readSnapshot(file).foreach { entry=>
+        println(s"producerId: ${entry.producerId} producerEpoch: ${entry.producerEpoch} lastSequence: ${entry.lastSeq} " +
+          s"lastOffset: ${entry.lastOffset} offsetDelta: ${entry.offsetDelta} lastTimestamp: ${entry.timestamp} " +
+          s"coordinatorEpoch: ${entry.coordinatorEpoch} currentTxnFirstOffset: ${entry.currentTxnFirstOffset}")
+      }
+    } catch {
+      case e: CorruptSnapshotException =>
+        System.err.println(e.getMessage)
     }
   }
 
@@ -134,7 +163,7 @@ object DumpLogSegments {
     val startOffset = file.getName.split("\\.")(0).toLong
     val logFile = new File(file.getAbsoluteFile.getParent, file.getName.split("\\.")(0) + Log.LogFileSuffix)
     val fileRecords = FileRecords.open(logFile, false)
-    val index = new OffsetIndex(file, baseOffset = startOffset)
+    val index = new OffsetIndex(file, baseOffset = startOffset, writable = false)
 
     //Check that index passes sanityCheck, this is the check that determines if indexes will be rebuilt on startup or not.
     if (indexSanityOnly) {
@@ -169,8 +198,8 @@ object DumpLogSegments {
     val logFile = new File(file.getAbsoluteFile.getParent, file.getName.split("\\.")(0) + Log.LogFileSuffix)
     val fileRecords = FileRecords.open(logFile, false)
     val indexFile = new File(file.getAbsoluteFile.getParent, file.getName.split("\\.")(0) + Log.IndexFileSuffix)
-    val index = new OffsetIndex(indexFile, baseOffset = startOffset)
-    val timeIndex = new TimeIndex(file, baseOffset = startOffset)
+    val index = new OffsetIndex(indexFile, baseOffset = startOffset, writable = false)
+    val timeIndex = new TimeIndex(file, baseOffset = startOffset, writable = false)
 
     //Check that index passes sanityCheck, this is the check that determines if indexes will be rebuilt on startup or not.
     if (indexSanityOnly) {
@@ -331,9 +360,15 @@ object DumpLogSegments {
               " headerKeys: " + record.headers.map(_.key).mkString("[", ",", "]"))
           }
 
-          if (record.isControlRecord) {
-            val controlType = ControlRecordType.parse(record.key)
-            print(s" controlType: $controlType")
+          if (batch.isControlBatch) {
+            val controlTypeId = ControlRecordType.parseTypeId(record.key)
+            ControlRecordType.fromTypeId(controlTypeId) match {
+              case ControlRecordType.ABORT | ControlRecordType.COMMIT =>
+                val endTxnMarker = EndTransactionMarker.deserialize(record)
+                print(s" endTxnMarker: ${endTxnMarker.controlType} coordinatorEpoch: ${endTxnMarker.coordinatorEpoch}")
+              case controlType =>
+                print(s" controlType: $controlType($controlTypeId)")
+            }
           } else if (printContents) {
             val (key, payload) = parser.parse(record)
             key.foreach(key => print(s" key: $key"))

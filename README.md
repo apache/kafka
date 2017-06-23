@@ -76,14 +76,16 @@ The release file can be found inside `./core/build/distributions/`.
 ### Cleaning the build ###
     ./gradlew clean
 
-### Running a task on a particular version of Scala (either 2.10.6 or 2.11.8) ###
-*Note that if building the jars with a version other than 2.10.6, you need to set the `SCALA_VERSION` variable or change it in `bin/kafka-run-class.sh` to run the quick start.*
+### Running a task on a particular version of Scala (either 2.11.x or 2.12.x) ###
+*Note that if building the jars with a version other than 2.11.11, you need to set the `SCALA_VERSION` variable or change it in `bin/kafka-run-class.sh` to run the quick start.*
 
-You can pass either the major version (eg 2.11) or the full version (eg 2.11.8):
+You can pass either the major version (eg 2.11) or the full version (eg 2.11.11):
 
     ./gradlew -PscalaVersion=2.11 jar
     ./gradlew -PscalaVersion=2.11 test
     ./gradlew -PscalaVersion=2.11 releaseTarGz
+
+Scala 2.12.x requires Java 8.
 
 ### Running a task for a specific project ###
 This is for `core`, `examples` and `clients`
@@ -156,17 +158,18 @@ You can run findbugs using:
     ./gradlew findbugsMain findbugsTest -x test
 
 The findbugs warnings will be found in `reports/findbugs/main.html` and `reports/findbugs/test.html` files in the subproject build
-directories. Currently, findbugs warnings do not cause the build to fail.
+directories.  Use -PxmlFindBugsReport=true to generate an XML report instead of an HTML one.
 
 ### Common build options ###
 
-The following options should be set with a `-D` switch, for example `./gradlew -Dorg.gradle.project.maxParallelForks=1 test`.
+The following options should be set with a `-P` switch, for example `./gradlew -PmaxParallelForks=1 test`.
 
-* `org.gradle.project.mavenUrl`: sets the URL of the maven deployment repository (`file://path/to/repo` can be used to point to a local repository).
-* `org.gradle.project.maxParallelForks`: limits the maximum number of processes for each task.
-* `org.gradle.project.showStandardStreams`: shows standard out and standard error of the test JVM(s) on the console.
-* `org.gradle.project.skipSigning`: skips signing of artifacts.
-* `org.gradle.project.testLoggingEvents`: unit test events to be logged, separated by comma. For example `./gradlew -Dorg.gradle.project.testLoggingEvents=started,passed,skipped,failed test`
+* `mavenUrl`: sets the URL of the maven deployment repository (`file://path/to/repo` can be used to point to a local repository).
+* `maxParallelForks`: limits the maximum number of processes for each task.
+* `showStandardStreams`: shows standard out and standard error of the test JVM(s) on the console.
+* `skipSigning`: skips signing of artifacts.
+* `testLoggingEvents`: unit test events to be logged, separated by comma. For example `./gradlew -PtestLoggingEvents=started,passed,skipped,failed test`.
+* `xmlFindBugsReport`: enable XML reports for findBugs. This also disables HTML reports as only one can be enabled at a time.
 
 ### Running in Vagrant ###
 

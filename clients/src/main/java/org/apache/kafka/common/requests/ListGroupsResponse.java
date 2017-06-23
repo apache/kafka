@@ -27,6 +27,7 @@ import java.util.List;
 
 public class ListGroupsResponse extends AbstractResponse {
 
+    public static final String THROTTLE_TIME_KEY_NAME = "throttle_time_ms";
     public static final String ERROR_CODE_KEY_NAME = "error_code";
     public static final String GROUPS_KEY_NAME = "groups";
     public static final String GROUP_ID_KEY_NAME = "group_id";
@@ -40,14 +41,21 @@ public class ListGroupsResponse extends AbstractResponse {
      */
 
     private final Errors error;
+    private final int throttleTimeMs;
     private final List<Group> groups;
 
     public ListGroupsResponse(Errors error, List<Group> groups) {
+        this(DEFAULT_THROTTLE_TIME, error, groups);
+    }
+
+    public ListGroupsResponse(int throttleTimeMs, Errors error, List<Group> groups) {
+        this.throttleTimeMs = throttleTimeMs;
         this.error = error;
         this.groups = groups;
     }
 
     public ListGroupsResponse(Struct struct) {
+        this.throttleTimeMs = struct.hasField(THROTTLE_TIME_KEY_NAME) ? struct.getInt(THROTTLE_TIME_KEY_NAME) : DEFAULT_THROTTLE_TIME;
         this.error = Errors.forCode(struct.getShort(ERROR_CODE_KEY_NAME));
         this.groups = new ArrayList<>();
         for (Object groupObj : struct.getArray(GROUPS_KEY_NAME)) {
@@ -56,6 +64,10 @@ public class ListGroupsResponse extends AbstractResponse {
             String protocolType = groupStruct.getString(PROTOCOL_TYPE_KEY_NAME);
             this.groups.add(new Group(groupId, protocolType));
         }
+    }
+
+    public int throttleTimeMs() {
+        return throttleTimeMs;
     }
 
     public List<Group> groups() {
@@ -88,6 +100,8 @@ public class ListGroupsResponse extends AbstractResponse {
     @Override
     protected Struct toStruct(short version) {
         Struct struct = new Struct(ApiKeys.LIST_GROUPS.responseSchema(version));
+        if (struct.hasField(THROTTLE_TIME_KEY_NAME))
+            struct.set(THROTTLE_TIME_KEY_NAME, throttleTimeMs);
         struct.set(ERROR_CODE_KEY_NAME, error.code());
         List<Struct> groupList = new ArrayList<>();
         for (Group group : groups) {
@@ -101,7 +115,11 @@ public class ListGroupsResponse extends AbstractResponse {
     }
 
     public static ListGroupsResponse fromError(Errors error) {
-        return new ListGroupsResponse(error, Collections.<Group>emptyList());
+        return fromError(DEFAULT_THROTTLE_TIME, error);
+    }
+
+    public static ListGroupsResponse fromError(int throttleTimeMs, Errors error) {
+        return new ListGroupsResponse(throttleTimeMs, error, Collections.<Group>emptyList());
     }
 
     public static ListGroupsResponse parse(ByteBuffer buffer, short version) {

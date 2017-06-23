@@ -29,7 +29,7 @@ interface StateManager extends Checkpointable {
 
     void register(final StateStore store, final boolean loggingEnabled, final StateRestoreCallback stateRestoreCallback);
 
-    void flush(InternalProcessorContext context);
+    void flush();
 
     void close(Map<TopicPartition, Long> offsets) throws IOException;
 

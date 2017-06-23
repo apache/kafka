@@ -29,7 +29,7 @@ import java.util.Map;
 public class WriteTxnMarkersResponse extends AbstractResponse {
     private static final String TXN_MARKER_ENTRY_KEY_NAME = "transaction_markers";
 
-    private static final String PID_KEY_NAME = "producer_id";
+    private static final String PRODUCER_ID_KEY_NAME = "producer_id";
     private static final String TOPIC_PARTITIONS_KEY_NAME = "topics";
     private static final String PARTITIONS_KEY_NAME = "partitions";
     private static final String TOPIC_KEY_NAME = "topic";
@@ -46,6 +46,8 @@ public class WriteTxnMarkersResponse extends AbstractResponse {
     //   NotEnoughReplicas
     //   NotEnoughReplicasAfterAppend
     //   InvalidRequiredAcks
+    //   TransactionCoordinatorFenced
+    //   RequestTimeout
 
     private final Map<Long, Map<TopicPartition, Errors>> errors;
 
@@ -60,7 +62,7 @@ public class WriteTxnMarkersResponse extends AbstractResponse {
         for (Object responseObj : responseArray) {
             Struct responseStruct = (Struct) responseObj;
 
-            long producerId = responseStruct.getLong(PID_KEY_NAME);
+            long producerId = responseStruct.getLong(PRODUCER_ID_KEY_NAME);
 
             Map<TopicPartition, Errors> errorPerPartition = new HashMap<>();
             Object[] topicPartitionsArray = responseStruct.getArray(TOPIC_PARTITIONS_KEY_NAME);
@@ -88,7 +90,7 @@ public class WriteTxnMarkersResponse extends AbstractResponse {
         int k = 0;
         for (Map.Entry<Long, Map<TopicPartition, Errors>> responseEntry : errors.entrySet()) {
             Struct responseStruct = struct.instance(TXN_MARKER_ENTRY_KEY_NAME);
-            responseStruct.set(PID_KEY_NAME, responseEntry.getKey());
+            responseStruct.set(PRODUCER_ID_KEY_NAME, responseEntry.getKey());
 
             Map<TopicPartition, Errors> partitionAndErrors = responseEntry.getValue();
             Map<String, Map<Integer, Errors>> mappedPartitions = CollectionUtils.groupDataByTopic(partitionAndErrors);

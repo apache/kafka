@@ -44,7 +44,7 @@ import scala.collection._
  */
 @threadsafe
 class LogManager(val logDirs: Array[File],
-                 val topicConfigs: Map[String, LogConfig],
+                 val topicConfigs: Map[String, LogConfig], // note that this doesn't get updated after creation
                  val defaultConfig: LogConfig,
                  val cleanerConfig: CleanerConfig,
                  ioThreads: Int,
@@ -55,6 +55,7 @@ class LogManager(val logDirs: Array[File],
                  val maxPidExpirationMs: Int,
                  scheduler: Scheduler,
                  val brokerState: BrokerState,
+                 brokerTopicStats: BrokerTopicStats,
                  time: Time) extends Logging {
   val RecoveryPointCheckpointFile = "recovery-point-offset-checkpoint"
   val LogStartOffsetCheckpointFile = "log-start-offset-checkpoint"
@@ -173,9 +174,10 @@ class LogManager(val logDirs: Array[File],
             config = config,
             logStartOffset = logStartOffset,
             recoveryPoint = logRecoveryPoint,
-            maxPidExpirationMs = maxPidExpirationMs,
+            maxProducerIdExpirationMs = maxPidExpirationMs,
             scheduler = scheduler,
-            time = time)
+            time = time,
+            brokerTopicStats = brokerTopicStats)
           if (logDir.getName.endsWith(Log.DeleteDirSuffix)) {
             this.logsToBeDeleted.add(current)
           } else {
@@ -189,7 +191,7 @@ class LogManager(val logDirs: Array[File],
         }
       }
 
-      jobs(cleanShutdownFile) = jobsForDir.map(pool.submit).toSeq
+      jobs(cleanShutdownFile) = jobsForDir.map(pool.submit)
     }
 
 
@@ -218,28 +220,28 @@ class LogManager(val logDirs: Array[File],
     if(scheduler != null) {
       info("Starting log cleanup with a period of %d ms.".format(retentionCheckMs))
       scheduler.schedule("kafka-log-retention",
-                         cleanupLogs,
+                         cleanupLogs _,
                          delay = InitialTaskDelayMs,
                          period = retentionCheckMs,
                          TimeUnit.MILLISECONDS)
       info("Starting log flusher with a default period of %d ms.".format(flushCheckMs))
-      scheduler.schedule("kafka-log-flusher", 
-                         flushDirtyLogs, 
-                         delay = InitialTaskDelayMs, 
-                         period = flushCheckMs, 
+      scheduler.schedule("kafka-log-flusher",
+                         flushDirtyLogs _,
+                         delay = InitialTaskDelayMs,
+                         period = flushCheckMs,
                          TimeUnit.MILLISECONDS)
       scheduler.schedule("kafka-recovery-point-checkpoint",
-                         checkpointRecoveryPointOffsets,
+                         checkpointRecoveryPointOffsets _,
                          delay = InitialTaskDelayMs,
                          period = flushRecoveryOffsetCheckpointMs,
                          TimeUnit.MILLISECONDS)
       scheduler.schedule("kafka-log-start-offset-checkpoint",
-                         checkpointLogStartOffsets,
+                         checkpointLogStartOffsets _,
                          delay = InitialTaskDelayMs,
                          period = flushStartOffsetCheckpointMs,
                          TimeUnit.MILLISECONDS)
       scheduler.schedule("kafka-delete-logs",
-                         deleteLogs,
+                         deleteLogs _,
                          delay = InitialTaskDelayMs,
                          period = defaultConfig.fileDeleteDelayMs,
                          TimeUnit.MILLISECONDS)
@@ -282,7 +284,6 @@ class LogManager(val logDirs: Array[File],
       jobs(dir) = jobsForDir.map(pool.submit).toSeq
     }
 
-
     try {
       for ((dir, dirJobs) <- jobs) {
         dirJobs.foreach(_.get)
@@ -311,7 +312,6 @@ class LogManager(val logDirs: Array[File],
 
     info("Shutdown complete.")
   }
-
 
   /**
    * Truncate the partition logs to the specified offsets and checkpoint the recovery point to this offset
@@ -416,9 +416,10 @@ class LogManager(val logDirs: Array[File],
           config = config,
           logStartOffset = 0L,
           recoveryPoint = 0L,
-          maxPidExpirationMs = maxPidExpirationMs,
+          maxProducerIdExpirationMs = maxPidExpirationMs,
           scheduler = scheduler,
-          time = time)
+          time = time,
+          brokerTopicStats = brokerTopicStats)
         logs.put(topicPartition, log)
         info("Created log for partition [%s,%d] in %s with properties {%s}."
           .format(topicPartition.topic,
@@ -454,7 +455,7 @@ class LogManager(val logDirs: Array[File],
       case e: Throwable => 
         error(s"Exception in kafka-delete-logs thread.", e)
     }
-}
+  }
 
   /**
     * Rename the directory of the given topic-partition "logdir" as "logdir.uuid.delete" and 
@@ -463,20 +464,15 @@ class LogManager(val logDirs: Array[File],
     */
   def asyncDelete(topicPartition: TopicPartition) = {
     val removedLog: Log = logCreationOrDeletionLock synchronized {
-                            logs.remove(topicPartition)
-                          }
+      logs.remove(topicPartition)
+    }
     if (removedLog != null) {
       //We need to wait until there is no more cleaning task on the log to be deleted before actually deleting it.
       if (cleaner != null) {
         cleaner.abortCleaning(topicPartition)
         cleaner.updateCheckpoints(removedLog.dir.getParentFile)
       }
-      // renaming the directory to topic-partition.uniqueId-delete
-      val dirName = new StringBuilder(removedLog.name)
-                        .append(".")
-                        .append(java.util.UUID.randomUUID.toString.replaceAll("-",""))
-                        .append(Log.DeleteDirSuffix)
-                        .toString()
+      val dirName = Log.logDeleteDirName(removedLog.name)
       removedLog.close()
       val renamedDir = new File(removedLog.dir.getParent, dirName)
       val renameSuccessful = removedLog.dir.renameTo(renamedDir)
@@ -579,7 +575,8 @@ object LogManager {
             zkUtils: ZkUtils,
             brokerState: BrokerState,
             kafkaScheduler: KafkaScheduler,
-            time: Time): LogManager = {
+            time: Time,
+            brokerTopicStats: BrokerTopicStats): LogManager = {
     val defaultProps = KafkaServer.copyKafkaConfigToLog(config)
     val defaultLogConfig = LogConfig(defaultProps)
 
@@ -609,6 +606,7 @@ object LogManager {
       maxPidExpirationMs = config.transactionIdExpirationMs,
       scheduler = kafkaScheduler,
       brokerState = brokerState,
-      time = time)
+      time = time,
+      brokerTopicStats = brokerTopicStats)
   }
 }

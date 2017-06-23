@@ -124,6 +124,8 @@ public class ProcessorNodeTest {
             assertNotNull(metrics.metrics().get(metrics.metricName(entity + "-" + throughputOperation + "-rate", groupName,
                 "The average number of occurrence of " + entity + " " + throughputOperation + " operation per second.", tags)));
         }
+
+        context.close();
     }
 
 }

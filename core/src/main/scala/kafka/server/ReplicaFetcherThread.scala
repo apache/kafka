@@ -112,6 +112,7 @@ class ReplicaFetcherThread(name: String,
         trace(s"Follower ${replica.brokerId} set replica high watermark for partition $topicPartition to $followerHighWatermark")
       if (quota.isThrottled(topicPartition))
         quota.record(records.sizeInBytes)
+      replicaMgr.brokerTopicStats.updateReplicationBytesIn(records.sizeInBytes)
     } catch {
       case e: KafkaStorageException =>
         fatal(s"Disk error while replicating data for $topicPartition", e)
@@ -348,6 +349,7 @@ object ReplicaFetcherThread {
     def isEmpty: Boolean = underlying.fetchData().isEmpty
     def offset(topicPartition: TopicPartition): Long =
       underlying.fetchData().asScala(topicPartition).fetchOffset
+    override def toString = underlying.toString
   }
 
   private[server] class PartitionData(val underlying: FetchResponse.PartitionData) extends AbstractFetcherThread.PartitionData {
@@ -366,5 +368,7 @@ object ReplicaFetcherThread {
       case Errors.NONE => None
       case e => Some(e.exception)
     }
+
+    override def toString = underlying.toString
   }
 }

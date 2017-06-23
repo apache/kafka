@@ -20,7 +20,6 @@ package kafka.api
 import java.util.concurrent.{ExecutionException, TimeoutException}
 import java.util.Properties
 
-import kafka.common.Topic
 import kafka.integration.KafkaServerTestHarness
 import kafka.log.LogConfig
 import kafka.server.KafkaConfig
@@ -28,6 +27,7 @@ import kafka.utils.TestUtils
 import org.apache.kafka.clients.producer._
 import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.errors._
+import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.record.{DefaultRecord, DefaultRecordBatch}
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
@@ -226,7 +226,7 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
   def testCannotSendToInternalTopic() {
     TestUtils.createOffsetsTopic(zkUtils, servers)
     val thrown = intercept[ExecutionException] {
-      producer2.send(new ProducerRecord(Topic.GroupMetadataTopicName, "test".getBytes, "test".getBytes)).get
+      producer2.send(new ProducerRecord(Topic.GROUP_METADATA_TOPIC_NAME, "test".getBytes, "test".getBytes)).get
     }
     assertTrue("Unexpected exception while sending to an invalid topic " + thrown.getCause, thrown.getCause.isInstanceOf[InvalidTopicException])
   }

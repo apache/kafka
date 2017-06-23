@@ -20,6 +20,8 @@ object Resource {
   val Separator = ":"
   val ClusterResourceName = "kafka-cluster"
   val ClusterResource = new Resource(Cluster, Resource.ClusterResourceName)
+  val ProducerIdResourceName = "producer-id"
+  val ProducerIdResource = new Resource(Cluster, Resource.ProducerIdResourceName)
   val WildCardResource = "*"
 
   def fromString(str: String): Resource = {

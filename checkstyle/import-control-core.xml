@@ -61,6 +61,10 @@
     <allow pkg="org.apache.kafka.clients.consumer" />
   </subpackage>
 
+  <subpackage name="coordinator">
+    <allow class="kafka.server.MetadataCache" />
+  </subpackage>
+
   <subpackage name="examples">
     <allow pkg="org.apache.kafka.clients" />
     <allow pkg="kafka.api" />

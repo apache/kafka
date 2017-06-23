@@ -64,7 +64,6 @@ import java.util.UUID;
 import java.util.regex.Pattern;
 
 import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.core.Is.is;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.fail;
 
@@ -241,26 +240,34 @@ public class RegexSourceIntegrationTest {
     @Test
     public void shouldAddStateStoreToRegexDefinedSource() throws Exception {
 
-        ProcessorSupplier<String, String> processorSupplier = new MockProcessorSupplier<>();
-        MockStateStoreSupplier stateStoreSupplier = new MockStateStoreSupplier("testStateStore", false);
+        final ProcessorSupplier<String, String> processorSupplier = new MockProcessorSupplier<>();
+        final MockStateStoreSupplier stateStoreSupplier = new MockStateStoreSupplier("testStateStore", false);
+        final long thirtySecondTimeout = 30 * 1000;
 
-        TopologyBuilder builder = new TopologyBuilder()
+        final TopologyBuilder builder = new TopologyBuilder()
                 .addSource("ingest", Pattern.compile("topic-\\d+"))
                 .addProcessor("my-processor", processorSupplier, "ingest")
                 .addStateStore(stateStoreSupplier, "my-processor");
 
 
         final KafkaStreams streams = new KafkaStreams(builder, streamsConfiguration);
-        streams.start();
+        try {
+            streams.start();
 
-        final Properties producerConfig = TestUtils.producerConfig(CLUSTER.bootstrapServers(), StringSerializer.class, StringSerializer.class);
+            final TestCondition stateStoreNameBoundToSourceTopic = new TestCondition() {
+                @Override
+                public boolean conditionMet() {
+                    final Map<String, List<String>> stateStoreToSourceTopic = builder.stateStoreNameToSourceTopics();
+                    final List<String> topicNamesList = stateStoreToSourceTopic.get("testStateStore");
+                    return topicNamesList != null && !topicNamesList.isEmpty() && topicNamesList.get(0).equals("topic-1");
+                }
+            };
 
-        IntegrationTestUtils.produceValuesSynchronously(TOPIC_1, Arrays.asList("message for test"), producerConfig, mockTime);
-        streams.close();
+            TestUtils.waitForCondition(stateStoreNameBoundToSourceTopic, thirtySecondTimeout, "Did not find topic: [topic-1] connected to state store: [testStateStore]");
 
-        Map<String, List<String>> stateStoreToSourceTopic = builder.stateStoreNameToSourceTopics();
-
-        assertThat(stateStoreToSourceTopic.get("testStateStore").get(0), is("topic-1"));
+        } finally {
+            streams.close();
+        }
     }
 
 

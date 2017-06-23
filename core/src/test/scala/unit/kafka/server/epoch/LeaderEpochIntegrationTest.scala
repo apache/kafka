@@ -33,7 +33,7 @@ import org.apache.kafka.common.utils.SystemTime
 import org.apache.kafka.common.TopicPartition
 
 import org.junit.Assert._
-import org.junit.{After, Before, Test}
+import org.junit.{After, Test}
 import org.apache.kafka.common.requests.{EpochEndOffset, OffsetsForLeaderEpochRequest, OffsetsForLeaderEpochResponse}
 
 import scala.collection.JavaConverters._
@@ -51,23 +51,18 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
   val tp = t1p0
   var producer: KafkaProducer[Array[Byte], Array[Byte]] = null
 
-  @Before
-  override def setUp() {
-    super.setUp()
-    val props = createBrokerConfigs(2, zkConnect)
-    brokers = props.map(KafkaConfig.fromProps).map(TestUtils.createServer(_))
-  }
-
   @After
   override def tearDown() {
-    brokers.foreach(_.shutdown())
     if (producer != null)
       producer.close()
+    TestUtils.shutdownServers(brokers)
     super.tearDown()
   }
 
   @Test
   def shouldAddCurrentLeaderEpochToMessagesAsTheyAreWrittenToLeader() {
+    brokers = (0 to 1).map { id => createServer(fromProps(createBrokerConfig(id, zkConnect))) }
+
     // Given two topics with replication of a single partition
     for (topic <- List(topic1, topic2)) {
       createTopic(zkUtils, topic, Map(0 -> Seq(0, 1)), servers = brokers)
