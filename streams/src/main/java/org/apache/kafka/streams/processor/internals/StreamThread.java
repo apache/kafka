@@ -772,7 +772,7 @@ public class StreamThread extends Thread {
 
         if (commitTimeMs >= 0 && lastCommitMs + commitTimeMs < now) {
 
-            log.info("{} Committing all active tasks {} and standby tasks {} because the commit interval {}ms has elapsed by {}ms",
+            log.debug("{} Committing all active tasks {} and standby tasks {} because the commit interval {}ms has elapsed by {}ms",
                 logPrefix, activeTasks.keySet(), standbyTasks.keySet(), commitTimeMs, now - lastCommitMs);
 
             commitAll();
@@ -810,7 +810,7 @@ public class StreamThread extends Thread {
      * Commit the state of a task
      */
     private void commitOne(final AbstractTask task) {
-        log.info("{} Committing task {} {}", logPrefix, task.getClass().getSimpleName(), task.id());
+        log.trace("{} Committing {} {}", logPrefix, task.getClass().getSimpleName(), task.id());
         try {
             task.commit();
         } catch (final CommitFailedException e) {

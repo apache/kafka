@@ -26,6 +26,7 @@ import java.util.Map;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 public class StoresTest {
 
@@ -79,5 +80,19 @@ public class StoresTest {
                 .build();
 
         assertFalse(supplier.loggingEnabled());
+    }
+
+    @Test
+    public void shouldThrowIllegalArgumentExceptionWhenTryingToConstructWindowStoreWithLessThanTwoSegments() throws Exception {
+        final Stores.PersistentKeyValueFactory<String, String> storeFactory = Stores.create("store")
+                .withKeys(Serdes.String())
+                .withValues(Serdes.String())
+                .persistent();
+        try {
+            storeFactory.windowed(1, 1, 1, false);
+            fail("Should have thrown illegal argument exception as number of segments is less than 2");
+        } catch (final IllegalArgumentException e) {
+         // ok
+        }
     }
 }
