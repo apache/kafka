@@ -272,7 +272,6 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     static KafkaAdminClient createInternal(AdminClientConfig config, TimeoutProcessorFactory timeoutProcessorFactory) {
-        Metadata metadata = null;
         Metrics metrics = null;
         NetworkClient networkClient = null;
         Time time = Time.SYSTEM;
@@ -284,7 +283,7 @@ public class KafkaAdminClient extends AdminClient {
         try {
             // Since we only request node information, it's safe to pass true for allowAutoTopicCreation (and it
             // simplifies communication with older brokers)
-            metadata = new Metadata(config.getLong(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG),
+            Metadata metadata = new Metadata(config.getLong(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG),
                     config.getLong(AdminClientConfig.METADATA_MAX_AGE_CONFIG), true);
             List<MetricsReporter> reporters = config.getConfiguredInstances(AdminClientConfig.METRIC_REPORTER_CLASSES_CONFIG,
                 MetricsReporter.class);
@@ -312,7 +311,6 @@ public class KafkaAdminClient extends AdminClient {
                 time,
                 true,
                 apiVersions);
-            channelBuilder = null;
             return new KafkaAdminClient(config, clientId, time, metadata, metrics, networkClient,
                 timeoutProcessorFactory);
         } catch (Throwable exc) {
