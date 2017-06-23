@@ -121,8 +121,10 @@ public class SaslChannelBuilder implements ChannelBuilder {
     }
 
     public void close()  {
-        if (this.loginManager != null)
-            this.loginManager.release();
+        if (loginManager != null) {
+            loginManager.release();
+            loginManager = null;
+        }
     }
 
     protected TransportLayer buildTransportLayer(String id, SelectionKey key, SocketChannel socketChannel) throws IOException {
