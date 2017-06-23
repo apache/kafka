@@ -72,7 +72,7 @@ public class InternalTopicManager {
                 streamsKafkaClient.createTopics(topicsToBeCreated, replicationFactor, windowChangeLogAdditionalRetention, metadata);
                 return;
             } catch (StreamsException ex) {
-                log.warn("Could not create internal topics: " + ex.getMessage() + " Retry #" + i);
+                log.warn("Could not create internal topics: {} Retry #{}", ex.getMessage(), i);
             }
             // backoff
             time.sleep(100L);
@@ -92,7 +92,7 @@ public class InternalTopicManager {
 
                 return existingTopicPartitions;
             } catch (StreamsException ex) {
-                log.warn("Could not get number of partitions: " + ex.getMessage() + " Retry #" + i);
+                log.warn("Could not get number of partitions: {} Retry #{}", ex.getMessage(), i);
             }
             // backoff
             time.sleep(100L);

@@ -77,7 +77,7 @@ public class StandbyTask extends AbstractTask {
      */
     @Override
     public void resume() {
-        log.debug("{} " + "Resuming", logPrefix);
+        log.debug("{} Resuming", logPrefix);
         updateOffsetLimits();
     }
 
