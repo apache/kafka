@@ -251,7 +251,7 @@ public class NetworkClient implements KafkaClient {
         }
         connectionStates.disconnected(nodeId, now);
         if (log.isDebugEnabled()) {
-            log.debug("Manually disconnected from {}.  Removed requests: {}.", nodeId,
+            log.debug("Manually disconnected from {}. Removed requests: {}.", nodeId,
                 Utils.join(requestTypes, ", "));
         }
     }
@@ -721,10 +721,10 @@ public class NetworkClient implements KafkaClient {
             if (discoverBrokerVersions) {
                 this.connectionStates.checkingApiVersions(node);
                 nodesNeedingApiVersionsFetch.put(node, new ApiVersionsRequest.Builder());
-                log.debug("Completed connection to node {}.  Fetching API versions.", node);
+                log.debug("Completed connection to node {}. Fetching API versions.", node);
             } else {
                 this.connectionStates.ready(node);
-                log.debug("Completed connection to node {}.  Ready.", node);
+                log.debug("Completed connection to node {}. Ready.", node);
             }
         }
     }
