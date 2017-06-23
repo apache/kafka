@@ -182,7 +182,7 @@ class TransactionMarkerRequestCompletionHandler(brokerId: Int,
 
             if (!abortSending) {
               if (retryPartitions.nonEmpty) {
-                trace(s"Re-enqueuing ${txnMarker.transactionResult} transaction markers for transactional id $transactionalId " +
+                debug(s"Re-enqueuing ${txnMarker.transactionResult} transaction markers for transactional id $transactionalId " +
                   s"under coordinator epoch ${txnMarker.coordinatorEpoch}")
 
                 // re-enqueue with possible new leaders of the partitions

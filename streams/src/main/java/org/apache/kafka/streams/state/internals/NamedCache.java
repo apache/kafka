@@ -47,10 +47,7 @@ class NamedCache {
     private LRUNode head;
     private long currentSizeBytes;
     private NamedCacheMetrics namedCacheMetrics;
-    // JMX stats
-    private Sensor hitRatio = null;
-
-
+    
     // internal stats
     private long numReadHits = 0;
     private long numReadMisses = 0;

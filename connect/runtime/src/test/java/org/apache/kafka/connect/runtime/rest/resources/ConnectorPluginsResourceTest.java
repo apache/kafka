@@ -30,6 +30,8 @@ import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.runtime.AbstractHerder;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.Herder;
+import org.apache.kafka.connect.runtime.TestSinkConnector;
+import org.apache.kafka.connect.runtime.TestSourceConnector;
 import org.apache.kafka.connect.runtime.isolation.PluginClassLoader;
 import org.apache.kafka.connect.runtime.isolation.PluginDesc;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
@@ -490,76 +492,6 @@ public class ConnectorPluginsResourceTest {
                     klass.newInstance().version(),
                     new MockPluginClassLoader(null, new URL[0])
             );
-        }
-    }
-
-    public static class TestSinkConnector extends SinkConnector {
-
-        static final String VERSION = "some great version";
-
-        @Override
-        public String version() {
-            return VERSION;
-        }
-
-        @Override
-        public void start(Map<String, String> props) {
-
-        }
-
-        @Override
-        public Class<? extends Task> taskClass() {
-            return null;
-        }
-
-        @Override
-        public List<Map<String, String>> taskConfigs(int maxTasks) {
-            return null;
-        }
-
-        @Override
-        public void stop() {
-
-        }
-
-        @Override
-        public ConfigDef config() {
-            return null;
-        }
-    }
-
-    public static class TestSourceConnector extends SourceConnector {
-
-        static final String VERSION = "an entirely different version";
-
-        @Override
-        public String version() {
-            return VERSION;
-        }
-
-        @Override
-        public void start(Map<String, String> props) {
-
-        }
-
-        @Override
-        public Class<? extends Task> taskClass() {
-            return null;
-        }
-
-        @Override
-        public List<Map<String, String>> taskConfigs(int maxTasks) {
-            return null;
-        }
-
-        @Override
-        public void stop() {
-
-        }
-
-        @Override
-        public ConfigDef config() {
-            return null;
         }
     }
 

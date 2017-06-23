@@ -1061,21 +1061,21 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                     }
 
                     records = currentBatch.streamingIterator(decompressionBufferSupplier);
-                }
+                } else {
+                    Record record = records.next();
+                    lastRecord = record;
+                    // skip any records out of range
+                    if (record.offset() >= nextFetchOffset) {
+                        // we only do validation when the message should not be skipped.
+                        maybeEnsureValid(record);
 
-                Record record = records.next();
-                lastRecord = record;
-                // skip any records out of range
-                if (record.offset() >= nextFetchOffset) {
-                    // we only do validation when the message should not be skipped.
-                    maybeEnsureValid(record);
-
-                    // control records are not returned to the user
-                    if (!currentBatch.isControlBatch()) {
-                        return record;
-                    } else {
-                        // Increment the next fetch offset when we skip a control batch.
-                        nextFetchOffset = record.offset() + 1;
+                        // control records are not returned to the user
+                        if (!currentBatch.isControlBatch()) {
+                            return record;
+                        } else {
+                            // Increment the next fetch offset when we skip a control batch.
+                            nextFetchOffset = record.offset() + 1;
+                        }
                     }
                 }
             }

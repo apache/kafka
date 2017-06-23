@@ -35,6 +35,7 @@ import org.apache.kafka.streams.kstream.TransformerSupplier;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
+import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.processor.StreamPartitioner;
@@ -308,7 +309,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     public KStream<K, V> through(Serde<K> keySerde, Serde<V> valSerde, StreamPartitioner<? super K, ? super V> partitioner, String topic) {
         to(keySerde, valSerde, partitioner, topic);
 
-        return topology.stream(keySerde, valSerde, topic);
+        return topology.stream(null, new FailOnInvalidTimestamp(), keySerde, valSerde, topic);
     }
 
     @Override
@@ -525,7 +526,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
         stream.topology.addSink(sinkName, repartitionTopic, keySerializer,
                          valSerializer, filterName);
-        stream.topology.addSource(sourceName, keyDeserializer, valDeserializer,
+        stream.topology.addSource(null, sourceName, new FailOnInvalidTimestamp(), keyDeserializer, valDeserializer,
                            repartitionTopic);
 
         return sourceName;

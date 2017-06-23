@@ -64,6 +64,7 @@ public class TransactionManager {
 
     private final String transactionalId;
     private final int transactionTimeoutMs;
+
     public final String logPrefix;
 
     private final Map<TopicPartition, Integer> sequenceNumbers;
@@ -72,6 +73,15 @@ public class TransactionManager {
     private final Set<TopicPartition> pendingPartitionsInTransaction;
     private final Set<TopicPartition> partitionsInTransaction;
     private final Map<TopicPartition, CommittedOffset> pendingTxnOffsetCommits;
+
+    // This is used by the TxnRequestHandlers to control how long to back off before a given request is retried.
+    // For instance, this value is lowered by the AddPartitionsToTxnHandler when it receives a CONCURRENT_TRANSACTIONS
+    // error for the first AddPartitionsRequest in a transaction.
+    private final long retryBackoffMs;
+
+    // The retryBackoff is overridden to the following value if the first AddPartitions receives a
+    // CONCURRENT_TRANSACTIONS error.
+    private static final long ADD_PARTITIONS_RETRY_BACKOFF_MS = 20L;
 
     private int inFlightRequestCorrelationId = NO_INFLIGHT_REQUEST_CORRELATION_ID;
     private Node transactionCoordinator;
@@ -132,7 +142,7 @@ public class TransactionManager {
         }
     }
 
-    public TransactionManager(String transactionalId, int transactionTimeoutMs) {
+    public TransactionManager(String transactionalId, int transactionTimeoutMs, long retryBackoffMs) {
         this.producerIdAndEpoch = new ProducerIdAndEpoch(NO_PRODUCER_ID, NO_PRODUCER_EPOCH);
         this.sequenceNumbers = new HashMap<>();
         this.transactionalId = transactionalId;
@@ -150,10 +160,12 @@ public class TransactionManager {
                 return Integer.compare(o1.priority().priority, o2.priority().priority);
             }
         });
+
+        this.retryBackoffMs = retryBackoffMs;
     }
 
     TransactionManager() {
-        this(null, 0);
+        this(null, 0, 100);
     }
 
     public synchronized TransactionalRequestResult initializeTransactions() {
@@ -611,6 +623,10 @@ public class TransactionManager {
             }
         }
 
+        long retryBackoffMs() {
+            return retryBackoffMs;
+        }
+
         @Override
         @SuppressWarnings("unchecked")
         public void onComplete(ClientResponse response) {
@@ -711,9 +727,11 @@ public class TransactionManager {
 
     private class AddPartitionsToTxnHandler extends TxnRequestHandler {
         private final AddPartitionsToTxnRequest.Builder builder;
+        private long retryBackoffMs;
 
         private AddPartitionsToTxnHandler(AddPartitionsToTxnRequest.Builder builder) {
             this.builder = builder;
+            this.retryBackoffMs = TransactionManager.this.retryBackoffMs;
         }
 
         @Override
@@ -732,6 +750,7 @@ public class TransactionManager {
             Map<TopicPartition, Errors> errors = addPartitionsToTxnResponse.errors();
             boolean hasPartitionErrors = false;
             Set<String> unauthorizedTopics = new HashSet<>();
+            retryBackoffMs = TransactionManager.this.retryBackoffMs;
 
             for (Map.Entry<TopicPartition, Errors> topicPartitionErrorEntry : errors.entrySet()) {
                 TopicPartition topicPartition = topicPartitionErrorEntry.getKey();
@@ -743,8 +762,11 @@ public class TransactionManager {
                     lookupCoordinator(FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
                     reenqueue();
                     return;
-                } else if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS || error == Errors.CONCURRENT_TRANSACTIONS
-                        || error == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
+                } else if (error == Errors.CONCURRENT_TRANSACTIONS) {
+                    maybeOverrideRetryBackoffMs();
+                    reenqueue();
+                    return;
+                } else if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS || error == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
                     reenqueue();
                     return;
                 } else if (error == Errors.INVALID_PRODUCER_EPOCH) {
@@ -787,6 +809,22 @@ public class TransactionManager {
                 transactionStarted = true;
                 result.done();
             }
+        }
+
+        @Override
+        public long retryBackoffMs() {
+            return Math.min(TransactionManager.this.retryBackoffMs, this.retryBackoffMs);
+        }
+
+        private void maybeOverrideRetryBackoffMs() {
+            // We only want to reduce the backoff when retrying the first AddPartition which errored out due to a
+            // CONCURRENT_TRANSACTIONS error since this means that the previous transaction is still completing and
+            // we don't want to wait too long before trying to start the new one.
+            //
+            // This is only a temporary fix, the long term solution is being tracked in
+            // https://issues.apache.org/jira/browse/KAFKA-5482
+            if (partitionsInTransaction.isEmpty())
+                this.retryBackoffMs = ADD_PARTITIONS_RETRY_BACKOFF_MS;
         }
     }
 

@@ -506,7 +506,6 @@ class TransactionStateManager(brokerId: Int,
             info(s"Accessing the cached transaction metadata for $transactionalId returns $err error; " +
               s"aborting transition to the new metadata and setting the error in the callback")
             responseError = err
-
           case Right(Some(epochAndMetadata)) =>
             val metadata = epochAndMetadata.transactionMetadata
 

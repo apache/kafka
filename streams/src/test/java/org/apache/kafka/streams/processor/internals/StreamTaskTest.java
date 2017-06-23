@@ -499,6 +499,72 @@ public class StreamTaskTest {
         assertThat(checkpoint.read(), equalTo(Collections.singletonMap(partition, offset + 1)));
     }
 
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldNotCheckpointOffsetsOnCommitIfEosIsEnabled() throws Exception {
+        final Map<String, Object> properties = config.originals();
+        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
+        final StreamsConfig testConfig = new StreamsConfig(properties);
+
+        final String storeName = "test";
+        final String changelogTopic = ProcessorStateManager.storeChangelogTopic("appId", storeName);
+        final InMemoryKeyValueStore inMemoryStore = new InMemoryKeyValueStore(storeName, null, null) {
+            @Override
+            public void init(final ProcessorContext context, final StateStore root) {
+                context.register(root, true, null);
+            }
+
+            @Override
+            public boolean persistent() {
+                return true;
+            }
+        };
+        Map<String, SourceNode> sourceByTopics =  new HashMap() {
+            {
+                put(partition1.topic(), source1);
+                put(partition2.topic(), source2);
+            }
+        };
+        final ProcessorTopology topology = new ProcessorTopology(Collections.<ProcessorNode>emptyList(),
+            sourceByTopics,
+            Collections.<String, SinkNode>emptyMap(),
+            Collections.<StateStore>singletonList(inMemoryStore),
+            Collections.singletonMap(storeName, changelogTopic),
+            Collections.<StateStore>emptyList());
+
+        final TopicPartition partition = new TopicPartition(changelogTopic, 0);
+
+        restoreStateConsumer.updatePartitions(changelogTopic,
+            Collections.singletonList(
+                new PartitionInfo(changelogTopic, 0, null, new Node[0], new Node[0])));
+        restoreStateConsumer.updateEndOffsets(Collections.singletonMap(partition, 0L));
+        restoreStateConsumer.updateBeginningOffsets(Collections.singletonMap(partition, 0L));
+
+        final long offset = 543L;
+        final StreamTask streamTask = new StreamTask(taskId00, "appId", partitions, topology, consumer,
+            changelogReader, testConfig, streamsMetrics, stateDirectory, null, time, producer) {
+
+            @Override
+            RecordCollector createRecordCollector() {
+                return new NoOpRecordCollector() {
+                    @Override
+                    public Map<TopicPartition, Long> offsets() {
+
+                        return Collections.singletonMap(partition, offset);
+                    }
+                };
+            }
+        };
+
+        time.sleep(testConfig.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG));
+
+        streamTask.commit();
+
+        final File checkpointFile = new File(stateDirectory.directoryForTask(taskId00),
+                                             ProcessorStateManager.CHECKPOINT_FILE_NAME);
+        assertFalse(checkpointFile.exists());
+    }
+
     @Test
     public void shouldThrowIllegalStateExceptionIfCurrentNodeIsNotNullWhenPunctuateCalled() throws Exception {
         ((ProcessorContextImpl) task.processorContext()).setCurrentNode(processor);

@@ -45,13 +45,14 @@ class StreamsTestBaseService(KafkaPathResolverMixin, Service):
             "collect_default": True},
     }
 
-    def __init__(self, test_context, kafka, streams_class_name, user_test_args, user_test_args1=None, user_test_args2=None):
+    def __init__(self, test_context, kafka, streams_class_name, user_test_args, user_test_args1=None, user_test_args2=None, user_test_args3=None):
         super(StreamsTestBaseService, self).__init__(test_context, 1)
         self.kafka = kafka
         self.args = {'streams_class_name': streams_class_name,
                      'user_test_args': user_test_args,
                      'user_test_args1': user_test_args1,
-                     'user_test_args2': user_test_args2}
+                     'user_test_args2': user_test_args2,
+                     'user_test_args3': user_test_args3}
         self.log_level = "DEBUG"
 
     @property
@@ -122,7 +123,7 @@ class StreamsTestBaseService(KafkaPathResolverMixin, Service):
         cmd = "( export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%(log4j)s\"; " \
               "INCLUDE_TEST_JARS=true %(kafka_run_class)s %(streams_class_name)s " \
               " %(kafka)s %(state_dir)s %(user_test_args)s %(user_test_args1)s %(user_test_args2)s" \
-              " & echo $! >&3 ) 1>> %(stdout)s 2>> %(stderr)s 3> %(pidfile)s" % args
+              " %(user_test_args3)s & echo $! >&3 ) 1>> %(stdout)s 2>> %(stderr)s 3> %(pidfile)s" % args
 
         return cmd
 
