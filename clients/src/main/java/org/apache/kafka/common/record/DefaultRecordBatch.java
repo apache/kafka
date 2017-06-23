@@ -30,6 +30,7 @@ import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.NoSuchElementException;
@@ -187,9 +188,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
         int baseSequence = baseSequence();
         if (baseSequence == RecordBatch.NO_SEQUENCE)
             return RecordBatch.NO_SEQUENCE;
-
-        int delta = lastOffsetDelta();
-        return incrementSequence(baseSequence, delta);
+        return incrementSequence(baseSequence, lastOffsetDelta());
     }
 
     @Override
@@ -297,6 +296,9 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
 
     @Override
     public Iterator<Record> iterator() {
+        if (count() == 0)
+            return Collections.emptyIterator();
+
         if (!isCompressed())
             return uncompressedIterator();
 
@@ -393,6 +395,24 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
         return attributes;
     }
 
+    public static void writeEmptyHeader(ByteBuffer buffer,
+                                        byte magic,
+                                        long producerId,
+                                        short producerEpoch,
+                                        int baseSequence,
+                                        long baseOffset,
+                                        long lastOffset,
+                                        int partitionLeaderEpoch,
+                                        TimestampType timestampType,
+                                        long timestamp,
+                                        boolean isTransactional,
+                                        boolean isControlRecord) {
+        int offsetDelta = (int) (lastOffset - baseOffset);
+        writeHeader(buffer, baseOffset, offsetDelta, DefaultRecordBatch.RECORD_BATCH_OVERHEAD, magic,
+                CompressionType.NONE, timestampType, timestamp, timestamp, producerId, producerEpoch, baseSequence,
+                isTransactional, isControlRecord, partitionLeaderEpoch, 0);
+    }
+
     static void writeHeader(ByteBuffer buffer,
                             long baseOffset,
                             int lastOffsetDelta,
@@ -431,6 +451,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
         buffer.putInt(position + RECORDS_COUNT_OFFSET, numRecords);
         long crc = Crc32C.compute(buffer, ATTRIBUTES_OFFSET, sizeInBytes - ATTRIBUTES_OFFSET);
         buffer.putInt(position + CRC_OFFSET, (int) crc);
+        buffer.position(position + RECORD_BATCH_OVERHEAD);
     }
 
     @Override

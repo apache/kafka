@@ -16,12 +16,18 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
+import org.junit.Test;
 
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.List;
+
+import static org.junit.Assert.assertEquals;
 
 public class InMemoryKeyValueLoggedStoreTest extends AbstractKeyValueStoreTest {
 
@@ -45,5 +51,15 @@ public class InMemoryKeyValueLoggedStoreTest extends AbstractKeyValueStoreTest {
         KeyValueStore<K, V> store = (KeyValueStore<K, V>) supplier.get();
         store.init(context, store);
         return store;
+    }
+
+    @Test
+    public void shouldPutAll() {
+        List<KeyValue<Integer, String>> entries = new ArrayList<>();
+        entries.add(new KeyValue<>(1, "1"));
+        entries.add(new KeyValue<>(2, "2"));
+        store.putAll(entries);
+        assertEquals(store.get(1), "1");
+        assertEquals(store.get(2), "2");
     }
 }

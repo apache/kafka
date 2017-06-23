@@ -48,6 +48,8 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.fail;
+import static org.junit.Assert.assertTrue;
 
 public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
 
@@ -241,6 +243,50 @@ public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
     public void shouldThrowIfTryingToDoPutIfAbsentClosedCachingStore() throws Exception {
         store.close();
         store.putIfAbsent("b", "c");
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerExceptionOnPutWithNullKey() {
+        store.put(null, "c");
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerExceptionOnPutIfAbsentWithNullKey() {
+        store.putIfAbsent(null, "c");
+    }
+
+    @Test
+    public void shouldThrowNullPointerExceptionOnPutAllWithNullKey() {
+        List<KeyValue<String, String>> entries = new ArrayList<>();
+        entries.add(new KeyValue<String, String>(null, "a"));
+        try {
+            store.putAll(entries);
+            fail("Should have thrown NullPointerException while putAll null key");
+        } catch (NullPointerException e) { }
+    }
+
+    @Test
+    public void shouldPutIfAbsent() {
+        store.putIfAbsent("b", "2");
+        assertTrue(store.get("b").equals("2"));
+
+        store.putIfAbsent("b", "3");
+        assertTrue(store.get("b").equals("2"));
+    }
+
+    @Test
+    public void shouldPutAll() {
+        List<KeyValue<String, String>> entries = new ArrayList<>();
+        entries.add(new KeyValue<>("a", "1"));
+        entries.add(new KeyValue<>("b", "2"));
+        store.putAll(entries);
+        assertEquals(store.get("a"), "1");
+        assertEquals(store.get("b"), "2");
+    }
+
+    @Test
+    public void shouldReturnUnderlying() {
+        assertTrue(store.underlying().equals(underlyingStore));
     }
 
     @Test(expected = InvalidStateStoreException.class)

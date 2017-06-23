@@ -334,18 +334,19 @@ public class EosTestDriver extends SmokeTestUtil {
                     final String receivedKey = stringDeserializer.deserialize(receivedRecord.topic(), receivedRecord.key());
                     final int receivedValue = integerDeserializer.deserialize(receivedRecord.topic(), receivedRecord.value());
                     final String key = stringDeserializer.deserialize(input.topic(), input.key());
-                    final Integer value = integerDeserializer.deserialize(input.topic(), input.value());
+                    final int value = integerDeserializer.deserialize(input.topic(), input.value());
 
 
                     Integer min = currentMinPerKey.get(key);
                     if (min == null) {
                         min = value;
+                    } else {
+                        min = Math.min(min, value);
                     }
-                    min = Math.min(min, value);
                     currentMinPerKey.put(key, min);
 
                     if (!receivedKey.equals(key) || receivedValue != min) {
-                        throw new RuntimeException("Result verification failed for " + receivedRecord + " expected <" + key + "," + value + "> but was <" + receivedKey + "," + receivedValue + ">");
+                        throw new RuntimeException("Result verification failed for " + receivedRecord + " expected <" + key + "," + min + "> but was <" + receivedKey + "," + receivedValue + ">");
                     }
                 }
             } catch (final NullPointerException e) {
@@ -374,17 +375,18 @@ public class EosTestDriver extends SmokeTestUtil {
                     final String receivedKey = stringDeserializer.deserialize(receivedRecord.topic(), receivedRecord.key());
                     final long receivedValue = longDeserializer.deserialize(receivedRecord.topic(), receivedRecord.value());
                     final String key = stringDeserializer.deserialize(input.topic(), input.key());
-                    final Integer value = integerDeserializer.deserialize(input.topic(), input.value());
+                    final int value = integerDeserializer.deserialize(input.topic(), input.value());
 
                     Long sum = currentSumPerKey.get(key);
                     if (sum == null) {
-                        sum = 0L;
+                        sum = (long) value;
+                    } else {
+                        sum += value;
                     }
-                    sum += value;
                     currentSumPerKey.put(key, sum);
 
                     if (!receivedKey.equals(key) || receivedValue != sum) {
-                        throw new RuntimeException("Result verification failed for " + receivedRecord + " expected <" + key + "," + value + "> but was <" + receivedKey + "," + receivedValue + ">");
+                        throw new RuntimeException("Result verification failed for " + receivedRecord + " expected <" + key + "," + sum + "> but was <" + receivedKey + "," + receivedValue + ">");
                     }
                 }
             } catch (final NullPointerException e) {
