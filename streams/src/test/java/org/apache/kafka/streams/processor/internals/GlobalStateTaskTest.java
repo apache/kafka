@@ -18,11 +18,15 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
+import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
+import org.apache.kafka.streams.errors.LogAndFailExceptionHandler;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.test.GlobalStateManagerStub;
 import org.apache.kafka.test.MockProcessorNode;
@@ -54,6 +58,7 @@ public class GlobalStateTaskTest {
     private TopicPartition t2;
     private MockSourceNode sourceOne;
     private MockSourceNode sourceTwo;
+    private ProcessorTopology topology;
 
     @Before
     public void before() {
@@ -71,12 +76,12 @@ public class GlobalStateTaskTest {
         final Map<String, String> storeToTopic = new HashMap<>();
         storeToTopic.put("t1-store", "t1");
         storeToTopic.put("t2-store", "t2");
-        final ProcessorTopology topology = new ProcessorTopology(processorNodes,
-                                                                 sourceByTopics,
-                                                                 Collections.<String, SinkNode>emptyMap(),
-                                                                 Collections.<StateStore>emptyList(),
-                                                                 storeToTopic,
-                                                                 Collections.<StateStore>emptyList());
+        topology = new ProcessorTopology(processorNodes,
+            sourceByTopics,
+            Collections.<String, SinkNode>emptyMap(),
+            Collections.<StateStore>emptyList(),
+            storeToTopic,
+            Collections.<StateStore>emptyList());
         context = new NoOpProcessorContext();
 
         t1 = new TopicPartition("t1", 1);
@@ -85,7 +90,7 @@ public class GlobalStateTaskTest {
         offsets.put(t1, 50L);
         offsets.put(t2, 100L);
         stateMgr = new GlobalStateManagerStub(storeNames, offsets);
-        globalStateTask = new GlobalStateUpdateTask(topology, context, stateMgr, new LogAndContinueExceptionHandler());
+        globalStateTask = new GlobalStateUpdateTask(topology, context, stateMgr, new LogAndFailExceptionHandler());
     }
 
     @Test
@@ -128,6 +133,55 @@ public class GlobalStateTaskTest {
         globalStateTask.update(new ConsumerRecord<>("t2", 1, 1, integerBytes, integerBytes));
         assertEquals(1, sourceTwo.numReceived);
         assertEquals(0, sourceOne.numReceived);
+    }
+
+    @Test(expected = StreamsException.class)
+    public void shouldThrowStreamsExceptionWhenKeyDeserializationFails() throws Exception {
+        final byte[] key = new LongSerializer().serialize("t2", 1L);
+        final byte[] recordValue = new IntegerSerializer().serialize("t2", 10);
+
+        globalStateTask.initialize();
+        globalStateTask.update(new ConsumerRecord<>("t2", 1, 1,
+            0L, TimestampType.CREATE_TIME, 0L, 0, 0,
+            key, recordValue));
+    }
+
+
+    @Test(expected = StreamsException.class)
+    public void shouldThrowStreamsExceptionWhenValueDeserializationFails() throws Exception {
+        final byte[] key = new IntegerSerializer().serialize("t2", 1);
+        final byte[] recordValue = new LongSerializer().serialize("t2", 10L);
+
+        globalStateTask.initialize();
+        globalStateTask.update(new ConsumerRecord<>("t2", 1, 1,
+            0L, TimestampType.CREATE_TIME, 0L, 0, 0,
+            key, recordValue));
+    }
+
+    @Test
+    public void shouldNotThrowStreamsExceptionWhenKeyDeserializationFailsWithSkipHandler() throws Exception {
+        final GlobalStateUpdateTask globalStateTask2 = new GlobalStateUpdateTask(topology, context, stateMgr,
+            new LogAndContinueExceptionHandler());
+        final byte[] key = new LongSerializer().serialize("t2", 1L);
+        final byte[] recordValue = new IntegerSerializer().serialize("t2", 10);
+
+        globalStateTask2.initialize();
+        globalStateTask2.update(new ConsumerRecord<>("t2", 1, 1,
+            0L, TimestampType.CREATE_TIME, 0L, 0, 0,
+            key, recordValue));
+    }
+
+    @Test
+    public void shouldNotThrowStreamsExceptionWhenValueDeserializationFails() throws Exception {
+        final GlobalStateUpdateTask globalStateTask2 = new GlobalStateUpdateTask(topology, context, stateMgr,
+            new LogAndContinueExceptionHandler());
+        final byte[] key = new IntegerSerializer().serialize("t2", 1);
+        final byte[] recordValue = new LongSerializer().serialize("t2", 10L);
+
+        globalStateTask2.initialize();
+        globalStateTask2.update(new ConsumerRecord<>("t2", 1, 1,
+            0L, TimestampType.CREATE_TIME, 0L, 0, 0,
+            key, recordValue));
     }
 
 
