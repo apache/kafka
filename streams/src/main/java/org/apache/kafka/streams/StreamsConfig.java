@@ -574,8 +574,8 @@ public class StreamsConfig extends AbstractConfig {
 
         final boolean eosEnabled = EXACTLY_ONCE.equals(parsedValues.get(PROCESSING_GUARANTEE_CONFIG));
         if (eosEnabled && !originals().containsKey(COMMIT_INTERVAL_MS_CONFIG)) {
-            log.debug("Using " + COMMIT_INTERVAL_MS_CONFIG + " default value of "
-                + EOS_DEFAULT_COMMIT_INTERVAL_MS + " as exactly once is enabled.");
+            log.debug("Using {} default value of {} as exactly once is enabled.",
+                    COMMIT_INTERVAL_MS_CONFIG, EOS_DEFAULT_COMMIT_INTERVAL_MS);
             configUpdates.put(COMMIT_INTERVAL_MS_CONFIG, EOS_DEFAULT_COMMIT_INTERVAL_MS);
         }
 
