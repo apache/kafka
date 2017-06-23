@@ -194,7 +194,7 @@ class LogManager(private val logDirs: Array[File],
     val logRecoveryPoint = recoveryPoints.getOrElse(topicPartition, 0L)
     val logStartOffset = logStartOffsets.getOrElse(topicPartition, 0L)
 
-    val current = new Log(
+    val current = Log(
       dir = logDir,
       config = config,
       logStartOffset = logStartOffset,
@@ -203,6 +203,7 @@ class LogManager(private val logDirs: Array[File],
       scheduler = scheduler,
       time = time,
       brokerTopicStats = brokerTopicStats)
+
     if (logDir.getName.endsWith(Log.DeleteDirSuffix)) {
       this.logsToBeDeleted.add(current)
     } else {
