@@ -758,7 +758,7 @@ public class StreamThread extends Thread {
         } else if (prevRecordsProcessedBeforeCommit != UNLIMITED_RECORDS && processLatency > 0) {
             // push up
             recordsProcessedBeforeCommit = Math.max(1, (commitTime * totalProcessed) / processLatency);
-            log.debug("{} processing latency {} > commit time {} for {} records. Adjusting up recordsProcessedBeforeCommit={}",
+            log.debug("{} processing latency {} < commit time {} for {} records. Adjusting up recordsProcessedBeforeCommit={}",
                 logPrefix, processLatency, commitTime, totalProcessed, recordsProcessedBeforeCommit);
         }
 
