@@ -103,7 +103,7 @@ public class LoginManager {
     public void release() {
         synchronized (LoginManager.class) {
             if (refCount == 0)
-                throw new IllegalStateException("release called on LoginManager with refCount == 0");
+                throw new IllegalStateException("release() called on disposed " + this);
             else if (refCount == 1) {
                 if (cacheKey instanceof Password) {
                     DYNAMIC_INSTANCES.remove(cacheKey);
@@ -114,6 +114,14 @@ public class LoginManager {
             }
             --refCount;
         }
+    }
+
+    @Override
+    public String toString() {
+        return "LoginManager(serviceName=" + serviceName() +
+                // subject.toString() exposes private credentials, so we can't use it
+                ", publicCredentials=" + subject().getPublicCredentials() +
+                ", refCount=" + refCount + ')';
     }
 
     /* Should only be used in tests. */
