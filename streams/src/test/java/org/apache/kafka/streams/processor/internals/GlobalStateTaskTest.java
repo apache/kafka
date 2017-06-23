@@ -22,6 +22,7 @@ import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.test.GlobalStateManagerStub;
 import org.apache.kafka.test.MockProcessorNode;
@@ -84,7 +85,7 @@ public class GlobalStateTaskTest {
         offsets.put(t1, 50L);
         offsets.put(t2, 100L);
         stateMgr = new GlobalStateManagerStub(storeNames, offsets);
-        globalStateTask = new GlobalStateUpdateTask(topology, context, stateMgr);
+        globalStateTask = new GlobalStateUpdateTask(topology, context, stateMgr, new LogAndContinueExceptionHandler());
     }
 
     @Test

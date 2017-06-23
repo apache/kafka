@@ -27,6 +27,8 @@ import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
+import org.apache.kafka.streams.errors.LogAndFailExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.LogAndSkipOnInvalidTimestamp;
@@ -46,7 +48,7 @@ public class RecordQueueTest {
     private final String[] topics = {"topic"};
     private final RecordQueue queue = new RecordQueue(new TopicPartition(topics[0], 1),
                                                       new MockSourceNode<>(topics, intDeserializer, intDeserializer),
-                                                      timestampExtractor);
+                                                      timestampExtractor, new LogAndFailExceptionHandler(), null);
 
     private final byte[] recordValue = intSerializer.serialize(null, 10);
     private final byte[] recordKey = intSerializer.serialize(null, 1);
@@ -140,6 +142,35 @@ public class RecordQueueTest {
         queue.addRawRecords(records);
     }
 
+    @Test
+    public void shouldNotThrowStreamsExceptionWhenKeyDeserializationFailsWithSkipHandler() throws Exception {
+        RecordQueue queue = new RecordQueue(new TopicPartition(topics[0], 1),
+            new MockSourceNode<>(topics, intDeserializer, intDeserializer),
+            timestampExtractor, new LogAndContinueExceptionHandler(), null);
+
+        final byte[] key = Serdes.Long().serializer().serialize("foo", 1L);
+        final List<ConsumerRecord<byte[], byte[]>> records = Collections.singletonList(
+            new ConsumerRecord<>("topic", 1, 1, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, key, recordValue));
+
+        queue.addRawRecords(records);
+        assertEquals(0, queue.size());
+    }
+
+    @Test
+    public void shouldNotThrowStreamsExceptionWhenValueDeserializationFailsWithSkipHandler() throws Exception {
+        RecordQueue queue = new RecordQueue(new TopicPartition(topics[0], 1),
+            new MockSourceNode<>(topics, intDeserializer, intDeserializer),
+            timestampExtractor, new LogAndContinueExceptionHandler(), null);
+
+        final byte[] value = Serdes.Long().serializer().serialize("foo", 1L);
+        final List<ConsumerRecord<byte[], byte[]>> records = Collections.singletonList(
+            new ConsumerRecord<>("topic", 1, 1, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, value));
+
+        queue.addRawRecords(records);
+        assertEquals(0, queue.size());
+    }
+
+
     @Test(expected = StreamsException.class)
     public void shouldThrowOnNegativeTimestamp() {
         final List<ConsumerRecord<byte[], byte[]>> records = Collections.singletonList(
@@ -147,7 +178,7 @@ public class RecordQueueTest {
 
         final RecordQueue queue = new RecordQueue(new TopicPartition(topics[0], 1),
                                                           new MockSourceNode<>(topics, intDeserializer, intDeserializer),
-                                                          new FailOnInvalidTimestamp());
+                                                          new FailOnInvalidTimestamp(), new LogAndContinueExceptionHandler(), null);
         queue.addRawRecords(records);
     }
 
@@ -158,7 +189,7 @@ public class RecordQueueTest {
 
         final RecordQueue queue = new RecordQueue(new TopicPartition(topics[0], 1),
                                                   new MockSourceNode<>(topics, intDeserializer, intDeserializer),
-                                                  new LogAndSkipOnInvalidTimestamp());
+                                                  new LogAndSkipOnInvalidTimestamp(), new LogAndContinueExceptionHandler(), null);
         queue.addRawRecords(records);
 
         assertEquals(0, queue.size());

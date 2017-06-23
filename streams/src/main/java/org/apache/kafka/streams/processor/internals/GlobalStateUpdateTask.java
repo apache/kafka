@@ -18,6 +18,7 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -45,15 +46,18 @@ public class GlobalStateUpdateTask implements GlobalStateMaintainer {
     private final Map<TopicPartition, Long> offsets = new HashMap<>();
     private final Map<String, SourceNodeAndDeserializer> deserializers = new HashMap<>();
     private final GlobalStateManager stateMgr;
+    private final DeserializationExceptionHandler deserializationExceptionHandler;
 
 
     public GlobalStateUpdateTask(final ProcessorTopology topology,
                                  final InternalProcessorContext processorContext,
-                                 final GlobalStateManager stateMgr) {
+                                 final GlobalStateManager stateMgr,
+                                 final DeserializationExceptionHandler deserializationExceptionHandler) {
 
         this.topology = topology;
         this.stateMgr = stateMgr;
         this.processorContext = processorContext;
+        this.deserializationExceptionHandler = deserializationExceptionHandler;
     }
 
     @SuppressWarnings("unchecked")
@@ -71,20 +75,43 @@ public class GlobalStateUpdateTask implements GlobalStateMaintainer {
     }
 
 
+    private ConsumerRecord<Object, Object> tryDeserialize(final SourceNodeAndDeserializer sourceNodeAndDeserializer,
+                                                          ConsumerRecord<byte[], byte[]> rawRecord) {
+        ConsumerRecord<Object, Object> record = null;
+        try {
+            record = sourceNodeAndDeserializer.deserializer.deserialize(rawRecord);
+        } catch (Exception e) {
+            DeserializationExceptionHandler.DeserializationHandlerResponse response =
+                deserializationExceptionHandler.handle(processorContext, rawRecord, e);
+            if (response.id == DeserializationExceptionHandler.DeserializationHandlerResponse.CONTINUE.id) {
+                // ignore and continue
+            } else {
+                // rethrow exception
+                throw e;
+            }
+        }
+
+        return record;
+    }
+
     @SuppressWarnings("unchecked")
     @Override
     public void update(final ConsumerRecord<byte[], byte[]> record) {
         final SourceNodeAndDeserializer sourceNodeAndDeserializer = deserializers.get(record.topic());
-        final ConsumerRecord<Object, Object> deserialized = sourceNodeAndDeserializer.deserializer.deserialize(record);
-        final ProcessorRecordContext recordContext =
+        final ConsumerRecord<Object, Object> deserialized = tryDeserialize(sourceNodeAndDeserializer, record);
+
+        if (deserialized != null) {
+            final ProcessorRecordContext recordContext =
                 new ProcessorRecordContext(deserialized.timestamp(),
-                                           deserialized.offset(),
-                                           deserialized.partition(),
-                                           deserialized.topic());
-        processorContext.setRecordContext(recordContext);
-        processorContext.setCurrentNode(sourceNodeAndDeserializer.sourceNode);
-        sourceNodeAndDeserializer.sourceNode.process(deserialized.key(), deserialized.value());
-        offsets.put(new TopicPartition(record.topic(), record.partition()), deserialized.offset() + 1);
+                    deserialized.offset(),
+                    deserialized.partition(),
+                    deserialized.topic());
+            processorContext.setRecordContext(recordContext);
+            processorContext.setCurrentNode(sourceNodeAndDeserializer.sourceNode);
+            sourceNodeAndDeserializer.sourceNode.process(deserialized.key(), deserialized.value());
+        }
+
+        offsets.put(new TopicPartition(record.topic(), record.partition()), record.offset() + 1);
     }
 
     public void flushState() {
