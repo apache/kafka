@@ -371,7 +371,7 @@ public class NetworkClient implements KafkaClient {
         } catch (UnsupportedVersionException e) {
             // If the version is not supported, skip sending the request over the wire.
             // Instead, simply add it to the local queue of aborted requests.
-            log.debug("Version mismatch when attempting to send {} to {}", clientRequest, clientRequest.destination(), e);
+            log.debug("Version mismatch when attempting to send {} to {}", builder, clientRequest.destination(), e);
             ClientResponse clientResponse = new ClientResponse(clientRequest.makeHeader(builder.desiredOrLatestVersion()),
                     clientRequest.callback(), clientRequest.destination(), now, now,
                     false, e, null);
