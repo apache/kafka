@@ -27,6 +27,7 @@ import org.junit.Test;
 import java.util.Collections;
 import java.util.HashMap;
 
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.fail;
 
@@ -45,6 +46,7 @@ public class SaslChannelBuilderTest {
     public void testCloseAfterConfigIsIdempotent() {
         SaslChannelBuilder builder = createChannelBuilder(SecurityProtocol.SASL_PLAINTEXT);
         builder.configure(new HashMap<String, Object>());
+        assertNotNull(builder.loginManager());
         builder.close();
         assertNull(builder.loginManager());
         builder.close();
