@@ -95,10 +95,7 @@ public class SaslChannelBuilder implements ChannelBuilder {
                 this.sslFactory.configure(configs);
             }
         } catch (Exception e) {
-            if (loginManager != null) {
-                loginManager.release();
-                loginManager = null;
-            }
+            close();
             throw new KafkaException(e);
         }
     }
