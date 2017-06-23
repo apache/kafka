@@ -182,7 +182,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
     @Override
     public void print(String streamName) {
-        print(null,null, null, streamName);
+        print(null, null, null, streamName);
     }
 
     @Override
@@ -219,25 +219,41 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
     @Override
     public void writeAsText(String filePath) {
-        writeAsText(filePath, null, null, null);
+        writeAsText(filePath, null, null, null, null);
     }
 
     @Override
     public void writeAsText(String filePath, String streamName) {
-        writeAsText(filePath, streamName, null, null);
+        writeAsText(filePath, streamName, null, null, null);
     }
-
 
     @Override
     public void writeAsText(String filePath, Serde<K> keySerde, Serde<V> valSerde) {
-        writeAsText(filePath, null, keySerde, valSerde);
+        writeAsText(filePath, null, keySerde, valSerde, null);
     }
 
-    /**
-     * @throws TopologyBuilderException if file is not found
-     */
     @Override
     public void writeAsText(String filePath, String streamName, Serde<K> keySerde, Serde<V> valSerde) {
+        writeAsText(filePath, streamName, keySerde, valSerde, null);
+    }
+
+    @Override
+    public void writeAsText(final String filePath, final KeyValueMapper<? super K, ? super V, String> mapper) {
+        writeAsText(filePath, null, null, null, mapper);
+    }
+
+    @Override
+    public void writeAsText(final String filePath, final String streamName, final KeyValueMapper<? super K, ? super V, String> mapper) {
+        writeAsText(filePath, streamName, null, null, mapper);
+    }
+
+    @Override
+    public void writeAsText(final String filePath, final Serde<K> keySerde, final Serde<V> valSerde, final KeyValueMapper<? super K, ? super V, String> mapper) {
+        writeAsText(filePath, null, keySerde, valSerde, mapper);
+    }
+
+    @Override
+    public void writeAsText(final String filePath, String streamName, final Serde<K> keySerde, final Serde<V> valSerde, final KeyValueMapper<? super K, ? super V, String> mapper) {
         Objects.requireNonNull(filePath, "filePath can't be null");
         if (filePath.trim().isEmpty()) {
             throw new TopologyBuilderException("filePath can't be an empty string");
@@ -245,14 +261,12 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         String name = topology.newName(PRINTING_NAME);
         streamName = (streamName == null) ? this.name : streamName;
         try {
-            PrintWriter printWriter = null;
-            printWriter = new PrintWriter(filePath, StandardCharsets.UTF_8.name());
-            topology.addProcessor(name, new KStreamPrint<>(new PrintForeachAction(printWriter, streamName), keySerde, valSerde), this.name);
+            PrintWriter printWriter = new PrintWriter(filePath, StandardCharsets.UTF_8.name());
+            topology.addProcessor(name, new KStreamPrint<>(new PrintForeachAction(printWriter, mapper, streamName), keySerde, valSerde), this.name);
         } catch (FileNotFoundException | UnsupportedEncodingException e) {
             String message = "Unable to write stream to file at [" + filePath + "] " + e.getMessage();
             throw new TopologyBuilderException(message);
         }
-
     }
 
     @Override

@@ -490,6 +490,112 @@ public interface KStream<K, V> {
                      final Serde<V> valSerde);
 
     /**
+     * Write the customised output to a given file path.
+     * <p>
+     * The user provided {@link KeyValueMapper} which customizes output is used to write to file.
+     * This function will use default name of stream to label records.
+     * <p>
+     * The default key and value serde will used to deserialize {@code byte[]} records before calling {@code toString()}.
+     * <p>
+     * The example below shows the way to customize output data.
+     * <pre>{@code
+     * final KeyValueMapper<Integer, String, String> mapper = new KeyValueMapper<Integer, String, String>() {
+     *     @Override
+     *     public String apply(Integer key, String value) {
+     *         return String.format("(%d, %s)", key, value);
+     *     }
+     * };
+     * }</pre>
+     * <p>
+     * The KeyValueMapper's mapped value type must be {@code String}.
+     *
+     * @param filePath path of the file to write to.
+     * @param mapper a {@link KeyValueMapper} that computes output type {@code String}.
+     */
+    void writeAsText(final String filePath, final KeyValueMapper<? super K, ? super V, String> mapper);
+
+    /**
+     * Write the customised output to a given file path.
+     * <p>
+     * The user provided {@link KeyValueMapper} which customizes output is used to write to file.
+     * This function will use given name of stream to label records.
+     * <p>
+     * The default key and value serde will used to deserialize {@code byte[]} records before calling {@code toString()}.
+     * <p>
+     * The example below shows the way to customize output data.
+     * <pre>{@code
+     * final KeyValueMapper<Integer, String, String> mapper = new KeyValueMapper<Integer, String, String>() {
+     *     @Override
+     *     public String apply(Integer key, String value) {
+     *         return String.format("(%d, %s)", key, value);
+     *     }
+     * };
+     * }</pre>
+     * <p>
+     * The KeyValueMapper's mapped value type must be {@code String}.
+     *
+     * @param filePath path of the file to write to.
+     * @param streamName the name used to label records written to file.
+     * @param mapper a {@link KeyValueMapper} that computes output type {@code String}.
+     */
+    void writeAsText(final String filePath, final String streamName, final KeyValueMapper<? super K, ? super V, String> mapper);
+
+    /**
+     * Write the customised output to a given file path.
+     * <p>
+     * The user provided {@link KeyValueMapper} which customizes output is used to write to file.
+     * This function will use default name of stream to label records.
+     * <p>
+     * The given key and value serde will be used to deserialize {@code byte[]} records before calling {@code toString()}.
+     * <p>
+     * The example below shows the way to customize output data.
+     * <pre>{@code
+     * final KeyValueMapper<Integer, String, String> mapper = new KeyValueMapper<Integer, String, String>() {
+     *     @Override
+     *     public String apply(Integer key, String value) {
+     *         return String.format("(%d, %s)", key, value);
+     *     }
+     * };
+     * }</pre>
+     * <p>
+     * The KeyValueMapper's mapped value type must be {@code String}.
+     *
+     * @param filePath path of the file to write to.
+     * @param keySerde key serde used to deserialize key if type is {@code byte[]}.
+     * @param valSerde value serde used to deserialize value if type is {@code byte[]}.
+     * @param mapper a {@link KeyValueMapper} that computes output type {@code String}.
+     */
+    void writeAsText(final String filePath, final Serde<K> keySerde, final Serde<V> valSerde, final KeyValueMapper<? super K, ? super V, String> mapper);
+
+    /**
+     * Write the customised output to a given file path.
+     * <p>
+     * The user provided {@link KeyValueMapper} which customizes output is used to write to file.
+     * This function will use given name of stream to label records.
+     * <p>
+     * The given key and value serde will be used to deserialize {@code byte[]} records before calling {@code toString()}.
+     * <p>
+     * The example below shows the way to customize output data.
+     * <pre>{@code
+     * final KeyValueMapper<Integer, String, String> mapper = new KeyValueMapper<Integer, String, String>() {
+     *     @Override
+     *     public String apply(Integer key, String value) {
+     *         return String.format("(%d, %s)", key, value);
+     *     }
+     * };
+     * }</pre>
+     * <p>
+     * The KeyValueMapper's mapped value type must be {@code String}.
+     *
+     * @param filePath path of the file to write to.
+     * @param streamName the name used to label records written to file.
+     * @param keySerde key serde used to deserialize key if type is {@code byte[]}.
+     * @param valSerde value serde used to deserialize value if type is {@code byte[]}.
+     * @param mapper a {@link KeyValueMapper} that computes output type {@code String}.
+     */
+    void writeAsText(final String filePath, final String streamName, final Serde<K> keySerde, final Serde<V> valSerde, final KeyValueMapper<? super K, ? super V, String> mapper);
+
+    /**
      * Perform an action on each record of {@code KStream}.
      * This is a stateless record-by-record operation (cf. {@link #process(ProcessorSupplier, String...)}).
      * Note that this is a terminal operation that returns void.
