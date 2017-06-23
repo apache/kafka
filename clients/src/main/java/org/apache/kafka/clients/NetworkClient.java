@@ -759,7 +759,7 @@ public class NetworkClient implements KafkaClient {
     private void initiateConnect(Node node, long now) {
         String nodeConnectionId = node.idString();
         try {
-            log.debug("Initiating connection to node {} at {}:{}.", node.id(), node.host(), node.port());
+            log.debug("Initiating connection to node {}", node);
             this.connectionStates.connecting(nodeConnectionId, now);
             selector.connect(nodeConnectionId,
                              new InetSocketAddress(node.host(), node.port()),
@@ -770,7 +770,7 @@ public class NetworkClient implements KafkaClient {
             connectionStates.disconnected(nodeConnectionId, now);
             /* maybe the problem is our metadata, update it */
             metadataUpdater.requestUpdate();
-            log.debug("Error connecting to node {} at {}:{}:", node.id(), node.host(), node.port(), e);
+            log.debug("Error connecting to node {}", node, e);
         }
     }
 
@@ -830,7 +830,7 @@ public class NetworkClient implements KafkaClient {
                 int nodeId = Integer.parseInt(destination);
                 Node node = cluster.nodeById(nodeId);
                 if (node != null)
-                    log.warn("Bootstrap broker {}:{} disconnected", node.host(), node.port());
+                    log.warn("Bootstrap broker {} disconnected", node);
             }
 
             metadataFetchInProgress = false;
@@ -888,7 +888,7 @@ public class NetworkClient implements KafkaClient {
                             metadata.allowAutoTopicCreation());
 
 
-                log.debug("Sending metadata request {} to node {}", metadataRequest, node.id());
+                log.debug("Sending metadata request {} to node {}", metadataRequest, node);
                 sendInternalMetadataRequest(metadataRequest, nodeConnectionId, now);
                 return requestTimeoutMs;
             }
@@ -904,7 +904,7 @@ public class NetworkClient implements KafkaClient {
 
             if (connectionStates.canConnect(nodeConnectionId, now)) {
                 // we don't have a connection to this node right now, make one
-                log.debug("Initialize connection to node {} for sending metadata request", node.id());
+                log.debug("Initialize connection to node {} for sending metadata request", node);
                 initiateConnect(node, now);
                 return reconnectBackoffMs;
             }
