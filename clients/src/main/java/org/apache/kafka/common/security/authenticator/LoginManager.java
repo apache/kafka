@@ -29,8 +29,12 @@ import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.security.JaasContext;
 import org.apache.kafka.common.security.auth.Login;
 import org.apache.kafka.common.security.kerberos.KerberosLogin;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class LoginManager {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(LoginManager.class);
 
     // static configs (broker or client)
     private static final Map<String, LoginManager> STATIC_INSTANCES = new HashMap<>();
@@ -94,6 +98,7 @@ public class LoginManager {
 
     private LoginManager acquire() {
         ++refCount;
+        LOGGER.trace("{} acquired", this);
         return this;
     }
 
@@ -103,7 +108,7 @@ public class LoginManager {
     public void release() {
         synchronized (LoginManager.class) {
             if (refCount == 0)
-                throw new IllegalStateException("release called on LoginManager with refCount == 0");
+                throw new IllegalStateException("release() called on disposed " + this);
             else if (refCount == 1) {
                 if (cacheKey instanceof Password) {
                     DYNAMIC_INSTANCES.remove(cacheKey);
@@ -113,7 +118,16 @@ public class LoginManager {
                 login.close();
             }
             --refCount;
+            LOGGER.trace("{} released", this);
         }
+    }
+
+    @Override
+    public String toString() {
+        return "LoginManager(serviceName=" + serviceName() +
+                // subject.toString() exposes private credentials, so we can't use it
+                ", publicCredentials=" + subject().getPublicCredentials() +
+                ", refCount=" + refCount + ')';
     }
 
     /* Should only be used in tests. */
