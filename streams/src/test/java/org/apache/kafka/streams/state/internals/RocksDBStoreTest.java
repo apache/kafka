@@ -20,6 +20,7 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.StreamsConfig;
@@ -29,13 +30,18 @@ import org.apache.kafka.test.MockProcessorContext;
 import org.apache.kafka.test.NoOpRecordCollector;
 import org.apache.kafka.test.TestUtils;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
 import java.io.File;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.io.IOException;
 import org.rocksdb.Options;
@@ -96,6 +102,67 @@ public class RocksDBStoreTest {
         tmpDir.setReadOnly();
 
         subject.openDB(tmpContext);
+    }
+
+    @Test
+    public void shouldPutAll() {
+        List<KeyValue<String, String>> entries = new ArrayList<>();
+        entries.add(new KeyValue<>("1", "a"));
+        entries.add(new KeyValue<>("2", "b"));
+        entries.add(new KeyValue<>("3", "c"));
+
+        subject.init(context, subject);
+        subject.putAll(entries);
+        subject.flush();
+
+        assertEquals(subject.get("1"), "a");
+        assertEquals(subject.get("2"), "b");
+        assertEquals(subject.get("3"), "c");
+    }
+
+    @Test
+    public void shouldThrowNullPointerExceptionOnNullPut() {
+        subject.init(context, subject);
+        try {
+            subject.put(null, "someVal");
+            fail("Should have thrown NullPointerException on null put()");
+        } catch (NullPointerException e) { }
+    }
+
+    @Test
+    public void shouldThrowNullPointerExceptionOnNullPutAll() {
+        subject.init(context, subject);
+        try {
+            subject.put(null, "someVal");
+            fail("Should have thrown NullPointerException on null put()");
+        } catch (NullPointerException e) { }
+    }
+
+    @Test
+    public void shouldThrowNullPointerExceptionOnNullGet() {
+        subject.init(context, subject);
+        try {
+            subject.get(null);
+            fail("Should have thrown NullPointerException on null get()");
+        } catch (NullPointerException e) { }
+    }
+
+    @Test
+    public void shouldThrowNullPointerExceptionOnDelete() {
+        subject.init(context, subject);
+        try {
+            subject.delete(null);
+            fail("Should have thrown NullPointerException on deleting null key");
+        } catch (NullPointerException e) { }
+    }
+
+    @Test
+    public void shouldThrowNullPointerExceptionOnRange() {
+        subject.init(context, subject);
+        try {
+            subject.range(null, "2");
+            fail("Should have thrown NullPointerException on deleting null key");
+        } catch (NullPointerException e) { }
     }
 
     @Test(expected = ProcessorStateException.class)

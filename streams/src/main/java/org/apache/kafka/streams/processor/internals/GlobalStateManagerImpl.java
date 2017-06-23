@@ -86,7 +86,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
             try {
                 stateDirectory.unlockGlobalState();
             } catch (IOException e1) {
-                log.error("failed to unlock the global state directory", e);
+                log.error("Failed to unlock the global state directory", e);
             }
             throw new StreamsException("Failed to read checkpoints for global state stores", e);
         }
@@ -129,7 +129,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
             throw new IllegalArgumentException(String.format("The stateRestoreCallback provided for store %s was null", store.name()));
         }
 
-        log.info("restoring state for global store {}", store.name());
+        log.info("Restoring state for global store {}", store.name());
         final List<TopicPartition> topicPartitions = topicPartitionsForStore(store);
         final Map<TopicPartition, Long> highWatermarks = consumer.endOffsets(topicPartitions);
         try {
@@ -234,7 +234,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
             try {
                 checkpoint.write(checkpointableOffsets);
             } catch (IOException e) {
-                log.warn("failed to write offsets checkpoint for global stores", e);
+                log.warn("Failed to write offsets checkpoint for global stores", e);
             }
         }
     }

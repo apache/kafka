@@ -168,7 +168,7 @@ public abstract class AbstractTask {
     }
 
     protected void updateOffsetLimits() {
-        log.debug("{} Updating store offset limits {}", logPrefix);
+        log.debug("{} Updating store offset limits", logPrefix);
         for (final TopicPartition partition : partitions) {
             try {
                 final OffsetAndMetadata metadata = consumer.committed(partition); // TODO: batch API?
