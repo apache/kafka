@@ -186,6 +186,10 @@
       <allow pkg="com.fasterxml.jackson.databind" />
       <allow pkg="org.apache.kafka.connect.json" />
     </subpackage>
+
+    <subpackage name="perf">
+      <allow pkg="com.fasterxml.jackson.databind" />
+    </subpackage>
     
     <subpackage name="integration">
       <allow pkg="kafka.admin" />
