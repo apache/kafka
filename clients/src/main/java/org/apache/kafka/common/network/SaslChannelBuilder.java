@@ -95,6 +95,10 @@ public class SaslChannelBuilder implements ChannelBuilder {
                 this.sslFactory.configure(configs);
             }
         } catch (Exception e) {
+            if (loginManager != null) {
+                loginManager.release();
+                loginManager = null;
+            }
             throw new KafkaException(e);
         }
     }
@@ -134,6 +138,11 @@ public class SaslChannelBuilder implements ChannelBuilder {
         } else {
             return new PlaintextTransportLayer(key);
         }
+    }
+
+    // Package private for testing
+    LoginManager loginManager() {
+        return loginManager;
     }
 
     private static String defaultKerberosRealm() throws ClassNotFoundException, NoSuchMethodException,

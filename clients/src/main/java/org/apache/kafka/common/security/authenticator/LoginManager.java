@@ -29,8 +29,12 @@ import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.security.JaasContext;
 import org.apache.kafka.common.security.auth.Login;
 import org.apache.kafka.common.security.kerberos.KerberosLogin;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class LoginManager {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(LoginManager.class);
 
     // static configs (broker or client)
     private static final Map<String, LoginManager> STATIC_INSTANCES = new HashMap<>();
@@ -94,6 +98,7 @@ public class LoginManager {
 
     private LoginManager acquire() {
         ++refCount;
+        LOGGER.trace("{} acquired", this);
         return this;
     }
 
@@ -113,6 +118,7 @@ public class LoginManager {
                 login.close();
             }
             --refCount;
+            LOGGER.trace("{} released", this);
         }
     }
 
