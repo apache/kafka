@@ -17,7 +17,7 @@
 
 package kafka.log
 
-import java.io.File
+import java.io.{File, IOException}
 import java.nio._
 import java.util.Date
 import java.util.concurrent.{CountDownLatch, TimeUnit}
@@ -89,10 +89,11 @@ import scala.collection.mutable.ArrayBuffer
 class LogCleaner(val config: CleanerConfig,
                  val logDirs: ArrayBuffer[File],
                  val logs: Pool[TopicPartition, Log],
+                 val logManager: LogManager,
                  time: Time = Time.SYSTEM) extends Logging with KafkaMetricsGroup {
 
   /* for managing the state of partitions being cleaned. package-private to allow access in tests */
-  private[log] val cleanerManager = new LogCleanerManager(logDirs, logs)
+  private[log] val cleanerManager = new LogCleanerManager(logDirs, logs, logManager)
 
   /* a throttle used to limit the I/O of all the cleaner threads to a user-specified maximum rate */
   private val throttler = new Throttler(desiredRatePerSec = config.maxIoBytesPerSecond,
@@ -263,6 +264,9 @@ class LogCleaner(val config: CleanerConfig,
             endOffset = nextDirtyOffset
           } catch {
             case _: LogCleaningAbortedException => // task can be aborted, let it go.
+            case e: IOException =>
+              error(s"Failed to cleanup log for ${cleanable.topicPartition} due to IOException", e)
+              handleLogDirFailure(cleanable.log.dir.getParent)
           } finally {
             cleanerManager.doneCleaning(cleanable.topicPartition, cleanable.log.dir.getParentFile, endOffset)
           }
@@ -273,6 +277,10 @@ class LogCleaner(val config: CleanerConfig,
         case (topicPartition, log) =>
           try {
             log.deleteOldSegments()
+          } catch {
+            case e: IOException =>
+              error(s"Failed to delete old segments for $topicPartition due to IOException", e)
+              handleLogDirFailure(log.dir.getParent)
           } finally {
             cleanerManager.doneDeleting(topicPartition)
           }

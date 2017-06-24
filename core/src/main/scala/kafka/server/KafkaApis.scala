@@ -54,7 +54,7 @@ import org.apache.kafka.common.requests.SaslHandshakeResponse
 import org.apache.kafka.common.resource.{Resource => AdminResource}
 import org.apache.kafka.common.acl.{AccessControlEntry, AclBinding}
 
-import scala.collection._
+import scala.collection.{mutable, _}
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ArrayBuffer
 import scala.util.{Failure, Success, Try}
@@ -144,15 +144,21 @@ class KafkaApis(val requestChannel: RequestChannel,
     val correlationId = request.header.correlationId
     val leaderAndIsrRequest = request.body[LeaderAndIsrRequest]
 
-    def onLeadershipChange(updatedLeaders: Iterable[Partition], updatedFollowers: Iterable[Partition]) {
+    def onLeadershipChange(updatedLeaders: Iterable[Partition], updatedFollowers: Iterable[Partition], responseMap: mutable.Map[TopicPartition, Errors]) {
       // for each new leader or follower, call coordinator to handle consumer group migration.
       // this callback is invoked under the replica state change lock to ensure proper order of
       // leadership changes
       updatedLeaders.foreach { partition =>
-        if (partition.topic == GROUP_METADATA_TOPIC_NAME)
-          groupCoordinator.handleGroupImmigration(partition.partitionId)
-        else if (partition.topic == TRANSACTION_STATE_TOPIC_NAME)
-          txnCoordinator.handleTxnImmigration(partition.partitionId, partition.getLeaderEpoch)
+        try {
+            if (partition.topic == GROUP_METADATA_TOPIC_NAME)
+              groupCoordinator.handleGroupImmigration(partition.partitionId)
+            else if (partition.topic == TRANSACTION_STATE_TOPIC_NAME)
+              txnCoordinator.handleTxnImmigration(partition.partitionId, partition.getLeaderEpoch)
+        } catch {
+          case e: KafkaStorageException =>
+            replicaManager.getLogDir(partition.topicPartition).foreach(replicaManager.handleLogDirFailure)
+            responseMap.put(partition.topicPartition, Errors.KAFKA_STORAGE_ERROR)
+        }
       }
 
       updatedFollowers.foreach { partition =>

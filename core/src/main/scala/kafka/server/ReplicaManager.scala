@@ -463,13 +463,10 @@ class ReplicaManager(val config: KafkaConfig,
         } catch {
           // NOTE: Failed produce requests metric is not incremented for known exceptions
           // it is supposed to indicate un-expected failures of a broker in handling a produce request
-          case e: KafkaStorageException =>
-            fatal("Halting due to unrecoverable I/O error while handling DeleteRecordsRequest: ", e)
-            Runtime.getRuntime.halt(1)
-            (topicPartition, null)
           case e@ (_: UnknownTopicOrPartitionException |
                    _: NotLeaderForPartitionException |
                    _: OffsetOutOfRangeException |
+                   _: KafkaStorageException |
                    _: PolicyViolationException |
                    _: NotEnoughReplicasException) =>
             (topicPartition, LogDeleteRecordsResult(-1L, -1L, Some(e)))
@@ -853,7 +850,7 @@ class ReplicaManager(val config: KafkaConfig,
 
   def becomeLeaderOrFollower(correlationId: Int,
                              leaderAndISRRequest: LeaderAndIsrRequest,
-                             onLeadershipChange: (Iterable[Partition], Iterable[Partition]) => Unit): BecomeLeaderOrFollowerResult = {
+                             onLeadershipChange: (Iterable[Partition], Iterable[Partition], mutable.Map[TopicPartition, Errors]) => Unit): BecomeLeaderOrFollowerResult = {
     leaderAndISRRequest.partitionStates.asScala.foreach { case (topicPartition, stateInfo) =>
       stateChangeLogger.trace("Broker %d received LeaderAndIsr request %s correlation id %d from controller %d epoch %d for partition [%s,%d]"
                                 .format(localBrokerId, stateInfo, correlationId,
@@ -919,7 +916,8 @@ class ReplicaManager(val config: KafkaConfig,
         }
         replicaFetcherManager.shutdownIdleFetcherThreads()
 
-        onLeadershipChange(partitionsBecomeLeader, partitionsBecomeFollower)
+        onLeadershipChange(partitionsBecomeLeader, partitionsBecomeFollower, responseMap)
+
         BecomeLeaderOrFollowerResult(responseMap, Errors.NONE)
       }
     }

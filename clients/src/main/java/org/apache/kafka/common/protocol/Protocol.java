@@ -1227,13 +1227,11 @@ public class Protocol {
                     new Field("partition_states", new ArrayOf(UPDATE_METADATA_REQUEST_PARTITION_STATE_V3)),
                     new Field("live_brokers", new ArrayOf(UPDATE_METADATA_REQUEST_BROKER_V3)));
 
-    public static final Schema UPDATE_METADATA_REQUEST_BROKER_V4 = UPDATE_METADATA_REQUEST_BROKER_V3;
-
     public static final Schema UPDATE_METADATA_REQUEST_V4 =
             new Schema(new Field("controller_id", INT32, "The controller id."),
                     new Field("controller_epoch", INT32, "The controller epoch."),
                     new Field("partition_states", new ArrayOf(UPDATE_METADATA_REQUEST_PARTITION_STATE_V4)),
-                    new Field("live_brokers", new ArrayOf(UPDATE_METADATA_REQUEST_BROKER_V4)));
+                    new Field("live_brokers", new ArrayOf(UPDATE_METADATA_REQUEST_BROKER_V3)));
 
     public static final Schema UPDATE_METADATA_RESPONSE_V3 = UPDATE_METADATA_RESPONSE_V2;
 

@@ -148,7 +148,7 @@ class ReplicaManagerTest extends ZooKeeperTestHarness {
       val leaderAndIsrRequest1 = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0,
         collection.immutable.Map(new TopicPartition(topic, 0) -> new PartitionState(0, 0, 0, brokerList, 0, brokerList, false)).asJava,
         Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
-      rm.becomeLeaderOrFollower(0, leaderAndIsrRequest1, (_, _) => ())
+      rm.becomeLeaderOrFollower(0, leaderAndIsrRequest1, (_, _, _) => ())
       rm.getLeaderReplicaIfLocal(new TopicPartition(topic, 0))
 
       val records = MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("first message".getBytes()))
@@ -165,7 +165,7 @@ class ReplicaManagerTest extends ZooKeeperTestHarness {
       val leaderAndIsrRequest2 = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0,
         collection.immutable.Map(new TopicPartition(topic, 0) -> new PartitionState(0, 1, 1, brokerList, 0, brokerList, false)).asJava,
         Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
-      rm.becomeLeaderOrFollower(1, leaderAndIsrRequest2, (_, _) => ())
+      rm.becomeLeaderOrFollower(1, leaderAndIsrRequest2, (_, _, _) => ())
 
       assertTrue(appendResult.isFired)
       assertTrue(fetchResult.isFired)
@@ -203,7 +203,7 @@ class ReplicaManagerTest extends ZooKeeperTestHarness {
       val leaderAndIsrRequest1 = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0,
         collection.immutable.Map(new TopicPartition(topic, 0) -> new PartitionState(0, 0, 0, brokerList, 0, brokerList, true)).asJava,
         Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
-      replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest1, (_, _) => ())
+      replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest1, (_, _, _) => ())
       replicaManager.getLeaderReplicaIfLocal(new TopicPartition(topic, 0))
 
 
@@ -292,7 +292,7 @@ class ReplicaManagerTest extends ZooKeeperTestHarness {
       val leaderAndIsrRequest1 = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0,
         collection.immutable.Map(new TopicPartition(topic, 0) -> new PartitionState(0, 0, 0, brokerList, 0, brokerList, true)).asJava,
         Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
-      replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest1, (_, _) => ())
+      replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest1, (_, _, _) => ())
       replicaManager.getLeaderReplicaIfLocal(new TopicPartition(topic, 0))
 
       val producerId = 234L
@@ -371,7 +371,7 @@ class ReplicaManagerTest extends ZooKeeperTestHarness {
       val leaderAndIsrRequest1 = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0,
         collection.immutable.Map(new TopicPartition(topic, 0) -> new PartitionState(0, 0, 0, brokerList, 0, brokerList, false)).asJava,
         Set(new Node(0, "host1", 0), new Node(1, "host2", 1), new Node(2, "host2", 2)).asJava).build()
-      rm.becomeLeaderOrFollower(0, leaderAndIsrRequest1, (_, _) => ())
+      rm.becomeLeaderOrFollower(0, leaderAndIsrRequest1, (_, _, _) => ())
       rm.getLeaderReplicaIfLocal(new TopicPartition(topic, 0))
 
       // Append a couple of messages.

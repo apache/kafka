@@ -220,7 +220,7 @@ class LogCleanerManagerTest extends JUnitSuite with Logging {
   private def createCleanerManager(log: Log): LogCleanerManager = {
     val logs = new Pool[TopicPartition, Log]()
     logs.put(new TopicPartition("log", 0), log)
-    val cleanerManager = new LogCleanerManager(ArrayBuffer(logDir), logs)
+    val cleanerManager = new LogCleanerManager(ArrayBuffer(logDir), logs, null)
     cleanerManager
   }
 

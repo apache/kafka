@@ -46,7 +46,9 @@ private[log] case object LogCleaningPaused extends LogCleaningState
  *  While a partition is in the LogCleaningPaused state, it won't be scheduled for cleaning again, until cleaning is
  *  requested to be resumed.
  */
-private[log] class LogCleanerManager(val logDirs: ArrayBuffer[File], val logs: Pool[TopicPartition, Log]) extends Logging with KafkaMetricsGroup {
+private[log] class LogCleanerManager(val logDirs: ArrayBuffer[File],
+                                     val logs: Pool[TopicPartition, Log],
+                                     val logManager: LogManager) extends Logging with KafkaMetricsGroup {
 
   import LogCleanerManager._
 
@@ -248,6 +250,7 @@ private[log] class LogCleanerManager(val logDirs: ArrayBuffer[File], val logs: P
     info(s"Stopping cleaning logs in dir $dir")
     inLock(lock) {
       checkpoints = checkpoints.filterKeys(_.getAbsolutePath != dir)
+      logManager.handleLogDirFailure(dir)
     }
     info(s"Stopped cleaning logs in dir $dir")
   }

@@ -22,7 +22,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock
 import com.yammer.metrics.core.Gauge
 import kafka.admin.AdminUtils
 import kafka.api.LeaderAndIsr
-import kafka.common.NotAssignedReplicaException
+import kafka.common.{KafkaStorageException, NotAssignedReplicaException}
 import kafka.controller.KafkaController
 import kafka.log.LogConfig
 import kafka.metrics.KafkaMetricsGroup
@@ -115,7 +115,7 @@ class Partition(val topic: String,
     isLeaderReplicaLocal && inSyncReplicas.size < assignedReplicas.size
 
   def getOrCreateReplica(replicaId: Int = localBrokerId, isNew: Boolean = false): Replica = {
-    assignedReplicaMap.getAndMaybePut(replicaId, {
+    val replica = assignedReplicaMap.getAndMaybePut(replicaId, {
       if (isReplicaLocal(replicaId)) {
         val config = LogConfig.fromProps(logManager.defaultConfig.originals,
                                          AdminUtils.fetchEntityConfig(zkUtils, ConfigType.Topic, topic))
@@ -128,6 +128,9 @@ class Partition(val topic: String,
         new Replica(replicaId, this, time, offset, Some(log))
       } else new Replica(replicaId, this, time)
     })
+    if (isReplicaLocal(replicaId) && !logManager.isLogOnline(topicPartition))
+      throw new KafkaStorageException(s"Local log for $topicPartition is offline")
+    replica
   }
 
   def getReplica(replicaId: Int = localBrokerId): Option[Replica] = Option(assignedReplicaMap.get(replicaId))

@@ -85,7 +85,7 @@ class LogManager(private val logDirs: Array[File],
   // public, so we can access this from kafka.admin.DeleteTopicTest
   val cleaner: LogCleaner =
     if(cleanerConfig.enableCleaner)
-      new LogCleaner(cleanerConfig, liveLogDirs, logs, time = time)
+      new LogCleaner(cleanerConfig, liveLogDirs, logs, this, time = time)
     else
       null
 
@@ -122,7 +122,7 @@ class LogManager(private val logDirs: Array[File],
           throw new KafkaException(dir.getAbsolutePath + " is not a readable log directory.")
         liveLogDirs += dir
       } catch {
-        case t: Throwable => error("Failed to create or validate data directory " + dir.getAbsolutePath, t);
+        case t: Throwable => error(s"Failed to create or validate data directory $dir.getAbsolutePath", t)
       }
     }
     if (liveLogDirs.isEmpty)
@@ -149,7 +149,7 @@ class LogManager(private val logDirs: Array[File],
 
       liveLogDirs -= new File(dir)
       if (liveLogDirs.isEmpty) {
-        fatal(s"Shutdown broker because all log dirs in ${logDirs.mkString(", ")} have failed");
+        fatal(s"Shutdown broker because all log dirs in ${logDirs.mkString(", ")} have failed")
         Runtime.getRuntime().halt(1)
       }
 
@@ -170,8 +170,6 @@ class LogManager(private val logDirs: Array[File],
         DiskUtils.propagateLogDirEvent(zkUtils, brokerId)
     }
     info(s"Stopped serving logs in dir $dir")
-    if (cleaner != null)
-      cleaner.handleLogDirFailure(dir)
   }
 
   /**
@@ -420,6 +418,10 @@ class LogManager(private val logDirs: Array[File],
           log.truncateTo(truncateOffset)
           if (needToStopCleaner)
             cleaner.maybeTruncateCheckpoint(log.dir.getParentFile, topicPartition, log.activeSegment.baseOffset)
+        } catch {
+          case e: IOException =>
+            error(s"Failed to truncate log for $topicPartition due to IOException", e)
+            handleLogDirFailure(log.dir.getParent)
         } finally {
           if (needToStopCleaner)
             cleaner.resumeCleaning(topicPartition)
@@ -476,7 +478,7 @@ class LogManager(private val logDirs: Array[File],
         this.recoveryPointCheckpoints(dir).write(recoveryPoints.get.mapValues(_.recoveryPoint))
       } catch {
         case e: IOException =>
-          error("Disk error while writing to recovery point file", e);
+          error("Disk error while writing to recovery point file", e)
           handleLogDirFailure(dir.getAbsolutePath)
       }
     }
@@ -493,7 +495,7 @@ class LogManager(private val logDirs: Array[File],
           logs.get.filter { case (tp, log) => log.logStartOffset > log.logSegments.head.baseOffset }.mapValues(_.logStartOffset))
       } catch {
         case e: IOException =>
-          error("Disk error while writing to logStartOffset file", e);
+          error("Disk error while writing to logStartOffset file", e)
           handleLogDirFailure(dir.getAbsolutePath)
       }
     }
@@ -513,7 +515,7 @@ class LogManager(private val logDirs: Array[File],
       getLog(topicPartition).getOrElse {
         // create the log if it has not already been created in another thread
         if (!isNew && offlineLogDirs.nonEmpty)
-          throw new KafkaStorageException("Can not create log for " + topicPartition + " because log directories " + offlineLogDirs.mkString(",") + " are offline")
+          throw new KafkaStorageException(s"Can not create log for $topicPartition because log directories ${offlineLogDirs.mkString(",")} are offline")
 
         val dataDir = nextLogDir()
         val dir = new File(dataDir, topicPartition.topic + "-" + topicPartition.partition)
@@ -663,6 +665,10 @@ class LogManager(private val logDirs: Array[File],
     this.logsByTopicPartition.groupBy {
       case (_, log) => log.dir.getParent
     }
+  }
+
+  def isLogOnline(topicPartition: TopicPartition): Boolean = {
+    logs.contains(topicPartition)
   }
 
   /**
