@@ -64,15 +64,20 @@ get_kafka() {
 
     kafka_dir=/opt/kafka-$version
     url=https://s3-us-west-2.amazonaws.com/kafka-packages-$version/kafka_$scala_version-$version.tgz
+    # the .tgz above does not include the streams test jar hence we need to get it separately
+    url_streams_test=https://s3-us-west-2.amazonaws.com/kafka-packages-$version/kafka-streams-$version-test.jar
     if [ ! -d /opt/kafka-$version ]; then
         pushd /tmp
         curl -O $url
+        curl -O $url_streams_test || true
         file_tgz=`basename $url`
+        file_streams_jar=`basename $url_streams_test` || true
         tar -xzf $file_tgz
         rm -rf $file_tgz
 
         file=`basename $file_tgz .tgz`
         mv $file $kafka_dir
+        mv $file_streams_jar $kafka_dir/libs || true
         popd
     fi
 }
