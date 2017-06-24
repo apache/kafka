@@ -75,41 +75,41 @@ public class MockProducerTest {
         PartitionInfo partitionInfo1 = new PartitionInfo(topic, 1, null, null, null);
         Cluster cluster = new Cluster(null, new ArrayList<Node>(0), asList(partitionInfo0, partitionInfo1),
                 Collections.<String>emptySet(), Collections.<String>emptySet());
-        MockProducer<String, String> producer = new MockProducer<>(cluster, true, new DefaultPartitioner(), new StringSerializer(), new StringSerializer());
-        ProducerRecord<String, String> record = new ProducerRecord<>(topic, "key", "value");
-        Future<RecordMetadata> metadata = producer.send(record);
-        assertEquals("Partition should be correct", 1, metadata.get().partition());
-        producer.clear();
-        assertEquals("Clear should erase our history", 0, producer.history().size());
-        producer.close();
+        try (MockProducer<String, String> producer = new MockProducer<>(cluster, true, new DefaultPartitioner(), new StringSerializer(), new StringSerializer())) {
+            ProducerRecord<String, String> record = new ProducerRecord<>(topic, "key", "value");
+            Future<RecordMetadata> metadata = producer.send(record);
+            assertEquals("Partition should be correct", 1, metadata.get().partition());
+            producer.clear();
+            assertEquals("Clear should erase our history", 0, producer.history().size());
+        }
     }
 
     @Test
     public void testManualCompletion() throws Exception {
-        MockProducer<byte[], byte[]> producer = new MockProducer<>(false, new MockSerializer(), new MockSerializer());
-        Future<RecordMetadata> md1 = producer.send(record1);
-        assertFalse("Send shouldn't have completed", md1.isDone());
-        Future<RecordMetadata> md2 = producer.send(record2);
-        assertFalse("Send shouldn't have completed", md2.isDone());
-        assertTrue("Complete the first request", producer.completeNext());
-        assertFalse("Requst should be successful", isError(md1));
-        assertFalse("Second request still incomplete", md2.isDone());
-        IllegalArgumentException e = new IllegalArgumentException("blah");
-        assertTrue("Complete the second request with an error", producer.errorNext(e));
-        try {
-            md2.get();
-            fail("Expected error to be thrown");
-        } catch (ExecutionException err) {
-            assertEquals(e, err.getCause());
-        }
-        assertFalse("No more requests to complete", producer.completeNext());
+        try (MockProducer<byte[], byte[]> producer = new MockProducer<>(false, new MockSerializer(), new MockSerializer())) {
+            Future<RecordMetadata> md1 = producer.send(record1);
+            assertFalse("Send shouldn't have completed", md1.isDone());
+            Future<RecordMetadata> md2 = producer.send(record2);
+            assertFalse("Send shouldn't have completed", md2.isDone());
+            assertTrue("Complete the first request", producer.completeNext());
+            assertFalse("Requst should be successful", isError(md1));
+            assertFalse("Second request still incomplete", md2.isDone());
+            IllegalArgumentException e = new IllegalArgumentException("blah");
+            assertTrue("Complete the second request with an error", producer.errorNext(e));
+            try {
+                md2.get();
+                fail("Expected error to be thrown");
+            } catch (ExecutionException err) {
+                assertEquals(e, err.getCause());
+            }
+            assertFalse("No more requests to complete", producer.completeNext());
 
-        Future<RecordMetadata> md3 = producer.send(record1);
-        Future<RecordMetadata> md4 = producer.send(record2);
-        assertTrue("Requests should not be completed.", !md3.isDone() && !md4.isDone());
-        producer.flush();
-        assertTrue("Requests should be completed.", md3.isDone() && md4.isDone());
-        producer.close();
+            Future<RecordMetadata> md3 = producer.send(record1);
+            Future<RecordMetadata> md4 = producer.send(record2);
+            assertTrue("Requests should not be completed.", !md3.isDone() && !md4.isDone());
+            producer.flush();
+            assertTrue("Requests should be completed.", md3.isDone() && md4.isDone());
+        }
     }
 
     @Test
@@ -320,21 +320,21 @@ public class MockProducerTest {
 
     @Test
     public void shouldFlushOnCommitForNonAutoCompleteIfTransactionsAreEnabled() {
-        MockProducer<byte[], byte[]> producer = new MockProducer<>(false, new MockSerializer(), new MockSerializer());
-        producer.initTransactions();
-        producer.beginTransaction();
+        try (MockProducer<byte[], byte[]> producer = new MockProducer<>(false, new MockSerializer(), new MockSerializer())) {
+            producer.initTransactions();
+            producer.beginTransaction();
 
-        Future<RecordMetadata> md1 = producer.send(record1);
-        Future<RecordMetadata> md2 = producer.send(record2);
+            Future<RecordMetadata> md1 = producer.send(record1);
+            Future<RecordMetadata> md2 = producer.send(record2);
 
-        assertFalse(md1.isDone());
-        assertFalse(md2.isDone());
+            assertFalse(md1.isDone());
+            assertFalse(md2.isDone());
 
-        producer.commitTransaction();
+            producer.commitTransaction();
 
-        assertTrue(md1.isDone());
-        assertTrue(md2.isDone());
-        producer.close();
+            assertTrue(md1.isDone());
+            assertTrue(md2.isDone());
+        }
     }
 
     @Test
@@ -354,16 +354,16 @@ public class MockProducerTest {
 
     @Test
     public void shouldThrowOnAbortForNonAutoCompleteIfTransactionsAreEnabled() throws Exception {
-        MockProducer<byte[], byte[]> producer = new MockProducer<>(false, new MockSerializer(), new MockSerializer());
-        producer.initTransactions();
-        producer.beginTransaction();
+        try (MockProducer<byte[], byte[]> producer = new MockProducer<>(false, new MockSerializer(), new MockSerializer())) {
+            producer.initTransactions();
+            producer.beginTransaction();
 
-        Future<RecordMetadata> md1 = producer.send(record1);
-        assertFalse(md1.isDone());
+            Future<RecordMetadata> md1 = producer.send(record1);
+            assertFalse(md1.isDone());
 
-        producer.abortTransaction();
-        assertTrue(md1.isDone());
-        producer.close();
+            producer.abortTransaction();
+            assertTrue(md1.isDone());
+        }
     }
 
     @Test
@@ -655,19 +655,19 @@ public class MockProducerTest {
 
     @Test
     public void shouldNotBeFlushedWithNoAutoCompleteIfBufferedRecords() {
-        MockProducer<byte[], byte[]> producer = new MockProducer<>(false, new MockSerializer(), new MockSerializer());
-        producer.send(record1);
-        assertFalse(producer.flushed());
-        producer.close();
+        try (MockProducer<byte[], byte[]> producer = new MockProducer<>(false, new MockSerializer(), new MockSerializer())) {
+            producer.send(record1);
+            assertFalse(producer.flushed());
+        }
     }
 
     @Test
     public void shouldNotBeFlushedAfterFlush() {
-        MockProducer<byte[], byte[]> producer = new MockProducer<>(false, new MockSerializer(), new MockSerializer());
-        producer.send(record1);
-        producer.flush();
-        assertTrue(producer.flushed());
-        producer.close();
+        try (MockProducer<byte[], byte[]> producer = new MockProducer<>(false, new MockSerializer(), new MockSerializer())) {
+            producer.send(record1);
+            producer.flush();
+            assertTrue(producer.flushed());
+        }
     }
 
     private boolean isError(Future<?> future) {

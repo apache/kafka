@@ -87,16 +87,12 @@ public class KafkaProducerTest {
 
         final int oldInitCount = MockMetricsReporter.INIT_COUNT.get();
         final int oldCloseCount = MockMetricsReporter.CLOSE_COUNT.get();
-        KafkaProducer<byte[], byte[]> producer = null;
-        try {
-            producer = new KafkaProducer<>(props, new ByteArraySerializer(), new ByteArraySerializer());
+        try (KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(props, new ByteArraySerializer(), new ByteArraySerializer())) {
             fail("should have caught an exception and returned");
         } catch (KafkaException e) {
             assertEquals(oldInitCount + 1, MockMetricsReporter.INIT_COUNT.get());
             assertEquals(oldCloseCount + 1, MockMetricsReporter.CLOSE_COUNT.get());
             assertEquals("Failed to construct kafka producer", e.getMessage());
-        } finally {
-            if (producer != null) producer.close();
         }
     }
 
@@ -173,9 +169,7 @@ public class KafkaProducerTest {
         config.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         config.put(ProducerConfig.SEND_BUFFER_CONFIG, Selectable.USE_DEFAULT_BUFFER_SIZE);
         config.put(ProducerConfig.RECEIVE_BUFFER_CONFIG, Selectable.USE_DEFAULT_BUFFER_SIZE);
-        KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(
-                config, new ByteArraySerializer(), new ByteArraySerializer());
-        producer.close();
+        new KafkaProducer<>(config, new ByteArraySerializer(), new ByteArraySerializer()).close();
     }
 
     @Test(expected = KafkaException.class)
