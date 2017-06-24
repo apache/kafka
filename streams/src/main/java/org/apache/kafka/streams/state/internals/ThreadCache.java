@@ -39,7 +39,7 @@ import java.util.NoSuchElementException;
 public class ThreadCache {
     private static final Logger log = LoggerFactory.getLogger(ThreadCache.class);
 
-    private final String name;
+    private final String logPrefix;
     private final long maxCacheSizeBytes;
     private final StreamsMetrics metrics;
     private final Map<String, NamedCache> caches = new HashMap<>();
@@ -54,8 +54,8 @@ public class ThreadCache {
         void apply(final List<DirtyEntry> dirty);
     }
 
-    public ThreadCache(final String name, long maxCacheSizeBytes, final StreamsMetrics metrics) {
-        this.name = name;
+    public ThreadCache(final String logPrefix, long maxCacheSizeBytes, final StreamsMetrics metrics) {
+        this.logPrefix = logPrefix;
         this.maxCacheSizeBytes = maxCacheSizeBytes;
         this.metrics = metrics;
     }
@@ -96,8 +96,9 @@ public class ThreadCache {
         }
         cache.flush();
 
-        log.trace("Thread {} cache stats on flush: #puts={}, #gets={}, #evicts={}, #flushes={}",
-                  name, puts(), gets(), evicts(), flushes());
+        if (log.isTraceEnabled())
+            log.trace("{} Cache stats on flush: #puts={}, #gets={}, #evicts={}, #flushes={}",
+                    logPrefix, puts(), gets(), evicts(), flushes());
     }
 
     public LRUCacheEntry get(final String namespace, Bytes key) {
@@ -201,6 +202,7 @@ public class ThreadCache {
     }
 
     private void maybeEvict(final String namespace) {
+        int numEvicted = 0;
         while (sizeBytes() > maxCacheSizeBytes) {
             final NamedCache cache = getOrCreateCache(namespace);
             // we abort here as the put on this cache may have triggered
@@ -210,10 +212,12 @@ public class ThreadCache {
             if (cache.size() == 0) {
                 return;
             }
-            log.trace("Thread {} evicting cache {}", name, namespace);
             cache.evict();
             numEvicts++;
+            numEvicted++;
         }
+
+        log.debug("{} Evicted {} entries from cache {}", logPrefix, numEvicted, namespace);
     }
 
     private synchronized NamedCache getCache(final String namespace) {
