@@ -119,7 +119,7 @@ public class ProcessorStateManager implements StateManager {
             checkpoint = null;
         }
 
-        log.info("{} Created state store manager for task {} with the acquired state dir lock", logPrefix, taskId);
+        log.debug("{} Created state store manager for task {} with the acquired state dir lock", logPrefix, taskId);
     }
 
 
@@ -349,7 +349,7 @@ public class ProcessorStateManager implements StateManager {
     }
 
     void registerGlobalStateStores(final List<StateStore> stateStores) {
-        log.info("{} Register global stores {}", logPrefix, stateStores);
+        log.debug("{} Register global stores {}", logPrefix, stateStores);
         for (final StateStore stateStore : stateStores) {
             globalStores.put(stateStore.name(), stateStore);
         }

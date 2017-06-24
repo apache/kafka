@@ -47,7 +47,7 @@ class NamedCache {
     private LRUNode head;
     private long currentSizeBytes;
     private NamedCacheMetrics namedCacheMetrics;
-    
+
     // internal stats
     private long numReadHits = 0;
     private long numReadMisses = 0;
@@ -144,9 +144,6 @@ class NamedCache {
             delete(key);
         }
     }
-
-
-
 
     synchronized void put(final Bytes key, final LRUCacheEntry value) {
         if (!value.isDirty() && dirtyKeys.contains(key)) {
@@ -375,15 +372,14 @@ class NamedCache {
             this.metricTags = new LinkedHashMap<>();
             this.metricTags.put(tagKey, tagValue);
 
-
             hitRatioSensor = this.metrics.registry().sensor(entityName + "-" + opName, Sensor.RecordingLevel.DEBUG);
 
             hitRatioSensor.add(this.metrics.registry().metricName(entityName + "-" + opName + "-avg", groupName,
-                "The current count of " + entityName + " " + opName + " operation.", metricTags), new Avg());
+                "The average cache hit ratio of " + entityName, metricTags), new Avg());
             hitRatioSensor.add(this.metrics.registry().metricName(entityName + "-" + opName + "-min", groupName,
-                "The current count of " + entityName + " " + opName + " operation.", metricTags), new Min());
+                "The minimum cache hit ratio of " + entityName, metricTags), new Min());
             hitRatioSensor.add(this.metrics.registry().metricName(entityName + "-" + opName + "-max", groupName,
-                "The current count of " + entityName + " " + opName + " operation.", metricTags), new Max());
+                "The maximum cache hit ratio of " + entityName, metricTags), new Max());
 
         }
 

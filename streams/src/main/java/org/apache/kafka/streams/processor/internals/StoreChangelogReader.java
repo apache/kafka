@@ -87,7 +87,7 @@ public class StoreChangelogReader implements ChangelogReader {
             throw new StreamsException(String.format("Store %s's change log (%s) does not contain partition %s",
                                                      storeName, topicPartition.topic(), topicPartition.partition()));
         }
-        log.debug("{} Took {} ms to validate that partition {} exists", logPrefix, time.milliseconds() - start, topicPartition);
+        log.debug("{} Took {}ms to validate that partition {} exists", logPrefix, time.milliseconds() - start, topicPartition);
     }
 
     @Override
@@ -99,6 +99,7 @@ public class StoreChangelogReader implements ChangelogReader {
 
     public void restore() {
         final long start = time.milliseconds();
+        final Map<TopicPartition, StateRestorer> needsRestoring = new HashMap<>();
         try {
             if (!consumer.subscription().isEmpty()) {
                 throw new IllegalStateException(String.format("Restore consumer should have not subscribed to any partitions (%s) beforehand", consumer.subscription()));
@@ -106,7 +107,6 @@ public class StoreChangelogReader implements ChangelogReader {
             final Map<TopicPartition, Long> endOffsets = consumer.endOffsets(stateRestorers.keySet());
 
             // remove any partitions where we already have all of the data
-            final Map<TopicPartition, StateRestorer> needsRestoring = new HashMap<>();
             for (final Map.Entry<TopicPartition, Long> entry : endOffsets.entrySet()) {
                 TopicPartition topicPartition = entry.getKey();
                 Long offset = entry.getValue();
@@ -118,7 +118,7 @@ public class StoreChangelogReader implements ChangelogReader {
                 }
             }
 
-            log.info("{} Starting restoring state stores from changelog topics {}", logPrefix, needsRestoring.keySet());
+            log.debug("{} Starting restoring state stores from changelog topics {}", logPrefix, needsRestoring.keySet());
 
             consumer.assign(needsRestoring.keySet());
             final List<StateRestorer> needsPositionUpdate = new ArrayList<>();
@@ -153,7 +153,7 @@ public class StoreChangelogReader implements ChangelogReader {
             }
         } finally {
             consumer.assign(Collections.<TopicPartition>emptyList());
-            log.debug("{} Took {} ms to restore all active states", logPrefix, time.milliseconds() - start);
+            log.info("{} Completed restore all active states from changelog topics {} in {}ms ", logPrefix, needsRestoring.keySet(), time.milliseconds() - start);
         }
     }
 

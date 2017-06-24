@@ -140,7 +140,7 @@ public class StandbyTask extends AbstractTask {
      */
     public List<ConsumerRecord<byte[], byte[]>> update(final TopicPartition partition,
                                                        final List<ConsumerRecord<byte[], byte[]>> records) {
-        log.debug("{} Updating standby replicas of its state store for partition [{}]", logPrefix, partition);
+        log.trace("{} Updating standby replicas of its state store for partition [{}]", logPrefix, partition);
         return stateMgr.updateStandbyStates(partition, records);
     }
 

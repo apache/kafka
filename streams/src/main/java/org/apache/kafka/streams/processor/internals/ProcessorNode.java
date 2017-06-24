@@ -165,7 +165,6 @@ public class ProcessorNode<K, V> {
 
     protected static final class NodeMetrics  {
         final StreamsMetricsImpl metrics;
-        final String metricGrpName;
         final Map<String, String> metricTags;
 
         final Sensor nodeProcessTimeSensor;
@@ -180,7 +179,6 @@ public class ProcessorNode<K, V> {
             final String tagKey = "processor-node-id";
             final String tagValue = name;
             this.metrics = (StreamsMetricsImpl) metrics;
-            this.metricGrpName = "stream-processor-node-metrics";
             this.metricTags = new LinkedHashMap<>();
             this.metricTags.put(tagKey, tagValue);
 
@@ -190,7 +188,6 @@ public class ProcessorNode<K, V> {
             this.nodeCreationSensor = metrics.addLatencyAndThroughputSensor(scope, sensorNamePrefix + "." + name, "create", Sensor.RecordingLevel.DEBUG, tagKey, tagValue);
             this.nodeDestructionSensor = metrics.addLatencyAndThroughputSensor(scope, sensorNamePrefix + "." + name, "destroy", Sensor.RecordingLevel.DEBUG, tagKey, tagValue);
             this.sourceNodeForwardSensor = metrics.addThroughputSensor(scope, sensorNamePrefix + "." + name, "forward", Sensor.RecordingLevel.DEBUG, tagKey, tagValue);
-
         }
 
         public void removeAllSensors() {
