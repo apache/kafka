@@ -554,6 +554,16 @@ public class RequestResponseTest {
         assertEquals(jgr2.rebalanceTimeout(), jgr.rebalanceTimeout());
     }
 
+    @Test
+    public void testOffsetFetchRequestBuilderToString() {
+        String allTopicPartitionsString = OffsetFetchRequest.Builder.allTopicPartitions("someGroup").toString();
+        assertTrue(allTopicPartitionsString.contains("<ALL>"));
+        String string = new OffsetFetchRequest.Builder("group1",
+                singletonList(new TopicPartition("test11", 1))).toString();
+        assertTrue(string.contains("test11"));
+        assertTrue(string.contains("group1"));
+    }
+
     private RequestHeader createRequestHeader() {
         return new RequestHeader((short) 10, (short) 1, "", 10);
     }
