@@ -358,17 +358,21 @@ public class EosTestDriver extends SmokeTestUtil {
             for (final ConsumerRecord<byte[], byte[]> receivedRecord : partitionMin) {
                 final ConsumerRecord<byte[], byte[]> input = inputRecords.next();
 
-                    Integer min = currentMinPerKey.get(key);
-                    if (min == null) {
-                        min = value;
-                    } else {
-                        min = Math.min(min, value);
-                    }
-                    currentMinPerKey.put(key, min);
+                final String receivedKey = stringDeserializer.deserialize(receivedRecord.topic(), receivedRecord.key());
+                final int receivedValue = integerDeserializer.deserialize(receivedRecord.topic(), receivedRecord.value());
+                final String key = stringDeserializer.deserialize(input.topic(), input.key());
+                final int value = integerDeserializer.deserialize(input.topic(), input.value());
 
-                    if (!receivedKey.equals(key) || receivedValue != min) {
-                        throw new RuntimeException("Result verification failed for " + receivedRecord + " expected <" + key + "," + min + "> but was <" + receivedKey + "," + receivedValue + ">");
-                    }
+                Integer min = currentMinPerKey.get(key);
+                if (min == null) {
+                    min = value;
+                } else {
+                    min = Math.min(min, value);
+                }
+                currentMinPerKey.put(key, min);
+
+                if (!receivedKey.equals(key) || receivedValue != min) {
+                    throw new RuntimeException("Result verification failed for " + receivedRecord + " expected <" + key + "," + min + "> but was <" + receivedKey + "," + receivedValue + ">");
                 }
             }
         }
@@ -393,17 +397,24 @@ public class EosTestDriver extends SmokeTestUtil {
 
             final Iterator<ConsumerRecord<byte[], byte[]>> inputRecords = partitionInput.iterator();
 
-                    Long sum = currentSumPerKey.get(key);
-                    if (sum == null) {
-                        sum = (long) value;
-                    } else {
-                        sum += value;
-                    }
-                    currentSumPerKey.put(key, sum);
+            for (final ConsumerRecord<byte[], byte[]> receivedRecord : partitionSum) {
+                final ConsumerRecord<byte[], byte[]> input = inputRecords.next();
 
-                    if (!receivedKey.equals(key) || receivedValue != sum) {
-                        throw new RuntimeException("Result verification failed for " + receivedRecord + " expected <" + key + "," + sum + "> but was <" + receivedKey + "," + receivedValue + ">");
-                    }
+                final String receivedKey = stringDeserializer.deserialize(receivedRecord.topic(), receivedRecord.key());
+                final long receivedValue = longDeserializer.deserialize(receivedRecord.topic(), receivedRecord.value());
+                final String key = stringDeserializer.deserialize(input.topic(), input.key());
+                final int value = integerDeserializer.deserialize(input.topic(), input.value());
+
+                Long sum = currentSumPerKey.get(key);
+                if (sum == null) {
+                    sum = (long) value;
+                } else {
+                    sum += value;
+                }
+                currentSumPerKey.put(key, sum);
+
+                if (!receivedKey.equals(key) || receivedValue != sum) {
+                    throw new RuntimeException("Result verification failed for " + receivedRecord + " expected <" + key + "," + sum + "> but was <" + receivedKey + "," + receivedValue + ">");
                 }
             }
         }
@@ -475,7 +486,6 @@ public class EosTestDriver extends SmokeTestUtil {
                 final String receivedKey = stringDeserializer.deserialize(receivedRecord.topic(), receivedRecord.key());
                 final long receivedValue = longDeserializer.deserialize(receivedRecord.topic(), receivedRecord.value());
                 final String key = stringDeserializer.deserialize(input.topic(), input.key());
-                final int value = integerDeserializer.deserialize(input.topic(), input.value());
 
                 Long cnt = currentSumPerKey.get(key);
                 if (cnt == null) {
