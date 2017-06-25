@@ -181,9 +181,19 @@ class StreamsEosTestJobRunnerService(StreamsEosTestBaseService):
         super(StreamsEosTestJobRunnerService, self).__init__(test_context, kafka, "process")
 
 
+class StreamsComplexEosTestJobRunnerService(StreamsEosTestBaseService):
+    def __init__(self, test_context, kafka):
+        super(StreamsComplexEosTestJobRunnerService, self).__init__(test_context, kafka, "process-complex")
+
+
 class StreamsEosTestVerifyRunnerService(StreamsEosTestBaseService):
     def __init__(self, test_context, kafka):
         super(StreamsEosTestVerifyRunnerService, self).__init__(test_context, kafka, "verify")
+
+
+class StreamsComplexEosTestVerifyRunnerService(StreamsEosTestBaseService):
+    def __init__(self, test_context, kafka):
+        super(StreamsComplexEosTestVerifyRunnerService, self).__init__(test_context, kafka, "verify-complex")
 
 
 class StreamsSmokeTestShutdownDeadlockService(StreamsSmokeTestBaseService):
