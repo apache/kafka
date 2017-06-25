@@ -37,6 +37,14 @@ public abstract class AbstractStream<K> {
     protected final String name;
     protected final Set<String> sourceNodes;
 
+    // This copy-constructor will allow to extend KStream
+    // and KTable APIs with new methods without impacting the public interface.
+    public AbstractStream(AbstractStream<K> stream) {
+        this.topology = stream.topology;
+        this.name = stream.name;
+        this.sourceNodes = stream.sourceNodes;
+    }
+
     AbstractStream(final KStreamBuilder topology, String name, final Set<String> sourceNodes) {
         if (sourceNodes == null || sourceNodes.isEmpty()) {
             throw new IllegalArgumentException("parameter <sourceNodes> must not be null or empty");
