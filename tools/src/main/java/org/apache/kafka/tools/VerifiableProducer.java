@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.tools;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
@@ -134,7 +136,7 @@ public class VerifiableProducer {
                 .type(Integer.class)
                 .choices(0, 1, -1)
                 .metavar("ACKS")
-                .help("Acks required on each produced message. See Kafka docs on request.required.acks for details.");
+                .help("Acks required on each produced message. See Kafka docs on acks for details.");
 
         parser.addArgument("--producer.config")
                 .action(store())
@@ -226,7 +228,7 @@ public class VerifiableProducer {
         } catch (Exception e) {
 
             synchronized (System.out) {
-                System.out.println(errorString(e, key, value, System.currentTimeMillis()));
+                printJson(new FailedSend(key, value, topic, e));
             }
         }
     }
@@ -242,66 +244,175 @@ public class VerifiableProducer {
     /** Close the producer to flush any remaining messages. */
     public void close() {
         producer.close();
-        System.out.println(shutdownString());
+        printJson(new ShutdownComplete());
     }
 
-    String shutdownString() {
-        Map<String, Object> data = new HashMap<>();
-        data.put("name", "shutdown_complete");
-        return toJsonString(data);
+    @JsonPropertyOrder({ "timestamp", "name" })
+    private static abstract class ProducerEvent {
+        private final long timestamp = System.currentTimeMillis();
+
+        @JsonProperty
+        public abstract String name();
+
+        @JsonProperty
+        public long timestamp() {
+            return timestamp;
+        }
     }
 
-    String startupString() {
-        Map<String, Object> data = new HashMap<>();
-        data.put("name", "startup_complete");
-        return toJsonString(data);
+    private static class StartupComplete extends ProducerEvent {
+
+        @Override
+        public String name() {
+            return "startup_complete";
+        }
     }
 
-    /**
-     * Return JSON string encapsulating basic information about the exception, as well
-     * as the key and value which triggered the exception.
-     */
-    String errorString(Exception e, String key, String value, Long nowMs) {
-        assert e != null : "Expected non-null exception.";
+    private static class ShutdownComplete extends ProducerEvent {
 
-        Map<String, Object> errorData = new HashMap<>();
-        errorData.put("name", "producer_send_error");
-
-        errorData.put("time_ms", nowMs);
-        errorData.put("exception", e.getClass().toString());
-        errorData.put("message", e.getMessage());
-        errorData.put("topic", this.topic);
-        errorData.put("key", key);
-        errorData.put("value", value);
-
-        return toJsonString(errorData);
+        @Override
+        public String name() {
+            return "shutdown_complete";
+        }
     }
 
-    String successString(RecordMetadata recordMetadata, String key, String value, Long nowMs) {
-        assert recordMetadata != null : "Expected non-null recordMetadata object.";
+    private static class SuccessfulSend extends ProducerEvent {
 
-        Map<String, Object> successData = new HashMap<>();
-        successData.put("name", "producer_send_success");
+        private String key;
+        private String value;
+        private RecordMetadata recordMetadata;
 
-        successData.put("time_ms", nowMs);
-        successData.put("topic", this.topic);
-        successData.put("partition", recordMetadata.partition());
-        successData.put("offset", recordMetadata.offset());
-        successData.put("key", key);
-        successData.put("value", value);
+        public SuccessfulSend(String key, String value, RecordMetadata recordMetadata) {
+            assert recordMetadata != null : "Expected non-null recordMetadata object.";
+            this.key = key;
+            this.value = value;
+            this.recordMetadata = recordMetadata;
+        }
 
-        return toJsonString(successData);
+        @Override
+        public String name() {
+            return "producer_send_success";
+        }
+
+        @JsonProperty
+        public String key() {
+            return key;
+        }
+
+        @JsonProperty
+        public String value() {
+            return value;
+        }
+
+        @JsonProperty
+        public String topic() {
+            return recordMetadata.topic();
+        }
+
+        @JsonProperty
+        public int partition() {
+            return recordMetadata.partition();
+        }
+
+        @JsonProperty
+        public long offset() {
+            return recordMetadata.offset();
+        }
     }
 
-    private String toJsonString(Map<String, Object> data) {
-        String json;
+    private static class FailedSend extends ProducerEvent {
+
+        private String topic;
+        private String key;
+        private String value;
+        private Exception exception;
+
+        public FailedSend(String key, String value, String topic, Exception exception) {
+            assert exception != null : "Expected non-null exception.";
+            this.key = key;
+            this.value = value;
+            this.topic = topic;
+            this.exception = exception;
+        }
+
+        @Override
+        public String name() {
+            return "producer_send_error";
+        }
+
+        @JsonProperty
+        public String key() {
+            return key;
+        }
+
+        @JsonProperty
+        public String value() {
+            return value;
+        }
+
+        @JsonProperty
+        public String topic() {
+            return topic;
+        }
+
+        @JsonProperty
+        public String exception() {
+            return exception.getClass().toString();
+        }
+
+        @JsonProperty
+        public String message() {
+            return exception.getMessage();
+        }
+    }
+
+    private static class ToolData extends ProducerEvent {
+
+        private long sent;
+        private long acked;
+        private long targetThroughput;
+        private double avgThroughput;
+
+        public ToolData(long sent, long acked, long targetThroughput, double avgThroughput) {
+            this.sent = sent;
+            this.acked = acked;
+            this.targetThroughput = targetThroughput;
+            this.avgThroughput = avgThroughput;
+        }
+
+        @Override
+        public String name() {
+            return "tool_data";
+        }
+
+        @JsonProperty
+        public long sent() {
+            return this.sent;
+        }
+
+        @JsonProperty
+        public long acked() {
+            return this.acked;
+        }
+
+        @JsonProperty("target_throughput")
+        public long targetThroughput() {
+            return this.targetThroughput;
+        }
+
+        @JsonProperty("avg_throughput")
+        public double avgThroughput() {
+            return this.avgThroughput;
+        }
+    }
+
+    private static void printJson(Object data) {
         try {
             ObjectMapper mapper = new ObjectMapper();
-            json = mapper.writeValueAsString(data);
+            System.out.println(mapper.writeValueAsString(data));
         } catch (JsonProcessingException e) {
-            json = "Bad data can't be written as json: " + e.getMessage();
+            System.out.println("Bad data can't be written as json: " + e.getMessage());
         }
-        return json;
     }
 
     /** Callback which prints errors to stdout when the producer fails to send. */
@@ -319,9 +430,9 @@ public class VerifiableProducer {
             synchronized (System.out) {
                 if (e == null) {
                     VerifiableProducer.this.numAcked++;
-                    System.out.println(successString(recordMetadata, this.key, this.value, System.currentTimeMillis()));
+                    printJson(new SuccessfulSend(this.key, this.value, recordMetadata));
                 } else {
-                    System.out.println(errorString(e, this.key, this.value, System.currentTimeMillis()));
+                    printJson(new FailedSend(this.key, this.value, topic, e));
                 }
             }
         }
@@ -346,19 +457,12 @@ public class VerifiableProducer {
                 long stopMs = System.currentTimeMillis();
                 double avgThroughput = 1000 * ((producer.numAcked) / (double) (stopMs - startMs));
 
-                Map<String, Object> data = new HashMap<>();
-                data.put("name", "tool_data");
-                data.put("sent", producer.numSent);
-                data.put("acked", producer.numAcked);
-                data.put("target_throughput", producer.throughput);
-                data.put("avg_throughput", avgThroughput);
-
-                System.out.println(producer.toJsonString(data));
+                printJson(new ToolData(producer.numSent, producer.numAcked, producer.throughput, avgThroughput));
             }
         });
 
         ThroughputThrottler throttler = new ThroughputThrottler(producer.throughput, startMs);
-        System.out.println(producer.startupString());
+        printJson(new StartupComplete());
         long maxMessages = infinite ? Long.MAX_VALUE : producer.maxMessages;
         for (long i = 0; i < maxMessages; i++) {
             if (producer.stopProducing) {
