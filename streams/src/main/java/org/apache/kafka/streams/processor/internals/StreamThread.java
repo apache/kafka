@@ -82,11 +82,11 @@ public class StreamThread extends Thread {
      *
      * <pre>
      *                +-------------+
-     *                | Created     |
-     *                +-----+-------+
-     *                      |
-     *                      v
-     *                +-----+-------+
+     *          +<--- | Created     |
+     *          |     +-----+-------+
+     *          |           |
+     *          |           v
+     *          |     +-----+-------+
      *          +<--- | Running     | <----+
      *          |     +-----+-------+      |
      *          |           |              |
@@ -115,7 +115,7 @@ public class StreamThread extends Thread {
      * </pre>
      */
     public enum State {
-        CREATED(1), RUNNING(1, 2, 4), PARTITIONS_REVOKED(3, 4), ASSIGNING_PARTITIONS(1, 4), PENDING_SHUTDOWN(5), DEAD;
+        CREATED(1, 4), RUNNING(1, 2, 4), PARTITIONS_REVOKED(3, 4), ASSIGNING_PARTITIONS(1, 4), PENDING_SHUTDOWN(5), DEAD;
 
         private final Set<Integer> validTransitions = new HashSet<>();
 
@@ -500,8 +500,6 @@ public class StreamThread extends Thread {
         lastCleanMs = Long.MAX_VALUE; // the cleaning cycle won't start until partition assignment
         lastCommitMs = timerStartedMs;
         rebalanceListener = new RebalanceListener(time, config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG));
-        setState(State.RUNNING);
-
     }
 
     /**
@@ -513,7 +511,7 @@ public class StreamThread extends Thread {
     @Override
     public void run() {
         log.info("{} Starting", logPrefix);
-
+        setState(State.RUNNING);
         boolean cleanRun = false;
         try {
             runLoop();
@@ -905,7 +903,7 @@ public class StreamThread extends Thread {
      */
     public synchronized void close() {
         log.info("{} Informed thread to shut down", logPrefix);
-        setState(State.PENDING_SHUTDOWN);
+        setStateWhenNotInPendingShutdown(State.PENDING_SHUTDOWN);
     }
 
     public synchronized boolean isInitialized() {
@@ -973,7 +971,7 @@ public class StreamThread extends Thread {
     }
 
     private synchronized void setStateWhenNotInPendingShutdown(final State newState) {
-        if (state == State.PENDING_SHUTDOWN) {
+        if (state == State.PENDING_SHUTDOWN || state == State.DEAD) {
             return;
         }
         setState(newState);

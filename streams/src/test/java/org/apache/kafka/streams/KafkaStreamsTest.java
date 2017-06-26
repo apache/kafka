@@ -28,8 +28,10 @@ import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.processor.StreamPartitioner;
+import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.MockMetricsReporter;
+import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Assert;
 import org.junit.Before;
@@ -72,13 +74,9 @@ public class KafkaStreamsTest {
     }
 
     @Test
-    public void testInitializesAndDestroysMetricsReporters() throws Exception {
-        final int oldInitCount = MockMetricsReporter.INIT_COUNT.get();
+    public void testStateChanges() throws Exception {
         final KStreamBuilder builder = new KStreamBuilder();
         final KafkaStreams streams = new KafkaStreams(builder, props);
-        final int newInitCount = MockMetricsReporter.INIT_COUNT.get();
-        final int initDiff = newInitCount - oldInitCount;
-        assertTrue("some reporters should be initialized by calling on construction", initDiff > 0);
 
         StateListenerStub stateListener = new StateListenerStub();
         streams.setStateListener(stateListener);
@@ -91,12 +89,77 @@ public class KafkaStreamsTest {
         Assert.assertEquals(stateListener.oldState, KafkaStreams.State.CREATED);
         Assert.assertEquals(stateListener.newState, KafkaStreams.State.RUNNING);
         Assert.assertEquals(stateListener.mapStates.get(KafkaStreams.State.RUNNING).longValue(), 1L);
-        final int oldCloseCount = MockMetricsReporter.CLOSE_COUNT.get();
         streams.close();
-        assertEquals(oldCloseCount + initDiff, MockMetricsReporter.CLOSE_COUNT.get());
         Assert.assertEquals(streams.state(), KafkaStreams.State.NOT_RUNNING);
         Assert.assertEquals(stateListener.mapStates.get(KafkaStreams.State.RUNNING).longValue(), 1L);
         Assert.assertEquals(stateListener.mapStates.get(KafkaStreams.State.NOT_RUNNING).longValue(), 1L);
+    }
+
+    @Test
+    public void testStateCloseAfterCreate() throws Exception {
+        final KStreamBuilder builder = new KStreamBuilder();
+        final KafkaStreams streams = new KafkaStreams(builder, props);
+
+        StateListenerStub stateListener = new StateListenerStub();
+        streams.setStateListener(stateListener);
+        streams.close();
+    }
+
+    @Test
+    public void testStateThreadChange() throws Exception {
+        final int numThreads = 2;
+        final KStreamBuilder builder = new KStreamBuilder();
+        props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, numThreads);
+        final KafkaStreams streams = new KafkaStreams(builder, props);
+
+        final StreamThread[] threads = streams.threads;
+        assertEquals(numThreads, threads.length);
+        assertEquals(streams.state(), KafkaStreams.State.CREATED);
+
+        streams.start();
+        TestUtils.waitForCondition(new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                return streams.state() == KafkaStreams.State.RUNNING;
+            }
+        }, 10 * 1000, "Streams never started.");
+
+        for (int i = 0; i < numThreads; i++) {
+            final StreamThread tmpThread = threads[i];
+            tmpThread.close();
+            TestUtils.waitForCondition(new TestCondition() {
+                @Override
+                public boolean conditionMet() {
+                    return tmpThread.state() == StreamThread.State.DEAD;
+                }
+            }, 10 * 1000, "Thread never stopped.");
+            threads[i].join();
+        }
+        TestUtils.waitForCondition(new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                return streams.state() == KafkaStreams.State.NOT_RUNNING;
+            }
+        }, 10 * 1000, "Streams never stopped.");
+
+        streams.close();
+        assertEquals(streams.globalStreamThread, null);
+    }
+
+
+    @Test
+    public void testInitializesAndDestroysMetricsReporters() throws Exception {
+        final int oldInitCount = MockMetricsReporter.INIT_COUNT.get();
+        final KStreamBuilder builder = new KStreamBuilder();
+        final KafkaStreams streams = new KafkaStreams(builder, props);
+        final int newInitCount = MockMetricsReporter.INIT_COUNT.get();
+        final int initDiff = newInitCount - oldInitCount;
+        assertTrue("some reporters should be initialized by calling on construction", initDiff > 0);
+
+        streams.start();
+        final int oldCloseCount = MockMetricsReporter.CLOSE_COUNT.get();
+        streams.close();
+        assertEquals(oldCloseCount + initDiff, MockMetricsReporter.CLOSE_COUNT.get());
     }
 
     @Test
