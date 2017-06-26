@@ -381,17 +381,17 @@ class LogCleanerTest extends JUnitSuite {
     }
 
     // grouping by very large values should result in a single group with all the segments in it
-    var groups = cleaner.groupSegmentsBySize(log.logSegments, maxSize = Int.MaxValue, maxIndexSize = Int.MaxValue)
+    var groups = cleaner.groupSegmentsBySize(log.logSegments, maxSize = Int.MaxValue, maxIndexSize = Int.MaxValue, log.logEndOffset )
     assertEquals(1, groups.size)
     assertEquals(log.numberOfSegments, groups.head.size)
     checkSegmentOrder(groups)
 
     // grouping by very small values should result in all groups having one entry
-    groups = cleaner.groupSegmentsBySize(log.logSegments, maxSize = 1, maxIndexSize = Int.MaxValue)
+    groups = cleaner.groupSegmentsBySize(log.logSegments, maxSize = 1, maxIndexSize = Int.MaxValue, log.logEndOffset )
     assertEquals(log.numberOfSegments, groups.size)
     assertTrue("All groups should be singletons.", groups.forall(_.size == 1))
     checkSegmentOrder(groups)
-    groups = cleaner.groupSegmentsBySize(log.logSegments, maxSize = Int.MaxValue, maxIndexSize = 1)
+    groups = cleaner.groupSegmentsBySize(log.logSegments, maxSize = Int.MaxValue, maxIndexSize = 1, log.logEndOffset)
     assertEquals(log.numberOfSegments, groups.size)
     assertTrue("All groups should be singletons.", groups.forall(_.size == 1))
     checkSegmentOrder(groups)
@@ -400,13 +400,13 @@ class LogCleanerTest extends JUnitSuite {
 
     // check grouping by log size
     val logSize = log.logSegments.take(groupSize).map(_.size).sum.toInt + 1
-    groups = cleaner.groupSegmentsBySize(log.logSegments, maxSize = logSize, maxIndexSize = Int.MaxValue)
+    groups = cleaner.groupSegmentsBySize(log.logSegments, maxSize = logSize, maxIndexSize = Int.MaxValue, log.logEndOffset)
     checkSegmentOrder(groups)
     assertTrue("All but the last group should be the target size.", groups.dropRight(1).forall(_.size == groupSize))
 
     // check grouping by index size
     val indexSize = log.logSegments.take(groupSize).map(_.index.sizeInBytes).sum + 1
-    groups = cleaner.groupSegmentsBySize(log.logSegments, maxSize = Int.MaxValue, maxIndexSize = indexSize)
+    groups = cleaner.groupSegmentsBySize(log.logSegments, maxSize = Int.MaxValue, maxIndexSize = indexSize, log.logEndOffset )
     checkSegmentOrder(groups)
     assertTrue("All but the last group should be the target size.", groups.dropRight(1).forall(_.size == groupSize))
   }
@@ -438,14 +438,14 @@ class LogCleanerTest extends JUnitSuite {
     assertEquals(Int.MaxValue, log.activeSegment.index.lastOffset)
 
     // grouping should result in a single group with maximum relative offset of Int.MaxValue
-    var groups = cleaner.groupSegmentsBySize(log.logSegments, maxSize = Int.MaxValue, maxIndexSize = Int.MaxValue)
+    var groups = cleaner.groupSegmentsBySize(log.logSegments, maxSize = Int.MaxValue, maxIndexSize = Int.MaxValue, log.logEndOffset )
     assertEquals(1, groups.size)
 
     // append another message, making last offset of second segment > Int.MaxValue
     log.append(TestUtils.singletonRecords(value = "hello".getBytes, key = "hello".getBytes))
 
     // grouping should not group the two segments to ensure that maximum relative offset in each group <= Int.MaxValue
-    groups = cleaner.groupSegmentsBySize(log.logSegments, maxSize = Int.MaxValue, maxIndexSize = Int.MaxValue)
+    groups = cleaner.groupSegmentsBySize(log.logSegments, maxSize = Int.MaxValue, maxIndexSize = Int.MaxValue, log.logEndOffset )
     assertEquals(2, groups.size)
     checkSegmentOrder(groups)
 
@@ -453,7 +453,7 @@ class LogCleanerTest extends JUnitSuite {
     while (log.numberOfSegments < 4)
       log.append(TestUtils.singletonRecords(value = "hello".getBytes, key = "hello".getBytes))
 
-    groups = cleaner.groupSegmentsBySize(log.logSegments, maxSize = Int.MaxValue, maxIndexSize = Int.MaxValue)
+    groups = cleaner.groupSegmentsBySize(log.logSegments, maxSize = Int.MaxValue, maxIndexSize = Int.MaxValue, log.logEndOffset )
     assertEquals(log.numberOfSegments - 1, groups.size)
     for (group <- groups)
       assertTrue("Relative offset greater than Int.MaxValue", group.last.index.lastOffset - group.head.index.baseOffset <= Int.MaxValue)
@@ -463,6 +463,50 @@ class LogCleanerTest extends JUnitSuite {
   private def checkSegmentOrder(groups: Seq[Seq[LogSegment]]): Unit = {
     val offsets = groups.flatMap(_.map(_.baseOffset))
     assertEquals("Offsets should be in increasing order.", offsets.sorted, offsets)
+  }
+
+  /**
+    * Following the loading of a log segment where the index file is zero sized,
+    * the index returned would be the base offset.  Sometimes the log file would
+    * contain data with offsets in excess of the baseOffset which would cause
+    * the log cleaner to group together segments with a range of > Int.MaxValue
+    * this test replicates that scenario to ensure that the segments are grouped
+    * correctly.
+    */
+  @Test
+  def testSegmentGroupingFollowingLoadOfZeroIndex(): Unit = {
+    val cleaner = makeCleaner(Int.MaxValue)
+
+    val logProps = new Properties()
+    logProps.put(LogConfig.SegmentBytesProp, 400: java.lang.Integer)
+
+    //mimic the effect of loading an empty index file
+    logProps.put(LogConfig.IndexIntervalBytesProp, 400: java.lang.Integer)
+
+    val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
+
+    val record1 = MemoryRecords.withLogEntries(LogEntry.create(0, Record.create("hello".getBytes, "hello".getBytes)))
+    log.append(record1, assignOffsets = false)
+    val record2 = MemoryRecords.withLogEntries(LogEntry.create(1, Record.create("hello".getBytes, "hello".getBytes)))
+    log.append(record2, assignOffsets = false)
+
+    log.roll(Int.MaxValue/2) // starting a new log segment at offset Int.MaxValue/2
+
+    val record3 = MemoryRecords.withLogEntries(LogEntry.create(Int.MaxValue/2, Record.create("hello".getBytes, "hello".getBytes)))
+    log.append(record3, assignOffsets = false)
+    val record4 = MemoryRecords.withLogEntries(LogEntry.create(Int.MaxValue.toLong + 1, Record.create("hello".getBytes, "hello".getBytes)))
+    log.append(record4, assignOffsets = false)
+
+    assertTrue("Actual offset range should be > Int.MaxValue", log.logEndOffset - 1 - log.logStartOffset > Int.MaxValue)
+    assertTrue("index.lastOffset is reporting the wrong last offset", log.logSegments.last.index.lastOffset - log.logStartOffset <= Int.MaxValue)
+
+    // grouping should result in two groups because the second segment takes the offset range > MaxInt
+    val groups = cleaner.groupSegmentsBySize(log.logSegments, maxSize = Int.MaxValue, maxIndexSize = Int.MaxValue, log.logEndOffset)
+    assertEquals(2, groups.size)
+
+    for (group <- groups)
+      assertTrue("Relative offset greater than Int.MaxValue", group.last.nextOffset() - 1 - group.head.baseOffset <= Int.MaxValue)
+    checkSegmentOrder(groups)
   }
 
   /**
