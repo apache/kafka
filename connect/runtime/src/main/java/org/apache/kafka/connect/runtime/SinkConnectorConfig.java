@@ -32,14 +32,12 @@ public class SinkConnectorConfig extends ConnectorConfig {
     public static final String TOPICS_DEFAULT = "";
     private static final String TOPICS_DISPLAY = "Topics";
 
-    static ConfigDef config = ConnectorConfig.configDef()
-        .define(TOPICS_CONFIG, ConfigDef.Type.LIST, TOPICS_DEFAULT, ConfigDef.Importance.HIGH, TOPICS_DOC, COMMON_GROUP, 4, ConfigDef.Width.LONG, TOPICS_DISPLAY);
-
-    public static ConfigDef configDef() {
-        return config;
+    public static ConfigDef configDef(Plugins plugins) {
+        return ConnectorConfig.configDef(plugins)
+                .define(TOPICS_CONFIG, ConfigDef.Type.LIST, TOPICS_DEFAULT, ConfigDef.Importance.HIGH, TOPICS_DOC, COMMON_GROUP, 4, ConfigDef.Width.LONG, TOPICS_DISPLAY);
     }
 
     public SinkConnectorConfig(Plugins plugins, Map<String, String> props) {
-        super(plugins, config, props);
+        super(plugins, configDef(plugins), props);
     }
 }

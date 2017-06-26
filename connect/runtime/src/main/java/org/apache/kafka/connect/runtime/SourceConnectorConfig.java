@@ -23,13 +23,11 @@ import java.util.Map;
 
 public class SourceConnectorConfig extends ConnectorConfig {
 
-    private static ConfigDef config = ConnectorConfig.configDef();
-
-    public static ConfigDef configDef() {
-        return config;
+    public static ConfigDef configDef(Plugins plugins) {
+        return ConnectorConfig.configDef(plugins);
     }
 
     public SourceConnectorConfig(Plugins plugins, Map<String, String> props) {
-        super(plugins, config, props);
+        super(plugins, configDef(plugins), props);
     }
 }

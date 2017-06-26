@@ -19,6 +19,7 @@ package org.apache.kafka.connect.runtime;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
+import org.apache.kafka.common.config.ConfigDef.Recommender;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigDef.Width;
 import org.apache.kafka.common.config.ConfigException;
@@ -26,6 +27,7 @@ import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.isolation.PluginDesc;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
+import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.transforms.Transformation;
 
 import java.util.ArrayList;
@@ -94,13 +96,36 @@ public class ConnectorConfig extends AbstractConfig {
         }
     }
 
+    private static Recommender converterRecommender(final Plugins plugins) {
+        return new Recommender() {
+            @Override
+            public List<Object> validValues(String name, Map<String, Object> parsedConfig) {
+                List<Object> values = new ArrayList<>();
+                for (PluginDesc<Converter> pluginDesc: plugins.converters()) {
+                    values.add(pluginDesc.pluginClass());
+                }
+                return values;
+            }
+
+            @Override
+            public boolean visible(String name, Map<String, Object> parsedConfig) {
+                return true;
+            }
+        };
+    }
+
     public static ConfigDef configDef() {
+        return configDef(null);
+    }
+
+    public static ConfigDef configDef(Plugins plugins) {
+        Recommender converterRecommender = plugins == null ? null : converterRecommender(plugins);
         return new ConfigDef()
                 .define(NAME_CONFIG, Type.STRING, Importance.HIGH, NAME_DOC, COMMON_GROUP, 1, Width.MEDIUM, NAME_DISPLAY)
                 .define(CONNECTOR_CLASS_CONFIG, Type.STRING, Importance.HIGH, CONNECTOR_CLASS_DOC, COMMON_GROUP, 2, Width.LONG, CONNECTOR_CLASS_DISPLAY)
                 .define(TASKS_MAX_CONFIG, Type.INT, TASKS_MAX_DEFAULT, atLeast(TASKS_MIN_CONFIG), Importance.HIGH, TASKS_MAX_DOC, COMMON_GROUP, 3, Width.SHORT, TASK_MAX_DISPLAY)
-                .define(KEY_CONVERTER_CLASS_CONFIG, Type.CLASS, null, Importance.LOW, KEY_CONVERTER_CLASS_DOC, COMMON_GROUP, 4, Width.SHORT, KEY_CONVERTER_CLASS_DISPLAY)
-                .define(VALUE_CONVERTER_CLASS_CONFIG, Type.CLASS, null, Importance.LOW, VALUE_CONVERTER_CLASS_DOC, COMMON_GROUP, 5, Width.SHORT, VALUE_CONVERTER_CLASS_DISPLAY)
+                .define(KEY_CONVERTER_CLASS_CONFIG, Type.CLASS, null, Importance.LOW, KEY_CONVERTER_CLASS_DOC, COMMON_GROUP, 4, Width.SHORT, KEY_CONVERTER_CLASS_DISPLAY, converterRecommender)
+                .define(VALUE_CONVERTER_CLASS_CONFIG, Type.CLASS, null, Importance.LOW, VALUE_CONVERTER_CLASS_DOC, COMMON_GROUP, 5, Width.SHORT, VALUE_CONVERTER_CLASS_DISPLAY, converterRecommender)
                 .define(TRANSFORMS_CONFIG, Type.LIST, null, new ConfigDef.Validator() {
                     @Override
                     public void ensureValid(String name, Object value) {
@@ -118,7 +143,7 @@ public class ConnectorConfig extends AbstractConfig {
     }
 
     public ConnectorConfig(Plugins plugins, Map<String, String> props) {
-        this(plugins, configDef(), props);
+        this(plugins, configDef(plugins), props);
     }
 
     public ConnectorConfig(Plugins plugins, ConfigDef configDef, Map<String, String> props) {
