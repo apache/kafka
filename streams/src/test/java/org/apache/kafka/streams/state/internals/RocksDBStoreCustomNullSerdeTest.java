@@ -33,8 +33,6 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.io.File;
-
 /**
  * Test checks RocksDBStore behaviour with serializer, which
  * serializes null value into non-null byte array.
@@ -45,18 +43,19 @@ public class RocksDBStoreCustomNullSerdeTest {
 
     @Before
     public void setUp() throws Exception {
-        Serializer<String> serializer = new StringSerializer() {
+        final Serializer<String> serializer = new StringSerializer() {
             @Override
-            public byte[] serialize(String topic, String data) {
-                if (data == null)
-                    return "not-null".getBytes();
+            public byte[] serialize(final String topic, final String data) {
+                if (data == null) {
+                    return "null-encoding-that-is-not-just-'null'".getBytes();
+                }
                 return super.serialize(topic, data);
             }
         };
-        Serde<String> serde = Serdes.serdeFrom(serializer, new StringDeserializer());
+        final Serde<String> serde = Serdes.serdeFrom(serializer, new StringDeserializer());
         subject = new RocksDBStore<>("test", serde, serde);
-        File dir = TestUtils.tempDirectory();
-        context = new MockProcessorContext(dir,
+        context = new MockProcessorContext(
+                TestUtils.tempDirectory(),
                 serde,
                 serde,
                 new NoOpRecordCollector(),
@@ -74,11 +73,12 @@ public class RocksDBStoreCustomNullSerdeTest {
         subject.put("a", "1");
         subject.put("b", "2");
         subject.delete("a");
-        KeyValueIterator<String, String> it = subject.all();
+        final KeyValueIterator<String, String> it = subject.all();
         while (it.hasNext()) {
-            KeyValue<String, String> next = it.next();
-            if (next.key.equals("a"))
+            final KeyValue<String, String> next = it.next();
+            if (next.key.equals("a")) {
                 Assert.fail("Got deleted key from iterator");
+            }
         }
     }
 }
