@@ -52,11 +52,11 @@
   <p>
   To add configs:
   <pre class="brush: bash;">
-  &gt; bin/kafka-topics.sh --zookeeper zk_host:port/chroot --alter --topic my_topic_name --config x=y
+  &gt; bin/kafka-configs.sh --zookeeper zk_host:port/chroot --entity-type topics --entity-name my_topic_name --alter --add-config x=y
   </pre>
   To remove a config:
   <pre class="brush: bash;">
-  &gt; bin/kafka-topics.sh --zookeeper zk_host:port/chroot --alter --topic my_topic_name --delete-config x
+  &gt; bin/kafka-configs.sh --zookeeper zk_host:port/chroot --entity-type topics --entity-name my_topic_name --alter --delete-config x
   </pre>
   And finally deleting a topic:
   <pre class="brush: bash;">
