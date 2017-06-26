@@ -28,10 +28,7 @@ import org.apache.kafka.clients.producer.RecordMetadata;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.io.InputStream;
 import java.util.Properties;
 
 import static net.sourceforge.argparse4j.impl.Arguments.store;
@@ -40,7 +37,9 @@ import net.sourceforge.argparse4j.ArgumentParsers;
 import net.sourceforge.argparse4j.inf.ArgumentParser;
 import net.sourceforge.argparse4j.inf.ArgumentParserException;
 import net.sourceforge.argparse4j.inf.Namespace;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Exit;
+import org.apache.kafka.common.utils.Utils;
 
 /**
  * Primarily intended for use with system testing, this producer prints metadata
@@ -57,8 +56,9 @@ import org.apache.kafka.common.utils.Exit;
  */
 public class VerifiableProducer {
 
-    String topic;
-    private Producer<String, String> producer;
+    private final ObjectMapper mapper = new ObjectMapper();
+    private final String topic;
+    private final Producer<String, String> producer;
     // If maxMessages < 0, produce until the process is killed externally
     private long maxMessages = -1;
 
@@ -69,22 +69,21 @@ public class VerifiableProducer {
     private long numSent = 0;
 
     // Throttle message throughput if this is set >= 0
-    private long throughput;
+    private final long throughput;
 
     // Hook to trigger producing thread to stop sending messages
     private boolean stopProducing = false;
 
     // Prefix (plus a dot separator) added to every value produced by verifiable producer
     // if null, then values are produced without a prefix
-    private Integer valuePrefix;
+    private final Integer valuePrefix;
 
-    public VerifiableProducer(
-            Properties producerProps, String topic, int throughput, int maxMessages, Integer valuePrefix) {
+    public VerifiableProducer(KafkaProducer<String, String> producer, String topic, int throughput, int maxMessages, Integer valuePrefix) {
 
         this.topic = topic;
         this.throughput = throughput;
         this.maxMessages = maxMessages;
-        this.producer = new KafkaProducer<>(producerProps);
+        this.producer = producer;
         this.valuePrefix = valuePrefix;
     }
 
@@ -154,72 +153,38 @@ public class VerifiableProducer {
         return parser;
     }
     
-    /**
-     * Read a properties file from the given path
-     * @param filename The path of the file to read
-     *                 
-     * Note: this duplication of org.apache.kafka.common.utils.Utils.loadProps is unfortunate 
-     * but *intentional*. In order to use VerifiableProducer in compatibility and upgrade tests, 
-     * we use VerifiableProducer from the development tools package, and run it against 0.8.X.X kafka jars.
-     * Since this method is not in Utils in the 0.8.X.X jars, we have to cheat a bit and duplicate.
-     */
-    public static Properties loadProps(String filename) throws IOException, FileNotFoundException {
-        Properties props = new Properties();
-        try (InputStream propStream = new FileInputStream(filename)) {
-            props.load(propStream);
-        }
-        return props;
-    }
-    
     /** Construct a VerifiableProducer object from command-line arguments. */
-    public static VerifiableProducer createFromArgs(String[] args) {
-        ArgumentParser parser = argParser();
-        VerifiableProducer producer = null;
+    public static VerifiableProducer createFromArgs(ArgumentParser parser, String[] args) throws ArgumentParserException {
+        Namespace res = parser.parseArgs(args);
 
-        try {
-            Namespace res;
-            res = parser.parseArgs(args);
+        int maxMessages = res.getInt("maxMessages");
+        String topic = res.getString("topic");
+        int throughput = res.getInt("throughput");
+        String configFile = res.getString("producer.config");
+        Integer valuePrefix = res.getInt("valuePrefix");
 
-            int maxMessages = res.getInt("maxMessages");
-            String topic = res.getString("topic");
-            int throughput = res.getInt("throughput");
-            String configFile = res.getString("producer.config");
-            Integer valuePrefix = res.getInt("valuePrefix");
-
-            Properties producerProps = new Properties();
-            producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, res.getString("brokerList"));
-            producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
-                              "org.apache.kafka.common.serialization.StringSerializer");
-            producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
-                              "org.apache.kafka.common.serialization.StringSerializer");
-            producerProps.put(ProducerConfig.ACKS_CONFIG, Integer.toString(res.getInt("acks")));
-            // No producer retries
-            producerProps.put("retries", "0");
-            if (configFile != null) {
-                try {
-                    producerProps.putAll(loadProps(configFile));
-                } catch (IOException e) {
-                    throw new ArgumentParserException(e.getMessage(), parser);
-                }
-            }
-
-            producer = new VerifiableProducer(producerProps, topic, throughput, maxMessages, valuePrefix);
-        } catch (ArgumentParserException e) {
-            if (args.length == 0) {
-                parser.printHelp();
-                Exit.exit(0);
-            } else {
-                parser.handleError(e);
-                Exit.exit(1);
+        Properties producerProps = new Properties();
+        if (configFile != null) {
+            try {
+                producerProps.putAll(Utils.loadProps(configFile));
+            } catch (IOException e) {
+                throw new ArgumentParserException(e.getMessage(), parser);
             }
         }
 
-        return producer;
+        producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, res.getString("brokerList"));
+        producerProps.put(ProducerConfig.ACKS_CONFIG, Integer.toString(res.getInt("acks")));
+        producerProps.put(ProducerConfig.RETRIES_CONFIG, "0");
+
+        StringSerializer serializer = new StringSerializer();
+        KafkaProducer<String, String> producer = new KafkaProducer<>(producerProps, serializer, serializer);
+
+        return new VerifiableProducer(producer, topic, throughput, maxMessages, valuePrefix);
     }
 
     /** Produce a message with given key and value. */
     public void send(String key, String value) {
-        ProducerRecord<String, String> record = new ProducerRecord<String, String>(topic, key, value);
+        ProducerRecord<String, String> record = new ProducerRecord<>(topic, key, value);
         numSent++;
         try {
             producer.send(record, new PrintInfoCallback(key, value));
@@ -404,9 +369,8 @@ public class VerifiableProducer {
         }
     }
 
-    private static void printJson(Object data) {
+    private void printJson(Object data) {
         try {
-            ObjectMapper mapper = new ObjectMapper();
             System.out.println(mapper.writeValueAsString(data));
         } catch (JsonProcessingException e) {
             System.out.println("Bad data can't be written as json: " + e.getMessage());
@@ -436,43 +400,60 @@ public class VerifiableProducer {
         }
     }
 
-    public static void main(String[] args) throws IOException {
+    public void run(ThroughputThrottler throttler) {
 
-        final VerifiableProducer producer = createFromArgs(args);
-        final long startMs = System.currentTimeMillis();
-        boolean infinite = producer.maxMessages < 0;
-
-        Runtime.getRuntime().addShutdownHook(new Thread() {
-            @Override
-            public void run() {
-                // Trigger main thread to stop producing messages
-                producer.stopProducing = true;
-
-                // Flush any remaining messages
-                producer.close();
-
-                // Print a summary
-                long stopMs = System.currentTimeMillis();
-                double avgThroughput = 1000 * ((producer.numAcked) / (double) (stopMs - startMs));
-
-                printJson(new ToolData(producer.numSent, producer.numAcked, producer.throughput, avgThroughput));
-            }
-        });
-
-        ThroughputThrottler throttler = new ThroughputThrottler(producer.throughput, startMs);
         printJson(new StartupComplete());
-        long maxMessages = infinite ? Long.MAX_VALUE : producer.maxMessages;
+        // negative maxMessages (-1) means "infinite"
+        long maxMessages = (this.maxMessages < 0) ? Long.MAX_VALUE : this.maxMessages;
+
         for (long i = 0; i < maxMessages; i++) {
-            if (producer.stopProducing) {
+            if (this.stopProducing) {
                 break;
             }
             long sendStartMs = System.currentTimeMillis();
 
-            producer.send(null, producer.getValue(i));
+            this.send(null, this.getValue(i));
 
             if (throttler.shouldThrottle(i, sendStartMs)) {
                 throttler.throttle();
             }
+        }
+    }
+
+    public static void main(String[] args) {
+        ArgumentParser parser = argParser();
+        if (args.length == 0) {
+            parser.printHelp();
+            Exit.exit(0);
+        }
+
+        try {
+            final VerifiableProducer producer = createFromArgs(parser, args);
+
+            final long startMs = System.currentTimeMillis();
+            ThroughputThrottler throttler = new ThroughputThrottler(producer.throughput, startMs);
+
+            Runtime.getRuntime().addShutdownHook(new Thread() {
+                @Override
+                public void run() {
+                    // Trigger main thread to stop producing messages
+                    producer.stopProducing = true;
+
+                    // Flush any remaining messages
+                    producer.close();
+
+                    // Print a summary
+                    long stopMs = System.currentTimeMillis();
+                    double avgThroughput = 1000 * ((producer.numAcked) / (double) (stopMs - startMs));
+
+                    producer.printJson(new ToolData(producer.numSent, producer.numAcked, producer.throughput, avgThroughput));
+                }
+            });
+
+            producer.run(throttler);
+        } catch (ArgumentParserException e) {
+            parser.handleError(e);
+            Exit.exit(1);
         }
     }
 
