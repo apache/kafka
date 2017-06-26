@@ -804,9 +804,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @return The set of partitions currently assigned to this consumer
      */
     public Set<TopicPartition> assignment() {
-        acquire();
+        acquireAndEnsureOpen();
         try {
-            ensureNotClosed();
             return Collections.unmodifiableSet(new HashSet<>(this.subscriptions.assignedPartitions()));
         } finally {
             release();
@@ -819,9 +818,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @return The set of topics currently subscribed to
      */
     public Set<String> subscription() {
-        acquire();
+        acquireAndEnsureOpen();
         try {
-            ensureNotClosed();
             return Collections.unmodifiableSet(new HashSet<>(this.subscriptions.subscription()));
         } finally {
             release();
@@ -859,10 +857,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public void subscribe(Collection<String> topics, ConsumerRebalanceListener listener) {
-        acquire();
+        acquireAndEnsureOpen();
         try {
-            ensureNotClosed();
-
             if (topics == null) {
                 throw new IllegalArgumentException("Topic collection to subscribe to cannot be null");
             } else if (topics.isEmpty()) {
@@ -927,10 +923,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public void subscribe(Pattern pattern, ConsumerRebalanceListener listener) {
-        acquire();
+        acquireAndEnsureOpen();
         try {
-            ensureNotClosed();
-
             if (pattern == null)
                 throw new IllegalArgumentException("Topic pattern to subscribe to cannot be null");
             log.debug("Subscribed to pattern: {}", pattern);
@@ -948,10 +942,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * also clears any partitions directly assigned through {@link #assign(Collection)}.
      */
     public void unsubscribe() {
-        acquire();
+        acquireAndEnsureOpen();
         try {
-            ensureNotClosed();
-
             log.debug("Unsubscribed all topics or patterns and assigned partitions");
             this.subscriptions.unsubscribe();
             this.coordinator.maybeLeaveGroup();
@@ -978,10 +970,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public void assign(Collection<TopicPartition> partitions) {
-        acquire();
+        acquireAndEnsureOpen();
         try {
-            ensureNotClosed();
-
             if (partitions == null) {
                 throw new IllegalArgumentException("Topic partition collection to assign to cannot be null");
             } else if (partitions.isEmpty()) {
@@ -1038,10 +1028,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public ConsumerRecords<K, V> poll(long timeout) {
-        acquire();
+        acquireAndEnsureOpen();
         try {
-            ensureNotClosed();
-
             if (timeout < 0)
                 throw new IllegalArgumentException("Timeout must not be negative");
 
@@ -1146,9 +1134,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public void commitSync() {
-        acquire();
+        acquireAndEnsureOpen();
         try {
-            ensureNotClosed();
             coordinator.commitOffsetsSync(subscriptions.allConsumed(), Long.MAX_VALUE);
         } finally {
             release();
@@ -1181,9 +1168,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public void commitSync(final Map<TopicPartition, OffsetAndMetadata> offsets) {
-        acquire();
+        acquireAndEnsureOpen();
         try {
-            ensureNotClosed();
             coordinator.commitOffsetsSync(new HashMap<>(offsets), Long.MAX_VALUE);
         } finally {
             release();
@@ -1213,9 +1199,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public void commitAsync(OffsetCommitCallback callback) {
-        acquire();
+        acquireAndEnsureOpen();
         try {
-            ensureNotClosed();
             commitAsync(subscriptions.allConsumed(), callback);
         } finally {
             release();
@@ -1239,9 +1224,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public void commitAsync(final Map<TopicPartition, OffsetAndMetadata> offsets, OffsetCommitCallback callback) {
-        acquire();
+        acquireAndEnsureOpen();
         try {
-            ensureNotClosed();
             log.debug("Committing offsets: {} ", offsets);
             coordinator.commitOffsetsAsync(new HashMap<>(offsets), callback);
         } finally {
@@ -1256,10 +1240,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public void seek(TopicPartition partition, long offset) {
-        acquire();
+        acquireAndEnsureOpen();
         try {
-            ensureNotClosed();
-
             if (offset < 0)
                 throw new IllegalArgumentException("seek offset must not be a negative number");
 
@@ -1276,10 +1258,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * If no partition is provided, seek to the first offset for all of the currently assigned partitions.
      */
     public void seekToBeginning(Collection<TopicPartition> partitions) {
-        acquire();
+        acquireAndEnsureOpen();
         try {
-            ensureNotClosed();
-
             Collection<TopicPartition> parts = partitions.size() == 0 ? this.subscriptions.assignedPartitions() : partitions;
             for (TopicPartition tp : parts) {
                 log.debug("Seeking to beginning of partition {}", tp);
@@ -1299,10 +1279,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * of the first message with an open transaction.
      */
     public void seekToEnd(Collection<TopicPartition> partitions) {
-        acquire();
+        acquireAndEnsureOpen();
         try {
-            ensureNotClosed();
-
             Collection<TopicPartition> parts = partitions.size() == 0 ? this.subscriptions.assignedPartitions() : partitions;
             for (TopicPartition tp : parts) {
                 log.debug("Seeking to end of partition {}", tp);
@@ -1329,10 +1307,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors
      */
     public long position(TopicPartition partition) {
-        acquire();
+        acquireAndEnsureOpen();
         try {
-            ensureNotClosed();
-
             if (!this.subscriptions.isAssigned(partition))
                 throw new IllegalArgumentException("You can only check the position for partitions assigned to this consumer.");
             Long offset = this.subscriptions.position(partition);
@@ -1365,10 +1341,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public OffsetAndMetadata committed(TopicPartition partition) {
-        acquire();
+        acquireAndEnsureOpen();
         try {
-            ensureNotClosed();
-
             Map<TopicPartition, OffsetAndMetadata> offsets = coordinator.fetchCommittedOffsets(Collections.singleton(partition));
             return offsets.get(partition);
         } finally {
@@ -1401,10 +1375,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public List<PartitionInfo> partitionsFor(String topic) {
-        acquire();
+        acquireAndEnsureOpen();
         try {
-            ensureNotClosed();
-
             Cluster cluster = this.metadata.fetch();
             List<PartitionInfo> parts = cluster.partitionsForTopic(topic);
             if (!parts.isEmpty())
@@ -1433,9 +1405,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public Map<String, List<PartitionInfo>> listTopics() {
-        acquire();
+        acquireAndEnsureOpen();
         try {
-            ensureNotClosed();
             return fetcher.getAllTopicMetadata(requestTimeoutMs);
         } finally {
             release();
@@ -1451,10 +1422,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public void pause(Collection<TopicPartition> partitions) {
-        acquire();
+        acquireAndEnsureOpen();
         try {
-            ensureNotClosed();
-
             for (TopicPartition partition: partitions) {
                 log.debug("Pausing partition {}", partition);
                 subscriptions.pause(partition);
@@ -1472,10 +1441,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public void resume(Collection<TopicPartition> partitions) {
-        acquire();
+        acquireAndEnsureOpen();
         try {
-            ensureNotClosed();
-
             for (TopicPartition partition: partitions) {
                 log.debug("Resuming partition {}", partition);
                 subscriptions.resume(partition);
@@ -1492,9 +1459,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public Set<TopicPartition> paused() {
-        acquire();
+        acquireAndEnsureOpen();
         try {
-            ensureNotClosed();
             return Collections.unmodifiableSet(subscriptions.pausedPartitions());
         } finally {
             release();
@@ -1521,10 +1487,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(Map<TopicPartition, Long> timestampsToSearch) {
-        acquire();
+        acquireAndEnsureOpen();
         try {
-            ensureNotClosed();
-
             for (Map.Entry<TopicPartition, Long> entry : timestampsToSearch.entrySet()) {
                 // we explicitly exclude the earliest and latest offset here so the timestamp in the returned
                 // OffsetAndTimestamp is always positive.
@@ -1551,9 +1515,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public Map<TopicPartition, Long> beginningOffsets(Collection<TopicPartition> partitions) {
-        acquire();
+        acquireAndEnsureOpen();
         try {
-            ensureNotClosed();
             return fetcher.beginningOffsets(partitions, requestTimeoutMs);
         } finally {
             release();
@@ -1579,9 +1542,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public Map<TopicPartition, Long> endOffsets(Collection<TopicPartition> partitions) {
-        acquire();
+        acquireAndEnsureOpen();
         try {
-            ensureNotClosed();
             return fetcher.endOffsets(partitions, requestTimeoutMs);
         } finally {
             release();
@@ -1705,12 +1667,16 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         }
     }
 
-    /*
-     * Check that the consumer hasn't been closed.
+    /**
+     * Acquire the light lock and ensure that the consumer hasn't been closed.
+     * @throws IllegalStateException If the consumer has been closed
      */
-    private void ensureNotClosed() {
-        if (this.closed)
+    private void acquireAndEnsureOpen() {
+        acquire();
+        if (this.closed) {
+            release();
             throw new IllegalStateException("This consumer has already been closed.");
+        }
     }
 
     /**
