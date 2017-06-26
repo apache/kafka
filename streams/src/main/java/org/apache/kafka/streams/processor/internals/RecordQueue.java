@@ -41,7 +41,7 @@ public class RecordQueue {
     private final TopicPartition partition;
     private final ArrayDeque<StampedRecord> fifoQueue;
     private final TimestampTracker<ConsumerRecord<Object, Object>> timeTracker;
-    private final RecordDeserializer recordDeserializer;
+    private final SourceNodeRecordDeserializer recordDeserializer;
     private final DeserializationExceptionHandler deserializationExceptionHandler;
     private final ProcessorContext processorContext;
 
@@ -57,7 +57,7 @@ public class RecordQueue {
         this.timestampExtractor = timestampExtractor;
         this.fifoQueue = new ArrayDeque<>();
         this.timeTracker = new MinTimestampTracker<>();
-        this.recordDeserializer = new SourceNodeRecordDeserializer(source);
+        this.recordDeserializer = new SourceNodeRecordDeserializer(source, deserializationExceptionHandler);
         this.deserializationExceptionHandler = deserializationExceptionHandler;
         this.processorContext = processorContext;
     }
@@ -81,24 +81,6 @@ public class RecordQueue {
         return partition;
     }
 
-    private ConsumerRecord<Object, Object> tryDeserialize(ConsumerRecord<byte[], byte[]> rawRecord) {
-        ConsumerRecord<Object, Object> record = null;
-        try {
-            record = recordDeserializer.deserialize(rawRecord);
-        } catch (Exception e) {
-            DeserializationExceptionHandler.DeserializationHandlerResponse response =
-                deserializationExceptionHandler.handle(processorContext, rawRecord, e);
-            if (response.id == DeserializationExceptionHandler.DeserializationHandlerResponse.CONTINUE.id) {
-                // ignore and continue
-            } else {
-                // rethrow exception
-                throw e;
-            }
-        }
-
-        return record;
-    }
-
     /**
      * Add a batch of {@link ConsumerRecord} into the queue
      *
@@ -109,7 +91,7 @@ public class RecordQueue {
         ConsumerRecord<Object, Object> record = null;
         for (ConsumerRecord<byte[], byte[]> rawRecord : rawRecords) {
 
-            record = tryDeserialize(rawRecord);
+            record = recordDeserializer.tryDeserialize(processorContext, rawRecord);
             if (record == null) {
                 continue;
             }

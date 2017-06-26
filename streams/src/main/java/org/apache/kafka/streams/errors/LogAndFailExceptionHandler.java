@@ -28,9 +28,9 @@ public class LogAndFailExceptionHandler implements DeserializationExceptionHandl
     private static final Logger log = LoggerFactory.getLogger(StreamThread.class);
 
     @Override
-    public DeserializationHandlerResponse handle(ProcessorContext context,
-                                                 ConsumerRecord<byte[], byte[]> record,
-                                                 Exception exception) {
+    public DeserializationHandlerResponse handle(final ProcessorContext context,
+                                                 final ConsumerRecord<byte[], byte[]> record,
+                                                 final Exception exception) {
 
         log.warn("Deserialization exception {}. Processor context is {} and record is {}",
             exception.toString(), context, record);
@@ -39,7 +39,7 @@ public class LogAndFailExceptionHandler implements DeserializationExceptionHandl
     }
 
     @Override
-    public void configure(Map<String, ?> configs) {
+    public void configure(final Map<String, ?> configs) {
         // ignore
     }
 }

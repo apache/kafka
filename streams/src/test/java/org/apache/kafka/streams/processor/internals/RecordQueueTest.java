@@ -177,8 +177,10 @@ public class RecordQueueTest {
                 new ConsumerRecord<>("topic", 1, 1, -1L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue));
 
         final RecordQueue queue = new RecordQueue(new TopicPartition(topics[0], 1),
-                                                          new MockSourceNode<>(topics, intDeserializer, intDeserializer),
-                                                          new FailOnInvalidTimestamp(), new LogAndContinueExceptionHandler(), null);
+                                                  new MockSourceNode<>(topics, intDeserializer, intDeserializer),
+                                                  new FailOnInvalidTimestamp(),
+                                                  new LogAndContinueExceptionHandler(),
+                                  null);
         queue.addRawRecords(records);
     }
 
@@ -189,7 +191,9 @@ public class RecordQueueTest {
 
         final RecordQueue queue = new RecordQueue(new TopicPartition(topics[0], 1),
                                                   new MockSourceNode<>(topics, intDeserializer, intDeserializer),
-                                                  new LogAndSkipOnInvalidTimestamp(), new LogAndContinueExceptionHandler(), null);
+                                                  new LogAndSkipOnInvalidTimestamp(),
+                                                  new LogAndContinueExceptionHandler(),
+                                  null);
         queue.addRawRecords(records);
 
         assertEquals(0, queue.size());

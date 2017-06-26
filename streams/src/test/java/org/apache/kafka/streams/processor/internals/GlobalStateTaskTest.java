@@ -46,6 +46,7 @@ import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 public class GlobalStateTaskTest {
 
@@ -77,11 +78,11 @@ public class GlobalStateTaskTest {
         storeToTopic.put("t1-store", "t1");
         storeToTopic.put("t2-store", "t2");
         topology = new ProcessorTopology(processorNodes,
-            sourceByTopics,
-            Collections.<String, SinkNode>emptyMap(),
-            Collections.<StateStore>emptyList(),
-            storeToTopic,
-            Collections.<StateStore>emptyList());
+                                         sourceByTopics,
+                                         Collections.<String, SinkNode>emptyMap(),
+                                         Collections.<StateStore>emptyList(),
+                                         storeToTopic,
+                                         Collections.<StateStore>emptyList());
         context = new NoOpProcessorContext();
 
         t1 = new TopicPartition("t1", 1);
@@ -135,27 +136,40 @@ public class GlobalStateTaskTest {
         assertEquals(0, sourceOne.numReceived);
     }
 
-    @Test(expected = StreamsException.class)
-    public void shouldThrowStreamsExceptionWhenKeyDeserializationFails() throws Exception {
-        final byte[] key = new LongSerializer().serialize("t2", 1L);
-        final byte[] recordValue = new IntegerSerializer().serialize("t2", 10);
-
-        globalStateTask.initialize();
-        globalStateTask.update(new ConsumerRecord<>("t2", 1, 1,
+    private void maybeDeserialize(final GlobalStateUpdateTask globalStateTask,
+                                  final byte[] key,
+                                  final byte[] recordValue,
+                                  boolean failExpected) {
+        ConsumerRecord record = new ConsumerRecord<>("t2", 1, 1,
             0L, TimestampType.CREATE_TIME, 0L, 0, 0,
-            key, recordValue));
+            key, recordValue);
+        globalStateTask.initialize();
+        try {
+            globalStateTask.update(record);
+            if (failExpected) {
+                fail("Should have failed to deserialize.");
+            }
+        } catch (StreamsException e) {
+            if (!failExpected) {
+                fail("Shouldn't have failed to deserialize.");
+            }
+        }
     }
 
 
-    @Test(expected = StreamsException.class)
+    @Test
+    public void shouldThrowStreamsExceptionWhenKeyDeserializationFails() throws Exception {
+        final byte[] key = new LongSerializer().serialize("t2", 1L);
+        final byte[] recordValue = new IntegerSerializer().serialize("t2", 10);
+        maybeDeserialize(globalStateTask, key, recordValue, true);
+    }
+
+
+    @Test
     public void shouldThrowStreamsExceptionWhenValueDeserializationFails() throws Exception {
         final byte[] key = new IntegerSerializer().serialize("t2", 1);
         final byte[] recordValue = new LongSerializer().serialize("t2", 10L);
-
-        globalStateTask.initialize();
-        globalStateTask.update(new ConsumerRecord<>("t2", 1, 1,
-            0L, TimestampType.CREATE_TIME, 0L, 0, 0,
-            key, recordValue));
+        maybeDeserialize(globalStateTask, key, recordValue, true);
     }
 
     @Test
@@ -165,10 +179,7 @@ public class GlobalStateTaskTest {
         final byte[] key = new LongSerializer().serialize("t2", 1L);
         final byte[] recordValue = new IntegerSerializer().serialize("t2", 10);
 
-        globalStateTask2.initialize();
-        globalStateTask2.update(new ConsumerRecord<>("t2", 1, 1,
-            0L, TimestampType.CREATE_TIME, 0L, 0, 0,
-            key, recordValue));
+        maybeDeserialize(globalStateTask2, key, recordValue, false);
     }
 
     @Test
@@ -178,10 +189,7 @@ public class GlobalStateTaskTest {
         final byte[] key = new IntegerSerializer().serialize("t2", 1);
         final byte[] recordValue = new LongSerializer().serialize("t2", 10L);
 
-        globalStateTask2.initialize();
-        globalStateTask2.update(new ConsumerRecord<>("t2", 1, 1,
-            0L, TimestampType.CREATE_TIME, 0L, 0, 0,
-            key, recordValue));
+        maybeDeserialize(globalStateTask2, key, recordValue, false);
     }
 
 

@@ -18,15 +18,19 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.processor.ProcessorContext;
 
 import static java.lang.String.format;
 
 class SourceNodeRecordDeserializer implements RecordDeserializer {
     private final SourceNode sourceNode;
+    private final DeserializationExceptionHandler deserializationExceptionHandler;
 
-    SourceNodeRecordDeserializer(final SourceNode sourceNode) {
+    SourceNodeRecordDeserializer(final SourceNode sourceNode, final DeserializationExceptionHandler deserializationExceptionHandler) {
         this.sourceNode = sourceNode;
+        this.deserializationExceptionHandler = deserializationExceptionHandler;
     }
 
     @Override
@@ -53,5 +57,29 @@ class SourceNodeRecordDeserializer implements RecordDeserializer {
                                     rawRecord.serializedKeySize(),
                                     rawRecord.serializedValueSize(), key, value);
 
+    }
+
+    public ConsumerRecord<Object, Object> tryDeserialize(final ProcessorContext processorContext,
+                                                         ConsumerRecord<byte[], byte[]> rawRecord) {
+
+        if (deserializationExceptionHandler == null) {
+            return deserialize(rawRecord);
+        }
+
+        // catch and process if we have a deserialization handler
+        try {
+            return deserialize(rawRecord);
+        } catch (Exception e) {
+            DeserializationExceptionHandler.DeserializationHandlerResponse response =
+                deserializationExceptionHandler.handle(processorContext, rawRecord, e);
+            if (response.id == DeserializationExceptionHandler.DeserializationHandlerResponse.FAIL.id) {
+                throw e;
+            }
+        }
+        return null;
+    }
+
+    public SourceNode sourceNode() {
+        return sourceNode;
     }
 }

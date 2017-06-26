@@ -30,21 +30,10 @@ import java.util.Set;
  */
 public class GlobalStateUpdateTask implements GlobalStateMaintainer {
 
-    private static class SourceNodeAndDeserializer {
-        private final SourceNode sourceNode;
-        private final RecordDeserializer deserializer;
-
-        SourceNodeAndDeserializer(final SourceNode sourceNode,
-                                  final RecordDeserializer deserializer) {
-            this.sourceNode = sourceNode;
-            this.deserializer = deserializer;
-        }
-    }
-
     private final ProcessorTopology topology;
     private final InternalProcessorContext processorContext;
     private final Map<TopicPartition, Long> offsets = new HashMap<>();
-    private final Map<String, SourceNodeAndDeserializer> deserializers = new HashMap<>();
+    private final Map<String, SourceNodeRecordDeserializer> deserializers = new HashMap<>();
     private final GlobalStateManager stateMgr;
     private final DeserializationExceptionHandler deserializationExceptionHandler;
 
@@ -67,7 +56,7 @@ public class GlobalStateUpdateTask implements GlobalStateMaintainer {
         for (final String storeName : storeNames) {
             final String sourceTopic = storeNameToTopic.get(storeName);
             final SourceNode source = topology.source(sourceTopic);
-            deserializers.put(sourceTopic, new SourceNodeAndDeserializer(source, new SourceNodeRecordDeserializer(source)));
+            deserializers.put(sourceTopic, new SourceNodeRecordDeserializer(source, this.deserializationExceptionHandler));
         }
         initTopology();
         processorContext.initialized();
@@ -75,30 +64,11 @@ public class GlobalStateUpdateTask implements GlobalStateMaintainer {
     }
 
 
-    private ConsumerRecord<Object, Object> tryDeserialize(final SourceNodeAndDeserializer sourceNodeAndDeserializer,
-                                                          ConsumerRecord<byte[], byte[]> rawRecord) {
-        ConsumerRecord<Object, Object> record = null;
-        try {
-            record = sourceNodeAndDeserializer.deserializer.deserialize(rawRecord);
-        } catch (Exception e) {
-            DeserializationExceptionHandler.DeserializationHandlerResponse response =
-                deserializationExceptionHandler.handle(processorContext, rawRecord, e);
-            if (response.id == DeserializationExceptionHandler.DeserializationHandlerResponse.CONTINUE.id) {
-                // ignore and continue
-            } else {
-                // rethrow exception
-                throw e;
-            }
-        }
-
-        return record;
-    }
-
     @SuppressWarnings("unchecked")
     @Override
     public void update(final ConsumerRecord<byte[], byte[]> record) {
-        final SourceNodeAndDeserializer sourceNodeAndDeserializer = deserializers.get(record.topic());
-        final ConsumerRecord<Object, Object> deserialized = tryDeserialize(sourceNodeAndDeserializer, record);
+        final SourceNodeRecordDeserializer sourceNodeAndDeserializer = deserializers.get(record.topic());
+        final ConsumerRecord<Object, Object> deserialized = sourceNodeAndDeserializer.tryDeserialize(processorContext, record);
 
         if (deserialized != null) {
             final ProcessorRecordContext recordContext =
@@ -107,8 +77,8 @@ public class GlobalStateUpdateTask implements GlobalStateMaintainer {
                     deserialized.partition(),
                     deserialized.topic());
             processorContext.setRecordContext(recordContext);
-            processorContext.setCurrentNode(sourceNodeAndDeserializer.sourceNode);
-            sourceNodeAndDeserializer.sourceNode.process(deserialized.key(), deserialized.value());
+            processorContext.setCurrentNode(sourceNodeAndDeserializer.sourceNode());
+            sourceNodeAndDeserializer.sourceNode().process(deserialized.key(), deserialized.value());
         }
 
         offsets.put(new TopicPartition(record.topic(), record.partition()), record.offset() + 1);
