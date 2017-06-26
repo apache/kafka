@@ -188,6 +188,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
             final TopicPartition partition = recordInfo.partition();
 
             log.trace("{} Start processing one record [{}]", logPrefix, record);
+
             updateProcessorContext(record, currNode);
             currNode.process(record.key(), record.value());
 
@@ -228,7 +229,9 @@ public class StreamTask extends AbstractTask implements Punctuator {
 
         updateProcessorContext(new StampedRecord(DUMMY_RECORD, timestamp), node);
 
-        log.trace("{} Punctuating processor {} with timestamp {}", logPrefix, node.name(), timestamp);
+        if (log.isTraceEnabled()) {
+            log.trace("{} Punctuating processor {} with timestamp {}", logPrefix, node.name(), timestamp);
+        }
 
         try {
             node.punctuate(timestamp);
@@ -254,11 +257,12 @@ public class StreamTask extends AbstractTask implements Punctuator {
     @Override
     public void commit() {
         commitImpl(true);
+
     }
 
     // visible for testing
     void commitImpl(final boolean startNewTransaction) {
-        log.trace("{} Committing", logPrefix);
+        log.debug("{} Committing", logPrefix);
         metrics.metrics.measureLatencyNs(
             time,
             new Runnable() {
@@ -272,6 +276,8 @@ public class StreamTask extends AbstractTask implements Punctuator {
                 }
             },
             metrics.taskCommitTimeSensor);
+
+        commitRequested = false;
     }
 
     @Override
@@ -288,7 +294,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
 
     private void commitOffsets(final boolean startNewTransaction) {
         if (commitOffsetNeeded) {
-            log.debug("{} Committing offsets", logPrefix);
+            log.trace("{} Committing offsets", logPrefix);
             final Map<TopicPartition, OffsetAndMetadata> consumedOffsetsAndMetadata = new HashMap<>(consumedOffsets.size());
             for (final Map.Entry<TopicPartition, Long> entry : consumedOffsets.entrySet()) {
                 final TopicPartition partition = entry.getKey();
@@ -318,13 +324,11 @@ public class StreamTask extends AbstractTask implements Punctuator {
             producer.commitTransaction();
             transactionInFlight = false;
         }
-
-        commitRequested = false;
     }
 
     private void initTopology() {
         // initialize the task by initializing all its processor nodes in the topology
-        log.debug("{} Initializing processor nodes of the topology", logPrefix);
+        log.trace("{} Initializing processor nodes of the topology", logPrefix);
         for (final ProcessorNode node : topology.processors()) {
             processorContext.setCurrentNode(node);
             try {
@@ -346,6 +350,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
      */
     @Override
     public void suspend() {
+        log.debug("{} Suspending", logPrefix);
         suspend(true);
     }
 
@@ -359,7 +364,6 @@ public class StreamTask extends AbstractTask implements Punctuator {
      * </pre>
      */
     private void suspend(final boolean clean) {
-        log.debug("{} Suspending", logPrefix);
         closeTopology(); // should we call this only on clean suspend?
         if (clean) {
             commitImpl(false);
@@ -367,7 +371,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
     }
 
     private void closeTopology() {
-        log.debug("{} Closing processor topology", logPrefix);
+        log.trace("{} Closing processor topology", logPrefix);
 
         partitionGroup.clear();
 
@@ -466,7 +470,9 @@ public class StreamTask extends AbstractTask implements Punctuator {
         final int oldQueueSize = partitionGroup.numBuffered(partition);
         final int newQueueSize = partitionGroup.addRawRecords(partition, records);
 
-        log.trace("{} Added records into the buffered queue of partition {}, new queue size is {}", logPrefix, partition, newQueueSize);
+        if (log.isTraceEnabled()) {
+            log.trace("{} Added records into the buffered queue of partition {}, new queue size is {}", logPrefix, partition, newQueueSize);
+        }
 
         // if after adding these records, its partition queue's buffered size has been
         // increased beyond the threshold, we can then pause the consumption for this partition

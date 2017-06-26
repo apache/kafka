@@ -168,11 +168,15 @@ public abstract class AbstractTask {
     }
 
     protected void updateOffsetLimits() {
-        log.debug("{} Updating store offset limits {}", logPrefix);
         for (final TopicPartition partition : partitions) {
             try {
                 final OffsetAndMetadata metadata = consumer.committed(partition); // TODO: batch API?
-                stateMgr.putOffsetLimit(partition, metadata != null ? metadata.offset() : 0L);
+                final long offset = metadata != null ? metadata.offset() : 0L;
+                stateMgr.putOffsetLimit(partition, offset);
+
+                if (log.isTraceEnabled()) {
+                    log.trace("{} Updating store offset limits {} for changelog {}", logPrefix, offset, partition);
+                }
             } catch (final AuthorizationException e) {
                 throw new ProcessorStateException(String.format("task [%s] AuthorizationException when initializing offsets for %s", id, partition), e);
             } catch (final WakeupException e) {
@@ -191,13 +195,13 @@ public abstract class AbstractTask {
     }
 
     void initializeStateStores() {
-        log.debug("{} Initializing state stores", logPrefix);
+        log.trace("{} Initializing state stores", logPrefix);
 
         // set initial offset limits
         updateOffsetLimits();
 
         for (final StateStore store : topology.stateStores()) {
-            log.trace("task [{}] Initializing store {}", id(), store.name());
+            log.trace("{} Initializing store {}", logPrefix, store.name());
             store.init(processorContext, store);
         }
     }

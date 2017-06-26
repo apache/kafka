@@ -63,16 +63,18 @@ public class InternalTopicManager {
                 final MetadataResponse metadata = streamsKafkaClient.fetchMetadata();
                 final Map<String, Integer> existingTopicPartitions = fetchExistingPartitionCountByTopic(metadata);
                 final Map<InternalTopicConfig, Integer> topicsToBeCreated = validateTopicPartitions(topics, existingTopicPartitions);
-                if (metadata.brokers().size() < replicationFactor) {
-                    throw new StreamsException("Found only " + metadata.brokers().size() + " brokers, " +
-                        " but replication factor is " + replicationFactor + "." +
-                        " Decrease replication factor for internal topics via StreamsConfig parameter \"replication.factor\""  +
-                        " or add more brokers to your cluster.");
+                if (topicsToBeCreated.size() > 0) {
+                    if (metadata.brokers().size() < replicationFactor) {
+                        throw new StreamsException("Found only " + metadata.brokers().size() + " brokers, " +
+                            " but replication factor is " + replicationFactor + "." +
+                            " Decrease replication factor for internal topics via StreamsConfig parameter \"replication.factor\"" +
+                            " or add more brokers to your cluster.");
+                    }
+                    streamsKafkaClient.createTopics(topicsToBeCreated, replicationFactor, windowChangeLogAdditionalRetention, metadata);
                 }
-                streamsKafkaClient.createTopics(topicsToBeCreated, replicationFactor, windowChangeLogAdditionalRetention, metadata);
                 return;
             } catch (StreamsException ex) {
-                log.warn("Could not create internal topics: " + ex.getMessage() + " Retry #" + i);
+                log.warn("Could not create internal topics: {} Retry #{}", ex.getMessage(), i);
             }
             // backoff
             time.sleep(100L);
@@ -92,7 +94,7 @@ public class InternalTopicManager {
 
                 return existingTopicPartitions;
             } catch (StreamsException ex) {
-                log.warn("Could not get number of partitions: " + ex.getMessage() + " Retry #" + i);
+                log.warn("Could not get number of partitions: {} Retry #{}", ex.getMessage(), i);
             }
             // backoff
             time.sleep(100L);
