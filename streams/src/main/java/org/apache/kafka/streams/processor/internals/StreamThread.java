@@ -511,7 +511,7 @@ public class StreamThread extends Thread {
     @Override
     public void run() {
         log.info("{} Starting", logPrefix);
-        setState(State.RUNNING);
+        setStateWhenNotInPendingShutdown(State.RUNNING);
         boolean cleanRun = false;
         try {
             runLoop();

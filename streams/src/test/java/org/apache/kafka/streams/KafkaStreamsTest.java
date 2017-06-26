@@ -88,10 +88,8 @@ public class KafkaStreamsTest {
         Assert.assertEquals(stateListener.numChanges, 1);
         Assert.assertEquals(stateListener.oldState, KafkaStreams.State.CREATED);
         Assert.assertEquals(stateListener.newState, KafkaStreams.State.RUNNING);
-        Assert.assertEquals(stateListener.mapStates.get(KafkaStreams.State.RUNNING).longValue(), 1L);
         streams.close();
         Assert.assertEquals(streams.state(), KafkaStreams.State.NOT_RUNNING);
-        Assert.assertEquals(stateListener.mapStates.get(KafkaStreams.State.RUNNING).longValue(), 1L);
         Assert.assertEquals(stateListener.mapStates.get(KafkaStreams.State.NOT_RUNNING).longValue(), 1L);
     }
 
@@ -103,6 +101,7 @@ public class KafkaStreamsTest {
         StateListenerStub stateListener = new StateListenerStub();
         streams.setStateListener(stateListener);
         streams.close();
+        Assert.assertEquals(streams.state(), KafkaStreams.State.NOT_RUNNING);
     }
 
     @Test

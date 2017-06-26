@@ -387,10 +387,6 @@ public class StreamThreadTest {
 
         final StateListenerStub stateListener = new StateListenerStub();
         thread.setStateListener(stateListener);
-        thread.close();
-        assertEquals(thread.state(), StreamThread.State.PENDING_SHUTDOWN);
-        thread.close();
-        assertEquals(thread.state(), StreamThread.State.PENDING_SHUTDOWN);
         thread.start();
         TestUtils.waitForCondition(new TestCondition() {
             @Override
