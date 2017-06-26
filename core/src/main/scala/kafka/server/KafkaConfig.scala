@@ -218,7 +218,7 @@ object KafkaConfig {
   private val LogConfigPrefix = "log."
 
   def main(args: Array[String]) {
-    System.out.println(configDef.toHtmlTable)
+    System.out.println(configDef.toHtmlTable("broker"))
   }
 
   /** ********* Zookeeper Configuration ***********/

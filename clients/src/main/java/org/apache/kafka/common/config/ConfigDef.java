@@ -959,6 +959,14 @@ public class ConfigDef {
         return Arrays.asList("Name", "Description", "Type", "Default", "Valid Values", "Importance");
     }
 
+    /**
+     * Does the config value for the given header uniquely
+     * identify this table row?
+     */
+    protected boolean headerIsId(String header) {
+        return "Name".equals(header);
+    }
+
     protected String getConfigValue(ConfigKey key, String headerName) {
         switch (headerName) {
             case "Name":
@@ -988,6 +996,10 @@ public class ConfigDef {
     }
 
     public String toHtmlTable() {
+        return toHtmlTable("");
+    }
+
+    public String toHtmlTable(String idPrefix) {
         List<ConfigKey> configs = sortedConfigs();
         StringBuilder b = new StringBuilder();
         b.append("<table class=\"data-table\"><tbody>\n");
@@ -1006,7 +1018,13 @@ public class ConfigDef {
             b.append("<tr>\n");
             // print column values
             for (String headerName : headers()) {
-                b.append("<td>");
+                String value = getConfigValue(key, headerName);
+                b.append("<td");
+                if (headerIsId(headerName)) {
+                    b.append(" id='").append(toHtmlId(idPrefix, value)).append("'>");
+                } else {
+                    b.append(">");
+                }
                 b.append(getConfigValue(key, headerName));
                 b.append("</td>");
             }
@@ -1014,6 +1032,10 @@ public class ConfigDef {
         }
         b.append("</tbody></table>");
         return b.toString();
+    }
+
+    private String toHtmlId(String prefix, String value) {
+        return prefix + "." + value;
     }
 
     /**

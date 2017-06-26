@@ -489,7 +489,7 @@ public class ConsumerConfig extends AbstractConfig {
     }
 
     public static void main(String[] args) {
-        System.out.println(CONFIG.toHtmlTable());
+        System.out.println(CONFIG.toHtmlTable("consumer"));
     }
 
 }
