@@ -186,32 +186,34 @@ public class MemoryRecords extends AbstractRecords {
                 }
             }
 
-            if (writeOriginalBatch) {
-                batch.writeTo(bufferOutputStream);
-                messagesRetained += retainedRecords.size();
-                bytesRetained += batch.sizeInBytes();
-                if (batch.maxTimestamp() > maxTimestamp) {
-                    maxTimestamp = batch.maxTimestamp();
-                    shallowOffsetOfMaxTimestamp = batch.lastOffset();
-                }
-            } else if (!retainedRecords.isEmpty()) {
-                MemoryRecordsBuilder builder = buildRetainedRecordsInto(batch, retainedRecords, bufferOutputStream);
-                MemoryRecords records = builder.build();
-                int filteredBatchSize = records.sizeInBytes();
+            if (!retainedRecords.isEmpty()) {
+                if (writeOriginalBatch) {
+                    batch.writeTo(bufferOutputStream);
+                    messagesRetained += retainedRecords.size();
+                    bytesRetained += batch.sizeInBytes();
+                    if (batch.maxTimestamp() > maxTimestamp) {
+                        maxTimestamp = batch.maxTimestamp();
+                        shallowOffsetOfMaxTimestamp = batch.lastOffset();
+                    }
+                } else {
+                    MemoryRecordsBuilder builder = buildRetainedRecordsInto(batch, retainedRecords, bufferOutputStream);
+                    MemoryRecords records = builder.build();
+                    int filteredBatchSize = records.sizeInBytes();
 
-                messagesRetained += retainedRecords.size();
-                bytesRetained += filteredBatchSize;
+                    messagesRetained += retainedRecords.size();
+                    bytesRetained += filteredBatchSize;
 
-                if (filteredBatchSize > batch.sizeInBytes() && filteredBatchSize > maxRecordBatchSize)
-                    log.warn("Record batch from {} with last offset {} exceeded max record batch size {} after cleaning " +
-                                    "(new size is {}). Consumers with version earlier than 0.10.1.0 may need to " +
-                                    "increase their fetch sizes.",
-                            partition, batch.lastOffset(), maxRecordBatchSize, filteredBatchSize);
+                    if (filteredBatchSize > batch.sizeInBytes() && filteredBatchSize > maxRecordBatchSize)
+                        log.warn("Record batch from {} with last offset {} exceeded max record batch size {} after cleaning " +
+                                        "(new size is {}). Consumers with version earlier than 0.10.1.0 may need to " +
+                                        "increase their fetch sizes.",
+                                partition, batch.lastOffset(), maxRecordBatchSize, filteredBatchSize);
 
-                MemoryRecordsBuilder.RecordsInfo info = builder.info();
-                if (info.maxTimestamp > maxTimestamp) {
-                    maxTimestamp = info.maxTimestamp;
-                    shallowOffsetOfMaxTimestamp = info.shallowOffsetOfMaxTimestamp;
+                    MemoryRecordsBuilder.RecordsInfo info = builder.info();
+                    if (info.maxTimestamp > maxTimestamp) {
+                        maxTimestamp = info.maxTimestamp;
+                        shallowOffsetOfMaxTimestamp = info.shallowOffsetOfMaxTimestamp;
+                    }
                 }
             } else if (batchRetention == BatchRetention.RETAIN_EMPTY) {
                 if (batchMagic < RecordBatch.MAGIC_VALUE_V2)

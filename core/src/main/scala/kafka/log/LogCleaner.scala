@@ -742,7 +742,8 @@ private[log] class Cleaner(val id: Int,
         } else {
           val isAborted = transactionMetadata.onBatchRead(batch)
           if (isAborted) {
-            // abort markers are supported in v2 and above, which means count is defined
+            // If the batch is aborted, do not bother populating the offset map.
+            // Note that abort markers are supported in v2 and above, which means count is defined.
             stats.indexMessagesRead(batch.countOrNull)
           } else {
             for (record <- batch.asScala) {

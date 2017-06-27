@@ -306,6 +306,20 @@ class LogCleanerTest extends JUnitSuite {
     assertEquals(List(2, 3), keysInLog(log))
     assertEquals(List(2, 3, 4), offsetsInLog(log)) // commit marker is still retained
     assertEquals(List(1, 2, 3, 4), lastOffsetsPerBatchInLog(log)) // empty batch is retained
+
+    // append a new record from the producer to force removal of the empty batch
+    appendProducer(Seq(1))
+    log.roll()
+
+    dirtyOffset = cleaner.doClean(LogToClean(tp, log, dirtyOffset, 100L), deleteHorizonMs = Long.MaxValue)._1
+    assertEquals(List(2, 3, 1), keysInLog(log))
+    assertEquals(List(2, 3, 4, 5), offsetsInLog(log)) // commit marker is still retained
+    assertEquals(List(2, 3, 4, 5), lastOffsetsPerBatchInLog(log)) // empty batch should be gone
+
+    dirtyOffset = cleaner.doClean(LogToClean(tp, log, dirtyOffset, 100L), deleteHorizonMs = Long.MaxValue)._1
+    assertEquals(List(2, 3, 1), keysInLog(log))
+    assertEquals(List(3, 4, 5), offsetsInLog(log)) // commit marker is gone
+    assertEquals(List(3, 4, 5), lastOffsetsPerBatchInLog(log)) // empty batch is gone
   }
 
   @Test
