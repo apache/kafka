@@ -92,13 +92,14 @@ class ReassignPartitionsCommandArgsTest extends JUnitSuite {
 
   @Test
   def shouldFailIfNoArgs(): Unit = {
-    val args: Array[String]= Array()
-    shouldFailWith("This command moves topic partitions between replicas.", args)
+    val args: Array[String]= Array("")
+    shouldFailWith("Missing required option(s) [zookeeper]", args)
   }
-
+  
   @Test
-  def shouldFailIfBlankArg(): Unit = {
-    val args = Array(" ")
+  def shouldFailIfNoAction(): Unit = {
+    val args = Array(
+        "--zookeeper", "localhost:1234")
     shouldFailWith("Command must include exactly one action: --generate, --execute or --verify", args)
   }
 

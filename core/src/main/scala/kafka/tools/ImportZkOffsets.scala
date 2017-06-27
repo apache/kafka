@@ -47,24 +47,24 @@ object ImportZkOffsets extends Logging {
     
     val zkConnectOpt = parser.accepts("zkconnect", "ZooKeeper connect string.")
                             .withRequiredArg()
+                            .describedAs("url(s) for the zookeeper connection")
                             .defaultsTo("localhost:2181")
                             .ofType(classOf[String])
-    val inFileOpt = parser.accepts("input-file", "Input file")
+    val inFileOpt = parser.accepts("input-file", "Input file to import offsets for broker partitions.")
                             .withRequiredArg()
+                            .describedAs("file name for importing offset information")
                             .ofType(classOf[String])
-    parser.accepts("help", "Print this message.")
+                            .required
+    parser.accepts("help", "Print usage information.").forHelp
     
+    var commandDef: String = "Import offsets to zookeeper from an input file."
     if(args.length == 0)
-      CommandLineUtils.printUsageAndDie(parser, "Import offsets to zookeeper from files.")
+      CommandLineUtils.printUsageAndDie(parser, commandDef)
             
-    val options = parser.parse(args : _*)
+    val options = CommandLineUtils.tryParse(parser, args)
     
-    if (options.has("help")) {
-       parser.printHelpOn(System.out)
-       Exit.exit(0)
-    }
-    
-    CommandLineUtils.checkRequiredArgs(parser, options, inFileOpt)
+    if (options.has("help")) 
+      CommandLineUtils.printUsageAndDie(parser, commandDef)
     
     val zkConnect           = options.valueOf(zkConnectOpt)
     val partitionOffsetFile = options.valueOf(inFileOpt)

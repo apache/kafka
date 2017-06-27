@@ -255,70 +255,73 @@ object ConsoleConsumer extends Logging {
     val parser = new OptionParser(false)
     val topicIdOpt = parser.accepts("topic", "The topic id to consume on.")
       .withRequiredArg
-      .describedAs("topic")
+      .describedAs("topic id to consume")
       .ofType(classOf[String])
     val whitelistOpt = parser.accepts("whitelist", "Whitelist of topics to include for consumption.")
       .withRequiredArg
-      .describedAs("whitelist")
+      .describedAs("topics to include for consumption")
       .ofType(classOf[String])
     val blacklistOpt = parser.accepts("blacklist", "Blacklist of topics to exclude from consumption.")
       .withRequiredArg
-      .describedAs("blacklist")
+      .describedAs("topics to exclude from consumption")
       .ofType(classOf[String])
     val partitionIdOpt = parser.accepts("partition", "The partition to consume from. Consumption " +
       "starts from the end of the partition unless '--offset' is specified.")
       .withRequiredArg
-      .describedAs("partition")
+      .describedAs("partition to consume from")
       .ofType(classOf[java.lang.Integer])
     val offsetOpt = parser.accepts("offset", "The offset id to consume from (a non-negative number), or 'earliest' which means from beginning, or 'latest' which means from end")
       .withRequiredArg
-      .describedAs("consume offset")
+      .describedAs("consumer offset")
       .ofType(classOf[String])
       .defaultsTo("latest")
-    val zkConnectOpt = parser.accepts("zookeeper", "REQUIRED (only when using old consumer): The connection string for the zookeeper connection in the form host:port. " +
-      "Multiple URLS can be given to allow fail-over.")
+    val zkConnectOpt = parser.accepts("zookeeper", "The connection string for the zookeeper connection in the form host:port. " +
+      "This is required only when using old consumer (By default this command uses the new consumer implementation. The old consumer implementation " +
+      "is used if the zookeeper option is specified). Multiple URLS can be given to allow fail-over.")
       .withRequiredArg
-      .describedAs("urls")
+      .describedAs("url(s) for the zookeeper connection")
       .ofType(classOf[String])
     val consumerPropertyOpt = parser.accepts("consumer-property", "A mechanism to pass user-defined properties in the form key=value to the consumer.")
       .withRequiredArg
-      .describedAs("consumer_prop")
+      .describedAs("user defined properties to pass to consumer")
       .ofType(classOf[String])
     val consumerConfigOpt = parser.accepts("consumer.config", s"Consumer config properties file. Note that ${consumerPropertyOpt} takes precedence over this config.")
       .withRequiredArg
-      .describedAs("config file")
+      .describedAs("consumer config file")
       .ofType(classOf[String])
-    val messageFormatterOpt = parser.accepts("formatter", "The name of a class to use for formatting kafka messages for display.")
+    val messageFormatterOpt = parser.accepts("formatter", "The name of a class to use for formatting Kafka messages for display.")
       .withRequiredArg
-      .describedAs("class")
+      .describedAs("name of class used to format Kafka messages for display")
       .ofType(classOf[String])
       .defaultsTo(classOf[DefaultMessageFormatter].getName)
     val messageFormatterArgOpt = parser.accepts("property", "The properties to initialize the message formatter.")
       .withRequiredArg
-      .describedAs("prop")
+      .describedAs("properties to initialize message formatter")
       .ofType(classOf[String])
-    val deleteConsumerOffsetsOpt = parser.accepts("delete-consumer-offsets", "If specified, the consumer path in zookeeper is deleted when starting up")
+    val deleteConsumerOffsetsOpt = parser.accepts("delete-consumer-offsets", "If specified, the consumer path in zookeeper is deleted when starting up.")
     val resetBeginningOpt = parser.accepts("from-beginning", "If the consumer does not already have an established offset to consume from, " +
       "start with the earliest message present in the log rather than the latest message.")
     val maxMessagesOpt = parser.accepts("max-messages", "The maximum number of messages to consume before exiting. If not set, consumption is continual.")
       .withRequiredArg
-      .describedAs("num_messages")
+      .describedAs("number of messages to consume before exiting")
       .ofType(classOf[java.lang.Integer])
     val timeoutMsOpt = parser.accepts("timeout-ms", "If specified, exit if no message is available for consumption for the specified interval.")
       .withRequiredArg
-      .describedAs("timeout_ms")
+      .describedAs("interval to wait(in ms) for before exiting if no message is available")
       .ofType(classOf[java.lang.Integer])
     val skipMessageOnErrorOpt = parser.accepts("skip-message-on-error", "If there is an error when processing a message, " +
       "skip it instead of halt.")
-    val csvMetricsReporterEnabledOpt = parser.accepts("csv-reporter-enabled", "If set, the CSV metrics reporter will be enabled")
+    val csvMetricsReporterEnabledOpt = parser.accepts("csv-reporter-enabled", "If set, the CSV metrics reporter will be enabled.")
     val metricsDirectoryOpt = parser.accepts("metrics-dir", "If csv-reporter-enable is set, and this parameter is" +
       "set, the csv metrics will be output here")
       .withRequiredArg
-      .describedAs("metrics directory")
+      .describedAs("directory where csv metrics will be ouput")
       .ofType(classOf[java.lang.String])
     val newConsumerOpt = parser.accepts("new-consumer", "Use the new consumer implementation. This is the default, so " +
       "this option is deprecated and will be removed in a future release.")
-    val bootstrapServerOpt = parser.accepts("bootstrap-server", "REQUIRED (unless old consumer is used): The server to connect to.")
+    val bootstrapServerOpt = parser.accepts("bootstrap-server", "The server to connect to. This is required with the new consumer implementation." +
+        "(The new consumer implementation is used by default or can be explicitely set using the --new-consumer option.)")
+      .requiredUnless("zookeeper")
       .withRequiredArg
       .describedAs("server to connect to")
       .ofType(classOf[String])
@@ -337,19 +340,24 @@ object ConsoleConsumer extends Logging {
         "Set to read_committed in order to filter out transactional messages which are not committed. Set to read_uncommitted" +
         "to read all messages.")
       .withRequiredArg()
+      .describedAs("settings to decide which messages should be consumed")
       .ofType(classOf[String])
       .defaultsTo("read_uncommitted")
-
     val groupIdOpt = parser.accepts("group", "The consumer group id of the consumer.")
       .withRequiredArg
       .describedAs("consumer group id")
       .ofType(classOf[String])
+    val helpOpt = parser.accepts("help", "Print usage information.").forHelp
 
+    val commandDef: String = "The console consumer is a tool that reads data from Kafka and outputs it to standard output."
     if (args.length == 0)
-      CommandLineUtils.printUsageAndDie(parser, "The console consumer is a tool that reads data from Kafka and outputs it to standard output.")
+      CommandLineUtils.printUsageAndDie(parser, commandDef)
+      
+    val options: OptionSet = CommandLineUtils.tryParse(parser, args)
+    if (options.has("help")) 
+        CommandLineUtils.printUsageAndDie(parser, commandDef)
 
     var groupIdPassed = true
-    val options: OptionSet = tryParse(parser, args)
     val useOldConsumer = options.has(zkConnectOpt)
     val enableSystestEventsLogging = options.has(enableSystestEventsLoggingOpt)
 
@@ -358,6 +366,7 @@ object ConsoleConsumer extends Logging {
     var topicArg: String = null
     var whitelistArg: String = null
     var filterSpec: TopicFilter = null
+     
     val extraConsumerProps = CommandLineUtils.parseKeyValueArgs(options.valuesOf(consumerPropertyOpt).asScala)
     val consumerProps = if (options.has(consumerConfigOpt))
       Utils.loadProps(options.valueOf(consumerConfigOpt))
@@ -365,12 +374,15 @@ object ConsoleConsumer extends Logging {
       new Properties()
     val zkConnectionStr = options.valueOf(zkConnectOpt)
     val fromBeginning = options.has(resetBeginningOpt)
-    val partitionArg = if (options.has(partitionIdOpt)) Some(options.valueOf(partitionIdOpt).intValue) else None
+    val partitionArg = if (options.has(partitionIdOpt))
+      Some(options.valueOf(partitionIdOpt).intValue) else None
     val skipMessageOnError = options.has(skipMessageOnErrorOpt)
     val messageFormatterClass = Class.forName(options.valueOf(messageFormatterOpt))
     val formatterArgs = CommandLineUtils.parseKeyValueArgs(options.valuesOf(messageFormatterArgOpt).asScala)
-    val maxMessages = if (options.has(maxMessagesOpt)) options.valueOf(maxMessagesOpt).intValue else -1
-    val timeoutMs = if (options.has(timeoutMsOpt)) options.valueOf(timeoutMsOpt).intValue else -1
+    val maxMessages = if (options.has(maxMessagesOpt))
+      options.valueOf(maxMessagesOpt).intValue else -1
+    val timeoutMs = if (options.has(timeoutMsOpt)) 
+      options.valueOf(timeoutMsOpt).intValue else -1
     val bootstrapServer = options.valueOf(bootstrapServerOpt)
     val keyDeserializer = options.valueOf(keyDeserializerOpt)
     val valueDeserializer = options.valueOf(valueDeserializerOpt)
@@ -479,15 +491,6 @@ object ConsoleConsumer extends Logging {
       case None =>
         consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, s"console-consumer-${new Random().nextInt(100000)}")
         groupIdPassed = false
-    }
-
-    def tryParse(parser: OptionParser, args: Array[String]): OptionSet = {
-      try
-        parser.parse(args: _*)
-      catch {
-        case e: OptionException =>
-          CommandLineUtils.printUsageAndDie(parser, e.getMessage)
-      }
     }
   }
 

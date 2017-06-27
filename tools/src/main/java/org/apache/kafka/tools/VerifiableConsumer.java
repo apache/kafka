@@ -513,7 +513,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
                 .type(String.class)
                 .metavar("GROUP_ID")
                 .dest("groupId")
-                .help("The groupId shared among members of the consumer group");
+                .help("The groupId shared among members of the consumer group.");
 
         parser.addArgument("--max-messages")
                 .action(store())
@@ -522,7 +522,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
                 .setDefault(-1)
                 .metavar("MAX-MESSAGES")
                 .dest("maxMessages")
-                .help("Consume this many messages. If -1 (the default), the consumer will consume until the process is killed externally");
+                .help("Consume this many messages. If -1 (the default), the consumer will consume until the process is killed externally.");
 
         parser.addArgument("--session-timeout")
                 .action(store())
@@ -531,20 +531,20 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
                 .type(Integer.class)
                 .metavar("TIMEOUT_MS")
                 .dest("sessionTimeout")
-                .help("Set the consumer's session timeout");
+                .help("Set the consumer's session timeout.");
 
         parser.addArgument("--verbose")
                 .action(storeTrue())
                 .type(Boolean.class)
                 .metavar("VERBOSE")
-                .help("Enable to log individual consumed records");
+                .help("Enable to log individual consumed records.");
 
         parser.addArgument("--enable-autocommit")
                 .action(storeTrue())
                 .type(Boolean.class)
                 .metavar("ENABLE-AUTOCOMMIT")
                 .dest("useAutoCommit")
-                .help("Enable offset auto-commit on consumer");
+                .help("Enable offset auto-commit on consumer.");
 
         parser.addArgument("--reset-policy")
                 .action(store())
@@ -552,7 +552,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
                 .setDefault("earliest")
                 .type(String.class)
                 .dest("resetPolicy")
-                .help("Set reset policy (must be either 'earliest', 'latest', or 'none'");
+                .help("Set reset policy (must be either 'earliest', 'latest', or 'none').");
 
         parser.addArgument("--assignment-strategy")
                 .action(store())
@@ -560,7 +560,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
                 .setDefault(RangeAssignor.class.getName())
                 .type(String.class)
                 .dest("assignmentStrategy")
-                .help("Set assignment strategy (e.g. " + RoundRobinAssignor.class.getName() + ")");
+                .help("Set assignment strategy (e.g. " + RoundRobinAssignor.class.getName() + ").");
 
         parser.addArgument("--consumer.config")
                 .action(store())

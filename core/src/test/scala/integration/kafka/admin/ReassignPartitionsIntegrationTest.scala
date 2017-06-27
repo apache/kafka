@@ -28,6 +28,7 @@ class ReassignPartitionsIntegrationTest extends ZooKeeperTestHarness with RackAw
 
     // create a non rack aware assignment topic first
     val createOpts = new kafka.admin.TopicCommand.TopicCommandOptions(Array(
+      "--zookeeper", zkConnect,
       "--partitions", numPartitions.toString,
       "--replication-factor", replicationFactor.toString,
       "--disable-rack-aware",

@@ -379,15 +379,10 @@ object ReassignPartitionsCommand extends Logging {
   def validateAndParseArgs(args: Array[String]): ReassignPartitionsCommandOptions = {
     val opts = new ReassignPartitionsCommandOptions(args)
 
-    if(args.length == 0)
-      CommandLineUtils.printUsageAndDie(opts.parser, "This command moves topic partitions between replicas.")
-
     // Should have exactly one action
     val actions = Seq(opts.generateOpt, opts.executeOpt, opts.verifyOpt).count(opts.options.has _)
     if(actions != 1)
       CommandLineUtils.printUsageAndDie(opts.parser, "Command must include exactly one action: --generate, --execute or --verify")
-
-    CommandLineUtils.checkRequiredArgs(opts.parser, opts.options, opts.zkConnectOpt)
 
     //Validate arguments for each action
     if(opts.options.has(opts.verifyOpt)) {
@@ -410,21 +405,22 @@ object ReassignPartitionsCommand extends Logging {
 
   class ReassignPartitionsCommandOptions(args: Array[String]) {
     val parser = new OptionParser(false)
-    val bootstrapServerOpt = parser.accepts("bootstrap-server", "the server(s) to use for bootstrapping. REQUIRED if " +
-                      "an absolution path of the log directory is specified for any replica in the reassignment json file")
+    val bootstrapServerOpt = parser.accepts("bootstrap-server", "The server(s) to use for bootstrapping. This is required if " +
+                      "an absolution path of the log directory is specified for any replica in the reassignment json file.")
                       .withRequiredArg
-                      .describedAs("Server(s) to use for bootstrapping")
+                      .describedAs("server(s) to connect to")
                       .ofType(classOf[String])
-    val zkConnectOpt = parser.accepts("zookeeper", "REQUIRED: The connection string for the zookeeper connection in the " +
+    val zkConnectOpt = parser.accepts("zookeeper", "The connection string for the zookeeper connection in the " +
                       "form host:port. Multiple URLS can be given to allow fail-over.")
                       .withRequiredArg
-                      .describedAs("urls")
+                      .describedAs("url(s) for the zookeeper connection")
                       .ofType(classOf[String])
+                      .required
     val generateOpt = parser.accepts("generate", "Generate a candidate partition reassignment configuration." +
                       " Note that this only generates a candidate assignment, it does not execute it.")
     val executeOpt = parser.accepts("execute", "Kick off the reassignment as specified by the --reassignment-json-file option.")
-    val verifyOpt = parser.accepts("verify", "Verify if the reassignment completed as specified by the --reassignment-json-file option. If there is a throttle engaged for the replicas specified, and the rebalance has completed, the throttle will be removed")
-    val reassignmentJsonFileOpt = parser.accepts("reassignment-json-file", "The JSON file with the partition reassignment configuration" +
+    val verifyOpt = parser.accepts("verify", "Verify if the reassignment completed as specified by the --reassignment-json-file option. If there is a throttle engaged for the replicas specified, and the rebalance has completed, the throttle will be removed. ")
+    val reassignmentJsonFileOpt = parser.accepts("reassignment-json-file", "The JSON file with the partition reassignment configuration. " +
                       "The format to use is - \n" +
                       "{\"partitions\":\n\t[{\"topic\": \"foo\",\n\t  \"partition\": 1,\n\t  \"replicas\": [1,2,3],\n\t  \"log_dirs\": [\"dir1\",\"dir2\",\"dir3\"] }],\n\"version\":1\n}\n" +
                       "Note that \"log_dirs\" is optional. When it is specified, its length must equal the length of the replicas list. The value in this list " +
@@ -442,26 +438,35 @@ object ReassignPartitionsCommand extends Logging {
     val brokerListOpt = parser.accepts("broker-list", "The list of brokers to which the partitions need to be reassigned" +
                       " in the form \"0,1,2\". This is required if --topics-to-move-json-file is used to generate reassignment configuration")
                       .withRequiredArg
-                      .describedAs("brokerlist")
+                      .describedAs("list of brokers")
                       .ofType(classOf[String])
-    val disableRackAware = parser.accepts("disable-rack-aware", "Disable rack aware replica assignment")
+    val disableRackAware = parser.accepts("disable-rack-aware", "Disable rack aware replica assignment.")
     val interBrokerThrottleOpt = parser.accepts("throttle", "The movement of partitions between brokers will be throttled to this value (bytes/sec). Rerunning with this option, whilst a rebalance is in progress, will alter the throttle value. The throttle rate should be at least 1 KB/s.")
                       .withRequiredArg()
-                      .describedAs("throttle")
+                      .describedAs("throttle value(bytes/sec) related to the movement of partitions between brokers")
                       .ofType(classOf[Long])
                       .defaultsTo(-1)
     val replicaAlterLogDirsThrottleOpt = parser.accepts("replica-alter-log-dirs-throttle", "The movement of replicas between log directories on the same broker will be throttled to this value (bytes/sec). Rerunning with this option, whilst a rebalance is in progress, will alter the throttle value. The throttle rate should be at least 1 KB/s.")
                       .withRequiredArg()
-                      .describedAs("replicaAlterLogDirsThrottle")
+                      .describedAs("throttle value(byes/sec) related to the movement of replicas between log directories on the same broker")
                       .ofType(classOf[Long])
                       .defaultsTo(-1)
-    val timeoutOpt = parser.accepts("timeout", "The maximum time in ms allowed to wait for partition reassignment execution to be successfully initiated")
+    val timeoutOpt = parser.accepts("timeout", "The maximum time in milliseconds allowed to wait for partition reassignment execution to be successfully initiated.")
                       .withRequiredArg()
-                      .describedAs("timeout")
+                      .describedAs("maximum time(in ms) to wait to initiate partition reassignment")
                       .ofType(classOf[Long])
                       .defaultsTo(10000)
-    val options = parser.parse(args : _*)
-  }
+    val helpOpt = parser.accepts("help", "Print usage information.").forHelp
+
+    var commandDef: String = "This command moves topic partitions between replicas."
+    if(args.length == 0)
+      CommandLineUtils.printUsageAndDie(parser, commandDef)
+
+    val options = CommandLineUtils.tryParse(parser, args)
+    
+    if (options.has("help"))
+      CommandLineUtils.printUsageAndDie(parser, commandDef)
+   }
 }
 
 class ReassignPartitionsCommand(zkClient: KafkaZkClient,

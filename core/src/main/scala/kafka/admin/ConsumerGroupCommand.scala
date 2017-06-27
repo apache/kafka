@@ -49,10 +49,7 @@ object ConsumerGroupCommand extends Logging {
 
   def main(args: Array[String]) {
     val opts = new ConsumerGroupCommandOptions(args)
-
-    if (args.length == 0)
-      CommandLineUtils.printUsageAndDie(opts.parser, "List all consumer groups, describe a consumer group, delete consumer group info, or reset consumer group offsets.")
-
+  
     // should have exactly one action
     val actions = Seq(opts.listOpt, opts.describeOpt, opts.deleteOpt, opts.resetOffsetsOpt).count(opts.options.has)
     if (actions != 1)
@@ -816,23 +813,23 @@ object ConsumerGroupCommand extends Logging {
   }
 
   class ConsumerGroupCommandOptions(args: Array[String]) {
-    val ZkConnectDoc = "REQUIRED (for consumer groups based on the old consumer): The connection string for the zookeeper connection in the form host:port. " +
-      "Multiple URLS can be given to allow fail-over."
-    val BootstrapServerDoc = "REQUIRED (for consumer groups based on the new consumer): The server to connect to."
+    val ZkConnectDoc = "The connection string for the zookeeper connection in the form host:port. " +
+      "Multiple URLS can be given to allow fail-over. This is required for consumer groups based on the old consumer."
+    val BootstrapServerDoc = "The server to connect to. This is required for consumer groups based on the new consumer."
     val GroupDoc = "The consumer group we wish to act on."
-    val TopicDoc = "The topic whose consumer group information should be deleted or topic whose should be included in the reset offset process. " +
-      "In `reset-offsets` case, partitions can be specified using this format: `topic1:0,1,2`, where 0,1,2 are the partition to be included in the process. " +
+    val TopicDoc = "The topic whose consumer group information should be deleted or topic whose consumer group should be included in the reset offset process. " +
+      "In `reset-offsets` case, partitions can be specified using this format: `topic1:0,1,2`, where 0,1,2 are the partitions to be included in the process. " +
       "Reset-offsets also supports multiple topic inputs."
     val AllTopicsDoc = "Consider all topics assigned to a group in the `reset-offsets` process."
     val ListDoc = "List all consumer groups."
     val DescribeDoc = "Describe consumer group and list offset lag (number of messages not yet processed) related to given group."
     val nl = System.getProperty("line.separator")
     val DeleteDoc = "Pass in groups to delete topic partition offsets and ownership information " +
-      "over the entire consumer group. For instance --group g1 --group g2" + nl +
+      "over the entire consumer group. For instance, --group g1 --group g2" + nl +
       "Pass in groups with a single topic to just delete the given topic's partition offsets and ownership " +
-      "information for the given consumer groups. For instance --group g1 --group g2 --topic t1" + nl +
+      "information for the given consumer groups. For instance, --group g1 --group g2 --topic t1" + nl +
       "Pass in just a topic to delete the given topic's partition offsets and ownership information " +
-      "for every consumer group. For instance --topic t1" + nl +
+      "for every consumer group. For instance, --topic t1" + nl +
       "WARNING: Group deletion only works for old ZK-based consumer groups, and one has to use it carefully to only delete groups that are not active."
     val NewConsumerDoc = "Use the new consumer implementation. This is the default, so this option is deprecated and " +
       "will be removed in a future release."
@@ -864,31 +861,33 @@ object ConsumerGroupCommand extends Logging {
     val StateDoc = "Describe the group state. This option may be used with '--describe' and '--bootstrap-server' options only." + nl +
       "Example: --bootstrap-server localhost:9092 --describe --group group1 --state"
 
+
     val parser = new OptionParser(false)
-    val zkConnectOpt = parser.accepts("zookeeper", ZkConnectDoc)
-                             .withRequiredArg
-                             .describedAs("urls")
-                             .ofType(classOf[String])
+    val newConsumerOpt = parser.accepts("new-consumer", NewConsumerDoc)
     val bootstrapServerOpt = parser.accepts("bootstrap-server", BootstrapServerDoc)
                                    .withRequiredArg
                                    .describedAs("server to connect to")
                                    .ofType(classOf[String])
+    val zkConnectOpt = parser.accepts("zookeeper", ZkConnectDoc)
+                             .requiredUnless("bootstrap-server")
+                             .withRequiredArg
+                             .describedAs("url(s) for the zookeeper connection")
+                             .ofType(classOf[String])
     val groupOpt = parser.accepts("group", GroupDoc)
                          .withRequiredArg
-                         .describedAs("consumer group")
+                         .describedAs("consumer group to act on")
                          .ofType(classOf[String])
     val topicOpt = parser.accepts("topic", TopicDoc)
                          .withRequiredArg
-                         .describedAs("topic")
+                         .describedAs("topic whose consumer group should be deleted or reset")
                          .ofType(classOf[String])
     val allTopicsOpt = parser.accepts("all-topics", AllTopicsDoc)
     val listOpt = parser.accepts("list", ListDoc)
     val describeOpt = parser.accepts("describe", DescribeDoc)
     val deleteOpt = parser.accepts("delete", DeleteDoc)
-    val newConsumerOpt = parser.accepts("new-consumer", NewConsumerDoc)
     val timeoutMsOpt = parser.accepts("timeout", TimeoutMsDoc)
                              .withRequiredArg
-                             .describedAs("timeout (ms)")
+                             .describedAs("maximum time(ms) to wait till group stabilizes")
                              .ofType(classOf[Long])
                              .defaultsTo(5000)
     val commandConfigOpt = parser.accepts("command-config", CommandConfigDoc)
@@ -900,7 +899,7 @@ object ConsumerGroupCommand extends Logging {
     val exportOpt = parser.accepts("export", ExportDoc)
     val resetToOffsetOpt = parser.accepts("to-offset", ResetToOffsetDoc)
                            .withRequiredArg()
-                           .describedAs("offset")
+                           .describedAs("offset to reset to ")
                            .ofType(classOf[Long])
     val resetFromFileOpt = parser.accepts("from-file", ResetFromFileDoc)
                                  .withRequiredArg()
@@ -908,18 +907,18 @@ object ConsumerGroupCommand extends Logging {
                                  .ofType(classOf[String])
     val resetToDatetimeOpt = parser.accepts("to-datetime", ResetToDatetimeDoc)
                                    .withRequiredArg()
-                                   .describedAs("datetime")
+                                   .describedAs("datetime to reset from")
                                    .ofType(classOf[String])
     val resetByDurationOpt = parser.accepts("by-duration", ResetByDurationDoc)
                                    .withRequiredArg()
-                                   .describedAs("duration")
+                                   .describedAs("duration by which to reset from current timestamp")
                                    .ofType(classOf[String])
     val resetToEarliestOpt = parser.accepts("to-earliest", ResetToEarliestDoc)
     val resetToLatestOpt = parser.accepts("to-latest", ResetToLatestDoc)
     val resetToCurrentOpt = parser.accepts("to-current", ResetToCurrentDoc)
     val resetShiftByOpt = parser.accepts("shift-by", ResetShiftByDoc)
                              .withRequiredArg()
-                             .describedAs("number-of-offsets")
+                             .describedAs("number-of-offsets to reset from")
                              .ofType(classOf[Long])
     val membersOpt = parser.accepts("members", MembersDoc)
                            .availableIf(describeOpt)
@@ -934,9 +933,17 @@ object ConsumerGroupCommand extends Logging {
                          .availableIf(describeOpt)
                          .availableUnless(zkConnectOpt)
     parser.mutuallyExclusive(membersOpt, offsetsOpt, stateOpt)
+    parser.accepts("help", "Print usage information.").forHelp
+    
+    var commandDef = "List all consumer groups, describe a consumer group, delete consumer group info, or reset consumer group offsets."
+    if (args.length == 0)
+      CommandLineUtils.printUsageAndDie(parser, commandDef)
+      
+    val options = CommandLineUtils.tryParse(parser, args)
 
-    val options = parser.parse(args : _*)
-
+    if (options.has("help"))
+      CommandLineUtils.printUsageAndDie(parser, commandDef)
+  
     val useOldConsumer = options.has(zkConnectOpt)
     val describeOptPresent = options.has(describeOpt)
 

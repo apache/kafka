@@ -40,6 +40,7 @@ object ProducerPerformance extends Logging {
 
   def main(args: Array[String]) {
     val config = new ProducerPerfConfig(args)
+
     if (!config.isFixedSize)
       logger.info("WARN: Throughput will be slower due to changing message size per request")
 
@@ -70,33 +71,39 @@ object ProducerPerformance extends Logging {
   }
 
   class ProducerPerfConfig(args: Array[String]) extends PerfConfig(args) {
-    val brokerListOpt = parser.accepts("broker-list", "REQUIRED: broker info the list of broker host and port for bootstrap.")
+    val brokerListOpt = parser.accepts("broker-list", "The list of broker host and port for bootstrap.")
       .withRequiredArg
-      .describedAs("hostname:port,..,hostname:port")
+      .describedAs("server(s) to connect to (e.g: hostname:port,..,hostname:port)")
       .ofType(classOf[String])
+      .required
     val producerConfigOpt = parser.accepts("producer.config", "Producer config properties file.")
       .withRequiredArg
-      .describedAs("config file")
+      .describedAs("producer config file")
       .ofType(classOf[String])
-    val topicsOpt = parser.accepts("topics", "REQUIRED: The comma separated list of topics to produce to")
+    val topicsOpt = parser.accepts("topics", "The comma separated list of topics to produce to.")
       .withRequiredArg
-      .describedAs("topic1,topic2..")
+      .describedAs("list of topics to produce to (e.g: topic1,topic2..)")
       .ofType(classOf[String])
-    val producerRequestTimeoutMsOpt = parser.accepts("request-timeout-ms", "The producer request timeout in ms")
+      .required
+    val producerRequestTimeoutMsOpt = parser.accepts("request-timeout-ms", "The producer request timeout in milliseconds.")
       .withRequiredArg()
+      .describedAs("producer request timeout(in ms)")
       .ofType(classOf[java.lang.Integer])
       .defaultsTo(3000)
-    val producerNumRetriesOpt = parser.accepts("producer-num-retries", "The producer retries number")
+    val producerNumRetriesOpt = parser.accepts("producer-num-retries", "The producer retries number.")
       .withRequiredArg()
+      .describedAs("number of producer retries")
       .ofType(classOf[java.lang.Integer])
       .defaultsTo(3)
     val producerRetryBackOffMsOpt = parser.accepts("producer-retry-backoff-ms", "The producer retry backoff time in milliseconds")
       .withRequiredArg()
+      .describedAs("producer retry backoff time(in ms)")
       .ofType(classOf[java.lang.Integer])
       .defaultsTo(100)
     val producerRequestRequiredAcksOpt = parser.accepts("request-num-acks", "Number of acks required for producer request " +
-      "to complete")
+      "to complete.")
       .withRequiredArg()
+      .describedAs("number of acks")
       .ofType(classOf[java.lang.Integer])
       .defaultsTo(-1)
     val varyMessageSizeOpt = parser.accepts("vary-message-size", "If set, message size will vary up to the given maximum.")
@@ -112,26 +119,26 @@ object ProducerPerformance extends Logging {
       .withRequiredArg()
       .describedAs("initial message id")
       .ofType(classOf[java.lang.Integer])
-    val messageSendGapMsOpt = parser.accepts("message-send-gap-ms", "If set, the send thread will wait for specified time between two sends")
+    val messageSendGapMsOpt = parser.accepts("message-send-gap-ms", "If set, the send thread will wait for specified time in milliseconds between two sends")
       .withRequiredArg()
-      .describedAs("message send time gap")
+      .describedAs("message send time gap(in ms)")
       .ofType(classOf[java.lang.Integer])
       .defaultsTo(0)
-    val csvMetricsReporterEnabledOpt = parser.accepts("csv-reporter-enabled", "If set, the CSV metrics reporter will be enabled")
+    val csvMetricsReporterEnabledOpt = parser.accepts("csv-reporter-enabled", "If set, the CSV metrics reporter will be enabled.")
     val metricsDirectoryOpt = parser.accepts("metrics-dir", "If csv-reporter-enable is set, and this parameter is" +
-      "set, the csv metrics will be outputted here")
+      "set, the csv metrics will be outputted here.")
       .withRequiredArg
       .describedAs("metrics directory")
       .ofType(classOf[java.lang.String])
     val useNewProducerOpt = parser.accepts("new-producer", "Use the new producer implementation.")
     val messageSizeOpt = parser.accepts("message-size", "The size of each message.")
       .withRequiredArg
-      .describedAs("size")
+      .describedAs("message size")
       .ofType(classOf[java.lang.Integer])
       .defaultsTo(100)
     val batchSizeOpt = parser.accepts("batch-size", "Number of messages to write in a single batch.")
       .withRequiredArg
-      .describedAs("size")
+      .describedAs("number of messages in a batch")
       .ofType(classOf[java.lang.Integer])
       .defaultsTo(200)
     val compressionCodecOpt = parser.accepts("compression-codec", "If set, messages are sent compressed")
@@ -140,9 +147,15 @@ object ProducerPerformance extends Logging {
       .ofType(classOf[java.lang.Integer])
       .defaultsTo(0)
 
-    val options = parser.parse(args: _*)
-    CommandLineUtils.checkRequiredArgs(parser, options, topicsOpt, brokerListOpt, numMessagesOpt)
-
+    var commandDef: String = "Verify performance of producers."
+    if(args.length == 0)
+      CommandLineUtils.printUsageAndDie(parser, commandDef)
+      
+    val options = CommandLineUtils.tryParse(parser, args)
+    
+    if(options.has("help"))
+        CommandLineUtils.printUsageAndDie(parser, commandDef)
+    
     val topicsStr = options.valueOf(topicsOpt)
     val topics = topicsStr.split(",")
     val numMessages = options.valueOf(numMessagesOpt).longValue

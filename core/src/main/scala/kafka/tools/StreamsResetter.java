@@ -16,7 +16,6 @@
  */
 package kafka.tools;
 
-import joptsimple.OptionException;
 import joptsimple.OptionParser;
 import joptsimple.OptionSet;
 import joptsimple.OptionSpec;
@@ -168,23 +167,23 @@ public class StreamsResetter {
         applicationIdOption = optionParser.accepts("application-id", "The Kafka Streams application ID (application.id).")
             .withRequiredArg()
             .ofType(String.class)
-            .describedAs("id")
+            .describedAs("application id for Kafka streams")
             .required();
         bootstrapServerOption = optionParser.accepts("bootstrap-servers", "Comma-separated list of broker urls with format: HOST1:PORT1,HOST2:PORT2")
             .withRequiredArg()
             .ofType(String.class)
             .defaultsTo("localhost:9092")
-            .describedAs("urls");
+            .describedAs("server(s) to connect to");
         inputTopicsOption = optionParser.accepts("input-topics", "Comma-separated list of user input topics. For these topics, the tool will reset the offset to the earliest available offset.")
             .withRequiredArg()
             .ofType(String.class)
             .withValuesSeparatedBy(',')
-            .describedAs("list");
+            .describedAs("list of user input topics");
         intermediateTopicsOption = optionParser.accepts("intermediate-topics", "Comma-separated list of intermediate user topics (topics used in the through() method). For these topics, the tool will skip to the end.")
             .withRequiredArg()
             .ofType(String.class)
             .withValuesSeparatedBy(',')
-            .describedAs("list");
+            .describedAs("list of intermediate user topics");
         toOffsetOption = optionParser.accepts("to-offset", "Reset offsets to a specific offset.")
             .withRequiredArg()
             .ofType(Long.class);
@@ -206,18 +205,20 @@ public class StreamsResetter {
         commandConfigOption = optionParser.accepts("config-file", "Property file containing configs to be passed to admin clients and embedded consumer.")
             .withRequiredArg()
             .ofType(String.class)
-            .describedAs("file name");
+            .describedAs("fconfig ile name to be passed to admin clients and embedded consumers");
         dryRunOption = optionParser.accepts("dry-run", "Display the actions that would be performed without executing the reset commands.");
+        optionParser.accepts("help", "Print usage information.").forHelp();
 
         // TODO: deprecated in 1.0; can be removed eventually
         optionParser.accepts("zookeeper", "Zookeeper option is deprecated by bootstrap.servers, as the reset tool would no longer access Zookeeper directly.");
 
-        try {
-            options = optionParser.parse(args);
-        } catch (final OptionException e) {
+        if (args.length == 0)
             printHelp(optionParser);
-            throw e;
-        }
+            
+        options = CommandLineUtils.tryParse(optionParser, args);
+        
+        if (options.has("help"))
+            printHelp(optionParser);
 
         scala.collection.immutable.HashSet<OptionSpec<?>> allScenarioOptions = new scala.collection.immutable.HashSet<>();
         allScenarioOptions.$plus(toOffsetOption);
@@ -621,6 +622,7 @@ public class StreamsResetter {
                 + "reset tool!\n\n"
         );
         parser.printHelpOn(System.err);
+        Exit.exit(1);
     }
 
     public static void main(final String[] args) {

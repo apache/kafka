@@ -52,28 +52,29 @@ object ExportZkOffsets extends Logging {
 
     val zkConnectOpt = parser.accepts("zkconnect", "ZooKeeper connect string.")
                             .withRequiredArg()
+                            .describedAs("url(s) for the zookeeper connection")
                             .defaultsTo("localhost:2181")
                             .ofType(classOf[String])
-    val groupOpt = parser.accepts("group", "Consumer group.")
+    val groupOpt = parser.accepts("group", "Consumer group name. If not specified, all groups will be implied.")
                             .withRequiredArg()
+                            .describedAs("consumer group name")
                             .ofType(classOf[String])
-    val outFileOpt = parser.accepts("output-file", "Output file")
+    val outFileOpt = parser.accepts("output-file", "Output file name to print the offset information of broker partitions.")
                             .withRequiredArg()
+                            .describedAs("file name for exporting offset information")
                             .ofType(classOf[String])
-    parser.accepts("help", "Print this message.")
-
+                            .required
+    parser.accepts("help", "Print usage information.").forHelp
+    
+    var commandDef: String = "Export consumer offsets to an output file."
     if(args.length == 0)
-      CommandLineUtils.printUsageAndDie(parser, "Export consumer offsets to an output file.")
+      CommandLineUtils.printUsageAndDie(parser, commandDef)
 
-    val options = parser.parse(args : _*)
-
-    if (options.has("help")) {
-       parser.printHelpOn(System.out)
-       Exit.exit(0)
-    }
-
-    CommandLineUtils.checkRequiredArgs(parser, options, zkConnectOpt, outFileOpt)
-
+    val options = CommandLineUtils.tryParse(parser, args)
+    
+    if (options.has("help"))
+      CommandLineUtils.printUsageAndDie(parser, commandDef)
+    
     val zkConnect  = options.valueOf(zkConnectOpt)
     val groups     = options.valuesOf(groupOpt)
     val outfile    = options.valueOf(outFileOpt)
@@ -83,39 +84,39 @@ object ExportZkOffsets extends Logging {
         new OutputStreamWriter(new FileOutputStream(outfile), StandardCharsets.UTF_8)
 
     try {
-      zkUtils = ZkUtils(zkConnect,
-                        30000,
-                        30000,
-                        JaasUtils.isZkSecurityEnabled())
+        zkUtils = ZkUtils(zkConnect,
+                          30000,
+                          30000,
+                          JaasUtils.isZkSecurityEnabled())
 
-      var consumerGroups: Seq[String] = null
+        var consumerGroups: Seq[String] = null
 
-      if (groups.size == 0) {
-        consumerGroups = zkUtils.getChildren(ZkUtils.ConsumersPath).toList
-      }
-      else {
-        consumerGroups = groups.asScala
-      }
+        if (groups.size == 0) {
+          consumerGroups = zkUtils.getChildren(ZkUtils.ConsumersPath).toList
+        }
+        else {
+          consumerGroups = groups.asScala
+        }
 
-      for (consumerGrp <- consumerGroups) {
-        val topicsList = getTopicsList(zkUtils, consumerGrp)
+        for (consumerGrp <- consumerGroups) {
+          val topicsList = getTopicsList(zkUtils, consumerGrp)
 
-        for (topic <- topicsList) {
-          val bidPidList = getBrokeridPartition(zkUtils, consumerGrp, topic)
+          for (topic <- topicsList) {
+            val bidPidList = getBrokeridPartition(zkUtils, consumerGrp, topic)
 
-          for (bidPid <- bidPidList) {
-            val zkGrpTpDir = new ZKGroupTopicDirs(consumerGrp,topic)
-            val offsetPath = zkGrpTpDir.consumerOffsetDir + "/" + bidPid
-            zkUtils.readDataMaybeNull(offsetPath)._1 match {
-              case Some(offsetVal) =>
-                fileWriter.write(offsetPath + ":" + offsetVal + "\n")
-                debug(offsetPath + " => " + offsetVal)
-              case None =>
-                error("Could not retrieve offset value from " + offsetPath)
+            for (bidPid <- bidPidList) {
+              val zkGrpTpDir = new ZKGroupTopicDirs(consumerGrp,topic)
+              val offsetPath = zkGrpTpDir.consumerOffsetDir + "/" + bidPid
+              zkUtils.readDataMaybeNull(offsetPath)._1 match {
+                case Some(offsetVal) =>
+                  fileWriter.write(offsetPath + ":" + offsetVal + "\n")
+                  debug(offsetPath + " => " + offsetVal)
+                case None =>
+                  error("Could not retrieve offset value from " + offsetPath)
+              }
             }
           }
         }
-      }
     }
     finally {
       fileWriter.flush()

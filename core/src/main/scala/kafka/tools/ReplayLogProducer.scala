@@ -31,7 +31,8 @@ object ReplayLogProducer extends Logging {
   private val GroupId: String = "replay-log-producer"
 
   def main(args: Array[String]) {
-    val config = new Config(args)
+    var config: Config = null
+    config = new Config(args)
 
     // if there is no group specified then avoid polluting zookeeper with persistent group data, this is a hack
     ZkUtils.maybeDeletePath(config.zkConnect, "/consumers/" + GroupId)
@@ -62,50 +63,59 @@ object ReplayLogProducer extends Logging {
 
   class Config(args: Array[String]) {
     val parser = new OptionParser(false)
-    val zkConnectOpt = parser.accepts("zookeeper", "REQUIRED: The connection string for the zookeeper connection in the form host:port. " +
+    val zkConnectOpt = parser.accepts("zookeeper", "The connection string for the zookeeper connection in the form host:port. " +
       "Multiple URLS can be given to allow fail-over.")
       .withRequiredArg
-      .describedAs("zookeeper url")
+      .describedAs("url(s) for the zookeeper connection")
       .ofType(classOf[String])
-      .defaultsTo("127.0.0.1:2181")
-    val brokerListOpt = parser.accepts("broker-list", "REQUIRED: the broker list must be specified.")
+      .defaultsTo("localhost:2181")
+    val brokerListOpt = parser.accepts("broker-list", "The broker list must be specified.")
       .withRequiredArg
-      .describedAs("hostname:port")
+      .describedAs("server(s) to connect to(e.g: hostname:port)")
       .ofType(classOf[String])
-    val inputTopicOpt = parser.accepts("inputtopic", "REQUIRED: The topic to consume from.")
+      .required
+    val inputTopicOpt = parser.accepts("inputtopic", "The topic to consume from.")
       .withRequiredArg
-      .describedAs("input-topic")
+      .describedAs("topic to consume from")
       .ofType(classOf[String])
-    val outputTopicOpt = parser.accepts("outputtopic", "REQUIRED: The topic to produce to")
+      .required
+    val outputTopicOpt = parser.accepts("outputtopic", "The topic to produce to.")
       .withRequiredArg
-      .describedAs("output-topic")
+      .describedAs("topic to produce to")
       .ofType(classOf[String])
+      .required
     val numMessagesOpt = parser.accepts("messages", "The number of messages to send.")
       .withRequiredArg
-      .describedAs("count")
+      .describedAs("number of messages to send")
       .ofType(classOf[java.lang.Integer])
       .defaultsTo(-1)
     val numThreadsOpt = parser.accepts("threads", "Number of sending threads.")
       .withRequiredArg
-      .describedAs("threads")
+      .describedAs("number of threads")
       .ofType(classOf[java.lang.Integer])
       .defaultsTo(1)
     val reportingIntervalOpt = parser.accepts("reporting-interval", "Interval at which to print progress info.")
       .withRequiredArg
-      .describedAs("size")
+      .describedAs("reporting interval(in ms) to print progress info")
       .ofType(classOf[java.lang.Integer])
       .defaultsTo(5000)
     val propertyOpt = parser.accepts("property", "A mechanism to pass properties in the form key=value to the producer. " +
-      "This allows the user to override producer properties that are not exposed by the existing command line arguments")
+      "This allows the user to override producer properties that are not exposed by the existing command line arguments.")
       .withRequiredArg
-      .describedAs("producer properties")
+      .describedAs("user defined properties to pass to producer")
       .ofType(classOf[String])
-    val syncOpt = parser.accepts("sync", "If set message send requests to the brokers are synchronously, one at a time as they arrive.")
+    val syncOpt = parser.accepts("sync", "If set, message requests to the brokers are send synchronously, one at a time as they arrive.")
+    val helpOpt = parser.accepts("help", "Print usage information.").forHelp
+  
+    var commandDef: String = "Consume from one topic and replay those messages and produce to another topic."
+    if(args.length == 0)
+      CommandLineUtils.printUsageAndDie(parser, commandDef)
 
-    val options = parser.parse(args : _*)
-    
-    CommandLineUtils.checkRequiredArgs(parser, options, brokerListOpt, inputTopicOpt)
+    val options = CommandLineUtils.tryParse(parser, args)
 
+    if (options.has("help"))
+      CommandLineUtils.printUsageAndDie(parser, commandDef)
+      
     val zkConnect = options.valueOf(zkConnectOpt)
     val brokerList = options.valueOf(brokerListOpt)
     ToolsUtils.validatePortOrDie(parser,brokerList)

@@ -61,47 +61,48 @@ object StateChangeLogMerger extends Logging {
 
     // Parse input arguments.
     val parser = new OptionParser(false)
-    val filesOpt = parser.accepts("logs", "Comma separated list of state change logs or a regex for the log file names")
+    val filesOpt = parser.accepts("logs", "Comma separated list of state change logs or a regex for the log file names.")
                               .withRequiredArg
-                              .describedAs("file1,file2,...")
+                              .describedAs("list or regex of state change logs(e.g: file1,file2,...)")
                               .ofType(classOf[String])
-    val regexOpt = parser.accepts("logs-regex", "Regex to match the state change log files to be merged")
+    val regexOpt = parser.accepts("logs-regex", "Regex to match the state change log files to be merged.")
                               .withRequiredArg
-                              .describedAs("for example: /tmp/state-change.log*")
+                              .describedAs("regex to match state change logs to be merged(e.g: /tmp/state-change.log*)")
                               .ofType(classOf[String])
-    val topicOpt = parser.accepts("topic", "The topic whose state change logs should be merged")
+    val topicOpt = parser.accepts("topic", "The topic whose state change logs should be merged.")
                               .withRequiredArg
-                              .describedAs("topic")
+                              .describedAs("topic name")
                               .ofType(classOf[String])
-    val partitionsOpt = parser.accepts("partitions", "Comma separated list of partition ids whose state change logs should be merged")
+    val partitionsOpt = parser.accepts("partitions", "Comma separated list of partition ids whose state change logs should be merged.")
                               .withRequiredArg
-                              .describedAs("0,1,2,...")
+                              .describedAs("list of partition ids(e.g: 0,1,2,...)")
                               .ofType(classOf[String])
-    val startTimeOpt = parser.accepts("start-time", "The earliest timestamp of state change log entries to be merged")
+    val startTimeOpt = parser.accepts("start-time", "The earliest timestamp of state change log entries to be merged.")
                               .withRequiredArg
                               .describedAs("start timestamp in the format " + dateFormat)
                               .ofType(classOf[String])
                               .defaultsTo("0000-00-00 00:00:00,000")
-    val endTimeOpt = parser.accepts("end-time", "The latest timestamp of state change log entries to be merged")
+    val endTimeOpt = parser.accepts("end-time", "The latest timestamp of state change log entries to be merged.")
                               .withRequiredArg
                               .describedAs("end timestamp in the format " + dateFormat)
                               .ofType(classOf[String])
                               .defaultsTo("9999-12-31 23:59:59,999")
-                              
+    parser.accepts("help", "Print usage information.").forHelp()
+
+    var commandDef: String = "A tool for merging the log files from several brokers to reconnstruct a unified history of what happened." 
     if(args.length == 0)
-      CommandLineUtils.printUsageAndDie(parser, "A tool for merging the log files from several brokers to reconnstruct a unified history of what happened.")
+      CommandLineUtils.printUsageAndDie(parser, commandDef)
 
-
-    val options = parser.parse(args : _*)
+    val options = CommandLineUtils.tryParse(parser, args)
+    
+    if(options.has("help"))
+      CommandLineUtils.printUsageAndDie(parser, commandDef)
+      
     if ((!options.has(filesOpt) && !options.has(regexOpt)) || (options.has(filesOpt) && options.has(regexOpt))) {
-      System.err.println("Provide arguments to exactly one of the two options \"" + filesOpt + "\" or \"" + regexOpt + "\"")
-      parser.printHelpOn(System.err)
-      Exit.exit(1)
+      CommandLineUtils.printUsageAndDie(parser, "Provide arguments to exactly one of the two options \"" + filesOpt + "\" or \"" + regexOpt + "\"")
     }
     if (options.has(partitionsOpt) && !options.has(topicOpt)) {
-      System.err.println("The option \"" + topicOpt + "\" needs to be provided an argument when specifying partition ids")
-      parser.printHelpOn(System.err)
-      Exit.exit(1)
+      CommandLineUtils.printUsageAndDie(parser, "The option \"" + topicOpt + "\" needs to be provided an argument when specifying partition ids.")
     }
 
     // Populate data structures.

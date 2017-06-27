@@ -44,47 +44,47 @@ object JmxTool extends Logging {
     val parser = new OptionParser(false)
     val objectNameOpt =
       parser.accepts("object-name", "A JMX object name to use as a query. This can contain wild cards, and this option " +
-        "can be given multiple times to specify more than one query. If no objects are specified " +
+        "can be given multiple times to specify more than one query. If no objects are specified, " +
         "all objects will be queried.")
         .withRequiredArg
-        .describedAs("name")
+        .describedAs("JMX object name to query")
         .ofType(classOf[String])
     val attributesOpt =
       parser.accepts("attributes", "The whitelist of attributes to query. This is a comma-separated list. If no " +
-        "attributes are specified all objects will be queried.")
+        "attributes are specified, all objects will be queried.")
         .withRequiredArg
-        .describedAs("name")
+        .describedAs("attributes to query")
         .ofType(classOf[String])
-    val reportingIntervalOpt = parser.accepts("reporting-interval", "Interval in MS with which to poll jmx stats.")
+    val reportingIntervalOpt = parser.accepts("reporting-interval", "Interval in milliseconds with which to poll JMX stats.")
       .withRequiredArg
-      .describedAs("ms")
+      .describedAs("polling interval(in ms)")
       .ofType(classOf[java.lang.Integer])
       .defaultsTo(2000)
-    val helpOpt = parser.accepts("help", "Print usage information.")
+    val helpOpt = parser.accepts("help", "Print usage information.").forHelp
     val dateFormatOpt = parser.accepts("date-format", "The date format to use for formatting the time field. " +
       "See java.text.SimpleDateFormat for options.")
       .withRequiredArg
-      .describedAs("format")
+      .describedAs("date format to use for formatting time field")
       .ofType(classOf[String])
     val jmxServiceUrlOpt =
       parser.accepts("jmx-url", "The url to connect to poll JMX data. See Oracle javadoc for JMXServiceURL for details.")
         .withRequiredArg
-        .describedAs("service-url")
+        .describedAs("service url for polling JMX data")
         .ofType(classOf[String])
         .defaultsTo("service:jmx:rmi:///jndi/rmi://:9999/jmxrmi")
     val waitOpt = parser.accepts("wait", "Wait for requested JMX objects to become available before starting output. " +
       "Only supported when the list of objects is non-empty and contains no object name patterns.")
 
+    var commandDef: String = "Dump JMX values to standard output."
+    
     if(args.length == 0)
-      CommandLineUtils.printUsageAndDie(parser, "Dump JMX values to standard output.")
-
-    val options = parser.parse(args : _*)
-
-    if(options.has(helpOpt)) {
-      parser.printHelpOn(System.out)
-      Exit.exit(0)
-    }
-
+      CommandLineUtils.printUsageAndDie(parser, commandDef)
+    
+    val options = CommandLineUtils.tryParse(parser, args)
+    
+    if(options.has(helpOpt))
+      CommandLineUtils.printUsageAndDie(parser, commandDef)
+     
     val url = new JMXServiceURL(options.valueOf(jmxServiceUrlOpt))
     val interval = options.valueOf(reportingIntervalOpt).intValue
     val attributesWhitelistExists = options.has(attributesOpt)
@@ -143,7 +143,7 @@ object JmxTool extends Logging {
 
     if (wait && !foundAllObjects) {
       val missing = (queries.toSet - namesSet).mkString(", ")
-      System.err.println(s"Could not find all requested object names after $waitTimeoutMs ms. Missing $missing")
+      System.err.println(s"Could not find all requested object names after $waitTimeoutMs ms. Missing $missing.")
       System.err.println("Exiting.")
       sys.exit(1)
     }

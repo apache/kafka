@@ -66,23 +66,24 @@ object ReplicaVerificationTool extends Logging {
 
   def main(args: Array[String]): Unit = {
     val parser = new OptionParser(false)
-    val brokerListOpt = parser.accepts("broker-list", "REQUIRED: The list of hostname and port of the server to connect to.")
+    val brokerListOpt = parser.accepts("broker-list", "The list of hostname and port of the server to connect to.")
                          .withRequiredArg
-                         .describedAs("hostname:port,...,hostname:port")
+                         .describedAs("server(s) to connect to(e.g. hostname:port,...,hostname:port)")
                          .ofType(classOf[String])
+                         .required
     val fetchSizeOpt = parser.accepts("fetch-size", "The fetch size of each request.")
                          .withRequiredArg
-                         .describedAs("bytes")
+                         .describedAs("fetch size of each request(in bytes)")
                          .ofType(classOf[java.lang.Integer])
                          .defaultsTo(ConsumerConfig.FetchSize)
-    val maxWaitMsOpt = parser.accepts("max-wait-ms", "The max amount of time each fetch request waits.")
+    val maxWaitMsOpt = parser.accepts("max-wait-ms", "The max amount of time in milliseconds that each fetch request waits.")
                          .withRequiredArg
-                         .describedAs("ms")
+                         .describedAs("max wait time(in ms) for each fetch request")
                          .ofType(classOf[java.lang.Integer])
                          .defaultsTo(1000)
     val topicWhiteListOpt = parser.accepts("topic-white-list", "White list of topics to verify replica consistency. Defaults to all topics.")
                          .withRequiredArg
-                         .describedAs("Java regex (String)")
+                         .describedAs("java regex (String) for list of topics")
                          .ofType(classOf[String])
                          .defaultsTo(".*")
     val initialOffsetTimeOpt = parser.accepts("time", "Timestamp for getting the initial offsets.")
@@ -90,18 +91,23 @@ object ReplicaVerificationTool extends Logging {
                            .describedAs("timestamp/-1(latest)/-2(earliest)")
                            .ofType(classOf[java.lang.Long])
                            .defaultsTo(-1L)
-    val reportIntervalOpt = parser.accepts("report-interval-ms", "The reporting interval.")
+    val reportIntervalOpt = parser.accepts("report-interval-ms", "The reporting interval in milliseconds.")
                          .withRequiredArg
-                         .describedAs("ms")
+                         .describedAs("reporting interval(in ms)")
                          .ofType(classOf[java.lang.Long])
                          .defaultsTo(30 * 1000L)
+    val helpOpt = parser.accepts("help", "Print usage information.").forHelp
+    
+    var commandDef: String = "Validate that all replicas for a set of topics have the same data."
+    if(args.length == 0)
+      CommandLineUtils.printUsageAndDie(parser, commandDef)
 
-   if(args.length == 0)
-      CommandLineUtils.printUsageAndDie(parser, "Validate that all replicas for a set of topics have the same data.")
-
-    val options = parser.parse(args : _*)
-    CommandLineUtils.checkRequiredArgs(parser, options, brokerListOpt)
-
+    val options = CommandLineUtils.tryParse(parser, args)
+    
+    if (options.has("help")) {
+       CommandLineUtils.printUsageAndDie(parser, commandDef)
+    }
+    
     val regex = options.valueOf(topicWhiteListOpt)
     val topicWhiteListFiler = new Whitelist(regex)
 
@@ -125,10 +131,8 @@ object ReplicaVerificationTool extends Logging {
     val topicsMetadataResponse = ClientUtils.fetchTopicMetadata(Set[String](), metadataTargetBrokers, clientId, maxWaitMs)
     val brokerMap = topicsMetadataResponse.brokers.map(b => (b.id, b)).toMap
     val filteredTopicMetadata = topicsMetadataResponse.topicsMetadata.filter(
-        topicMetadata => if (topicWhiteListFiler.isTopicAllowed(topicMetadata.topic, excludeInternalTopics = false))
-          true
-        else
-          false
+        topicMetadata => topicWhiteListFiler.isTopicAllowed(topicMetadata.topic, excludeInternalTopics = false)
+  
     )
 
     if (filteredTopicMetadata.isEmpty) {
@@ -161,7 +165,6 @@ object ReplicaVerificationTool extends Logging {
        topicAndPartition
      })
     debug("Leaders per broker: " + leadersPerBroker)
-
     val replicaBuffer = new ReplicaBuffer(expectedReplicasPerTopicAndPartition,
                                           leadersPerBroker,
                                           topicAndPartitionsPerBroker.size,
@@ -192,7 +195,6 @@ object ReplicaVerificationTool extends Logging {
     })
     fetcherThreads.foreach(_.start())
     println(ReplicaVerificationTool.getCurrentTimeString() + ": verification process is started.")
-
   }
 }
 

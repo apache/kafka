@@ -21,6 +21,7 @@ import java.io.PrintStream
 import java.util.Properties
 
 import kafka.utils.CommandLineUtils
+import kafka.utils.Exit;
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.clients.CommonClientConfigs
 import joptsimple._
@@ -60,7 +61,7 @@ object BrokerApiVersionsCommand {
   }
 
   class BrokerVersionCommandOptions(args: Array[String]) {
-    val BootstrapServerDoc = "REQUIRED: The server to connect to."
+    val BootstrapServerDoc = "The server to connect to."
     val CommandConfigDoc = "A property file containing configs to be passed to Admin Client."
 
     val parser = new OptionParser(false)
@@ -70,14 +71,17 @@ object BrokerApiVersionsCommand {
                                  .ofType(classOf[String])
     val bootstrapServerOpt = parser.accepts("bootstrap-server", BootstrapServerDoc)
                                    .withRequiredArg
-                                   .describedAs("server(s) to use for bootstrapping")
+                                   .describedAs("server(s) to connect to")
                                    .ofType(classOf[String])
-    val options = parser.parse(args : _*)
-    checkArgs()
+                                   .required
+    parser.accepts("help", "Print usage information.").forHelp()
 
-    def checkArgs() {
-      // check required args
-      CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServerOpt)
-    }
+    var commandDef = "Retrieve broker version information."
+    if(args.length == 0)
+      CommandLineUtils.printUsageAndDie(parser, commandDef) 
+    val options = CommandLineUtils.tryParse(parser, args)
+    
+    if (options.has("help"))
+       CommandLineUtils.printUsageAndDie(parser, commandDef)
   }
 }

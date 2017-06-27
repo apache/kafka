@@ -30,41 +30,46 @@ object GetOffsetShell {
 
   def main(args: Array[String]): Unit = {
     val parser = new OptionParser(false)
-    val brokerListOpt = parser.accepts("broker-list", "REQUIRED: The list of hostname and port of the server to connect to.")
+    val brokerListOpt = parser.accepts("broker-list", "The list of hostname and port of the server to connect to.")
                            .withRequiredArg
-                           .describedAs("hostname:port,...,hostname:port")
+                           .describedAs("server(s) to connect to. e.g: hostname:port,...,hostname:port")
                            .ofType(classOf[String])
-    val topicOpt = parser.accepts("topic", "REQUIRED: The topic to get offset from.")
+                           .required
+    val topicOpt = parser.accepts("topic", "The topic to get offset from.")
                            .withRequiredArg
-                           .describedAs("topic")
+                           .describedAs("topic name")
                            .ofType(classOf[String])
-    val partitionOpt = parser.accepts("partitions", "comma separated list of partition ids. If not specified, it will find offsets for all partitions")
+                           .required
+    val partitionOpt = parser.accepts("partitions", "Comma separated list of partition ids. If not specified, it will find offsets for all partitions.")
                            .withRequiredArg
                            .describedAs("partition ids")
                            .ofType(classOf[String])
                            .defaultsTo("")
-    val timeOpt = parser.accepts("time", "timestamp of the offsets before that")
+    val timeOpt = parser.accepts("time", "Timestamp in milliseconds. The offsets before this timestamp will be fetched.")
                            .withRequiredArg
                            .describedAs("timestamp/-1(latest)/-2(earliest)")
                            .ofType(classOf[java.lang.Long])
                            .defaultsTo(-1)
-    val nOffsetsOpt = parser.accepts("offsets", "number of offsets returned")
+    val nOffsetsOpt = parser.accepts("offsets", "Number of offsets returned.")
                            .withRequiredArg
-                           .describedAs("count")
+                           .describedAs("number of offsets returned")
                            .ofType(classOf[java.lang.Integer])
                            .defaultsTo(1)
     val maxWaitMsOpt = parser.accepts("max-wait-ms", "The max amount of time each fetch request waits.")
                            .withRequiredArg
-                           .describedAs("ms")
+                           .describedAs("max fetch request wait time (in ms)")
                            .ofType(classOf[java.lang.Integer])
                            .defaultsTo(1000)
-                           
+    parser.accepts("help", "Print usage information.").forHelp
+                      
+   var commandDef: String = "An interactive shell for getting consumer offsets."
    if(args.length == 0)
-      CommandLineUtils.printUsageAndDie(parser, "An interactive shell for getting consumer offsets.")
+      CommandLineUtils.printUsageAndDie(parser, commandDef)
 
-    val options = parser.parse(args : _*)
+    val options = CommandLineUtils.tryParse(parser, args)
 
-    CommandLineUtils.checkRequiredArgs(parser, options, brokerListOpt, topicOpt)
+    if(options.has("help"))
+        CommandLineUtils.printUsageAndDie(parser, commandDef)
 
     val clientId = "GetOffsetShell"
     val brokerList = options.valueOf(brokerListOpt)

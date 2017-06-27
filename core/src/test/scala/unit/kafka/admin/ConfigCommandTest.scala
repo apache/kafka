@@ -33,6 +33,7 @@ import scala.collection.mutable
 import scala.collection.JavaConverters._
 
 class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
+  
   @Test
   def shouldParseArgumentsForClientsEntityType() {
     testArgumentParse("clients")
@@ -407,7 +408,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
     val zkClient = EasyMock.createNiceMock(classOf[KafkaZkClient])
 
     def checkEntities(opts: Array[String], expectedFetches: Map[String, Seq[String]], expectedEntityNames: Seq[String]) {
-      val entity = ConfigCommand.parseEntity(new ConfigCommandOptions(opts :+ "--describe"))
+      val entity = ConfigCommand.parseEntity(new ConfigCommandOptions(Array("--zookeeper", zkConnect) ++ opts :+ "--describe"))
       expectedFetches.foreach {
         case (name, values) => EasyMock.expect(zkClient.getAllEntitiesWithConfig(name)).andReturn(values)
       }

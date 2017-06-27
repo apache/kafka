@@ -23,6 +23,7 @@ import scala.collection.JavaConverters._
 import java.util.concurrent.atomic.AtomicLong
 import java.nio.channels.ClosedByInterruptException
 
+import joptsimple.OptionSet
 import org.apache.kafka.clients.consumer.{ConsumerRebalanceListener, KafkaConsumer}
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import org.apache.kafka.common.utils.Utils
@@ -255,60 +256,69 @@ object ConsumerPerformance extends LazyLogging {
   }
 
   class ConsumerPerfConfig(args: Array[String]) extends PerfConfig(args) {
-    val zkConnectOpt = parser.accepts("zookeeper", "REQUIRED (only when using old consumer): The connection string for the zookeeper connection in the form host:port. " +
-      "Multiple URLS can be given to allow fail-over. This option is only used with the old consumer.")
+    val zkConnectOpt = parser.accepts("zookeeper", "The connection string for the zookeeper connection in the form host:port. " +
+      "Multiple URLS can be given to allow fail-over. This option is used only when using the old consumer implementation. ")
       .withRequiredArg
-      .describedAs("urls")
+      .describedAs("url(s) for the zookeeper connection")
       .ofType(classOf[String])
-    val bootstrapServersOpt = parser.accepts("broker-list", "REQUIRED (unless old consumer is used): A broker list to use for connecting if using the new consumer.")
+    val bootstrapServersOpt = parser.accepts("broker-list", "A broker list to use for connecting if using the new consumer. This option " +
+        "is required if the --zookeeper option is not set. If --zookeeper option is set, it means the old consumer will be used. By default, " +
+        "the new consumer implementation is set. User can also explicitely set the new consumer implementation using the --new-consumer option.")
+      .requiredUnless("zookeeper")
       .withRequiredArg()
-      .describedAs("host")
+      .describedAs("server(s) to connect to")
       .ofType(classOf[String])
-    val topicOpt = parser.accepts("topic", "REQUIRED: The topic to consume from.")
+    val topicOpt = parser.accepts("topic", "The topic to consume from.")
       .withRequiredArg
-      .describedAs("topic")
+      .describedAs("topic to consume from")
       .ofType(classOf[String])
+      .required
     val groupIdOpt = parser.accepts("group", "The group id to consume on.")
       .withRequiredArg
-      .describedAs("gid")
+      .describedAs("group id")
       .defaultsTo("perf-consumer-" + new Random().nextInt(100000))
       .ofType(classOf[String])
     val fetchSizeOpt = parser.accepts("fetch-size", "The amount of data to fetch in a single request.")
       .withRequiredArg
-      .describedAs("size")
+      .describedAs("data size (in bytes) to fetch")
       .ofType(classOf[java.lang.Integer])
       .defaultsTo(1024 * 1024)
     val resetBeginningOffsetOpt = parser.accepts("from-latest", "If the consumer does not already have an established " +
       "offset to consume from, start with the latest message present in the log rather than the earliest message.")
     val socketBufferSizeOpt = parser.accepts("socket-buffer-size", "The size of the tcp RECV size.")
       .withRequiredArg
-      .describedAs("size")
+      .describedAs("buffer size (in bytes) used for socket connections")
       .ofType(classOf[java.lang.Integer])
       .defaultsTo(2 * 1024 * 1024)
     val numThreadsOpt = parser.accepts("threads", "Number of processing threads.")
       .withRequiredArg
-      .describedAs("count")
+      .describedAs("number of processing threads")
       .ofType(classOf[java.lang.Integer])
       .defaultsTo(10)
     val numFetchersOpt = parser.accepts("num-fetch-threads", "Number of fetcher threads.")
       .withRequiredArg
-      .describedAs("count")
+      .describedAs("Number of fetcher threads")
       .ofType(classOf[java.lang.Integer])
       .defaultsTo(1)
     val newConsumerOpt = parser.accepts("new-consumer", "Use the new consumer implementation. This is the default, so " +
       "this option is deprecated and will be removed in a future release.")
     val consumerConfigOpt = parser.accepts("consumer.config", "Consumer config properties file.")
       .withRequiredArg
-      .describedAs("config file")
+      .describedAs("consumer config file")
       .ofType(classOf[String])
     val printMetricsOpt = parser.accepts("print-metrics", "Print out the metrics. This only applies to new consumer.")
     val showDetailedStatsOpt = parser.accepts("show-detailed-stats", "If set, stats are reported for each reporting " +
       "interval as configured by reporting-interval")
 
-    val options = parser.parse(args: _*)
-
-    CommandLineUtils.checkRequiredArgs(parser, options, topicOpt, numMessagesOpt)
-
+    val commandDef = "Verify performance of consumers."
+    if(args.length == 0)
+      CommandLineUtils.printUsageAndDie(parser, commandDef)
+      
+    val options: OptionSet = CommandLineUtils.tryParse(parser, args)
+    
+    if (options.has("help"))
+       CommandLineUtils.printUsageAndDie(parser, commandDef)
+    
     val useOldConsumer = options.has(zkConnectOpt)
     val printMetrics = options.has(printMetricsOpt)
 
@@ -316,6 +326,7 @@ object ConsumerPerformance extends LazyLogging {
       Utils.loadProps(options.valueOf(consumerConfigOpt))
     else
       new Properties
+    
     if (!useOldConsumer) {
       CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServersOpt)
 
@@ -348,9 +359,9 @@ object ConsumerPerformance extends LazyLogging {
       props.put("num.consumer.fetchers", options.valueOf(numFetchersOpt).toString)
     }
     val numThreads = options.valueOf(numThreadsOpt).intValue
-    val topic = options.valueOf(topicOpt)
     val numMessages = options.valueOf(numMessagesOpt).longValue
     val reportingInterval = options.valueOf(reportingIntervalOpt).intValue
+    val topic = options.valueOf(topicOpt)
     if (reportingInterval <= 0)
       throw new IllegalArgumentException("Reporting interval must be greater than 0.")
     val showDetailedStats = options.has(showDetailedStatsOpt)

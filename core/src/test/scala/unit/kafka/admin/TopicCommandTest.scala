@@ -78,7 +78,7 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
     TopicCommand.createTopic(zkClient, createOpts)
 
     // delete the NormalTopic
-    val deleteOpts = new TopicCommandOptions(Array("--topic", normalTopic))
+    val deleteOpts = new TopicCommandOptions(Array("--topic", normalTopic, "--zookeeper", zkConnect))
     val deletePath = getDeleteTopicPath(normalTopic)
     assertFalse("Delete path for topic shouldn't exist before deletion.", zkUtils.pathExists(deletePath))
     TopicCommand.deleteTopic(zkClient, deleteOpts)
@@ -91,7 +91,7 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
     TopicCommand.createTopic(zkClient, createOffsetTopicOpts)
 
     // try to delete the Topic.GROUP_METADATA_TOPIC_NAME and make sure it doesn't
-    val deleteOffsetTopicOpts = new TopicCommandOptions(Array("--topic", Topic.GROUP_METADATA_TOPIC_NAME))
+    val deleteOffsetTopicOpts = new TopicCommandOptions(Array("--topic", Topic.GROUP_METADATA_TOPIC_NAME, "--zookeeper", zkConnect))
     val deleteOffsetTopicPath = getDeleteTopicPath(Topic.GROUP_METADATA_TOPIC_NAME)
     assertFalse("Delete path for topic shouldn't exist before deletion.", zkUtils.pathExists(deleteOffsetTopicPath))
     intercept[AdminOperationException] {
@@ -107,7 +107,7 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
     TestUtils.createBrokersInZk(zkClient, brokers)
 
     // delete a topic that does not exist without --if-exists
-    val deleteOpts = new TopicCommandOptions(Array("--topic", "test"))
+    val deleteOpts = new TopicCommandOptions(Array("--topic", "test", "--zookeeper", zkConnect))
     intercept[IllegalArgumentException] {
       TopicCommand.deleteTopic(zkClient, deleteOpts)
     }
@@ -124,7 +124,7 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
     TestUtils.createBrokersInZk(zkClient, brokers)
 
     // alter a topic that does not exist without --if-exists
-    val alterOpts = new TopicCommandOptions(Array("--topic", "test", "--partitions", "1"))
+    val alterOpts = new TopicCommandOptions(Array("--topic", "test", "--partitions", "1", "--zookeeper", zkConnect))
     intercept[IllegalArgumentException] {
       TopicCommand.alterTopic(zkClient, alterOpts)
     }

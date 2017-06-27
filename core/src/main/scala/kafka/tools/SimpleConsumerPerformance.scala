@@ -36,7 +36,7 @@ object SimpleConsumerPerformance extends LazyLogging {
 
   def main(args: Array[String]) {
     logger.warn("WARNING: SimpleConsumerPerformance is deprecated and will be dropped in a future release following 0.11.0.0.")
-
+ 
     val config = new ConsumerPerfConfig(args)
     logger.info("Starting SimpleConsumer...")
 
@@ -118,38 +118,45 @@ object SimpleConsumerPerformance extends LazyLogging {
   }
 
   class ConsumerPerfConfig(args: Array[String]) extends PerfConfig(args) {
-    val urlOpt = parser.accepts("server", "REQUIRED: The hostname of the server to connect to.")
+    val urlOpt = parser.accepts("server", "The hostname of the server to connect to.")
                            .withRequiredArg
                            .describedAs("kafka://hostname:port")
                            .ofType(classOf[String])
-    val topicOpt = parser.accepts("topic", "REQUIRED: The topic to consume from.")
+                           .required
+    val topicOpt = parser.accepts("topic", "The topic to consume from.")
       .withRequiredArg
       .describedAs("topic")
       .ofType(classOf[String])
+      .required
     val resetBeginningOffsetOpt = parser.accepts("from-latest", "If the consumer does not already have an established " +
       "offset to consume from, start with the latest message present in the log rather than the earliest message.")
     val partitionOpt = parser.accepts("partition", "The topic partition to consume from.")
                            .withRequiredArg
-                           .describedAs("partition")
+                           .describedAs("topic partition to consume from")
                            .ofType(classOf[java.lang.Integer])
                            .defaultsTo(0)
-    val fetchSizeOpt = parser.accepts("fetch-size", "REQUIRED: The fetch size to use for consumption.")
+    val fetchSizeOpt = parser.accepts("fetch-size", "The fetch size to use for consumption.")
                            .withRequiredArg
-                           .describedAs("bytes")
+                           .describedAs("fetch size(in bytes)")
                            .ofType(classOf[java.lang.Integer])
                            .defaultsTo(1024*1024)
     val clientIdOpt = parser.accepts("clientId", "The ID of this client.")
                            .withRequiredArg
-                           .describedAs("clientId")
+                           .describedAs("client id")
                            .ofType(classOf[String])
                            .defaultsTo("SimpleConsumerPerformanceClient")
     val showDetailedStatsOpt = parser.accepts("show-detailed-stats", "If set, stats are reported for each reporting " +
       "interval as configured by reporting-interval")
 
-    val options = parser.parse(args : _*)
+    var commandDef: String = "Run performance test for Simple Consumer."
+    if (args.length == 0)
+      CommandLineUtils.printUsageAndDie(parser, commandDef)
+      
+    val options = CommandLineUtils.tryParse(parser, args)
 
-    CommandLineUtils.checkRequiredArgs(parser, options, topicOpt, urlOpt, numMessagesOpt)
-
+    if (options.has("help"))
+      CommandLineUtils.printUsageAndDie(parser, commandDef)
+    
     val url = new URI(options.valueOf(urlOpt))
     val fetchSize = options.valueOf(fetchSizeOpt).intValue
     val fromLatest = options.has(resetBeginningOffsetOpt)

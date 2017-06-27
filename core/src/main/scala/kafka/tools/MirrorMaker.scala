@@ -92,8 +92,9 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
       val consumerConfigOpt = parser.accepts("consumer.config",
         "Embedded consumer config for consuming from the source cluster.")
         .withRequiredArg()
-        .describedAs("config file")
+        .describedAs("consumer config file")
         .ofType(classOf[String])
+        .required
 
       val useNewConsumerOpt = parser.accepts("new.consumer",
         "Use new consumer in mirror maker (this is the default).")
@@ -101,9 +102,10 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
       val producerConfigOpt = parser.accepts("producer.config",
         "Embedded producer config.")
         .withRequiredArg()
-        .describedAs("config file")
+        .describedAs("producer config file")
         .ofType(classOf[String])
-
+        .required
+        
       val numStreamsOpt = parser.accepts("num.streams",
         "Number of consumption streams.")
         .withRequiredArg()
@@ -124,57 +126,54 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
         .ofType(classOf[String])
 
       val offsetCommitIntervalMsOpt = parser.accepts("offset.commit.interval.ms",
-        "Offset commit interval in ms.")
+        "Offset commit interval in milliseconds.")
         .withRequiredArg()
-        .describedAs("offset commit interval in millisecond")
+        .describedAs("offset commit interval(in ms)")
         .ofType(classOf[java.lang.Integer])
         .defaultsTo(60000)
 
       val consumerRebalanceListenerOpt = parser.accepts("consumer.rebalance.listener",
         "The consumer rebalance listener to use for mirror maker consumer.")
         .withRequiredArg()
-        .describedAs("A custom rebalance listener of type ConsumerRebalanceListener")
+        .describedAs("a custom rebalance listener of type ConsumerRebalanceListener")
         .ofType(classOf[String])
 
       val rebalanceListenerArgsOpt = parser.accepts("rebalance.listener.args",
         "Arguments used by custom rebalance listener for mirror maker consumer.")
         .withRequiredArg()
-        .describedAs("Arguments passed to custom rebalance listener constructor as a string.")
+        .describedAs("arguments passed to custom rebalance listener constructor as a string.")
         .ofType(classOf[String])
 
       val messageHandlerOpt = parser.accepts("message.handler",
         "Message handler which will process every record in-between consumer and producer.")
         .withRequiredArg()
-        .describedAs("A custom message handler of type MirrorMakerMessageHandler")
+        .describedAs("custom message handler of type MirrorMakerMessageHandler")
         .ofType(classOf[String])
 
       val messageHandlerArgsOpt = parser.accepts("message.handler.args",
         "Arguments used by custom message handler for mirror maker.")
         .withRequiredArg()
-        .describedAs("Arguments passed to message handler constructor.")
+        .describedAs("arguments passed to message handler constructor.")
         .ofType(classOf[String])
 
       val abortOnSendFailureOpt = parser.accepts("abort.on.send.failure",
         "Configure the mirror maker to exit on a failed send.")
         .withRequiredArg()
-        .describedAs("Stop the entire mirror maker when a send failure occurs")
+        .describedAs("stop the entire mirror maker when a send failure occurs")
         .ofType(classOf[String])
         .defaultsTo("true")
 
-      val helpOpt = parser.accepts("help", "Print this message.")
+      val helpOpt = parser.accepts("help", "Print usage information.").forHelp
 
+      var commandDef: String = "Continuously copy data between two Kafka clusters."
       if (args.length == 0)
-        CommandLineUtils.printUsageAndDie(parser, "Continuously copy data between two Kafka clusters.")
+        CommandLineUtils.printUsageAndDie(parser, commandDef)
 
-
-      val options = parser.parse(args: _*)
+      val options = CommandLineUtils.tryParse(parser, args)
 
       if (options.has(helpOpt)) {
-        parser.printHelpOn(System.out)
-        sys.exit(0)
+       CommandLineUtils.printUsageAndDie(parser, commandDef)
       }
-
-      CommandLineUtils.checkRequiredArgs(parser, options, consumerConfigOpt, producerConfigOpt)
 
       val consumerProps = Utils.loadProps(options.valueOf(consumerConfigOpt))
       val useOldConsumer = consumerProps.containsKey(ZKConfig.ZkConnectProp)

@@ -22,7 +22,7 @@ import java.util.Properties
 
 import kafka.admin.AdminClient.DeleteRecordsResult
 import kafka.common.AdminCommandFailedException
-import kafka.utils.{CoreUtils, Json, CommandLineUtils}
+import kafka.utils.{CoreUtils, Exit, Json, CommandLineUtils}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.clients.CommonClientConfigs
@@ -51,7 +51,8 @@ object DeleteRecordsCommand {
   }
 
   def execute(args: Array[String], out: PrintStream): Unit = {
-    val opts = new DeleteRecordsCommandOptions(args)
+    var opts: DeleteRecordsCommandOptions = null
+    opts = new DeleteRecordsCommandOptions(args)
     val adminClient = createAdminClient(opts)
     val offsetJsonFile =  opts.options.valueOf(opts.offsetJsonFileOpt)
     val offsetJsonString = Utils.readFileAsString(offsetJsonFile)
@@ -60,7 +61,6 @@ object DeleteRecordsCommand {
     val duplicatePartitions = CoreUtils.duplicates(offsetSeq.map { case (tp, _) => tp })
     if (duplicatePartitions.nonEmpty)
       throw new AdminCommandFailedException("Offset json file contains duplicate topic partitions: %s".format(duplicatePartitions.mkString(",")))
-
     out.println("Executing records delete operation")
     val deleteRecordsResult: Map[TopicPartition, DeleteRecordsResult] = adminClient.deleteRecordsBefore(offsetSeq.toMap).get()
     out.println("Records delete operation completed:")
@@ -84,26 +84,34 @@ object DeleteRecordsCommand {
   }
 
   class DeleteRecordsCommandOptions(args: Array[String]) {
-    val BootstrapServerDoc = "REQUIRED: The server to connect to."
-    val offsetJsonFileDoc = "REQUIRED: The JSON file with offset per partition. The format to use is:\n" +
+    val BootstrapServerDoc = "The server to connect to."
+    val offsetJsonFileDoc = "The JSON file with offset per partition. The format to use is:\n" +
                                  "{\"partitions\":\n  [{\"topic\": \"foo\", \"partition\": 1, \"offset\": 1}],\n \"version\":1\n}"
     val CommandConfigDoc = "A property file containing configs to be passed to Admin Client."
 
     val parser = new OptionParser(false)
     val bootstrapServerOpt = parser.accepts("bootstrap-server", BootstrapServerDoc)
                                    .withRequiredArg
-                                   .describedAs("server(s) to use for bootstrapping")
+                                   .describedAs("server(s) to connect to")
                                    .ofType(classOf[String])
+                                   .required
     val offsetJsonFileOpt = parser.accepts("offset-json-file", offsetJsonFileDoc)
                                    .withRequiredArg
                                    .describedAs("Offset json file path")
                                    .ofType(classOf[String])
+                                   .required
     val commandConfigOpt = parser.accepts("command-config", CommandConfigDoc)
                                    .withRequiredArg
                                    .describedAs("command config property file path")
                                    .ofType(classOf[String])
-
-    val options = parser.parse(args : _*)
-    CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServerOpt, offsetJsonFileOpt)
+    parser.accepts("help", "Print usage information.").forHelp
+   
+    var commandDef: String = "Delete records of the given partitions down to the specified offset."
+    if (args.length == 0)
+      CommandLineUtils.printUsageAndDie(parser, commandDef)
+      
+    val options = CommandLineUtils.tryParse(parser, args)
+    if (options.has("help")) 
+      CommandLineUtils.printUsageAndDie(parser, commandDef)
   }
 }

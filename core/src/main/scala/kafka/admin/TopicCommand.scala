@@ -42,10 +42,7 @@ object TopicCommand extends Logging {
   def main(args: Array[String]): Unit = {
 
     val opts = new TopicCommandOptions(args)
-
-    if(args.length == 0)
-      CommandLineUtils.printUsageAndDie(opts.parser, "Create, delete, describe, or change a topic.")
-
+ 
     // should have exactly one action
     val actions = Seq(opts.createOpt, opts.listOpt, opts.alterOpt, opts.describeOpt, opts.deleteOpt).count(opts.options.has _)
     if(actions != 1)
@@ -299,37 +296,48 @@ object TopicCommand extends Logging {
 
   class TopicCommandOptions(args: Array[String]) {
     val parser = new OptionParser(false)
-    val zkConnectOpt = parser.accepts("zookeeper", "REQUIRED: The connection string for the zookeeper connection in the form host:port. " +
+    val zkConnectOpt = parser.accepts("zookeeper", "The connection string for the zookeeper connection in the form host:port. " +
                                       "Multiple URLS can be given to allow fail-over.")
                            .withRequiredArg
-                           .describedAs("urls")
+                           .describedAs("url(s) for the zookeeper connection")
                            .ofType(classOf[String])
+                           .required
     val listOpt = parser.accepts("list", "List all available topics.")
-    val createOpt = parser.accepts("create", "Create a new topic.")
-    val deleteOpt = parser.accepts("delete", "Delete a topic")
-    val alterOpt = parser.accepts("alter", "Alter the number of partitions, replica assignment, and/or configuration for the topic.")
-    val describeOpt = parser.accepts("describe", "List details for the given topics.")
-    val helpOpt = parser.accepts("help", "Print usage information.")
-    val topicOpt = parser.accepts("topic", "The topic to be create, alter or describe. Can also accept a regular " +
-                                           "expression except for --create option")
+    val createOpt = parser.accepts("create", "Creates a new topic. In addition to specifying the topic name using --topic option, it is required to specify one of the following: " +
+                                   "(--partitions option + --replication-factor option) OR --replica-assignment option. If the --replica-assignment option is specified, the number of " +
+                                   "partitions and replication factor for each partition will be calculated from it. When creating topics, we can also override the default topic " +
+                                   "configurations by specifying the --config option one or more times. For more details on topic configurations, please refer to the Kafka documentation.")
+    val deleteOpt = parser.accepts("delete", "Delete a topic. It is required to specify the topic name to be deleted using --topic option.")
+    val alterOpt = parser.accepts("alter", "Alter the number of partitions and replica assignment, and/or override configuration for a topic. The topic name needs to be specified using --topic option. The number of " +
+                                  "partitions for a given topic can be increased using the --partitions option. The --replica-assignment option can also be " +
+                                  "used along with the --partitions option to manually assign partitions to replicas. \nTo override the default values of topic level configurations, use --config option one or more times. To " +
+                                  "delete topic configuration overrides, use the --delete-config option. (WARNING: Altering topic configuration from this script has been deprecated and may be removed in future releases. " +
+                                  "Going forward, please use kafka-configs.sh for this functionality)")
+    val describeOpt = parser.accepts("describe", "List details for the given topics and the partition assignments. If the --topic option is present, this will print the details about the " +
+                                     "partitions for the given topic. Else, it will output the partition assignments of all topics. The details include a summary of all partitions for " +
+                                     "a given topic followed by details about each partition which includes information regarding leader, replicas and In-sync replicas(Isr)")
+    val helpOpt = parser.accepts("help", "Print usage information.").forHelp
+    val topicOpt = parser.accepts("topic", "The topic to create, alter or describe. Can also accept a regular " +
+                                           "expression except for --create option.")
+                         .requiredIf("create", "delete", "alter")
                          .withRequiredArg
-                         .describedAs("topic")
+                         .describedAs("topic to create/alter/describe")
                          .ofType(classOf[String])
     val nl = System.getProperty("line.separator")
     val configOpt = parser.accepts("config", "A topic configuration override for the topic being created or altered."  +
                                              "The following is a list of valid configurations: " + nl + LogConfig.configNames.map("\t" + _).mkString(nl) + nl +
                                              "See the Kafka documentation for full details on the topic configs.")
                            .withRequiredArg
-                           .describedAs("name=value")
+                           .describedAs("config(name=value) override for given topic")
                            .ofType(classOf[String])
     val deleteConfigOpt = parser.accepts("delete-config", "A topic configuration override to be removed for an existing topic (see the list of configurations under the --config option).")
                            .withRequiredArg
-                           .describedAs("name")
+                           .describedAs("name of topic config to be deleted")
                            .ofType(classOf[String])
     val partitionsOpt = parser.accepts("partitions", "The number of partitions for the topic being created or " +
-      "altered (WARNING: If partitions are increased for a topic that has a key, the partition logic or ordering of the messages will be affected")
+      "altered (WARNING: If partitions are increased for a topic that has a key, the partition logic or ordering of the messages will be affected.")
                            .withRequiredArg
-                           .describedAs("# of partitions")
+                           .describedAs("number of partitions for a topic")
                            .ofType(classOf[java.lang.Integer])
     val replicationFactorOpt = parser.accepts("replication-factor", "The replication factor for each partition in the topic being created.")
                            .withRequiredArg
@@ -341,30 +349,33 @@ object TopicCommand extends Logging {
                                         "broker_id_for_part2_replica1 : broker_id_for_part2_replica2 , ...")
                            .ofType(classOf[String])
     val reportUnderReplicatedPartitionsOpt = parser.accepts("under-replicated-partitions",
-                                                            "if set when describing topics, only show under replicated partitions")
+                                                            "If set when describing topics, only show under replicated partitions.")
     val reportUnavailablePartitionsOpt = parser.accepts("unavailable-partitions",
-                                                            "if set when describing topics, only show partitions whose leader is not available")
+                                                            "If set when describing topics, only show partitions whose leader is not available.")
     val topicsWithOverridesOpt = parser.accepts("topics-with-overrides",
-                                                "if set when describing topics, only show topics that have overridden configs")
+                                                "If set when describing topics, only show topics that have overridden configs.")
     val ifExistsOpt = parser.accepts("if-exists",
-                                     "if set when altering or deleting topics, the action will only execute if the topic exists")
+                                     "If set when altering or deleting topics, the action will only execute if the topic exists.")
     val ifNotExistsOpt = parser.accepts("if-not-exists",
-                                        "if set when creating topics, the action will only execute if the topic does not already exist")
+                                        "If set when creating topics, the action will only execute if the topic does not already exist.")
 
-    val disableRackAware = parser.accepts("disable-rack-aware", "Disable rack aware replica assignment")
+    val disableRackAware = parser.accepts("disable-rack-aware", "Disable rack aware replica assignment.")
 
-    val forceOpt = parser.accepts("force", "Suppress console prompts")
+    val forceOpt = parser.accepts("force", "Suppress console prompts.")
 
-    val options = parser.parse(args : _*)
+    val commandDef: String = "Create, delete, describe, or change a topic."
+    
+    if(args.length == 0)
+      CommandLineUtils.printUsageAndDie(parser, commandDef)
+
+    val options: OptionSet = CommandLineUtils.tryParse(parser, args)
+    
+    if(options.has("help"))
+      CommandLineUtils.printUsageAndDie(parser, commandDef)
 
     val allTopicLevelOpts: Set[OptionSpec[_]] = Set(alterOpt, createOpt, describeOpt, listOpt, deleteOpt)
 
     def checkArgs() {
-      // check required args
-      CommandLineUtils.checkRequiredArgs(parser, options, zkConnectOpt)
-      if (!options.has(listOpt) && !options.has(describeOpt))
-        CommandLineUtils.checkRequiredArgs(parser, options, topicOpt)
-
       // check invalid args
       CommandLineUtils.checkInvalidArgs(parser, options, configOpt, allTopicLevelOpts -- Set(alterOpt, createOpt))
       CommandLineUtils.checkInvalidArgs(parser, options, deleteConfigOpt, allTopicLevelOpts -- Set(alterOpt))
