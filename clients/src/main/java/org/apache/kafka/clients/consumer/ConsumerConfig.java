@@ -124,9 +124,9 @@ public class ConsumerConfig extends AbstractConfig {
      */
     public static final String FETCH_MAX_BYTES_CONFIG = "fetch.max.bytes";
     private static final String FETCH_MAX_BYTES_DOC = "The maximum amount of data the server should return for a fetch request. " +
-            "This is not an absolute maximum, if the first message in the first non-empty partition of the fetch is larger than " +
-            "this value, the message will still be returned to ensure that the consumer can make progress. " +
-            "The maximum message size accepted by the broker is defined via <code>message.max.bytes</code> (broker config) or " +
+            "Records are fetched in batches by the consumer, and if the first record batch in the first non-empty partition of the fetch is larger than " +
+            "this value, the record batch will still be returned to ensure that the consumer can make progress. As such, this is not a absolute maximum." +
+            "The maximum record batch size accepted by the broker is defined via <code>message.max.bytes</code> (broker config) or " +
             "<code>max.message.bytes</code> (topic config). Note that the consumer performs multiple fetches in parallel.";
     public static final int DEFAULT_FETCH_MAX_BYTES = 50 * 1024 * 1024;
 
@@ -144,8 +144,9 @@ public class ConsumerConfig extends AbstractConfig {
      */
     public static final String MAX_PARTITION_FETCH_BYTES_CONFIG = "max.partition.fetch.bytes";
     private static final String MAX_PARTITION_FETCH_BYTES_DOC = "The maximum amount of data per-partition the server " +
-            "will return. If the first message in the first non-empty partition of the fetch is larger than this limit, the " +
-            "message will still be returned to ensure that the consumer can make progress. The maximum message size " +
+            "will return. Records are fetched in batches by the consumer. If the first record batch in the first non-empty " +
+            "partition of the fetch is larger than this limit, the " +
+            "batch will still be returned to ensure that the consumer can make progress. The maximum record batch size " +
             "accepted by the broker is defined via <code>message.max.bytes</code> (broker config) or " +
             "<code>max.message.bytes</code> (topic config). See " + FETCH_MAX_BYTES_CONFIG + " for limiting the consumer request size.";
     public static final int DEFAULT_MAX_PARTITION_FETCH_BYTES = 1 * 1024 * 1024;
