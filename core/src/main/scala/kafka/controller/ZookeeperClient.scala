@@ -17,132 +17,136 @@
 
 package kafka.controller
 
-import java.util.concurrent.locks.ReentrantLock
+import java.util.concurrent.locks.{ReentrantLock, ReentrantReadWriteLock}
 import java.util.concurrent.{ArrayBlockingQueue, ConcurrentHashMap, CountDownLatch}
 
-import kafka.utils.CoreUtils.inLock
+import kafka.utils.CoreUtils.{inLock, inReadLock, inWriteLock}
 import org.apache.zookeeper.AsyncCallback.{ACLCallback, Children2Callback, DataCallback, StatCallback, StringCallback, VoidCallback}
 import org.apache.zookeeper.Watcher.Event.EventType
-import org.apache.zookeeper.ZooKeeper.States
 import org.apache.zookeeper.data.{ACL, Stat}
 import org.apache.zookeeper.{CreateMode, WatchedEvent, Watcher, ZooKeeper}
 
-class ZookeeperClient(connectString: String, sessionTimeout: Int) {
-  private val initializationLock = new ReentrantLock()
+class ZookeeperClient(connectString: String, sessionTimeout: Int, sessionExpirationHandler: SessionExpirationHandler) {
+  private val initializationLock = new ReentrantReadWriteLock()
   private val isConnectedOrExpiredLock = new ReentrantLock()
   private val isConnectedOrExpiredCondition = isConnectedOrExpiredLock.newCondition()
   private val zNodeChangeHandlers = new ConcurrentHashMap[String, ZNodeChangeHandler]()
   private val zNodeChildChangeHandlers = new ConcurrentHashMap[String, ZNodeChildChangeHandler]()
-  @volatile private var stateChangeHandlerOpt: Option[StateChangeHandler] = None
   @volatile private var zooKeeper = new ZooKeeper(connectString, sessionTimeout, ZookeeperClientWatcher)
-  private val sessionContext = new ThreadLocal[ZooKeeper] {
-    override def initialValue(): ZooKeeper = zooKeeper
+
+  def handle(request: AsyncRequest): AsyncResponse = inReadLock(initializationLock) {
+    handle(Seq(request)).head
   }
 
-  def handle(request: AsyncRequest): AsyncResponse = {
-    batch(Seq(request)).head
-  }
-
-  def batch(requests: Seq[AsyncRequest]): Seq[AsyncResponse] = {
+  def handle(requests: Seq[AsyncRequest]): Seq[AsyncResponse] = inReadLock(initializationLock) {
     import scala.collection.JavaConverters._
     val countDownLatch = new CountDownLatch(requests.size)
     val responseQueue = new ArrayBlockingQueue[AsyncResponse](requests.size)
     requests.foreach {
-      case CreateRequest(path, data, acl, createMode, ctx) => sessionContext.get().create(path, data, acl.asJava, createMode, new StringCallback {
+      case CreateRequest(path, data, acl, createMode, ctx) => zooKeeper.create(path, data, acl.asJava, createMode, new StringCallback {
         override def processResult(rc: Int, path: String, ctx: Any, name: String) = {
           responseQueue.add(CreateResponse(rc, path, ctx, name))
           countDownLatch.countDown()
         }}, ctx)
-      case DeleteRequest(path, version, ctx) => sessionContext.get().delete(path, version, new VoidCallback {
+      case DeleteRequest(path, version, ctx) => zooKeeper.delete(path, version, new VoidCallback {
         override def processResult(rc: Int, path: String, ctx: Any) = {
           responseQueue.add(DeleteResponse(rc, path, ctx))
           countDownLatch.countDown()
         }}, ctx)
-      case ExistsRequest(path, ctx) => sessionContext.get().exists(path, false, new StatCallback {
+      case ExistsRequest(path, ctx) => zooKeeper.exists(path, false, new StatCallback {
         override def processResult(rc: Int, path: String, ctx: Any, stat: Stat) = {
           responseQueue.add(ExistsResponse(rc, path, ctx, stat))
           countDownLatch.countDown()
         }}, ctx)
-      case GetDataRequest(path, ctx) => sessionContext.get().getData(path, false, new DataCallback {
+      case GetDataRequest(path, ctx) => zooKeeper.getData(path, false, new DataCallback {
         override def processResult(rc: Int, path: String, ctx: Any, data: Array[Byte], stat: Stat) = {
           responseQueue.add(GetDataResponse(rc, path, ctx, data, stat))
           countDownLatch.countDown()
         }}, ctx)
-      case SetDataRequest(path, data, version, ctx) => sessionContext.get().setData(path, data, version, new StatCallback {
+      case SetDataRequest(path, data, version, ctx) => zooKeeper.setData(path, data, version, new StatCallback {
         override def processResult(rc: Int, path: String, ctx: Any, stat: Stat) = {
           responseQueue.add(SetDataResponse(rc, path, ctx, stat))
           countDownLatch.countDown()
         }}, ctx)
-      case GetACLRequest(path, ctx) => sessionContext.get().getACL(path, null, new ACLCallback {
+      case GetACLRequest(path, ctx) => zooKeeper.getACL(path, null, new ACLCallback {
         override def processResult(rc: Int, path: String, ctx: Any, acl: java.util.List[ACL], stat: Stat): Unit = {
           responseQueue.add(GetACLResponse(rc, path, ctx, Option(acl).map(_.asScala).orNull, stat))
           countDownLatch.countDown()
         }}, ctx)
-      case SetACLRequest(path, acl, version, ctx) => sessionContext.get().setACL(path, acl.asJava, version, new StatCallback {
+      case SetACLRequest(path, acl, version, ctx) => zooKeeper.setACL(path, acl.asJava, version, new StatCallback {
         override def processResult(rc: Int, path: String, ctx: Any, stat: Stat) = {
           responseQueue.add(SetACLResponse(rc, path, ctx, stat))
           countDownLatch.countDown()
         }}, ctx)
-      case GetChildrenRequest(path, ctx) => sessionContext.get().getChildren(path, false, new Children2Callback {
+      case GetChildrenRequest(path, ctx) => zooKeeper.getChildren(path, false, new Children2Callback {
         override def processResult(rc: Int, path: String, ctx: Any, children: java.util.List[String], stat: Stat) = {
           responseQueue.add(GetChildrenResponse(rc, path, ctx, Option(children).map(_.asScala).orNull, stat))
           countDownLatch.countDown()
         }}, ctx)
+      case ExistsWithWatcherRequest(path) => zooKeeper.exists(path, true, new StatCallback {
+        override def processResult(rc: Int, path: String, ctx: Any, stat: Stat) = {
+          responseQueue.add(ExistsResponse(rc, path, ctx, stat))
+          countDownLatch.countDown()
+        }}, null)
+      case GetChildrenWithWatcherRequest(path) => zooKeeper.getChildren(path, true, new Children2Callback {
+        override def processResult(rc: Int, path: String, ctx: Any, children: java.util.List[String], stat: Stat) = {
+          responseQueue.add(GetChildrenResponse(rc, path, ctx, Option(children).map(_.asScala).orNull, stat))
+          countDownLatch.countDown()
+        }}, null)
     }
     countDownLatch.await()
     responseQueue.asScala.toSeq
   }
 
-  def getState: States = sessionContext.get().getState
-
   def waitUntilConnectedOrExpired: Boolean = inLock(isConnectedOrExpiredLock) {
-    var state = sessionContext.get().getState
+    var state = zooKeeper.getState
     while (!state.isConnected && state.isAlive) {
       isConnectedOrExpiredCondition.await()
-      state = sessionContext.get().getState
+      state = zooKeeper.getState
     }
     state.isConnected
   }
 
-  def registerStateChangeHandler(stateChangeHandler: StateChangeHandler): Unit = {
-    stateChangeHandlerOpt = Option(stateChangeHandler)
+  def registerZNodeChangeHandler(zNodeChangeHandler: ZNodeChangeHandler): ExistsResponse = inReadLock(initializationLock) {
+    registerZNodeChangeHandlers(Seq(zNodeChangeHandler)).head
   }
 
-  def unregisterStateChangeHandler(): Unit = {
-    stateChangeHandlerOpt = None
+  def registerZNodeChangeHandlers(handlers: Seq[ZNodeChangeHandler]): Seq[ExistsResponse] = inReadLock(initializationLock) {
+    handlers.foreach(handler => zNodeChangeHandlers.put(handler.path, handler))
+    val asyncRequests = handlers.map(handler => ExistsWithWatcherRequest(handler.path))
+    handle(asyncRequests).asInstanceOf[Seq[ExistsResponse]]
   }
 
-  def registerZNodeChangeHandler(zNodeChangeHandler: ZNodeChangeHandler): Unit = {
-    zNodeChangeHandlers.put(zNodeChangeHandler.path, zNodeChangeHandler)
-    sessionContext.get().exists(zNodeChangeHandler.path, true)
-  }
-
-  def unregisterZNodeChangeHandler(path: String): Unit = {
+  def unregisterZNodeChangeHandler(path: String): Unit = inReadLock(initializationLock) {
     zNodeChangeHandlers.remove(path)
   }
 
-  def registerZNodeChildChangeHandler(zNodeChildChangeHandler: ZNodeChildChangeHandler): Unit = {
-    zNodeChildChangeHandlers.put(zNodeChildChangeHandler.path, zNodeChildChangeHandler)
-    sessionContext.get().getChildren(zNodeChildChangeHandler.path, true)
+  def registerZNodeChildChangeHandler(zNodeChildChangeHandler: ZNodeChildChangeHandler): GetChildrenResponse = inReadLock(initializationLock) {
+    registerZNodeChildChangeHandlers(Seq(zNodeChildChangeHandler)).head
   }
 
-  def unregisterZNodeChildChangeHandler(path: String): Unit = {
+  def registerZNodeChildChangeHandlers(handlers: Seq[ZNodeChildChangeHandler]): Seq[GetChildrenResponse] = inReadLock(initializationLock) {
+    handlers.foreach(handler => zNodeChildChangeHandlers.put(handler.path, handler))
+    val asyncRequests = handlers.map(handler => GetChildrenWithWatcherRequest(handler.path))
+    handle(asyncRequests).asInstanceOf[Seq[GetChildrenResponse]]
+  }
+
+  def unregisterZNodeChildChangeHandler(path: String): Unit = inReadLock(initializationLock) {
     zNodeChildChangeHandlers.remove(path)
   }
 
-  def initialize(): Unit = inLock(initializationLock) {
+  def close(): Unit = inWriteLock(initializationLock) {
+    zNodeChangeHandlers.clear()
+    zNodeChildChangeHandlers.clear()
+    zooKeeper.close()
+  }
+
+  private def initialize(): Unit = {
     if (!zooKeeper.getState.isAlive) {
       zNodeChangeHandlers.clear()
       zNodeChildChangeHandlers.clear()
       zooKeeper = new ZooKeeper(connectString, sessionTimeout, ZookeeperClientWatcher)
     }
-    sessionContext.set(zooKeeper)
-  }
-
-  def close(): Unit = inLock(initializationLock) {
-    zNodeChangeHandlers.clear()
-    zNodeChildChangeHandlers.clear()
-    zooKeeper.close()
   }
 
   private object ZookeeperClientWatcher extends Watcher {
@@ -151,7 +155,11 @@ class ZookeeperClient(connectString: String, sessionTimeout: Int) {
         inLock(isConnectedOrExpiredLock) {
           isConnectedOrExpiredCondition.signalAll()
         }
-        stateChangeHandlerOpt.foreach(_.handleStateChange)
+        inWriteLock(initializationLock) {
+          sessionExpirationHandler.beforeInitializingSession
+          initialize()
+          sessionExpirationHandler.afterInitializingSession
+        }
       } else if (event.getType == EventType.NodeCreated) {
         Option(zNodeChangeHandlers.remove(event.getPath)).foreach(_.handleCreation)
       } else if (event.getType == EventType.NodeDeleted) {
@@ -163,10 +171,14 @@ class ZookeeperClient(connectString: String, sessionTimeout: Int) {
       }
     }
   }
+
+  private[this] case class ExistsWithWatcherRequest(path: String) extends AsyncRequest
+  private[this] case class GetChildrenWithWatcherRequest(path: String) extends AsyncRequest
 }
 
-trait StateChangeHandler {
-  def handleStateChange: Unit
+trait SessionExpirationHandler {
+  def beforeInitializingSession: Unit
+  def afterInitializingSession: Unit
 }
 
 trait ZNodeChangeHandler {
