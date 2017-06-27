@@ -63,7 +63,8 @@ object ConsumerPerformance {
           s"${if (!config.useOldConsumer) ", rebalance.time.ms, fetch.time.ms, fetch.MB.sec, fetch.nMsg.sec" else ""}"
         )
       } else
-        println("time, data.consumed.in.MB, MB.sec, data.consumed.in.nMsg, nMsg.sec")
+        println("time, data.consumed.in.MB, MB.sec, data.consumed.in.nMsg, nMsg.sec" +
+          s"${if (!config.useOldConsumer) ", rebalance.time.ms, fetch.time.ms, fetch.MB.sec, fetch.nMsg.sec" else ""}")
     }
 
     var startMs, endMs = 0L
@@ -178,7 +179,7 @@ object ConsumerPerformance {
 
         if (currentTimeMillis - lastReportTime >= config.reportingInterval) {
           if (config.showDetailedStats)
-            printProgressMessage(0, bytesRead, lastBytesRead, messagesRead, lastMessagesRead, lastReportTime, currentTimeMillis, config.dateFormat)
+            printProgressMessage(0, bytesRead, lastBytesRead, messagesRead, lastMessagesRead, lastReportTime, currentTimeMillis, config.dateFormat, Some(joinTime.get))
           lastReportTime = currentTimeMillis
           lastMessagesRead = messagesRead
           lastBytesRead = bytesRead
@@ -191,12 +192,21 @@ object ConsumerPerformance {
   }
 
   def printProgressMessage(id: Int, bytesRead: Long, lastBytesRead: Long, messagesRead: Long, lastMessagesRead: Long,
-    startMs: Long, endMs: Long, dateFormat: SimpleDateFormat) = {
+    startMs: Long, endMs: Long, dateFormat: SimpleDateFormat, joinTimeMs: Option[Long] = None) = {
     val elapsedMs: Double = endMs - startMs
     val totalMBRead = (bytesRead * 1.0) / (1024 * 1024)
     val mbRead = ((bytesRead - lastBytesRead) * 1.0) / (1024 * 1024)
-    println("%s, %d, %.4f, %.4f, %d, %.4f".format(dateFormat.format(endMs), id, totalMBRead,
-        1000.0 * (mbRead / elapsedMs), messagesRead, ((messagesRead - lastMessagesRead) / elapsedMs) * 1000.0))
+
+    joinTimeMs match {
+      case None =>
+        println("%s, %d, %.4f, %.4f, %d, %.4f".format(dateFormat.format(endMs), id, totalMBRead,
+          1000.0 * (mbRead / elapsedMs), messagesRead, ((messagesRead - lastMessagesRead) / elapsedMs) * 1000.0))
+      case Some(rebalanceTimeMs) =>
+        val fetchTimeMs = elapsedMs - rebalanceTimeMs
+        println("%s, %d, %.4f, %.4f, %d, %.4f, %.2f, %.2f, %.4f, %.4f".format(dateFormat.format(endMs), id, totalMBRead,
+          1000.0 * (mbRead / elapsedMs), messagesRead, ((messagesRead - lastMessagesRead) / elapsedMs) * 1000.0,
+          rebalanceTimeMs.toDouble, fetchTimeMs, mbRead / (fetchTimeMs / 1000.0), (messagesRead - lastMessagesRead) / (fetchTimeMs / 1000.0)))
+    }
   }
 
   class ConsumerPerfConfig(args: Array[String]) extends PerfConfig(args) {
