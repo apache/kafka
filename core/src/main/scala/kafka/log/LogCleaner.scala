@@ -64,7 +64,22 @@ import scala.collection.JavaConverters._
  * The cleaner will only retain delete records for a period of time to avoid accumulating space indefinitely. This period of time is configurable on a per-topic
  * basis and is measured from the time the segment enters the clean portion of the log (at which point any prior message with that key has been removed).
  * Delete markers in the clean section of the log that are older than this time will not be retained when log segments are being recopied as part of cleaning.
- * 
+ *
+ * Note that cleaning is more complicated with the idempotent/transactional producer capabilities. The following
+ * are the key points:
+ *
+ * 1. In order to maintain sequence number continuity for active producers, we always retain the last batch
+ *    from each producerId, even if all the records from the batch have been removed. The batch will be removed
+ *    once the producer either writes a new batch or is expired due to inactivity.
+ * 2. We do not clean beyond the last stable offset. This ensures that all records observed by the cleaner have
+ *    been decided (i.e. committed or aborted). In particular, this allows us to use the transaction index to
+ *    collect the aborted transactions ahead of time.
+ * 3. Records from aborted transactions are removed by the cleaner immediately without regard to record keys.
+ * 4. Transaction markers are retained until all record batches from the same transaction have been removed and
+ *    a sufficient amount of time has passed to reasonably ensure that an active consumer wouldn't consume any
+ *    data from the transaction prior to reaching the offset of the marker. This follows the same logic used for
+ *    tombstone deletion.
+ *
  * @param config Configuration parameters for the cleaner
  * @param logDirs The directories where offset checkpoints reside
  * @param logs The pool of logs
