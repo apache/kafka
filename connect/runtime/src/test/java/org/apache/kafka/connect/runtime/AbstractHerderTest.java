@@ -25,6 +25,7 @@ import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.runtime.rest.errors.BadRequestException;
 import org.apache.kafka.connect.storage.ConfigBackingStore;
+import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.util.ConnectorTaskId;
@@ -149,6 +150,7 @@ public class AbstractHerderTest extends EasyMockSupport {
     @Test()
     public void testConfigValidationMissingName() {
         AbstractHerder herder = createConfigValidationHerder(TestSourceConnector.class);
+        EasyMock.expect(plugins.converters()).andReturn(Collections.<PluginDesc<Converter>>emptySet()).times(2);
         replayAll();
 
         Map<String, String> config = Collections.singletonMap(ConnectorConfig.CONNECTOR_CLASS_CONFIG, TestSourceConnector.class.getName());
@@ -179,6 +181,7 @@ public class AbstractHerderTest extends EasyMockSupport {
         Set<PluginDesc<Transformation>> transformations = new HashSet<>();
         transformations.add(new PluginDesc<Transformation>(SampleTransformation.class, "1.0", classLoader));
         EasyMock.expect(plugins.transformations()).andReturn(transformations).times(2);
+        EasyMock.expect(plugins.converters()).andReturn(Collections.<PluginDesc<Converter>>emptySet()).times(2);
 
         replayAll();
 
