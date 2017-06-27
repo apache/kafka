@@ -28,7 +28,6 @@ public class SinkNode<K, V> extends ProcessorNode<K, V> {
     private Serializer<K> keySerializer;
     private Serializer<V> valSerializer;
     private final StreamPartitioner<? super K, ? super V> partitioner;
-
     private ProcessorContext context;
 
     public SinkNode(final String name,
@@ -97,6 +96,10 @@ public class SinkNode<K, V> extends ProcessorNode<K, V> {
                                     keyClass,
                                     valueClass),
                     e);
+        } catch (final StreamsException e) {
+            throw new StreamsException(
+                    String.format("%s: Aborting sending record because a previous send request returned an error.",
+                    name()));
         }
     }
 

@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
@@ -56,7 +57,13 @@ class StoreChangeLogger<K, V> {
         if (collector != null) {
             final Serializer<K> keySerializer = serialization.keySerializer();
             final Serializer<V> valueSerializer = serialization.valueSerializer();
-            collector.send(this.topic, key, value, this.partition, context.timestamp(), keySerializer, valueSerializer);
+            try {
+                collector.send(this.topic, key, value, this.partition, context.timestamp(), keySerializer, valueSerializer);
+            } catch (final StreamsException e) {
+                throw new StreamsException(
+                        String.format("Aborting sending record to store's changelog %s because a previous send request returned an error.",
+                                this.topic));
+            }
         }
     }
 
