@@ -43,6 +43,8 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.Assert.assertEquals;
@@ -56,7 +58,7 @@ public class AbstractCoordinatorTest {
     private static final int REBALANCE_TIMEOUT_MS = 60000;
     private static final int SESSION_TIMEOUT_MS = 10000;
     private static final int HEARTBEAT_INTERVAL_MS = 3000;
-    private static final long RETRY_BACKOFF_MS = 100;
+    private static final long RETRY_BACKOFF_MS = 10000;
     private static final long REQUEST_TIMEOUT_MS = 40000;
     private static final String GROUP_ID = "dummy-group";
     private static final String METRIC_GROUP_PREFIX = "consumer";
@@ -124,9 +126,6 @@ public class AbstractCoordinatorTest {
         try {
             coordinator.ensureActiveGroup();
             mockTime.sleep(HEARTBEAT_INTERVAL_MS);
-            synchronized (coordinator) {
-                coordinator.notify();
-            }
             long startMs = System.currentTimeMillis();
             while (System.currentTimeMillis() - startMs < 1000) {
                 Thread.sleep(10);
@@ -135,6 +134,31 @@ public class AbstractCoordinatorTest {
             fail("Expected pollHeartbeat to raise an error in 1 second");
         } catch (RuntimeException exception) {
             assertEquals(exception, e);
+        }
+    }
+
+    @Test
+    public void testPollHeartbeatAwakesHeartbeatThread() throws Exception {
+        mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        mockClient.prepareResponse(joinGroupFollowerResponse(1, "memberId", "leaderId", Errors.NONE));
+        mockClient.prepareResponse(syncGroupResponse(Errors.NONE));
+
+        coordinator.ensureActiveGroup();
+
+        final CountDownLatch heartbeatDone = new CountDownLatch(1);
+        mockClient.prepareResponse(new MockClient.RequestMatcher() {
+            @Override
+            public boolean matches(AbstractRequest body) {
+                heartbeatDone.countDown();
+                return body instanceof HeartbeatRequest;
+            }
+        }, heartbeatResponse(Errors.NONE));
+
+        mockTime.sleep(HEARTBEAT_INTERVAL_MS);
+        coordinator.pollHeartbeat(mockTime.milliseconds());
+
+        if (!heartbeatDone.await(1, TimeUnit.SECONDS)) {
+            fail("Should have received a heartbeat request after calling pollHeartbeat");
         }
     }
 
@@ -458,6 +482,10 @@ public class AbstractCoordinatorTest {
 
     private void awaitFirstHeartbeat(final AtomicBoolean heartbeatReceived) throws Exception {
         mockTime.sleep(HEARTBEAT_INTERVAL_MS);
+        // Awake the heartbeat thread
+        synchronized (coordinator) {
+            coordinator.notify();
+        }
         TestUtils.waitForCondition(new TestCondition() {
             @Override
             public boolean conditionMet() {
