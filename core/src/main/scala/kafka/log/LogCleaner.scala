@@ -845,7 +845,7 @@ private[log] object CleanedTransactionMetadata {
 private[log] class CleanedTransactionMetadata(val abortedTransactions: mutable.PriorityQueue[AbortedTxn],
                                               val transactionIndex: Option[TransactionIndex] = None) {
   val ongoingCommittedTxns = mutable.Set.empty[Long]
-  val ongoingAbortedTxns = mutable.Map.empty[Long, AbortedTxn]
+  val ongoingAbortedTxns = mutable.Map.empty[Long, AbortedTransactionMetadata]
 
   /**
    * Update the cleaned transaction state with a control batch that has just been traversed by the cleaner.
@@ -859,14 +859,16 @@ private[log] class CleanedTransactionMetadata(val abortedTransactions: mutable.P
     val producerId = controlBatch.producerId
     controlType match {
       case ControlRecordType.ABORT =>
-        val maybeAbortedTxn = ongoingAbortedTxns.remove(producerId)
-        maybeAbortedTxn.foreach { abortedTxn =>
-          transactionIndex.foreach(_.append(abortedTxn))
+        ongoingAbortedTxns.remove(producerId) match {
+          // Retain the marker until all batches from the transaction have been removed
+          case Some(abortedTxnMetadata) if abortedTxnMetadata.lastObservedBatchOffset.isDefined =>
+            transactionIndex.foreach(_.append(abortedTxnMetadata.abortedTxn))
+            false
+          case _ => true
         }
-        true
 
       case ControlRecordType.COMMIT =>
-        // this marker is eligible for deletion if we didn't traverse any records from the transaction
+        // This marker is eligible for deletion if we didn't traverse any batches from the transaction
         !ongoingCommittedTxns.remove(producerId)
 
       case _ => false
@@ -876,7 +878,7 @@ private[log] class CleanedTransactionMetadata(val abortedTransactions: mutable.P
   private def consumeAbortedTxnsUpTo(offset: Long): Unit = {
     while (abortedTransactions.headOption.exists(_.firstOffset <= offset)) {
       val abortedTxn = abortedTransactions.dequeue()
-      ongoingAbortedTxns += abortedTxn.producerId -> abortedTxn
+      ongoingAbortedTxns += abortedTxn.producerId -> new AbortedTransactionMetadata(abortedTxn)
     }
   }
 
@@ -887,15 +889,21 @@ private[log] class CleanedTransactionMetadata(val abortedTransactions: mutable.P
   def onBatchRead(batch: RecordBatch): Boolean = {
     consumeAbortedTxnsUpTo(batch.lastOffset)
     if (batch.isTransactional) {
-      if (ongoingAbortedTxns.contains(batch.producerId))
-        true
-      else {
-        ongoingCommittedTxns += batch.producerId
-        false
+      ongoingAbortedTxns.get(batch.producerId) match {
+        case Some(abortedTransactionMetadata) =>
+          abortedTransactionMetadata.lastObservedBatchOffset = Some(batch.lastOffset)
+          true
+        case None =>
+          ongoingCommittedTxns += batch.producerId
+          false
       }
     } else {
       false
     }
   }
 
+}
+
+private class AbortedTransactionMetadata(val abortedTxn: AbortedTxn) {
+  var lastObservedBatchOffset: Option[Long] = None
 }

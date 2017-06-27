@@ -19,7 +19,7 @@ package kafka.log
 
 import java.io.File
 import java.nio._
-import java.nio.file.{Files, Paths}
+import java.nio.file.Paths
 import java.util.Properties
 
 import kafka.common._
@@ -107,7 +107,7 @@ class LogCleanerTest extends JUnitSuite {
 
     log.roll()
     cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 0L, log.activeSegment.baseOffset))
-    assertEquals(List(2, 5, 7), lastBatchOffsetsInLog(log))
+    assertEquals(List(2, 5, 7), lastOffsetsPerBatchInLog(log))
     assertEquals(Map(pid1 -> 2, pid2 -> 2, pid3 -> 1), lastSequencesInLog(log))
     assertEquals(List(2, 3, 1, 4), keysInLog(log))
     assertEquals(List(1, 3, 6, 7), offsetsInLog(log))
@@ -140,7 +140,7 @@ class LogCleanerTest extends JUnitSuite {
     log.roll()
     cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 0L, log.activeSegment.baseOffset))
     assertEquals(Map(pid1 -> 2, pid2 -> 2, pid3 -> 1, pid4 -> 0), lastSequencesInLog(log))
-    assertEquals(List(2, 5, 7, 8), lastBatchOffsetsInLog(log))
+    assertEquals(List(2, 5, 7, 8), lastOffsetsPerBatchInLog(log))
     assertEquals(List(3, 1, 4, 2), keysInLog(log))
     assertEquals(List(3, 6, 7, 8), offsetsInLog(log))
 
@@ -270,9 +270,42 @@ class LogCleanerTest extends JUnitSuite {
     assertEquals(List(3, 4, 5, 6, 7, 8), offsetsInLog(log))
 
     // clean again with large delete horizon and verify the marker is removed
-    cleaner.doClean(LogToClean(tp, log, dirtyOffset, 100L), deleteHorizonMs = Long.MaxValue)
+    dirtyOffset = cleaner.doClean(LogToClean(tp, log, dirtyOffset, 100L), deleteHorizonMs = Long.MaxValue)._1
     assertEquals(List(2, 1, 3), keysInLog(log))
     assertEquals(List(4, 5, 6, 7, 8), offsetsInLog(log))
+  }
+
+  @Test
+  def testCommitMarkerRetentionWithEmptyBatch(): Unit = {
+    val tp = new TopicPartition("test", 0)
+    val cleaner = makeCleaner(Int.MaxValue)
+    val logProps = new Properties()
+    logProps.put(LogConfig.SegmentBytesProp, 256: java.lang.Integer)
+    val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
+
+    val producerEpoch = 0.toShort
+    val producerId = 1L
+    val appendProducer = appendTransactionalAsLeader(log, producerId, producerEpoch)
+
+    appendProducer(Seq(2, 3)) // batch at offset 1
+    log.appendAsLeader(commitMarker(producerId, producerEpoch), leaderEpoch = 0, isFromClient = false)
+    log.roll()
+
+    log.appendAsLeader(record(2, 2), leaderEpoch = 0)
+    log.appendAsLeader(record(3, 3), leaderEpoch = 0)
+    log.roll()
+
+    // first time through the records are removed
+    var dirtyOffset = cleaner.doClean(LogToClean(tp, log, 0L, 100L), deleteHorizonMs = Long.MaxValue)._1
+    assertEquals(List(2, 3), keysInLog(log))
+    assertEquals(List(2, 3, 4), offsetsInLog(log)) // commit marker is retained
+    assertEquals(List(1, 2, 3, 4), lastOffsetsPerBatchInLog(log)) // empty batch is retained
+
+    // next time through, only the empty batch remains
+    dirtyOffset = cleaner.doClean(LogToClean(tp, log, dirtyOffset, 100L), deleteHorizonMs = Long.MaxValue)._1
+    assertEquals(List(2, 3), keysInLog(log))
+    assertEquals(List(2, 3, 4), offsetsInLog(log)) // commit marker is still retained
+    assertEquals(List(1, 2, 3, 4), lastOffsetsPerBatchInLog(log)) // empty batch is retained
   }
 
   @Test
@@ -303,6 +336,65 @@ class LogCleanerTest extends JUnitSuite {
     cleaner.doClean(LogToClean(tp, log, dirtyOffset, 100L), deleteHorizonMs = Long.MaxValue)
     assertEquals(List(3), keysInLog(log))
     assertEquals(List(4, 5), offsetsInLog(log))
+  }
+
+  @Test
+  def testAbortMarkerRetentionWithEmptyBatch(): Unit = {
+    val tp = new TopicPartition("test", 0)
+    val cleaner = makeCleaner(Int.MaxValue)
+    val logProps = new Properties()
+    logProps.put(LogConfig.SegmentBytesProp, 256: java.lang.Integer)
+    val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
+
+    val producerEpoch = 0.toShort
+    val producerId = 1L
+    val appendProducer = appendTransactionalAsLeader(log, producerId, producerEpoch)
+
+    appendProducer(Seq(2, 3)) // batch at offset 1
+    log.appendAsLeader(abortMarker(producerId, producerEpoch), leaderEpoch = 0, isFromClient = false)
+    log.roll()
+
+    def assertAbortedTransactionIndexed(): Unit = {
+      val abortedTxns = log.collectAbortedTransactions(0L, 100L)
+      assertEquals(1, abortedTxns.size)
+      assertEquals(producerId, abortedTxns.head.producerId)
+      assertEquals(0, abortedTxns.head.firstOffset)
+      assertEquals(2, abortedTxns.head.lastOffset)
+    }
+
+    assertAbortedTransactionIndexed()
+
+    // first time through the records are removed
+    var dirtyOffset = cleaner.doClean(LogToClean(tp, log, 0L, 100L), deleteHorizonMs = Long.MaxValue)._1
+    assertAbortedTransactionIndexed()
+    assertEquals(List(), keysInLog(log))
+    assertEquals(List(2), offsetsInLog(log)) // abort marker is retained
+    assertEquals(List(1, 2), lastOffsetsPerBatchInLog(log)) // empty batch is retained
+
+    // next time through, only the empty batch remains
+    dirtyOffset = cleaner.doClean(LogToClean(tp, log, dirtyOffset, 100L), deleteHorizonMs = Long.MaxValue)._1
+    assertAbortedTransactionIndexed()
+    assertEquals(List(), keysInLog(log))
+    assertEquals(List(2), offsetsInLog(log)) // abort marker is still retained
+    assertEquals(List(1, 2), lastOffsetsPerBatchInLog(log)) // empty batch is retained
+
+    // now update the last sequence so that the empty batch can be removed
+    appendProducer(Seq(1))
+    log.roll()
+
+    dirtyOffset = cleaner.doClean(LogToClean(tp, log, dirtyOffset, 100L), deleteHorizonMs = Long.MaxValue)._1
+    assertAbortedTransactionIndexed()
+    assertEquals(List(1), keysInLog(log))
+    assertEquals(List(2, 3), offsetsInLog(log)) // abort marker is not yet gone because we read the empty batch
+    assertEquals(List(2, 3), lastOffsetsPerBatchInLog(log)) // but we do not preserve the empty batch
+
+    dirtyOffset = cleaner.doClean(LogToClean(tp, log, dirtyOffset, 100L), deleteHorizonMs = Long.MaxValue)._1
+    assertEquals(List(1), keysInLog(log))
+    assertEquals(List(3), offsetsInLog(log)) // abort marker is gone
+    assertEquals(List(3), lastOffsetsPerBatchInLog(log))
+
+    // we do not bother retaining the aborted transaction in the index
+    assertEquals(0, log.collectAbortedTransactions(0L, 100L).size)
   }
 
   /**
@@ -408,7 +500,7 @@ class LogCleanerTest extends JUnitSuite {
     log.roll()
 
     cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 0L, log.activeSegment.baseOffset))
-    assertEquals(List(1, 3, 4), lastBatchOffsetsInLog(log))
+    assertEquals(List(1, 3, 4), lastOffsetsPerBatchInLog(log))
     assertEquals(Map(1L -> 0, 2L -> 1, 3L -> 0), lastSequencesInLog(log))
     assertEquals(List(0, 1), keysInLog(log))
     assertEquals(List(3, 4), offsetsInLog(log))
@@ -431,7 +523,7 @@ class LogCleanerTest extends JUnitSuite {
     log.roll()
 
     cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 0L, log.activeSegment.baseOffset))
-    assertEquals(List(2, 3), lastBatchOffsetsInLog(log))
+    assertEquals(List(2, 3), lastOffsetsPerBatchInLog(log))
     assertEquals(Map(producerId -> 2), lastSequencesInLog(log))
     assertEquals(List(), keysInLog(log))
     assertEquals(List(3), offsetsInLog(log))
@@ -441,7 +533,7 @@ class LogCleanerTest extends JUnitSuite {
     log.roll()
     cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 0L, log.activeSegment.baseOffset))
 
-    assertEquals(List(3, 5), lastBatchOffsetsInLog(log))
+    assertEquals(List(3, 5), lastOffsetsPerBatchInLog(log))
     assertEquals(Map(producerId -> 4), lastSequencesInLog(log))
     assertEquals(List(1, 5), keysInLog(log))
     assertEquals(List(3, 4, 5), offsetsInLog(log))
@@ -606,7 +698,7 @@ class LogCleanerTest extends JUnitSuite {
       yield TestUtils.readString(record.key).toInt
   }
 
-  def lastBatchOffsetsInLog(log: Log): Iterable[Long] = {
+  def lastOffsetsPerBatchInLog(log: Log): Iterable[Long] = {
     for (segment <- log.logSegments; batch <- segment.log.batches.asScala)
       yield batch.lastOffset
   }
