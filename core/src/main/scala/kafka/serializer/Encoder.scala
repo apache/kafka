@@ -64,10 +64,7 @@ class StringEncoder(props: VerifiableProperties = null) extends Encoder[String] 
   */
 class LongEncoder(props: VerifiableProperties = null) extends Encoder[Long] {
   override def toBytes(l: Long): Array[Byte] =
-    if(l == null)
-      null
-    else
-      ByteBuffer.allocate(8).putLong(l).array()
+    ByteBuffer.allocate(8).putLong(l).array()
 }
 
 /**
