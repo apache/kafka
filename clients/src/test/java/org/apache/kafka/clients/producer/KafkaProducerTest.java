@@ -75,7 +75,7 @@ public class KafkaProducerTest {
     public void testNoSerializerProvided() {
         Properties producerProps = new Properties();
         producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
-        new KafkaProducer(producerProps);
+        new KafkaProducer(producerProps).close();
     }
 
     @Test
@@ -240,6 +240,7 @@ public class KafkaProducerTest {
         PowerMock.replay(metadata);
         producer.partitionsFor(topic);
         PowerMock.verify(metadata);
+        producer.close();
     }
 
     @PrepareOnlyThisForTest(Metadata.class)
@@ -317,6 +318,7 @@ public class KafkaProducerTest {
         PowerMock.replay(metadata);
         producer.send(extendedRecord, null);
         PowerMock.verify(metadata);
+        producer.close();
     }
 
     @Test
@@ -352,6 +354,8 @@ public class KafkaProducerTest {
             fail("Expect TimeoutException");
         } catch (TimeoutException e) {
             // skip
+        } finally {
+            producer.close();
         }
         Assert.assertTrue("Topic should still exist in metadata", metadata.containsTopic(topic));
     }
@@ -404,6 +408,8 @@ public class KafkaProducerTest {
             fail("Expected IllegalStateException to be raised");
         } catch (IllegalStateException ise) {
             //expected
+        } finally {
+            producer.close();
         }
         
         //ensure existing headers are not changed, and last header for key is still original value
