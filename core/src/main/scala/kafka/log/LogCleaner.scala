@@ -479,7 +479,7 @@ private[log] class Cleaner(val id: Int,
                              activeProducers: Map[Long, ProducerIdEntry],
                              stats: CleanerStats) {
     val logCleanerFilter = new RecordFilter {
-      var discardBatchRecords: Boolean = false
+      var discardBatchRecords: Boolean = _
 
       override def checkBatchRetention(batch: RecordBatch): BatchRetention = {
         // we piggy-back on the tombstone retention logic to delay deletion of transaction markers.
@@ -488,19 +488,17 @@ private[log] class Cleaner(val id: Int,
 
         // check if the batch contains the last sequence number for the producer. if so, we cannot
         // remove the batch just yet or the producer may see an out of sequence error.
-        if (batch.hasProducerId && activeProducers.get(batch.producerId).exists(_.lastSeq == batch.lastSequence)) {
+        if (batch.hasProducerId && activeProducers.get(batch.producerId).exists(_.lastSeq == batch.lastSequence))
           BatchRetention.RETAIN_EMPTY
-        } else {
-          if (discardBatchRecords)
-            BatchRetention.DELETE
-          else
-            BatchRetention.DELETE_EMPTY
-        }
+        else if (discardBatchRecords)
+          BatchRetention.DELETE
+        else
+          BatchRetention.DELETE_EMPTY
       }
 
       override def shouldRetainRecord(batch: RecordBatch, record: Record): Boolean = {
         if (discardBatchRecords)
-          // remove the record if the batch would have otherwise been discarded
+          // The batch is only retained to preserve producer sequence information; the records can be removed
           false
         else
           Cleaner.this.shouldRetainRecord(source, map, retainDeletes, batch, record, stats)

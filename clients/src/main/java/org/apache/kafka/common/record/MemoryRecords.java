@@ -324,9 +324,9 @@ public class MemoryRecords extends AbstractRecords {
         protected abstract BatchRetention checkBatchRetention(RecordBatch batch);
 
         /**
-         * Check whether a record should be retained in the log. Only records from
-         * batches which were not discarded with {@link #checkBatchRetention(RecordBatch)}
-         * will be considered.
+         * Check whether a record should be retained in the log. Note that {@link #checkBatchRetention(RecordBatch)}
+         * is used prior to checking individual record retention. Only records from batches which were not
+         * explicitly discarded with {@link BatchRetention#DELETE} will be considered.
          */
         protected abstract boolean shouldRetainRecord(RecordBatch recordBatch, Record record);
     }
