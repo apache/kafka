@@ -255,27 +255,25 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
         self.logger.debug("Console consumer %d command: %s", idx, cmd)
 
         consumer_output = node.account.ssh_capture(cmd, allow_fail=False)
-        first_line = next(consumer_output, None)
 
-        if first_line is not None:
-            self.logger.debug("collecting following jmx objects: %s", self.jmx_object_names)
-            self.init_jmx_attributes()
-            self.start_jmx_tool(idx, node)
+        self.init_jmx_attributes()
+        self.logger.debug("collecting following jmx objects: %s", self.jmx_object_names)
+        self.start_jmx_tool(idx, node)
 
-            for line in itertools.chain([first_line], consumer_output):
-                msg = line.strip()
-                if msg == "shutdown_complete":
-                    # Note that we can only rely on shutdown_complete message if running 0.10.0 or greater
-                    if node in self.clean_shutdown_nodes:
-                        raise Exception("Unexpected shutdown event from consumer, already shutdown. Consumer index: %d" % idx)
-                    self.clean_shutdown_nodes.add(node)
-                else:
-                    if self.message_validator is not None:
-                        msg = self.message_validator(msg)
-                    if msg is not None:
-                        self.messages_consumed[idx].append(msg)
+        for line in consumer_output:
+            msg = line.strip()
+            if msg == "shutdown_complete":
+                # Note that we can only rely on shutdown_complete message if running 0.10.0 or greater
+                if node in self.clean_shutdown_nodes:
+                    raise Exception("Unexpected shutdown event from consumer, already shutdown. Consumer index: %d" % idx)
+                self.clean_shutdown_nodes.add(node)
+            else:
+                if self.message_validator is not None:
+                    msg = self.message_validator(msg)
+                if msg is not None:
+                    self.messages_consumed[idx].append(msg)
 
-            self.read_jmx_output(idx, node)
+        self.read_jmx_output(idx, node)
 
     def start_node(self, node):
         BackgroundThreadService.start_node(self, node)
