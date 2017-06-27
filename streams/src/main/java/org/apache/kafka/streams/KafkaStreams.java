@@ -235,7 +235,7 @@ public class KafkaStreams {
         }
     }
 
-    private void setStateWhenNotInPendingShutdown(final State newState) {
+    private void setStateWhenNotShuttingDownOrNotRunning(final State newState) {
         if (state == State.PENDING_SHUTDOWN || state == State.NOT_RUNNING) {
             return;
         }
@@ -280,7 +280,7 @@ public class KafkaStreams {
             }
             if (newState == StreamThread.State.PARTITIONS_REVOKED ||
                 newState == StreamThread.State.ASSIGNING_PARTITIONS) {
-                setStateWhenNotInPendingShutdown(State.REBALANCING);
+                setStateWhenNotShuttingDownOrNotRunning(State.REBALANCING);
             } else if (newState == StreamThread.State.RUNNING) {
                 // one thread is running, check others
                 for (final StreamThread.State state : threadState.values()) {
@@ -288,11 +288,11 @@ public class KafkaStreams {
                         return;
                     }
                 }
-                setStateWhenNotInPendingShutdown(State.RUNNING);
+                setStateWhenNotShuttingDownOrNotRunning(State.RUNNING);
             } else if (newState == StreamThread.State.DEAD) {
                 // one thread died, check if we have enough threads running
                 if (threadState.size() == 0) {
-                    setStateWhenNotInPendingShutdown(State.NOT_RUNNING);
+                    setStateWhenNotShuttingDownOrNotRunning(State.NOT_RUNNING);
                 }
             }
 
