@@ -110,8 +110,7 @@ object ConsumerPerformance {
 
   }
 
-  def consume(consumer: KafkaConsumer[Array[Byte],
-              Array[Byte]],
+  def consume(consumer: KafkaConsumer[Array[Byte], Array[Byte]],
               topics: List[String],
               count: Long,
               timeout: Long,
@@ -286,8 +285,7 @@ object ConsumerPerformance {
 
   class ConsumerPerfThread(threadId: Int,
                            name: String,
-                           stream: KafkaStream[Array[Byte],
-                           Array[Byte]],
+                           stream: KafkaStream[Array[Byte], Array[Byte]],
                            config: ConsumerPerfConfig,
                            totalMessagesRead: AtomicLong,
                            totalBytesRead: AtomicLong,
