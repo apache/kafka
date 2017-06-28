@@ -92,30 +92,38 @@ public class StreamThread extends Thread {
      *          |           |              |
      *          |           v              |
      *          |     +-----+-------+      |
-     *          +<--- | Partitions  |      |
-     *          |     | Revoked     |      |
+     *          +<--- | Partitions  | <-+  |
+     *          |     | Revoked     | --+  |
      *          |     +-----+-------+      |
      *          |           |              |
      *          |           v              |
      *          |     +-----+-------+      |
-     *          |     | Assigning   |      |
+     *          +<--- | Assigning   |      |
      *          |     | Partitions  | ---->+
      *          |     +-----+-------+
      *          |           |
      *          |           v
      *          |     +-----+-------+
      *          +---> | Pending     |
-     *                | Shutdown    |
-     *                +-----+-------+
-     *                      |
-     *                      v
-     *                +-----+-------+
-     *                | Dead        |
+     *          |     | Shutdown    |
+     *          |     +-----+-------+
+     *          |           |
+     *          |           v
+     *          |     +-----+-------+
+     *          +---> | Dead        |
      *                +-------------+
      * </pre>
+     *
+     * Note the following:
+     * - Any state can go to PENDING_SHUTDOWN. That is because streams can be closed at any time.
+     * - Any state can go to DEAD. That is because exceptions can happen at any other state,
+     *   leading to the stream thread terminating.
+     * - A streams thread can stay in PARTITIONS_REVOKED indefinitely, in the corner case when
+     *   the coordinator repeatedly fails in-between revoking partitions and assigning new partitions.
+     *
      */
     public enum State {
-        CREATED(1, 4), RUNNING(1, 2, 4), PARTITIONS_REVOKED(3, 4), ASSIGNING_PARTITIONS(1, 4), PENDING_SHUTDOWN(5), DEAD;
+        CREATED(1, 4), RUNNING(1, 2, 4), PARTITIONS_REVOKED(2, 3, 4, 5), ASSIGNING_PARTITIONS(1, 4, 5), PENDING_SHUTDOWN(5), DEAD;
 
         private final Set<Integer> validTransitions = new HashSet<>();
 
@@ -175,7 +183,7 @@ public class StreamThread extends Thread {
             final long start = time.milliseconds();
             try {
                 storeChangelogReader = new StoreChangelogReader(getName(), restoreConsumer, time, requestTimeOut);
-                setStateWhenNotShuttingDownOrDead(State.ASSIGNING_PARTITIONS);
+                setState(State.ASSIGNING_PARTITIONS, true);
                 // do this first as we may have suspended standby tasks that
                 // will become active or vice versa
                 closeNonAssignedSuspendedStandbyTasks();
@@ -185,7 +193,7 @@ public class StreamThread extends Thread {
                 addStandbyTasks(start);
                 streamsMetadataState.onChange(partitionAssignor.getPartitionsByHostState(), partitionAssignor.clusterMetadata());
                 lastCleanMs = time.milliseconds(); // start the cleaning cycle
-                setStateWhenNotShuttingDownOrDead(State.RUNNING);
+                setState(State.RUNNING, true);
             } catch (final Throwable t) {
                 rebalanceException = t;
                 throw t;
@@ -214,7 +222,7 @@ public class StreamThread extends Thread {
 
             final long start = time.milliseconds();
             try {
-                setStateWhenNotShuttingDownOrDead(State.PARTITIONS_REVOKED);
+                setState(State.PARTITIONS_REVOKED, true);
                 lastCleanMs = Long.MAX_VALUE; // stop the cleaning cycle until partitions are assigned
                 // suspend active tasks
                 suspendTasksAndState();
@@ -378,6 +386,8 @@ public class StreamThread extends Thread {
 
 
     private volatile State state = State.CREATED;
+    private final Object stateLock = new Object();
+
     private StreamThread.StateListener stateListener = null;
     final PartitionGrouper partitionGrouper;
     private final StreamsMetadataState streamsMetadataState;
@@ -511,7 +521,7 @@ public class StreamThread extends Thread {
     @Override
     public void run() {
         log.info("{} Starting", logPrefix);
-        setStateWhenNotShuttingDownOrDead(State.RUNNING);
+        setState(State.RUNNING, true);
         boolean cleanRun = false;
         try {
             runLoop();
@@ -596,7 +606,7 @@ public class StreamThread extends Thread {
                 addToResetList(partition, seekToEnd, "{} Setting topic '{}' to consume from {} offset", "latest", loggedTopics);
             } else {
                 if (originalReset == null || (!originalReset.equals("earliest") && !originalReset.equals("latest"))) {
-                    setState(State.PENDING_SHUTDOWN);
+                    setState(State.PENDING_SHUTDOWN, false);
                     final String errorMessage = "No valid committed offset found for input topic %s (partition %s) and no valid reset policy configured." +
                         " You need to set configuration parameter \"auto.offset.reset\" or specify a topic specific reset " +
                         "policy via KStreamBuilder#stream(StreamsConfig.AutoOffsetReset offsetReset, ...) or KStreamBuilder#table(StreamsConfig.AutoOffsetReset offsetReset, ...)";
@@ -903,15 +913,19 @@ public class StreamThread extends Thread {
      */
     public synchronized void close() {
         log.info("{} Informed thread to shut down", logPrefix);
-        setStateWhenNotShuttingDownOrDead(State.PENDING_SHUTDOWN);
+        setState(State.PENDING_SHUTDOWN, true);
     }
 
     public synchronized boolean isInitialized() {
-        return state == State.RUNNING;
+        synchronized (stateLock) {
+            return state == State.RUNNING;
+        }
     }
 
     public synchronized boolean stillRunning() {
-        return state.isRunning();
+        synchronized (stateLock) {
+            return state.isRunning();
+        }
     }
 
     public Map<TaskId, StreamTask> tasks() {
@@ -966,28 +980,43 @@ public class StreamThread extends Thread {
     /**
      * @return The state this instance is in
      */
-    public synchronized State state() {
-        return state;
+    public State state() {
+        synchronized (stateLock) {
+            return state;
+        }
     }
 
-    private synchronized void setStateWhenNotShuttingDownOrDead(final State newState) {
-        if (state == State.PENDING_SHUTDOWN || state == State.DEAD) {
-            return;
-        }
-        setState(newState);
-    }
 
-    private synchronized void setState(final State newState) {
-        final State oldState = state;
-        if (!state.isValidTransition(newState)) {
-            log.warn("{} Unexpected state transition from {} to {}.", logPrefix, oldState, newState);
-        } else {
-            log.info("{} State transition from {} to {}.", logPrefix, oldState, newState);
-        }
+    /**
+     * Sets the state
+     * @param newState New state
+     * @param ignoreWhenShuttingDownOrDead,       if true, then we'll first check if the state is
+     *                                            PENDING_SHUTDOWN or DEAD, and if it is,
+     *                                            we immediately return. Effectively this enables
+     *                                            a conditional set, under the stateLock lock.
+     */
+    private void setState(final State newState, boolean ignoreWhenShuttingDownOrDead) {
+        synchronized (stateLock) {
+            final State oldState = state;
 
-        state = newState;
-        if (stateListener != null) {
-            stateListener.onChange(this, state, oldState);
+
+            if (ignoreWhenShuttingDownOrDead) {
+                if (state == State.PENDING_SHUTDOWN || state == State.DEAD) {
+                    return;
+                }
+            }
+
+            if (!state.isValidTransition(newState)) {
+                log.warn("{} Unexpected state transition from {} to {}.", logPrefix, oldState, newState);
+                throw new StreamsException(logPrefix + " Unexpected state transition from " + oldState + " to " + newState);
+            } else {
+                log.info("{} State transition from {} to {}.", logPrefix, oldState, newState);
+            }
+
+            state = newState;
+            if (stateListener != null) {
+                stateListener.onChange(this, state, oldState);
+            }
         }
     }
 
@@ -1075,7 +1104,7 @@ public class StreamThread extends Thread {
         // clean up global tasks
 
         log.info("{} Stream thread shutdown complete", logPrefix);
-        setState(State.DEAD);
+        setState(State.DEAD, false);
         streamsMetrics.removeAllSensors();
     }
 

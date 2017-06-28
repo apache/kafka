@@ -52,6 +52,7 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.io.File;
+import java.io.IOException;
 import java.lang.reflect.Field;
 import java.nio.ByteBuffer;
 import java.nio.file.Files;
@@ -220,12 +221,11 @@ public class StreamThreadTest {
 
     @SuppressWarnings("unchecked")
     @Test
-    public void testPartitionAssignmentChange() throws Exception {
+    public void testPartitionAssignmentChange() throws InterruptedException {
         builder.addSource("source1", "topic1");
         builder.addSource("source2", "topic2");
         builder.addSource("source3", "topic3");
         builder.addProcessor("processor", new MockProcessorSupplier(), "source2", "source3");
-
         final StreamThread thread = new StreamThread(
             builder,
             config,
@@ -261,7 +261,13 @@ public class StreamThreadTest {
         initPartitionGrouper(config, thread, clientSupplier);
 
         final ConsumerRebalanceListener rebalanceListener = thread.rebalanceListener;
-
+        thread.start();
+        TestUtils.waitForCondition(new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                return thread.state() == StreamThread.State.RUNNING;
+            }
+        }, 10 * 1000, "Thread never started.");
         assertTrue(thread.tasks().isEmpty());
 
         List<TopicPartition> revokedPartitions;
@@ -275,14 +281,10 @@ public class StreamThreadTest {
 
         rebalanceListener.onPartitionsRevoked(revokedPartitions);
         assertEquals(thread.state(), StreamThread.State.PARTITIONS_REVOKED);
-        Assert.assertEquals(stateListener.numChanges, 1);
-        Assert.assertEquals(stateListener.oldState, StreamThread.State.CREATED);
-        Assert.assertEquals(stateListener.newState, StreamThread.State.PARTITIONS_REVOKED);
         rebalanceListener.onPartitionsAssigned(assignedPartitions);
         assertEquals(thread.state(), StreamThread.State.RUNNING);
-        Assert.assertEquals(stateListener.numChanges, 3);
+        Assert.assertEquals(stateListener.numChanges, 4);
         Assert.assertEquals(stateListener.oldState, StreamThread.State.ASSIGNING_PARTITIONS);
-        Assert.assertEquals(stateListener.newState, StreamThread.State.RUNNING);
 
         assertTrue(thread.tasks().containsKey(task1));
         assertEquals(expectedGroup1, thread.tasks().get(task1).partitions());
@@ -371,7 +373,7 @@ public class StreamThreadTest {
 
     @SuppressWarnings("unchecked")
     @Test
-    public void testStateChangeStartClose() throws Exception {
+    public void testStateChangeStartClose() throws InterruptedException {
 
         final StreamThread thread = new StreamThread(
             builder,
@@ -412,7 +414,7 @@ public class StreamThreadTest {
 
     @SuppressWarnings("unchecked")
     @Test
-    public void testHandingOverTaskFromOneToAnotherThread() throws Exception {
+    public void testHandingOverTaskFromOneToAnotherThread() throws InterruptedException {
         builder.addStateStore(
             Stores
                 .create("store")
@@ -423,7 +425,7 @@ public class StreamThreadTest {
         );
         builder.addSource("source", TOPIC);
 
-        clientSupplier.consumer.assign(Arrays.asList(new TopicPartition(TOPIC, 0), new TopicPartition(TOPIC, 1)));
+        //clientSupplier.consumer.assign(Arrays.asList(new TopicPartition(TOPIC, 0), new TopicPartition(TOPIC, 1)));
 
         final StreamThread thread1 = new StreamThread(
             builder,
@@ -456,6 +458,23 @@ public class StreamThreadTest {
 
         thread1.setPartitionAssignor(new MockStreamsPartitionAssignor(thread1Assignment));
         thread2.setPartitionAssignor(new MockStreamsPartitionAssignor(thread2Assignment));
+
+
+        thread1.start();
+        TestUtils.waitForCondition(new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                return thread1.state() == StreamThread.State.RUNNING;
+            }
+        }, 10 * 1000, "Thread never started.");
+
+        thread2.start();
+        TestUtils.waitForCondition(new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                return thread2.state() == StreamThread.State.RUNNING;
+            }
+        }, 10 * 1000, "Thread never started.");
 
         // revoke (to get threads in correct state)
         thread1.rebalanceListener.onPartitionsRevoked(EMPTY_SET);
@@ -518,7 +537,7 @@ public class StreamThreadTest {
     }
 
     @Test
-    public void testMetrics() throws Exception {
+    public void testMetrics() {
         final StreamThread thread = new StreamThread(
             builder,
             config,
@@ -559,8 +578,9 @@ public class StreamThreadTest {
         assertNotNull(metrics.metrics().get(metrics.metricName("skipped-records-rate", defaultGroupName, "The average per-second number of skipped records.", defaultTags)));
     }
 
+
     @Test
-    public void testMaybeClean() throws Exception {
+    public void testMaybeClean() throws IOException, InterruptedException, java.nio.file.NoSuchFileException {
         final File baseDir = Files.createTempDirectory("test").toFile();
         try {
             final long cleanupDelay = 1000L;
@@ -578,9 +598,7 @@ public class StreamThreadTest {
             stateDir2.mkdir();
             stateDir3.mkdir();
             extraDir.mkdir();
-
             builder.addSource("source1", "topic1");
-
             final StreamThread thread = new StreamThread(
                 builder,
                 config,
@@ -592,12 +610,10 @@ public class StreamThreadTest {
                 mockTime,
                 new StreamsMetadataState(builder, StreamsMetadataState.UNKNOWN_HOST),
                 0) {
-
                 @Override
                 public void maybeClean(final long now) {
                     super.maybeClean(now);
                 }
-
                 @Override
                 protected StreamTask createStreamTask(final TaskId id, final Collection<TopicPartition> partitionsForTask) {
                     final ProcessorTopology topology = builder.build(id.topicGroupId);
@@ -629,9 +645,7 @@ public class StreamThreadTest {
             List<TopicPartition> assignedPartitions;
             Map<TaskId, StreamTask> prevTasks;
 
-            //
             // Assign t1p1 and t1p2. This should create task1 & task2
-            //
             final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
             activeTasks.put(task1, Collections.singleton(t1p1));
             activeTasks.put(task2, Collections.singleton(t1p2));
@@ -642,6 +656,13 @@ public class StreamThreadTest {
             prevTasks = new HashMap<>(thread.tasks());
 
             final ConsumerRebalanceListener rebalanceListener = thread.rebalanceListener;
+            thread.start();
+            TestUtils.waitForCondition(new TestCondition() {
+                @Override
+                public boolean conditionMet() {
+                    return thread.state() == StreamThread.State.RUNNING;
+                }
+            }, 10 * 1000, "Thread never started.");
             rebalanceListener.onPartitionsRevoked(revokedPartitions);
             rebalanceListener.onPartitionsAssigned(assignedPartitions);
 
@@ -651,27 +672,17 @@ public class StreamThreadTest {
             // task 1 & 2 are created
             assertEquals(2, thread.tasks().size());
 
-            // all directories should still exit before the cleanup delay time
-            mockTime.sleep(cleanupDelay - 10L);
-            thread.maybeClean(mockTime.milliseconds());
-            assertTrue(stateDir1.exists());
-            assertTrue(stateDir2.exists());
-            assertTrue(stateDir3.exists());
-            assertTrue(extraDir.exists());
 
             // all state directories except for task task2 & task3 will be removed. the extra directory should still exists
-            mockTime.sleep(11L);
+            mockTime.sleep(cleanupDelay + 10L);
             thread.maybeClean(mockTime.milliseconds());
             assertTrue(stateDir1.exists());
             assertTrue(stateDir2.exists());
             assertFalse(stateDir3.exists());
             assertTrue(extraDir.exists());
 
-            //
             // Revoke t1p1 and t1p2. This should remove task1 & task2
-            //
             activeTasks.clear();
-
             revokedPartitions = assignedPartitions;
             assignedPartitions = Collections.emptyList();
             prevTasks = new HashMap<>(thread.tasks());
@@ -705,12 +716,14 @@ public class StreamThreadTest {
             assertFalse(stateDir3.exists());
             assertTrue(extraDir.exists());
         } finally {
+            // note that this call can throw a java.nio.file.NoSuchFileException
+            // since some of the subdirs might be deleted already during cleanup
             Utils.delete(baseDir);
         }
     }
 
     @Test
-    public void testMaybeCommit() throws Exception {
+    public void testMaybeCommit() throws IOException, InterruptedException {
         final File baseDir = Files.createTempDirectory("test").toFile();
         try {
             final long commitInterval = 1000L;
@@ -769,6 +782,14 @@ public class StreamThreadTest {
             revokedPartitions = Collections.emptyList();
             assignedPartitions = Arrays.asList(t1p1, t1p2);
 
+            thread.start();
+            TestUtils.waitForCondition(new TestCondition() {
+                @Override
+                public boolean conditionMet() {
+                    return thread.state() == StreamThread.State.RUNNING;
+                }
+            }, 10 * 1000, "Thread never started.");
+            thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
             rebalanceListener.onPartitionsRevoked(revokedPartitions);
             rebalanceListener.onPartitionsAssigned(assignedPartitions);
 
@@ -809,7 +830,7 @@ public class StreamThreadTest {
     }
 
     @Test
-    public void shouldInjectSharedProducerForAllTasksUsingClientSupplierOnCreateIfEosDisabled() {
+    public void shouldInjectSharedProducerForAllTasksUsingClientSupplierOnCreateIfEosDisabled() throws InterruptedException {
         builder.addSource("source1", "someTopic");
 
         final StreamThread thread = new StreamThread(
@@ -829,6 +850,14 @@ public class StreamThreadTest {
         assignment.put(new TaskId(0, 1), Collections.singleton(new TopicPartition("someTopic", 1)));
         thread.setPartitionAssignor(new MockStreamsPartitionAssignor(assignment));
 
+        thread.start();
+        TestUtils.waitForCondition(new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                return thread.state() == StreamThread.State.RUNNING;
+            }
+        }, 10 * 1000, "Thread never started.");
+        thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
         thread.rebalanceListener.onPartitionsAssigned(Collections.singleton(new TopicPartition("someTopic", 0)));
 
         assertEquals(1, clientSupplier.producers.size());
@@ -842,7 +871,7 @@ public class StreamThreadTest {
     }
 
     @Test
-    public void shouldInjectProducerPerTaskUsingClientSupplierOnCreateIfEosEnable() {
+    public void shouldInjectProducerPerTaskUsingClientSupplierOnCreateIfEosEnable() throws InterruptedException {
         builder.addSource("source1", "someTopic");
 
         final MockClientSupplier clientSupplier = new MockClientSupplier(applicationId);
@@ -866,6 +895,14 @@ public class StreamThreadTest {
 
         final Set<TopicPartition> assignedPartitions = new HashSet<>();
         Collections.addAll(assignedPartitions, new TopicPartition("someTopic", 0), new TopicPartition("someTopic", 2));
+        thread.start();
+        TestUtils.waitForCondition(new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                return thread.state() == StreamThread.State.RUNNING;
+            }
+        }, 10 * 1000, "Thread never started.");
+        thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
         thread.rebalanceListener.onPartitionsAssigned(assignedPartitions);
 
         assertNull(thread.threadProducer);
@@ -879,7 +916,7 @@ public class StreamThreadTest {
     }
 
     @Test
-    public void shouldCloseAllTaskProducersOnCloseIfEosEnabled() {
+    public void shouldCloseAllTaskProducersOnCloseIfEosEnabled() throws InterruptedException {
         builder.addSource("source1", "someTopic");
 
         final MockClientSupplier clientSupplier = new MockClientSupplier(applicationId);
@@ -900,10 +937,18 @@ public class StreamThreadTest {
         assignment.put(new TaskId(0, 1), Collections.singleton(new TopicPartition("someTopic", 1)));
         thread.setPartitionAssignor(new MockStreamsPartitionAssignor(assignment));
 
+        thread.start();
+        TestUtils.waitForCondition(new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                return thread.state() == StreamThread.State.RUNNING;
+            }
+        }, 10 * 1000, "Thread never started.");
+        thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
         thread.rebalanceListener.onPartitionsAssigned(Collections.singleton(new TopicPartition("someTopic", 0)));
 
         thread.close();
-        thread.run();
+        thread.join();
 
         for (final StreamTask task : thread.tasks().values()) {
             assertTrue(((MockProducer) ((RecordCollectorImpl) task.recordCollector()).producer()).closed());
@@ -911,7 +956,7 @@ public class StreamThreadTest {
     }
 
     @Test
-    public void shouldCloseThreadProducerOnCloseIfEosDisabled() {
+    public void shouldCloseThreadProducerOnCloseIfEosDisabled() throws InterruptedException {
         builder.addSource("source1", "someTopic");
 
         final StreamThread thread = new StreamThread(
@@ -931,16 +976,24 @@ public class StreamThreadTest {
         assignment.put(new TaskId(0, 1), Collections.singleton(new TopicPartition("someTopic", 1)));
         thread.setPartitionAssignor(new MockStreamsPartitionAssignor(assignment));
 
+        thread.start();
+        TestUtils.waitForCondition(new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                return thread.state() == StreamThread.State.RUNNING;
+            }
+        }, 10 * 1000, "Thread never started.");
+        thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
         thread.rebalanceListener.onPartitionsAssigned(Collections.singleton(new TopicPartition("someTopic", 0)));
 
         thread.close();
-        thread.run();
+        thread.join();
 
         assertTrue(((MockProducer) thread.threadProducer).closed());
     }
 
     @Test
-    public void shouldNotNullPointerWhenStandbyTasksAssignedAndNoStateStoresForTopology() throws Exception {
+    public void shouldNotNullPointerWhenStandbyTasksAssignedAndNoStateStoresForTopology() throws InterruptedException {
         builder.addSource("name", "topic").addSink("out", "output");
 
         final StreamThread thread = new StreamThread(
@@ -962,12 +1015,19 @@ public class StreamThreadTest {
             }
         });
 
+        thread.start();
+        TestUtils.waitForCondition(new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                return thread.state() == StreamThread.State.RUNNING;
+            }
+        }, 10 * 1000, "Thread never started.");
         thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
         thread.rebalanceListener.onPartitionsAssigned(Collections.<TopicPartition>emptyList());
     }
 
     @Test
-    public void shouldInitializeRestoreConsumerWithOffsetsFromStandbyTasks() throws Exception {
+    public void shouldInitializeRestoreConsumerWithOffsetsFromStandbyTasks() throws InterruptedException {
         final KStreamBuilder builder = new KStreamBuilder();
         builder.setApplicationId(applicationId);
         builder.stream("t1").groupByKey().count("count-one");
@@ -1002,6 +1062,12 @@ public class StreamThreadTest {
         final Map<TaskId, Set<TopicPartition>> standbyTasks = new HashMap<>();
         final TopicPartition t1 = new TopicPartition("t1", 0);
         standbyTasks.put(new TaskId(0, 0), Utils.mkSet(t1));
+        final HashMap<TopicPartition, Long> offsets = new HashMap<>();
+        offsets.put(new TopicPartition("stream-thread-test-count-one-changelog", 0), 0L);
+        offsets.put(new TopicPartition("stream-thread-test-count-two-changelog", 0), 0L);
+        restoreConsumer.updateEndOffsets(offsets);
+        restoreConsumer.updateBeginningOffsets(offsets);
+
 
         thread.setPartitionAssignor(new StreamPartitionAssignor() {
             @Override
@@ -1010,6 +1076,13 @@ public class StreamThreadTest {
             }
         });
 
+        thread.start();
+        TestUtils.waitForCondition(new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                return thread.state() == StreamThread.State.RUNNING;
+            }
+        }, 10 * 1000, "Thread never started.");
         thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
         thread.rebalanceListener.onPartitionsAssigned(Collections.<TopicPartition>emptyList());
 
@@ -1083,6 +1156,13 @@ public class StreamThreadTest {
             }
         });
 
+        thread.start();
+        TestUtils.waitForCondition(new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                return thread.state() == StreamThread.State.RUNNING;
+            }
+        }, 10 * 1000, "Thread never started.");
         thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
         thread.rebalanceListener.onPartitionsAssigned(Utils.mkSet(t2));
 
@@ -1157,6 +1237,14 @@ public class StreamThreadTest {
         builder.updateSubscriptions(subscriptionUpdates, null);
 
         // should create task for id 0_0 with a single partition
+        thread.start();
+        TestUtils.waitForCondition(new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                return thread.state() == StreamThread.State.RUNNING;
+            }
+        }, 10 * 1000, "Thread never started.");
+
         thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
         thread.rebalanceListener.onPartitionsAssigned(task00Partitions);
 
@@ -1202,12 +1290,20 @@ public class StreamThreadTest {
 
         thread.setPartitionAssignor(new MockStreamsPartitionAssignor(activeTasks));
 
+        thread.start();
+        TestUtils.waitForCondition(new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                return thread.state() == StreamThread.State.RUNNING;
+            }
+        }, 10 * 1000, "Thread never started.");
+
         thread.rebalanceListener.onPartitionsRevoked(null);
         thread.rebalanceListener.onPartitionsAssigned(task0Assignment);
         assertThat(thread.tasks().size(), equalTo(1));
         final MockProducer producer = clientSupplier.producers.get(0);
 
-        thread.start();
+
 
         TestUtils.waitForCondition(
             new TestCondition() {
@@ -1290,6 +1386,13 @@ public class StreamThreadTest {
 
         thread.setPartitionAssignor(new MockStreamsPartitionAssignor(activeTasks));
 
+        thread.start();
+        TestUtils.waitForCondition(new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                return thread.state() == StreamThread.State.RUNNING;
+            }
+        }, 10 * 1000, "Thread never started.");
         thread.rebalanceListener.onPartitionsRevoked(null);
         thread.rebalanceListener.onPartitionsAssigned(task0Assignment);
         assertThat(thread.tasks().size(), equalTo(1));
@@ -1351,10 +1454,16 @@ public class StreamThreadTest {
 
         thread.setPartitionAssignor(new MockStreamsPartitionAssignor(activeTasks));
 
+        thread.start();
+        TestUtils.waitForCondition(new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                return thread.state() == StreamThread.State.RUNNING;
+            }
+        }, 10 * 1000, "Thread never started.");
         thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
         thread.rebalanceListener.onPartitionsAssigned(testStreamTask.partitions);
 
-        thread.start();
         thread.close();
         thread.join();
         assertFalse("task shouldn't have been committed as there was an exception during shutdown", testStreamTask.committed);
@@ -1407,12 +1516,18 @@ public class StreamThreadTest {
 
         thread.setPartitionAssignor(new MockStreamsPartitionAssignor(activeTasks));
 
+        thread.start();
+        TestUtils.waitForCondition(new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                return thread.state() == StreamThread.State.RUNNING;
+            }
+        }, 10 * 1000, "Thread never started.");
         thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
         thread.rebalanceListener.onPartitionsAssigned(testStreamTask.partitions);
         // store should have been opened
         assertTrue(stateStore.isOpen());
 
-        thread.start();
         thread.close();
         thread.join();
         assertFalse("task shouldn't have been committed as there was an exception during shutdown", testStreamTask.committed);
@@ -1469,6 +1584,13 @@ public class StreamThreadTest {
 
         thread.setPartitionAssignor(new MockStreamsPartitionAssignor(activeTasks));
 
+        thread.start();
+        TestUtils.waitForCondition(new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                return thread.state() == StreamThread.State.RUNNING;
+            }
+        }, 10 * 1000, "Thread never started.");
         thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
         thread.rebalanceListener.onPartitionsAssigned(testStreamTask.partitions);
         try {
@@ -1528,6 +1650,13 @@ public class StreamThreadTest {
 
         thread.setPartitionAssignor(new MockStreamsPartitionAssignor(activeTasks));
 
+        thread.start();
+        TestUtils.waitForCondition(new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                return thread.state() == StreamThread.State.RUNNING;
+            }
+        }, 10 * 1000, "Thread never started.");
         thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
         thread.rebalanceListener.onPartitionsAssigned(testStreamTask.partitions);
         try {

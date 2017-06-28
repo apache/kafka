@@ -162,17 +162,19 @@ public class KafkaStreams {
      *         |             v
      *         |       +-----+--------+
      *         +-----> | Pending      |
-     *                 | Shutdown     |
-     *                 +-----+--------+
-     *                       |
-     *                       v
-     *                 +-----+--------+
-     *                 | Not Running  |
+     *         |       | Shutdown     |
+     *         |       +-----+--------+
+     *         |             |
+     *         |             v
+     *         |       +-----+--------+
+     *         +-----> | Not Running  |
      *                 +--------------+
      * </pre>
+     * Note the following:
+     * - Any state can go to PENDING_SHUTDOWN (during clean shutdown) or NOT_RUNNING (e.g., during an exception).
      */
     public enum State {
-        CREATED(1, 2, 3), REBALANCING(1, 2, 3), RUNNING(1, 2, 3), PENDING_SHUTDOWN(4), NOT_RUNNING;
+        CREATED(1, 2, 3), REBALANCING(1, 2, 3, 4), RUNNING(1, 3, 4), PENDING_SHUTDOWN(4), NOT_RUNNING;
 
         private final Set<Integer> validTransitions = new HashSet<>();
 
@@ -220,11 +222,26 @@ public class KafkaStreams {
         stateListener = listener;
     }
 
-    private void setState(final State newState) {
+    /**
+     * Sets the state
+     * @param newState New state
+     * @param ignoreWhenShuttingDownOrNotRunning, if true, then we'll first check if the state is
+     *                                            PENDING_SHUTDOWN or NOT_RUNNING, and if it is,
+     *                                            we immediately return. Effectively this enables
+     *                                            a conditional set, under the stateLock lock.
+     */
+    private void setState(final State newState, boolean ignoreWhenShuttingDownOrNotRunning) {
         synchronized (stateLock) {
+            if (ignoreWhenShuttingDownOrNotRunning) {
+                if (state == State.PENDING_SHUTDOWN || state == State.NOT_RUNNING) {
+                    return;
+                }
+            }
+
             final State oldState = state;
             if (!state.isValidTransition(newState)) {
                 log.warn("{} Unexpected state transition from {} to {}.", logPrefix, oldState, newState);
+                throw new StreamsException(logPrefix + " Unexpected state transition from " + oldState + " to " + newState);
             } else {
                 log.info("{} State transition from {} to {}.", logPrefix, oldState, newState);
             }
@@ -235,12 +252,6 @@ public class KafkaStreams {
         }
     }
 
-    private void setStateWhenNotShuttingDownOrNotRunning(final State newState) {
-        if (state == State.PENDING_SHUTDOWN || state == State.NOT_RUNNING) {
-            return;
-        }
-        setState(newState);
-    }
 
 
     /**
@@ -280,7 +291,7 @@ public class KafkaStreams {
             }
             if (newState == StreamThread.State.PARTITIONS_REVOKED ||
                 newState == StreamThread.State.ASSIGNING_PARTITIONS) {
-                setStateWhenNotShuttingDownOrNotRunning(State.REBALANCING);
+                setState(State.REBALANCING, true);
             } else if (newState == StreamThread.State.RUNNING) {
                 // one thread is running, check others
                 for (final StreamThread.State state : threadState.values()) {
@@ -288,11 +299,11 @@ public class KafkaStreams {
                         return;
                     }
                 }
-                setStateWhenNotShuttingDownOrNotRunning(State.RUNNING);
+                setState(State.RUNNING, true);
             } else if (newState == StreamThread.State.DEAD) {
                 // one thread died, check if we have enough threads running
                 if (threadState.size() == 0) {
-                    setStateWhenNotShuttingDownOrNotRunning(State.NOT_RUNNING);
+                    setState(State.NOT_RUNNING, true);
                 }
             }
 
@@ -455,7 +466,6 @@ public class KafkaStreams {
 
         if (state == State.CREATED) {
             checkBrokerVersionCompatibility();
-            setState(State.RUNNING);
 
             if (globalStreamThread != null) {
                 globalStreamThread.start();
@@ -492,7 +502,7 @@ public class KafkaStreams {
     public synchronized boolean close(final long timeout, final TimeUnit timeUnit) {
         log.debug("{} Stopping Kafka Stream process.", logPrefix);
         if (state.isCreatedOrRunning() || globalStreamThread != null) {
-            setState(State.PENDING_SHUTDOWN);
+            setState(State.PENDING_SHUTDOWN, false);
             // save the current thread so that if it is a stream thread
             // we don't attempt to join it and cause a deadlock
             final Thread shutdown = new Thread(new Runnable() {
@@ -537,7 +547,7 @@ public class KafkaStreams {
             } catch (final InterruptedException e) {
                 Thread.interrupted();
             }
-            setState(State.NOT_RUNNING);
+            setState(State.NOT_RUNNING, false);
             return !shutdown.isAlive();
         }
         return true;
@@ -577,6 +587,12 @@ public class KafkaStreams {
         return sb.toString();
     }
 
+    private boolean isRunning() {
+        synchronized (stateLock) {
+            return state.isRunning();
+        }
+    }
+
     /**
      * Do a clean up of the local {@link StateStore} directory ({@link StreamsConfig#STATE_DIR_CONFIG}) by deleting all
      * data with regard to the {@link StreamsConfig#APPLICATION_ID_CONFIG application ID}.
@@ -589,7 +605,7 @@ public class KafkaStreams {
      * @throws IllegalStateException if the instance is currently running
      */
     public void cleanUp() {
-        if (state.isRunning()) {
+        if (isRunning()) {
             throw new IllegalStateException("Cannot clean up while running.");
         }
 
@@ -745,7 +761,7 @@ public class KafkaStreams {
     }
 
     private void validateIsRunning() {
-        if (!state.isRunning()) {
+        if (!isRunning()) {
             throw new IllegalStateException("KafkaStreams is not running. State is " + state + ".");
         }
     }

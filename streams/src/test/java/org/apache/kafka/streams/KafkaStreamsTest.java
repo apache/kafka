@@ -55,6 +55,7 @@ import static org.junit.Assert.assertTrue;
 public class KafkaStreamsTest {
 
     private static final int NUM_BROKERS = 1;
+    private static final int NUM_THREADS = 10;
     // We need this to avoid the KafkaConsumer hanging on poll (this may occur if the test doesn't complete
     // quick enough)
     @ClassRule
@@ -70,6 +71,7 @@ public class KafkaStreamsTest {
         props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         props.setProperty(StreamsConfig.METRIC_REPORTER_CLASSES_CONFIG, MockMetricsReporter.class.getName());
         props.setProperty(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
+        props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, NUM_THREADS);
         streams = new KafkaStreams(builder, props);
     }
 
@@ -84,13 +86,14 @@ public class KafkaStreamsTest {
         Assert.assertEquals(stateListener.numChanges, 0);
 
         streams.start();
-        Assert.assertEquals(streams.state(), KafkaStreams.State.RUNNING);
-        Assert.assertEquals(stateListener.numChanges, 1);
-        Assert.assertEquals(stateListener.oldState, KafkaStreams.State.CREATED);
-        Assert.assertEquals(stateListener.newState, KafkaStreams.State.RUNNING);
+        TestUtils.waitForCondition(new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                return streams.state() == KafkaStreams.State.RUNNING;
+            }
+        }, 10 * 1000, "Streams never started.");
         streams.close();
         Assert.assertEquals(streams.state(), KafkaStreams.State.NOT_RUNNING);
-        Assert.assertEquals(stateListener.mapStates.get(KafkaStreams.State.NOT_RUNNING).longValue(), 1L);
     }
 
     @Test
@@ -341,6 +344,12 @@ public class KafkaStreamsTest {
         final KafkaStreams streams = new KafkaStreams(builder, props);
 
         streams.start();
+        TestUtils.waitForCondition(new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                return streams.state() == KafkaStreams.State.RUNNING;
+            }
+        }, 10 * 1000, "Streams never started.");
         try {
             streams.cleanUp();
         } catch (final IllegalStateException e) {
