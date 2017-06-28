@@ -78,7 +78,7 @@ public class TopicConfig {
         "is increased and there are consumers older than 0.10.2, the consumers' fetch size must also be increased so that " +
         "the they can fetch record batches this large.</p>" +
         "<p>In the latest message format version, records are always grouped into batches for efficiency. In previous " +
-        "message format versions, uncompressed records are not grouped into batches and this limit only applies to a" +
+        "message format versions, uncompressed records are not grouped into batches and this limit only applies to a " +
         "single record in that case.</p>";
 
     public static final String INDEX_INTERVAL_BYTES_CONFIG = "index.interval.bytes";
