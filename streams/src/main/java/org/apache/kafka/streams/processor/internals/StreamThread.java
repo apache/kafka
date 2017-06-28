@@ -546,7 +546,7 @@ public class StreamThread extends Thread {
             if (records != null && !records.isEmpty() && !activeTasks.isEmpty()) {
                 streamsMetrics.pollTimeSensor.record(computeLatency(), timerStartedMs);
                 addRecordsToTasks(records);
-                final long totalProcessed = processAndPunctuate(activeTasks, recordsProcessedBeforeCommit);
+                final long totalProcessed = processAndPunctuateStreamTime(activeTasks, recordsProcessedBeforeCommit);
                 if (totalProcessed > 0) {
                     final long processLatency = computeLatency();
                     streamsMetrics.processTimeSensor.record(processLatency / (double) totalProcessed,
@@ -556,6 +556,7 @@ public class StreamThread extends Thread {
                 }
             }
 
+            maybePunctuateSystemTime();
             maybeCommit(timerStartedMs);
             maybeUpdateStandbyTasks(timerStartedMs);
             maybeClean(timerStartedMs);
@@ -653,8 +654,8 @@ public class StreamThread extends Thread {
      *                                     if UNLIMITED_RECORDS, then commit is never called
      * @return Number of records processed since last commit.
      */
-    private long processAndPunctuate(final Map<TaskId, StreamTask> tasks,
-                                     final long recordsProcessedBeforeCommit) {
+    private long processAndPunctuateStreamTime(final Map<TaskId, StreamTask> tasks,
+                                               final long recordsProcessedBeforeCommit) {
 
         long totalProcessedEachRound;
         long totalProcessedSinceLastMaybeCommit = 0;
@@ -699,7 +700,7 @@ public class StreamThread extends Thread {
             @Override
             public void apply(final StreamTask task) {
                 name = "punctuate";
-                maybePunctuate(task);
+                maybePunctuateStreamTime(task);
                 if (task.commitNeeded()) {
                     name = "commit";
 
@@ -721,15 +722,40 @@ public class StreamThread extends Thread {
         return totalProcessedSinceLastMaybeCommit;
     }
 
-    private void maybePunctuate(final StreamTask task) {
+    private void maybePunctuateStreamTime(final StreamTask task) {
         try {
             // check whether we should punctuate based on the task's partition group timestamp;
             // which are essentially based on record timestamp.
-            if (task.maybePunctuate()) {
+            if (task.maybePunctuateStreamTime()) {
                 streamsMetrics.punctuateTimeSensor.record(computeLatency(), timerStartedMs);
             }
         } catch (final KafkaException e) {
             log.error("{} Failed to punctuate active task {}: ", logPrefix, task.id(), e);
+            throw e;
+        }
+    }
+
+    private void maybePunctuateSystemTime() {
+        final RuntimeException e = performOnStreamTasks(new StreamTaskAction() {
+            @Override
+            public String name() {
+                return "punctuate";
+            }
+
+            @Override
+            public void apply(final StreamTask task) {
+                try {
+                    // check whether we should punctuate based on system timestamp
+                    if (task.maybePunctuateSystemTime()) {
+                        streamsMetrics.punctuateTimeSensor.record(computeLatency(), timerStartedMs);
+                    }
+                } catch (final KafkaException e) {
+                    log.error("{} Failed to punctuate active task {}: {}", logPrefix, task.id(), e);
+                    throw e;
+                }
+            }
+        });
+        if (e != null) {
             throw e;
         }
     }
