@@ -167,7 +167,7 @@ class LogManager(private val logDirs: Array[File],
       logStartOffsetCheckpoints = logStartOffsetCheckpoints.filterKeys(file => file.getAbsolutePath != dir)
 
       if (offlineTopicPartitions.nonEmpty)
-        DiskUtils.propagateLogDirEvent(zkUtils, brokerId)
+        LogDirUtils.propagateLogDirEvent(zkUtils, brokerId)
     }
     info(s"Stopped serving logs in dir $dir")
   }

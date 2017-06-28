@@ -20,7 +20,7 @@ package kafka.utils
 import kafka.controller.{LogDirEventNotificationListener}
 import scala.collection.{Map, Seq, Set}
 
-object DiskUtils extends Logging {
+object LogDirUtils extends Logging {
 
   private val LogDirEventNotificationPrefix = "log_dir_event_"
   val LogDirFailureEvent = 1

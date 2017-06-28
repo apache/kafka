@@ -829,16 +829,16 @@ public class RequestResponseTest {
     }
 
     private UpdateMetadataRequest createUpdateMetadataRequest(int version, String rack) {
-        Map<TopicPartition, UpdateMetadataRequest.UpdateMetadataRequestPartitionState> partitionStates = new HashMap<>();
+        Map<TopicPartition, UpdateMetadataRequest.PartitionState> partitionStates = new HashMap<>();
         List<Integer> isr = asList(1, 2);
         List<Integer> replicas = asList(1, 2, 3, 4);
         List<Integer> offlineReplicas = asList();
         partitionStates.put(new TopicPartition("topic5", 105),
-            new UpdateMetadataRequest.UpdateMetadataRequestPartitionState(0, 2, 1, isr, 2, replicas, offlineReplicas));
+            new UpdateMetadataRequest.PartitionState(0, 2, 1, isr, 2, replicas, offlineReplicas));
         partitionStates.put(new TopicPartition("topic5", 1),
-            new UpdateMetadataRequest.UpdateMetadataRequestPartitionState(1, 1, 1, isr, 2, replicas, offlineReplicas));
+            new UpdateMetadataRequest.PartitionState(1, 1, 1, isr, 2, replicas, offlineReplicas));
         partitionStates.put(new TopicPartition("topic20", 1),
-            new UpdateMetadataRequest.UpdateMetadataRequestPartitionState(1, 0, 1, isr, 2, replicas, offlineReplicas));
+            new UpdateMetadataRequest.PartitionState(1, 0, 1, isr, 2, replicas, offlineReplicas));
 
         SecurityProtocol plaintext = SecurityProtocol.PLAINTEXT;
         List<UpdateMetadataRequest.EndPoint> endPoints1 = new ArrayList<>();

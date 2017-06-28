@@ -176,20 +176,6 @@ class ReplicaManagerTest extends ZooKeeperTestHarness {
 
   @Test
   def testReadCommittedFetchLimitedAtLSO(): Unit = {
-    val props = TestUtils.createBrokerConfig(1, TestUtils.MockZkConnect)
-    props.put("log.dir", TestUtils.tempRelativeDir("data").getAbsolutePath)
-    props.put("broker.id", Int.box(0))
-    val config = KafkaConfig.fromProps(props)
-    val logProps = new Properties()
-    logProps.put(LogConfig.MessageTimestampDifferenceMaxMsProp, Long.MaxValue.toString)
-    val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)).toArray, zkUtils, LogConfig(logProps))
-    val aliveBrokers = Seq(createBroker(0, "host0", 0), createBroker(1, "host1", 1))
-    val metadataCache = EasyMock.createMock(classOf[MetadataCache])
-    EasyMock.expect(metadataCache.getAliveBrokers).andReturn(aliveBrokers).anyTimes()
-    EasyMock.expect(metadataCache.isBrokerAlive(EasyMock.eq(0))).andReturn(true).anyTimes()
-    EasyMock.expect(metadataCache.isBrokerAlive(EasyMock.eq(1))).andReturn(true).anyTimes()
-    EasyMock.replay(metadataCache)
-
     val timer = new MockTimer
     val replicaManager = setupReplicaManagerWithMockedPurgatories(timer)
 

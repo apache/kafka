@@ -179,7 +179,7 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
   }
 
   def closeHandler() = {
-    // File handler of the index filel will be closed after the mmap is garbage collected
+    // File handler of the index field will be closed after the mmap is garbage collected
     mmap = null
   }
 

@@ -115,7 +115,7 @@ class ReplicaFetcherThread(name: String,
     } catch {
       case e@ (_: KafkaStorageException | _: IOException) =>
         error(s"Disk error while replicating data for $topicPartition", e)
-        replicaMgr.getLogDir(topicPartition).foreach(replicaMgr.handleLogDirFailure)
+        throw new KafkaStorageException(s"Disk error while replicating data for $topicPartition", e)
     }
   }
 
@@ -198,8 +198,12 @@ class ReplicaFetcherThread(name: String,
   }
 
   // any logic for partitions whose leader has changed
-  def handlePartitionsWithErrors(partitions: Iterable[TopicPartition]) {
-    delayPartitions(partitions, brokerConfig.replicaFetchBackoffMs.toLong)
+  def handlePartitionsWithErrors(partitions: Map[TopicPartition, Option[Exception]]) {
+    val (partitionsWithStorageException, partitionsWithoutStorageException) = partitions.partition{ case (_, exception) =>
+        exception.isDefined && exception.get.isInstanceOf[KafkaStorageException]
+    }
+    partitionsWithStorageException.keys.foreach(tp => replicaMgr.getLogDir(tp).foreach(replicaMgr.handleLogDirFailure))
+    delayPartitions(partitionsWithoutStorageException.keys, brokerConfig.replicaFetchBackoffMs.toLong)
   }
 
   protected def fetch(fetchRequest: FetchRequest): Seq[(TopicPartition, PartitionData)] = {

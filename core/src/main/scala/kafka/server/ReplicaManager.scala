@@ -908,6 +908,12 @@ class ReplicaManager(val config: KafkaConfig,
         else
           Set.empty[Partition]
 
+        leaderAndISRRequest.partitionStates.asScala.keys.foreach( topicPartition =>
+          // Remove the partition from cache if local replica can not be created due to KafkaStorageException
+          if (getReplica(topicPartition).isEmpty)
+            allPartitions.remove(topicPartition)
+        )
+
         // we initialize highwatermark thread after the first leaderisrrequest. This ensures that all the partitions
         // have been completely populated before starting the checkpointing there by avoiding weird race conditions
         if (!hwThreadInitialized) {
@@ -915,6 +921,7 @@ class ReplicaManager(val config: KafkaConfig,
           hwThreadInitialized = true
         }
         replicaFetcherManager.shutdownIdleFetcherThreads()
+
 
         onLeadershipChange(partitionsBecomeLeader, partitionsBecomeFollower, responseMap)
 
@@ -1184,6 +1191,8 @@ class ReplicaManager(val config: KafkaConfig,
           case None => false
         }
       }.map(_.topicPartition)
+
+      info(s"Partitions ${newOfflinePartitions.mkString(",")} are offline due to failure on log directory $dir")
 
       newOfflinePartitions.foreach { topicPartition =>
         val partition = allPartitions.remove(topicPartition)

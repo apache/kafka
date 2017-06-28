@@ -31,7 +31,7 @@ import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.{Node, TopicPartition}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.UpdateMetadataRequest.UpdateMetadataRequestPartitionState
+import org.apache.kafka.common.requests.UpdateMetadataRequest.PartitionState
 import org.apache.kafka.common.requests.{MetadataResponse, PartitionState, UpdateMetadataRequest}
 
 /**
@@ -225,7 +225,7 @@ class MetadataCache(brokerId: Int) extends Logging {
     }
   }
 
-  private def partitionStateToPartitionStateInfo(partitionState: UpdateMetadataRequestPartitionState): MetadataPartitionState = {
+  private def partitionStateToPartitionStateInfo(partitionState: UpdateMetadataRequest.PartitionState): MetadataPartitionState = {
     val leaderAndIsr = LeaderAndIsr(partitionState.leader, partitionState.leaderEpoch, partitionState.isr.asScala.map(_.toInt).toList, partitionState.zkVersion)
     val leaderInfo = LeaderIsrAndControllerEpoch(leaderAndIsr, partitionState.controllerEpoch)
     MetadataPartitionState(leaderInfo, partitionState.replicas.asScala.map(_.toInt), partitionState.offlineReplicas.asScala.map(_.toInt))

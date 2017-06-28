@@ -585,7 +585,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
       if (shutdownLatch.getCount > 0 && isShuttingDown.compareAndSet(false, true)) {
         CoreUtils.swallow(controlledShutdown())
         brokerState.newState(BrokerShuttingDown)
-        
+
         if (socketServer != null)
           CoreUtils.swallow(socketServer.shutdown())
         if (requestHandlerPool != null)
@@ -695,10 +695,10 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
   private def checkpointBrokerId(brokerId: Int) {
     var logDirsWithoutMetaProps: List[String] = List()
 
-    for (logDir <- config.logDirs if logManager.liveLogDirs.contains(new File(logDir))) {
-      val brokerMetadataOpt = brokerMetadataCheckpoints(logDir).read()
+    for (logDir <- logManager.liveLogDirs) {
+      val brokerMetadataOpt = brokerMetadataCheckpoints(logDir.getAbsolutePath).read()
       if(brokerMetadataOpt.isEmpty)
-        logDirsWithoutMetaProps ++= List(logDir)
+        logDirsWithoutMetaProps ++= List(logDir.getAbsolutePath)
     }
 
     for(logDir <- logDirsWithoutMetaProps) {

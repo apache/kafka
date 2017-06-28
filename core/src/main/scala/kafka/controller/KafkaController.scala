@@ -1402,7 +1402,7 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, time: Time, met
     override def process(): Unit = {
       val zkUtils = controllerContext.zkUtils
       try {
-        val brokerIds = sequenceNumbers.flatMap(DiskUtils.getBrokerIdFromLogDirEvent(zkUtils, _))
+        val brokerIds = sequenceNumbers.flatMap(LogDirUtils.getBrokerIdFromLogDirEvent(zkUtils, _))
         onBrokerLogDirFailure(brokerIds)
       } finally {
         // delete processed children

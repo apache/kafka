@@ -56,6 +56,13 @@ class CheckpointFile[T](val file: File, version: Int, formatter: CheckpointFileF
 
         writer.flush()
         fileOutputStream.getFD().sync()
+      } catch {
+        case e: FileNotFoundException =>
+          if (FileSystems.getDefault.isReadOnly) {
+            fatal(s"Halting writes to checkpoint file (${file.getAbsolutePath}) because the underlying file system is inaccessible: ", e)
+            Exit.halt(1)
+          }
+          throw e
       } finally {
         writer.close()
       }

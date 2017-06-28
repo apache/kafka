@@ -116,7 +116,7 @@ class AbstractFetcherThreadTest {
 
     override def handleOffsetOutOfRange(topicPartition: TopicPartition): Long = 0L
 
-    override def handlePartitionsWithErrors(partitions: Iterable[TopicPartition]): Unit = {}
+    override def handlePartitionsWithErrors(partitions: Map[TopicPartition, Option[Exception]]): Unit = {}
 
     override protected def fetch(fetchRequest: DummyFetchRequest): Seq[(TopicPartition, TestPartitionData)] =
       fetchRequest.offsets.mapValues(_ => new TestPartitionData()).toSeq
@@ -211,7 +211,9 @@ class AbstractFetcherThreadTest {
       new DummyFetchRequest(requestMap)
     }
 
-    override def handlePartitionsWithErrors(partitions: Iterable[TopicPartition]) = delayPartitions(partitions, fetchBackOffMs.toLong)
+    override def handlePartitionsWithErrors(partitions: Map[TopicPartition, Option[Exception]]) {
+      delayPartitions (partitions.keys, fetchBackOffMs.toLong)
+    }
 
   }
 
