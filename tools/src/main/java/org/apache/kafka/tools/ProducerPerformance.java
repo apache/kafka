@@ -52,6 +52,7 @@ public class ProducerPerformance {
             Namespace res = parser.parseArgs(args);
 
             /* parse args */
+            String bootstrapServer = res.getString("bootstrapServer");
             String topicName = res.getString("topic");
             long numRecords = res.getLong("numRecords");
             Integer recordSize = res.getInt("recordSize");
@@ -89,6 +90,7 @@ public class ProducerPerformance {
             }
 
             Properties props = new Properties();
+            props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServer);
             if (producerConfig != null) {
                 props.putAll(Utils.loadProps(producerConfig));
             }
@@ -197,6 +199,13 @@ public class ProducerPerformance {
                 .addMutuallyExclusiveGroup()
                 .required(true)
                 .description("either --record-size or --payload-file must be specified but not both.");
+
+        parser.addArgument("--bootstrap-server")
+                .action(store())
+                .required(true)
+                .type(String.class)
+                .dest("bootstrapServer")
+                .help("REQUIRED: The server to connect to");
 
         parser.addArgument("--topic")
                 .action(store())
