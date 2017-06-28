@@ -18,6 +18,7 @@ package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.internals.RecordHeaders;
+import org.apache.kafka.common.record.MemoryRecords.RecordFilter.BatchRetention;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Test;
@@ -287,6 +288,42 @@ public class MemoryRecordsTest {
                 assertEquals(baseSequence, batch.baseSequence());
                 assertEquals(baseSequence + 1, batch.lastSequence());
                 assertEquals(isTransactional, batch.isTransactional());
+            }
+        }
+    }
+
+    @Test
+    public void testEmptyBatchDeletion() {
+        if (magic >= RecordBatch.MAGIC_VALUE_V2) {
+            for (final BatchRetention deleteRetention : Arrays.asList(BatchRetention.DELETE, BatchRetention.DELETE_EMPTY)) {
+                ByteBuffer buffer = ByteBuffer.allocate(DefaultRecordBatch.RECORD_BATCH_OVERHEAD);
+                long producerId = 23L;
+                short producerEpoch = 5;
+                long baseOffset = 3L;
+                int baseSequence = 10;
+                int partitionLeaderEpoch = 293;
+
+                DefaultRecordBatch.writeEmptyHeader(buffer, RecordBatch.MAGIC_VALUE_V2, producerId, producerEpoch,
+                        baseSequence, baseOffset, baseOffset, partitionLeaderEpoch, TimestampType.CREATE_TIME,
+                        System.currentTimeMillis(), false, false);
+                buffer.flip();
+
+                ByteBuffer filtered = ByteBuffer.allocate(2048);
+                MemoryRecords.readableRecords(buffer).filterTo(new TopicPartition("foo", 0), new MemoryRecords.RecordFilter() {
+                    @Override
+                    protected BatchRetention checkBatchRetention(RecordBatch batch) {
+                        return deleteRetention;
+                    }
+
+                    @Override
+                    protected boolean shouldRetainRecord(RecordBatch recordBatch, Record record) {
+                        return false;
+                    }
+                }, filtered, Integer.MAX_VALUE, BufferSupplier.NO_CACHING);
+
+                filtered.flip();
+                MemoryRecords filteredRecords = MemoryRecords.readableRecords(filtered);
+                assertEquals(0, filteredRecords.sizeInBytes());
             }
         }
     }

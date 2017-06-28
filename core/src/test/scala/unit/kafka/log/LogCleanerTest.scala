@@ -287,7 +287,7 @@ class LogCleanerTest extends JUnitSuite {
     val producerId = 1L
     val appendProducer = appendTransactionalAsLeader(log, producerId, producerEpoch)
 
-    appendProducer(Seq(2, 3)) // batch at offset 1
+    appendProducer(Seq(2, 3)) // batch last offset is 1
     log.appendAsLeader(commitMarker(producerId, producerEpoch), leaderEpoch = 0, isFromClient = false)
     log.roll()
 
@@ -301,13 +301,13 @@ class LogCleanerTest extends JUnitSuite {
     assertEquals(List(2, 3, 4), offsetsInLog(log)) // commit marker is retained
     assertEquals(List(1, 2, 3, 4), lastOffsetsPerBatchInLog(log)) // empty batch is retained
 
-    // next time through, only the empty batch remains
+    // the empty batch remains if cleaned again because it still holds the last sequence
     dirtyOffset = cleaner.doClean(LogToClean(tp, log, dirtyOffset, 100L), deleteHorizonMs = Long.MaxValue)._1
     assertEquals(List(2, 3), keysInLog(log))
     assertEquals(List(2, 3, 4), offsetsInLog(log)) // commit marker is still retained
     assertEquals(List(1, 2, 3, 4), lastOffsetsPerBatchInLog(log)) // empty batch is retained
 
-    // append a new record from the producer to force removal of the empty batch
+    // append a new record from the producer to allow cleaning of the empty batch
     appendProducer(Seq(1))
     log.roll()
 
@@ -364,7 +364,7 @@ class LogCleanerTest extends JUnitSuite {
     val producerId = 1L
     val appendProducer = appendTransactionalAsLeader(log, producerId, producerEpoch)
 
-    appendProducer(Seq(2, 3)) // batch at offset 1
+    appendProducer(Seq(2, 3)) // batch last offset is 1
     log.appendAsLeader(abortMarker(producerId, producerEpoch), leaderEpoch = 0, isFromClient = false)
     log.roll()
 
@@ -385,7 +385,7 @@ class LogCleanerTest extends JUnitSuite {
     assertEquals(List(2), offsetsInLog(log)) // abort marker is retained
     assertEquals(List(1, 2), lastOffsetsPerBatchInLog(log)) // empty batch is retained
 
-    // next time through, only the empty batch remains
+    // the empty batch remains if cleaned again because it still holds the last sequence
     dirtyOffset = cleaner.doClean(LogToClean(tp, log, dirtyOffset, 100L), deleteHorizonMs = Long.MaxValue)._1
     assertAbortedTransactionIndexed()
     assertEquals(List(), keysInLog(log))
