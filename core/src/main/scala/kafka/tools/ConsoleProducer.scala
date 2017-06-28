@@ -21,13 +21,13 @@ import kafka.common._
 import kafka.message._
 import kafka.serializer._
 import kafka.utils.{CommandLineUtils, Exit, ToolsUtils}
-import kafka.producer.{NewShinyProducer, OldProducer}
 import java.util.Properties
 import java.io._
 import java.nio.charset.StandardCharsets
 
 import joptsimple._
-import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
+import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
+import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.utils.Utils
 
 import scala.collection.JavaConverters._
@@ -41,12 +41,7 @@ object ConsoleProducer {
         val reader = Class.forName(config.readerClass).newInstance().asInstanceOf[MessageReader]
         reader.init(System.in, getReaderProps(config))
 
-        val producer =
-          if(config.useOldProducer) {
-            new OldProducer(getOldProducerProps(config))
-          } else {
-            new NewShinyProducer(getNewProducerProps(config))
-          }
+        val producer = new KafkaProducer[Array[Byte], Array[Byte]](getNewProducerProps(config))
 
         Runtime.getRuntime.addShutdownHook(new Thread() {
           override def run() {
@@ -58,7 +53,7 @@ object ConsoleProducer {
         do {
           message = reader.readMessage()
           if (message != null)
-            producer.send(message.topic, message.key, message.value)
+            producer.send(message, new ErrorLoggingCallback(message.topic, message.key, message.value, false))
         } while (message != null)
     } catch {
       case e: joptsimple.OptionException =>
@@ -75,29 +70,6 @@ object ConsoleProducer {
     val props = new Properties
     props.put("topic",config.topic)
     props.putAll(config.cmdLineProps)
-    props
-  }
-
-  def getOldProducerProps(config: ProducerConfig): Properties = {
-    val props = producerProps(config)
-
-    props.put("metadata.broker.list", config.brokerList)
-    props.put("compression.codec", config.compressionCodec)
-    props.put("producer.type", if(config.sync) "sync" else "async")
-    props.put("batch.num.messages", config.batchSize.toString)
-    props.put("message.send.max.retries", config.messageSendMaxRetries.toString)
-    props.put("retry.backoff.ms", config.retryBackoffMs.toString)
-    props.put("queue.buffering.max.ms", config.sendTimeout.toString)
-    props.put("queue.buffering.max.messages", config.queueSize.toString)
-    props.put("queue.enqueue.timeout.ms", config.queueEnqueueTimeoutMs.toString)
-    props.put("request.required.acks", config.requestRequiredAcks)
-    props.put("request.timeout.ms", config.requestTimeoutMs.toString)
-    props.put("key.serializer.class", config.keyEncoderClass)
-    props.put("serializer.class", config.valueEncoderClass)
-    props.put("send.buffer.bytes", config.socketBuffer.toString)
-    props.put("topic.metadata.refresh.interval.ms", config.metadataExpiryMs.toString)
-    props.put("client.id", "console-producer")
-
     props
   }
 
@@ -247,14 +219,12 @@ object ConsoleProducer {
       .withRequiredArg
       .describedAs("config file")
       .ofType(classOf[String])
-    val useOldProducerOpt = parser.accepts("old-producer", "Use the old producer implementation.")
 
     val options = parser.parse(args : _*)
     if(args.length == 0)
       CommandLineUtils.printUsageAndDie(parser, "Read data from standard input and publish it to Kafka.")
     CommandLineUtils.checkRequiredArgs(parser, options, topicOpt, brokerListOpt)
 
-    val useOldProducer = options.has(useOldProducerOpt)
     val topic = options.valueOf(topicOpt)
     val brokerList = options.valueOf(brokerListOpt)
     ToolsUtils.validatePortOrDie(parser,brokerList)
