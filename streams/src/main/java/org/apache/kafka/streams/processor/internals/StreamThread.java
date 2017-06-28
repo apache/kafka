@@ -994,8 +994,9 @@ public class StreamThread extends Thread {
      *                                            PENDING_SHUTDOWN or DEAD, and if it is,
      *                                            we immediately return. Effectively this enables
      *                                            a conditional set, under the stateLock lock.
+     * Note: protected for testing only
      */
-    private void setState(final State newState, boolean ignoreWhenShuttingDownOrDead) {
+    protected void setState(final State newState, boolean ignoreWhenShuttingDownOrDead) {
         synchronized (stateLock) {
             final State oldState = state;
 

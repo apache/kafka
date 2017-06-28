@@ -656,13 +656,7 @@ public class StreamThreadTest {
             prevTasks = new HashMap<>(thread.tasks());
 
             final ConsumerRebalanceListener rebalanceListener = thread.rebalanceListener;
-            thread.start();
-            TestUtils.waitForCondition(new TestCondition() {
-                @Override
-                public boolean conditionMet() {
-                    return thread.state() == StreamThread.State.RUNNING;
-                }
-            }, 10 * 1000, "Thread never started.");
+            thread.setState(StreamThread.State.RUNNING, false);
             rebalanceListener.onPartitionsRevoked(revokedPartitions);
             rebalanceListener.onPartitionsAssigned(assignedPartitions);
 
@@ -672,9 +666,16 @@ public class StreamThreadTest {
             // task 1 & 2 are created
             assertEquals(2, thread.tasks().size());
 
+            // all directories should still exit before the cleanup delay time
+            mockTime.sleep(cleanupDelay - 10L);
+            thread.maybeClean(mockTime.milliseconds());
+            assertTrue(stateDir1.exists());
+            assertTrue(stateDir2.exists());
+            assertTrue(stateDir3.exists());
+            assertTrue(extraDir.exists());
 
             // all state directories except for task task2 & task3 will be removed. the extra directory should still exists
-            mockTime.sleep(cleanupDelay + 10L);
+            mockTime.sleep(11L);
             thread.maybeClean(mockTime.milliseconds());
             assertTrue(stateDir1.exists());
             assertTrue(stateDir2.exists());
