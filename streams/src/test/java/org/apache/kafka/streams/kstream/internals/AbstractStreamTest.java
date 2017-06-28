@@ -65,7 +65,7 @@ public class AbstractStreamTest {
     private class ExtendedKStream<K, V> extends AbstractStream<K> {
 
         ExtendedKStream(KStream<K, V> stream) {
-            super((KStreamImpl<K, V>)stream);
+            super((KStreamImpl<K, V>) stream);
         }
 
         KStream<K, V> randomFilter() {
