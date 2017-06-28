@@ -219,7 +219,7 @@ public class MemoryRecords extends AbstractRecords {
                 if (batchMagic < RecordBatch.MAGIC_VALUE_V2)
                     throw new IllegalStateException("Empty batches are only supported for magic v2 and above");
 
-                bufferOutputStream.maybeExpandBuffer(DefaultRecordBatch.RECORD_BATCH_OVERHEAD);
+                bufferOutputStream.ensureRemaining(DefaultRecordBatch.RECORD_BATCH_OVERHEAD);
                 DefaultRecordBatch.writeEmptyHeader(bufferOutputStream.buffer(), batchMagic, batch.producerId(),
                         batch.producerEpoch(), batch.baseSequence(), batch.baseOffset(), batch.lastOffset(),
                         batch.partitionLeaderEpoch(), batch.timestampType(), batch.maxTimestamp(),
