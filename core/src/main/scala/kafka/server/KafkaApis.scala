@@ -721,30 +721,29 @@ class KafkaApis(val requestChannel: RequestChannel,
                                                               ListOffsetResponse.UNKNOWN_OFFSET))
       } else {
         try {
-          val fromConsumer = offsetRequest.replicaId == ListOffsetRequest.CONSUMER_REPLICA_ID
-
           // ensure leader exists
           val localReplica = if (offsetRequest.replicaId != ListOffsetRequest.DEBUGGING_REPLICA_ID)
             replicaManager.getLeaderReplicaIfLocal(topicPartition)
           else
             replicaManager.getReplicaOrException(topicPartition)
 
-          val found = {
-            if (fromConsumer && timestamp == ListOffsetRequest.LATEST_TIMESTAMP) {
-              val lastFetchableOffset = offsetRequest.isolationLevel match {
-                case IsolationLevel.READ_COMMITTED => localReplica.lastStableOffset.messageOffset
-                case IsolationLevel.READ_UNCOMMITTED => localReplica.highWatermark.messageOffset
-              }
-              TimestampOffset(RecordBatch.NO_TIMESTAMP, lastFetchableOffset)
-            } else {
-              def allowed(timestampOffset: TimestampOffset): Boolean =
-                !fromConsumer || timestampOffset.offset <= localReplica.highWatermark.messageOffset
-
-              fetchOffsetForTimestamp(replicaManager.logManager, topicPartition, timestamp) match {
-                case Some(timestampOffset) if allowed(timestampOffset) => timestampOffset
-                case _ => TimestampOffset(ListOffsetResponse.UNKNOWN_TIMESTAMP, ListOffsetResponse.UNKNOWN_OFFSET)
-              }
+          val fromConsumer = offsetRequest.replicaId == ListOffsetRequest.CONSUMER_REPLICA_ID
+          val found = if (fromConsumer) {
+            val lastFetchableOffset = offsetRequest.isolationLevel match {
+              case IsolationLevel.READ_COMMITTED => localReplica.lastStableOffset.messageOffset
+              case IsolationLevel.READ_UNCOMMITTED => localReplica.highWatermark.messageOffset
             }
+
+            if (timestamp == ListOffsetRequest.LATEST_TIMESTAMP)
+              TimestampOffset(RecordBatch.NO_TIMESTAMP, lastFetchableOffset)
+            else
+              fetchOffsetForTimestamp(replicaManager.logManager, topicPartition, timestamp) match {
+                case Some(timestampOffset) if timestampOffset.offset < lastFetchableOffset => timestampOffset
+                case _ => TimestampOffset.Unknown
+              }
+          } else {
+            fetchOffsetForTimestamp(replicaManager.logManager, topicPartition, timestamp)
+              .getOrElse(TimestampOffset.Unknown)
           }
 
           (topicPartition, new ListOffsetResponse.PartitionData(Errors.NONE, found.timestamp, found.offset))
