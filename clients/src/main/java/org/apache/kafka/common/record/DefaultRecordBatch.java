@@ -48,7 +48,7 @@ import static org.apache.kafka.common.record.Records.LOG_OVERHEAD;
  *  CRC => Uint32
  *  Attributes => Int16
  *  LastOffsetDelta => Int32 // also serves as LastSequenceDelta
- *  BaseTimestamp => Int64
+ *  FirstTimestamp => Int64
  *  MaxTimestamp => Int64
  *  ProducerId => Int64
  *  ProducerEpoch => Int16
@@ -92,9 +92,9 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
     static final int ATTRIBUTE_LENGTH = 2;
     static final int LAST_OFFSET_DELTA_OFFSET = ATTRIBUTES_OFFSET + ATTRIBUTE_LENGTH;
     static final int LAST_OFFSET_DELTA_LENGTH = 4;
-    static final int BASE_TIMESTAMP_OFFSET = LAST_OFFSET_DELTA_OFFSET + LAST_OFFSET_DELTA_LENGTH;
-    static final int BASE_TIMESTAMP_LENGTH = 8;
-    static final int MAX_TIMESTAMP_OFFSET = BASE_TIMESTAMP_OFFSET + BASE_TIMESTAMP_LENGTH;
+    static final int FIRST_TIMESTAMP_OFFSET = LAST_OFFSET_DELTA_OFFSET + LAST_OFFSET_DELTA_LENGTH;
+    static final int FIRST_TIMESTAMP_LENGTH = 8;
+    static final int MAX_TIMESTAMP_OFFSET = FIRST_TIMESTAMP_OFFSET + FIRST_TIMESTAMP_LENGTH;
     static final int MAX_TIMESTAMP_LENGTH = 8;
     static final int PRODUCER_ID_OFFSET = MAX_TIMESTAMP_OFFSET + MAX_TIMESTAMP_LENGTH;
     static final int PRODUCER_ID_LENGTH = 8;
@@ -140,8 +140,8 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
      *
      * @return The base timestamp
      */
-    public long baseTimestamp() {
-        return buffer.getLong(BASE_TIMESTAMP_OFFSET);
+    public long firstTimestamp() {
+        return buffer.getLong(FIRST_TIMESTAMP_OFFSET);
     }
 
     @Override
@@ -243,9 +243,9 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
 
         return new RecordIterator() {
             @Override
-            protected Record readNext(long baseOffset, long baseTimestamp, int baseSequence, Long logAppendTime) {
+            protected Record readNext(long baseOffset, long firstTimestamp, int baseSequence, Long logAppendTime) {
                 try {
-                    return DefaultRecord.readFrom(inputStream, baseOffset, baseTimestamp, baseSequence, logAppendTime);
+                    return DefaultRecord.readFrom(inputStream, baseOffset, firstTimestamp, baseSequence, logAppendTime);
                 } catch (EOFException e) {
                     throw new InvalidRecordException("Incorrect declared batch size, premature EOF reached");
                 } catch (IOException e) {
@@ -278,9 +278,9 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
         buffer.position(RECORDS_OFFSET);
         return new RecordIterator() {
             @Override
-            protected Record readNext(long baseOffset, long baseTimestamp, int baseSequence, Long logAppendTime) {
+            protected Record readNext(long baseOffset, long firstTimestamp, int baseSequence, Long logAppendTime) {
                 try {
-                    return DefaultRecord.readFrom(buffer, baseOffset, baseTimestamp, baseSequence, logAppendTime);
+                    return DefaultRecord.readFrom(buffer, baseOffset, firstTimestamp, baseSequence, logAppendTime);
                 } catch (BufferUnderflowException e) {
                     throw new InvalidRecordException("Incorrect declared batch size, premature EOF reached");
                 }
@@ -420,7 +420,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
                             byte magic,
                             CompressionType compressionType,
                             TimestampType timestampType,
-                            long baseTimestamp,
+                            long firstTimestamp,
                             long maxTimestamp,
                             long producerId,
                             short epoch,
@@ -431,8 +431,8 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
                             int numRecords) {
         if (magic < RecordBatch.CURRENT_MAGIC_VALUE)
             throw new IllegalArgumentException("Invalid magic value " + magic);
-        if (baseTimestamp < 0 && baseTimestamp != NO_TIMESTAMP)
-            throw new IllegalArgumentException("Invalid message timestamp " + baseTimestamp);
+        if (firstTimestamp < 0 && firstTimestamp != NO_TIMESTAMP)
+            throw new IllegalArgumentException("Invalid message timestamp " + firstTimestamp);
 
         short attributes = computeAttributes(compressionType, timestampType, isTransactional, isControlBatch);
 
@@ -442,7 +442,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
         buffer.putInt(position + PARTITION_LEADER_EPOCH_OFFSET, partitionLeaderEpoch);
         buffer.put(position + MAGIC_OFFSET, magic);
         buffer.putShort(position + ATTRIBUTES_OFFSET, attributes);
-        buffer.putLong(position + BASE_TIMESTAMP_OFFSET, baseTimestamp);
+        buffer.putLong(position + FIRST_TIMESTAMP_OFFSET, firstTimestamp);
         buffer.putLong(position + MAX_TIMESTAMP_OFFSET, maxTimestamp);
         buffer.putInt(position + LAST_OFFSET_DELTA_OFFSET, lastOffsetDelta);
         buffer.putLong(position + PRODUCER_ID_OFFSET, producerId);
@@ -466,13 +466,13 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
             return 0;
 
         int size = RECORD_BATCH_OVERHEAD;
-        Long baseTimestamp = null;
+        Long firstTimestamp = null;
         while (iterator.hasNext()) {
             Record record = iterator.next();
             int offsetDelta = (int) (record.offset() - baseOffset);
-            if (baseTimestamp == null)
-                baseTimestamp = record.timestamp();
-            long timestampDelta = record.timestamp() - baseTimestamp;
+            if (firstTimestamp == null)
+                firstTimestamp = record.timestamp();
+            long timestampDelta = record.timestamp() - firstTimestamp;
             size += DefaultRecord.sizeInBytes(offsetDelta, timestampDelta, record.key(), record.value(),
                     record.headers());
         }
@@ -486,12 +486,12 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
 
         int size = RECORD_BATCH_OVERHEAD;
         int offsetDelta = 0;
-        Long baseTimestamp = null;
+        Long firstTimestamp = null;
         while (iterator.hasNext()) {
             SimpleRecord record = iterator.next();
-            if (baseTimestamp == null)
-                baseTimestamp = record.timestamp();
-            long timestampDelta = record.timestamp() - baseTimestamp;
+            if (firstTimestamp == null)
+                firstTimestamp = record.timestamp();
+            long timestampDelta = record.timestamp() - firstTimestamp;
             size += DefaultRecord.sizeInBytes(offsetDelta++, timestampDelta, record.key(), record.value(),
                     record.headers());
         }
@@ -516,7 +516,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
     private abstract class RecordIterator implements CloseableIterator<Record> {
         private final Long logAppendTime;
         private final long baseOffset;
-        private final long baseTimestamp;
+        private final long firstTimestamp;
         private final int baseSequence;
         private final int numRecords;
         private int readRecords = 0;
@@ -524,7 +524,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
         public RecordIterator() {
             this.logAppendTime = timestampType() == TimestampType.LOG_APPEND_TIME ? maxTimestamp() : null;
             this.baseOffset = baseOffset();
-            this.baseTimestamp = baseTimestamp();
+            this.firstTimestamp = firstTimestamp();
             this.baseSequence = baseSequence();
             int numRecords = count();
             if (numRecords < 0)
@@ -544,7 +544,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
                 throw new NoSuchElementException();
 
             readRecords++;
-            Record rec = readNext(baseOffset, baseTimestamp, baseSequence, logAppendTime);
+            Record rec = readNext(baseOffset, firstTimestamp, baseSequence, logAppendTime);
             if (readRecords == numRecords) {
                 // Validate that the actual size of the batch is equal to declared size
                 // by checking that after reading declared number of items, there no items left
@@ -555,7 +555,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
             return rec;
         }
 
-        protected abstract Record readNext(long baseOffset, long baseTimestamp, int baseSequence, Long logAppendTime);
+        protected abstract Record readNext(long baseOffset, long firstTimestamp, int baseSequence, Long logAppendTime);
 
         protected abstract boolean ensureNoneRemaining();
 
