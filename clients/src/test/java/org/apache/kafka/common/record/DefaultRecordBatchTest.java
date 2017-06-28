@@ -63,6 +63,7 @@ public class DefaultRecordBatchTest {
                     assertEquals(isTransactional, batch.isTransactional());
                     assertEquals(timestampType, batch.timestampType());
                     assertEquals(timestamp, batch.maxTimestamp());
+                    assertEquals(RecordBatch.NO_TIMESTAMP, batch.baseTimestamp());
                     assertEquals(isControlBatch, batch.isControlBatch());
                 }
             }
