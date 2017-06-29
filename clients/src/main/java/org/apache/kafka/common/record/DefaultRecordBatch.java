@@ -82,6 +82,11 @@ import static org.apache.kafka.common.record.Records.LOG_OVERHEAD;
  * field therefore always reflects the timestamp of the first record in the batch. If the batch is empty, the
  * FirstTimestamp will be set to -1 (NO_TIMESTAMP).
  *
+ * Similarly, the MaxTimestamp field reflects the maximum timestamp of the current records if the timestamp type
+ * is CREATE_TIME. For LOG_APPEND_TIME, on the other hand, the MaxTimestamp field reflects the timestamp set
+ * by the broker and is preserved after compaction. Additionally, the MaxTimestamp of an empty batch always retains
+ * the previous value prior to becoming empty.
+ *
  * The current attributes are given below:
  *
  *  -------------------------------------------------------------------------------------------------
