@@ -115,10 +115,15 @@ public class KafkaStreamsTest {
         props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, numThreads);
         final KafkaStreams streams = new KafkaStreams(builder, props);
 
-        final StreamThread[] threads = streams.threads;
+        final java.lang.reflect.Field threadsField = streams.getClass().getDeclaredField("threads");
+        threadsField.setAccessible(true);
+        final StreamThread[] threads = (StreamThread[]) threadsField.get(streams);
+
         final java.lang.reflect.Field globalThreadField = streams.getClass().getDeclaredField("globalStreamThread");
         globalThreadField.setAccessible(true);
         GlobalStreamThread globalStreamThread = (GlobalStreamThread) globalThreadField.get(streams);
+
+
         assertEquals(numThreads, threads.length);
         assertEquals(streams.state(), KafkaStreams.State.CREATED);
 

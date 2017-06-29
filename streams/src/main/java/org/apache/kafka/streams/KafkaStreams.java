@@ -123,7 +123,7 @@ public class KafkaStreams {
     private static final int DEFAULT_CLOSE_TIMEOUT = 0;
     private GlobalStreamThread globalStreamThread;
 
-    final StreamThread[] threads;
+    private final StreamThread[] threads;
     private final Metrics metrics;
     private final QueryableStoreProvider queryableStoreProvider;
 
@@ -150,9 +150,9 @@ public class KafkaStreams {
      *         |       +-----+--------+
      *         |             |
      *         |             v
-     *         |       +-----+--------+
-     *         +<----- | Rebalancing  | <----+
-     *         |       +--------------+      |
+     *         |       +-----+--------+ <-+
+     *         +<----- | Rebalancing  | --+
+     *         |       +--------------+ <----+
      *         |                             |
      *         |                             |
      *         |       +--------------+      |
@@ -172,6 +172,9 @@ public class KafkaStreams {
      * </pre>
      * Note the following:
      * - Any state can go to PENDING_SHUTDOWN (during clean shutdown) or NOT_RUNNING (e.g., during an exception).
+     * - It is theoretically possible for a thread to always be in the PARTITION_REVOKED state
+     * (see {@code StreamThread} state diagram) and hence it is possible that this instance is always
+     * on a REBALANCING state.
      */
     public enum State {
         CREATED(1, 2, 3), REBALANCING(1, 2, 3, 4), RUNNING(1, 3, 4), PENDING_SHUTDOWN(4), NOT_RUNNING;

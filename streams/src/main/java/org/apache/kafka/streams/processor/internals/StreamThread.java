@@ -606,7 +606,6 @@ public class StreamThread extends Thread {
                 addToResetList(partition, seekToEnd, "{} Setting topic '{}' to consume from {} offset", "latest", loggedTopics);
             } else {
                 if (originalReset == null || (!originalReset.equals("earliest") && !originalReset.equals("latest"))) {
-                    setState(State.PENDING_SHUTDOWN, false);
                     final String errorMessage = "No valid committed offset found for input topic %s (partition %s) and no valid reset policy configured." +
                         " You need to set configuration parameter \"auto.offset.reset\" or specify a topic specific reset " +
                         "policy via KStreamBuilder#stream(StreamsConfig.AutoOffsetReset offsetReset, ...) or KStreamBuilder#table(StreamsConfig.AutoOffsetReset offsetReset, ...)";
@@ -996,7 +995,7 @@ public class StreamThread extends Thread {
      *                                            a conditional set, under the stateLock lock.
      * Note: protected for testing only
      */
-    protected void setState(final State newState, boolean ignoreWhenShuttingDownOrDead) {
+    void setState(final State newState, boolean ignoreWhenShuttingDownOrDead) {
         synchronized (stateLock) {
             final State oldState = state;
 
