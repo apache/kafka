@@ -32,23 +32,22 @@ import static org.junit.Assert.assertTrue;
 
 public class AbstractStreamTest {
 
-    private String topicName = "topic";
+    private final String topicName = "topic";
 
-    private KStreamTestDriver driver = null;
+    private KStreamTestDriver driver;
 
     @After
     public void cleanup() {
         if (driver != null) {
             driver.close();
         }
-        driver = null;
     }
 
     @Test
     public void testShouldBeExtensible() {
-        KStreamBuilder builder = new KStreamBuilder();
+        final KStreamBuilder builder = new KStreamBuilder();
         final int[] expectedKeys = new int[]{1, 2, 3, 4, 5, 6, 7};
-        MockProcessorSupplier<Integer, String> processor = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<Integer, String> processor = new MockProcessorSupplier<>();
 
         ExtendedKStream<Integer, String> stream = new ExtendedKStream<>(builder.stream(Serdes.Integer(), Serdes.String(), topicName));
 
