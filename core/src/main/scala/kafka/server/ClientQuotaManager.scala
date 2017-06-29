@@ -138,7 +138,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
                          private val time: Time) extends Logging {
   private val overriddenQuota = new ConcurrentHashMap[QuotaId, Quota]()
   private val staticConfigClientIdQuota = Quota.upperBound(config.quotaBytesPerSecondDefault)
-  private var quotaTypesEnabled = if (config.quotaBytesPerSecondDefault == Long.MaxValue) QuotaTypes.NoQuotas else QuotaTypes.ClientIdQuotaEnabled
+  @volatile private var quotaTypesEnabled = if (config.quotaBytesPerSecondDefault == Long.MaxValue) QuotaTypes.NoQuotas else QuotaTypes.ClientIdQuotaEnabled
   private val lock = new ReentrantReadWriteLock()
   private val delayQueue = new DelayQueue[ThrottledResponse]()
   private val sensorAccessor = new SensorAccess
@@ -172,6 +172,15 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
   }
 
   /**
+   * Returns true if any quotas are enabled for this quota manager. This is used
+   * to determine if quota related metrics should be created.
+   * Note: If any quotas (static defaults, dynamic defaults or quota overrides) have
+   * been configured for this broker at any time for this quota type, quotasEnabled will
+   * return true until the next broker restart, even if all quotas are subsequently deleted.
+   */
+  def quotasEnabled: Boolean = quotaTypesEnabled != QuotaTypes.NoQuotas
+
+  /**
    * Records that a user/clientId changed some metric being throttled (produced/consumed bytes, request processing time etc.)
    * If quota has been violated, callback is invoked after a delay, otherwise the callback is invoked immediately.
    * Throttle time calculation may be overridden by sub-classes.
@@ -183,9 +192,16 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
    * @return Number of milliseconds to delay the response in case of Quota violation.
    *         Zero otherwise
    */
-  def recordAndMaybeThrottle(sanitizedUser: String, clientId: String, value: Double, callback: Int => Unit): Int = {
-    val clientSensors = getOrCreateQuotaSensors(sanitizedUser, clientId)
-    recordAndThrottleOnQuotaViolation(clientSensors, value, callback)
+  def maybeRecordAndThrottle(sanitizedUser: String, clientId: String, value: Double, callback: Int => Unit): Int = {
+    if (quotasEnabled) {
+      val clientSensors = getOrCreateQuotaSensors(sanitizedUser, clientId)
+      recordAndThrottleOnQuotaViolation(clientSensors, value, callback)
+    } else {
+      // Don't record any metrics if quotas are not enabled at any level
+      val throttleTimeMs = 0
+      callback(throttleTimeMs)
+      throttleTimeMs
+    }
   }
 
   def recordAndThrottleOnQuotaViolation(clientSensors: ClientSensors, value: Double, callback: Int => Unit): Int = {
@@ -405,7 +421,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
             .quota(quota)
   }
 
-  protected def createSensor(sensorName: String, metricName: MetricName): Sensor = {
+  protected def getOrCreateSensor(sensorName: String, metricName: MetricName): Sensor = {
     sensorAccessor.getOrCreate(
         sensorName,
         ClientQuotaManagerConfig.InactiveSensorExpirationTimeSeconds,
