@@ -42,6 +42,7 @@ class PyTest(TestCommand):
         errno = pytest.main(self.pytest_args)
         sys.exit(errno)
 
+# Note: when changing the version of ducktape, also revise tests/docker/Dockerfile
 setup(name="kafkatest",
       version=version,
       description="Apache Kafka System Tests",
