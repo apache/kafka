@@ -61,8 +61,8 @@ class StoreChangeLogger<K, V> {
                 collector.send(this.topic, key, value, this.partition, context.timestamp(), keySerializer, valueSerializer);
             } catch (final StreamsException e) {
                 throw new StreamsException(
-                        String.format("Aborting sending record to store's changelog %s because a previous send request returned an error.",
-                                this.topic));
+                        String.format("Aborting sending record to store's changelog %s because a previous send request returned an error %s.",
+                                this.topic, e));
             }
         }
     }

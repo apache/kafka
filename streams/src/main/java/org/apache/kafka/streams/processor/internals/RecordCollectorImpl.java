@@ -108,8 +108,7 @@ public class RecordCollectorImpl implements RecordCollector {
                             if (sendException == null) {
                                 sendException = exception;
                                 log.error("{} Error sending record with key {} to topic {}, partition {}. " +
-                                                "No more offsets will be " +
-                                                "recorded for this task and the exception will eventually be thrown",
+                                                "Exception will be handled by caller.",
                                         logPrefix, key, topic, partition, exception);
 
                             }
