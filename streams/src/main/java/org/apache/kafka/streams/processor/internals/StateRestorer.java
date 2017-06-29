@@ -32,7 +32,7 @@ public class StateRestorer {
     private final boolean persistent;
     private final TopicPartition partition;
     private final String storeName;
-    private final RestoreCallbackAdapter callbackAdapter;
+    private final CompositeRestoreListener compositeRestoreListener;
     private long restoredOffset;
     private long startingOffset;
     private boolean restoreStarted;
@@ -44,7 +44,7 @@ public class StateRestorer {
                   final boolean persistent,
                   final String storeName) {
         this.partition = partition;
-        this.callbackAdapter = new RestoreCallbackAdapter(stateRestoreCallback);
+        this.compositeRestoreListener = new CompositeRestoreListener(stateRestoreCallback);
         this.checkpoint = checkpoint;
         this.offsetLimit = offsetLimit;
         this.persistent = persistent;
@@ -61,22 +61,22 @@ public class StateRestorer {
 
     void maybeNotifyRestoreStarted(long startingOffset, long endingOffset) {
         if (!restoreStarted) {
-            callbackAdapter.onRestoreStart(storeName, startingOffset, endingOffset);
+            compositeRestoreListener.onRestoreStart(storeName, startingOffset, endingOffset);
             restoreStarted = true;
         }
     }
 
     void restoreDone() {
-        callbackAdapter.onRestoreEnd(storeName, restoredNumRecords());
+        compositeRestoreListener.onRestoreEnd(storeName, restoredNumRecords());
         restoreStarted = false;
     }
 
     void restoreBatchCompleted(long currentRestoredOffset, int numRestored) {
-        callbackAdapter.onBatchRestored(storeName, currentRestoredOffset, numRestored);
+        compositeRestoreListener.onBatchRestored(storeName, currentRestoredOffset, numRestored);
     }
 
     void restore(final Collection<KeyValue<byte[], byte[]>> records) {
-        callbackAdapter.restoreAll(records);
+        compositeRestoreListener.restoreAll(records);
     }
 
     boolean isPersistent() {
@@ -84,7 +84,7 @@ public class StateRestorer {
     }
 
     void setStateRestoreListener(StateRestoreListener stateRestoreListener) {
-        this.callbackAdapter.setStateRestoreListener(stateRestoreListener);
+        this.compositeRestoreListener.setReportingStoreListener(stateRestoreListener);
     }
 
     void setRestoredOffset(final long restoredOffset) {

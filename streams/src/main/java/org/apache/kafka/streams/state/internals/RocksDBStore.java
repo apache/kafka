@@ -188,12 +188,12 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
             }
 
             @Override
-            public void restoreStart() {
+            public void onRestoreStart(String storeName, long startingOffset, long endingOffset) {
                 toggleDbForBulkLoading(true);
             }
 
             @Override
-            public void restoreEnd() {
+            public void onRestoreEnd(String storeName, long totalRestored) {
                 toggleDbForBulkLoading(false);
             }
         });

@@ -18,16 +18,21 @@
 package org.apache.kafka.streams.processor;
 
 
-public abstract  class AbstractNotifyingRestoreCallback  implements StateRestoreCallback, StateRestoreNotification {
+public abstract  class AbstractNotifyingRestoreCallback  implements StateRestoreCallback, StateRestoreListener {
 
 
     @Override
-    public void restoreStart() {
+    public void onRestoreStart(String storeName, long startingOffset, long endingOffset) {
 
     }
 
     @Override
-    public void restoreEnd() {
+    public void onBatchRestored(String storeName, long batchEndOffset, long numRestored) {
+
+    }
+
+    @Override
+    public void onRestoreEnd(String storeName, long totalRestored) {
 
     }
 }

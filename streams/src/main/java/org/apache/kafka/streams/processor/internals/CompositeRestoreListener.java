@@ -22,46 +22,47 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.BatchingStateRestoreCallback;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateRestoreListener;
-import org.apache.kafka.streams.processor.StateRestoreNotification;
 
 import java.util.Collection;
 
-class RestoreCallbackAdapter implements BatchingStateRestoreCallback, StateRestoreListener {
+class CompositeRestoreListener implements BatchingStateRestoreCallback, StateRestoreListener {
 
     private final StateRestoreCallback stateRestoreCallback;
     private final BatchingStateRestoreCallback batchingStateRestoreCallback;
-    private final StateRestoreNotification stateRestoreNotification;
-    private StateRestoreListener stateRestoreListener;
+    private final StateRestoreListener storeRestoreListener;
+    private StateRestoreListener reportingStoreListener;
 
-    RestoreCallbackAdapter(StateRestoreCallback stateRestoreCallback) {
+    CompositeRestoreListener(StateRestoreCallback stateRestoreCallback) {
         this.stateRestoreCallback = stateRestoreCallback;
         this.batchingStateRestoreCallback = stateRestoreCallback instanceof BatchingStateRestoreCallback ?
                                             (BatchingStateRestoreCallback) stateRestoreCallback : null;
 
-        if (stateRestoreCallback instanceof StateRestoreNotification) {
-            stateRestoreNotification = (StateRestoreNotification) stateRestoreCallback;
-        } else if (batchingStateRestoreCallback instanceof StateRestoreNotification) {
-            stateRestoreNotification = (StateRestoreNotification) batchingStateRestoreCallback;
+        if (stateRestoreCallback instanceof StateRestoreListener) {
+            storeRestoreListener = (StateRestoreListener) stateRestoreCallback;
+        } else if (batchingStateRestoreCallback instanceof StateRestoreListener) {
+            storeRestoreListener = (StateRestoreListener) batchingStateRestoreCallback;
         } else {
-            stateRestoreNotification = new NoOpRestoreNotifier();
+            storeRestoreListener = new NoOpStateRestoreListener();
         }
     }
 
     @Override
     public void onRestoreStart(String storeName, long startingOffset, long endingOffset) {
-        stateRestoreListener.onRestoreStart(storeName, startingOffset, endingOffset);
-        stateRestoreNotification.restoreStart();
+        reportingStoreListener.onRestoreStart(storeName, startingOffset, endingOffset);
+        storeRestoreListener.onBatchRestored(storeName, startingOffset, endingOffset);
     }
 
     @Override
     public void onBatchRestored(String storeName, long batchEndOffset, long numRestored) {
-        stateRestoreListener.onBatchRestored(storeName, batchEndOffset, numRestored);
+        reportingStoreListener.onBatchRestored(storeName, batchEndOffset, numRestored);
+        storeRestoreListener.onBatchRestored(storeName, batchEndOffset, numRestored);
     }
 
     @Override
     public void onRestoreEnd(String storeName, long totalRestored) {
-        stateRestoreListener.onRestoreEnd(storeName, totalRestored);
-        stateRestoreNotification.restoreEnd();
+        reportingStoreListener.onRestoreEnd(storeName, totalRestored);
+        storeRestoreListener.onRestoreEnd(storeName, totalRestored);
+
     }
 
     @Override
@@ -75,8 +76,8 @@ class RestoreCallbackAdapter implements BatchingStateRestoreCallback, StateResto
         }
     }
 
-    void setStateRestoreListener(StateRestoreListener stateRestoreListener) {
-        this.stateRestoreListener = (stateRestoreListener != null) ? stateRestoreListener : new NoOpStateRestoreListener();
+    void setReportingStoreListener(StateRestoreListener reportingStoreListener) {
+        this.reportingStoreListener = (reportingStoreListener != null) ? reportingStoreListener : new NoOpStateRestoreListener();
     }
 
     @Override
@@ -84,18 +85,6 @@ class RestoreCallbackAdapter implements BatchingStateRestoreCallback, StateResto
         stateRestoreCallback.restore(key, value);
     }
 
-    private static final class NoOpRestoreNotifier implements StateRestoreNotification {
-
-        @Override
-        public void restoreStart() {
-
-        }
-
-        @Override
-        public void restoreEnd() {
-
-        }
-    }
 
     private static final class NoOpStateRestoreListener implements StateRestoreListener {
 
