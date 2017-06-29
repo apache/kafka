@@ -147,6 +147,13 @@ class TransactionsTest extends KafkaServerTestHarness {
     val tp2 = new TopicPartition(topic2, 0)
     readUncommittedConsumer.assign(Set(tp1, tp2).asJava)
     consumeRecords(readUncommittedConsumer, 8)
+    val readUncommittedOffsetsForTimes = readUncommittedConsumer.offsetsForTimes(Map(
+      tp1 -> (latestWrittenTimestamp: JLong),
+      tp2 -> (latestWrittenTimestamp: JLong)
+    ).asJava)
+    assertEquals(2, readUncommittedOffsetsForTimes.size)
+    assertEquals(latestWrittenTimestamp, readUncommittedOffsetsForTimes.get(tp1).timestamp)
+    assertEquals(latestWrittenTimestamp, readUncommittedOffsetsForTimes.get(tp2).timestamp)
     readUncommittedConsumer.unsubscribe()
 
     // we should only see the first two records which come before the undecided second transaction
@@ -165,12 +172,12 @@ class TransactionsTest extends KafkaServerTestHarness {
     }
 
     // undecided timestamps should not be searchable either
-    val offsetsForTimes = readCommittedConsumer.offsetsForTimes(Map(
+    val readCommittedOffsetsForTimes = readCommittedConsumer.offsetsForTimes(Map(
       tp1 -> (latestWrittenTimestamp: JLong),
       tp2 -> (latestWrittenTimestamp: JLong)
     ).asJava)
-    assertNull(offsetsForTimes.get(tp1))
-    assertNull(offsetsForTimes.get(tp2))
+    assertNull(readCommittedOffsetsForTimes.get(tp1))
+    assertNull(readCommittedOffsetsForTimes.get(tp2))
   }
 
   @Test
