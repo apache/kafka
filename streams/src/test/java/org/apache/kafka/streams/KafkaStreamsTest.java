@@ -28,6 +28,7 @@ import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.processor.StreamPartitioner;
+import org.apache.kafka.streams.processor.internals.GlobalStreamThread;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.MockMetricsReporter;
@@ -115,6 +116,9 @@ public class KafkaStreamsTest {
         final KafkaStreams streams = new KafkaStreams(builder, props);
 
         final StreamThread[] threads = streams.threads;
+        final java.lang.reflect.Field globalThreadField = streams.getClass().getDeclaredField("globalStreamThread");
+        globalThreadField.setAccessible(true);
+        GlobalStreamThread globalStreamThread = (GlobalStreamThread) globalThreadField.get(streams);
         assertEquals(numThreads, threads.length);
         assertEquals(streams.state(), KafkaStreams.State.CREATED);
 
@@ -145,7 +149,7 @@ public class KafkaStreamsTest {
         }, 10 * 1000, "Streams never stopped.");
 
         streams.close();
-        assertEquals(streams.globalStreamThread, null);
+        assertEquals(globalStreamThread, null);
     }
 
 
