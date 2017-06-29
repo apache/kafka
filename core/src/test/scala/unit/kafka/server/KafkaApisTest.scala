@@ -199,7 +199,46 @@ class KafkaApisTest {
   }
 
   @Test
-  def testConsumerListOffsetLimitedAtHighWatermark(): Unit = {
+  def testReadCommittedConsumerListOffsetLimitedAtHighWatermark(): Unit = {
+    val tp = new TopicPartition("foo", 0)
+    val timestamp: JLong = time.milliseconds()
+    val lastStableOffset = 15L
+
+    val capturedResponse = EasyMock.newCapture[RequestChannel.Response]()
+    val capturedThrottleCallback = EasyMock.newCapture[Int => Unit]()
+    val replica = EasyMock.mock(classOf[Replica])
+    val log = EasyMock.mock(classOf[Log])
+    EasyMock.expect(replicaManager.getLeaderReplicaIfLocal(tp)).andReturn(replica)
+    EasyMock.expect(replica.lastStableOffset).andReturn(LogOffsetMetadata(messageOffset = lastStableOffset))
+    EasyMock.expect(replicaManager.getLog(tp)).andReturn(Some(log))
+    EasyMock.expect(log.fetchOffsetsByTimestamp(timestamp)).andReturn(Some(TimestampOffset(timestamp = timestamp, offset = lastStableOffset)))
+    EasyMock.expect(clientRequestQuotaManager.recordAndThrottleOnQuotaViolation(EasyMock.anyObject[ClientSensors](),
+      EasyMock.anyDouble(), EasyMock.capture(capturedThrottleCallback))).andAnswer(new IAnswer[Int] {
+      override def answer(): Int = {
+        val callback = capturedThrottleCallback.getValue
+        callback(0)
+        0
+      }
+    })
+    EasyMock.expect(requestChannel.sendResponse(EasyMock.capture(capturedResponse)))
+    EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel, replica, log)
+
+    val builder = ListOffsetRequest.Builder.forConsumer(true, IsolationLevel.READ_COMMITTED)
+      .setTargetTimes(Map(tp -> timestamp).asJava)
+    val (listOffsetRequest, request) = buildRequest(builder)
+    createKafkaApis().handleListOffsetRequest(request)
+
+    val response = readResponse(ApiKeys.LIST_OFFSETS, listOffsetRequest, capturedResponse).asInstanceOf[ListOffsetResponse]
+    assertTrue(response.responseData.containsKey(tp))
+
+    val partitionData = response.responseData.get(tp)
+    assertEquals(Errors.NONE, partitionData.error)
+    assertEquals(ListOffsetResponse.UNKNOWN_OFFSET, partitionData.offset)
+    assertEquals(ListOffsetResponse.UNKNOWN_TIMESTAMP, partitionData.timestamp)
+  }
+
+  @Test
+  def testReadUncommittedConsumerListOffsetLimitedAtHighWatermark(): Unit = {
     val tp = new TopicPartition("foo", 0)
     val timestamp: JLong = time.milliseconds()
     val hw = 15L

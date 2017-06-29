@@ -631,17 +631,13 @@ class KafkaApis(val requestChannel: RequestChannel,
   def replicationQuota(fetchRequest: FetchRequest): ReplicaQuota =
     if (fetchRequest.isFromFollower) quotas.leader else UnboundedQuota
 
-  /**
-   * Handle an offset request
-   */
   def handleListOffsetRequest(request: RequestChannel.Request) {
     val version = request.header.apiVersion()
 
-    val mergedResponseMap =
-      if (version == 0)
-        handleListOffsetRequestV0(request)
-      else
-        handleListOffsetRequestV1AndAbove(request)
+    val mergedResponseMap = if (version == 0)
+      handleListOffsetRequestV0(request)
+    else
+      handleListOffsetRequestV1AndAbove(request)
 
     sendResponseMaybeThrottle(request, requestThrottleMs => new ListOffsetResponse(requestThrottleMs, mergedResponseMap.asJava))
   }
@@ -740,10 +736,8 @@ class KafkaApis(val requestChannel: RequestChannel,
               def allowed(timestampOffset: TimestampOffset): Boolean =
                 timestamp == ListOffsetRequest.EARLIEST_TIMESTAMP || timestampOffset.offset < lastFetchableOffset
 
-              fetchOffsetForTimestamp(topicPartition, timestamp) match {
-                case Some(timestampOffset) if allowed(timestampOffset) => timestampOffset
-                case _ => TimestampOffset.Unknown
-              }
+              fetchOffsetForTimestamp(topicPartition, timestamp)
+                .filter(allowed).getOrElse(TimestampOffset.Unknown)
             }
           } else {
             fetchOffsetForTimestamp(topicPartition, timestamp)
@@ -785,7 +779,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
   }
 
-  private def fetchOffsetForTimestamp(topicPartition: TopicPartition, timestamp: Long) : Option[TimestampOffset] = {
+  private def fetchOffsetForTimestamp(topicPartition: TopicPartition, timestamp: Long): Option[TimestampOffset] = {
     replicaManager.getLog(topicPartition) match {
       case Some(log) =>
         log.fetchOffsetsByTimestamp(timestamp)
