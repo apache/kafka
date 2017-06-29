@@ -79,9 +79,8 @@ import static org.apache.kafka.common.record.Records.LOG_OVERHEAD;
  * is expired from lack of activity.
  *
  * There is no similar need to preserve the timestamp from the original batch after compaction. The FirstTimestamp
- * field therefore always reflects the timestamp of the first record in the batch. It is possible for a batch to
- * be retained during compaction even if all records have been removed. In this case, the FirstTimestamp will be
- * set to -1 (NO_TIMESTAMP).
+ * field therefore always reflects the timestamp of the first record in the batch. If the batch is empty, the
+ * FirstTimestamp will be set to -1 (NO_TIMESTAMP).
  *
  * The current attributes are given below:
  *
