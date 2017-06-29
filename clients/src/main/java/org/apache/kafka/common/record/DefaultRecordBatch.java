@@ -64,12 +64,24 @@ import static org.apache.kafka.common.record.Records.LOG_OVERHEAD;
  * computation to avoid the need to recompute the CRC when this field is assigned for every batch that is received by
  * the broker. The CRC-32C (Castagnoli) polynomial is used for the computation.
  *
- * On compaction: unlike the older message formats, magic v2 and above preserves the first and last offset/sequence
+ * On Compaction: Unlike the older message formats, magic v2 and above preserves the first and last offset/sequence
  * numbers from the original batch when the log is cleaned. This is required in order to be able to restore the
- * producer's state when the log is reloaded. If we did not retain the last sequence number, for example, then
- * after a partition leader failure, the producer might see an OutOfSequence error. The base sequence number must
- * be preserved for duplicate checking (the broker checks incoming Produce requests for duplicates by verifying
- * that the first and last sequence numbers of the incoming batch match the last from that producer).
+ * producer's state when the log is reloaded. If we did not retain the last sequence number, then following
+ * a partition leader failure, once the new leader has rebuilt the producer state from the log, the next sequence
+ * expected number would no longer be in sync with what was written by the client. This would cause an
+ * unexpected OutOfOrderSequence error, which is typically fatal. The base sequence number must be preserved for
+ * duplicate checking: the broker checks incoming Produce requests for duplicates by verifying that the first and
+ * last sequence numbers of the incoming batch match the last from that producer.
+ *
+ * Note that if all of the records in a batch are removed during compaction, the broker may still retain an empty
+ * batch header in order to preserve the producer sequence information as described above. These empty batches
+ * are retained only until either a new sequence number is written by the corresponding producer or the producerId
+ * is expired from lack of activity.
+ *
+ * There is no similar need to preserve the timestamp from the original batch after compaction. The FirstTimestamp
+ * field therefore always reflects the timestamp of the first record in the batch. It is possible for a batch to
+ * be retained during compaction even if all records have been removed. In this case, the FirstTimestamp will be
+ * set to -1 (NO_TIMESTAMP).
  *
  * The current attributes are given below:
  *
@@ -138,7 +150,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
      * Get the timestamp of the first record in this batch. It is always the create time of the record even if the
      * timestamp type of the batch is log append time.
      *
-     * @return The base timestamp
+     * @return The first timestamp or {@link RecordBatch#NO_TIMESTAMP} if the batch is empty
      */
     public long firstTimestamp() {
         return buffer.getLong(FIRST_TIMESTAMP_OFFSET);
