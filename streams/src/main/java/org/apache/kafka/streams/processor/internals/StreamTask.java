@@ -253,12 +253,12 @@ public class StreamTask extends AbstractTask implements Punctuator {
      */
     @Override
     public void commit() {
-        commitImpl(true);
+        commit(true);
 
     }
 
     // visible for testing
-    void commitImpl(final boolean startNewTransaction) {
+    void commit(final boolean startNewTransaction) {
         log.debug("{} Committing", logPrefix);
         metrics.metrics.measureLatencyNs(
             time,
@@ -348,7 +348,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
     @Override
     public void suspend() {
         log.debug("{} Suspending", logPrefix);
-        suspendImpl(true);
+        suspend(true);
     }
 
     /**
@@ -361,10 +361,10 @@ public class StreamTask extends AbstractTask implements Punctuator {
      * </pre>
      */
     // visible for testing
-    void suspendImpl(final boolean clean) {
+    void suspend(final boolean clean) {
         closeTopology(); // should we call this only on clean suspend?
         if (clean) {
-            commitImpl(false);
+            commit(false);
         }
     }
 
@@ -432,7 +432,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
 
         /**
          * <pre>
-         * - {@link #suspendImpl(boolean) suspendImpl(clean)}
+         * - {@link #suspend(boolean) suspend(clean)}
          *   - close topology
          *   - if (clean) {@link #commit()}
          *     - flush state and producer
@@ -450,7 +450,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
 
         RuntimeException firstException = null;
         try {
-            suspendImpl(clean);
+            suspend(clean);
         } catch (final RuntimeException e) {
             clean = false;
             firstException = e;

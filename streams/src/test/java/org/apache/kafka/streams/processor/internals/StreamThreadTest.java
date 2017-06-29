@@ -197,8 +197,8 @@ public class StreamThreadTest {
         }
 
         @Override
-        void commitImpl(final boolean startNewTransaction) {
-            super.commitImpl(startNewTransaction);
+        void commit(final boolean startNewTransaction) {
+            super.commit(startNewTransaction);
             committed = true;
         }
 
@@ -215,11 +215,11 @@ public class StreamThreadTest {
         }
 
         @Override
-        void suspendImpl(final boolean clean) {
+        void suspend(final boolean clean) {
             if (suspended || closed) {
                 throw new IllegalStateException("Should not suspend task that is already suspended or closed.");
             }
-            super.suspendImpl(clean);
+            super.suspend(clean);
             suspended = true;
         }
 
