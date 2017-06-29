@@ -33,6 +33,8 @@ import org.junit.Test
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable.Buffer
+import kafka.server.QuotaType
+import kafka.server.KafkaServer
 
 /* We have some tests in this class instead of `BaseConsumerTest` in order to keep the build time under control. */
 class PlaintextConsumerTest extends BaseConsumerTest {
@@ -1470,6 +1472,40 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     } finally {
       consumer.close()
     }
+  }
+
+  @Test
+  def testQuotaMetricsNotCreatedIfNoQuotasConfigured() {
+    val numRecords = 1000
+    sendRecords(numRecords)
+
+    this.consumers.head.assign(List(tp).asJava)
+    this.consumers.head.seek(tp, 0)
+    consumeAndVerifyRecords(consumer = this.consumers.head, numRecords = numRecords, startingOffset = 0)
+
+    def assertNoMetric(broker: KafkaServer, name: String, quotaType: QuotaType, clientId: String) {
+        val metricName = broker.metrics.metricName("throttle-time",
+                                  quotaType.toString,
+                                  "",
+                                  "user", "",
+                                  "client-id", clientId)
+        assertNull("Metric should not hanve been created " + metricName, broker.metrics.metric(metricName))
+    }
+    servers.foreach(assertNoMetric(_, "byte-rate", QuotaType.Produce, producerClientId))
+    servers.foreach(assertNoMetric(_, "throttle-time", QuotaType.Produce, producerClientId))
+    servers.foreach(assertNoMetric(_, "byte-rate", QuotaType.Fetch, consumerClientId))
+    servers.foreach(assertNoMetric(_, "throttle-time", QuotaType.Fetch, consumerClientId))
+
+    servers.foreach(assertNoMetric(_, "request-time", QuotaType.Request, producerClientId))
+    servers.foreach(assertNoMetric(_, "throttle-time", QuotaType.Request, producerClientId))
+    servers.foreach(assertNoMetric(_, "request-time", QuotaType.Request, consumerClientId))
+    servers.foreach(assertNoMetric(_, "throttle-time", QuotaType.Request, consumerClientId))
+
+    def assertNoExemptRequestMetric(broker: KafkaServer) {
+        val metricName = broker.metrics.metricName("exempt-request-time", QuotaType.Request.toString, "")
+        assertNull("Metric should not hanve been created " + metricName, broker.metrics.metric(metricName))
+    }
+    servers.foreach(assertNoExemptRequestMetric(_))
   }
 
   def runMultiConsumerSessionTimeoutTest(closeConsumer: Boolean): Unit = {
