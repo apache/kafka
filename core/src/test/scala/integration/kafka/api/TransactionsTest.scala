@@ -166,8 +166,8 @@ class TransactionsTest extends KafkaServerTestHarness {
 
     // undecided timestamps should not be searchable either
     val offsetsForTimes = readCommittedConsumer.offsetsForTimes(Map(
-      tp1 -> new JLong(latestWrittenTimestamp),
-      tp2 -> new JLong(latestWrittenTimestamp)
+      tp1 -> (latestWrittenTimestamp: JLong),
+      tp2 -> (latestWrittenTimestamp: JLong)
     ).asJava)
     assertNull(offsetsForTimes.get(tp1))
     assertNull(offsetsForTimes.get(tp2))

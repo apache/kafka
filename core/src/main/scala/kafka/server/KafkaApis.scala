@@ -740,13 +740,13 @@ class KafkaApis(val requestChannel: RequestChannel,
               def allowed(timestampOffset: TimestampOffset): Boolean =
                 timestamp == ListOffsetRequest.EARLIEST_TIMESTAMP || timestampOffset.offset < lastFetchableOffset
 
-              fetchOffsetForTimestamp(replicaManager.logManager, topicPartition, timestamp) match {
+              fetchOffsetForTimestamp(topicPartition, timestamp) match {
                 case Some(timestampOffset) if allowed(timestampOffset) => timestampOffset
                 case _ => TimestampOffset.Unknown
               }
             }
           } else {
-            fetchOffsetForTimestamp(replicaManager.logManager, topicPartition, timestamp)
+            fetchOffsetForTimestamp(topicPartition, timestamp)
               .getOrElse(TimestampOffset.Unknown)
           }
 
@@ -785,8 +785,8 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
   }
 
-  private def fetchOffsetForTimestamp(logManager: LogManager, topicPartition: TopicPartition, timestamp: Long) : Option[TimestampOffset] = {
-    logManager.getLog(topicPartition) match {
+  private def fetchOffsetForTimestamp(topicPartition: TopicPartition, timestamp: Long) : Option[TimestampOffset] = {
+    replicaManager.getLog(topicPartition) match {
       case Some(log) =>
         log.fetchOffsetsByTimestamp(timestamp)
       case None =>
