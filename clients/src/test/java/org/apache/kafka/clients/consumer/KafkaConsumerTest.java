@@ -1248,6 +1248,7 @@ public class KafkaConsumerTest {
         KafkaConsumer<byte[], byte[]> consumer = newConsumer();
         consumer.close();
         consumer.close();
+        consumer.close();
     }
 
     @Test

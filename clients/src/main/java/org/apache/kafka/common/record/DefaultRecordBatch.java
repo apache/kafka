@@ -409,8 +409,8 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
                                         boolean isControlRecord) {
         int offsetDelta = (int) (lastOffset - baseOffset);
         writeHeader(buffer, baseOffset, offsetDelta, DefaultRecordBatch.RECORD_BATCH_OVERHEAD, magic,
-                CompressionType.NONE, timestampType, timestamp, timestamp, producerId, producerEpoch, baseSequence,
-                isTransactional, isControlRecord, partitionLeaderEpoch, 0);
+                CompressionType.NONE, timestampType, RecordBatch.NO_TIMESTAMP, timestamp, producerId,
+                producerEpoch, baseSequence, isTransactional, isControlRecord, partitionLeaderEpoch, 0);
     }
 
     static void writeHeader(ByteBuffer buffer,

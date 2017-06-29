@@ -6,17 +6,19 @@
 
 <suppressions>
 
+    <!-- Note that [/\\] must be used as the path separator for cross-platform support -->
+
     <!-- Clients -->
     <suppress checks="ClassFanOutComplexity"
               files="(Fetcher|Sender|SenderTest|ConsumerCoordinator|KafkaConsumer|KafkaProducer|SaslServerAuthenticator|Utils|TransactionManagerTest|KafkaAdminClient|NetworkClient).java"/>
     <suppress checks="ClassFanOutComplexity"
-              files=".*/protocol/Errors.java"/>
+              files="Errors.java"/>
     <suppress checks="ClassFanOutComplexity"
-              files=".*/common/utils/Utils.java"/>
+              files="Utils.java"/>
     <suppress checks="ClassFanOutComplexity"
-              files=".*/requests/AbstractRequest.java"/>
+              files="AbstractRequest.java"/>
     <suppress checks="ClassFanOutComplexity"
-              files=".*/requests/AbstractResponse.java"/>
+              files="AbstractResponse.java"/>
 
     <suppress checks="MethodLength"
               files="KerberosLogin.java|RequestResponseTest.java"/>
@@ -37,13 +39,13 @@
     <suppress checks="ClassDataAbstractionCoupling"
               files="(KafkaConsumer|ConsumerCoordinator|Fetcher|KafkaProducer|AbstractRequest|AbstractResponse|TransactionManager|KafkaAdminClient).java"/>
     <suppress checks="ClassDataAbstractionCoupling"
-              files=".*/protocol/Errors.java"/>
+              files="Errors.java"/>
 
     <suppress checks="BooleanExpressionComplexity"
               files="(Utils|Topic|KafkaLZ4BlockOutputStream|AclData).java"/>
 
     <suppress checks="CyclomaticComplexity"
-              files="(ConsumerCoordinator|Fetcher|Sender|KafkaProducer|BufferPool|ConfigDef|RecordAccumulator|SsLTransportLayer|KerberosLogin|AbstractRequest|AbstractResponse|Selector|SslTransportLayer).java"/>
+              files="(ConsumerCoordinator|Fetcher|Sender|KafkaProducer|BufferPool|ConfigDef|RecordAccumulator|KerberosLogin|AbstractRequest|AbstractResponse|Selector|SslTransportLayer).java"/>
 
     <suppress checks="JavaNCSS"
               files="AbstractRequest.java|KerberosLogin.java"/>
@@ -157,9 +159,7 @@
               files="KStreamWindowAggregateTest.java"/>
 
     <suppress checks="ClassDataAbstractionCoupling"
-              files=".*/streams/.*/Test.java"/>
-    <suppress checks="ClassDataAbstractionCoupling"
-              files=".*/streams/.*test/.*.java"/>
+              files=".*[/\\]streams[/\\].*test[/\\].*.java"/>
 
     <suppress checks="BooleanExpressionComplexity"
               files="SmokeTestDriver.java"/>

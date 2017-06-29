@@ -32,6 +32,7 @@ import kafka.server.{BrokerTopicStats, KafkaConfig}
 import kafka.server.epoch.{EpochEntry, LeaderEpochFileCache}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter
+import org.apache.kafka.common.record.MemoryRecords.RecordFilter.BatchRetention
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
 import org.apache.kafka.common.requests.IsolationLevel
@@ -401,7 +402,8 @@ class LogTest {
 
     val filtered = ByteBuffer.allocate(2048)
     records.filterTo(new TopicPartition("foo", 0), new RecordFilter {
-      override def shouldRetain(recordBatch: RecordBatch, record: Record): Boolean = !record.hasKey
+      override def checkBatchRetention(batch: RecordBatch): BatchRetention = RecordFilter.BatchRetention.DELETE_EMPTY
+      override def shouldRetainRecord(recordBatch: RecordBatch, record: Record): Boolean = !record.hasKey
     }, filtered, Int.MaxValue, BufferSupplier.NO_CACHING)
     filtered.flip()
     val filteredRecords = MemoryRecords.readableRecords(filtered)
@@ -428,6 +430,49 @@ class LogTest {
   }
 
   @Test
+  def testRebuildProducerStateWithEmptyCompactedBatch() {
+    val log = createLog(2048)
+    val pid = 1L
+    val epoch = 0.toShort
+    val seq = 0
+    val baseOffset = 23L
+
+    // create an empty batch
+    val records = TestUtils.records(producerId = pid, producerEpoch = epoch, sequence = seq, baseOffset = baseOffset, records = List(
+      new SimpleRecord(System.currentTimeMillis(), "key".getBytes, "a".getBytes),
+      new SimpleRecord(System.currentTimeMillis(), "key".getBytes, "b".getBytes)))
+    records.batches.asScala.foreach(_.setPartitionLeaderEpoch(0))
+
+    val filtered = ByteBuffer.allocate(2048)
+    records.filterTo(new TopicPartition("foo", 0), new RecordFilter {
+      override def checkBatchRetention(batch: RecordBatch): BatchRetention = RecordFilter.BatchRetention.RETAIN_EMPTY
+      override def shouldRetainRecord(recordBatch: RecordBatch, record: Record): Boolean = false
+    }, filtered, Int.MaxValue, BufferSupplier.NO_CACHING)
+    filtered.flip()
+    val filteredRecords = MemoryRecords.readableRecords(filtered)
+
+    log.appendAsFollower(filteredRecords)
+
+    // append some more data and then truncate to force rebuilding of the PID map
+    val moreRecords = TestUtils.records(baseOffset = baseOffset + 2, records = List(
+      new SimpleRecord(System.currentTimeMillis(), "e".getBytes),
+      new SimpleRecord(System.currentTimeMillis(), "f".getBytes)))
+    moreRecords.batches.asScala.foreach(_.setPartitionLeaderEpoch(0))
+    log.appendAsFollower(moreRecords)
+
+    log.truncateTo(baseOffset + 2)
+
+    val activeProducers = log.activeProducers
+    assertTrue(activeProducers.contains(pid))
+
+    val entry = activeProducers(pid)
+    assertEquals(0, entry.firstSeq)
+    assertEquals(baseOffset, entry.firstOffset)
+    assertEquals(1, entry.lastSeq)
+    assertEquals(baseOffset + 1, entry.lastOffset)
+  }
+
+  @Test
   def testUpdatePidMapWithCompactedData() {
     val log = createLog(2048)
     val pid = 1L
@@ -445,7 +490,8 @@ class LogTest {
 
     val filtered = ByteBuffer.allocate(2048)
     records.filterTo(new TopicPartition("foo", 0), new RecordFilter {
-      override def shouldRetain(recordBatch: RecordBatch, record: Record): Boolean = !record.hasKey
+      override def checkBatchRetention(batch: RecordBatch): BatchRetention = RecordFilter.BatchRetention.DELETE_EMPTY
+      override def shouldRetainRecord(recordBatch: RecordBatch, record: Record): Boolean = !record.hasKey
     }, filtered, Int.MaxValue, BufferSupplier.NO_CACHING)
     filtered.flip()
     val filteredRecords = MemoryRecords.readableRecords(filtered)
