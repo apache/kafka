@@ -19,7 +19,7 @@ package kafka.log
 import java.nio.ByteBuffer
 
 import kafka.common.LongRef
-import kafka.message.{DefaultCompressionCodec, GZIPCompressionCodec, NoCompressionCodec, SnappyCompressionCodec}
+import kafka.message.{CompressionCodec, DefaultCompressionCodec, GZIPCompressionCodec, NoCompressionCodec, SnappyCompressionCodec}
 import org.apache.kafka.common.errors.{InvalidTimestampException, UnsupportedForMessageFormatException}
 import org.apache.kafka.common.record._
 import org.apache.kafka.test.TestUtils
@@ -903,6 +903,44 @@ class LogValidatorTest {
       targetCodec = SnappyCompressionCodec,
       compactedTopic = false,
       magic = RecordBatch.MAGIC_VALUE_V1,
+      timestampType = TimestampType.CREATE_TIME,
+      timestampDiffMaxMs = 5000L,
+      partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
+      isFromClient = true)
+  }
+
+  @Test(expected = classOf[InvalidRecordException])
+  def testCompressedBatchWithoutRecordsNotAllowed(): Unit = {
+    testBatchWithoutRecordsNotAllowed(DefaultCompressionCodec, DefaultCompressionCodec)
+  }
+
+  @Test(expected = classOf[InvalidRecordException])
+  def testUncompressedBatchWithoutRecordsNotAllowed(): Unit = {
+    testBatchWithoutRecordsNotAllowed(NoCompressionCodec, NoCompressionCodec)
+  }
+
+  @Test(expected = classOf[InvalidRecordException])
+  def testRecompressedBatchWithoutRecordsNotAllowed(): Unit = {
+    testBatchWithoutRecordsNotAllowed(NoCompressionCodec, DefaultCompressionCodec)
+  }
+
+  private def testBatchWithoutRecordsNotAllowed(sourceCodec: CompressionCodec, targetCodec: CompressionCodec): Unit = {
+    val offset = 1234567
+    val (producerId, producerEpoch, baseSequence, isTransactional, partitionLeaderEpoch) =
+      (1324L, 10.toShort, 984, true, 40)
+    val buffer = ByteBuffer.allocate(DefaultRecordBatch.RECORD_BATCH_OVERHEAD)
+    DefaultRecordBatch.writeEmptyHeader(buffer, RecordBatch.CURRENT_MAGIC_VALUE, producerId, producerEpoch,
+      baseSequence, 0L, 5L, partitionLeaderEpoch, TimestampType.CREATE_TIME, System.currentTimeMillis(),
+      isTransactional, false)
+    buffer.flip()
+    val records = MemoryRecords.readableRecords(buffer)
+    LogValidator.validateMessagesAndAssignOffsets(records,
+      offsetCounter = new LongRef(offset),
+      now = System.currentTimeMillis(),
+      sourceCodec = sourceCodec,
+      targetCodec = targetCodec,
+      compactedTopic = false,
+      magic = RecordBatch.CURRENT_MAGIC_VALUE,
       timestampType = TimestampType.CREATE_TIME,
       timestampDiffMaxMs = 5000L,
       partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,

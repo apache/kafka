@@ -18,6 +18,9 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.processor.Cancellable;
+import org.apache.kafka.streams.processor.PunctuationType;
+import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.state.internals.ThreadCache;
@@ -141,6 +144,11 @@ public class AbstractProcessorContextTest {
 
         @Override
         public StateStore getStateStore(final String name) {
+            return null;
+        }
+
+        @Override
+        public Cancellable schedule(long interval, PunctuationType type, Punctuator callback) {
             return null;
         }
 
