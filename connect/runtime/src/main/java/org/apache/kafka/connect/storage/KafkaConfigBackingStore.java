@@ -408,12 +408,14 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
     KafkaBasedLog<String, byte[]> setupAndCreateKafkaBasedLog(String topic, final WorkerConfig config) {
         Map<String, Object> producerProps = new HashMap<>();
         producerProps.putAll(config.originals());
+        producerProps.putAll(config.originalsWithPrefix("producer."));
         producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
         producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
         producerProps.put(ProducerConfig.RETRIES_CONFIG, Integer.MAX_VALUE);
 
         Map<String, Object> consumerProps = new HashMap<>();
         consumerProps.putAll(config.originals());
+        consumerProps.putAll(config.originalsWithPrefix("consumer."));
         consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
 
