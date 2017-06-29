@@ -123,7 +123,7 @@ public class StreamThread extends Thread {
      *
      */
     public enum State {
-        CREATED(1, 4), RUNNING(1, 2, 4, 5), PARTITIONS_REVOKED(2, 3, 4, 5), ASSIGNING_PARTITIONS(1, 4, 5), PENDING_SHUTDOWN(5), DEAD;
+        CREATED(1, 4, 5), RUNNING(2, 4, 5), PARTITIONS_REVOKED(2, 3, 4, 5), ASSIGNING_PARTITIONS(1, 4, 5), PENDING_SHUTDOWN(5), DEAD;
 
         private final Set<Integer> validTransitions = new HashSet<>();
 
