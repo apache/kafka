@@ -99,7 +99,7 @@ public class SinkNode<K, V> extends ProcessorNode<K, V> {
         } catch (final StreamsException e) {
             throw new StreamsException(
                     String.format("%s: Aborting sending record because a previous send request returned an error %s.",
-                    name()), e);
+                    name(), e));
         }
     }
 
