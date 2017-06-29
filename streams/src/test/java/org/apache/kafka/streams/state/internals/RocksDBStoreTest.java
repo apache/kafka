@@ -19,12 +19,15 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.ProcessorStateException;
+import org.apache.kafka.streams.processor.Cancellable;
+import org.apache.kafka.streams.processor.PunctuationType;
+import org.apache.kafka.streams.processor.Punctuator;
+import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.internals.AbstractProcessorContext;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.state.RocksDBConfigSetter;
 import org.apache.kafka.test.MockProcessorContext;
 import org.apache.kafka.test.NoOpRecordCollector;
@@ -70,23 +73,13 @@ public class RocksDBStoreTest {
     }
 
     @Test
-    public void canSpecifyConfigSetterAsClass() throws Exception {
+    public void verifyRocksDbConfigSetterIsCalled() throws Exception {
         final Map<String, Object> configs = new HashMap<>();
+        configs.put(StreamsConfig.APPLICATION_ID_CONFIG, "test-application");
+        configs.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "test-server:9092");
         configs.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, MockRocksDbConfigSetter.class);
         MockRocksDbConfigSetter.called = false;
-        subject.openDB(new ConfigurableProcessorContext(tempDir, Serdes.String(), Serdes.String(),
-                null, null, configs));
-
-        assertTrue(MockRocksDbConfigSetter.called);
-    }
-
-    @Test
-    public void canSpecifyConfigSetterAsString() throws Exception {
-        final Map<String, Object> configs = new HashMap<>();
-        configs.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, MockRocksDbConfigSetter.class.getName());
-        MockRocksDbConfigSetter.called = false;
-        subject.openDB(new ConfigurableProcessorContext(tempDir, Serdes.String(), Serdes.String(),
-                null, null, configs));
+        subject.openDB(new ConfigurableProcessorContext(new StreamsConfig(configs), tempDir));
 
         assertTrue(MockRocksDbConfigSetter.called);
     }
@@ -166,7 +159,7 @@ public class RocksDBStoreTest {
     }
 
     @Test(expected = ProcessorStateException.class)
-    public void shouldThrowProcessorStateExeptionOnPutDeletedDir() throws IOException {
+    public void shouldThrowProcessorStateExceptionOnPutDeletedDir() throws IOException {
         subject.init(context, subject);
         Utils.delete(dir);
         subject.put("anyKey", "anyValue");
@@ -183,22 +176,42 @@ public class RocksDBStoreTest {
     }
 
 
-    private static class ConfigurableProcessorContext extends MockProcessorContext {
-        final Map<String, Object> configs;
+    private static class ConfigurableProcessorContext extends AbstractProcessorContext {
+        private final File stateDir;
 
-        ConfigurableProcessorContext(final File stateDir,
-                                     final Serde<?> keySerde,
-                                     final Serde<?> valSerde,
-                                     final RecordCollector collector,
-                                     final ThreadCache cache,
-                                     final Map<String, Object> configs) {
-            super(stateDir, keySerde, valSerde, collector, cache);
-            this.configs = configs;
+        ConfigurableProcessorContext(StreamsConfig config, File stateDir) {
+            super(null, null, config, null, null, null);
+            this.stateDir = stateDir;
         }
 
         @Override
-        public Map<String, Object> appConfigs() {
-            return configs;
+        public File stateDir() {
+            return stateDir;
         }
+
+        @Override
+        public StateStore getStateStore(String name) {
+            return null;
+        }
+
+        @Override
+        public Cancellable schedule(long interval, PunctuationType type, Punctuator callback) {
+            return null;
+        }
+
+        @Override
+        public void schedule(long interval) { }
+
+        @Override
+        public <K, V> void forward(K key, V value) { }
+
+        @Override
+        public <K, V> void forward(K key, V value, int childIndex) { }
+
+        @Override
+        public <K, V> void forward(K key, V value, String childName) { }
+
+        @Override
+        public void commit() { }
     }
 }

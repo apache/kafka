@@ -155,6 +155,7 @@ public class AbstractProcessorContextTest {
         static Properties config;
         static {
             config = minimalStreamsConfig();
+            // Value must be a string to test className -> class conversion
             config.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, RocksDBConfigSetter.class.getName());
             config.put("user.supplied.config", "user-suppplied-value");
         }

@@ -157,7 +157,7 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
 
     @Override
     public Map<String, Object> appConfigs() {
-        Map<String, Object> combined = new HashMap<>();
+        final Map<String, Object> combined = new HashMap<>();
         combined.putAll(config.originals());
         combined.putAll(config.values());
         return combined;
