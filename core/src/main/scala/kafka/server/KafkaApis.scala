@@ -446,7 +446,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       // When this callback is triggered, the remote API call has completed
       request.apiRemoteCompleteTimeNanos = time.nanoseconds
 
-      quotas.produce.recordAndMaybeThrottle(
+      quotas.produce.maybeRecordAndThrottle(
         request.session.sanitizedUser,
         request.header.clientId,
         numBytesAppended,
@@ -594,7 +594,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         // result in data being loaded into memory, it is better to do this after throttling to avoid OOM.
         val response = new FetchResponse(fetchedPartitionData, 0)
         val responseStruct = response.toStruct(versionId)
-        quotas.fetch.recordAndMaybeThrottle(request.session.sanitizedUser, clientId, responseStruct.sizeOf,
+        quotas.fetch.maybeRecordAndThrottle(request.session.sanitizedUser, clientId, responseStruct.sizeOf,
           fetchResponseCallback)
       }
     }
@@ -2003,16 +2003,9 @@ class KafkaApis(val requestChannel: RequestChannel,
       // When this callback is triggered, the remote API call has completed
       request.apiRemoteCompleteTimeNanos = time.nanoseconds
     }
-    val quotaSensors = quotas.request.getOrCreateQuotaSensors(request.session.sanitizedUser, clientId)
-    def recordNetworkThreadTimeNanos(timeNanos: Long) {
-      quotas.request.recordNoThrottle(quotaSensors, nanosToPercentage(timeNanos))
-    }
-    request.recordNetworkThreadTimeCallback = Some(recordNetworkThreadTimeNanos)
-
-    quotas.request.recordAndThrottleOnQuotaViolation(
-        quotaSensors,
-        nanosToPercentage(request.requestThreadTimeNanos),
-        sendResponseCallback)
+    quotas.request.maybeRecordAndThrottle(request.session.sanitizedUser, clientId,
+        request.requestThreadTimeNanos, sendResponseCallback,
+        callback => request.recordNetworkThreadTimeCallback = Some(callback))
   }
 
   private def sendResponseExemptThrottle(response: RequestChannel.Response) {
@@ -2020,18 +2013,12 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   private def sendResponseExemptThrottle(request: RequestChannel.Request, sendResponseCallback: () => Unit) {
-    def recordNetworkThreadTimeNanos(timeNanos: Long) {
-      quotas.request.recordExempt(nanosToPercentage(timeNanos))
-    }
-    request.recordNetworkThreadTimeCallback = Some(recordNetworkThreadTimeNanos)
-
-    quotas.request.recordExempt(nanosToPercentage(request.requestThreadTimeNanos))
+    quotas.request.maybeRecordExempt(request.requestThreadTimeNanos,
+        callback => request.recordNetworkThreadTimeCallback = Some(callback))
     sendResponseCallback()
   }
 
   private def sendResponse(request: RequestChannel.Request, response: AbstractResponse) {
     requestChannel.sendResponse(RequestChannel.Response(request, response))
   }
-
-  private def nanosToPercentage(nanos: Long): Double = nanos * ClientQuotaManagerConfig.NanosToPercentagePerSecond
 }
