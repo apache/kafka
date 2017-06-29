@@ -24,7 +24,6 @@ import kafka.utils.CommandLineUtils
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.clients.CommonClientConfigs
 import joptsimple._
-import org.apache.kafka.common.Node
 
 import scala.util.{Failure, Success}
 
