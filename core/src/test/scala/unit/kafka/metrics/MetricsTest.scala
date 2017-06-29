@@ -28,6 +28,7 @@ import kafka.server._
 import kafka.serializer._
 import kafka.utils._
 import kafka.admin.AdminUtils
+import kafka.cluster.PartitionMetrics
 import kafka.utils.TestUtils._
 
 import scala.collection._
@@ -76,6 +77,7 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
     AdminUtils.deleteTopic(zkUtils, topic)
     TestUtils.verifyTopicDeletion(zkUtils, topic, 1, servers)
     assertEquals("Topic metrics exists after deleteTopic", Set.empty, topicMetricGroups(topic))
+    checkPartitionMetricsRemoved()
   }
 
   @Test
@@ -89,6 +91,7 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
     servers.foreach(s => assertNotNull(s.brokerTopicStats.topicStats(topic)))
     AdminUtils.deleteTopic(zkUtils, topic)
     TestUtils.verifyTopicDeletion(zkUtils, topic, 1, servers)
+    checkPartitionMetricsRemoved()
     assertEquals("Topic metrics exists after deleteTopic", Set.empty, topicMetricGroups(topic))
   }
 
@@ -170,5 +173,14 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
     val topicMetricRegex = new Regex(".*BrokerTopicMetrics.*("+topic+")$")
     val metricGroups = Metrics.defaultRegistry.groupedMetrics(MetricPredicate.ALL).keySet.asScala
     metricGroups.filter(topicMetricRegex.pattern.matcher(_).matches)
+  }
+
+  private def checkPartitionMetricsRemoved() : Unit = {
+    val allMetricNames = Metrics.defaultRegistry().allMetrics().asScala.map { case (metricName, metric) =>
+      metricName.getName
+    }.toSet
+    PartitionMetrics.allMetrics.foreach { metric =>
+      assertFalse(allMetricNames.contains(metric))
+    }
   }
 }

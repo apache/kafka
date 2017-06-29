@@ -40,6 +40,15 @@ import org.apache.kafka.common.utils.Time
 
 import scala.collection.JavaConverters._
 
+object PartitionMetrics {
+  val UnderReplicated = "UnderReplicated"
+  val InSyncReplicasCount = "InSyncReplicasCount"
+  val ReplicasCount = "ReplicasCount"
+  val LastStableOffsetLag = "LastStableOffsetLag"
+
+  val allMetrics = List(UnderReplicated, InSyncReplicasCount, ReplicasCount, LastStableOffsetLag)
+}
+
 /**
  * Data structure that represents a topic partition. The leader maintains the AR, ISR, CUR, RAR
  */
@@ -71,7 +80,7 @@ class Partition(val topic: String,
   private def isReplicaLocal(replicaId: Int) : Boolean = replicaId == localBrokerId
   val tags = Map("topic" -> topic, "partition" -> partitionId.toString)
 
-  newGauge("UnderReplicated",
+  newGauge(PartitionMetrics.UnderReplicated,
     new Gauge[Int] {
       def value = {
         if (isUnderReplicated) 1 else 0
@@ -80,7 +89,7 @@ class Partition(val topic: String,
     tags
   )
 
-  newGauge("InSyncReplicasCount",
+  newGauge(PartitionMetrics.InSyncReplicasCount,
     new Gauge[Int] {
       def value = {
         if (isLeaderReplicaLocal) inSyncReplicas.size else 0
@@ -89,7 +98,7 @@ class Partition(val topic: String,
     tags
   )
 
-  newGauge("ReplicasCount",
+  newGauge(PartitionMetrics.ReplicasCount,
     new Gauge[Int] {
       def value = {
         if (isLeaderReplicaLocal) assignedReplicas.size else 0
@@ -98,7 +107,7 @@ class Partition(val topic: String,
     tags
   )
 
-  newGauge("LastStableOffsetLag",
+  newGauge(PartitionMetrics.LastStableOffsetLag,
     new Gauge[Long] {
       def value = {
         leaderReplicaIfLocal.map { replica =>
@@ -557,12 +566,7 @@ class Partition(val topic: String,
   /**
    * remove deleted log metrics
    */
-  private def removePartitionMetrics() {
-    removeMetric("UnderReplicated", tags)
-    removeMetric("InSyncReplicasCount", tags)
-    removeMetric("ReplicasCount", tags)
-    removeMetric("LastStableOffsetLag", tags)
-  }
+  private def removePartitionMetrics() = PartitionMetrics.allMetrics.foreach(removeMetric(_, tags))
 
   override def equals(that: Any): Boolean = that match {
     case other: Partition => partitionId == other.partitionId && topic == other.topic
