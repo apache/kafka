@@ -618,4 +618,13 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         return sendOldValues;
     }
 
+	@Override
+	public <K0, V0, KO, VO> KTable<K0, V0> oneToManyJoin(KTable<KO, VO> other,
+			ValueMapper<VO, K> keyExtractor,
+			ValueMapper<K, K0> joinPrefixFaker,
+			ValueMapper<K0, K> leftKeyExtractor, ValueJoiner<V, VO, V0> joiner) {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
 }

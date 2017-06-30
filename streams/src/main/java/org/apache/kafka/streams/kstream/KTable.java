@@ -1783,6 +1783,33 @@ public interface KTable<K, V> {
                                      final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
                                      final StateStoreSupplier<KeyValueStore> storeSupplier);
 
+    
+    
+    /**
+     * 
+     * Joins one record of this KTable to n records of the other KTable
+     * an event in this KTabl will produce n consecutive events an update
+     * in other table will update only the 1 matched record
+     * 
+     * @param the table containing n records for each K of this table
+     * @param keyExtractor a {@code ValueMapper} returning the key of this table from the others value
+     * @param joinPrefixFaker a {@code ValueMapper} returning an outputkey that when serialized only produces the
+     * 							prefix of the output key wich is the same as serializing K 
+     * @param leftKeyExtractor a {@code ValueMapper} extracting the Key of this table from the resulting Key 
+     * @param <K0> the resultings tables Key
+     * @param <V0> the resultings tables Value
+     * @param joiner
+     * @return
+     */
+    <K0,V0,KO,VO> KTable<K0,V0> oneToManyJoin (final KTable<KO,VO> other,
+    		 							  		final ValueMapper<VO, K> keyExtractor,
+    		 							  		final ValueMapper<K, K0> joinPrefixFaker,
+    		 							  		final ValueMapper<K0, K> leftKeyExtractor,
+    		 							  		final ValueJoiner<V, VO, V0> joiner);
+    
+    
+    
+    
     /**
      * Get the name of the local state store used that can be used to query this {@code KTable}.
      *
