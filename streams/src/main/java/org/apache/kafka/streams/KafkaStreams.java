@@ -74,6 +74,8 @@ import java.util.concurrent.TimeUnit;
 
 import static org.apache.kafka.common.utils.Utils.getHost;
 import static org.apache.kafka.common.utils.Utils.getPort;
+import static org.apache.kafka.streams.KafkaStreams.State.ERROR;
+import static org.apache.kafka.streams.KafkaStreams.State.PENDING_SHUTDOWN;
 import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE;
 import static org.apache.kafka.streams.StreamsConfig.PROCESSING_GUARANTEE_CONFIG;
 
@@ -168,20 +170,24 @@ public class KafkaStreams {
      *         |             v
      *         |       +-----+--------+
      *         +-----> | Not Running  |
+     *         |       +--------------+
+     *         |
+     *         |       +--------------+
+     *         +-----> | Error        |
      *                 +--------------+
+     *
+     *
      * </pre>
      * Note the following:
      * - Any state can go to PENDING_SHUTDOWN (during clean shutdown) or NOT_RUNNING (e.g., during an exception).
      * - It is theoretically possible for a thread to always be in the PARTITION_REVOKED state
      * (see {@code StreamThread} state diagram) and hence it is possible that this instance is always
      * on a REBALANCING state.
-     * - Of special importance: The Kafka Streams instance may go to PENDING_SHUTDOWN or NOT_RUNNING if the global stream
-     * thread is shutting down or dead respectively.
-     * - Of special importance: The Kafka Streams instance may go to PENDING_SHUTDOWN or NOT_RUNNING if all
-     * the stream threads are dead.
+     * - Of special importance: If the global stream thread dies, or all stream threads die (or both) then
+     * the instance will be in the ERROR state. The user will need to close it.
      */
     public enum State {
-        CREATED(1, 2, 3), REBALANCING(1, 2, 3, 4), RUNNING(1, 3, 4), PENDING_SHUTDOWN(4), NOT_RUNNING;
+        CREATED(1, 2, 3, 5), REBALANCING(1, 2, 3, 4, 5), RUNNING(1, 3, 4, 5), PENDING_SHUTDOWN(4), NOT_RUNNING, ERROR;
 
         private final Set<Integer> validTransitions = new HashSet<>();
 
@@ -293,13 +299,37 @@ public class KafkaStreams {
         }
 
         /**
-         * If all threads are dead, including the global thread, set to NOT_RUNNING
+         * If all threads are dead set to ERROR
          */
-        private void maybeSetNotRunning() {
+        private void checkAllThreadsDeadAndSetError() {
 
-            // one thread died, check if we have enough threads running
-            if (threadState.size() == 0 && globalThreadState.size() == 0) {
-                setState(State.NOT_RUNNING);
+            synchronized (stateLock) {
+                // if we are pending a shutdown, it's ok for all threads to die, in fact
+                // it is expected. Otherwise, it is an error
+                if (state != PENDING_SHUTDOWN) {
+                    // one thread died, check if we have enough threads running
+                    if (threadState.size() == 0) {
+                        log.warn("{} All stream threads have died. The Kafka Streams instance will be in an error state and should be closed.",
+                                logPrefix);
+                        setState(ERROR);
+                    }
+                }
+            }
+        }
+
+        /**
+         * If all global thread is DEAD
+         */
+        private void checkGlobalStreamThreadDeadAndSetError() {
+
+            synchronized (stateLock) {
+                // if we are pending a shutdown, it's ok for all threads to die, in fact
+                // it is expected. Otherwise, it is an error
+                if (state != PENDING_SHUTDOWN) {
+                    log.warn("{} Global Stream thread has died. The Kafka Streams instance will be in an error state and should be closed.",
+                            logPrefix);
+                    setState(ERROR);
+                }
             }
         }
 
@@ -352,7 +382,7 @@ public class KafkaStreams {
                 } else if (newState == StreamThread.State.RUNNING && state() != State.RUNNING) {
                     maybeSetRunning();
                 } else if (newState == StreamThread.State.DEAD) {
-                    maybeSetNotRunning();
+                    checkAllThreadsDeadAndSetError();
                 }
             } else if (thread instanceof GlobalStreamThread) {
                 // global stream thread has different invariants
@@ -361,9 +391,7 @@ public class KafkaStreams {
 
                 // special case when global thread is dead
                 if (newState == GlobalStreamThread.State.DEAD) {
-                    log.warn("{} Global Stream thread has shut down. Shutting down the Kafka Streams instance.",
-                            logPrefix);
-                    maybeSetNotRunning();
+                    checkGlobalStreamThreadDeadAndSetError();
                 } else if (newState == GlobalStreamThread.State.RUNNING && state() != State.RUNNING) {
                     maybeSetRunning();
                 }
@@ -563,8 +591,8 @@ public class KafkaStreams {
 
     private boolean checkFirstTimeClosing() {
         synchronized (stateLock) {
-            if (state.isCreatedOrRunning()) {
-                state = State.PENDING_SHUTDOWN;
+            if (state.isCreatedOrRunning() || state == ERROR) {
+                state = PENDING_SHUTDOWN;
                 return true;
             }
             return false;

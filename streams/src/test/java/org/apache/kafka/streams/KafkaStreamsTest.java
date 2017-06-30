@@ -145,7 +145,12 @@ public class KafkaStreamsTest {
             }, 10 * 1000, "Thread never stopped.");
             threads[i].join();
         }
-
+        TestUtils.waitForCondition(new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                return streams.state() == KafkaStreams.State.ERROR;
+            }
+        }, 10 * 1000, "Streams never stopped.");
         streams.close();
         TestUtils.waitForCondition(new TestCondition() {
             @Override
@@ -188,6 +193,8 @@ public class KafkaStreamsTest {
             }
         }, 10 * 1000, "Thread never stopped.");
         globalStreamThread.join();
+        assertEquals(streams.state(), KafkaStreams.State.ERROR);
+
         streams.close();
         assertEquals(streams.state(), KafkaStreams.State.NOT_RUNNING);
 
