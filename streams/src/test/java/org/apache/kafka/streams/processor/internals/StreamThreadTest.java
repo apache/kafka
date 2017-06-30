@@ -269,7 +269,7 @@ public class StreamThreadTest {
         assertEquals(thread.state(), StreamThread.State.CREATED);
 
         final ConsumerRebalanceListener rebalanceListener = thread.rebalanceListener;
-        thread.setState(StreamThread.State.RUNNING, false);
+        thread.setState(StreamThread.State.RUNNING);
         assertTrue(thread.tasks().isEmpty());
 
         List<TopicPartition> revokedPartitions;
@@ -366,7 +366,7 @@ public class StreamThreadTest {
         assertEquals(thread.state(), StreamThread.State.CREATED);
 
         final ConsumerRebalanceListener rebalanceListener = thread.rebalanceListener;
-        thread.setState(StreamThread.State.RUNNING, false);
+        thread.setState(StreamThread.State.RUNNING);
         assertTrue(thread.tasks().isEmpty());
 
         List<TopicPartition> revokedPartitions;
@@ -722,7 +722,7 @@ public class StreamThreadTest {
             prevTasks = new HashMap<>(thread.tasks());
 
             final ConsumerRebalanceListener rebalanceListener = thread.rebalanceListener;
-            thread.setState(StreamThread.State.RUNNING, false);
+            thread.setState(StreamThread.State.RUNNING);
             rebalanceListener.onPartitionsRevoked(revokedPartitions);
             rebalanceListener.onPartitionsAssigned(assignedPartitions);
 
@@ -849,7 +849,7 @@ public class StreamThreadTest {
             revokedPartitions = Collections.emptyList();
             assignedPartitions = Arrays.asList(t1p1, t1p2);
 
-            thread.setState(StreamThread.State.RUNNING, false);
+            thread.setState(StreamThread.State.RUNNING);
             thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
             rebalanceListener.onPartitionsRevoked(revokedPartitions);
             rebalanceListener.onPartitionsAssigned(assignedPartitions);
@@ -911,7 +911,7 @@ public class StreamThreadTest {
         assignment.put(new TaskId(0, 1), Collections.singleton(new TopicPartition("someTopic", 1)));
         thread.setPartitionAssignor(new MockStreamsPartitionAssignor(assignment));
 
-        thread.setState(StreamThread.State.RUNNING, false);
+        thread.setState(StreamThread.State.RUNNING);
         thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
         thread.rebalanceListener.onPartitionsAssigned(Collections.singleton(new TopicPartition("someTopic", 0)));
 
@@ -950,7 +950,7 @@ public class StreamThreadTest {
 
         final Set<TopicPartition> assignedPartitions = new HashSet<>();
         Collections.addAll(assignedPartitions, new TopicPartition("someTopic", 0), new TopicPartition("someTopic", 2));
-        thread.setState(StreamThread.State.RUNNING, false);
+        thread.setState(StreamThread.State.RUNNING);
         thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
         thread.rebalanceListener.onPartitionsAssigned(assignedPartitions);
 
@@ -986,7 +986,7 @@ public class StreamThreadTest {
         assignment.put(new TaskId(0, 1), Collections.singleton(new TopicPartition("someTopic", 1)));
         thread.setPartitionAssignor(new MockStreamsPartitionAssignor(assignment));
 
-        thread.setState(StreamThread.State.RUNNING, false);
+        thread.setState(StreamThread.State.RUNNING);
         thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
         thread.rebalanceListener.onPartitionsAssigned(Collections.singleton(new TopicPartition("someTopic", 0)));
 
@@ -1019,7 +1019,7 @@ public class StreamThreadTest {
         assignment.put(new TaskId(0, 1), Collections.singleton(new TopicPartition("someTopic", 1)));
         thread.setPartitionAssignor(new MockStreamsPartitionAssignor(assignment));
 
-        thread.setState(StreamThread.State.RUNNING, false);
+        thread.setState(StreamThread.State.RUNNING);
         thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
         thread.rebalanceListener.onPartitionsAssigned(Collections.singleton(new TopicPartition("someTopic", 0)));
 
@@ -1052,7 +1052,7 @@ public class StreamThreadTest {
             }
         });
 
-        thread.setState(StreamThread.State.RUNNING, false);
+        thread.setState(StreamThread.State.RUNNING);
         thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
         thread.rebalanceListener.onPartitionsAssigned(Collections.<TopicPartition>emptyList());
     }
@@ -1104,8 +1104,8 @@ public class StreamThreadTest {
                 };
             }
         });
-        thread.setState(StreamThread.State.RUNNING, false);
-        thread.setState(StreamThread.State.PARTITIONS_REVOKED, false);
+        thread.setState(StreamThread.State.RUNNING);
+        thread.setState(StreamThread.State.PARTITIONS_REVOKED);
         thread.rebalanceListener.onPartitionsAssigned(activeTasks);
         thread.rebalanceListener.onPartitionsRevoked(activeTasks);
 
@@ -1163,7 +1163,7 @@ public class StreamThreadTest {
             }
         });
 
-        thread.setState(StreamThread.State.RUNNING, false);
+        thread.setState(StreamThread.State.RUNNING);
         thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
         thread.rebalanceListener.onPartitionsAssigned(Collections.<TopicPartition>emptyList());
 
@@ -1240,7 +1240,7 @@ public class StreamThreadTest {
             }
         });
 
-        thread.setState(StreamThread.State.RUNNING, false);
+        thread.setState(StreamThread.State.RUNNING);
         thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
         thread.rebalanceListener.onPartitionsAssigned(Utils.mkSet(t2));
 
@@ -1315,7 +1315,7 @@ public class StreamThreadTest {
         builder.updateSubscriptions(subscriptionUpdates, null);
 
         // should create task for id 0_0 with a single partition
-        thread.setState(StreamThread.State.RUNNING, false);
+        thread.setState(StreamThread.State.RUNNING);
 
         thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
         thread.rebalanceListener.onPartitionsAssigned(task00Partitions);
@@ -1455,7 +1455,7 @@ public class StreamThreadTest {
 
         thread.setPartitionAssignor(new MockStreamsPartitionAssignor(activeTasks));
 
-        thread.setState(StreamThread.State.RUNNING, false);
+        thread.setState(StreamThread.State.RUNNING);
         thread.rebalanceListener.onPartitionsRevoked(null);
         thread.rebalanceListener.onPartitionsAssigned(task0Assignment);
         assertThat(thread.tasks().size(), equalTo(1));
@@ -1517,7 +1517,7 @@ public class StreamThreadTest {
 
         thread.setPartitionAssignor(new MockStreamsPartitionAssignor(activeTasks));
 
-        thread.setState(StreamThread.State.RUNNING, false);
+        thread.setState(StreamThread.State.RUNNING);
         thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
         thread.rebalanceListener.onPartitionsAssigned(testStreamTask.partitions);
 
@@ -1641,7 +1641,7 @@ public class StreamThreadTest {
 
         thread.setPartitionAssignor(new MockStreamsPartitionAssignor(activeTasks));
 
-        thread.setState(StreamThread.State.RUNNING, false);
+        thread.setState(StreamThread.State.RUNNING);
         thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
         thread.rebalanceListener.onPartitionsAssigned(testStreamTask.partitions);
         try {
@@ -1701,7 +1701,7 @@ public class StreamThreadTest {
 
         thread.setPartitionAssignor(new MockStreamsPartitionAssignor(activeTasks));
 
-        thread.setState(StreamThread.State.RUNNING, false);
+        thread.setState(StreamThread.State.RUNNING);
         thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
         thread.rebalanceListener.onPartitionsAssigned(testStreamTask.partitions);
         try {
@@ -1818,12 +1818,12 @@ public class StreamThreadTest {
 
     private static class StateListenerStub implements StreamThread.StateListener {
         int numChanges = 0;
-        StreamThread.AbstractState oldState = null;
-        StreamThread.AbstractState newState = null;
+        AbstractThreadState oldState = null;
+        AbstractThreadState newState = null;
 
         @Override
-        public void onChange(final Thread thread, final StreamThread.AbstractState newState,
-                             final StreamThread.AbstractState oldState) {
+        public void onChange(final Thread thread, final AbstractThreadState newState,
+                             final AbstractThreadState oldState) {
             ++numChanges;
             if (this.newState != null) {
                 if (this.newState != oldState) {

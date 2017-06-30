@@ -46,6 +46,7 @@ import org.apache.kafka.streams.processor.internals.StateDirectory;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.StreamsKafkaClient;
 import org.apache.kafka.streams.processor.internals.StreamsMetadataState;
+import org.apache.kafka.streams.processor.internals.AbstractThreadState;
 import org.apache.kafka.streams.state.HostInfo;
 import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.streams.state.StreamsMetadata;
@@ -229,17 +230,18 @@ public class KafkaStreams {
     /**
      * Sets the state
      * @param newState New state
-     * @param ignoreWhenShuttingDown, if true, then we'll first check if the state is
-     *                                PENDING_SHUTDOWN or NOT_RUNNING, and if it is,
-     *                                we immediately return. Effectively this enables
-     *                                a conditional set, under the stateLock lock.
      */
-    private void setState(final State newState, boolean ignoreWhenShuttingDown) {
+    private void setState(final State newState) {
+
         synchronized (stateLock) {
-            if (ignoreWhenShuttingDown) {
-                if (state == State.PENDING_SHUTDOWN) {
-                    return;
-                }
+
+            // there are cases when we shouldn't check if a transition is valid, e.g.,
+            // when, for testing, Kafka Streams is closed multiple times. We could either
+            // check here and immediately return for those cases, or add them to the transition
+            // diagram (but then the diagram would be confusing and have transitions like
+            // NOT_RUNNING->NOT_RUNNING).
+            if (state == State.NOT_RUNNING) {
+                return;
             }
 
             final State oldState = state;
@@ -297,7 +299,7 @@ public class KafkaStreams {
 
             // one thread died, check if we have enough threads running
             if (threadState.size() == 0 && globalThreadState.size() == 0) {
-                setState(State.NOT_RUNNING, true);
+                setState(State.NOT_RUNNING);
             }
         }
 
@@ -316,7 +318,7 @@ public class KafkaStreams {
                     return;
                 }
             }
-            setState(State.RUNNING, true);
+            setState(State.RUNNING);
         }
 
         private void updateThreadState(final Thread thread, final StreamThread.State newState) {
@@ -337,8 +339,8 @@ public class KafkaStreams {
 
         @Override
         public synchronized void onChange(final Thread thread,
-                                          final StreamThread.AbstractState abstractNewState,
-                                          final StreamThread.AbstractState abstractOldState) {
+                                          final AbstractThreadState abstractNewState,
+                                          final AbstractThreadState abstractOldState) {
             // StreamThreads first
             if (thread instanceof StreamThread) {
                 StreamThread.State newState = (StreamThread.State) abstractNewState;
@@ -346,7 +348,7 @@ public class KafkaStreams {
 
                 if (newState == StreamThread.State.PARTITIONS_REVOKED ||
                         newState == StreamThread.State.ASSIGNING_PARTITIONS) {
-                    setState(State.REBALANCING, true);
+                    setState(State.REBALANCING);
                 } else if (newState == StreamThread.State.RUNNING && state() != State.RUNNING) {
                     maybeSetRunning();
                 } else if (newState == StreamThread.State.DEAD) {
@@ -635,7 +637,7 @@ public class KafkaStreams {
         } catch (final InterruptedException e) {
             Thread.interrupted();
         }
-        setState(State.NOT_RUNNING, false);
+        setState(State.NOT_RUNNING);
         return !shutdown.isAlive();
     }
 

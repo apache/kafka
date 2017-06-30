@@ -75,10 +75,6 @@ public class StreamThread extends Thread {
     private static final Logger log = LoggerFactory.getLogger(StreamThread.class);
     private static final AtomicInteger STREAM_THREAD_ID_SEQUENCE = new AtomicInteger(1);
 
-    public interface AbstractState {
-        public boolean isValidTransition(final AbstractState newState);
-    }
-
     /**
      * Stream thread states are the possible states that a stream thread can be in.
      * A thread must only be in one state at a time
@@ -126,7 +122,7 @@ public class StreamThread extends Thread {
      *   the coordinator repeatedly fails in-between revoking partitions and assigning new partitions.
      *
      */
-    public enum State implements AbstractState {
+    public enum State implements AbstractThreadState {
         CREATED(1, 4, 5), RUNNING(2, 4, 5), PARTITIONS_REVOKED(2, 3, 4, 5), ASSIGNING_PARTITIONS(1, 4, 5), PENDING_SHUTDOWN(5), DEAD;
 
         private final Set<Integer> validTransitions = new HashSet<>();
@@ -140,7 +136,7 @@ public class StreamThread extends Thread {
         }
 
         @Override
-        public boolean isValidTransition(final AbstractState newState) {
+        public boolean isValidTransition(final AbstractThreadState newState) {
             State tmpState = (State) newState;
             return validTransitions.contains(tmpState.ordinal());
         }
@@ -157,7 +153,7 @@ public class StreamThread extends Thread {
          * @param newState     current state
          * @param oldState     previous state
          */
-        void onChange(final Thread thread, final AbstractState newState, final AbstractState oldState);
+        void onChange(final Thread thread, final AbstractThreadState newState, final AbstractThreadState oldState);
     }
 
     private class RebalanceListener implements ConsumerRebalanceListener {
@@ -189,7 +185,7 @@ public class StreamThread extends Thread {
             final long start = time.milliseconds();
             try {
                 storeChangelogReader = new StoreChangelogReader(getName(), restoreConsumer, time, requestTimeOut);
-                setState(State.ASSIGNING_PARTITIONS, true);
+                setState(State.ASSIGNING_PARTITIONS);
                 // do this first as we may have suspended standby tasks that
                 // will become active or vice versa
                 closeNonAssignedSuspendedStandbyTasks();
@@ -199,7 +195,7 @@ public class StreamThread extends Thread {
                 addStandbyTasks(start);
                 streamsMetadataState.onChange(partitionAssignor.getPartitionsByHostState(), partitionAssignor.clusterMetadata());
                 lastCleanMs = time.milliseconds(); // start the cleaning cycle
-                setState(State.RUNNING, true);
+                setState(State.RUNNING);
             } catch (final Throwable t) {
                 rebalanceException = t;
                 throw t;
@@ -228,7 +224,7 @@ public class StreamThread extends Thread {
 
             final long start = time.milliseconds();
             try {
-                setState(State.PARTITIONS_REVOKED, true);
+                setState(State.PARTITIONS_REVOKED);
                 lastCleanMs = Long.MAX_VALUE; // stop the cleaning cycle until partitions are assigned
                 // suspend active tasks
                 suspendTasksAndState();
@@ -527,7 +523,7 @@ public class StreamThread extends Thread {
     @Override
     public void run() {
         log.info("{} Starting", logPrefix);
-        setState(State.RUNNING, true);
+        setState(State.RUNNING);
         boolean cleanRun = false;
         try {
             runLoop();
@@ -941,10 +937,12 @@ public class StreamThread extends Thread {
 
     /**
      * Shutdown this stream thread.
+     * Note that there is nothing to prevent this function from being called multiple times
+     * (e.g., in testing), hence the state is set only the first time
      */
     public synchronized void close() {
         log.info("{} Informed thread to shut down", logPrefix);
-        setState(State.PENDING_SHUTDOWN, true);
+        setState(State.PENDING_SHUTDOWN);
     }
 
     public synchronized boolean isInitialized() {
@@ -1021,19 +1019,18 @@ public class StreamThread extends Thread {
     /**
      * Sets the state
      * @param newState New state
-     * @param ignoreWhenShuttingDownOrDead,       if true, then we'll first check if the state is
-     *                                            PENDING_SHUTDOWN or DEAD, and if it is,
-     *                                            we immediately return. Effectively this enables
-     *                                            a conditional set, under the stateLock lock.
      */
-    void setState(final State newState, boolean ignoreWhenShuttingDownOrDead) {
+    void setState(final State newState) {
         synchronized (stateLock) {
             final State oldState = state;
 
-            if (ignoreWhenShuttingDownOrDead) {
-                if (state == State.PENDING_SHUTDOWN || state == State.DEAD) {
-                    return;
-                }
+            // there are cases when we shouldn't check if a transition is valid, e.g.,
+            // when, for testing, a thread is closed multiple times. We could either
+            // check here and immediately return for those cases, or add them to the transition
+            // diagram (but then the diagram would be confusing and have transitions like
+            // PENDING_SHUTDOWN->PENDING_SHUTDOWN).
+            if (newState != State.DEAD && (state == State.PENDING_SHUTDOWN || state == State.DEAD)) {
+                return;
             }
 
             if (!state.isValidTransition(newState)) {
@@ -1134,7 +1131,7 @@ public class StreamThread extends Thread {
         // clean up global tasks
 
         log.info("{} Stream thread shutdown complete", logPrefix);
-        setState(State.DEAD, false);
+        setState(State.DEAD);
         streamsMetrics.removeAllSensors();
     }
 
