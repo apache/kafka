@@ -288,6 +288,13 @@ class LogTest {
     log.truncateTo(1L)
 
     EasyMock.verify(stateManager)
+
+    // Close out the log so that tearDown can delete files (necessary on Windows).
+    EasyMock.reset(stateManager)
+    stateManager.takeSnapshot()
+    EasyMock.expectLastCall().anyTimes()
+    EasyMock.replay(stateManager)
+    log.close()
   }
 
   @Test
@@ -307,7 +314,7 @@ class LogTest {
     val logProps = new Properties()
     logProps.put(LogConfig.MessageFormatVersionProp, "0.10.2")
     val config = LogConfig(logProps)
-    new Log(logDir,
+    val log = new Log(logDir,
       config,
       logStartOffset = 0L,
       recoveryPoint = 0L,
@@ -318,6 +325,7 @@ class LogTest {
       producerIdExpirationCheckIntervalMs = 30000,
       topicPartition = Log.parseTopicPartitionName(logDir),
       stateManager)
+    log.close()
 
     EasyMock.verify(stateManager)
   }
@@ -341,7 +349,7 @@ class LogTest {
     val logProps = new Properties()
     logProps.put(LogConfig.MessageFormatVersionProp, "0.10.2")
     val config = LogConfig(logProps)
-    new Log(logDir,
+    val log = new Log(logDir,
       config,
       logStartOffset = 0L,
       recoveryPoint = 0L,
@@ -355,6 +363,7 @@ class LogTest {
 
     EasyMock.verify(stateManager)
     cleanShutdownFile.delete()
+    log.close()
   }
 
   @Test
@@ -376,7 +385,7 @@ class LogTest {
     val logProps = new Properties()
     logProps.put(LogConfig.MessageFormatVersionProp, "0.11.0")
     val config = LogConfig(logProps)
-    new Log(logDir,
+    val log = new Log(logDir,
       config,
       logStartOffset = 0L,
       recoveryPoint = 0L,
@@ -390,6 +399,7 @@ class LogTest {
 
     EasyMock.verify(stateManager)
     cleanShutdownFile.delete()
+    log.close()
   }
 
   @Test
@@ -480,6 +490,8 @@ class LogTest {
     assertEquals(baseOffset, entry.firstOffset)
     assertEquals(1, entry.lastSeq)
     assertEquals(baseOffset + 1, entry.lastOffset)
+
+    log.close()
   }
 
   @Test
@@ -566,6 +578,8 @@ class LogTest {
 
     val pidEntry = pidEntryOpt.get
     assertEquals(0, pidEntry.lastSeq)
+
+    log.close()
   }
 
   @Test
@@ -594,6 +608,7 @@ class LogTest {
     assertEquals(1, reloadedLog.activeProducers.size)
     val reloadedEntryOpt = log.activeProducers.get(pid2)
     assertEquals(retainedEntryOpt, reloadedEntryOpt)
+    reloadedLog.close()
   }
 
   @Test
@@ -621,12 +636,14 @@ class LogTest {
     assertTrue(retainedEntryOpt.isDefined)
     assertEquals(0, retainedEntryOpt.get.lastSeq)
 
+    time.sleep(log.config.fileDeleteDelayMs + 1)
     log.close()
 
     val reloadedLog = createLog(2048, logStartOffset = 1L)
     assertEquals(1, reloadedLog.activeProducers.size)
     val reloadedEntryOpt = log.activeProducers.get(pid2)
     assertEquals(retainedEntryOpt, reloadedEntryOpt)
+    reloadedLog.close()
   }
 
   @Test
@@ -2996,6 +3013,8 @@ class LogTest {
 
     // the first unstable offset should be lower bounded by the log start offset
     assertEquals(Some(5L), log.firstUnstableOffset.map(_.messageOffset))
+
+    log.close()
   }
 
   @Test
@@ -3021,6 +3040,9 @@ class LogTest {
 
     // the first unstable offset should be lower bounded by the log start offset
     assertEquals(Some(8L), log.firstUnstableOffset.map(_.messageOffset))
+
+    time.sleep(log.config.fileDeleteDelayMs + 1)
+    log.close()
   }
 
   @Test

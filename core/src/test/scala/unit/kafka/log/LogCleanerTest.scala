@@ -336,6 +336,9 @@ class LogCleanerTest extends JUnitSuite {
     assertEquals(List(2, 3, 1), keysInLog(log))
     assertEquals(List(3, 4, 5), offsetsInLog(log)) // commit marker is gone
     assertEquals(List(3, 4, 5), lastOffsetsPerBatchInLog(log)) // empty batch is gone
+
+    time.sleep(log.config.fileDeleteDelayMs + 1)
+    log.close()
   }
 
   @Test
@@ -428,6 +431,9 @@ class LogCleanerTest extends JUnitSuite {
 
     // we do not bother retaining the aborted transaction in the index
     assertEquals(0, log.collectAbortedTransactions(0L, 100L).size)
+
+    time.sleep(log.config.fileDeleteDelayMs + 1)
+    log.close()
   }
 
   /**
@@ -951,6 +957,8 @@ class LogCleanerTest extends JUnitSuite {
     for (group <- groups)
       assertTrue("Relative offset greater than Int.MaxValue", group.last.nextOffset() - 1 - group.head.baseOffset <= Int.MaxValue)
     checkSegmentOrder(groups)
+
+    log.close()
   }
 
   private def checkSegmentOrder(groups: Seq[Seq[LogSegment]]): Unit = {
