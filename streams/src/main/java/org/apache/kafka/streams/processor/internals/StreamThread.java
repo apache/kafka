@@ -75,6 +75,10 @@ public class StreamThread extends Thread {
     private static final Logger log = LoggerFactory.getLogger(StreamThread.class);
     private static final AtomicInteger STREAM_THREAD_ID_SEQUENCE = new AtomicInteger(1);
 
+    public interface AbstractState {
+        public boolean isValidTransition(final AbstractState newState);
+    }
+
     /**
      * Stream thread states are the possible states that a stream thread can be in.
      * A thread must only be in one state at a time
@@ -122,7 +126,7 @@ public class StreamThread extends Thread {
      *   the coordinator repeatedly fails in-between revoking partitions and assigning new partitions.
      *
      */
-    public enum State {
+    public enum State implements AbstractState {
         CREATED(1, 4, 5), RUNNING(2, 4, 5), PARTITIONS_REVOKED(2, 3, 4, 5), ASSIGNING_PARTITIONS(1, 4, 5), PENDING_SHUTDOWN(5), DEAD;
 
         private final Set<Integer> validTransitions = new HashSet<>();
@@ -135,8 +139,10 @@ public class StreamThread extends Thread {
             return !equals(PENDING_SHUTDOWN) && !equals(CREATED) && !equals(DEAD);
         }
 
-        public boolean isValidTransition(final State newState) {
-            return validTransitions.contains(newState.ordinal());
+        @Override
+        public boolean isValidTransition(final AbstractState newState) {
+            State tmpState = (State) newState;
+            return validTransitions.contains(tmpState.ordinal());
         }
     }
 
@@ -151,7 +157,7 @@ public class StreamThread extends Thread {
          * @param newState     current state
          * @param oldState     previous state
          */
-        void onChange(final StreamThread thread, final State newState, final State oldState);
+        void onChange(final Thread thread, final AbstractState newState, final AbstractState oldState);
     }
 
     private class RebalanceListener implements ConsumerRebalanceListener {
@@ -1019,7 +1025,6 @@ public class StreamThread extends Thread {
      *                                            PENDING_SHUTDOWN or DEAD, and if it is,
      *                                            we immediately return. Effectively this enables
      *                                            a conditional set, under the stateLock lock.
-     * Note: protected for testing only
      */
     void setState(final State newState, boolean ignoreWhenShuttingDownOrDead) {
         synchronized (stateLock) {

@@ -109,20 +109,19 @@ public class KafkaStreamsTest {
     }
 
     @Test
-    public void testStateThreadChange() throws Exception {
+    public void testStateThreadClose() throws Exception {
         final int numThreads = 2;
         final KStreamBuilder builder = new KStreamBuilder();
+        // make sure we have the global state thread running too
+        builder.globalTable("anyTopic");
         props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, numThreads);
         final KafkaStreams streams = new KafkaStreams(builder, props);
+
+
 
         final java.lang.reflect.Field threadsField = streams.getClass().getDeclaredField("threads");
         threadsField.setAccessible(true);
         final StreamThread[] threads = (StreamThread[]) threadsField.get(streams);
-
-        final java.lang.reflect.Field globalThreadField = streams.getClass().getDeclaredField("globalStreamThread");
-        globalThreadField.setAccessible(true);
-        GlobalStreamThread globalStreamThread = (GlobalStreamThread) globalThreadField.get(streams);
-
 
         assertEquals(numThreads, threads.length);
         assertEquals(streams.state(), KafkaStreams.State.CREATED);
@@ -146,6 +145,8 @@ public class KafkaStreamsTest {
             }, 10 * 1000, "Thread never stopped.");
             threads[i].join();
         }
+
+        streams.close();
         TestUtils.waitForCondition(new TestCondition() {
             @Override
             public boolean conditionMet() {
@@ -153,8 +154,42 @@ public class KafkaStreamsTest {
             }
         }, 10 * 1000, "Streams never stopped.");
 
-        streams.close();
+        final java.lang.reflect.Field globalThreadField = streams.getClass().getDeclaredField("globalStreamThread");
+        globalThreadField.setAccessible(true);
+        GlobalStreamThread globalStreamThread = (GlobalStreamThread) globalThreadField.get(streams);
         assertEquals(globalStreamThread, null);
+    }
+
+    @Test
+    public void testStateGlobalThreadClose() throws Exception {
+        final int numThreads = 2;
+        final KStreamBuilder builder = new KStreamBuilder();
+        // make sure we have the global state thread running too
+        builder.globalTable("anyTopic");
+        props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, numThreads);
+        final KafkaStreams streams = new KafkaStreams(builder, props);
+
+
+        streams.start();
+        TestUtils.waitForCondition(new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                return streams.state() == KafkaStreams.State.RUNNING;
+            }
+        }, 10 * 1000, "Streams never started.");
+        final java.lang.reflect.Field globalThreadField = streams.getClass().getDeclaredField("globalStreamThread");
+        globalThreadField.setAccessible(true);
+        final GlobalStreamThread globalStreamThread = (GlobalStreamThread) globalThreadField.get(streams);
+        globalStreamThread.close();
+        TestUtils.waitForCondition(new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                return globalStreamThread.state() == GlobalStreamThread.State.DEAD;
+            }
+        }, 10 * 1000, "Thread never stopped.");
+        globalStreamThread.join();
+        assertEquals(streams.state(), KafkaStreams.State.NOT_RUNNING);
+
     }
 
 

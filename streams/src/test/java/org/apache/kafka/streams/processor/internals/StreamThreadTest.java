@@ -1818,11 +1818,12 @@ public class StreamThreadTest {
 
     private static class StateListenerStub implements StreamThread.StateListener {
         int numChanges = 0;
-        StreamThread.State oldState = null;
-        StreamThread.State newState = null;
+        StreamThread.AbstractState oldState = null;
+        StreamThread.AbstractState newState = null;
 
         @Override
-        public void onChange(final StreamThread thread, final StreamThread.State newState, final StreamThread.State oldState) {
+        public void onChange(final Thread thread, final StreamThread.AbstractState newState,
+                             final StreamThread.AbstractState oldState) {
             ++numChanges;
             if (this.newState != null) {
                 if (this.newState != oldState) {
