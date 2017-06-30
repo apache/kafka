@@ -141,8 +141,8 @@
         transforms.MakeMap.type=org.apache.kafka.connect.transforms.HoistField$Value
         transforms.MakeMap.field=line
         transforms.InsertSource.type=org.apache.kafka.connect.transforms.InsertField$Value
-        transforms.InsertSource.static.field=data_source
-        transforms.InsertSource.static.value=test-file-source
+        transforms.InsertSource.field=data_source
+        transforms.InsertSource.value=test-file-source
     </pre>
 
     <p>All the lines starting with <code>transforms</code> were added for the transformations. You can see the two transformations we created: "InsertSource" and "MakeMap" are aliases that we chose to give the transformations. The transformation types are based on the list of built-in transformations you can see below. Each transformation type has additional configuration: HoistField requires a configuration called "field", which is the name of the field in the map that will include the original String from the file. InsertField transformation lets us specify the field name and the value that we are adding.</p>
