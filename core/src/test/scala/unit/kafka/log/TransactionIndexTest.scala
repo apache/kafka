@@ -30,13 +30,13 @@ class TransactionIndexTest extends JUnitSuite {
   val offset = 0L
 
   @Before
-  def setup: Unit = {
+  def setup(): Unit = {
     file = TestUtils.tempFile()
     index = new TransactionIndex(offset, file)
   }
 
   @After
-  def teardown: Unit = {
+  def teardown(): Unit = {
     index.close()
   }
 

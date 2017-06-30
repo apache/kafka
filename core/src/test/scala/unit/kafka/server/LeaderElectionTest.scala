@@ -65,7 +65,7 @@ class LeaderElectionTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testLeaderElectionAndEpoch {
+  def testLeaderElectionAndEpoch(): Unit = {
     // start 2 brokers
     val topic = "new-topic"
     val partitionId = 0

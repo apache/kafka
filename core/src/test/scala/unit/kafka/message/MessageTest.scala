@@ -57,7 +57,7 @@ class MessageTest extends JUnitSuite {
   }
 
   @Test
-  def testFieldValues {
+  def testFieldValues(): Unit = {
     for(v <- messages) {
       // check payload
       if(v.payload == null) {

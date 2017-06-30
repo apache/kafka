@@ -47,7 +47,7 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
   private var consumerGroupExecutor: ConsumerGroupExecutor = _
 
   // configure the servers and clients
-  override def generateConfigs() = {
+  override def generateConfigs = {
     TestUtils.createBrokerConfigs(1, zkConnect, enableControlledShutdown = false).map { props =>
       KafkaConfig.fromProps(props)
     }
