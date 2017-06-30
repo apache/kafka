@@ -274,6 +274,7 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
     }
   }
 
+  @deprecated("This test has been deprecated and will be removed in a future release.", "0.11.1.0")
   private def createOldConsumer(): Unit = {
     val consumerProps = new Properties
     consumerProps.setProperty("group.id", group)
