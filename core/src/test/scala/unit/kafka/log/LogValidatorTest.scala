@@ -991,7 +991,7 @@ class LogValidatorTest {
   def maybeCheckBaseTimestamp(expected: Long, batch: RecordBatch): Unit = {
     batch match {
       case b: DefaultRecordBatch =>
-        assertEquals(s"Unexpected base timestamp of batch $batch", expected, b.baseTimestamp)
+        assertEquals(s"Unexpected base timestamp of batch $batch", expected, b.firstTimestamp)
       case _ => // no-op
     }
   }
