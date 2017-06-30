@@ -188,6 +188,7 @@ public class KafkaStreamsTest {
             }
         }, 10 * 1000, "Thread never stopped.");
         globalStreamThread.join();
+        streams.close();
         assertEquals(streams.state(), KafkaStreams.State.NOT_RUNNING);
 
     }
