@@ -1228,7 +1228,7 @@ public class StreamThread extends Thread {
             if (!task.partitions().equals(assignedPartitionsForTask)) {
                 log.debug("{} Closing suspended non-assigned active task {}", logPrefix, task.id());
                 try {
-                    task.close(true);
+                    task.closeSuspended(true, null);
                 } catch (final Exception e) {
                     log.error("{} Failed to remove suspended task {}: ", logPrefix, next.getKey(), e);
                 } finally {
