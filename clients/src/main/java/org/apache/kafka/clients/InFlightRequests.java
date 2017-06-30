@@ -109,8 +109,7 @@ final class InFlightRequests {
      * Return true if there is no in-flight request directed at the given node and false otherwise
      */
     public boolean isEmpty(String node) {
-        Deque<NetworkClient.InFlightRequest> queue = requests.get(node);
-        return queue == null || queue.isEmpty();
+        return count(node) == 0;
     }
 
     /**
