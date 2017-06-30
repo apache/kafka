@@ -1524,8 +1524,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
-     * Get the last offset for the given partitions. The last offset of a partition is the offset of the upcoming
-     * message, i.e. the offset of the last available message + 1.
+     * Get the last offset for the given partitions.  The last offset of a partition is the offset of the upcoming
+     * message, i.e. the offset of the last available message + 1.  If there are no messages in the partition, 
+     * the offset returned will be 0.
+     *
      * <p>
      * Notice that this method may block indefinitely if the partition does not exist.
      * This method does not change the current consumer position of the partitions.
