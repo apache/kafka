@@ -88,6 +88,8 @@ abstract class KafkaServerTestHarness extends ZooKeeperTestHarness {
     // default implementation is a no-op, it is overridden by subclasses if required
     configureSecurityBeforeServersStart()
 
+    // Add each broker to `servers` buffer as soon as it is created to ensure that brokers
+    // are shutdown cleanly in tearDown even if a subsequent broker fails to start
     for (config <- configs)
       servers += TestUtils.createServer(config)
     brokerList = TestUtils.bootstrapServers(servers, listenerName)
