@@ -21,9 +21,11 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.internals.ChangedSerializer;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StreamPartitioner;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class SinkNode<K, V> extends ProcessorNode<K, V> {
-
+    private static final Logger log = LoggerFactory.getLogger(SinkNode.class);
     private final String topic;
     private Serializer<K> keySerializer;
     private Serializer<V> valSerializer;
@@ -97,9 +99,10 @@ public class SinkNode<K, V> extends ProcessorNode<K, V> {
                                     valueClass),
                     e);
         } catch (final StreamsException e) {
-            throw new StreamsException(
-                    String.format("%s: Aborting sending record because a previous send request returned an error %s.",
-                    name(), e));
+            log.error("{} Aborting sending record with key {} to topic {} " +
+                            "because of a previous exception while sending {}.",
+                    name(), key, topic, e.toString());
+            throw e;
         }
     }
 

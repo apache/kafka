@@ -22,6 +22,8 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.state.StateSerdes;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Note that the use of array-typed keys is discouraged because they result in incorrect caching behavior.
@@ -32,7 +34,7 @@ import org.apache.kafka.streams.state.StateSerdes;
  * @param <V>
  */
 class StoreChangeLogger<K, V> {
-
+    private static final Logger log = LoggerFactory.getLogger(StoreChangeLogger.class);
     protected final StateSerdes<K, V> serialization;
 
     private final String topic;
@@ -60,9 +62,10 @@ class StoreChangeLogger<K, V> {
             try {
                 collector.send(this.topic, key, value, this.partition, context.timestamp(), keySerializer, valueSerializer);
             } catch (final StreamsException e) {
-                throw new StreamsException(
-                        String.format("Aborting sending record to store's changelog %s because a previous send request returned an error %s.",
-                                this.topic, e));
+                log.error("Aborting sending record with key {} to topic {} " +
+                                "because of a previous exception while sending {}.",
+                            key, topic, e.toString());
+                throw e;
             }
         }
     }
