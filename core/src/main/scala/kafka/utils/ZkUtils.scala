@@ -903,10 +903,11 @@ class ZkUtils(val zkClient: ZkClient,
 
   def getAllPartitions(): Set[TopicAndPartition] = {
     val topics = getChildrenParentMayNotExist(BrokerTopicsPath)
-    if(topics == null) Set.empty[TopicAndPartition]
+    if (topics == null) Set.empty[TopicAndPartition]
     else {
       topics.flatMap { topic =>
-        getChildren(getTopicPartitionsPath(topic)).map(_.toInt).map(TopicAndPartition(topic, _))
+        // The partitions path may not exist if the topic is in the process of being deleted
+        getChildrenParentMayNotExist(getTopicPartitionsPath(topic)).map(_.toInt).map(TopicAndPartition(topic, _))
       }.toSet
     }
   }

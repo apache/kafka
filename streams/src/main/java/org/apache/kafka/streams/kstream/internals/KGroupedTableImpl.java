@@ -26,6 +26,7 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.KGroupedTable;
+import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -134,8 +135,8 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
         topology.addInternalTopic(topic);
         topology.addSink(sinkName, topic, keySerializer, changedValueSerializer, this.name);
 
-        // read the intermediate topic
-        topology.addSource(sourceName, keyDeserializer, changedValueDeserializer, topic);
+        // read the intermediate topic with RecordMetadataTimestampExtractor
+        topology.addSource(null, sourceName, new FailOnInvalidTimestamp(), keyDeserializer, changedValueDeserializer, topic);
 
         // aggregate the values with the aggregator and local store
         topology.addProcessor(funcName, aggregateSupplier, sourceName);

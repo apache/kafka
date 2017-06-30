@@ -29,6 +29,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 
 public class FileStreamSinkConnectorTest {
 
@@ -69,6 +70,19 @@ public class FileStreamSinkConnectorTest {
         for (int i = 0; i < 2; i++) {
             assertEquals(FILENAME, taskConfigs.get(0).get(FileStreamSinkConnector.FILE_CONFIG));
         }
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testSinkTasksStdout() {
+        PowerMock.replayAll();
+
+        sinkProperties.remove(FileStreamSourceConnector.FILE_CONFIG);
+        connector.start(sinkProperties);
+        List<Map<String, String>> taskConfigs = connector.taskConfigs(1);
+        assertEquals(1, taskConfigs.size());
+        assertNull(taskConfigs.get(0).get(FileStreamSourceConnector.FILE_CONFIG));
 
         PowerMock.verifyAll();
     }

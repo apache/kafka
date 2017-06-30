@@ -282,11 +282,15 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
     //
     // if valid, transition is done via overwriting the whole object to ensure synchronization
 
-    val toState = pendingState.getOrElse(throw new IllegalStateException(s"TransactionalId $transactionalId " +
-      "completing transaction state transition while it does not have a pending state"))
+    val toState = pendingState.getOrElse {
+      fatal(s"$this's transition to $transitMetadata failed since pendingState is not defined: this should not happen")
 
-    if (toState != transitMetadata.txnState || txnLastUpdateTimestamp > transitMetadata.txnLastUpdateTimestamp) {
-      throwStateTransitionFailure(toState)
+      throw new IllegalStateException(s"TransactionalId $transactionalId " +
+        "completing transaction state transition while it does not have a pending state")
+    }
+
+    if (toState != transitMetadata.txnState) {
+      throwStateTransitionFailure(transitMetadata)
     } else {
       toState match {
         case Empty => // from initPid
@@ -294,7 +298,7 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
             transitMetadata.topicPartitions.nonEmpty ||
             transitMetadata.txnStartTimestamp != -1) {
 
-            throwStateTransitionFailure(toState)
+            throwStateTransitionFailure(transitMetadata)
           } else {
             txnTimeoutMs = transitMetadata.txnTimeoutMs
             producerEpoch = transitMetadata.producerEpoch
@@ -307,7 +311,7 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
             txnTimeoutMs != transitMetadata.txnTimeoutMs ||
             txnStartTimestamp > transitMetadata.txnStartTimestamp) {
 
-            throwStateTransitionFailure(toState)
+            throwStateTransitionFailure(transitMetadata)
           } else {
             txnStartTimestamp = transitMetadata.txnStartTimestamp
             addPartitions(transitMetadata.topicPartitions)
@@ -319,7 +323,7 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
             txnTimeoutMs != transitMetadata.txnTimeoutMs ||
             txnStartTimestamp != transitMetadata.txnStartTimestamp) {
 
-            throwStateTransitionFailure(toState)
+            throwStateTransitionFailure(transitMetadata)
           }
 
         case CompleteAbort | CompleteCommit => // from write markers
@@ -327,7 +331,7 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
             txnTimeoutMs != transitMetadata.txnTimeoutMs ||
             transitMetadata.txnStartTimestamp == -1) {
 
-            throwStateTransitionFailure(toState)
+            throwStateTransitionFailure(transitMetadata)
           } else {
             txnStartTimestamp = transitMetadata.txnStartTimestamp
             topicPartitions.clear()
@@ -360,14 +364,16 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
     transitEpoch == producerEpoch + 1 || (transitEpoch == 0 && transitProducerId != producerId)
   }
 
-  private def throwStateTransitionFailure(toState: TransactionState): Unit = {
-    throw new IllegalStateException(s"TransactionalId $transactionalId failed transition to state $toState " +
+  private def throwStateTransitionFailure(txnTransitMetadata: TxnTransitMetadata): Unit = {
+    fatal(s"${this.toString}'s transition to $txnTransitMetadata failed: this should not happen")
+
+    throw new IllegalStateException(s"TransactionalId $transactionalId failed transition to state $txnTransitMetadata " +
       "due to unexpected metadata")
   }
 
   def pendingTransitionInProgress: Boolean = pendingState.isDefined
 
-  override def toString = {
+  override def toString: String = {
     "TransactionMetadata(" +
       s"transactionalId=$transactionalId, " +
       s"producerId=$producerId, " +

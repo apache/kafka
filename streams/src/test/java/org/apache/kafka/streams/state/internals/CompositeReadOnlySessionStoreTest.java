@@ -34,6 +34,7 @@ import java.util.List;
 import static org.apache.kafka.test.StreamsTestUtils.toList;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.fail;
 
 public class CompositeReadOnlySessionStoreTest {
 
@@ -111,10 +112,17 @@ public class CompositeReadOnlySessionStoreTest {
         store.fetch("a");
     }
 
-    @Test(expected = InvalidStateStoreException.class)
-    public void shouldThrowInvalidStateStoreExceptionIfFetchThrows() throws Exception {
+    @Test
+    public void shouldThrowInvalidStateStoreExceptionIfSessionFetchThrows() {
         underlyingSessionStore.setOpen(false);
-        underlyingSessionStore.fetch("key");
+        try {
+            sessionStore.fetch("key");
+            fail("Should have thrown InvalidStateStoreException with session store");
+        } catch (InvalidStateStoreException e) { }
     }
 
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerExceptionIfFetchingNullKey() {
+        sessionStore.fetch(null);
+    }
 }

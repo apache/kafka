@@ -47,7 +47,7 @@ class TransactionalMessageCopier(KafkaPathResolverMixin, BackgroundThreadService
 
     def __init__(self, context, num_nodes, kafka, transactional_id, consumer_group,
                  input_topic, input_partition, output_topic, max_messages = -1,
-                 transaction_size = 1000):
+                 transaction_size = 1000, enable_random_aborts=True):
         super(TransactionalMessageCopier, self).__init__(context, num_nodes)
         self.kafka = kafka
         self.transactional_id = transactional_id
@@ -61,6 +61,7 @@ class TransactionalMessageCopier(KafkaPathResolverMixin, BackgroundThreadService
         self.consumed = -1
         self.remaining = -1
         self.stop_timeout_sec = 60
+        self.enable_random_aborts = enable_random_aborts
         self.loggers = {
             "org.apache.kafka.clients.producer.internals": "TRACE"
         }
@@ -117,14 +118,18 @@ class TransactionalMessageCopier(KafkaPathResolverMixin, BackgroundThreadService
         cmd += " --output-topic %s" % self.output_topic
         cmd += " --input-partition %s" % str(self.input_partition)
         cmd += " --transaction-size %s" % str(self.transaction_size)
+
+        if self.enable_random_aborts:
+            cmd += " --enable-random-aborts"
+
         if self.max_messages > 0:
             cmd += " --max-messages %s" % str(self.max_messages)
         cmd += " 2>> %s | tee -a %s &" % (TransactionalMessageCopier.STDERR_CAPTURE, TransactionalMessageCopier.STDOUT_CAPTURE)
 
         return cmd
 
-    def clean_node(self, node, clean_shutdown=True):
-        self.kill_node(node, clean_shutdown)
+    def clean_node(self, node):
+        self.kill_node(node, clean_shutdown=False)
         node.account.ssh("rm -rf " + self.PERSISTENT_ROOT, allow_fail=False)
         self.security_config.clean_node(node)
 

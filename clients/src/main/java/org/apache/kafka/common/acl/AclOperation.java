@@ -17,6 +17,8 @@
 
 package org.apache.kafka.common.acl;
 
+import org.apache.kafka.common.annotation.InterfaceStability;
+
 import java.util.HashMap;
 import java.util.Locale;
 
@@ -35,7 +37,10 @@ import java.util.Locale;
  * ALLOW ALTER implies ALLOW DESCRIBE
  *
  * ALLOW ALTER_CONFIGS implies ALLOW DESCRIBE_CONFIGS
+ *
+ * The API for this class is still evolving and we may break compatibility in minor releases, if necessary.
  */
+@InterfaceStability.Evolving
 public enum AclOperation {
     /**
      * Represents any AclOperation which this client cannot understand, perhaps because this
@@ -126,6 +131,9 @@ public enum AclOperation {
         }
     }
 
+    /**
+     * Return the AclOperation with the provided code or `AclOperation.UNKNOWN` if one cannot be found.
+     */
     public static AclOperation fromCode(byte code) {
         AclOperation operation = CODE_TO_VALUE.get(code);
         if (operation == null) {
@@ -140,11 +148,17 @@ public enum AclOperation {
         this.code = code;
     }
 
+    /**
+     * Return the code of this operation.
+     */
     public byte code() {
         return code;
     }
 
-    public boolean unknown() {
+    /**
+     * Return true if this operation is UNKNOWN.
+     */
+    public boolean isUnknown() {
         return this == UNKNOWN;
     }
 }

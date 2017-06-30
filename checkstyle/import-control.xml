@@ -47,10 +47,12 @@
   <subpackage name="common">
     <disallow pkg="org.apache.kafka.clients" />
     <allow pkg="org.apache.kafka.common" exact-match="true" />
+    <allow pkg="org.apache.kafka.common.annotation" />
     <allow pkg="org.apache.kafka.common.internals" exact-match="true" />
     <allow pkg="org.apache.kafka.test" />
 
     <subpackage name="acl">
+      <allow pkg="org.apache.kafka.common.annotation" />
       <allow pkg="org.apache.kafka.common.acl" />
       <allow pkg="org.apache.kafka.common.resource" />
     </subpackage>
@@ -74,6 +76,7 @@
     </subpackage>
 
     <subpackage name="resource">
+      <allow pkg="org.apache.kafka.common.annotation" />
       <allow pkg="org.apache.kafka.common.resource" />
     </subpackage>
 
@@ -182,6 +185,10 @@
     <subpackage name="examples">
       <allow pkg="com.fasterxml.jackson.databind" />
       <allow pkg="org.apache.kafka.connect.json" />
+    </subpackage>
+
+    <subpackage name="perf">
+      <allow pkg="com.fasterxml.jackson.databind" />
     </subpackage>
     
     <subpackage name="integration">

@@ -83,8 +83,8 @@ class AccessControlEntryData {
     /**
      * Return true if there are any UNKNOWN components.
      */
-    boolean unknown() {
-        return operation.unknown() || permissionType.unknown();
+    boolean isUnknown() {
+        return operation.isUnknown() || permissionType.isUnknown();
     }
 
     @Override

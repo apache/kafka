@@ -95,6 +95,7 @@ public class SaslChannelBuilder implements ChannelBuilder {
                 this.sslFactory.configure(configs);
             }
         } catch (Exception e) {
+            close();
             throw new KafkaException(e);
         }
     }
@@ -121,8 +122,10 @@ public class SaslChannelBuilder implements ChannelBuilder {
     }
 
     public void close()  {
-        if (this.loginManager != null)
-            this.loginManager.release();
+        if (loginManager != null) {
+            loginManager.release();
+            loginManager = null;
+        }
     }
 
     protected TransportLayer buildTransportLayer(String id, SelectionKey key, SocketChannel socketChannel) throws IOException {
@@ -132,6 +135,11 @@ public class SaslChannelBuilder implements ChannelBuilder {
         } else {
             return new PlaintextTransportLayer(key);
         }
+    }
+
+    // Package private for testing
+    LoginManager loginManager() {
+        return loginManager;
     }
 
     private static String defaultKerberosRealm() throws ClassNotFoundException, NoSuchMethodException,

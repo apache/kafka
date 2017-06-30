@@ -40,13 +40,13 @@ import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.NoSuchElementException;
 import java.util.Properties;
 import java.util.Random;
 import java.util.Set;
@@ -68,7 +68,7 @@ public class EosTestDriver extends SmokeTestUtil {
         });
 
         final Properties producerProps = new Properties();
-        producerProps.put(ProducerConfig.CLIENT_ID_CONFIG, "SmokeTest");
+        producerProps.put(ProducerConfig.CLIENT_ID_CONFIG, "EosTest");
         producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);
         producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, IntegerSerializer.class);
@@ -105,10 +105,10 @@ public class EosTestDriver extends SmokeTestUtil {
         System.out.println(numRecordsProduced + " records produced");
     }
 
-    public static void verify(final String kafka) {
+    public static void verify(final String kafka, final boolean withRepartitioning) {
         ensureStreamsApplicationDown(kafka);
 
-        final Map<TopicPartition, Long> committedOffsets = getCommittedOffsets(kafka);
+        final Map<TopicPartition, Long> committedOffsets = getCommittedOffsets(kafka, withRepartitioning);
 
         final Properties props = new Properties();
         props.put(ConsumerConfig.CLIENT_ID_CONFIG, "verifier");
@@ -117,27 +117,69 @@ public class EosTestDriver extends SmokeTestUtil {
         props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
         props.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.toString().toLowerCase(Locale.ROOT));
 
+        final String[] allInputTopics;
+        final String[] allOutputTopics;
+        if (withRepartitioning) {
+            allInputTopics = new String[] {"data", "repartition"};
+            allOutputTopics = new String[] {"echo", "min", "sum", "repartition", "max", "cnt"};
+        } else {
+            allInputTopics = new String[] {"data"};
+            allOutputTopics = new String[] {"echo", "min", "sum"};
+        }
+
+        final Map<String, Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>>> inputRecordsPerTopicPerPartition;
         try (final KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(props)) {
-            final List<TopicPartition> partitions = getAllPartitions(consumer, "data", "echo", "min", "sum");
+            final List<TopicPartition> partitions = getAllPartitions(consumer, allInputTopics);
             consumer.assign(partitions);
             consumer.seekToBeginning(partitions);
 
-            final Map<String, Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>>> recordPerTopicPerPartition
-                = getOutputRecords(consumer, committedOffsets);
-
-            truncate("data", recordPerTopicPerPartition, committedOffsets);
-
-            verifyMin(recordPerTopicPerPartition.get("data"), recordPerTopicPerPartition.get("min"));
-            verifySum(recordPerTopicPerPartition.get("data"), recordPerTopicPerPartition.get("sum"));
-
-            verifyAllTransactionFinished(consumer, kafka);
-
-            // do not modify: required test output
-            System.out.println("ALL-RECORDS-DELIVERED");
+            inputRecordsPerTopicPerPartition = getRecords(consumer, committedOffsets, withRepartitioning, true);
         } catch (final Exception e) {
             e.printStackTrace(System.err);
             System.out.println("FAILED");
+            return;
         }
+
+        final Map<String, Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>>> outputRecordsPerTopicPerPartition;
+        try (final KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(props)) {
+            final List<TopicPartition> partitions = getAllPartitions(consumer, allOutputTopics);
+            consumer.assign(partitions);
+            consumer.seekToBeginning(partitions);
+
+            outputRecordsPerTopicPerPartition = getRecords(consumer, consumer.endOffsets(partitions), withRepartitioning, false);
+        } catch (final Exception e) {
+            e.printStackTrace(System.err);
+            System.out.println("FAILED");
+            return;
+        }
+
+        verifyReceivedAllRecords(inputRecordsPerTopicPerPartition.get("data"), outputRecordsPerTopicPerPartition.get("echo"));
+        if (withRepartitioning) {
+            verifyReceivedAllRecords(inputRecordsPerTopicPerPartition.get("data"), outputRecordsPerTopicPerPartition.get("repartition"));
+        }
+
+        verifyMin(inputRecordsPerTopicPerPartition.get("data"), outputRecordsPerTopicPerPartition.get("min"));
+        verifySum(inputRecordsPerTopicPerPartition.get("data"), outputRecordsPerTopicPerPartition.get("sum"));
+
+        if (withRepartitioning) {
+            verifyMax(inputRecordsPerTopicPerPartition.get("repartition"), outputRecordsPerTopicPerPartition.get("max"));
+            verifyCnt(inputRecordsPerTopicPerPartition.get("repartition"), outputRecordsPerTopicPerPartition.get("cnt"));
+        }
+
+        try (final KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(props)) {
+            final List<TopicPartition> partitions = getAllPartitions(consumer, allOutputTopics);
+            consumer.assign(partitions);
+            consumer.seekToBeginning(partitions);
+
+            verifyAllTransactionFinished(consumer, kafka, withRepartitioning);
+        } catch (final Exception e) {
+            e.printStackTrace(System.err);
+            System.out.println("FAILED");
+            return;
+        }
+
+        // do not modify: required test output
+        System.out.println("ALL-RECORDS-DELIVERED");
     }
 
     private static void ensureStreamsApplicationDown(final String kafka) {
@@ -159,7 +201,8 @@ public class EosTestDriver extends SmokeTestUtil {
         }
     }
 
-    private static Map<TopicPartition, Long> getCommittedOffsets(final String kafka) {
+    private static Map<TopicPartition, Long> getCommittedOffsets(final String kafka,
+                                                                 final boolean withRepartitioning) {
         final Properties props = new Properties();
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);
         props.put(ConsumerConfig.GROUP_ID_CONFIG, EosTestClient.APP_ID);
@@ -171,6 +214,9 @@ public class EosTestDriver extends SmokeTestUtil {
         try (final KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(props)) {
             final Set<String> topics = new HashSet<>();
             topics.add("data");
+            if (withRepartitioning) {
+                topics.add("repartition");
+            }
             consumer.subscribe(topics);
             consumer.poll(0);
 
@@ -190,8 +236,10 @@ public class EosTestDriver extends SmokeTestUtil {
         return committedOffsets;
     }
 
-    private static Map<String, Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>>> getOutputRecords(final KafkaConsumer<byte[], byte[]> consumer,
-                                                                                                           final Map<TopicPartition, Long> committedOffsets) {
+    private static Map<String, Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>>> getRecords(final KafkaConsumer<byte[], byte[]> consumer,
+                                                                                                     final Map<TopicPartition, Long> readEndOffsets,
+                                                                                                     final boolean withRepartitioning,
+                                                                                                     final boolean isInputTopic) {
         final Map<String, Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>>> recordPerTopicPerPartition = new HashMap<>();
 
         long maxWaitTime = System.currentTimeMillis() + MAX_IDLE_TIME_MS;
@@ -201,16 +249,20 @@ public class EosTestDriver extends SmokeTestUtil {
 
             for (final ConsumerRecord<byte[], byte[]> record : receivedRecords) {
                 maxWaitTime = System.currentTimeMillis() + MAX_IDLE_TIME_MS;
-                addRecord(record, recordPerTopicPerPartition);
+                final TopicPartition tp = new TopicPartition(record.topic(), record.partition());
+                final long readEndOffset = readEndOffsets.get(tp);
+                if (record.offset() < readEndOffset) {
+                    addRecord(record, recordPerTopicPerPartition, withRepartitioning);
+                } else if (!isInputTopic) {
+                    throw new RuntimeException("FAIL: did receive more records than expected for " + tp
+                        + " (expected EOL offset: " + readEndOffset + "; current offset: " + record.offset());
+                }
+                if (consumer.position(tp) >= readEndOffset) {
+                    consumer.pause(Collections.singletonList(tp));
+                }
             }
 
-            if (receivedRecords.count() > 0) {
-                allRecordsReceived =
-                    receivedAllRecords(
-                        recordPerTopicPerPartition.get("data"),
-                        recordPerTopicPerPartition.get("echo"),
-                        committedOffsets);
-            }
+            allRecordsReceived = consumer.paused().size() == readEndOffsets.keySet().size();
         }
 
         if (!allRecordsReceived) {
@@ -221,16 +273,13 @@ public class EosTestDriver extends SmokeTestUtil {
     }
 
     private static void addRecord(final ConsumerRecord<byte[], byte[]> record,
-                                  final Map<String, Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>>> recordPerTopicPerPartition) {
+                                  final Map<String, Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>>> recordPerTopicPerPartition,
+                                  final boolean withRepartitioning) {
 
         final String topic = record.topic();
         final TopicPartition partition = new TopicPartition(topic, record.partition());
 
-        if ("data".equals(topic)
-            || "echo".equals(topic)
-            || "min".equals(topic)
-            || "sum".equals(topic)) {
-
+        if (verifyTopic(topic, withRepartitioning)) {
             Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> topicRecordsPerPartition
                 = recordPerTopicPerPartition.get(topic);
 
@@ -250,108 +299,81 @@ public class EosTestDriver extends SmokeTestUtil {
         }
     }
 
-    private static boolean receivedAllRecords(final Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> supersetExpectedRecords,
-                                              final Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> receivedRecords,
-                                              final Map<TopicPartition, Long> committedOffsets) {
-        if (supersetExpectedRecords == null
-            || receivedRecords == null
-            || supersetExpectedRecords.keySet().size() < committedOffsets.keySet().size()
-            || receivedRecords.keySet().size() < committedOffsets.keySet().size()) {
+    private static boolean verifyTopic(final String topic,
+                                       final boolean withRepartitioning) {
+        final boolean validTopic = "data".equals(topic) || "echo".equals(topic) || "min".equals(topic) || "sum".equals(topic);
 
-            return false;
+        if (withRepartitioning) {
+            return validTopic || "repartition".equals(topic) || "max".equals(topic) || "cnt".equals(topic);
         }
 
-        for (final Map.Entry<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> partitionRecords : receivedRecords.entrySet()) {
-            final TopicPartition tp = partitionRecords.getKey();
-            final int numberOfReceivedRecords = partitionRecords.getValue().size();
-            final Long committed = committedOffsets.get(new TopicPartition("data", tp.partition()));
-            if (committed != null) {
-                if (numberOfReceivedRecords < committed) {
-                    return false;
-                }
-            } else if (numberOfReceivedRecords > 0) {
-                throw new RuntimeException("Result verification failed for partition " + tp
-                    + ". No offset was committed but we received " + numberOfReceivedRecords + " records.");
-            }
+        return validTopic;
+    }
+
+    private static void verifyReceivedAllRecords(final Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> expectedRecords,
+                                                 final Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> receivedRecords) {
+        if (expectedRecords.size() != receivedRecords.size()) {
+            throw new RuntimeException("Result verification failed. Received " + receivedRecords.size() + " records but expected " + expectedRecords.size());
         }
 
         final StringDeserializer stringDeserializer = new StringDeserializer();
         final IntegerDeserializer integerDeserializer = new IntegerDeserializer();
         for (final Map.Entry<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> partitionRecords : receivedRecords.entrySet()) {
-            try {
-                final TopicPartition inputTopicPartition = new TopicPartition("data", partitionRecords.getKey().partition());
-                final Iterator<ConsumerRecord<byte[], byte[]>> expectedRecords = supersetExpectedRecords.get(inputTopicPartition).iterator();
+            final TopicPartition inputTopicPartition = new TopicPartition("data", partitionRecords.getKey().partition());
+            final Iterator<ConsumerRecord<byte[], byte[]>> expectedRecord = expectedRecords.get(inputTopicPartition).iterator();
 
-                for (final ConsumerRecord<byte[], byte[]> receivedRecord : partitionRecords.getValue()) {
-                    final ConsumerRecord<byte[], byte[]> expected = expectedRecords.next();
+            for (final ConsumerRecord<byte[], byte[]> receivedRecord : partitionRecords.getValue()) {
+                final ConsumerRecord<byte[], byte[]> expected = expectedRecord.next();
 
-                    final String receivedKey = stringDeserializer.deserialize(receivedRecord.topic(), receivedRecord.key());
-                    final int receivedValue = integerDeserializer.deserialize(receivedRecord.topic(), receivedRecord.value());
-                    final String expectedKey = stringDeserializer.deserialize(expected.topic(), expected.key());
-                    final int expectedValue = integerDeserializer.deserialize(expected.topic(), expected.value());
+                final String receivedKey = stringDeserializer.deserialize(receivedRecord.topic(), receivedRecord.key());
+                final int receivedValue = integerDeserializer.deserialize(receivedRecord.topic(), receivedRecord.value());
+                final String expectedKey = stringDeserializer.deserialize(expected.topic(), expected.key());
+                final int expectedValue = integerDeserializer.deserialize(expected.topic(), expected.value());
 
-                    if (!receivedKey.equals(expectedKey) || receivedValue != expectedValue) {
-                        throw new RuntimeException("Result verification failed for " + receivedRecord + " expected <" + expectedKey + "," + expectedValue + "> but was <" + receivedKey + "," + receivedValue + ">");
-                    }
+                if (!receivedKey.equals(expectedKey) || receivedValue != expectedValue) {
+                    throw new RuntimeException("Result verification failed for " + receivedRecord + " expected <" + expectedKey + "," + expectedValue + "> but was <" + receivedKey + "," + receivedValue + ">");
                 }
-            } catch (final NullPointerException | NoSuchElementException e) {
-                return false;
             }
         }
-
-        return true;
-    }
-
-    private static void truncate(final String topic,
-                                 final Map<String, Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>>> recordPerTopicPerPartition,
-                                 final Map<TopicPartition, Long> committedOffsets) {
-        final Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> topicRecords = recordPerTopicPerPartition.get(topic);
-        final Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> truncatedTopicRecords = recordPerTopicPerPartition.get(topic);
-
-        for (final Map.Entry<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> partitionRecords : topicRecords.entrySet()) {
-            final TopicPartition tp = partitionRecords.getKey();
-            final Long committed = committedOffsets.get(new TopicPartition("data", tp.partition()));
-            truncatedTopicRecords.put(tp, partitionRecords.getValue().subList(0, committed != null ? committed.intValue() : 0));
-        }
-
-        recordPerTopicPerPartition.put(topic, truncatedTopicRecords);
     }
 
     private static void verifyMin(final Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> inputPerTopicPerPartition,
-                                     final Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> minPerTopicPerPartition) {
+                                  final Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> minPerTopicPerPartition) {
         final StringDeserializer stringDeserializer = new StringDeserializer();
         final IntegerDeserializer integerDeserializer = new IntegerDeserializer();
 
         final HashMap<String, Integer> currentMinPerKey = new HashMap<>();
         for (final Map.Entry<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> partitionRecords : minPerTopicPerPartition.entrySet()) {
-            try {
-                final TopicPartition inputTopicPartition = new TopicPartition("data", partitionRecords.getKey().partition());
-                final Iterator<ConsumerRecord<byte[], byte[]>> inputRecords = inputPerTopicPerPartition.get(inputTopicPartition).iterator();
+            final TopicPartition inputTopicPartition = new TopicPartition("data", partitionRecords.getKey().partition());
+            final List<ConsumerRecord<byte[], byte[]>> partitionInput = inputPerTopicPerPartition.get(inputTopicPartition);
+            final List<ConsumerRecord<byte[], byte[]>> partitionMin = partitionRecords.getValue();
 
-                for (final ConsumerRecord<byte[], byte[]> receivedRecord : partitionRecords.getValue()) {
-                    final ConsumerRecord<byte[], byte[]> input = inputRecords.next();
+            if (partitionInput.size() != partitionMin.size()) {
+                throw new RuntimeException("Result verification failed: expected " + partitionInput.size() + " records for "
+                    +  partitionRecords.getKey() + " but received " + partitionMin.size());
+            }
 
-                    final String receivedKey = stringDeserializer.deserialize(receivedRecord.topic(), receivedRecord.key());
-                    final int receivedValue = integerDeserializer.deserialize(receivedRecord.topic(), receivedRecord.value());
-                    final String key = stringDeserializer.deserialize(input.topic(), input.key());
-                    final Integer value = integerDeserializer.deserialize(input.topic(), input.value());
+            final Iterator<ConsumerRecord<byte[], byte[]>> inputRecords = partitionInput.iterator();
 
+            for (final ConsumerRecord<byte[], byte[]> receivedRecord : partitionMin) {
+                final ConsumerRecord<byte[], byte[]> input = inputRecords.next();
 
-                    Integer min = currentMinPerKey.get(key);
-                    if (min == null) {
-                        min = value;
-                    }
+                final String receivedKey = stringDeserializer.deserialize(receivedRecord.topic(), receivedRecord.key());
+                final int receivedValue = integerDeserializer.deserialize(receivedRecord.topic(), receivedRecord.value());
+                final String key = stringDeserializer.deserialize(input.topic(), input.key());
+                final int value = integerDeserializer.deserialize(input.topic(), input.value());
+
+                Integer min = currentMinPerKey.get(key);
+                if (min == null) {
+                    min = value;
+                } else {
                     min = Math.min(min, value);
-                    currentMinPerKey.put(key, min);
-
-                    if (!receivedKey.equals(key) || receivedValue != min) {
-                        throw new RuntimeException("Result verification failed for " + receivedRecord + " expected <" + key + "," + value + "> but was <" + receivedKey + "," + receivedValue + ">");
-                    }
                 }
-            } catch (final NullPointerException e) {
-                System.err.println(inputPerTopicPerPartition);
-                e.printStackTrace(System.err);
-                throw e;
+                currentMinPerKey.put(key, min);
+
+                if (!receivedKey.equals(key) || receivedValue != min) {
+                    throw new RuntimeException("Result verification failed for " + receivedRecord + " expected <" + key + "," + min + "> but was <" + receivedKey + "," + receivedValue + ">");
+                }
             }
         }
     }
@@ -364,40 +386,131 @@ public class EosTestDriver extends SmokeTestUtil {
 
         final HashMap<String, Long> currentSumPerKey = new HashMap<>();
         for (final Map.Entry<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> partitionRecords : minPerTopicPerPartition.entrySet()) {
-            try {
-                final TopicPartition inputTopicPartition = new TopicPartition("data", partitionRecords.getKey().partition());
-                final Iterator<ConsumerRecord<byte[], byte[]>> inputRecords = inputPerTopicPerPartition.get(inputTopicPartition).iterator();
+            final TopicPartition inputTopicPartition = new TopicPartition("data", partitionRecords.getKey().partition());
+            final List<ConsumerRecord<byte[], byte[]>> partitionInput = inputPerTopicPerPartition.get(inputTopicPartition);
+            final List<ConsumerRecord<byte[], byte[]>> partitionSum = partitionRecords.getValue();
 
-                for (final ConsumerRecord<byte[], byte[]> receivedRecord : partitionRecords.getValue()) {
-                    final ConsumerRecord<byte[], byte[]> input = inputRecords.next();
+            if (partitionInput.size() != partitionSum.size()) {
+                throw new RuntimeException("Result verification failed: expected " + partitionInput.size() + " records for "
+                    +  partitionRecords.getKey() + " but received " + partitionSum.size());
+            }
 
-                    final String receivedKey = stringDeserializer.deserialize(receivedRecord.topic(), receivedRecord.key());
-                    final long receivedValue = longDeserializer.deserialize(receivedRecord.topic(), receivedRecord.value());
-                    final String key = stringDeserializer.deserialize(input.topic(), input.key());
-                    final Integer value = integerDeserializer.deserialize(input.topic(), input.value());
+            final Iterator<ConsumerRecord<byte[], byte[]>> inputRecords = partitionInput.iterator();
 
-                    Long sum = currentSumPerKey.get(key);
-                    if (sum == null) {
-                        sum = 0L;
-                    }
+            for (final ConsumerRecord<byte[], byte[]> receivedRecord : partitionSum) {
+                final ConsumerRecord<byte[], byte[]> input = inputRecords.next();
+
+                final String receivedKey = stringDeserializer.deserialize(receivedRecord.topic(), receivedRecord.key());
+                final long receivedValue = longDeserializer.deserialize(receivedRecord.topic(), receivedRecord.value());
+                final String key = stringDeserializer.deserialize(input.topic(), input.key());
+                final int value = integerDeserializer.deserialize(input.topic(), input.value());
+
+                Long sum = currentSumPerKey.get(key);
+                if (sum == null) {
+                    sum = (long) value;
+                } else {
                     sum += value;
-                    currentSumPerKey.put(key, sum);
-
-                    if (!receivedKey.equals(key) || receivedValue != sum) {
-                        throw new RuntimeException("Result verification failed for " + receivedRecord + " expected <" + key + "," + value + "> but was <" + receivedKey + "," + receivedValue + ">");
-                    }
                 }
-            } catch (final NullPointerException e) {
-                System.err.println(inputPerTopicPerPartition);
-                e.printStackTrace(System.err);
-                throw e;
+                currentSumPerKey.put(key, sum);
+
+                if (!receivedKey.equals(key) || receivedValue != sum) {
+                    throw new RuntimeException("Result verification failed for " + receivedRecord + " expected <" + key + "," + sum + "> but was <" + receivedKey + "," + receivedValue + ">");
+                }
+            }
+        }
+    }
+
+    private static void verifyMax(final Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> inputPerTopicPerPartition,
+                                  final Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> maxPerTopicPerPartition) {
+        final StringDeserializer stringDeserializer = new StringDeserializer();
+        final IntegerDeserializer integerDeserializer = new IntegerDeserializer();
+
+        final HashMap<String, Integer> currentMinPerKey = new HashMap<>();
+        for (final Map.Entry<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> partitionRecords : maxPerTopicPerPartition.entrySet()) {
+            final TopicPartition inputTopicPartition = new TopicPartition("repartition", partitionRecords.getKey().partition());
+            final List<ConsumerRecord<byte[], byte[]>> partitionInput = inputPerTopicPerPartition.get(inputTopicPartition);
+            final List<ConsumerRecord<byte[], byte[]>> partitionMax = partitionRecords.getValue();
+
+            if (partitionInput.size() != partitionMax.size()) {
+                throw new RuntimeException("Result verification failed: expected " + partitionInput.size() + " records for "
+                    +  partitionRecords.getKey() + " but received " + partitionMax.size());
+            }
+
+            final Iterator<ConsumerRecord<byte[], byte[]>> inputRecords = partitionInput.iterator();
+
+            for (final ConsumerRecord<byte[], byte[]> receivedRecord : partitionMax) {
+                final ConsumerRecord<byte[], byte[]> input = inputRecords.next();
+
+                final String receivedKey = stringDeserializer.deserialize(receivedRecord.topic(), receivedRecord.key());
+                final int receivedValue = integerDeserializer.deserialize(receivedRecord.topic(), receivedRecord.value());
+                final String key = stringDeserializer.deserialize(input.topic(), input.key());
+                final int value = integerDeserializer.deserialize(input.topic(), input.value());
+
+
+                Integer max = currentMinPerKey.get(key);
+                if (max == null) {
+                    max = Integer.MIN_VALUE;
+                }
+                max = Math.max(max, value);
+                currentMinPerKey.put(key, max);
+
+                if (!receivedKey.equals(key) || receivedValue != max.intValue()) {
+                    throw new RuntimeException("Result verification failed for " + receivedRecord + " expected <" + key + "," + max + "> but was <" + receivedKey + "," + receivedValue + ">");
+                }
+            }
+        }
+    }
+
+    private static void verifyCnt(final Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> inputPerTopicPerPartition,
+                                  final Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> cntPerTopicPerPartition) {
+        final StringDeserializer stringDeserializer = new StringDeserializer();
+        final IntegerDeserializer integerDeserializer = new IntegerDeserializer();
+        final LongDeserializer longDeserializer = new LongDeserializer();
+
+        final HashMap<String, Long> currentSumPerKey = new HashMap<>();
+        for (final Map.Entry<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> partitionRecords : cntPerTopicPerPartition.entrySet()) {
+            final TopicPartition inputTopicPartition = new TopicPartition("repartition", partitionRecords.getKey().partition());
+            final List<ConsumerRecord<byte[], byte[]>> partitionInput = inputPerTopicPerPartition.get(inputTopicPartition);
+            final List<ConsumerRecord<byte[], byte[]>> partitionCnt = partitionRecords.getValue();
+
+            if (partitionInput.size() != partitionCnt.size()) {
+                throw new RuntimeException("Result verification failed: expected " + partitionInput.size() + " records for "
+                    +  partitionRecords.getKey() + " but received " + partitionCnt.size());
+            }
+
+            final Iterator<ConsumerRecord<byte[], byte[]>> inputRecords = partitionInput.iterator();
+
+            for (final ConsumerRecord<byte[], byte[]> receivedRecord : partitionCnt) {
+                final ConsumerRecord<byte[], byte[]> input = inputRecords.next();
+
+                final String receivedKey = stringDeserializer.deserialize(receivedRecord.topic(), receivedRecord.key());
+                final long receivedValue = longDeserializer.deserialize(receivedRecord.topic(), receivedRecord.value());
+                final String key = stringDeserializer.deserialize(input.topic(), input.key());
+
+                Long cnt = currentSumPerKey.get(key);
+                if (cnt == null) {
+                    cnt = 0L;
+                }
+                currentSumPerKey.put(key, ++cnt);
+
+                if (!receivedKey.equals(key) || receivedValue != cnt.longValue()) {
+                    throw new RuntimeException("Result verification failed for " + receivedRecord + " expected <" + key + "," + cnt + "> but was <" + receivedKey + "," + receivedValue + ">");
+                }
             }
         }
     }
 
     private static void verifyAllTransactionFinished(final KafkaConsumer<byte[], byte[]> consumer,
-                                                     final String kafka) {
-        final List<TopicPartition> partitions = getAllPartitions(consumer, "echo", "min", "sum");
+                                                     final String kafka,
+                                                     final boolean withRepartitioning) {
+        final String[] topics;
+        if (withRepartitioning) {
+            topics = new String[] {"echo", "min", "sum", "repartition", "max", "min"};
+        } else {
+            topics = new String[] {"echo", "min", "sum"};
+        }
+
+        final List<TopicPartition> partitions = getAllPartitions(consumer, topics);
         consumer.assign(partitions);
         consumer.seekToEnd(partitions);
         consumer.poll(0);

@@ -313,7 +313,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
             clientMetadata.addConsumer(consumerId, info);
         }
 
-        log.info("stream-thread [{}] Constructed client metadata {} from the member subscriptions.", streamThread.getName(), clientsMetadata);
+        log.debug("stream-thread [{}] Constructed client metadata {} from the member subscriptions.", streamThread.getName(), clientsMetadata);
 
         // ---------------- Step Zero ---------------- //
 
@@ -669,7 +669,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
             }
         }
 
-        log.info("stream-thread [{}] Completed validating internal topics in partition assignor", streamThread.getName());
+        log.debug("stream-thread [{}] Completed validating internal topics in partition assignor", streamThread.getName());
     }
 
     private boolean allTopicsCreated(final Set<String> topicNamesToMakeReady, final Map<InternalTopicConfig, Integer> topicsToMakeReady) {

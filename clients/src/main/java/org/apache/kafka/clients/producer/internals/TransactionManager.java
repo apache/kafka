@@ -64,6 +64,7 @@ public class TransactionManager {
 
     private final String transactionalId;
     private final int transactionTimeoutMs;
+
     public final String logPrefix;
 
     private final Map<TopicPartition, Integer> sequenceNumbers;
@@ -72,6 +73,15 @@ public class TransactionManager {
     private final Set<TopicPartition> pendingPartitionsInTransaction;
     private final Set<TopicPartition> partitionsInTransaction;
     private final Map<TopicPartition, CommittedOffset> pendingTxnOffsetCommits;
+
+    // This is used by the TxnRequestHandlers to control how long to back off before a given request is retried.
+    // For instance, this value is lowered by the AddPartitionsToTxnHandler when it receives a CONCURRENT_TRANSACTIONS
+    // error for the first AddPartitionsRequest in a transaction.
+    private final long retryBackoffMs;
+
+    // The retryBackoff is overridden to the following value if the first AddPartitions receives a
+    // CONCURRENT_TRANSACTIONS error.
+    private static final long ADD_PARTITIONS_RETRY_BACKOFF_MS = 20L;
 
     private int inFlightRequestCorrelationId = NO_INFLIGHT_REQUEST_CORRELATION_ID;
     private Node transactionCoordinator;
@@ -97,8 +107,7 @@ public class TransactionManager {
                 case INITIALIZING:
                     return source == UNINITIALIZED;
                 case READY:
-                    return source == INITIALIZING || source == COMMITTING_TRANSACTION
-                            || source == ABORTING_TRANSACTION || source == ABORTABLE_ERROR;
+                    return source == INITIALIZING || source == COMMITTING_TRANSACTION || source == ABORTING_TRANSACTION;
                 case IN_TRANSACTION:
                     return source == READY;
                 case COMMITTING_TRANSACTION:
@@ -106,7 +115,7 @@ public class TransactionManager {
                 case ABORTING_TRANSACTION:
                     return source == IN_TRANSACTION || source == ABORTABLE_ERROR;
                 case ABORTABLE_ERROR:
-                    return source == IN_TRANSACTION || source == COMMITTING_TRANSACTION || source == ABORTING_TRANSACTION;
+                    return source == IN_TRANSACTION || source == COMMITTING_TRANSACTION || source == ABORTABLE_ERROR;
                 case FATAL_ERROR:
                 default:
                     // We can transition to FATAL_ERROR unconditionally.
@@ -133,7 +142,7 @@ public class TransactionManager {
         }
     }
 
-    public TransactionManager(String transactionalId, int transactionTimeoutMs) {
+    public TransactionManager(String transactionalId, int transactionTimeoutMs, long retryBackoffMs) {
         this.producerIdAndEpoch = new ProducerIdAndEpoch(NO_PRODUCER_ID, NO_PRODUCER_EPOCH);
         this.sequenceNumbers = new HashMap<>();
         this.transactionalId = transactionalId;
@@ -151,10 +160,12 @@ public class TransactionManager {
                 return Integer.compare(o1.priority().priority, o2.priority().priority);
             }
         });
+
+        this.retryBackoffMs = retryBackoffMs;
     }
 
     TransactionManager() {
-        this(null, 0);
+        this(null, 0, 100);
     }
 
     public synchronized TransactionalRequestResult initializeTransactions() {
@@ -174,14 +185,14 @@ public class TransactionManager {
         transitionTo(State.IN_TRANSACTION);
     }
 
-    public synchronized TransactionalRequestResult beginCommittingTransaction() {
+    public synchronized TransactionalRequestResult beginCommit() {
         ensureTransactional();
         maybeFailWithError();
         transitionTo(State.COMMITTING_TRANSACTION);
-        return beginCompletingTransaction(true);
+        return beginCompletingTransaction(TransactionResult.COMMIT);
     }
 
-    public synchronized TransactionalRequestResult beginAbortingTransaction() {
+    public synchronized TransactionalRequestResult beginAbort() {
         ensureTransactional();
         if (currentState != State.ABORTABLE_ERROR)
             maybeFailWithError();
@@ -189,14 +200,12 @@ public class TransactionManager {
 
         // We're aborting the transaction, so there should be no need to add new partitions
         newPartitionsInTransaction.clear();
-        return beginCompletingTransaction(false);
+        return beginCompletingTransaction(TransactionResult.ABORT);
     }
 
-    private TransactionalRequestResult beginCompletingTransaction(boolean isCommit) {
+    private TransactionalRequestResult beginCompletingTransaction(TransactionResult transactionResult) {
         if (!newPartitionsInTransaction.isEmpty())
             enqueueRequest(addPartitionsToTransactionHandler());
-
-        TransactionResult transactionResult = isCommit ? TransactionResult.COMMIT : TransactionResult.ABORT;
         EndTxnRequest.Builder builder = new EndTxnRequest.Builder(transactionalId, producerIdAndEpoch.producerId,
                 producerIdAndEpoch.epoch, transactionResult);
         EndTxnHandler handler = new EndTxnHandler(builder);
@@ -221,10 +230,9 @@ public class TransactionManager {
     }
 
     public synchronized void maybeAddPartitionToTransaction(TopicPartition topicPartition) {
-        if (currentState != State.IN_TRANSACTION)
-            throw new IllegalStateException("Cannot add partitions to a transaction in state " + currentState);
+        failIfNotReadyForSend();
 
-        if (partitionsInTransaction.contains(topicPartition) || pendingPartitionsInTransaction.contains(topicPartition))
+        if (isPartitionAdded(topicPartition) || isPartitionPendingAdd(topicPartition))
             return;
 
         log.debug("{}Begin adding new partition {} to transaction", logPrefix, topicPartition);
@@ -272,7 +280,7 @@ public class TransactionManager {
         return !newPartitionsInTransaction.isEmpty() || !pendingPartitionsInTransaction.isEmpty();
     }
 
-    synchronized boolean isCompletingTransaction() {
+    synchronized boolean isCompleting() {
         return currentState == State.COMMITTING_TRANSACTION || currentState == State.ABORTING_TRANSACTION;
     }
 
@@ -285,6 +293,11 @@ public class TransactionManager {
     }
 
     synchronized void transitionToAbortableError(RuntimeException exception) {
+        if (currentState == State.ABORTING_TRANSACTION) {
+            log.debug("Skipping transition to abortable error state since the transaction is already being " +
+                    "aborted. Underlying exception: ", exception);
+            return;
+        }
         transitionTo(State.ABORTABLE_ERROR, exception);
     }
 
@@ -376,18 +389,26 @@ public class TransactionManager {
         sequenceNumbers.put(topicPartition, currentSequenceNumber);
     }
 
-    synchronized TxnRequestHandler nextRequestHandler() {
+    synchronized TxnRequestHandler nextRequestHandler(boolean hasIncompleteBatches) {
         if (!newPartitionsInTransaction.isEmpty())
             enqueueRequest(addPartitionsToTransactionHandler());
 
-        TxnRequestHandler nextRequestHandler = pendingRequests.poll();
-        if (nextRequestHandler != null && maybeTerminateRequestWithError(nextRequestHandler)) {
+        TxnRequestHandler nextRequestHandler = pendingRequests.peek();
+        if (nextRequestHandler == null)
+            return null;
+
+        // Do not send the EndTxn until all batches have been flushed
+        if (nextRequestHandler.isEndTxn() && hasIncompleteBatches)
+            return null;
+
+        pendingRequests.poll();
+        if (maybeTerminateRequestWithError(nextRequestHandler)) {
             log.trace("{}Not sending transactional request {} because we are in an error state",
                     logPrefix, nextRequestHandler.requestBuilder());
             return null;
         }
 
-        if (nextRequestHandler != null && nextRequestHandler.isEndTxn() && !transactionStarted) {
+        if (nextRequestHandler.isEndTxn() && !transactionStarted) {
             nextRequestHandler.result.done();
             if (currentState != State.FATAL_ERROR) {
                 log.debug("{}Not sending EndTxn for completed transaction since no partitions " +
@@ -431,7 +452,7 @@ public class TransactionManager {
         inFlightRequestCorrelationId = NO_INFLIGHT_REQUEST_CORRELATION_ID;
     }
 
-    boolean hasInflightRequest() {
+    boolean hasInFlightRequest() {
         return inFlightRequestCorrelationId != NO_INFLIGHT_REQUEST_CORRELATION_ID;
     }
 
@@ -458,7 +479,7 @@ public class TransactionManager {
     // visible for testing
     synchronized boolean hasOngoingTransaction() {
         // transactions are considered ongoing once started until completion or a fatal error
-        return currentState == State.IN_TRANSACTION || isCompletingTransaction() || hasAbortableError();
+        return currentState == State.IN_TRANSACTION || isCompleting() || hasAbortableError();
     }
 
     // visible for testing
@@ -471,9 +492,11 @@ public class TransactionManager {
     }
 
     private synchronized void transitionTo(State target, RuntimeException error) {
-        if (!currentState.isTransitionValid(currentState, target))
-            throw new KafkaException("Invalid transition attempted from state " + currentState.name() +
-                    " to state " + target.name());
+        if (!currentState.isTransitionValid(currentState, target)) {
+            String idString = transactionalId == null ?  "" : "TransactionalId " + transactionalId + ": ";
+            throw new KafkaException(idString + "Invalid transition attempted from state "
+                    + currentState.name() + " to state " + target.name());
+        }
 
         if (target == State.FATAL_ERROR || target == State.ABORTABLE_ERROR) {
             if (error == null)
@@ -503,13 +526,10 @@ public class TransactionManager {
 
     private boolean maybeTerminateRequestWithError(TxnRequestHandler requestHandler) {
         if (hasError()) {
-            if (requestHandler instanceof EndTxnHandler) {
-                // we allow abort requests to break out of the error state. The state and the last error
-                // will be cleared when the request returns
-                EndTxnHandler endTxnHandler = (EndTxnHandler) requestHandler;
-                if (endTxnHandler.builder.result() == TransactionResult.ABORT)
-                    return false;
-            }
+            if (hasAbortableError() && requestHandler instanceof FindCoordinatorHandler)
+                // No harm letting the FindCoordinator request go through if we're expecting to abort
+                return false;
+
             requestHandler.fail(lastError);
             return true;
         }
@@ -541,6 +561,8 @@ public class TransactionManager {
         transitionTo(State.READY);
         lastError = null;
         transactionStarted = false;
+        newPartitionsInTransaction.clear();
+        pendingPartitionsInTransaction.clear();
         partitionsInTransaction.clear();
     }
 
@@ -599,6 +621,10 @@ public class TransactionManager {
                 this.isRetry = true;
                 enqueueRequest(this);
             }
+        }
+
+        long retryBackoffMs() {
+            return retryBackoffMs;
         }
 
         @Override
@@ -701,9 +727,11 @@ public class TransactionManager {
 
     private class AddPartitionsToTxnHandler extends TxnRequestHandler {
         private final AddPartitionsToTxnRequest.Builder builder;
+        private long retryBackoffMs;
 
         private AddPartitionsToTxnHandler(AddPartitionsToTxnRequest.Builder builder) {
             this.builder = builder;
+            this.retryBackoffMs = TransactionManager.this.retryBackoffMs;
         }
 
         @Override
@@ -722,6 +750,7 @@ public class TransactionManager {
             Map<TopicPartition, Errors> errors = addPartitionsToTxnResponse.errors();
             boolean hasPartitionErrors = false;
             Set<String> unauthorizedTopics = new HashSet<>();
+            retryBackoffMs = TransactionManager.this.retryBackoffMs;
 
             for (Map.Entry<TopicPartition, Errors> topicPartitionErrorEntry : errors.entrySet()) {
                 TopicPartition topicPartition = topicPartitionErrorEntry.getKey();
@@ -733,8 +762,11 @@ public class TransactionManager {
                     lookupCoordinator(FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
                     reenqueue();
                     return;
-                } else if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS || error == Errors.CONCURRENT_TRANSACTIONS
-                        || error == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
+                } else if (error == Errors.CONCURRENT_TRANSACTIONS) {
+                    maybeOverrideRetryBackoffMs();
+                    reenqueue();
+                    return;
+                } else if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS || error == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
                     reenqueue();
                     return;
                 } else if (error == Errors.INVALID_PRODUCER_EPOCH) {
@@ -758,18 +790,41 @@ public class TransactionManager {
                 }
             }
 
+            Set<TopicPartition> partitions = errors.keySet();
+
+            // Remove the partitions from the pending set regardless of the result. We use the presence
+            // of partitions in the pending set to know when it is not safe to send batches. However, if
+            // the partitions failed to be added and we enter an error state, we expect the batches to be
+            // aborted anyway. In this case, we must be able to continue sending the batches which are in
+            // retry for partitions that were successfully added.
+            pendingPartitionsInTransaction.removeAll(partitions);
+
             if (!unauthorizedTopics.isEmpty()) {
                 abortableError(new TopicAuthorizationException(unauthorizedTopics));
             } else if (hasPartitionErrors) {
-                abortableError(new KafkaException("Could not add partitions to transaction due to partition level errors"));
+                abortableError(new KafkaException("Could not add partitions to transaction due to errors: " + errors));
             } else {
-                Set<TopicPartition> addedPartitions = errors.keySet();
-                log.debug("{}Successfully added partitions {} to transaction", logPrefix, addedPartitions);
-                partitionsInTransaction.addAll(addedPartitions);
-                pendingPartitionsInTransaction.removeAll(addedPartitions);
+                log.debug("{}Successfully added partitions {} to transaction", logPrefix, partitions);
+                partitionsInTransaction.addAll(partitions);
                 transactionStarted = true;
                 result.done();
             }
+        }
+
+        @Override
+        public long retryBackoffMs() {
+            return Math.min(TransactionManager.this.retryBackoffMs, this.retryBackoffMs);
+        }
+
+        private void maybeOverrideRetryBackoffMs() {
+            // We only want to reduce the backoff when retrying the first AddPartition which errored out due to a
+            // CONCURRENT_TRANSACTIONS error since this means that the previous transaction is still completing and
+            // we don't want to wait too long before trying to start the new one.
+            //
+            // This is only a temporary fix, the long term solution is being tracked in
+            // https://issues.apache.org/jira/browse/KAFKA-5482
+            if (partitionsInTransaction.isEmpty())
+                this.retryBackoffMs = ADD_PARTITIONS_RETRY_BACKOFF_MS;
         }
     }
 

@@ -27,7 +27,7 @@ import kafka.cluster.BrokerEndPoint
 import scala.collection.JavaConverters._
 import kafka.common.{MessageFormatter, TopicAndPartition}
 import org.apache.kafka.clients.consumer.ConsumerRecord
-import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.utils.{KafkaThread, Utils}
 
 /**
  * Command line program to dump out messages to standard out using the simple consumer
@@ -201,7 +201,7 @@ object SimpleConsumerShell extends Logging {
     val simpleConsumer = new SimpleConsumer(fetchTargetBroker.host,
                                             fetchTargetBroker.port,
                                             10000, 64*1024, clientId)
-    val thread = Utils.newThread("kafka-simpleconsumer-shell", new Runnable() {
+    val thread = KafkaThread.nonDaemon("kafka-simpleconsumer-shell", new Runnable() {
       def run() {
         var offset = startingOffset
         var numMessagesConsumed = 0
@@ -253,7 +253,7 @@ object SimpleConsumerShell extends Logging {
           info(s"Consumed $numMessagesConsumed messages")
         }
       }
-    }, false)
+    })
     thread.start()
     thread.join()
     System.out.flush()

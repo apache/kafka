@@ -34,13 +34,16 @@ public class EosTestClient extends SmokeTestUtil {
     static final String APP_ID = "EosTest";
     private final String kafka;
     private final File stateDir;
+    private final boolean withRepartitioning;
+
     private KafkaStreams streams;
     private boolean uncaughtException;
 
-    EosTestClient(final File stateDir, final String kafka) {
+    EosTestClient(final String kafka, final File stateDir, final boolean withRepartitioning) {
         super();
-        this.stateDir = stateDir;
         this.kafka = kafka;
+        this.stateDir = stateDir;
+        this.withRepartitioning = withRepartitioning;
     }
 
     private boolean isRunning = true;
@@ -81,8 +84,8 @@ public class EosTestClient extends SmokeTestUtil {
         }
     }
 
-    private static KafkaStreams createKafkaStreams(final File stateDir,
-                                                   final String kafka) {
+    private KafkaStreams createKafkaStreams(final File stateDir,
+                                            final String kafka) {
         final Properties props = new Properties();
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID);
         props.put(StreamsConfig.STATE_DIR_CONFIG, stateDir.toString());
@@ -143,6 +146,38 @@ public class EosTestClient extends SmokeTestUtil {
             longSerde,
             "sum")
             .to(stringSerde, longSerde, "sum");
+
+        if (withRepartitioning) {
+            final KStream<String, Integer> repartitionedData = data.through("repartition");
+
+            repartitionedData.process(SmokeTestUtil.printProcessorSupplier("repartition"));
+
+            final KGroupedStream<String, Integer> groupedDataAfterRepartitioning = repartitionedData.groupByKey();
+            // max
+            groupedDataAfterRepartitioning
+                .aggregate(
+                    new Initializer<Integer>() {
+                        @Override
+                        public Integer apply() {
+                            return Integer.MIN_VALUE;
+                        }
+                    },
+                    new Aggregator<String, Integer, Integer>() {
+                        @Override
+                        public Integer apply(final String aggKey,
+                                             final Integer value,
+                                             final Integer aggregate) {
+                            return (value > aggregate) ? value : aggregate;
+                        }
+                    },
+                    intSerde,
+                    "max")
+                .to(stringSerde, intSerde, "max");
+
+            // count
+            groupedDataAfterRepartitioning.count("cnt")
+                .to(stringSerde, longSerde, "cnt");
+        }
 
         return new KafkaStreams(builder, props);
     }

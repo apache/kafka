@@ -14,7 +14,7 @@ package kafka.api
 
 import java.nio.ByteBuffer
 import java.util
-import java.util.concurrent.{CountDownLatch, ExecutionException, TimeUnit}
+import java.util.concurrent.ExecutionException
 import java.util.regex.Pattern
 import java.util.{ArrayList, Collections, Properties}
 
@@ -22,14 +22,24 @@ import kafka.common.TopicAndPartition
 import kafka.security.auth._
 import kafka.server.{BaseRequestTest, KafkaConfig}
 import kafka.utils.TestUtils
+import kafka.admin.AdminUtils
+import kafka.log.LogConfig
+import kafka.network.SocketServer
+import org.apache.kafka.clients.consumer.OffsetAndMetadata
 import org.apache.kafka.clients.consumer.internals.NoOpConsumerRebalanceListener
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer._
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic.GROUP_METADATA_TOPIC_NAME
+import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.protocol.{ApiKeys, Errors, SecurityProtocol}
 import org.apache.kafka.common.requests.{Resource => RResource, ResourceType => RResourceType, _}
-import CreateTopicsRequest.TopicDetails
+import org.apache.kafka.common.acl.{AccessControlEntry, AccessControlEntryFilter, AclBinding, AclBindingFilter, AclOperation, AclPermissionType}
+import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.record.{CompressionType, MemoryRecords, RecordBatch, SimpleRecord}
+import org.apache.kafka.common.requests.CreateAclsRequest.AclCreation
+import org.apache.kafka.common.requests.CreateTopicsRequest.TopicDetails
+import org.apache.kafka.common.resource.{ResourceFilter, Resource => AdminResource, ResourceType => AdminResourceType}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.{Node, TopicPartition, requests}
 import org.junit.Assert._
@@ -38,13 +48,6 @@ import org.junit.{After, Assert, Before, Test}
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.collection.mutable.Buffer
-import org.apache.kafka.common.KafkaException
-import kafka.admin.AdminUtils
-import kafka.log.LogConfig
-import kafka.network.SocketServer
-import org.apache.kafka.clients.consumer.OffsetAndMetadata
-import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.record.{CompressionType, MemoryRecords, RecordBatch, SimpleRecord}
 
 class AuthorizerIntegrationTest extends BaseRequestTest {
 
@@ -72,6 +75,8 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   val groupDescribeAcl = Map(groupResource -> Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Describe)))
   val clusterAcl = Map(Resource.ClusterResource -> Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, ClusterAction)))
   val clusterCreateAcl = Map(Resource.ClusterResource -> Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Create)))
+  val clusterAlterAcl = Map(Resource.ClusterResource -> Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Alter)))
+  val clusterDescribeAcl = Map(Resource.ClusterResource -> Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Describe)))
   val clusterIdempotentWriteAcl = Map(Resource.ClusterResource -> Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, IdempotentWrite)))
   val topicReadAcl = Map(topicResource -> Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Read)))
   val topicWriteAcl = Map(topicResource -> Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Write)))
@@ -125,7 +130,10 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       ApiKeys.ADD_PARTITIONS_TO_TXN -> classOf[AddPartitionsToTxnResponse],
       ApiKeys.ADD_OFFSETS_TO_TXN -> classOf[AddOffsetsToTxnResponse],
       ApiKeys.END_TXN -> classOf[EndTxnResponse],
-      ApiKeys.TXN_OFFSET_COMMIT -> classOf[TxnOffsetCommitResponse]
+      ApiKeys.TXN_OFFSET_COMMIT -> classOf[TxnOffsetCommitResponse],
+      ApiKeys.CREATE_ACLS -> classOf[CreateAclsResponse],
+      ApiKeys.DELETE_ACLS -> classOf[DeleteAclsResponse],
+      ApiKeys.DESCRIBE_ACLS -> classOf[DescribeAclsResponse]
   )
 
   val requestKeyToError = Map[ApiKeys, Nothing => Errors](
@@ -156,7 +164,10 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     ApiKeys.ADD_PARTITIONS_TO_TXN -> ((resp: AddPartitionsToTxnResponse) => resp.errors.get(tp)),
     ApiKeys.ADD_OFFSETS_TO_TXN -> ((resp: AddOffsetsToTxnResponse) => resp.error),
     ApiKeys.END_TXN -> ((resp: EndTxnResponse) => resp.error),
-    ApiKeys.TXN_OFFSET_COMMIT -> ((resp: TxnOffsetCommitResponse) => resp.errors.get(tp))
+    ApiKeys.TXN_OFFSET_COMMIT -> ((resp: TxnOffsetCommitResponse) => resp.errors.get(tp)),
+    ApiKeys.CREATE_ACLS -> ((resp: CreateAclsResponse) => resp.aclCreationResponses.asScala.head.error.error),
+    ApiKeys.DESCRIBE_ACLS -> ((resp: DescribeAclsResponse) => resp.error.error),
+    ApiKeys.DELETE_ACLS -> ((resp: DeleteAclsResponse) => resp.responses.asScala.head.error.error)
   )
 
   val requestKeysToAcls = Map[ApiKeys, Map[Resource, Set[Acl]]](
@@ -185,7 +196,10 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     ApiKeys.ADD_PARTITIONS_TO_TXN -> (topicWriteAcl ++ transactionIdWriteAcl),
     ApiKeys.ADD_OFFSETS_TO_TXN -> (groupReadAcl ++ transactionIdWriteAcl),
     ApiKeys.END_TXN -> transactionIdWriteAcl,
-    ApiKeys.TXN_OFFSET_COMMIT -> (groupReadAcl ++ transactionIdWriteAcl)
+    ApiKeys.TXN_OFFSET_COMMIT -> (groupReadAcl ++ transactionIdWriteAcl),
+    ApiKeys.CREATE_ACLS -> clusterAlterAcl,
+    ApiKeys.DESCRIBE_ACLS -> clusterDescribeAcl,
+    ApiKeys.DELETE_ACLS -> clusterAlterAcl
   )
 
   @Before
@@ -284,45 +298,46 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       build()
   }
 
-  private def createHeartbeatRequest = {
-    new HeartbeatRequest.Builder(group, 1, "").build()
-  }
+  private def heartbeatRequest = new HeartbeatRequest.Builder(group, 1, "").build()
 
-  private def createLeaveGroupRequest = {
-    new LeaveGroupRequest.Builder(group, "").build()
-  }
+  private def leaveGroupRequest = new LeaveGroupRequest.Builder(group, "").build()
 
-  private def createLeaderAndIsrRequest = {
+  private def leaderAndIsrRequest = {
     new requests.LeaderAndIsrRequest.Builder(brokerId, Int.MaxValue,
       Map(tp -> new PartitionState(Int.MaxValue, brokerId, Int.MaxValue, List(brokerId).asJava, 2, Seq(brokerId).asJava)).asJava,
       Set(new Node(brokerId, "localhost", 0)).asJava).build()
   }
 
-  private def createStopReplicaRequest = {
-    new requests.StopReplicaRequest.Builder(brokerId, Int.MaxValue, true, Set(tp).asJava).build()
-  }
+  private def stopReplicaRequest = new StopReplicaRequest.Builder(brokerId, Int.MaxValue, true, Set(tp).asJava).build()
 
-  private def createControlledShutdownRequest = {
-    new requests.ControlledShutdownRequest.Builder(brokerId).build()
-  }
+  private def controlledShutdownRequest = new requests.ControlledShutdownRequest.Builder(brokerId).build()
 
-  private def createTopicsRequest = {
+  private def createTopicsRequest =
     new CreateTopicsRequest.Builder(Map(createTopic -> new TopicDetails(1, 1.toShort)).asJava, 0).build()
-  }
 
-  private def deleteTopicsRequest = {
-    new DeleteTopicsRequest.Builder(Set(deleteTopic).asJava, 5000).build()
-  }
+  private def deleteTopicsRequest = new DeleteTopicsRequest.Builder(Set(deleteTopic).asJava, 5000).build()
 
-  private def createDescribeConfigsRequest =
+  private def describeConfigsRequest =
     new DescribeConfigsRequest.Builder(Collections.singleton(new RResource(RResourceType.TOPIC, tp.topic))).build()
 
-  private def createAlterConfigsRequest =
+  private def alterConfigsRequest =
     new AlterConfigsRequest.Builder(
       Collections.singletonMap(new RResource(RResourceType.TOPIC, tp.topic),
         new AlterConfigsRequest.Config(Collections.singleton(
           new AlterConfigsRequest.ConfigEntry(LogConfig.MaxMessageBytesProp, "1000000")
         ))), true).build()
+
+  private def describeAclsRequest = new DescribeAclsRequest.Builder(AclBindingFilter.ANY).build()
+
+  private def createAclsRequest = new CreateAclsRequest.Builder(
+    Collections.singletonList(new AclCreation(new AclBinding(
+      new AdminResource(AdminResourceType.TOPIC, "mytopic"),
+      new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.WRITE, AclPermissionType.DENY))))).build()
+
+  private def deleteAclsRequest = new DeleteAclsRequest.Builder(
+    Collections.singletonList(new AclBindingFilter(
+      new ResourceFilter(AdminResourceType.TOPIC, null),
+      new AccessControlEntryFilter("User:ANONYMOUS", "*", AclOperation.ANY, AclPermissionType.DENY)))).build()
 
 
   @Test
@@ -338,16 +353,19 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       ApiKeys.JOIN_GROUP -> createJoinGroupRequest,
       ApiKeys.SYNC_GROUP -> createSyncGroupRequest,
       ApiKeys.OFFSET_COMMIT -> createOffsetCommitRequest,
-      ApiKeys.HEARTBEAT -> createHeartbeatRequest,
-      ApiKeys.LEAVE_GROUP -> createLeaveGroupRequest,
-      ApiKeys.LEADER_AND_ISR -> createLeaderAndIsrRequest,
-      ApiKeys.STOP_REPLICA -> createStopReplicaRequest,
-      ApiKeys.CONTROLLED_SHUTDOWN_KEY -> createControlledShutdownRequest,
+      ApiKeys.HEARTBEAT -> heartbeatRequest,
+      ApiKeys.LEAVE_GROUP -> leaveGroupRequest,
+      ApiKeys.LEADER_AND_ISR -> leaderAndIsrRequest,
+      ApiKeys.STOP_REPLICA -> stopReplicaRequest,
+      ApiKeys.CONTROLLED_SHUTDOWN_KEY -> controlledShutdownRequest,
       ApiKeys.CREATE_TOPICS -> createTopicsRequest,
       ApiKeys.DELETE_TOPICS -> deleteTopicsRequest,
       ApiKeys.OFFSET_FOR_LEADER_EPOCH -> offsetsForLeaderEpochRequest,
-      ApiKeys.DESCRIBE_CONFIGS -> createDescribeConfigsRequest,
-      ApiKeys.ALTER_CONFIGS -> createAlterConfigsRequest
+      ApiKeys.DESCRIBE_CONFIGS -> describeConfigsRequest,
+      ApiKeys.ALTER_CONFIGS -> alterConfigsRequest,
+      ApiKeys.CREATE_ACLS -> createAclsRequest,
+      ApiKeys.DELETE_ACLS -> deleteAclsRequest,
+      ApiKeys.DESCRIBE_ACLS -> describeAclsRequest
     )
 
     for ((key, request) <- requestKeyToRequest) {
@@ -926,10 +944,10 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     try {
       // the second time, the call to send itself should fail (the producer becomes unusable
       // if no producerId can be obtained)
-      producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, "hi".getBytes))
+      producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, "hi".getBytes)).get()
       fail("Should have raised ClusterAuthorizationException")
     } catch {
-      case e: KafkaException =>
+      case e: ExecutionException =>
         assertTrue(e.getCause.isInstanceOf[ClusterAuthorizationException])
     }
   }
@@ -959,10 +977,10 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     try {
       // the second time, the call to send itself should fail (the producer becomes unusable
       // if no producerId can be obtained)
-      producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, "hi".getBytes))
+      producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, "hi".getBytes)).get()
       fail("Should have raised ClusterAuthorizationException")
     } catch {
-      case e: KafkaException =>
+      case e: ExecutionException =>
         assertTrue(e.getCause.isInstanceOf[ClusterAuthorizationException])
     }
   }
@@ -1061,7 +1079,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     try {
       producer.send(new ProducerRecord(deleteTopic, 0, "1".getBytes, "1".getBytes)).get
     } catch {
-      case e : ExecutionException =>
+      case e: ExecutionException =>
         assertTrue(e.getCause.isInstanceOf[TopicAuthorizationException])
     }
     // now rollback

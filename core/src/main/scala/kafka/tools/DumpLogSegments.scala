@@ -66,10 +66,12 @@ object DumpLogSegments {
     val transactionLogOpt = parser.accepts("transaction-log-decoder", "if set, log data will be parsed as " +
       "transaction metadata from the __transaction_state topic.")
 
-    if(args.length == 0)
-      CommandLineUtils.printUsageAndDie(parser, "Parse a log file and dump its contents to the console, useful for debugging a seemingly corrupt log segment.")
+    val helpOpt = parser.accepts("help", "Print usage information.")
 
     val options = parser.parse(args : _*)
+
+    if(args.length == 0 || options.has(helpOpt))
+      CommandLineUtils.printUsageAndDie(parser, "Parse a log file and dump its contents to the console, useful for debugging a seemingly corrupt log segment.")
 
     CommandLineUtils.checkRequiredArgs(parser, options, filesOpt)
 
@@ -283,7 +285,8 @@ object DumpLogSegments {
         s"producerEpoch:${txnMetadata.producerEpoch}," +
         s"state=${txnMetadata.state}," +
         s"partitions=${txnMetadata.topicPartitions}," +
-        s"lastUpdateTimestamp=${txnMetadata.txnLastUpdateTimestamp}"
+        s"txnLastUpdateTimestamp=${txnMetadata.txnLastUpdateTimestamp}," +
+        s"txnTimeoutMs=${txnMetadata.txnTimeoutMs}"
 
       (Some(keyString), Some(valueString))
     }

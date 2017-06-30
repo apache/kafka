@@ -119,7 +119,7 @@ class AdminManager(val config: KafkaConfig,
             else
               AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils, topic, assignments, configs, update = false)
         }
-        CreateTopicMetadata(topic, assignments, new ApiError(Errors.NONE, null))
+        CreateTopicMetadata(topic, assignments, ApiError.NONE)
       } catch {
         // Log client errors at a lower level than unexpected exceptions
         case e@ (_: PolicyViolationException | _: ApiException) =>
@@ -135,7 +135,7 @@ class AdminManager(val config: KafkaConfig,
     if (timeout <= 0 || validateOnly || !metadata.exists(_.error.is(Errors.NONE))) {
       val results = metadata.map { createTopicMetadata =>
         // ignore topics that already have errors
-        if (createTopicMetadata.error.is(Errors.NONE) && !validateOnly) {
+        if (createTopicMetadata.error.isSuccess() && !validateOnly) {
           (createTopicMetadata.topic, new ApiError(Errors.REQUEST_TIMED_OUT, null))
         } else {
           (createTopicMetadata.topic, createTopicMetadata.error)
@@ -212,7 +212,7 @@ class AdminManager(val config: KafkaConfig,
           new DescribeConfigsResponse.ConfigEntry(name, valueAsString, isSensitive, isDefault(name), isReadOnly)
         }
 
-        new DescribeConfigsResponse.Config(new ApiError(Errors.NONE, null), configEntries.asJava)
+        new DescribeConfigsResponse.Config(ApiError.NONE, configEntries.asJava)
       }
 
       try {
@@ -280,7 +280,7 @@ class AdminManager(val config: KafkaConfig,
                 else
                   AdminUtils.changeTopicConfig(zkUtils, topic, properties)
             }
-            resource -> new ApiError(Errors.NONE, null)
+            resource -> ApiError.NONE
           case resourceType =>
             throw new InvalidRequestException(s"AlterConfigs is only supported for topics, but resource type is $resourceType")
         }

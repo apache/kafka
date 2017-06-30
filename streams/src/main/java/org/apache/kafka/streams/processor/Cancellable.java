@@ -14,24 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.kafka.streams.processor;
 
-package org.apache.kafka.clients.admin;
+public interface Cancellable {
 
-import org.apache.kafka.common.annotation.InterfaceStability;
+    void cancel();
 
-/**
- * Options for the apiVersions call.
- */
-@InterfaceStability.Unstable
-public class ApiVersionsOptions {
-    private Integer timeoutMs = null;
-
-    public ApiVersionsOptions timeoutMs(Integer timeoutMs) {
-        this.timeoutMs = timeoutMs;
-        return this;
-    }
-
-    public Integer timeoutMs() {
-        return timeoutMs;
-    }
 }

@@ -93,6 +93,7 @@ import org.apache.kafka.common.errors.InterruptException;
 public abstract class AbstractCoordinator implements Closeable {
 
     private static final Logger log = LoggerFactory.getLogger(AbstractCoordinator.class);
+    public static final String HEARTBEAT_THREAD_PREFIX = "kafka-coordinator-heartbeat-thread";
 
     private enum MemberState {
         UNJOINED,    // the client is not part of a group
@@ -863,7 +864,7 @@ public abstract class AbstractCoordinator implements Closeable {
         private AtomicReference<RuntimeException> failed = new AtomicReference<>(null);
 
         private HeartbeatThread() {
-            super("kafka-coordinator-heartbeat-thread" + (groupId.isEmpty() ? "" : " | " + groupId), true);
+            super(HEARTBEAT_THREAD_PREFIX + (groupId.isEmpty() ? "" : " | " + groupId), true);
         }
 
         public void enable() {

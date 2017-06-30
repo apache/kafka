@@ -91,7 +91,7 @@ abstract class AbstractLogCleanerIntegrationTest {
         compactionLag = compactionLag,
         deleteDelay = deleteDelay,
         segmentSize = segmentSize))
-      val log = new Log(dir,
+      val log = Log(dir,
         logConfig,
         logStartOffset = 0L,
         recoveryPoint = 0L,

@@ -24,7 +24,7 @@ import java.util.concurrent.{CountDownLatch, TimeUnit}
 
 import com.yammer.metrics.core.Meter
 import org.apache.kafka.common.internals.FatalExitError
-import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.common.utils.{KafkaThread, Time}
 
 /**
  * A thread that answers kafka requests.
@@ -92,7 +92,7 @@ class KafkaRequestHandlerPool(val brokerId: Int,
   val runnables = new Array[KafkaRequestHandler](numThreads)
   for(i <- 0 until numThreads) {
     runnables(i) = new KafkaRequestHandler(i, brokerId, aggregateIdleMeter, numThreads, requestChannel, apis, time)
-    Utils.daemonThread("kafka-request-handler-" + i, runnables(i)).start()
+    KafkaThread.daemon("kafka-request-handler-" + i, runnables(i)).start()
   }
 
   def shutdown() {

@@ -1027,6 +1027,13 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                     maybeCloseRecordStream();
 
                     if (!batches.hasNext()) {
+                        // Message format v2 preserves the last offset in a batch even if the last record is removed
+                        // through compaction. By using the next offset computed from the last offset in the batch,
+                        // we ensure that the offset of the next fetch will point to the next batch, which avoids
+                        // unnecessary re-fetching of the same batch (in the worst case, the consumer could get stuck
+                        // fetching the same batch repeatedly).
+                        if (currentBatch != null)
+                            nextFetchOffset = currentBatch.nextOffset();
                         drain();
                         return null;
                     }
@@ -1054,21 +1061,21 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                     }
 
                     records = currentBatch.streamingIterator(decompressionBufferSupplier);
-                }
+                } else {
+                    Record record = records.next();
+                    lastRecord = record;
+                    // skip any records out of range
+                    if (record.offset() >= nextFetchOffset) {
+                        // we only do validation when the message should not be skipped.
+                        maybeEnsureValid(record);
 
-                Record record = records.next();
-                lastRecord = record;
-                // skip any records out of range
-                if (record.offset() >= nextFetchOffset) {
-                    // we only do validation when the message should not be skipped.
-                    maybeEnsureValid(record);
-
-                    // control records are not returned to the user
-                    if (!currentBatch.isControlBatch()) {
-                        return record;
-                    } else {
-                        // Increment the next fetch offset when we skip a control batch.
-                        nextFetchOffset = record.offset() + 1;
+                        // control records are not returned to the user
+                        if (!currentBatch.isControlBatch()) {
+                            return record;
+                        } else {
+                            // Increment the next fetch offset when we skip a control batch.
+                            nextFetchOffset = record.offset() + 1;
+                        }
                     }
                 }
             }
