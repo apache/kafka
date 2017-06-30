@@ -17,14 +17,12 @@
 
 package kafka.integration
 
-import java.io.File
-
 import kafka.admin.AdminUtils
 import kafka.api.TopicMetadataResponse
 import kafka.client.ClientUtils
 import kafka.cluster.BrokerEndPoint
 import kafka.server.{KafkaConfig, KafkaServer, NotRunning}
-import kafka.utils.{CoreUtils, TestUtils}
+import kafka.utils.TestUtils
 import kafka.utils.TestUtils._
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.protocol.Errors
@@ -129,7 +127,7 @@ class TopicMetadataTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testAutoCreateTopicWithInvalidReplication() Unit = {
+  def testAutoCreateTopicWithInvalidReplication(): Unit = {
     val adHocProps = createBrokerConfig(2, zkConnect)
     // Set default replication higher than the number of live brokers
     adHocProps.setProperty(KafkaConfig.DefaultReplicationFactorProp, "3")
@@ -212,7 +210,7 @@ class TopicMetadataTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testIsrAfterBrokerShutDownAndJoinsBack(): Unit {
+  def testIsrAfterBrokerShutDownAndJoinsBack(): Unit = {
     val numBrokers = 2 //just 2 brokers are enough for the test
 
     // start adHoc brokers
