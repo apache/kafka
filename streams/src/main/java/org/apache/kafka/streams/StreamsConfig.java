@@ -99,9 +99,9 @@ public class StreamsConfig extends AbstractConfig {
 
 
     /**
-     * Prefix used to provide default Topic configs to be applied when creating internal topics.
-     * These should be valid properties from {@link org.apache.kafka.common.config.TopicConfig}
-     * It is recommended to use {@link #topicPrefix(String)}
+     * Prefix used to provide default topic configs to be applied when creating internal topics.
+     * These should be valid properties from {@link org.apache.kafka.common.config.TopicConfig TopicConfig}.
+     * It is recommended to use {@link #topicPrefix(String)}.
      */
     public static final String TOPIC_PREFIX = "topic.";
 
@@ -557,10 +557,10 @@ public class StreamsConfig extends AbstractConfig {
     }
 
     /**
-     * Prefix a property with {@link #TOPIC_PREFIX}.
-     * used to provide default Topic configs to be applied when creating internal topics.
-
-     * @param topicProp the producer property to be masked
+     * Prefix a property with {@link #TOPIC_PREFIX}
+     * used to provide default topic configs to be applied when creating internal topics.
+     *
+     * @param topicProp the topic property to be masked
      * @return TOPIC_PREFIX + {@code topicProp}
      */
     public static String topicPrefix(final String topicProp) {

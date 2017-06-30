@@ -49,7 +49,7 @@ public class StreamsKafkaClientTest {
     private final MockClient kafkaClient = new MockClient(new MockTime());
     private final List<MetricsReporter> reporters = Collections.emptyList();
     private final MetadataResponse metadata = new MetadataResponse(Collections.singletonList(new Node(1, "host", 90)), "cluster", 1, Collections.<MetadataResponse.TopicMetadata>emptyList());
-    private final Properties props = new Properties();
+    private final Map<String, Object> config = new HashMap<>();
     private final InternalTopicConfig topicConfigWithNoOverrides = new InternalTopicConfig(TOPIC,
                                                                                            Collections.singleton(InternalTopicConfig.CleanupPolicy.delete),
                                                                                            Collections.<String, String>emptyMap());
@@ -62,15 +62,15 @@ public class StreamsKafkaClientTest {
 
     @Before
     public void before() {
-        props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "some_app_id");
-        props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
+        config.put(StreamsConfig.APPLICATION_ID_CONFIG, "some_app_id");
+        config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
     }
 
     @Test
     public void testConfigFromStreamsConfig() {
         for (final String expectedMechanism : asList("PLAIN", "SCRAM-SHA-512")) {
-            props.setProperty(SaslConfigs.SASL_MECHANISM, expectedMechanism);
-            final StreamsConfig streamsConfig = new StreamsConfig(props);
+            config.put(SaslConfigs.SASL_MECHANISM, expectedMechanism);
+            final StreamsConfig streamsConfig = new StreamsConfig(config);
             final AbstractConfig config = StreamsKafkaClient.Config.fromStreamsConfig(streamsConfig);
             assertEquals(expectedMechanism, config.values().get(SaslConfigs.SASL_MECHANISM));
             assertEquals(expectedMechanism, config.getString(SaslConfigs.SASL_MECHANISM));
@@ -86,8 +86,8 @@ public class StreamsKafkaClientTest {
 
     @Test
     public void shouldAddDefaultTopicConfigFromStreamConfig() throws Exception {
-        props.setProperty(StreamsConfig.topicPrefix(TopicConfig.SEGMENT_MS_CONFIG), "100");
-        props.setProperty(StreamsConfig.topicPrefix(TopicConfig.COMPRESSION_TYPE_CONFIG), "gzip");
+        config.put(StreamsConfig.topicPrefix(TopicConfig.SEGMENT_MS_CONFIG), "100");
+        config.put(StreamsConfig.topicPrefix(TopicConfig.COMPRESSION_TYPE_CONFIG), "gzip");
 
         final Map<String, String> expectedConfigs = new HashMap<>();
         expectedConfigs.put(TopicConfig.SEGMENT_MS_CONFIG, "100");
@@ -107,8 +107,8 @@ public class StreamsKafkaClientTest {
 
     @Test
     public void shouldOverrideDefaultTopicConfigsWithInternalTopicConfigs() throws Exception {
-        props.setProperty(StreamsConfig.topicPrefix(TopicConfig.DELETE_RETENTION_MS_CONFIG), "99999");
-        props.setProperty(StreamsConfig.topicPrefix(TopicConfig.SEGMENT_MS_CONFIG), "988");
+        config.put(StreamsConfig.topicPrefix(TopicConfig.DELETE_RETENTION_MS_CONFIG), "99999");
+        config.put(StreamsConfig.topicPrefix(TopicConfig.SEGMENT_MS_CONFIG), "988");
 
         final Map<String, String> expectedConfigs = new HashMap<>(overridenTopicConfig);
         expectedConfigs.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT);
@@ -116,8 +116,13 @@ public class StreamsKafkaClientTest {
         expectedConfigs.put(TopicConfig.SEGMENT_MS_CONFIG, "988");
         final StreamsKafkaClient streamsKafkaClient = createStreamsKafkaClient();
         verifyCorrectTopicConfigs(streamsKafkaClient, topicConfigWithOverrides, expectedConfigs);
+    }
 
-
+    @Test
+    public void shouldNotAllowNullTopicConfigs() throws Exception {
+        config.put(StreamsConfig.topicPrefix(TopicConfig.DELETE_RETENTION_MS_CONFIG), null);
+        final StreamsKafkaClient streamsKafkaClient = createStreamsKafkaClient();
+        verifyCorrectTopicConfigs(streamsKafkaClient, topicConfigWithNoOverrides, Collections.singletonMap("cleanup.policy", "delete"));
     }
 
     private void verifyCorrectTopicConfigs(final StreamsKafkaClient streamsKafkaClient,
@@ -146,7 +151,7 @@ public class StreamsKafkaClientTest {
     }
 
     private StreamsKafkaClient createStreamsKafkaClient() {
-        final StreamsConfig streamsConfig = new StreamsConfig(props);
+        final StreamsConfig streamsConfig = new StreamsConfig(config);
         return new StreamsKafkaClient(StreamsKafkaClient.Config.fromStreamsConfig(streamsConfig),
                                                                              kafkaClient,
                                                                              reporters);
