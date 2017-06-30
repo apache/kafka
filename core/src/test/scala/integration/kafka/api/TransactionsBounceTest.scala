@@ -27,7 +27,7 @@ import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.junit.Test
 
-import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
 import org.junit.Assert._
 
 
@@ -104,7 +104,7 @@ class TransactionsBounceTest extends KafkaServerTestHarness {
             !shouldAbort), new ErrorLoggingCallback(outputTopic, record.key, record.value, true))
         }
         trace(s"Sent ${records.size} messages. Committing offsets.")
-        producer.sendOffsetsToTransaction(TestUtils.consumerPositions(consumer), consumerGroup)
+        producer.sendOffsetsToTransaction(TestUtils.consumerPositions(consumer).asJava, consumerGroup)
 
         if (shouldAbort) {
           trace(s"Committed offsets. Aborting transaction of ${records.size} messages.")
@@ -149,7 +149,7 @@ class TransactionsBounceTest extends KafkaServerTestHarness {
 
     val consumer = TestUtils.createNewConsumer(TestUtils.getBrokerListStrFromServers(servers), groupId = groupId,
       securityProtocol = SecurityProtocol.PLAINTEXT, props = Some(props))
-    consumer.subscribe(topics)
+    consumer.subscribe(topics.asJava)
     consumer
   }
 
