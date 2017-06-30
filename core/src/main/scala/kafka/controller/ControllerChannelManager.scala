@@ -502,33 +502,17 @@ case class ControllerBrokerStateInfo(networkClient: NetworkClient,
 
 case class StopReplicaRequestInfo(replica: PartitionAndReplica, deletePartition: Boolean, callback: AbstractResponse => Unit = null)
 
-class Callbacks private (var leaderAndIsrResponseCallback: AbstractResponse => Unit = null,
-                         var updateMetadataResponseCallback: AbstractResponse => Unit = null,
-                         var stopReplicaResponseCallback: (AbstractResponse, Int) => Unit = null)
+class Callbacks private (var stopReplicaResponseCallback: (AbstractResponse, Int) => Unit)
 
 object Callbacks {
   class CallbackBuilder {
-    var leaderAndIsrResponseCbk: AbstractResponse => Unit = null
-    var updateMetadataResponseCbk: AbstractResponse => Unit = null
     var stopReplicaResponseCbk: (AbstractResponse, Int) => Unit = null
-
-    def leaderAndIsrCallback(cbk: AbstractResponse => Unit): CallbackBuilder = {
-      leaderAndIsrResponseCbk = cbk
-      this
-    }
-
-    def updateMetadataCallback(cbk: AbstractResponse => Unit): CallbackBuilder = {
-      updateMetadataResponseCbk = cbk
-      this
-    }
 
     def stopReplicaCallback(cbk: (AbstractResponse, Int) => Unit): CallbackBuilder = {
       stopReplicaResponseCbk = cbk
       this
     }
 
-    def build: Callbacks = {
-      new Callbacks(leaderAndIsrResponseCbk, updateMetadataResponseCbk, stopReplicaResponseCbk)
-    }
+    def build: Callbacks = new Callbacks(stopReplicaResponseCbk)
   }
 }
