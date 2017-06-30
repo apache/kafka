@@ -154,7 +154,7 @@ public class TopologyBuilder {
 
         public abstract ProcessorNode build();
 
-        abstract TopologyDescription.Node describe();
+        abstract TopologyDescription.AbstractNode describe();
     }
 
     private static class ProcessorNodeFactory extends NodeFactory {
@@ -1637,12 +1637,12 @@ public class TopologyBuilder {
         for (final TopologyDescription.Node node : nodesByName.values()) {
             for (final String predecessorName : nodeFactories.get(node.name()).parents) {
                 final TopologyDescription.Node predecessor = nodesByName.get(predecessorName);
-                node.predecessors().add(predecessor);
-                predecessor.successors().add(node);
+                ((TopologyDescription.AbstractNode) node).addPredecessor(predecessor);
+                ((TopologyDescription.AbstractNode) predecessor).addSuccessor(node);
             }
         }
 
-        description.subtopologies().add(new TopologyDescription.Subtopology(
+        description.addSubtopology(new TopologyDescription.Subtopology(
             subtopologyId,
             new HashSet<>(nodesByName.values())));
     }
@@ -1660,7 +1660,7 @@ public class TopologyBuilder {
                     it.remove(); // remove sourceNode from group
                     final String processorNode = nodes.iterator().next(); // get remaining processorNode
 
-                    description.globalStores().add(new TopologyDescription.GlobalStore(
+                    description.addGlobalStore(new TopologyDescription.GlobalStore(
                         node,
                         processorNode,
                         ((ProcessorNodeFactory) nodeFactories.get(processorNode)).stateStoreNames.iterator().next(),

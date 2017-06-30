@@ -69,7 +69,7 @@ final class TopologyDescription {
          * @return set of all nodes within the sub-topology
          */
         public Set<Node> nodes() {
-            return nodes;
+            return Collections.unmodifiableSet(nodes);
         }
 
         @Override
@@ -108,9 +108,9 @@ final class TopologyDescription {
     }
 
     /**
-     * Represents a {@link TopologyBuilder#addGlobalStore(StateStore, String,
-     * org.apache.kafka.common.serialization.Deserializer,
-     * org.apache.kafka.common.serialization.Deserializer, String, String, ProcessorSupplier) global store}.
+     * Represents a {@link Topology#addGlobalStore(StateStoreSupplier, String,
+     * org.apache.kafka.common.serialization.Deserializer, org.apache.kafka.common.serialization.Deserializer, String,
+     * String, ProcessorSupplier)} global store}.
      * Adding a global store results in adding a source node and one stateful processor node.
      * Note, that all added global stores form a single unit (similar to a {@link Subtopology}) even if different
      * global stores are not connected to each other.
@@ -198,23 +198,49 @@ final class TopologyDescription {
         Set<Node> successors();
     }
 
-    /**
-     * A source node of a topology.
-     */
-    public final static class Source implements Node {
-        private final String name;
-        private final String topics;
-        private final Set<Node> successors = new HashSet<>();
+    abstract static class AbstractNode implements Node {
+        final String name;
+        final Set<Node> predecessors = new HashSet<>();
+        final Set<Node> successors = new HashSet<>();
 
-        Source(final String name,
-               final String topics) {
+        AbstractNode(final String name) {
             this.name = name;
-            this.topics = topics;
         }
 
         @Override
         public String name() {
             return name;
+        }
+
+        @Override
+        public Set<Node> predecessors() {
+            return Collections.unmodifiableSet(predecessors);
+        }
+
+        @Override
+        public Set<Node> successors() {
+            return Collections.unmodifiableSet(successors);
+        }
+
+        void addPredecessor(final Node predecessor) {
+            predecessors.add(predecessor);
+        }
+
+        void addSuccessor(final Node successor) {
+            successors.add(successor);
+        }
+    }
+
+    /**
+     * A source node of a topology.
+     */
+    public final static class Source extends AbstractNode {
+        private final String topics;
+
+        Source(final String name,
+               final String topics) {
+            super(name);
+            this.topics = topics;
         }
 
         /**
@@ -226,13 +252,8 @@ final class TopologyDescription {
         }
 
         @Override
-        public Set<Node> predecessors() {
-            return Collections.emptySet();
-        }
-
-        @Override
-        public Set<Node> successors() {
-            return successors;
+        void addPredecessor(final Node predecessor) {
+            throw new UnsupportedOperationException("Sources don't have predecessors.");
         }
 
         @Override
@@ -265,23 +286,13 @@ final class TopologyDescription {
     /**
      * A processor node of a topology.
      */
-    public final static class Processor implements Node {
-        private final String name;
+    public final static class Processor extends AbstractNode {
         private final Set<String> stores;
-        /** All predecessors of this processor node. */
-        private final Set<Node> predecessors = new HashSet<>();
-        /** All successors of this processor node. */
-        private final Set<Node> successors = new HashSet<>();
 
         Processor(final String name,
                   final Set<String> stores) {
-            this.name = name;
+            super(name);
             this.stores = stores;
-        }
-
-        @Override
-        public String name() {
-            return name;
         }
 
         /**
@@ -289,17 +300,7 @@ final class TopologyDescription {
          * @return set of store names
          */
         public Set<String> stores() {
-            return stores;
-        }
-
-        @Override
-        public Set<Node> predecessors() {
-            return predecessors;
-        }
-
-        @Override
-        public Set<Node> successors() {
-            return successors;
+            return Collections.unmodifiableSet(stores);
         }
 
         @Override
@@ -333,21 +334,13 @@ final class TopologyDescription {
     /**
      * A sink node of a topology.
      */
-    public final static class Sink implements Node {
-        private final String name;
+    public final static class Sink extends AbstractNode {
         private final String topic;
-        /** All predecessors of this processor node. */
-        private final Set<Node> predecessors = new HashSet<>();
 
         Sink(final String name,
              final String topic) {
-            this.name = name;
+            super(name);
             this.topic = topic;
-        }
-
-        @Override
-        public String name() {
-            return name;
         }
 
         /**
@@ -359,13 +352,8 @@ final class TopologyDescription {
         }
 
         @Override
-        public Set<Node> predecessors() {
-            return predecessors;
-        }
-
-        @Override
-        public Set<Node> successors() {
-            return Collections.emptySet();
+        void addSuccessor(final Node successor) {
+            throw new UnsupportedOperationException("Sinks don't have successors.");
         }
 
         @Override
@@ -395,6 +383,35 @@ final class TopologyDescription {
         }
     }
 
+    void addSubtopology(final Subtopology subtopology) {
+        subtopologies.add(subtopology);
+    }
+
+    void addGlobalStore(final GlobalStore globalStore) {
+        globalStores.add(globalStore);
+    }
+
+    /**
+     * All sub-topologies of the represented topology.
+     * @return set of all sub-topologies
+     */
+    public Set<Subtopology> subtopologies() {
+        return Collections.unmodifiableSet(subtopologies);
+    }
+
+    /**
+     * All global stores of the represented topology.
+     * @return set of all global stores
+     */
+    public Set<GlobalStore> globalStores() {
+        return Collections.unmodifiableSet(globalStores);
+    }
+
+    @Override
+    public String toString() {
+        return subtopologiesAsString() + globalStoresAsString();
+    }
+
     private static String nodeNames(final Set<Node> nodes) {
         final StringBuilder sb = new StringBuilder();
         if (!nodes.isEmpty()) {
@@ -406,27 +423,6 @@ final class TopologyDescription {
             sb.deleteCharAt(sb.length() - 1);
         }
         return sb.toString();
-    }
-
-    /**
-     * All sub-topologies of the represented topology.
-     * @return set of all sub-topologies
-     */
-    public Set<Subtopology> subtopologies() {
-        return subtopologies;
-    }
-
-    /**
-     * All global stores of the represented topology.
-     * @return set of all global stores
-     */
-    public Set<GlobalStore> globalStores() {
-        return globalStores;
-    }
-
-    @Override
-    public String toString() {
-        return subtopologiesAsString() + globalStoresAsString();
     }
 
     private String subtopologiesAsString() {
