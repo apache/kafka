@@ -714,14 +714,7 @@ public class StreamsConfig extends AbstractConfig {
     @Deprecated
     public Serde keySerde() {
         try {
-            Serde<?> serde = getConfiguredInstance(KEY_SERDE_CLASS_CONFIG, Serde.class);
-            // the default value of deprecated key serde is null
-            if (serde == null) {
-                serde = defaultKeySerde();
-            } else {
-                serde.configure(originals(), true);
-            }
-            return serde;
+            return defaultKeySerde();
         } catch (final Exception e) {
             throw new StreamsException(String.format("Failed to configure key serde %s", get(KEY_SERDE_CLASS_CONFIG)), e);
         }
@@ -735,7 +728,6 @@ public class StreamsConfig extends AbstractConfig {
      */
     public Serde defaultKeySerde() {
         try {
-            //TODO just until we remove the deprecated configs, backwards compatible until then
             Serde<?> serde = getConfiguredInstance(KEY_SERDE_CLASS_CONFIG, Serde.class);
             if (serde == null) {
                 serde = getConfiguredInstance(DEFAULT_KEY_SERDE_CLASS_CONFIG, Serde.class);
@@ -757,14 +749,7 @@ public class StreamsConfig extends AbstractConfig {
     @Deprecated
     public Serde valueSerde() {
         try {
-            Serde<?> serde = getConfiguredInstance(VALUE_SERDE_CLASS_CONFIG, Serde.class);
-            // the default value of deprecated value serde is null
-            if (serde == null) {
-                serde = defaultValueSerde();
-            } else {
-                serde.configure(originals(), false);
-            }
-            return serde;
+            return defaultValueSerde();
         } catch (final Exception e) {
             throw new StreamsException(String.format("Failed to configure value serde %s", get(VALUE_SERDE_CLASS_CONFIG)), e);
         }
@@ -778,7 +763,6 @@ public class StreamsConfig extends AbstractConfig {
      */
     public Serde defaultValueSerde() {
         try {
-            //TODO just until we remove the deprecated configs, backwards compatible until then
             Serde<?> serde = getConfiguredInstance(VALUE_SERDE_CLASS_CONFIG, Serde.class);
             if (serde == null) {
                 serde = getConfiguredInstance(DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serde.class);
