@@ -199,56 +199,36 @@ class KafkaApisTest {
   }
 
   @Test
-  def testReadCommittedConsumerListOffsetLimitedAtHighWatermark(): Unit = {
-    val tp = new TopicPartition("foo", 0)
-    val timestamp: JLong = time.milliseconds()
-    val lastStableOffset = 15L
-
-    val capturedResponse = EasyMock.newCapture[RequestChannel.Response]()
-    val capturedThrottleCallback = EasyMock.newCapture[Int => Unit]()
-    val replica = EasyMock.mock(classOf[Replica])
-    val log = EasyMock.mock(classOf[Log])
-    EasyMock.expect(replicaManager.getLeaderReplicaIfLocal(tp)).andReturn(replica)
-    EasyMock.expect(replica.lastStableOffset).andReturn(LogOffsetMetadata(messageOffset = lastStableOffset))
-    EasyMock.expect(replicaManager.getLog(tp)).andReturn(Some(log))
-    EasyMock.expect(log.fetchOffsetsByTimestamp(timestamp)).andReturn(Some(TimestampOffset(timestamp = timestamp, offset = lastStableOffset)))
-    expectThrottleCallbackAndInvoke(capturedThrottleCallback)
-    EasyMock.expect(requestChannel.sendResponse(EasyMock.capture(capturedResponse)))
-    EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel, replica, log)
-
-    val builder = ListOffsetRequest.Builder.forConsumer(true, IsolationLevel.READ_COMMITTED)
-      .setTargetTimes(Map(tp -> timestamp).asJava)
-    val (listOffsetRequest, request) = buildRequest(builder)
-    createKafkaApis().handleListOffsetRequest(request)
-
-    val response = readResponse(ApiKeys.LIST_OFFSETS, listOffsetRequest, capturedResponse).asInstanceOf[ListOffsetResponse]
-    assertTrue(response.responseData.containsKey(tp))
-
-    val partitionData = response.responseData.get(tp)
-    assertEquals(Errors.NONE, partitionData.error)
-    assertEquals(ListOffsetResponse.UNKNOWN_OFFSET, partitionData.offset)
-    assertEquals(ListOffsetResponse.UNKNOWN_TIMESTAMP, partitionData.timestamp)
-  }
-
-  @Test
   def testReadUncommittedConsumerListOffsetLimitedAtHighWatermark(): Unit = {
+    testConsumerListOffsetLimit(IsolationLevel.READ_UNCOMMITTED)
+  }
+
+  @Test
+  def testReadCommittedConsumerListOffsetLimitedAtLastStableOffset(): Unit = {
+    testConsumerListOffsetLimit(IsolationLevel.READ_COMMITTED)
+  }
+
+  private def testConsumerListOffsetLimit(isolationLevel: IsolationLevel): Unit = {
     val tp = new TopicPartition("foo", 0)
     val timestamp: JLong = time.milliseconds()
-    val hw = 15L
+    val limitOffset = 15L
 
     val capturedResponse = EasyMock.newCapture[RequestChannel.Response]()
     val capturedThrottleCallback = EasyMock.newCapture[Int => Unit]()
     val replica = EasyMock.mock(classOf[Replica])
     val log = EasyMock.mock(classOf[Log])
     EasyMock.expect(replicaManager.getLeaderReplicaIfLocal(tp)).andReturn(replica)
-    EasyMock.expect(replica.highWatermark).andReturn(LogOffsetMetadata(messageOffset = hw))
+    if (isolationLevel == IsolationLevel.READ_UNCOMMITTED)
+      EasyMock.expect(replica.highWatermark).andReturn(LogOffsetMetadata(messageOffset = limitOffset))
+    else
+      EasyMock.expect(replica.lastStableOffset).andReturn(LogOffsetMetadata(messageOffset = limitOffset))
     EasyMock.expect(replicaManager.getLog(tp)).andReturn(Some(log))
-    EasyMock.expect(log.fetchOffsetsByTimestamp(timestamp)).andReturn(Some(TimestampOffset(timestamp = timestamp, offset = hw)))
+    EasyMock.expect(log.fetchOffsetsByTimestamp(timestamp)).andReturn(Some(TimestampOffset(timestamp = timestamp, offset = limitOffset)))
     expectThrottleCallbackAndInvoke(capturedThrottleCallback)
     EasyMock.expect(requestChannel.sendResponse(EasyMock.capture(capturedResponse)))
     EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel, replica, log)
 
-    val builder = ListOffsetRequest.Builder.forConsumer(true, IsolationLevel.READ_UNCOMMITTED)
+    val builder = ListOffsetRequest.Builder.forConsumer(true, isolationLevel)
       .setTargetTimes(Map(tp -> timestamp).asJava)
     val (listOffsetRequest, request) = buildRequest(builder)
     createKafkaApis().handleListOffsetRequest(request)
@@ -263,24 +243,36 @@ class KafkaApisTest {
   }
 
   @Test
-  def testConsumerListOffsetEarliestOffsetCanReturnHighWatermark(): Unit = {
+  def testReadUncommittedConsumerListOffsetEarliestOffsetEqualsHighWatermark(): Unit = {
+    testConsumerListOffsetEarliestOffsetEqualsLimit(IsolationLevel.READ_UNCOMMITTED)
+  }
+
+  @Test
+  def testReadCommittedConsumerListOffsetEarliestOffsetEqualsLastStableOffset(): Unit = {
+    testConsumerListOffsetEarliestOffsetEqualsLimit(IsolationLevel.READ_COMMITTED)
+  }
+
+  private def testConsumerListOffsetEarliestOffsetEqualsLimit(isolationLevel: IsolationLevel): Unit = {
     val tp = new TopicPartition("foo", 0)
-    val hw = 15L
+    val limitOffset = 15L
 
     val capturedResponse = EasyMock.newCapture[RequestChannel.Response]()
     val capturedThrottleCallback = EasyMock.newCapture[Int => Unit]()
     val replica = EasyMock.mock(classOf[Replica])
     val log = EasyMock.mock(classOf[Log])
     EasyMock.expect(replicaManager.getLeaderReplicaIfLocal(tp)).andReturn(replica)
-    EasyMock.expect(replica.highWatermark).andReturn(LogOffsetMetadata(messageOffset = hw))
+    if (isolationLevel == IsolationLevel.READ_UNCOMMITTED)
+      EasyMock.expect(replica.highWatermark).andReturn(LogOffsetMetadata(messageOffset = limitOffset))
+    else
+      EasyMock.expect(replica.lastStableOffset).andReturn(LogOffsetMetadata(messageOffset = limitOffset))
     EasyMock.expect(replicaManager.getLog(tp)).andReturn(Some(log))
     EasyMock.expect(log.fetchOffsetsByTimestamp(ListOffsetRequest.EARLIEST_TIMESTAMP))
-      .andReturn(Some(TimestampOffset(timestamp = ListOffsetResponse.UNKNOWN_TIMESTAMP, offset = hw)))
+      .andReturn(Some(TimestampOffset(timestamp = ListOffsetResponse.UNKNOWN_TIMESTAMP, offset = limitOffset)))
     expectThrottleCallbackAndInvoke(capturedThrottleCallback)
     EasyMock.expect(requestChannel.sendResponse(EasyMock.capture(capturedResponse)))
     EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel, replica, log)
 
-    val builder = ListOffsetRequest.Builder.forConsumer(true, IsolationLevel.READ_UNCOMMITTED)
+    val builder = ListOffsetRequest.Builder.forConsumer(true, isolationLevel)
       .setTargetTimes(Map(tp -> (ListOffsetRequest.EARLIEST_TIMESTAMP: JLong)).asJava)
     val (listOffsetRequest, request) = buildRequest(builder)
     createKafkaApis().handleListOffsetRequest(request)
@@ -290,7 +282,48 @@ class KafkaApisTest {
 
     val partitionData = response.responseData.get(tp)
     assertEquals(Errors.NONE, partitionData.error)
-    assertEquals(hw, partitionData.offset)
+    assertEquals(limitOffset, partitionData.offset)
+    assertEquals(ListOffsetResponse.UNKNOWN_TIMESTAMP, partitionData.timestamp)
+  }
+
+  @Test
+  def testReadUncommittedConsumerListOffsetLatest(): Unit = {
+    testConsumerListOffsetLatest(IsolationLevel.READ_UNCOMMITTED)
+  }
+
+  @Test
+  def testReadCommittedConsumerListOffsetLatest(): Unit = {
+    testConsumerListOffsetLatest(IsolationLevel.READ_COMMITTED)
+  }
+
+  private def testConsumerListOffsetLatest(isolationLevel: IsolationLevel): Unit = {
+    val tp = new TopicPartition("foo", 0)
+    val latestOffset = 15L
+
+    val capturedResponse = EasyMock.newCapture[RequestChannel.Response]()
+    val capturedThrottleCallback = EasyMock.newCapture[Int => Unit]()
+    val replica = EasyMock.mock(classOf[Replica])
+    val log = EasyMock.mock(classOf[Log])
+    EasyMock.expect(replicaManager.getLeaderReplicaIfLocal(tp)).andReturn(replica)
+    if (isolationLevel == IsolationLevel.READ_UNCOMMITTED)
+      EasyMock.expect(replica.highWatermark).andReturn(LogOffsetMetadata(messageOffset = latestOffset))
+    else
+      EasyMock.expect(replica.lastStableOffset).andReturn(LogOffsetMetadata(messageOffset = latestOffset))
+    expectThrottleCallbackAndInvoke(capturedThrottleCallback)
+    EasyMock.expect(requestChannel.sendResponse(EasyMock.capture(capturedResponse)))
+    EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel, replica, log)
+
+    val builder = ListOffsetRequest.Builder.forConsumer(true, isolationLevel)
+      .setTargetTimes(Map(tp -> (ListOffsetRequest.LATEST_TIMESTAMP: JLong)).asJava)
+    val (listOffsetRequest, request) = buildRequest(builder)
+    createKafkaApis().handleListOffsetRequest(request)
+
+    val response = readResponse(ApiKeys.LIST_OFFSETS, listOffsetRequest, capturedResponse).asInstanceOf[ListOffsetResponse]
+    assertTrue(response.responseData.containsKey(tp))
+
+    val partitionData = response.responseData.get(tp)
+    assertEquals(Errors.NONE, partitionData.error)
+    assertEquals(latestOffset, partitionData.offset)
     assertEquals(ListOffsetResponse.UNKNOWN_TIMESTAMP, partitionData.timestamp)
   }
 
