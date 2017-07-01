@@ -75,6 +75,7 @@ import java.util.concurrent.TimeUnit;
 import static org.apache.kafka.common.utils.Utils.getHost;
 import static org.apache.kafka.common.utils.Utils.getPort;
 import static org.apache.kafka.streams.KafkaStreams.State.ERROR;
+import static org.apache.kafka.streams.KafkaStreams.State.NOT_RUNNING;
 import static org.apache.kafka.streams.KafkaStreams.State.PENDING_SHUTDOWN;
 import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE;
 import static org.apache.kafka.streams.StreamsConfig.PROCESSING_GUARANTEE_CONFIG;
@@ -246,7 +247,7 @@ public class KafkaStreams {
             // check here and immediately return for those cases, or add them to the transition
             // diagram (but then the diagram would be confusing and have transitions like
             // NOT_RUNNING->NOT_RUNNING).
-            if (state == State.NOT_RUNNING) {
+            if (newState != NOT_RUNNING && (state == State.NOT_RUNNING || state == PENDING_SHUTDOWN)) {
                 return;
             }
 
