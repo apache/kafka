@@ -134,7 +134,7 @@ public class InFlightRequestsTest {
     }
 
     @Test
-    public void testClearAllInSingleNode() {
+    public void testClearAll() {
         String nodeId = (nodeIdCounter++).toString();
         int totalRequest = 10;
         pushRequests(nodeId, totalRequest);
