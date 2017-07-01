@@ -1,0 +1,94 @@
+<!--
+ Licensed to the Apache Software Foundation (ASF) under one or more
+ contributor license agreements.  See the NOTICE file distributed with
+ this work for additional information regarding copyright ownership.
+ The ASF licenses this file to You under the Apache License, Version 2.0
+ (the "License"); you may not use this file except in compliance with
+ the License.  You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+-->
+
+<script><!--#include virtual="js/templateData.js" --></script>
+
+<script id="streams-template" type="text/x-handlebars-template">
+    <h1>Streams</h1>
+
+    <ol class="toc">
+        <li>
+            <a href="/{{version}}/documentation/streams/core-concepts">Core Concepts</a>
+        </li>
+        <li>
+            <a href="/{{version}}/documentation/streams/architecture">Architecture</a>
+        </li>
+        <li>
+            <a href="/{{version}}/documentation/streams/developer-guide">Developer Guide</a>
+            <ul>
+                <li><a href="/{{version}}/documentation/streams/developer-guide#streams_processor">Low-level Processor API</a></li>
+                <li><a href="/{{version}}/documentation/streams/developer-guide#streams_dsl">High-level Streams DSL</a></li>
+                <li><a href="/{{version}}/documentation/streams/developer-guide#streams_execute">Application Configuration and Execution</a></li>
+            </ul>
+        </li>
+        <li>
+            <a href="/{{version}}/documentation/streams/upgrade-guide">Upgrade Guide and API Changes</a>
+        </li>
+    </ol>
+
+    <h2>Overview</h2>
+
+    <p>
+        Kafka Streams is a client library for processing and analyzing data stored in Kafka.
+        It builds upon important stream processing concepts such as properly distinguishing between event time and processing time, windowing support, and simple yet efficient management of application state.
+    </p>
+    <p>
+        Kafka Streams has a <b>low barrier to entry</b>: You can quickly write and run a small-scale proof-of-concept on a single machine; and you only need to run additional instances of your application on multiple machines to scale up to high-volume production workloads.
+        Kafka Streams transparently handles the load balancing of multiple instances of the same application by leveraging Kafka's parallelism model.
+    </p>
+    <p>
+        Some highlights of Kafka Streams:
+    </p>
+
+    <ul>
+        <li>Designed as a <b>simple and lightweight client library</b>, which can be easily embedded in any Java application and integrated with any existing packaging, deployment and operational tools that users have for their streaming applications.</li>
+        <li>Has <b>no external dependencies on systems other than Apache Kafka itself</b> as the internal messaging layer; notably, it uses Kafka's partitioning model to horizontally scale processing while maintaining strong ordering guarantees.</li>
+        <li>Supports <b>fault-tolerant local state</b>, which enables very fast and efficient stateful operations like windowed joins and aggregations.</li>
+        <li>Supports <b>exactly-once</b> processing semantics to guarantee that each record will be processed once and only once even when there is a failure on either Streams clients or Kafka brokers in the middle of processing.</li>
+        <li>Employs <b>one-record-at-a-time processing</b> to achieve millisecond processing latency, and supports <b>event-time based windowing operations</b> with late arrival of records.</li>
+        <li>Offers necessary stream processing primitives, along with a <b>high-level Streams DSL</b> and a <b>low-level Processor API</b>.</li>
+
+    </ul>
+
+    <div class="pagination">
+        <a href="#" class="pagination__btn pagination__btn__prev pagination__btn--disabled">Previous</a>
+        <a href="/{{version}}/documentation/streams/core-concepts" class="pagination__btn pagination__btn__next">Next</a>
+    </div>
+</script>
+
+<!--#include virtual="../includes/_header.htm" -->
+<!--#include virtual="../includes/_top.htm" -->
+<div class="content documentation documentation--current">
+    <!--#include virtual="../includes/_nav.htm" -->
+    <div class="right">
+        <!--#include virtual="../includes/_docs_banner.htm" -->
+        <ul class="breadcrumbs">
+            <li><a href="/documentation">Documentation</a></li>
+        </ul>
+        <div class="p-streams"></div>
+    </div>
+</div>
+<!--#include virtual="../includes/_footer.htm" -->
+<script>
+$(function() {
+  // Show selected style on nav item
+  $('.b-nav__streams').addClass('selected');
+
+  // Display docs subnav items
+  $('.b-nav__docs').parent().toggleClass('nav__item__with__subs--expanded');
+});
+</script>
