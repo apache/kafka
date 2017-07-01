@@ -266,4 +266,28 @@ public class StructTest {
         thrown.expectMessage("Invalid Java object for schema type INT8: class java.lang.Object for field: \"field\"");
         ConnectSchema.validateValue(fieldName, Schema.INT8_SCHEMA, new Object());
     }
+
+    @Test
+    public void testPutNullField() {
+        final String fieldName = "fieldName";
+        Schema testSchema = SchemaBuilder.struct()
+            .field(fieldName, Schema.STRING_SCHEMA);
+        Struct struct = new Struct(testSchema);
+
+        thrown.expect(DataException.class);
+        Field field = null;
+        struct.put(field, "valid");
+    }
+
+    @Test
+    public void testInvalidPutIncludesFieldName() {
+        final String fieldName = "fieldName";
+        Schema testSchema = SchemaBuilder.struct()
+            .field(fieldName, Schema.STRING_SCHEMA);
+        Struct struct = new Struct(testSchema);
+
+        thrown.expect(DataException.class);
+        thrown.expectMessage("Invalid value: null used for required field: \"fieldName\", schema type: STRING");
+        struct.put(fieldName, null);
+    }
 }
