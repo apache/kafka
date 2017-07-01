@@ -1081,9 +1081,8 @@ public class StreamThread extends Thread {
         streamsMetrics.removeAllSensors();
     }
 
-    // visible for testing
     @SuppressWarnings("ThrowableNotThrown")
-    void shutdownTasksAndState(final boolean cleanRun) {
+    private void shutdownTasksAndState(final boolean cleanRun) {
         log.debug("{} Shutting down all active tasks {}, standby tasks {}, suspended tasks {}, and suspended standby tasks {}",
             logPrefix, activeTasks.keySet(), standbyTasks.keySet(),
             suspendedTasks.keySet(), suspendedStandbyTasks.keySet());

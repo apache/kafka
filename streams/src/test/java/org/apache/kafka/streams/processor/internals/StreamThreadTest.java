@@ -1629,6 +1629,7 @@ public class StreamThreadTest {
         final TaskId taskId = new TaskId(0, 0);
 
         final StreamThread thread = setupTest(taskId);
+        thread.start();
 
         final StateDirectory testStateDir = new StateDirectory(
             applicationId,
@@ -1637,7 +1638,8 @@ public class StreamThreadTest {
 
         assertFalse(testStateDir.lock(taskId, 0));
         try {
-            thread.shutdownTasksAndState(true);
+            thread.close();
+            thread.join();
             assertTrue(testStateDir.lock(taskId, 0));
         } finally {
             testStateDir.unlock(taskId);
@@ -1715,6 +1717,7 @@ public class StreamThreadTest {
         final TaskId taskId = new TaskId(0, 0);
 
         final StreamThread thread = setupStandbyTest(taskId);
+        thread.start();
 
         final StateDirectory testStateDir = new StateDirectory(applicationId,
             config.getString(StreamsConfig.STATE_DIR_CONFIG),
@@ -1722,7 +1725,8 @@ public class StreamThreadTest {
 
         assertFalse(testStateDir.lock(taskId, 0));
         try {
-            thread.shutdownTasksAndState(true);
+            thread.close();
+            thread.join();
             assertTrue(testStateDir.lock(taskId, 0));
         } finally {
             testStateDir.unlock(taskId);
