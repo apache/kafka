@@ -1626,7 +1626,7 @@ public class TopologyBuilder {
                                      final Integer subtopologyId,
                                      final Set<String> nodeNames) {
 
-        final HashMap<String, TopologyDescription.Node> nodesByName = new HashMap<>();
+        final HashMap<String, TopologyDescription.AbstractNode> nodesByName = new HashMap<>();
 
         // add all nodes
         for (final String nodeName : nodeNames) {
@@ -1634,17 +1634,17 @@ public class TopologyBuilder {
         }
 
         // connect each node to its predecessors and successors
-        for (final TopologyDescription.Node node : nodesByName.values()) {
+        for (final TopologyDescription.AbstractNode node : nodesByName.values()) {
             for (final String predecessorName : nodeFactories.get(node.name()).parents) {
-                final TopologyDescription.Node predecessor = nodesByName.get(predecessorName);
-                ((TopologyDescription.AbstractNode) node).addPredecessor(predecessor);
-                ((TopologyDescription.AbstractNode) predecessor).addSuccessor(node);
+                final TopologyDescription.AbstractNode predecessor = nodesByName.get(predecessorName);
+                node.addPredecessor(predecessor);
+                predecessor.addSuccessor(node);
             }
         }
 
         description.addSubtopology(new TopologyDescription.Subtopology(
             subtopologyId,
-            new HashSet<>(nodesByName.values())));
+            new HashSet<TopologyDescription.Node>(nodesByName.values())));
     }
 
     private void describeGlobalStores(final TopologyDescription description) {
