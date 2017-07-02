@@ -47,7 +47,7 @@ public class InFlightRequestsTest {
 
     @Before
     public void setUp() throws Exception {
-        for (nodeIdCounter = 0; nodeIdCounter < 2; nodeIdCounter ++) {
+        for (nodeIdCounter = 0; nodeIdCounter < 2; nodeIdCounter++) {
             String nodeId = nodeIdCounter.toString();
             pushRequests(nodeId, 5);
         }
@@ -76,7 +76,7 @@ public class InFlightRequestsTest {
 
     @Test
     public void testLastSent() {
-        NetworkClient.InFlightRequest lastSentRequest = requests.get(requests.size()-1);
+        NetworkClient.InFlightRequest lastSentRequest = requests.get(requests.size() - 1);
         assertEquals(lastSentRequest, inFlightRequests.lastSent(lastSentRequest.destination));
     }
 
@@ -87,7 +87,7 @@ public class InFlightRequestsTest {
 
     @Test
     public void testCompleteLastSent() {
-        NetworkClient.InFlightRequest lastSentRequest = requests.remove(requests.size()-1);
+        NetworkClient.InFlightRequest lastSentRequest = requests.remove(requests.size() - 1);
         decrementCounter(lastSentRequest.destination);
         assertEquals(lastSentRequest, inFlightRequests.completeLastSent(lastSentRequest.destination));
     }
@@ -169,7 +169,7 @@ public class InFlightRequestsTest {
         AbstractRequest abstractRequest = new AlterConfigsRequest((short) 0, Collections.<Resource, AlterConfigsRequest.Config>emptyMap(), false);
         Node node = new Node(Integer.parseInt(nodeIdString), "localhost", 9092);
         Send send = new ByteBufferSend(node.idString());
-        return new NetworkClient.InFlightRequest(header, time.milliseconds(), node.idString(), handler,true,
+        return new NetworkClient.InFlightRequest(header, time.milliseconds(), node.idString(), handler, true,
                 true, abstractRequest, send, time.milliseconds());
     }
 
@@ -178,11 +178,11 @@ public class InFlightRequestsTest {
         if (counter == null) {
             counter = 0;
         }
-        nodeWiseRequestCounter.put(nodeId, counter+1);
+        nodeWiseRequestCounter.put(nodeId, counter + 1);
     }
 
     private void decrementCounter(String nodeId) {
         Integer counter = nodeWiseRequestCounter.get(nodeId);
-        nodeWiseRequestCounter.put(nodeId, counter-1);
+        nodeWiseRequestCounter.put(nodeId, counter - 1);
     }
 }
