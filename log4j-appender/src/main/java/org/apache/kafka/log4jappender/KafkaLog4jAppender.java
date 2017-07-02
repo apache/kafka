@@ -53,7 +53,7 @@ public class KafkaLog4jAppender extends AppenderSkeleton {
     private static final String SSL_KEYSTORE_LOCATION = SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG;
     private static final String SSL_KEYSTORE_PASSWORD = SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG;
     private static final String SASL_KERBEROS_SERVICE_NAME = SaslConfigs.SASL_KERBEROS_SERVICE_NAME;
-    private static final String SASL_MECHANISM = saslConfigs.SASL_MECHANISM;
+    private static final String SASL_MECHANISM = SaslConfigs.SASL_MECHANISM;
     
     private String brokerList = null;
     private String topic = null;
