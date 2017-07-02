@@ -53,11 +53,13 @@ public class KafkaLog4jAppender extends AppenderSkeleton {
     private static final String SSL_KEYSTORE_LOCATION = SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG;
     private static final String SSL_KEYSTORE_PASSWORD = SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG;
     private static final String SASL_KERBEROS_SERVICE_NAME = SaslConfigs.SASL_KERBEROS_SERVICE_NAME;
-
+    private static final String SASL_MECHANISM = saslConfigs.SASL_MECHANISM;
+    
     private String brokerList = null;
     private String topic = null;
     private String compressionType = null;
     private String securityProtocol = null;
+    private String saslMechanism = null;
     private String sslTruststoreLocation = null;
     private String sslTruststorePassword = null;
     private String sslKeystoreType = null;
@@ -135,7 +137,15 @@ public class KafkaLog4jAppender extends AppenderSkeleton {
     public String getSecurityProtocol() {
         return securityProtocol;
     }
-
+    
+    public String getSaslMechanism() {
+        return saslMechanism;
+    }
+    
+    public void setSaslMechanism(String saslMechanism) {
+        this.saslMechanism = saslMechanism;    
+    }
+    
     public void setSecurityProtocol(String securityProtocol) {
         this.securityProtocol = securityProtocol;
     }
@@ -215,6 +225,10 @@ public class KafkaLog4jAppender extends AppenderSkeleton {
         if (securityProtocol != null) {
             props.put(SECURITY_PROTOCOL, securityProtocol);
         }
+        if (saslMechanism != null) {
+            props.put(SASL_MECHANISM, saslMechanism);
+        }
+        
         if (securityProtocol != null && securityProtocol.contains("SSL") && sslTruststoreLocation != null &&
             sslTruststorePassword != null) {
             props.put(SSL_TRUSTSTORE_LOCATION, sslTruststoreLocation);
