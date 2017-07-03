@@ -67,8 +67,10 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
+import java.util.concurrent.FutureTask;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -699,11 +701,24 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     public Future<RecordMetadata> send(ProducerRecord<K, V> record, Callback callback) {
         // intercept the record, which can be potentially modified; this method does not throw exceptions
         ProducerRecord<K, V> interceptedRecord = this.interceptors == null ? record : this.interceptors.onSend(record);
-        return doSend(interceptedRecord, callback);
+        return asyncSend(interceptedRecord, callback);
     }
 
     /**
      * Implementation of asynchronously send a record to a topic.
+     */
+    private Future<RecordMetadata> asyncSend(final ProducerRecord<K, V> record, final Callback callback) {
+        return new FutureTask<>(new Callable<RecordMetadata>() {
+            @Override
+            public RecordMetadata call() throws Exception {
+                return doSend(record, callback).get();
+            }
+        });
+    }
+
+    /**
+     * Send a record to a topic. Can potentially block for maxBlockTimeMs milliseconds due to
+     * {@link #waitOnMetadata(String, Integer, long)} blocking call.
      */
     private Future<RecordMetadata> doSend(ProducerRecord<K, V> record, Callback callback) {
         TopicPartition tp = null;

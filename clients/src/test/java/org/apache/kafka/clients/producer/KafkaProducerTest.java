@@ -40,6 +40,7 @@ import org.apache.kafka.test.MockProducerInterceptor;
 import org.apache.kafka.test.MockSerializer;
 import org.apache.kafka.test.MockPartitioner;
 import org.easymock.EasyMock;
+import org.easymock.IAnswer;
 import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -471,6 +472,49 @@ public class KafkaProducerTest {
         
         EasyMock.verify(interceptors);
         
+    }
+
+    @PrepareOnlyThisForTest(Metadata.class)
+    @Test
+    public void testSendShouldNotBlock() throws Exception {
+        final Properties props = new Properties();
+        props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        final KafkaProducer<String, String> producer = new KafkaProducer<>(props, new StringSerializer(), new StringSerializer());
+        final Metadata metadata = PowerMock.createNiceMock(Metadata.class);
+        MemberModifier.field(KafkaProducer.class, "metadata").set(producer, metadata);
+
+        final String topic = "topic";
+        final ProducerRecord<String, String> record = new ProducerRecord<>(topic, "value");
+        final Collection<Node> nodes = Collections.singletonList(new Node(0, "host1", 1000));
+        final Cluster emptyCluster = new Cluster(null, nodes,
+                Collections.<PartitionInfo>emptySet(),
+                Collections.<String>emptySet(),
+                Collections.<String>emptySet());
+        final Cluster cluster = new Cluster(
+                "dummy",
+                Collections.singletonList(new Node(0, "host1", 1000)),
+                Arrays.asList(new PartitionInfo(topic, 0, null, null, null)),
+                Collections.<String>emptySet(),
+                Collections.<String>emptySet());
+
+        EasyMock.expect(metadata.fetch()).andReturn(emptyCluster);
+        EasyMock.expect(metadata.fetch()).andReturn(cluster).once();
+        metadata.awaitUpdate(EasyMock.anyInt(), EasyMock.anyLong());
+        final long awaitLatencyMillis = 3000;
+        EasyMock.expectLastCall().andAnswer(new IAnswer<Void>() {
+            @Override
+            public Void answer() throws Throwable {
+                Thread.sleep(awaitLatencyMillis);
+                return null;
+            }
+        });
+        PowerMock.replay(metadata);
+        final long begin = System.nanoTime();
+        producer.send(record);
+        final long end = System.nanoTime();
+        Assert.assertTrue("KafkaProducer.send() should not wait for Metadata.awaitUpdate()",
+                end - begin < awaitLatencyMillis * 1000000);
+        PowerMock.verify(metadata);
     }
 
 }
