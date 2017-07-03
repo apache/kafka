@@ -50,6 +50,15 @@ class JmxMixin(object):
             self.logger.debug("%s: jmx tool has been started already on this node" % node.account)
             return
 
+        # JmxTool is not particularly robust to slow-starting processes. In order to ensure JmxTool doesn't fail if the
+        # process we're trying to monitor takes awhile before listening on the JMX port, wait until we can see that port
+        # listening before even launching JmxTool
+        def check_jmx_port_listening():
+            return 0 == node.account.ssh("nc -z 127.0.0.1 %d" % self.jmx_port, allow_fail=True)
+
+        wait_until(check_jmx_port_listening, timeout_sec=30, backoff_sec=.1,
+                   err_msg="%s: Never saw JMX port for %s start listening" % (node.account, self))
+
         cmd = "%s kafka.tools.JmxTool " % self.path.script("kafka-run-class.sh", node)
         cmd += "--reporting-interval 1000 --jmx-url service:jmx:rmi:///jndi/rmi://127.0.0.1:%d/jmxrmi" % self.jmx_port
         for jmx_object_name in self.jmx_object_names:

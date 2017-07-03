@@ -333,7 +333,7 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
     val rebalanceFuture = createConsumerToRebalance()
 
     // consumer1 should leave group and close immediately even though rebalance is in progress
-    submitCloseAndValidate(consumer1, Long.MaxValue, None, Some(gracefulCloseTimeMs))
+    val closeFuture1 = submitCloseAndValidate(consumer1, Long.MaxValue, None, Some(gracefulCloseTimeMs))
 
     // Rebalance should complete without waiting for consumer1 to timeout since consumer1 has left the group
     waitForRebalance(2000, rebalanceFuture, consumer2)
@@ -343,7 +343,11 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
     servers.foreach(server => killBroker(server.config.brokerId))
 
     // consumer2 should close immediately without LeaveGroup request since there are no brokers available
-    submitCloseAndValidate(consumer2, Long.MaxValue, None, Some(0))
+    val closeFuture2 = submitCloseAndValidate(consumer2, Long.MaxValue, None, Some(0))
+
+    // Ensure futures complete to avoid concurrent shutdown attempt during test cleanup
+    closeFuture1.get(2000, TimeUnit.MILLISECONDS)
+    closeFuture2.get(2000, TimeUnit.MILLISECONDS)
   }
 
   private def createConsumer(groupId: String) : KafkaConsumer[Array[Byte], Array[Byte]] = {

@@ -16,7 +16,8 @@
 from ducktape.mark.resource import cluster
 
 from kafkatest.tests.kafka_test import KafkaTest
-from kafkatest.services.streams import StreamsEosTestDriverService, StreamsEosTestJobRunnerService, StreamsEosTestVerifyRunnerService
+from kafkatest.services.streams import StreamsEosTestDriverService, StreamsEosTestJobRunnerService, \
+    StreamsComplexEosTestJobRunnerService, StreamsEosTestVerifyRunnerService, StreamsComplexEosTestVerifyRunnerService
 import time
 
 
@@ -30,76 +31,99 @@ class StreamsEosTest(KafkaTest):
             'data' : { 'partitions': 5, 'replication-factor': 2 },
             'echo' : { 'partitions': 5, 'replication-factor': 2 },
             'min' : { 'partitions': 5, 'replication-factor': 2 },
-            'sum' : { 'partitions': 5, 'replication-factor': 2 }
+            'sum' : { 'partitions': 5, 'replication-factor': 2 },
+            'repartition' : { 'partitions': 5, 'replication-factor': 2 },
+            'max' : { 'partitions': 5, 'replication-factor': 2 },
+            'cnt' : { 'partitions': 5, 'replication-factor': 2 }
         })
         self.driver = StreamsEosTestDriverService(test_context, self.kafka)
-        self.processor1 = StreamsEosTestJobRunnerService(test_context, self.kafka)
-        self.processor2 = StreamsEosTestJobRunnerService(test_context, self.kafka)
-        self.verifier = StreamsEosTestVerifyRunnerService(test_context, self.kafka)
+        self.test_context = test_context
 
     @cluster(num_nodes=8)
-    def test_rebalance(self):
+    def test_rebalance_simple(self):
+        self.run_rebalance(StreamsEosTestJobRunnerService(self.test_context, self.kafka),
+                           StreamsEosTestJobRunnerService(self.test_context, self.kafka),
+                           StreamsEosTestVerifyRunnerService(self.test_context, self.kafka))
+
+    @cluster(num_nodes=8)
+    def test_rebalance_complex(self):
+        self.run_rebalance(StreamsComplexEosTestJobRunnerService(self.test_context, self.kafka),
+                           StreamsComplexEosTestJobRunnerService(self.test_context, self.kafka),
+                           StreamsComplexEosTestVerifyRunnerService(self.test_context, self.kafka))
+
+    def run_rebalance(self, processor1, processor2, verifier):
         """
         Starts and stops two test clients a few times.
         Ensure that all records are delivered exactly-once.
         """
 
         self.driver.start()
-        self.processor1.start()
+        processor1.start()
 
-        time.sleep(30)
+        time.sleep(120)
 
-        self.processor2.start()
+        processor2.start()
 
-        time.sleep(30)
-        self.processor1.stop()
+        time.sleep(120)
+        processor1.stop()
 
-        time.sleep(30)
-        self.processor1.start()
+        time.sleep(120)
+        processor1.start()
 
-        time.sleep(30)
-        self.processor2.stop()
+        time.sleep(120)
+        processor2.stop()
 
-        time.sleep(30)
+        time.sleep(120)
 
         self.driver.stop()
 
-        self.processor1.stop()
-        self.processor2.stop()
+        processor1.stop()
+        processor2.stop()
 
-        self.verifier.start()
-        self.verifier.wait()
+        verifier.start()
+        verifier.wait()
 
-        self.verifier.node.account.ssh("grep ALL-RECORDS-DELIVERED %s" % self.verifier.STDOUT_FILE, allow_fail=False)
+        verifier.node.account.ssh("grep ALL-RECORDS-DELIVERED %s" % verifier.STDOUT_FILE, allow_fail=False)
 
     @cluster(num_nodes=8)
     def test_failure_and_recovery(self):
+        self.run_failure_and_recovery(StreamsEosTestJobRunnerService(self.test_context, self.kafka),
+                                      StreamsEosTestJobRunnerService(self.test_context, self.kafka),
+                                      StreamsEosTestVerifyRunnerService(self.test_context, self.kafka))
+
+    @cluster(num_nodes=8)
+    def test_failure_and_recovery_complex(self):
+        self.run_failure_and_recovery(StreamsComplexEosTestJobRunnerService(self.test_context, self.kafka),
+                                      StreamsComplexEosTestJobRunnerService(self.test_context, self.kafka),
+                                      StreamsComplexEosTestVerifyRunnerService(self.test_context, self.kafka))
+
+    def run_failure_and_recovery(self, processor1, processor2, verifier):
         """
         Starts two test clients, then abort (kill -9) and restart them a few times.
         Ensure that all records are delivered exactly-once.
         """
 
         self.driver.start()
-        self.processor1.start()
-        self.processor2.start()
+        processor1.start()
+        processor2.start()
 
-        time.sleep(30)
-        self.processor1.abortThenRestart()
+        time.sleep(120)
+        processor1.abortThenRestart()
 
-        time.sleep(30)
-        self.processor1.abortThenRestart()
+        time.sleep(120)
+        processor1.abortThenRestart()
 
-        time.sleep(30)
-        self.processor2.abortThenRestart()
+        time.sleep(120)
+        processor2.abortThenRestart()
 
-        time.sleep(30)
+        time.sleep(120)
 
         self.driver.stop()
 
-        self.processor1.stop()
-        self.processor2.stop()
+        processor1.stop()
+        processor2.stop()
 
-        self.verifier.start()
-        self.verifier.wait()
+        verifier.start()
+        verifier.wait()
 
-        self.verifier.node.account.ssh("grep ALL-RECORDS-DELIVERED %s" % self.verifier.STDOUT_FILE, allow_fail=False)
+        verifier.node.account.ssh("grep ALL-RECORDS-DELIVERED %s" % verifier.STDOUT_FILE, allow_fail=False)

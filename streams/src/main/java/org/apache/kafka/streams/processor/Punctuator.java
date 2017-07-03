@@ -14,10 +14,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.processor.internals;
+package org.apache.kafka.streams.processor;
 
+/**
+ * A functional interface used as an argument to {@link ProcessorContext#schedule(long, PunctuationType, Punctuator)}.
+ */
 public interface Punctuator {
 
-    void punctuate(ProcessorNode node, long streamTime);
+    void punctuate(long timestamp);
 
 }

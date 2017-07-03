@@ -174,7 +174,8 @@ class TransactionIndex(val startOffset: Long, @volatile var file: File) extends 
   def sanityCheck(): Unit = {
     val buffer = ByteBuffer.allocate(AbortedTxn.TotalSize)
     for ((abortedTxn, _) <- iterator(() => buffer)) {
-      require(abortedTxn.lastOffset >= startOffset)
+      require(abortedTxn.lastOffset >= startOffset, s"Last offset of aborted transaction $abortedTxn is less than " +
+        s"start offset $startOffset")
     }
   }
 
