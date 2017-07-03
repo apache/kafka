@@ -55,7 +55,7 @@ class StreamsBrokerCompatibility(Test):
     def setUp(self):
         self.zk.start()
 
-    @parametrize(broker_version=str(LATEST_0_11_0))
+   
     @parametrize(broker_version=str(LATEST_0_10_2))
     @parametrize(broker_version=str(LATEST_0_10_1))
     def test_fail_fast_on_incompatible_brokers_if_eos_enabled(self, broker_version):
