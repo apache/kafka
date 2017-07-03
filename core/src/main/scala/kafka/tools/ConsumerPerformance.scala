@@ -56,10 +56,7 @@ object ConsumerPerformance {
     var metrics: mutable.Map[MetricName, _ <: Metric] = null
 
     if (!config.hideHeader) {
-      if (!config.showDetailedStats)
-        println("start.time, end.time, data.consumed.in.MB, MB.sec, data.consumed.in.nMsg, nMsg.sec")
-      else
-        println("time, threadId, data.consumed.in.MB, MB.sec, data.consumed.in.nMsg, nMsg.sec")
+      printHeader(!config.showDetailedStats)
     }
 
     var startMs, endMs = 0L
@@ -108,6 +105,13 @@ object ConsumerPerformance {
       ToolsUtils.printMetrics(metrics)
     }
 
+  }
+
+  def printHeader(showDetailedStats: Boolean): Unit = {
+    if (showDetailedStats)
+      println("start.time, end.time, data.consumed.in.MB, MB.sec, data.consumed.in.nMsg, nMsg.sec")
+    else
+      println("time, threadId, data.consumed.in.MB, MB.sec, data.consumed.in.nMsg, nMsg.sec")
   }
 
   def consume(consumer: KafkaConsumer[Array[Byte], Array[Byte]],
