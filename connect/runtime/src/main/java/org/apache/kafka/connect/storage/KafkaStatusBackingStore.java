@@ -138,6 +138,8 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
         consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
 
         Map<String, Object> adminProps = new HashMap<>(config.originals());
+        adminProps.putAll(config.originalsWithPrefix("producer."));
+        adminProps.putAll(config.originalsWithPrefix("consumer."));
         NewTopic topicDescription = TopicAdmin.defineTopic(topic).
                 compacted().
                 partitions(config.getInt(DistributedConfig.STATUS_STORAGE_PARTITIONS_CONFIG)).
