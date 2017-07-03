@@ -319,6 +319,10 @@ public class SchemaBuilder implements Schema {
     public SchemaBuilder field(String fieldName, Schema fieldSchema) {
         if (type != Type.STRUCT)
             throw new SchemaBuilderException("Cannot create fields on type " + type);
+        if (null == fieldName || fieldName.isEmpty())
+            throw new SchemaBuilderException("fieldName cannot be null.");
+        if (null == fieldSchema)
+            throw new SchemaBuilderException("fieldSchema for field " + fieldName + " cannot be null.");
         int fieldIndex = fields.size();
         if (fields.containsKey(fieldName))
             throw new SchemaBuilderException("Cannot create field because of field name duplication " + fieldName);
@@ -351,6 +355,8 @@ public class SchemaBuilder implements Schema {
      * @return a new {@link Schema.Type#ARRAY} SchemaBuilder
      */
     public static SchemaBuilder array(Schema valueSchema) {
+        if (null == valueSchema)
+            throw new SchemaBuilderException("valueSchema cannot be null.");
         SchemaBuilder builder = new SchemaBuilder(Type.ARRAY);
         builder.valueSchema = valueSchema;
         return builder;
@@ -362,6 +368,10 @@ public class SchemaBuilder implements Schema {
      * @return a new {@link Schema.Type#MAP} SchemaBuilder
      */
     public static SchemaBuilder map(Schema keySchema, Schema valueSchema) {
+        if (null == keySchema)
+            throw new SchemaBuilderException("keySchema cannot be null.");
+        if (null == valueSchema)
+            throw new SchemaBuilderException("valueSchema cannot be null.");
         SchemaBuilder builder = new SchemaBuilder(Type.MAP);
         builder.keySchema = keySchema;
         builder.valueSchema = valueSchema;
