@@ -124,7 +124,7 @@ public class StreamsKafkaClient {
         final List<MetricsReporter> reporters = streamsConfig.getConfiguredInstances(ProducerConfig.METRIC_REPORTER_CLASSES_CONFIG,
                                                          MetricsReporter.class);
         // TODO: This should come from the KafkaStream
-        reporters.add(new JmxReporter("kafka.admin"));
+        reporters.add(new JmxReporter("kafka.admin.client"));
         final Metrics metrics = new Metrics(metricConfig, reporters, time);
 
         final ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(streamsConfig);

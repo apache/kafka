@@ -105,7 +105,7 @@ public class StreamsKafkaClientTest {
     }
 
     @Test
-    public void shouldOverrideDefaultTopicConfigsWithInternalTopicConfigs() throws Exception {
+    public void shouldOverrideDefaultTopicConfigsFromStreamsConfig() throws Exception {
         config.put(StreamsConfig.topicPrefix(TopicConfig.DELETE_RETENTION_MS_CONFIG), "99999");
         config.put(StreamsConfig.topicPrefix(TopicConfig.SEGMENT_MS_CONFIG), "988");
 
