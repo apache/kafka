@@ -561,6 +561,7 @@ class Partition(val topic: String,
     removeMetric("UnderReplicated", tags)
     removeMetric("InSyncReplicasCount", tags)
     removeMetric("ReplicasCount", tags)
+    removeMetric("LastStableOffsetLag", tags)
   }
 
   override def equals(that: Any): Boolean = that match {

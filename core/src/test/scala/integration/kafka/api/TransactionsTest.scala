@@ -17,6 +17,7 @@
 
 package kafka.api
 
+import java.lang.{Long => JLong}
 import java.util.Properties
 import java.util.concurrent.TimeUnit
 
@@ -124,27 +125,39 @@ class TransactionsTest extends KafkaServerTestHarness {
 
     producer1.beginTransaction()
     producer2.beginTransaction()
-    producer2.send(new ProducerRecord(topic1, 0, "x".getBytes, "1".getBytes))
-    producer2.send(new ProducerRecord(topic2, 0, "x".getBytes, "1".getBytes))
+
+    val latestVisibleTimestamp = System.currentTimeMillis()
+    producer2.send(new ProducerRecord(topic1, 0, latestVisibleTimestamp, "x".getBytes, "1".getBytes))
+    producer2.send(new ProducerRecord(topic2, 0, latestVisibleTimestamp, "x".getBytes, "1".getBytes))
     producer2.flush()
 
-    producer1.send(new ProducerRecord(topic1, 0, "a".getBytes, "1".getBytes))
-    producer1.send(new ProducerRecord(topic1, 0, "b".getBytes, "2".getBytes))
-    producer1.send(new ProducerRecord(topic2, 0, "c".getBytes, "3".getBytes))
-    producer1.send(new ProducerRecord(topic2, 0, "d".getBytes, "4".getBytes))
+    val latestWrittenTimestamp = latestVisibleTimestamp + 1
+    producer1.send(new ProducerRecord(topic1, 0, latestWrittenTimestamp, "a".getBytes, "1".getBytes))
+    producer1.send(new ProducerRecord(topic1, 0, latestWrittenTimestamp, "b".getBytes, "2".getBytes))
+    producer1.send(new ProducerRecord(topic2, 0, latestWrittenTimestamp, "c".getBytes, "3".getBytes))
+    producer1.send(new ProducerRecord(topic2, 0, latestWrittenTimestamp, "d".getBytes, "4".getBytes))
     producer1.flush()
 
-    producer2.send(new ProducerRecord(topic1, 0, "x".getBytes, "2".getBytes))
-    producer2.send(new ProducerRecord(topic2, 0, "x".getBytes, "2".getBytes))
+    producer2.send(new ProducerRecord(topic1, 0, latestWrittenTimestamp, "x".getBytes, "2".getBytes))
+    producer2.send(new ProducerRecord(topic2, 0, latestWrittenTimestamp, "x".getBytes, "2".getBytes))
     producer2.commitTransaction()
 
     // ensure the records are visible to the read uncommitted consumer
-    readUncommittedConsumer.assign(Set(new TopicPartition(topic1, 0), new TopicPartition(topic2, 0)).asJava)
+    val tp1 = new TopicPartition(topic1, 0)
+    val tp2 = new TopicPartition(topic2, 0)
+    readUncommittedConsumer.assign(Set(tp1, tp2).asJava)
     consumeRecords(readUncommittedConsumer, 8)
+    val readUncommittedOffsetsForTimes = readUncommittedConsumer.offsetsForTimes(Map(
+      tp1 -> (latestWrittenTimestamp: JLong),
+      tp2 -> (latestWrittenTimestamp: JLong)
+    ).asJava)
+    assertEquals(2, readUncommittedOffsetsForTimes.size)
+    assertEquals(latestWrittenTimestamp, readUncommittedOffsetsForTimes.get(tp1).timestamp)
+    assertEquals(latestWrittenTimestamp, readUncommittedOffsetsForTimes.get(tp2).timestamp)
     readUncommittedConsumer.unsubscribe()
 
     // we should only see the first two records which come before the undecided second transaction
-    readCommittedConsumer.assign(Set(new TopicPartition(topic1, 0), new TopicPartition(topic2, 0)).asJava)
+    readCommittedConsumer.assign(Set(tp1, tp2).asJava)
     val records = consumeRecords(readCommittedConsumer, 2)
     records.foreach { record =>
       assertEquals("x", new String(record.key))
@@ -157,6 +170,14 @@ class TransactionsTest extends KafkaServerTestHarness {
     readCommittedConsumer.assignment.asScala.foreach { tp =>
       assertEquals(1L, readCommittedConsumer.position(tp))
     }
+
+    // undecided timestamps should not be searchable either
+    val readCommittedOffsetsForTimes = readCommittedConsumer.offsetsForTimes(Map(
+      tp1 -> (latestWrittenTimestamp: JLong),
+      tp2 -> (latestWrittenTimestamp: JLong)
+    ).asJava)
+    assertNull(readCommittedOffsetsForTimes.get(tp1))
+    assertNull(readCommittedOffsetsForTimes.get(tp2))
   }
 
   @Test
