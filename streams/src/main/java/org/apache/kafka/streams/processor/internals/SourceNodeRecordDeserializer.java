@@ -28,7 +28,8 @@ class SourceNodeRecordDeserializer implements RecordDeserializer {
     private final SourceNode sourceNode;
     private final DeserializationExceptionHandler deserializationExceptionHandler;
 
-    SourceNodeRecordDeserializer(final SourceNode sourceNode, final DeserializationExceptionHandler deserializationExceptionHandler) {
+    SourceNodeRecordDeserializer(final SourceNode sourceNode,
+                                 final DeserializationExceptionHandler deserializationExceptionHandler) {
         this.sourceNode = sourceNode;
         this.deserializationExceptionHandler = deserializationExceptionHandler;
     }
@@ -62,18 +63,16 @@ class SourceNodeRecordDeserializer implements RecordDeserializer {
     public ConsumerRecord<Object, Object> tryDeserialize(final ProcessorContext processorContext,
                                                          ConsumerRecord<byte[], byte[]> rawRecord) {
 
-        if (deserializationExceptionHandler == null) {
-            return deserialize(rawRecord);
-        }
-
         // catch and process if we have a deserialization handler
         try {
             return deserialize(rawRecord);
         } catch (Exception e) {
-            DeserializationExceptionHandler.DeserializationHandlerResponse response =
+            final DeserializationExceptionHandler.DeserializationHandlerResponse response =
                 deserializationExceptionHandler.handle(processorContext, rawRecord, e);
-            if (response.id == DeserializationExceptionHandler.DeserializationHandlerResponse.FAIL.id) {
+            if (response == DeserializationExceptionHandler.DeserializationHandlerResponse.FAIL) {
                 throw e;
+            } else {
+                sourceNode.nodeMetrics.sourceNodeSkippedDueToDeserializationError.record();
             }
         }
         return null;

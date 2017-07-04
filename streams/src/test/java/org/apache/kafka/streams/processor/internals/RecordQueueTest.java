@@ -27,12 +27,15 @@ import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
 import org.apache.kafka.streams.errors.LogAndFailExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.LogAndSkipOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.TimestampExtractor;
+import org.apache.kafka.streams.state.StateSerdes;
+import org.apache.kafka.test.MockProcessorContext;
 import org.apache.kafka.test.MockSourceNode;
 import org.apache.kafka.test.MockTimestampExtractor;
 import org.junit.Test;
@@ -49,6 +52,13 @@ public class RecordQueueTest {
     private final RecordQueue queue = new RecordQueue(new TopicPartition(topics[0], 1),
                                                       new MockSourceNode<>(topics, intDeserializer, intDeserializer),
                                                       timestampExtractor, new LogAndFailExceptionHandler(), null);
+
+    final MockProcessorContext context = new MockProcessorContext(StateSerdes.withBuiltinTypes("anyName", Bytes.class, Bytes.class),
+            new RecordCollectorImpl(null, null));
+    private final MockSourceNode mockSourceNodeWithMetrics = new MockSourceNode<>(topics, intDeserializer, intDeserializer);
+    private final RecordQueue queueThatSkipsDeserializeErrors = new RecordQueue(new TopicPartition(topics[0], 1),
+            mockSourceNodeWithMetrics,
+            timestampExtractor, new LogAndContinueExceptionHandler(), null);
 
     private final byte[] recordValue = intSerializer.serialize(null, 10);
     private final byte[] recordKey = intSerializer.serialize(null, 1);
@@ -144,30 +154,27 @@ public class RecordQueueTest {
 
     @Test
     public void shouldNotThrowStreamsExceptionWhenKeyDeserializationFailsWithSkipHandler() throws Exception {
-        RecordQueue queue = new RecordQueue(new TopicPartition(topics[0], 1),
-            new MockSourceNode<>(topics, intDeserializer, intDeserializer),
-            timestampExtractor, new LogAndContinueExceptionHandler(), null);
-
+        mockSourceNodeWithMetrics.init(context);
         final byte[] key = Serdes.Long().serializer().serialize("foo", 1L);
         final List<ConsumerRecord<byte[], byte[]>> records = Collections.singletonList(
             new ConsumerRecord<>("topic", 1, 1, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, key, recordValue));
+        final StateSerdes anyStateSerde = StateSerdes.withBuiltinTypes("anyName", Bytes.class, Bytes.class);
 
-        queue.addRawRecords(records);
-        assertEquals(0, queue.size());
+        queueThatSkipsDeserializeErrors.addRawRecords(records);
+        assertEquals(0, queueThatSkipsDeserializeErrors.size());
+        mockSourceNodeWithMetrics.close();
     }
 
     @Test
     public void shouldNotThrowStreamsExceptionWhenValueDeserializationFailsWithSkipHandler() throws Exception {
-        RecordQueue queue = new RecordQueue(new TopicPartition(topics[0], 1),
-            new MockSourceNode<>(topics, intDeserializer, intDeserializer),
-            timestampExtractor, new LogAndContinueExceptionHandler(), null);
-
+        mockSourceNodeWithMetrics.init(context);
         final byte[] value = Serdes.Long().serializer().serialize("foo", 1L);
         final List<ConsumerRecord<byte[], byte[]>> records = Collections.singletonList(
             new ConsumerRecord<>("topic", 1, 1, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, value));
 
-        queue.addRawRecords(records);
-        assertEquals(0, queue.size());
+        queueThatSkipsDeserializeErrors.addRawRecords(records);
+        assertEquals(0, queueThatSkipsDeserializeErrors.size());
+        mockSourceNodeWithMetrics.close();
     }
 
 
