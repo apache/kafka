@@ -145,6 +145,14 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
             this.config = config;
             this.numPartitions = UNKNOWN;
         }
+
+        @Override
+        public String toString() {
+            return "InternalTopicMetadata(" +
+                    "config=" + config +
+                    ", numPartitions=" + numPartitions +
+                    ")";
+        }
     }
 
     private static final Comparator<TopicPartition> PARTITION_COMPARATOR = new Comparator<TopicPartition>() {
@@ -474,7 +482,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
 
         prepareTopic(changelogTopicMetadata);
 
-        log.debug("stream-thread [{}] Created state changelog topics {} from the parsed topology.", streamThread.getName(), changelogTopicMetadata);
+        log.debug("stream-thread [{}] Created state changelog topics {} from the parsed topology.", streamThread.getName(), changelogTopicMetadata.values());
 
         // ---------------- Step Two ---------------- //
 
