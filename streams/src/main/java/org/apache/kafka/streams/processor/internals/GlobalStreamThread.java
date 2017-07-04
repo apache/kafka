@@ -88,7 +88,7 @@ public class GlobalStreamThread extends Thread {
      *   leading to the stream thread terminating.
      *
      */
-    public enum State implements AbstractThreadState {
+    public enum State implements ThreadStateTransitionValidator {
         CREATED(1, 2, 3), RUNNING(2, 3), PENDING_SHUTDOWN(3), DEAD;
 
         private final Set<Integer> validTransitions = new HashSet<>();
@@ -101,7 +101,7 @@ public class GlobalStreamThread extends Thread {
             return !equals(PENDING_SHUTDOWN) && !equals(CREATED) && !equals(DEAD);
         }
 
-        public boolean isValidTransition(final AbstractThreadState newState) {
+        public boolean isValidTransition(final ThreadStateTransitionValidator newState) {
             State tmpState = (State) newState;
             return validTransitions.contains(tmpState.ordinal());
         }

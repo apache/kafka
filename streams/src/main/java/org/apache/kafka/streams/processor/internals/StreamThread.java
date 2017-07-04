@@ -122,7 +122,7 @@ public class StreamThread extends Thread {
      *   the coordinator repeatedly fails in-between revoking partitions and assigning new partitions.
      *
      */
-    public enum State implements AbstractThreadState {
+    public enum State implements ThreadStateTransitionValidator {
         CREATED(1, 4, 5), RUNNING(2, 4, 5), PARTITIONS_REVOKED(2, 3, 4, 5), ASSIGNING_PARTITIONS(1, 4, 5), PENDING_SHUTDOWN(5), DEAD;
 
         private final Set<Integer> validTransitions = new HashSet<>();
@@ -136,7 +136,7 @@ public class StreamThread extends Thread {
         }
 
         @Override
-        public boolean isValidTransition(final AbstractThreadState newState) {
+        public boolean isValidTransition(final ThreadStateTransitionValidator newState) {
             State tmpState = (State) newState;
             return validTransitions.contains(tmpState.ordinal());
         }
@@ -153,7 +153,7 @@ public class StreamThread extends Thread {
          * @param newState     current state
          * @param oldState     previous state
          */
-        void onChange(final Thread thread, final AbstractThreadState newState, final AbstractThreadState oldState);
+        void onChange(final Thread thread, final ThreadStateTransitionValidator newState, final ThreadStateTransitionValidator oldState);
     }
 
     private class RebalanceListener implements ConsumerRebalanceListener {

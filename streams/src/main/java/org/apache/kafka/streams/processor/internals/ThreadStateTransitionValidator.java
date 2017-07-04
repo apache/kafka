@@ -19,6 +19,6 @@ package org.apache.kafka.streams.processor.internals;
 /**
  * Basic interface for keeping track of the state of a thread.
  */
-public interface AbstractThreadState {
-    boolean isValidTransition(final AbstractThreadState newState);
+public interface ThreadStateTransitionValidator {
+    boolean isValidTransition(final ThreadStateTransitionValidator newState);
 }

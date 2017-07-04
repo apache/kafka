@@ -46,7 +46,7 @@ import org.apache.kafka.streams.processor.internals.StateDirectory;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.StreamsKafkaClient;
 import org.apache.kafka.streams.processor.internals.StreamsMetadataState;
-import org.apache.kafka.streams.processor.internals.AbstractThreadState;
+import org.apache.kafka.streams.processor.internals.ThreadStateTransitionValidator;
 import org.apache.kafka.streams.state.HostInfo;
 import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.streams.state.StreamsMetadata;
@@ -291,10 +291,10 @@ public class KafkaStreams {
      */
     final class StreamStateListener implements StreamThread.StateListener {
         private final Map<Long, StreamThread.State> threadState;
-        private final Map<Long, GlobalStreamThread.State> globalThreadState;
+        private GlobalStreamThread.State globalThreadState;
 
-        public StreamStateListener(final Map<Long, StreamThread.State> threadState,
-                                   final Map<Long, GlobalStreamThread.State> globalThreadState) {
+        StreamStateListener(final Map<Long, StreamThread.State> threadState,
+                            final GlobalStreamThread.State globalThreadState) {
             this.threadState = threadState;
             this.globalThreadState = globalThreadState;
         }
@@ -309,11 +309,14 @@ public class KafkaStreams {
                 // it is expected. Otherwise, it is an error
                 if (state != PENDING_SHUTDOWN) {
                     // one thread died, check if we have enough threads running
-                    if (threadState.size() == 0) {
-                        log.warn("{} All stream threads have died. The Kafka Streams instance will be in an error state and should be closed.",
-                                logPrefix);
-                        setState(ERROR);
+                    for (final StreamThread.State state : threadState.values()) {
+                        if (state != StreamThread.State.DEAD) {
+                            return;
+                        }
                     }
+                    log.warn("{} All stream threads have died. The Kafka Streams instance will be in an error state and should be closed.",
+                            logPrefix);
+                    setState(ERROR);
                 }
             }
         }
@@ -321,7 +324,7 @@ public class KafkaStreams {
         /**
          * If all global thread is DEAD
          */
-        private void checkGlobalStreamThreadDeadAndSetError() {
+        private void maybeSetErrorSinceGlobalStreamThreadIsDead() {
 
             synchronized (stateLock) {
                 // if we are pending a shutdown, it's ok for all threads to die, in fact
@@ -344,38 +347,24 @@ public class KafkaStreams {
                     return;
                 }
             }
-            for (final GlobalStreamThread.State state : globalThreadState.values()) {
-                if (state != GlobalStreamThread.State.RUNNING) {
-                    return;
-                }
+            // the global state thread is relevant only if it is started. There are cases
+            // when we don't have a global state thread at all, e.g., when we don't have global KTables
+            if (globalThreadState != null && globalThreadState != GlobalStreamThread.State.RUNNING) {
+                return;
             }
+
             setState(State.RUNNING);
         }
 
-        private void updateThreadState(final Thread thread, final StreamThread.State newState) {
-            if (newState != StreamThread.State.DEAD) {
-                threadState.put(thread.getId(), newState);
-            } else {
-                threadState.remove(thread.getId());
-            }
-        }
-
-        private void updateGlobalThreadState(final Thread thread, final GlobalStreamThread.State newState) {
-            if (newState != GlobalStreamThread.State.DEAD) {
-                globalThreadState.put(thread.getId(), newState);
-            } else {
-                globalThreadState.remove(thread.getId());
-            }
-        }
 
         @Override
         public synchronized void onChange(final Thread thread,
-                                          final AbstractThreadState abstractNewState,
-                                          final AbstractThreadState abstractOldState) {
+                                          final ThreadStateTransitionValidator abstractNewState,
+                                          final ThreadStateTransitionValidator abstractOldState) {
             // StreamThreads first
             if (thread instanceof StreamThread) {
                 StreamThread.State newState = (StreamThread.State) abstractNewState;
-                updateThreadState(thread, newState);
+                threadState.put(thread.getId(), newState);
 
                 if (newState == StreamThread.State.PARTITIONS_REVOKED ||
                         newState == StreamThread.State.ASSIGNING_PARTITIONS) {
@@ -388,17 +377,13 @@ public class KafkaStreams {
             } else if (thread instanceof GlobalStreamThread) {
                 // global stream thread has different invariants
                 GlobalStreamThread.State newState = (GlobalStreamThread.State) abstractNewState;
-                updateGlobalThreadState(thread, newState);
+                globalThreadState = newState;
 
                 // special case when global thread is dead
                 if (newState == GlobalStreamThread.State.DEAD) {
-                    checkGlobalStreamThreadDeadAndSetError();
-                } else if (newState == GlobalStreamThread.State.RUNNING && state() != State.RUNNING) {
-                    maybeSetRunning();
+                    maybeSetErrorSinceGlobalStreamThreadIsDead();
                 }
-
             }
-
         }
     }
 
@@ -464,7 +449,7 @@ public class KafkaStreams {
 
         threads = new StreamThread[config.getInt(StreamsConfig.NUM_STREAM_THREADS_CONFIG)];
         final Map<Long, StreamThread.State> threadState = new HashMap<>(threads.length);
-        final Map<Long, GlobalStreamThread.State> globalThreadState = new HashMap<>(1);
+        GlobalStreamThread.State globalThreadState = null;
 
         final ArrayList<StateStoreProvider> storeProviders = new ArrayList<>();
         streamsMetadataState = new StreamsMetadataState(builder, parseHostInfo(config.getString(StreamsConfig.APPLICATION_SERVER_CONFIG)));
@@ -478,7 +463,6 @@ public class KafkaStreams {
         final long cacheSizeBytes = Math.max(0, config.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG) /
                 (config.getInt(StreamsConfig.NUM_STREAM_THREADS_CONFIG) + (globalTaskTopology == null ? 0 : 1)));
 
-        final StreamStateListener streamStateListener = new StreamStateListener(threadState, globalThreadState);
         if (globalTaskTopology != null) {
             final String globalThreadId = clientId + "-GlobalStreamThread";
             globalStreamThread = new GlobalStreamThread(globalTaskTopology,
@@ -488,7 +472,7 @@ public class KafkaStreams {
                                                         metrics,
                                                         time,
                                                         globalThreadId);
-            globalStreamThread.setStateListener(streamStateListener);
+            globalThreadState = globalStreamThread.state();
         }
 
         for (int i = 0; i < threads.length; i++) {
@@ -502,10 +486,17 @@ public class KafkaStreams {
                                           time,
                                           streamsMetadataState,
                                           cacheSizeBytes);
-            threads[i].setStateListener(streamStateListener);
             threadState.put(threads[i].getId(), threads[i].state());
             storeProviders.add(new StreamThreadStateStoreProvider(threads[i]));
         }
+        final StreamStateListener streamStateListener = new StreamStateListener(threadState, globalThreadState);
+        if (globalTaskTopology != null) {
+            globalStreamThread.setStateListener(streamStateListener);
+        }
+        for (int i = 0; i < threads.length; i++) {
+            threads[i].setStateListener(streamStateListener);
+        }
+
         final GlobalStateStoreProvider globalStateStoreProvider = new GlobalStateStoreProvider(builder.globalStateStores());
         queryableStoreProvider = new QueryableStoreProvider(storeProviders, globalStateStoreProvider);
     }
