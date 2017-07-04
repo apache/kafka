@@ -142,7 +142,7 @@ class Replica(val brokerId: Int,
     }
   }
 
-  def highWatermark = highWatermarkMetadata
+  def highWatermark: LogOffsetMetadata = highWatermarkMetadata
 
   /**
    * The last stable offset (LSO) is defined as the first offset such that all lower offsets have been "decided."

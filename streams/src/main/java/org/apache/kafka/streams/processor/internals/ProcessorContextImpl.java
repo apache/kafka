@@ -19,6 +19,9 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.errors.TopologyBuilderException;
+import org.apache.kafka.streams.processor.Cancellable;
+import org.apache.kafka.streams.processor.PunctuationType;
+import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.state.internals.ThreadCache;
@@ -122,8 +125,19 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
     }
 
     @Override
+    public Cancellable schedule(final long interval, final PunctuationType type, final Punctuator callback) {
+        return task.schedule(interval, type, callback);
+    }
+
+    @Override
+    @Deprecated
     public void schedule(final long interval) {
-        task.schedule(interval);
+        schedule(interval, PunctuationType.STREAM_TIME, new Punctuator() {
+            @Override
+            public void punctuate(final long timestamp) {
+                currentNode().processor().punctuate(timestamp);
+            }
+        });
     }
 
 }
