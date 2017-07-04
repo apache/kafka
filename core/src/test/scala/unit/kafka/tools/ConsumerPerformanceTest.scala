@@ -29,34 +29,30 @@ class ConsumerPerformanceTest {
 
   private val outContent: ByteArrayOutputStream = new ByteArrayOutputStream()
 
-  @Before
-  def setUp(): Unit = {
-    System.setOut(new PrintStream(outContent))
-  }
-
-  @After
-  def tearDown(): Unit = {
-    System.setOut(null)
-  }
-
   @Test
   def testPrintProgressMessage(): Unit = {
-    ConsumerPerformance.printProgressMessage(1, 1024 * 1024, 0, 1, 0, 0, 1,
-      new SimpleDateFormat("yyyy-MM-dd HH:mm:ss:SSS")
-    )
+    Console.withOut(outContent) {
+      ConsumerPerformance.printProgressMessage(1, 1024 * 1024, 0, 1, 0, 0, 1,
+        new SimpleDateFormat("yyyy-MM-dd HH:mm:ss:SSS")
+      )
+    }
     val expected = "1970-01-01 08:00:00:001, 1, 1.0000, 1000.0000, 1, 1000.0000"
     assertEquals(expected, outContent.toString.trim)
   }
 
   @Test
   def testHeaderMatchBody(): Unit = {
-    ConsumerPerformance.printHeader(true)
-    val header = outContent.toString
+    Console.withOut(outContent) {
+      ConsumerPerformance.printHeader(true)
+      ConsumerPerformance.printProgressMessage(1, 1024 * 1024, 0, 1, 0, 0, 1,
+        new SimpleDateFormat("yyyy-MM-dd HH:mm:ss:SSS")
+      )
+    }
 
-    ConsumerPerformance.printProgressMessage(1, 1024 * 1024, 0, 1, 0, 0, 1,
-      new SimpleDateFormat("yyyy-MM-dd HH:mm:ss:SSS")
-    )
-    val body = outContent.toString.split("\n")(1)
+    val contents = outContent.toString.split("\n")
+    assertEquals(2, contents.length)
+    val header = contents(0)
+    val body = contents(1)
 
     assertEquals(header.split(",").length, body.split(",").length)
   }
