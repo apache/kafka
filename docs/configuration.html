@@ -257,6 +257,72 @@
   <h3><a id="adminclientconfigs" href="#adminclientconfigs">3.6 AdminClient Configs</a></h3>
   Below is the configuration of the Kafka Admin client library.
   <!--#include virtual="generated/admin_client_config.html" -->
+
+  <h3><a id="exampleconfigs" href="#exampleconfigs">3.7 Example Configs</a></h3>
+  Here are some partial configurations highlighting configuration properties
+  which are particularly important for specific requirements
+
+  <h4><a id="exampleconfig-reliability" href="#exampleconfig-reliability">3.7.1 Configuration for reliability</a></h4>
+  The following partial configurations are suitable in circumstances where
+  reliability of message delivery is the overriding consideration.
+  Considerations such as availability, latency and throughput are
+  secondary considerations.
+
+  <h5>Producer</h5>
+  <dl>
+    <dt class="config-setting">acks</dt>
+    <dd>For the strongest guarantee that messages won't be lost set <code>acks=all</code>:
+      The message won't be lost so long at at least one in-sync replica remains alive.
+      See the broker's <code>min.insync.replicas</code> for the broker-side
+      part of this guarantee.
+      Bear in mind that while this guarantees messages won't be lost that
+      comes at a cost of increased latency.</dd>
+  </dt>
+
+  <h5>Broker</h5>
+  <dl>
+    <dt class="config-setting">unclean.leader.election.enable</dt>
+    <dd>This should be set to <code>false</code>.</dd>
+
+    <dt class="config-setting">log.dir/log.dirs</dt>
+    <dd>The default is a subdirectory of </code>/tmp</code> which may not
+      survive a reboot, or may be subject to periodic cleaning by the
+      operating system.</dd>
+
+    <dt class="config-setting">min.insync.replicas</dt>
+    <dd>As a minimum, this should be greater than one. Bear in mind the
+      cost of this setting is higher latency and potentially lower availability.
+      For example, if you set it to the
+      same as the topic replication count then the unavailability of a single
+      broker would mean nothing could be published.
+      See <code>acks</code> for the producer-side part of this guarantee.</dd>
+
+    <dt class="config-setting">offsets.retention.minutes</dt>
+    <dd>The default is shorter than <code>log.retention.hours</code>,
+      which, in conjunction with consumer-side setting of
+      <code>auto.offset.reset=latest</code> (the default) can result
+      in lost messages in the event that the consumer is not committing offsets
+      frequently enough.</dd>
+  </dl>
+
+  <h5>Topic</h5>
+
+    Your topic partitions must have <strong>more than one replica</strong>.
+    In addition you can set the following options at the topic level instead
+    of the broker level:
+  <ul>
+    <li class="config-setting">min.insync.replicas</li>
+    <li class="config-setting">unclean.leader.election.enable</li>
+  </ul>
+
+  <h5>Consumer</h5>
+  <dl>
+    <dt class="config-setting">auto.offset.reset</dt>
+    <dd>Setting this to <code>earliest</code> can result in
+      reprocessing messages, but the default of <code>latest</code>
+      can result in lost messages.</dd>
+  </dl>
+
 </script>
 
 <div class="p-configuration"></div>
