@@ -34,14 +34,14 @@ public class ProcessorNodeTest {
 
     @SuppressWarnings("unchecked")
     @Test (expected = StreamsException.class)
-    public void shouldThrowStreamsExceptionIfExceptionCaughtDuringInit() throws Exception {
+    public void shouldThrowStreamsExceptionIfExceptionCaughtDuringInit() {
         final ProcessorNode node = new ProcessorNode("name", new ExceptionalProcessor(), Collections.emptySet());
         node.init(null);
     }
 
     @SuppressWarnings("unchecked")
     @Test (expected = StreamsException.class)
-    public void shouldThrowStreamsExceptionIfExceptionCaughtDuringClose() throws Exception {
+    public void shouldThrowStreamsExceptionIfExceptionCaughtDuringClose() {
         final ProcessorNode node = new ProcessorNode("name", new ExceptionalProcessor(), Collections.emptySet());
         node.close();
     }

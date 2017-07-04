@@ -50,10 +50,12 @@ import scala.Tuple2;
 import scala.collection.Iterator;
 import scala.collection.Map;
 
+import java.io.IOException;
 import java.util.Properties;
 import java.util.Arrays;
 import java.util.Locale;
 import java.util.List;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.Assert.assertEquals;
@@ -76,7 +78,7 @@ public class InternalTopicIntegrationTest {
     private String applicationId = "compact-topics-integration-test";
 
     @BeforeClass
-    public static void startKafkaCluster() throws Exception {
+    public static void startKafkaCluster() throws InterruptedException {
         CLUSTER.createTopics(DEFAULT_INPUT_TOPIC, DEFAULT_OUTPUT_TOPIC);
     }
 
@@ -125,7 +127,7 @@ public class InternalTopicIntegrationTest {
     }
 
     @Test
-    public void shouldCompactTopicsForStateChangelogs() throws Exception {
+    public void shouldCompactTopicsForStateChangelogs() throws ExecutionException, InterruptedException, IOException {
         //
         // Step 1: Configure and start a simple word count topology
         //
@@ -184,7 +186,7 @@ public class InternalTopicIntegrationTest {
     }
 
     @Test
-    public void shouldUseCompactAndDeleteForWindowStoreChangelogs() throws Exception {
+    public void shouldUseCompactAndDeleteForWindowStoreChangelogs() throws IOException, ExecutionException, InterruptedException {
         KStreamBuilder builder = new KStreamBuilder();
 
         KStream<String, String> textLines = builder.stream(DEFAULT_INPUT_TOPIC);

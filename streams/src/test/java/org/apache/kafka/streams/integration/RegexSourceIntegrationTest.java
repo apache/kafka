@@ -52,6 +52,7 @@ import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
+import java.io.IOException;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -61,6 +62,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
+import java.util.concurrent.ExecutionException;
 import java.util.regex.Pattern;
 
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -96,7 +98,7 @@ public class RegexSourceIntegrationTest {
 
 
     @BeforeClass
-    public static void startKafkaCluster() throws Exception {
+    public static void startKafkaCluster() throws InterruptedException {
         CLUSTER.createTopics(
             TOPIC_1,
             TOPIC_2,
@@ -123,13 +125,13 @@ public class RegexSourceIntegrationTest {
     }
 
     @After
-    public void tearDown() throws Exception {
+    public void tearDown() throws IOException {
         // Remove any state from previous test runs
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
     }
 
     @Test
-    public void testRegexMatchesTopicsAWhenCreated() throws Exception {
+    public void testRegexMatchesTopicsAWhenCreated() throws InterruptedException, IllegalAccessException, NoSuchFieldException {
 
         final Serde<String> stringSerde = Serdes.String();
         final List<String> expectedFirstAssignment = Arrays.asList("TEST-TOPIC-1");
@@ -183,7 +185,7 @@ public class RegexSourceIntegrationTest {
     }
 
     @Test
-    public void testRegexMatchesTopicsAWhenDeleted() throws Exception {
+    public void testRegexMatchesTopicsAWhenDeleted() throws InterruptedException, NoSuchFieldException, IllegalAccessException {
 
         final Serde<String> stringSerde = Serdes.String();
         final List<String> expectedFirstAssignment = Arrays.asList("TEST-TOPIC-A", "TEST-TOPIC-B");
@@ -237,7 +239,7 @@ public class RegexSourceIntegrationTest {
     }
 
     @Test
-    public void shouldAddStateStoreToRegexDefinedSource() throws Exception {
+    public void shouldAddStateStoreToRegexDefinedSource() throws InterruptedException {
 
         final ProcessorSupplier<String, String> processorSupplier = new MockProcessorSupplier<>();
         final MockStateStoreSupplier stateStoreSupplier = new MockStateStoreSupplier("testStateStore", false);
@@ -271,7 +273,7 @@ public class RegexSourceIntegrationTest {
 
 
     @Test
-    public void testShouldReadFromRegexAndNamedTopics() throws Exception {
+    public void testShouldReadFromRegexAndNamedTopics() throws ExecutionException, InterruptedException {
 
         final String topic1TestMessage = "topic-1 test";
         final String topic2TestMessage = "topic-2 test";
@@ -322,7 +324,7 @@ public class RegexSourceIntegrationTest {
     }
 
     @Test
-    public void testMultipleConsumersCanReadFromPartitionedTopic() throws Exception {
+    public void testMultipleConsumersCanReadFromPartitionedTopic() throws NoSuchFieldException, IllegalAccessException, InterruptedException {
 
         final Serde<String> stringSerde = Serdes.String();
         final KStreamBuilder builderLeader = new KStreamBuilder();
@@ -395,7 +397,7 @@ public class RegexSourceIntegrationTest {
 
     // TODO should be updated to expected = TopologyBuilderException after KAFKA-3708
     @Test(expected = AssertionError.class)
-    public void testNoMessagesSentExceptionFromOverlappingPatterns() throws Exception {
+    public void testNoMessagesSentExceptionFromOverlappingPatterns() throws ExecutionException, InterruptedException {
 
         final String fooMessage = "fooMessage";
         final String fMessage = "fMessage";

@@ -42,6 +42,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Properties;
+import java.util.concurrent.ExecutionException;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.junit.Assert.assertThat;
@@ -78,12 +79,12 @@ public class FanoutIntegrationTest {
     private static final String OUTPUT_TOPIC_C = "C";
 
     @BeforeClass
-    public static void startKafkaCluster() throws Exception {
+    public static void startKafkaCluster() throws InterruptedException {
         CLUSTER.createTopics(INPUT_TOPIC_A, OUTPUT_TOPIC_B, OUTPUT_TOPIC_C);
     }
 
     @Test
-    public void shouldFanoutTheInput() throws Exception {
+    public void shouldFanoutTheInput() throws ExecutionException, InterruptedException {
         final List<String> inputValues = Arrays.asList("Hello", "World");
         final List<String> expectedValuesForB = new ArrayList<>();
         final List<String> expectedValuesForC = new ArrayList<>();

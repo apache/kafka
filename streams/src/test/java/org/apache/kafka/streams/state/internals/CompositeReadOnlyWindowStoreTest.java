@@ -69,7 +69,7 @@ public class CompositeReadOnlyWindowStoreTest {
     }
 
     @Test
-    public void shouldFetchValuesFromWindowStore() throws Exception {
+    public void shouldFetchValuesFromWindowStore() {
         underlyingWindowStore.put("my-key", "my-value", 0L);
         underlyingWindowStore.put("my-key", "my-later-value", 10L);
 
@@ -82,13 +82,13 @@ public class CompositeReadOnlyWindowStoreTest {
     }
 
     @Test
-    public void shouldReturnEmptyIteratorIfNoData() throws Exception {
+    public void shouldReturnEmptyIteratorIfNoData() {
         final WindowStoreIterator<String> iterator = windowStore.fetch("my-key", 0L, 25L);
         assertEquals(false, iterator.hasNext());
     }
 
     @Test
-    public void shouldFindValueForKeyWhenMultiStores() throws Exception {
+    public void shouldFindValueForKeyWhenMultiStores() {
         final ReadOnlyWindowStoreStub<String, String> secondUnderlying = new
             ReadOnlyWindowStoreStub<>(WINDOW_SIZE);
         stubProviderTwo.addStore(storeName, secondUnderlying);
@@ -106,7 +106,7 @@ public class CompositeReadOnlyWindowStoreTest {
     }
 
     @Test
-    public void shouldNotGetValuesFromOtherStores() throws Exception {
+    public void shouldNotGetValuesFromOtherStores() {
         otherUnderlyingStore.put("some-key", "some-value", 0L);
         underlyingWindowStore.put("some-key", "my-value", 1L);
 
@@ -115,13 +115,13 @@ public class CompositeReadOnlyWindowStoreTest {
     }
 
     @Test(expected = InvalidStateStoreException.class)
-    public void shouldThrowInvalidStateStoreExceptionOnRebalance() throws Exception {
+    public void shouldThrowInvalidStateStoreExceptionOnRebalance() {
         final CompositeReadOnlyWindowStore<Object, Object> store = new CompositeReadOnlyWindowStore<>(new StateStoreProviderStub(true), QueryableStoreTypes.windowStore(), "foo");
         store.fetch("key", 1, 10);
     }
 
     @Test
-    public void shouldThrowInvalidStateStoreExceptionIfFetchThrows() throws Exception {
+    public void shouldThrowInvalidStateStoreExceptionIfFetchThrows() {
         underlyingWindowStore.setOpen(false);
         final CompositeReadOnlyWindowStore<Object, Object> store =
                 new CompositeReadOnlyWindowStore<>(stubProviderOne, QueryableStoreTypes.windowStore(), "window-store");
@@ -135,7 +135,7 @@ public class CompositeReadOnlyWindowStoreTest {
     }
 
     @Test
-    public void emptyIteratorAlwaysReturnsFalse() throws Exception {
+    public void emptyIteratorAlwaysReturnsFalse() {
         final CompositeReadOnlyWindowStore<Object, Object> store = new CompositeReadOnlyWindowStore<>(new
                 StateStoreProviderStub(false), QueryableStoreTypes.windowStore(), "foo");
         final WindowStoreIterator<Object> windowStoreIterator = store.fetch("key", 1, 10);
@@ -144,7 +144,7 @@ public class CompositeReadOnlyWindowStoreTest {
     }
 
     @Test
-    public void emptyIteratorPeekNextKeyShouldThrowNoSuchElementException() throws Exception {
+    public void emptyIteratorPeekNextKeyShouldThrowNoSuchElementException() {
         final CompositeReadOnlyWindowStore<Object, Object> store = new CompositeReadOnlyWindowStore<>(new
                 StateStoreProviderStub(false), QueryableStoreTypes.windowStore(), "foo");
         final WindowStoreIterator<Object> windowStoreIterator = store.fetch("key", 1, 10);
@@ -154,7 +154,7 @@ public class CompositeReadOnlyWindowStoreTest {
     }
 
     @Test
-    public void emptyIteratorNextShouldThrowNoSuchElementException() throws Exception {
+    public void emptyIteratorNextShouldThrowNoSuchElementException() {
         final CompositeReadOnlyWindowStore<Object, Object> store = new CompositeReadOnlyWindowStore<>(new
                 StateStoreProviderStub(false), QueryableStoreTypes.windowStore(), "foo");
         final WindowStoreIterator<Object> windowStoreIterator = store.fetch("key", 1, 10);

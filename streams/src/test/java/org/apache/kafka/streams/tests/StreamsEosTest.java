@@ -24,7 +24,7 @@ public class StreamsEosTest {
      *  args ::= command kafka zookeeper stateDir
      *  command := "run" | "process" | "verify"
      */
-    public static void main(final String[] args) throws Exception {
+    public static void main(final String[] args) {
         final String kafka = args[0];
         final String stateDir = args.length > 1 ? args[1] : null;
         final String command = args.length > 2 ? args[2] : null;

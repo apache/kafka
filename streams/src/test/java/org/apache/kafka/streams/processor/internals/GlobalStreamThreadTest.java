@@ -66,7 +66,7 @@ public class GlobalStreamThreadTest {
     }
 
     @Test
-    public void shouldThrowStreamsExceptionOnStartupIfThereIsAStreamsException() throws Exception {
+    public void shouldThrowStreamsExceptionOnStartupIfThereIsAStreamsException() {
         // should throw as the MockConsumer hasn't been configured and there are no
         // partitions available
         try {
@@ -80,7 +80,7 @@ public class GlobalStreamThreadTest {
 
     @SuppressWarnings("unchecked")
     @Test
-    public void shouldThrowStreamsExceptionOnStartupIfExceptionOccurred() throws Exception {
+    public void shouldThrowStreamsExceptionOnStartupIfExceptionOccurred() {
         final MockConsumer<byte[], byte[]> mockConsumer = new MockConsumer(OffsetResetStrategy.EARLIEST) {
             @Override
             public List<PartitionInfo> partitionsFor(final String topic) {
@@ -107,14 +107,14 @@ public class GlobalStreamThreadTest {
 
 
     @Test
-    public void shouldBeRunningAfterSuccesulStart() throws Exception {
+    public void shouldBeRunningAfterSuccesulStart() {
         initializeConsumer();
         globalStreamThread.start();
         assertTrue(globalStreamThread.stillRunning());
     }
 
     @Test(timeout = 30000)
-    public void shouldStopRunningWhenClosedByUser() throws Exception {
+    public void shouldStopRunningWhenClosedByUser() throws InterruptedException {
         initializeConsumer();
         globalStreamThread.start();
         globalStreamThread.close();
@@ -122,7 +122,7 @@ public class GlobalStreamThreadTest {
     }
 
     @Test
-    public void shouldCloseStateStoresOnClose() throws Exception {
+    public void shouldCloseStateStoresOnClose() throws InterruptedException {
         initializeConsumer();
         globalStreamThread.start();
         final StateStore globalStore = builder.globalStateStores().get("bar");

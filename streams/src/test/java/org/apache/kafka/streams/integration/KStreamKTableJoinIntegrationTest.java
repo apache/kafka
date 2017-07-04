@@ -49,6 +49,7 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Properties;
+import java.util.concurrent.ExecutionException;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.junit.Assert.assertThat;
@@ -133,12 +134,12 @@ public class KStreamKTableJoinIntegrationTest {
     }
 
     @Test
-    public void shouldCountClicksPerRegionWithZeroByteCache() throws Exception {
+    public void shouldCountClicksPerRegionWithZeroByteCache() throws ExecutionException, InterruptedException {
         countClicksPerRegion(0);
     }
 
     @Test
-    public void shouldCountClicksPerRegionWithNonZeroByteCache() throws Exception {
+    public void shouldCountClicksPerRegionWithNonZeroByteCache() throws ExecutionException, InterruptedException {
         countClicksPerRegion(10 * 1024 * 1024);
     }
 

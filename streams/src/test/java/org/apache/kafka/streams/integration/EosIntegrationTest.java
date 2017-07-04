@@ -56,6 +56,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -97,7 +98,7 @@ public class EosIntegrationTest {
     private int testNumber = 0;
 
     @Before
-    public void createTopics() throws Exception {
+    public void createTopics() throws InterruptedException {
         applicationId = "appId-" + ++testNumber;
         CLUSTER.deleteTopicsAndWait(
             SINGLE_PARTITION_INPUT_TOPIC, MULTI_PARTITION_INPUT_TOPIC,
@@ -111,39 +112,39 @@ public class EosIntegrationTest {
     }
 
     @Test
-    public void shouldBeAbleToRunWithEosEnabled() throws Exception {
+    public void shouldBeAbleToRunWithEosEnabled() throws ExecutionException, InterruptedException {
         runSimpleCopyTest(1, SINGLE_PARTITION_INPUT_TOPIC, null, SINGLE_PARTITION_OUTPUT_TOPIC);
     }
 
     @Test
-    public void shouldBeAbleToRestartAfterClose() throws Exception {
+    public void shouldBeAbleToRestartAfterClose() throws ExecutionException, InterruptedException {
         runSimpleCopyTest(2, SINGLE_PARTITION_INPUT_TOPIC, null, SINGLE_PARTITION_OUTPUT_TOPIC);
     }
 
     @Test
-    public void shouldBeAbleToCommitToMultiplePartitions() throws Exception {
+    public void shouldBeAbleToCommitToMultiplePartitions() throws ExecutionException, InterruptedException {
         runSimpleCopyTest(1, SINGLE_PARTITION_INPUT_TOPIC, null, MULTI_PARTITION_OUTPUT_TOPIC);
     }
 
     @Test
-    public void shouldBeAbleToCommitMultiplePartitionOffsets() throws Exception {
+    public void shouldBeAbleToCommitMultiplePartitionOffsets() throws ExecutionException, InterruptedException {
         runSimpleCopyTest(1, MULTI_PARTITION_INPUT_TOPIC, null, SINGLE_PARTITION_OUTPUT_TOPIC);
     }
 
     @Test
-    public void shouldBeAbleToRunWithTwoSubtopologies() throws Exception {
+    public void shouldBeAbleToRunWithTwoSubtopologies() throws ExecutionException, InterruptedException {
         runSimpleCopyTest(1, SINGLE_PARTITION_INPUT_TOPIC, SINGLE_PARTITION_THROUGH_TOPIC, SINGLE_PARTITION_OUTPUT_TOPIC);
     }
 
     @Test
-    public void shouldBeAbleToRunWithTwoSubtopologiesAndMultiplePartitions() throws Exception {
+    public void shouldBeAbleToRunWithTwoSubtopologiesAndMultiplePartitions() throws ExecutionException, InterruptedException {
         runSimpleCopyTest(1, MULTI_PARTITION_INPUT_TOPIC, MULTI_PARTITION_THROUGH_TOPIC, MULTI_PARTITION_OUTPUT_TOPIC);
     }
 
     private void runSimpleCopyTest(final int numberOfRestarts,
                                    final String inputTopic,
                                    final String throughTopic,
-                                   final String outputTopic) throws Exception {
+                                   final String outputTopic) throws ExecutionException, InterruptedException {
         final KStreamBuilder builder = new KStreamBuilder();
         final KStream<Long, Long> input = builder.stream(inputTopic);
         KStream<Long, Long> output = input;
@@ -234,7 +235,7 @@ public class EosIntegrationTest {
     }
 
     @Test
-    public void shouldBeAbleToPerformMultipleTransactions() throws Exception {
+    public void shouldBeAbleToPerformMultipleTransactions() throws ExecutionException, InterruptedException {
         final KStreamBuilder builder = new KStreamBuilder();
         builder.stream(SINGLE_PARTITION_INPUT_TOPIC).to(SINGLE_PARTITION_OUTPUT_TOPIC);
 
@@ -312,7 +313,7 @@ public class EosIntegrationTest {
     }
 
     @Test
-    public void shouldNotViolateEosIfOneTaskFails() throws Exception {
+    public void shouldNotViolateEosIfOneTaskFails() throws ExecutionException, InterruptedException {
         // this test writes 10 + 5 + 5 records per partition (running with 2 partitions)
         // the app is supposed to copy all 40 records into the output topic
         // the app commits after each 10 records per partition, and thus will have 2*5 uncommitted writes
@@ -386,7 +387,7 @@ public class EosIntegrationTest {
     }
 
     @Test
-    public void shouldNotViolateEosIfOneTaskFailsWithState() throws Exception {
+    public void shouldNotViolateEosIfOneTaskFailsWithState() throws ExecutionException, InterruptedException {
         // this test updates a store with 10 + 5 + 5 records per partition (running with 2 partitions)
         // the app is supposed to emit all 40 update records into the output topic
         // the app commits after each 10 records per partition, and thus will have 2*5 uncommitted writes
@@ -464,7 +465,7 @@ public class EosIntegrationTest {
     }
 
     @Test
-    public void shouldNotViolateEosIfOneTaskGetsFencedUsingIsolatedAppInstances() throws Exception {
+    public void shouldNotViolateEosIfOneTaskGetsFencedUsingIsolatedAppInstances() throws ExecutionException, InterruptedException {
         // this test writes 10 + 5 + 5 + 10 records per partition (running with 2 partitions)
         // the app is supposed to copy all 60 records into the output topic
         // the app commits after each 10 records per partition, and thus will have 2*5 uncommitted writes
@@ -691,7 +692,7 @@ public class EosIntegrationTest {
         return streams;
     }
 
-    private void writeInputData(final List<KeyValue<Long, Long>> records) throws Exception {
+    private void writeInputData(final List<KeyValue<Long, Long>> records) throws ExecutionException, InterruptedException {
         IntegrationTestUtils.produceKeyValuesSynchronously(
             MULTI_PARTITION_INPUT_TOPIC,
             records,
@@ -701,7 +702,7 @@ public class EosIntegrationTest {
     }
 
     private List<KeyValue<Long, Long>> readResult(final int numberOfRecords,
-                                                  final String groupId) throws Exception {
+                                                  final String groupId) throws InterruptedException {
         if (groupId != null) {
             return IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
                 TestUtils.consumerConfig(

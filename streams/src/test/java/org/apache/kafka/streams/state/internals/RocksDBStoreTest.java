@@ -54,7 +54,7 @@ public class RocksDBStoreTest {
     private File dir;
 
     @Before
-    public void setUp() throws Exception {
+    public void setUp() {
         subject = new RocksDBStore<>("test", Serdes.String(), Serdes.String());
         dir = TestUtils.tempDirectory();
         context = new MockProcessorContext(dir,
@@ -65,12 +65,12 @@ public class RocksDBStoreTest {
     }
 
     @After
-    public void tearDown() throws Exception {
+    public void tearDown() {
         subject.close();
     }
 
     @Test
-    public void canSpecifyConfigSetterAsClass() throws Exception {
+    public void canSpecifyConfigSetterAsClass() {
         final Map<String, Object> configs = new HashMap<>();
         configs.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, MockRocksDbConfigSetter.class);
         MockRocksDbConfigSetter.called = false;
@@ -81,7 +81,7 @@ public class RocksDBStoreTest {
     }
 
     @Test
-    public void canSpecifyConfigSetterAsString() throws Exception {
+    public void canSpecifyConfigSetterAsString() {
         final Map<String, Object> configs = new HashMap<>();
         configs.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, MockRocksDbConfigSetter.class.getName());
         MockRocksDbConfigSetter.called = false;

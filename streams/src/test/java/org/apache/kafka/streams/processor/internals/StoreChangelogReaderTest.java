@@ -49,7 +49,7 @@ public class StoreChangelogReaderTest {
 
     @SuppressWarnings("unchecked")
     @Test
-    public void shouldThrowStreamsExceptionWhenTimeoutExceptionThrown() throws Exception {
+    public void shouldThrowStreamsExceptionWhenTimeoutExceptionThrown() {
         final MockConsumer<byte[], byte[]> consumer = new MockConsumer(OffsetResetStrategy.EARLIEST) {
             @Override
             public Map<String, List<PartitionInfo>> listTopics() {
@@ -66,13 +66,13 @@ public class StoreChangelogReaderTest {
     }
 
     @Test(expected = StreamsException.class)
-    public void shouldThrowStreamsExceptionIfPartitionDoesntExistAfterMaxWait() throws Exception {
+    public void shouldThrowStreamsExceptionIfPartitionDoesntExistAfterMaxWait() {
         changelogReader.validatePartitionExists(topicPartition, "store");
     }
 
     @SuppressWarnings("unchecked")
     @Test
-    public void shouldFallbackToPartitionsForIfPartitionNotInAllPartitionsList() throws Exception {
+    public void shouldFallbackToPartitionsForIfPartitionNotInAllPartitionsList() {
         final MockConsumer<byte[], byte[]> consumer = new MockConsumer(OffsetResetStrategy.EARLIEST) {
             @Override
             public List<PartitionInfo> partitionsFor(final String topic) {
@@ -86,7 +86,7 @@ public class StoreChangelogReaderTest {
 
     @SuppressWarnings("unchecked")
     @Test
-    public void shouldThrowStreamsExceptionIfTimeoutOccursDuringPartitionsFor() throws Exception {
+    public void shouldThrowStreamsExceptionIfTimeoutOccursDuringPartitionsFor() {
         final MockConsumer<byte[], byte[]> consumer = new MockConsumer(OffsetResetStrategy.EARLIEST) {
             @Override
             public List<PartitionInfo> partitionsFor(final String topic) {
@@ -103,14 +103,14 @@ public class StoreChangelogReaderTest {
     }
 
     @Test
-    public void shouldPassIfTopicPartitionExists() throws Exception {
+    public void shouldPassIfTopicPartitionExists() {
         consumer.updatePartitions(topicPartition.topic(), Collections.singletonList(partitionInfo));
         changelogReader.validatePartitionExists(topicPartition, "store");
     }
 
     @SuppressWarnings("unchecked")
     @Test
-    public void shouldRequestPartitionInfoIfItDoesntExist() throws Exception {
+    public void shouldRequestPartitionInfoIfItDoesntExist() {
         final MockConsumer<byte[], byte[]> consumer = new MockConsumer(OffsetResetStrategy.EARLIEST) {
             @Override
             public Map<String, List<PartitionInfo>> listTopics() {
@@ -125,7 +125,7 @@ public class StoreChangelogReaderTest {
 
 
     @Test
-    public void shouldThrowExceptionIfConsumerHasCurrentSubscription() throws Exception {
+    public void shouldThrowExceptionIfConsumerHasCurrentSubscription() {
         consumer.subscribe(Collections.singleton("sometopic"));
         try {
             changelogReader.restore();
@@ -136,7 +136,7 @@ public class StoreChangelogReaderTest {
     }
 
     @Test
-    public void shouldRestoreAllMessagesFromBeginningWhenCheckpointNull() throws Exception {
+    public void shouldRestoreAllMessagesFromBeginningWhenCheckpointNull() {
         final int messages = 10;
         setupConsumer(messages, topicPartition);
         changelogReader.register(new StateRestorer(topicPartition, callback, null, Long.MAX_VALUE, true));
@@ -146,7 +146,7 @@ public class StoreChangelogReaderTest {
     }
 
     @Test
-    public void shouldRestoreMessagesFromCheckpoint() throws Exception {
+    public void shouldRestoreMessagesFromCheckpoint() {
         final int messages = 10;
         setupConsumer(messages, topicPartition);
         changelogReader.register(new StateRestorer(topicPartition, callback, 5L, Long.MAX_VALUE, true));
@@ -156,7 +156,7 @@ public class StoreChangelogReaderTest {
     }
 
     @Test
-    public void shouldClearAssignmentAtEndOfRestore() throws Exception {
+    public void shouldClearAssignmentAtEndOfRestore() {
         final int messages = 1;
         setupConsumer(messages, topicPartition);
         changelogReader.register(new StateRestorer(topicPartition, callback, null, Long.MAX_VALUE, true));
@@ -166,7 +166,7 @@ public class StoreChangelogReaderTest {
     }
 
     @Test
-    public void shouldRestoreToLimitWhenSupplied() throws Exception {
+    public void shouldRestoreToLimitWhenSupplied() {
         setupConsumer(10, topicPartition);
         final StateRestorer restorer = new StateRestorer(topicPartition, callback, null, 3, true);
         changelogReader.register(restorer);
@@ -177,7 +177,7 @@ public class StoreChangelogReaderTest {
     }
 
     @Test
-    public void shouldRestoreMultipleStores() throws Exception {
+    public void shouldRestoreMultipleStores() {
         final TopicPartition one = new TopicPartition("one", 0);
         final TopicPartition two = new TopicPartition("two", 0);
         final MockRestoreCallback callbackOne = new MockRestoreCallback();
@@ -198,7 +198,7 @@ public class StoreChangelogReaderTest {
     }
 
     @Test
-    public void shouldNotRestoreAnythingWhenPartitionIsEmpty() throws Exception {
+    public void shouldNotRestoreAnythingWhenPartitionIsEmpty() {
         final StateRestorer restorer = new StateRestorer(topicPartition, callback, null, Long.MAX_VALUE, true);
         setupConsumer(0, topicPartition);
         changelogReader.register(restorer);
@@ -209,7 +209,7 @@ public class StoreChangelogReaderTest {
     }
 
     @Test
-    public void shouldNotRestoreAnythingWhenCheckpointAtEndOffset() throws Exception {
+    public void shouldNotRestoreAnythingWhenCheckpointAtEndOffset() {
         final Long endOffset = 10L;
         setupConsumer(endOffset, topicPartition);
         final StateRestorer restorer = new StateRestorer(topicPartition, callback, endOffset, Long.MAX_VALUE, true);
@@ -222,7 +222,7 @@ public class StoreChangelogReaderTest {
     }
 
     @Test
-    public void shouldReturnRestoredOffsetsForPersistentStores() throws Exception {
+    public void shouldReturnRestoredOffsetsForPersistentStores() {
         setupConsumer(10, topicPartition);
         changelogReader.register(new StateRestorer(topicPartition, callback, null, Long.MAX_VALUE, true));
         changelogReader.restore();
@@ -231,7 +231,7 @@ public class StoreChangelogReaderTest {
     }
 
     @Test
-    public void shouldNotReturnRestoredOffsetsForNonPersistentStore() throws Exception {
+    public void shouldNotReturnRestoredOffsetsForNonPersistentStore() {
         setupConsumer(10, topicPartition);
         changelogReader.register(new StateRestorer(topicPartition, callback, null, Long.MAX_VALUE, false));
         changelogReader.restore();
@@ -240,7 +240,7 @@ public class StoreChangelogReaderTest {
     }
 
     @Test
-    public void shouldIgnoreNullKeysWhenRestoring() throws Exception {
+    public void shouldIgnoreNullKeysWhenRestoring() {
         assignPartition(3, topicPartition);
         final byte[] bytes = new byte[0];
         consumer.addRecord(new ConsumerRecord<>(topicPartition.topic(), topicPartition.partition(), 0, bytes, bytes));

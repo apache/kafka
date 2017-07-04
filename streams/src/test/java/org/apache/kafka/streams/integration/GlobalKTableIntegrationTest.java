@@ -49,6 +49,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.ExecutionException;
 
 @Category({IntegrationTest.class})
 public class GlobalKTableIntegrationTest {
@@ -120,7 +121,7 @@ public class GlobalKTableIntegrationTest {
     }
 
     @Test
-    public void shouldKStreamGlobalKTableLeftJoin() throws Exception {
+    public void shouldKStreamGlobalKTableLeftJoin() throws ExecutionException, InterruptedException {
         final KStream<String, String> streamTableJoin = stream.leftJoin(globalTable, keyMapper, joiner);
         streamTableJoin.foreach(foreachAction);
         produceInitialGlobalTableValues();
@@ -169,7 +170,7 @@ public class GlobalKTableIntegrationTest {
     }
 
     @Test
-    public void shouldKStreamGlobalKTableJoin() throws Exception {
+    public void shouldKStreamGlobalKTableJoin() throws ExecutionException, InterruptedException {
         final KStream<String, String> streamTableJoin = stream.join(globalTable, keyMapper, joiner);
         streamTableJoin.foreach(foreachAction);
         produceInitialGlobalTableValues();

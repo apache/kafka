@@ -63,7 +63,7 @@ public class ChangeLoggingSegmentedBytesStoreTest {
 
     @SuppressWarnings("unchecked")
     @Before
-    public void setUp() throws Exception {
+    public void setUp() {
         context.setTime(0);
         store.init(context, store);
     }
@@ -76,7 +76,7 @@ public class ChangeLoggingSegmentedBytesStoreTest {
 
     @SuppressWarnings("unchecked")
     @Test
-    public void shouldLogPuts() throws Exception {
+    public void shouldLogPuts() {
         final byte[] value1 = {0};
         final byte[] value2 = {1};
         final Bytes key1 = Bytes.wrap(value1);
@@ -90,7 +90,7 @@ public class ChangeLoggingSegmentedBytesStoreTest {
 
     @SuppressWarnings("unchecked")
     @Test
-    public void shouldLogRemoves() throws Exception {
+    public void shouldLogRemoves() {
         final Bytes key1 = Bytes.wrap(new byte[]{0});
         final Bytes key2 = Bytes.wrap(new byte[]{1});
         store.remove(key1);
@@ -103,25 +103,25 @@ public class ChangeLoggingSegmentedBytesStoreTest {
     }
 
     @Test
-    public void shouldDelegateToUnderlyingStoreWhenFetching() throws Exception {
+    public void shouldDelegateToUnderlyingStoreWhenFetching() {
         store.fetch(Bytes.wrap(new byte[0]), 1, 1);
         assertTrue(bytesStore.fetchCalled);
     }
 
     @Test
-    public void shouldFlushUnderlyingStore() throws Exception {
+    public void shouldFlushUnderlyingStore() {
         store.flush();
         assertTrue(bytesStore.flushed);
     }
 
     @Test
-    public void shouldCloseUnderlyingStore() throws Exception {
+    public void shouldCloseUnderlyingStore() {
         store.close();
         assertTrue(bytesStore.closed);
     }
 
     @Test
-    public void shouldInitUnderlyingStore() throws Exception {
+    public void shouldInitUnderlyingStore() {
         assertTrue(bytesStore.initialized);
     }
 

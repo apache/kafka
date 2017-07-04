@@ -73,7 +73,7 @@ public class KTableAggregateTest {
     }
 
     @Test
-    public void testAggBasic() throws Exception {
+    public void testAggBasic() {
         final KStreamBuilder builder = new KStreamBuilder();
         final String topic1 = "topic1";
         final MockProcessorSupplier<String, String> proc = new MockProcessorSupplier<>();
@@ -122,7 +122,7 @@ public class KTableAggregateTest {
 
 
     @Test
-    public void testAggCoalesced() throws Exception {
+    public void testAggCoalesced() {
         final KStreamBuilder builder = new KStreamBuilder();
         final String topic1 = "topic1";
         final MockProcessorSupplier<String, String> proc = new MockProcessorSupplier<>();
@@ -151,7 +151,7 @@ public class KTableAggregateTest {
 
 
     @Test
-    public void testAggRepartition() throws Exception {
+    public void testAggRepartition() {
         final KStreamBuilder builder = new KStreamBuilder();
         final String topic1 = "topic1";
         final MockProcessorSupplier<String, String> proc = new MockProcessorSupplier<>();
@@ -352,7 +352,7 @@ public class KTableAggregateTest {
     }
 
     @Test
-    public void shouldForwardToCorrectProcessorNodeWhenMultiCacheEvictions() throws Exception {
+    public void shouldForwardToCorrectProcessorNodeWhenMultiCacheEvictions() {
         final String tableOne = "tableOne";
         final String tableTwo = "tableTwo";
         final KStreamBuilder builder = new KStreamBuilder();

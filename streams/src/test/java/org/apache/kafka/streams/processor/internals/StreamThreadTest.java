@@ -52,6 +52,7 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.io.File;
+import java.io.IOException;
 import java.lang.reflect.Field;
 import java.nio.ByteBuffer;
 import java.nio.file.Files;
@@ -95,7 +96,7 @@ public class StreamThreadTest {
 
 
     @Before
-    public void setUp() throws Exception {
+    public void setUp() {
         processId = UUID.randomUUID();
     }
 
@@ -250,7 +251,7 @@ public class StreamThreadTest {
 
     @SuppressWarnings("unchecked")
     @Test
-    public void testPartitionAssignmentChangeForSingleGroup() throws Exception {
+    public void testPartitionAssignmentChangeForSingleGroup() {
         builder.addSource("source1", "topic1");
 
         final StreamThread thread = getStreamThread();
@@ -349,7 +350,7 @@ public class StreamThreadTest {
 
     @SuppressWarnings("unchecked")
     @Test
-    public void testPartitionAssignmentChangeForMultipleGroups() throws Exception {
+    public void testPartitionAssignmentChangeForMultipleGroups() {
         builder.addSource("source1", "topic1");
         builder.addSource("source2", "topic2");
         builder.addSource("source3", "topic3");
@@ -451,7 +452,7 @@ public class StreamThreadTest {
 
     @SuppressWarnings("unchecked")
     @Test
-    public void testHandingOverTaskFromOneToAnotherThread() throws Exception {
+    public void testHandingOverTaskFromOneToAnotherThread() throws InterruptedException {
         builder.addStateStore(
             Stores
                 .create("store")
@@ -557,7 +558,7 @@ public class StreamThreadTest {
     }
 
     @Test
-    public void testMetrics() throws Exception {
+    public void testMetrics() {
         final StreamThread thread = new StreamThread(
             builder,
             config,
@@ -599,7 +600,7 @@ public class StreamThreadTest {
     }
 
     @Test
-    public void testMaybeClean() throws Exception {
+    public void testMaybeClean() throws IOException {
         final File baseDir = Files.createTempDirectory("test").toFile();
         try {
             final long cleanupDelay = 1000L;
@@ -749,7 +750,7 @@ public class StreamThreadTest {
     }
 
     @Test
-    public void testMaybeCommit() throws Exception {
+    public void testMaybeCommit() throws IOException {
         final File baseDir = Files.createTempDirectory("test").toFile();
         try {
             final long commitInterval = 1000L;
@@ -979,7 +980,7 @@ public class StreamThreadTest {
     }
 
     @Test
-    public void shouldNotNullPointerWhenStandbyTasksAssignedAndNoStateStoresForTopology() throws Exception {
+    public void shouldNotNullPointerWhenStandbyTasksAssignedAndNoStateStoresForTopology() {
         builder.addSource("name", "topic").addSink("out", "output");
 
         final StreamThread thread = new StreamThread(
@@ -1006,7 +1007,7 @@ public class StreamThreadTest {
     }
 
     @Test
-    public void shouldNotCloseSuspendedTaskswice() throws Exception {
+    public void shouldNotCloseSuspendedTaskswice() {
         builder.addSource("name", "topic").addSink("out", "output");
 
         final TestStreamTask testStreamTask = new TestStreamTask(
@@ -1067,7 +1068,7 @@ public class StreamThreadTest {
     }
     @Test
 
-    public void shouldInitializeRestoreConsumerWithOffsetsFromStandbyTasks() throws Exception {
+    public void shouldInitializeRestoreConsumerWithOffsetsFromStandbyTasks() {
         final KStreamBuilder builder = new KStreamBuilder();
         builder.setApplicationId(applicationId);
         builder.stream("t1").groupByKey().count("count-one");
@@ -1125,7 +1126,7 @@ public class StreamThreadTest {
     }
 
     @Test
-    public void shouldCloseSuspendedTasksThatAreNoLongerAssignedToThisStreamThreadBeforeCreatingNewTasks() throws Exception {
+    public void shouldCloseSuspendedTasksThatAreNoLongerAssignedToThisStreamThreadBeforeCreatingNewTasks() {
         final KStreamBuilder builder = new KStreamBuilder();
         builder.setApplicationId(applicationId);
         builder.stream("t1").groupByKey().count("count-one");
@@ -1197,7 +1198,7 @@ public class StreamThreadTest {
     }
 
     @Test
-    public void shouldCloseActiveTasksThatAreAssignedToThisStreamThreadButAssignmentHasChangedBeforeCreatingNewTasks() throws Exception {
+    public void shouldCloseActiveTasksThatAreAssignedToThisStreamThreadButAssignmentHasChangedBeforeCreatingNewTasks() throws NoSuchFieldException, IllegalAccessException {
         final KStreamBuilder builder = new KStreamBuilder();
         builder.setApplicationId(applicationId);
         builder.stream(Pattern.compile("t.*")).to("out");
@@ -1278,7 +1279,7 @@ public class StreamThreadTest {
     }
 
     @Test
-    public void shouldCloseTaskAsZombieAndRemoveFromActiveTasksIfProducerWasFencedWhileProcessing() throws Exception {
+    public void shouldCloseTaskAsZombieAndRemoveFromActiveTasksIfProducerWasFencedWhileProcessing() throws InterruptedException {
         builder.addSource("source", TOPIC).addSink("sink", "dummyTopic", "source");
 
         final MockClientSupplier clientSupplier = new MockClientSupplier(applicationId);
@@ -1369,7 +1370,7 @@ public class StreamThreadTest {
     }
 
     @Test
-    public void shouldCloseTaskAsZombieAndRemoveFromActiveTasksIfProducerGotFencedAtBeginTransactionWhenTaskIsResumed() throws Exception {
+    public void shouldCloseTaskAsZombieAndRemoveFromActiveTasksIfProducerGotFencedAtBeginTransactionWhenTaskIsResumed() {
         builder.addSource("name", "topic").addSink("out", "output");
 
         final MockClientSupplier clientSupplier = new MockClientSupplier(applicationId);
@@ -1405,7 +1406,7 @@ public class StreamThreadTest {
     }
 
     @Test
-    public void shouldNotViolateAtLeastOnceWhenAnExceptionOccursOnTaskCloseDuringShutdown() throws Exception {
+    public void shouldNotViolateAtLeastOnceWhenAnExceptionOccursOnTaskCloseDuringShutdown() throws InterruptedException {
         final KStreamBuilder builder = new KStreamBuilder();
         builder.setApplicationId(applicationId);
         builder.stream("t1").groupByKey();
@@ -1461,7 +1462,7 @@ public class StreamThreadTest {
     }
 
     @Test
-    public void shouldNotViolateAtLeastOnceWhenAnExceptionOccursOnTaskFlushDuringShutdown() throws Exception {
+    public void shouldNotViolateAtLeastOnceWhenAnExceptionOccursOnTaskFlushDuringShutdown() throws InterruptedException {
         final MockStateStoreSupplier.MockStateStore stateStore = new MockStateStoreSupplier.MockStateStore("foo", false);
         builder.stream("t1").groupByKey().count(new MockStateStoreSupplier(stateStore));
         final TestStreamTask testStreamTask = new TestStreamTask(
@@ -1521,7 +1522,7 @@ public class StreamThreadTest {
     }
 
     @Test
-    public void shouldNotViolateAtLeastOnceWhenExceptionOccursDuringTaskSuspension() throws Exception {
+    public void shouldNotViolateAtLeastOnceWhenExceptionOccursDuringTaskSuspension() {
         final KStreamBuilder builder = new KStreamBuilder();
         builder.setApplicationId(applicationId);
         builder.stream("t1").groupByKey();
@@ -1581,7 +1582,7 @@ public class StreamThreadTest {
     }
 
     @Test
-    public void shouldNotViolateAtLeastOnceWhenExceptionOccursDuringFlushStateWhileSuspendingState() throws Exception {
+    public void shouldNotViolateAtLeastOnceWhenExceptionOccursDuringFlushStateWhileSuspendingState() {
         final KStreamBuilder builder = new KStreamBuilder();
         builder.setApplicationId(applicationId);
         builder.stream("t1").groupByKey();
@@ -1642,7 +1643,7 @@ public class StreamThreadTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    public void shouldAlwaysUpdateWithLatestTopicsFromStreamPartitionAssignor() throws Exception {
+    public void shouldAlwaysUpdateWithLatestTopicsFromStreamPartitionAssignor() throws NoSuchFieldException, IllegalAccessException {
         final TopologyBuilder topologyBuilder = new TopologyBuilder();
         topologyBuilder.addSource("source", Pattern.compile("t.*"));
         topologyBuilder.addProcessor("processor", new MockProcessorSupplier(), "source");

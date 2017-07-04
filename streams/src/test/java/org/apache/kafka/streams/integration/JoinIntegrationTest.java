@@ -42,11 +42,13 @@ import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Properties;
+import java.util.concurrent.ExecutionException;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
@@ -100,7 +102,7 @@ public class JoinIntegrationTest {
     };
 
     @BeforeClass
-    public static void setupConfigsAndUtils() throws Exception {
+    public static void setupConfigsAndUtils() {
         PRODUCER_CONFIG.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         PRODUCER_CONFIG.put(ProducerConfig.ACKS_CONFIG, "all");
         PRODUCER_CONFIG.put(ProducerConfig.RETRIES_CONFIG, 0);
@@ -124,7 +126,7 @@ public class JoinIntegrationTest {
     }
 
     @Before
-    public void prepareTopology() throws Exception {
+    public void prepareTopology() throws InterruptedException {
         CLUSTER.createTopics(INPUT_TOPIC_1, INPUT_TOPIC_2, OUTPUT_TOPIC);
 
         builder = new KStreamBuilder();
@@ -135,11 +137,11 @@ public class JoinIntegrationTest {
     }
 
     @After
-    public void cleanup() throws Exception {
+    public void cleanup() throws InterruptedException {
         CLUSTER.deleteTopicsAndWait(120000, INPUT_TOPIC_1, INPUT_TOPIC_2, OUTPUT_TOPIC);
     }
 
-    private void checkResult(final String outputTopic, final List<String> expectedResult) throws Exception {
+    private void checkResult(final String outputTopic, final List<String> expectedResult) throws InterruptedException {
         if (expectedResult != null) {
             final List<String> result = IntegrationTestUtils.waitUntilMinValuesRecordsReceived(RESULT_CONSUMER_CONFIG, outputTopic, expectedResult.size(), 30 * 1000L);
             assertThat(result, is(expectedResult));
@@ -150,7 +152,7 @@ public class JoinIntegrationTest {
      * Runs the actual test. Checks the result after each input record to ensure fixed processing order.
      * If an input tuple does not trigger any result, "expectedResult" should contain a "null" entry
      */
-    private void runTest(final List<List<String>> expectedResult) throws Exception {
+    private void runTest(final List<List<String>> expectedResult) throws IOException, ExecutionException, InterruptedException {
         assert expectedResult.size() == input.size();
 
         IntegrationTestUtils.purgeLocalStreamsState(STREAMS_CONFIG);
@@ -171,7 +173,7 @@ public class JoinIntegrationTest {
     }
 
     @Test
-    public void testInnerKStreamKStream() throws Exception {
+    public void testInnerKStreamKStream() throws InterruptedException, ExecutionException, IOException {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-inner-KStream-KStream");
 
         final List<List<String>> expectedResult = Arrays.asList(
@@ -198,7 +200,7 @@ public class JoinIntegrationTest {
     }
 
     @Test
-    public void testLeftKStreamKStream() throws Exception {
+    public void testLeftKStreamKStream() throws InterruptedException, ExecutionException, IOException {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-left-KStream-KStream");
 
         final List<List<String>> expectedResult = Arrays.asList(
@@ -225,7 +227,7 @@ public class JoinIntegrationTest {
     }
 
     @Test
-    public void testOuterKStreamKStream() throws Exception {
+    public void testOuterKStreamKStream() throws InterruptedException, ExecutionException, IOException {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-outer-KStream-KStream");
 
         final List<List<String>> expectedResult = Arrays.asList(
@@ -252,7 +254,7 @@ public class JoinIntegrationTest {
     }
 
     @Test
-    public void testInnerKStreamKTable() throws Exception {
+    public void testInnerKStreamKTable() throws InterruptedException, ExecutionException, IOException {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-inner-KStream-KTable");
 
         final List<List<String>> expectedResult = Arrays.asList(
@@ -279,7 +281,7 @@ public class JoinIntegrationTest {
     }
 
     @Test
-    public void testLeftKStreamKTable() throws Exception {
+    public void testLeftKStreamKTable() throws InterruptedException, ExecutionException, IOException {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-left-KStream-KTable");
 
         final List<List<String>> expectedResult = Arrays.asList(
@@ -306,7 +308,7 @@ public class JoinIntegrationTest {
     }
 
     @Test
-    public void testInnerKTableKTable() throws Exception {
+    public void testInnerKTableKTable() throws InterruptedException, ExecutionException, IOException {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-inner-KTable-KTable");
 
         final List<List<String>> expectedResult = Arrays.asList(
@@ -333,7 +335,7 @@ public class JoinIntegrationTest {
     }
 
     @Test
-    public void testLeftKTableKTable() throws Exception {
+    public void testLeftKTableKTable() throws InterruptedException, ExecutionException, IOException {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-left-KTable-KTable");
 
         final List<List<String>> expectedResult = Arrays.asList(
@@ -360,7 +362,7 @@ public class JoinIntegrationTest {
     }
 
     @Test
-    public void testOuterKTableKTable() throws Exception {
+    public void testOuterKTableKTable() throws InterruptedException, ExecutionException, IOException {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-outer-KTable-KTable");
 
         final List<List<String>> expectedResult = Arrays.asList(

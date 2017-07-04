@@ -73,7 +73,7 @@ public class StoreChangeLoggerTest {
 
     @SuppressWarnings("unchecked")
     @Test
-    public void testAddRemove() throws Exception {
+    public void testAddRemove() {
         context.setTime(1);
         changeLogger.logChange(0, "zero");
         changeLogger.logChange(1, "one");

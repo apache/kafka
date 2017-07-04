@@ -73,7 +73,7 @@ public class KTableKTableLeftJoinTest {
     }
 
     @Test
-    public void testJoin() throws Exception {
+    public void testJoin() {
         final KStreamBuilder builder = new KStreamBuilder();
 
         final int[] expectedKeys = new int[]{0, 1, 2, 3};
@@ -167,7 +167,7 @@ public class KTableKTableLeftJoinTest {
     }
 
     @Test
-    public void testNotSendingOldValue() throws Exception {
+    public void testNotSendingOldValue() {
         final KStreamBuilder builder = new KStreamBuilder();
 
         final int[] expectedKeys = new int[]{0, 1, 2, 3};
@@ -248,7 +248,7 @@ public class KTableKTableLeftJoinTest {
     }
 
     @Test
-    public void testSendingOldValue() throws Exception {
+    public void testSendingOldValue() {
         final KStreamBuilder builder = new KStreamBuilder();
 
         final int[] expectedKeys = new int[]{0, 1, 2, 3};
@@ -336,7 +336,7 @@ public class KTableKTableLeftJoinTest {
      * Before the fix this would trigger an IllegalStateException.
      */
     @Test
-    public void shouldNotThrowIllegalStateExceptionWhenMultiCacheEvictions() throws Exception {
+    public void shouldNotThrowIllegalStateExceptionWhenMultiCacheEvictions() {
         final String agg = "agg";
         final String tableOne = "tableOne";
         final String tableTwo = "tableTwo";

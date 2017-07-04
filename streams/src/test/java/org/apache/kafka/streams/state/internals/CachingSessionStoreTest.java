@@ -60,7 +60,7 @@ public class CachingSessionStoreTest {
     private static final Long DEFAULT_TIMESTAMP = 10L;
 
     @Before
-    public void setUp() throws Exception {
+    public void setUp() {
         final SessionKeySchema schema = new SessionKeySchema();
         schema.init("topic");
         final int retention = 60000;
@@ -85,7 +85,7 @@ public class CachingSessionStoreTest {
     }
 
     @Test
-    public void shouldPutFetchFromCache() throws Exception {
+    public void shouldPutFetchFromCache() {
         cachingStore.put(new Windowed<>("a", new SessionWindow(0, 0)), 1L);
         cachingStore.put(new Windowed<>("aa", new SessionWindow(0, 0)), 1L);
         cachingStore.put(new Windowed<>("b", new SessionWindow(0, 0)), 1L);
@@ -102,7 +102,7 @@ public class CachingSessionStoreTest {
     }
 
     @Test
-    public void shouldPutFetchAllKeysFromCache() throws Exception {
+    public void shouldPutFetchAllKeysFromCache() {
         cachingStore.put(new Windowed<>("a", new SessionWindow(0, 0)), 1L);
         cachingStore.put(new Windowed<>("aa", new SessionWindow(0, 0)), 1L);
         cachingStore.put(new Windowed<>("b", new SessionWindow(0, 0)), 1L);
@@ -117,7 +117,7 @@ public class CachingSessionStoreTest {
     }
 
     @Test
-    public void shouldPutFetchRangeFromCache() throws Exception {
+    public void shouldPutFetchRangeFromCache() {
         cachingStore.put(new Windowed<>("a", new SessionWindow(0, 0)), 1L);
         cachingStore.put(new Windowed<>("aa", new SessionWindow(0, 0)), 1L);
         cachingStore.put(new Windowed<>("b", new SessionWindow(0, 0)), 1L);
@@ -131,7 +131,7 @@ public class CachingSessionStoreTest {
     }
 
     @Test
-    public void shouldFetchAllSessionsWithSameRecordKey() throws Exception {
+    public void shouldFetchAllSessionsWithSameRecordKey() {
 
         final List<KeyValue<Windowed<String>, Long>> expected = Arrays.asList(KeyValue.pair(new Windowed<>("a", new SessionWindow(0, 0)), 1L),
                                                                                     KeyValue.pair(new Windowed<>("a", new SessionWindow(10, 10)), 2L),
@@ -151,7 +151,7 @@ public class CachingSessionStoreTest {
     }
 
     @Test
-    public void shouldFlushItemsToStoreOnEviction() throws Exception {
+    public void shouldFlushItemsToStoreOnEviction() {
         final List<KeyValue<Windowed<String>, Long>> added = addSessionsUntilOverflow("a", "b", "c", "d");
         assertEquals(added.size() - 1, cache.size());
         final KeyValueIterator<Bytes, byte[]> iterator = underlying.fetch(Bytes.wrap(added.get(0).key.key().getBytes()), 0, 0);
@@ -161,7 +161,7 @@ public class CachingSessionStoreTest {
     }
 
     @Test
-    public void shouldQueryItemsInCacheAndStore() throws Exception {
+    public void shouldQueryItemsInCacheAndStore() {
         final List<KeyValue<Windowed<String>, Long>> added = addSessionsUntilOverflow("a");
         final KeyValueIterator<Windowed<String>, Long> iterator = cachingStore.findSessions("a", 0, added.size() * 10);
         final List<KeyValue<Windowed<String>, Long>> actual = toList(iterator);
@@ -169,7 +169,7 @@ public class CachingSessionStoreTest {
     }
 
     @Test
-    public void shouldRemove() throws Exception {
+    public void shouldRemove() {
         final Windowed<String> a = new Windowed<>("a", new SessionWindow(0, 0));
         final Windowed<String> b = new Windowed<>("b", new SessionWindow(0, 0));
         cachingStore.put(a, 2L);
@@ -182,7 +182,7 @@ public class CachingSessionStoreTest {
     }
 
     @Test
-    public void shouldFetchCorrectlyAcrossSegments() throws Exception {
+    public void shouldFetchCorrectlyAcrossSegments() {
         final Windowed<String> a1 = new Windowed<>("a", new SessionWindow(0, 0));
         final Windowed<String> a2 = new Windowed<>("a", new SessionWindow(Segments.MIN_SEGMENT_INTERVAL, Segments.MIN_SEGMENT_INTERVAL));
         final Windowed<String> a3 = new Windowed<>("a", new SessionWindow(Segments.MIN_SEGMENT_INTERVAL * 2, Segments.MIN_SEGMENT_INTERVAL * 2));
@@ -198,7 +198,7 @@ public class CachingSessionStoreTest {
     }
 
     @Test
-    public void shouldFetchRangeCorrectlyAcrossSegments() throws Exception {
+    public void shouldFetchRangeCorrectlyAcrossSegments() {
         final Windowed<String> a1 = new Windowed<>("a", new SessionWindow(0, 0));
         final Windowed<String> aa1 = new Windowed<>("aa", new SessionWindow(0, 0));
         final Windowed<String> a2 = new Windowed<>("a", new SessionWindow(Segments.MIN_SEGMENT_INTERVAL, Segments.MIN_SEGMENT_INTERVAL));
@@ -221,7 +221,7 @@ public class CachingSessionStoreTest {
     }
 
     @Test
-    public void shouldForwardChangedValuesDuringFlush() throws Exception {
+    public void shouldForwardChangedValuesDuringFlush() {
         final Windowed<String> a = new Windowed<>("a", new SessionWindow(0, 0));
         final List<KeyValue<Windowed<String>, Change<Long>>> flushed = new ArrayList<>();
         cachingStore.setFlushListener(new CacheFlushListener<Windowed<String>, Long>() {
@@ -244,7 +244,7 @@ public class CachingSessionStoreTest {
     }
 
     @Test
-    public void shouldClearNamespaceCacheOnClose() throws Exception {
+    public void shouldClearNamespaceCacheOnClose() {
         final Windowed<String> a1 = new Windowed<>("a", new SessionWindow(0, 0));
         cachingStore.put(a1, 1L);
         assertEquals(1, cache.size());
@@ -253,66 +253,66 @@ public class CachingSessionStoreTest {
     }
 
     @Test(expected = InvalidStateStoreException.class)
-    public void shouldThrowIfTryingToFetchFromClosedCachingStore() throws Exception {
+    public void shouldThrowIfTryingToFetchFromClosedCachingStore() {
         cachingStore.close();
         cachingStore.fetch("a");
     }
 
     @Test(expected = InvalidStateStoreException.class)
-    public void shouldThrowIfTryingToFindMergeSessionFromClosedCachingStore() throws Exception {
+    public void shouldThrowIfTryingToFindMergeSessionFromClosedCachingStore() {
         cachingStore.close();
         cachingStore.findSessions("a", 0, Long.MAX_VALUE);
     }
 
     @Test(expected = InvalidStateStoreException.class)
-    public void shouldThrowIfTryingToRemoveFromClosedCachingStore() throws Exception {
+    public void shouldThrowIfTryingToRemoveFromClosedCachingStore() {
         cachingStore.close();
         cachingStore.remove(new Windowed<>("a", new SessionWindow(0, 0)));
     }
 
     @Test(expected = InvalidStateStoreException.class)
-    public void shouldThrowIfTryingToPutIntoClosedCachingStore() throws Exception {
+    public void shouldThrowIfTryingToPutIntoClosedCachingStore() {
         cachingStore.close();
         cachingStore.put(new Windowed<>("a", new SessionWindow(0, 0)), 1L);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldThrowNullPointerExceptionOnFindSessionsNullKey() throws Exception {
+    public void shouldThrowNullPointerExceptionOnFindSessionsNullKey() {
         cachingStore.findSessions(null, 1L, 2L);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldThrowNullPointerExceptionOnFindSessionsNullFromKey() throws Exception {
+    public void shouldThrowNullPointerExceptionOnFindSessionsNullFromKey() {
         cachingStore.findSessions(null, "anyKeyTo", 1L, 2L);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldThrowNullPointerExceptionOnFindSessionsNullToKey() throws Exception {
+    public void shouldThrowNullPointerExceptionOnFindSessionsNullToKey() {
         cachingStore.findSessions("anyKeyFrom", null, 1L, 2L);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldThrowNullPointerExceptionOnFetchNullFromKey() throws Exception {
+    public void shouldThrowNullPointerExceptionOnFetchNullFromKey() {
         cachingStore.fetch(null, "anyToKey");
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldThrowNullPointerExceptionOnFetchNullToKey() throws Exception {
+    public void shouldThrowNullPointerExceptionOnFetchNullToKey() {
         cachingStore.fetch("anyFromKey", null);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldThrowNullPointerExceptionOnFetchNullKey() throws Exception {
+    public void shouldThrowNullPointerExceptionOnFetchNullKey() {
         cachingStore.fetch(null);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldThrowNullPointerExceptionOnRemoveNullKey() throws Exception {
+    public void shouldThrowNullPointerExceptionOnRemoveNullKey() {
         cachingStore.remove(null);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldThrowNullPointerExceptionOnPutNullKey() throws Exception {
+    public void shouldThrowNullPointerExceptionOnPutNullKey() {
         cachingStore.put(null, 1L);
     }
 

@@ -47,7 +47,7 @@ public class AbstractProcessorContextTest {
     }
 
     @Test
-    public void shouldThrowIllegalStateExceptionOnRegisterWhenContextIsInitialized() throws Exception {
+    public void shouldThrowIllegalStateExceptionOnRegisterWhenContextIsInitialized() {
         context.initialized();
         try {
             context.register(stateStore, false, null);
@@ -58,7 +58,7 @@ public class AbstractProcessorContextTest {
     }
 
     @Test
-    public void shouldNotThrowIllegalStateExceptionOnRegisterWhenContextIsNotInitialized() throws Exception {
+    public void shouldNotThrowIllegalStateExceptionOnRegisterWhenContextIsNotInitialized() {
         context.register(stateStore, false, null);
     }
 
@@ -68,7 +68,7 @@ public class AbstractProcessorContextTest {
     }
 
     @Test
-    public void shouldThrowIllegalStateExceptionOnTopicIfNoRecordContext() throws Exception {
+    public void shouldThrowIllegalStateExceptionOnTopicIfNoRecordContext() {
         context.setRecordContext(null);
         try {
             context.topic();
@@ -79,18 +79,18 @@ public class AbstractProcessorContextTest {
     }
 
     @Test
-    public void shouldReturnTopicFromRecordContext() throws Exception {
+    public void shouldReturnTopicFromRecordContext() {
         assertThat(context.topic(), equalTo(recordContext.topic()));
     }
 
     @Test
-    public void shouldReturnNullIfTopicEqualsNonExistTopic() throws Exception {
+    public void shouldReturnNullIfTopicEqualsNonExistTopic() {
         context.setRecordContext(new RecordContextStub(0, 0, 0, AbstractProcessorContext.NONEXIST_TOPIC));
         assertThat(context.topic(), nullValue());
     }
 
     @Test
-    public void shouldThrowIllegalStateExceptionOnPartitionIfNoRecordContext() throws Exception {
+    public void shouldThrowIllegalStateExceptionOnPartitionIfNoRecordContext() {
         context.setRecordContext(null);
         try {
             context.partition();
@@ -101,12 +101,12 @@ public class AbstractProcessorContextTest {
     }
 
     @Test
-    public void shouldReturnPartitionFromRecordContext() throws Exception {
+    public void shouldReturnPartitionFromRecordContext() {
         assertThat(context.partition(), equalTo(recordContext.partition()));
     }
 
     @Test
-    public void shouldThrowIllegalStateExceptionOnOffsetIfNoRecordContext() throws Exception {
+    public void shouldThrowIllegalStateExceptionOnOffsetIfNoRecordContext() {
         context.setRecordContext(null);
         try {
             context.offset();
@@ -116,12 +116,12 @@ public class AbstractProcessorContextTest {
     }
 
     @Test
-    public void shouldReturnOffsetFromRecordContext() throws Exception {
+    public void shouldReturnOffsetFromRecordContext() {
         assertThat(context.offset(), equalTo(recordContext.offset()));
     }
 
     @Test
-    public void shouldThrowIllegalStateExceptionOnTimestampIfNoRecordContext() throws Exception {
+    public void shouldThrowIllegalStateExceptionOnTimestampIfNoRecordContext() {
         context.setRecordContext(null);
         try {
             context.timestamp();
@@ -132,7 +132,7 @@ public class AbstractProcessorContextTest {
     }
 
     @Test
-    public void shouldReturnTimestampFromRecordContext() throws Exception {
+    public void shouldReturnTimestampFromRecordContext() {
         assertThat(context.timestamp(), equalTo(recordContext.timestamp()));
     }
 

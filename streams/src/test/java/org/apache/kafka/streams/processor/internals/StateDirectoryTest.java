@@ -59,7 +59,7 @@ public class StateDirectoryTest {
     }
 
     @Test
-    public void shouldCreateBaseDirectory() throws Exception {
+    public void shouldCreateBaseDirectory() {
         assertTrue(stateDir.exists());
         assertTrue(stateDir.isDirectory());
         assertTrue(appDir.exists());
@@ -67,7 +67,7 @@ public class StateDirectoryTest {
     }
 
     @Test
-    public void shouldCreateTaskStateDirectory() throws Exception {
+    public void shouldCreateTaskStateDirectory() {
         final TaskId taskId = new TaskId(0, 0);
         final File taskDirectory = directory.directoryForTask(taskId);
         assertTrue(taskDirectory.exists());
@@ -75,7 +75,7 @@ public class StateDirectoryTest {
     }
 
     @Test
-    public void shouldLockTaskStateDirectory() throws Exception {
+    public void shouldLockTaskStateDirectory() throws IOException {
         final TaskId taskId = new TaskId(0, 0);
         final File taskDirectory = directory.directoryForTask(taskId);
 
@@ -96,7 +96,7 @@ public class StateDirectoryTest {
     }
 
     @Test
-    public void shouldBeTrueIfAlreadyHoldsLock() throws Exception {
+    public void shouldBeTrueIfAlreadyHoldsLock() throws IOException {
         final TaskId taskId = new TaskId(0, 0);
         directory.directoryForTask(taskId);
         directory.lock(taskId, 0);
@@ -108,7 +108,7 @@ public class StateDirectoryTest {
     }
 
     @Test(expected = ProcessorStateException.class)
-    public void shouldThrowProcessorStateException() throws Exception {
+    public void shouldThrowProcessorStateException() throws IOException {
         final TaskId taskId = new TaskId(0, 0);
 
         Utils.delete(stateDir);
@@ -116,7 +116,7 @@ public class StateDirectoryTest {
     }
 
     @Test
-    public void shouldNotLockDeletedDirectory() throws Exception {
+    public void shouldNotLockDeletedDirectory() throws IOException {
         final TaskId taskId = new TaskId(0, 0);
 
         Utils.delete(stateDir);
@@ -124,7 +124,7 @@ public class StateDirectoryTest {
     }
     
     @Test
-    public void shouldLockMulitpleTaskDirectories() throws Exception {
+    public void shouldLockMulitpleTaskDirectories() throws IOException {
         final TaskId taskId = new TaskId(0, 0);
         final File task1Dir = directory.directoryForTask(taskId);
         final TaskId taskId2 = new TaskId(1, 0);
@@ -155,7 +155,7 @@ public class StateDirectoryTest {
     }
 
     @Test
-    public void shouldReleaseTaskStateDirectoryLock() throws Exception {
+    public void shouldReleaseTaskStateDirectoryLock() throws IOException {
         final TaskId taskId = new TaskId(0, 0);
         final File taskDirectory = directory.directoryForTask(taskId);
 
@@ -173,7 +173,7 @@ public class StateDirectoryTest {
     }
 
     @Test
-    public void shouldCleanUpTaskStateDirectoriesThatAreNotCurrentlyLocked() throws Exception {
+    public void shouldCleanUpTaskStateDirectoriesThatAreNotCurrentlyLocked() throws IOException {
         final TaskId task0 = new TaskId(0, 0);
         final TaskId task1 = new TaskId(1, 0);
         try {
@@ -194,7 +194,7 @@ public class StateDirectoryTest {
     }
 
     @Test
-    public void shouldCleanupStateDirectoriesWhenLastModifiedIsLessThanNowMinusCleanupDelay() throws Exception {
+    public void shouldCleanupStateDirectoriesWhenLastModifiedIsLessThanNowMinusCleanupDelay() {
         final File dir = directory.directoryForTask(new TaskId(2, 0));
         final int cleanupDelayMs = 60000;
         directory.cleanRemovedTasks(cleanupDelayMs);
@@ -206,14 +206,14 @@ public class StateDirectoryTest {
     }
 
     @Test
-    public void shouldNotRemoveNonTaskDirectoriesAndFiles() throws Exception {
+    public void shouldNotRemoveNonTaskDirectoriesAndFiles() {
         final File otherDir = TestUtils.tempDirectory(stateDir.toPath(), "foo");
         directory.cleanRemovedTasks(0);
         assertTrue(otherDir.exists());
     }
 
     @Test
-    public void shouldListAllTaskDirectories() throws Exception {
+    public void shouldListAllTaskDirectories() {
         TestUtils.tempDirectory(stateDir.toPath(), "foo");
         final File taskDir1 = directory.directoryForTask(new TaskId(0, 0));
         final File taskDir2 = directory.directoryForTask(new TaskId(0, 1));
@@ -225,7 +225,7 @@ public class StateDirectoryTest {
     }
 
     @Test
-    public void shouldCreateDirectoriesIfParentDoesntExist() throws Exception {
+    public void shouldCreateDirectoriesIfParentDoesntExist() {
         final File tempDir = TestUtils.tempDirectory();
         final File stateDir = new File(new File(tempDir, "foo"), "state-dir");
         final StateDirectory stateDirectory = new StateDirectory(applicationId, stateDir.getPath(), time);
@@ -235,7 +235,7 @@ public class StateDirectoryTest {
     }
 
     @Test(expected = OverlappingFileLockException.class)
-    public void shouldLockGlobalStateDirectory() throws Exception {
+    public void shouldLockGlobalStateDirectory() throws IOException {
         directory.lockGlobalState(1);
 
         try (
@@ -251,7 +251,7 @@ public class StateDirectoryTest {
     }
 
     @Test
-    public void shouldUnlockGlobalStateDirectory() throws Exception {
+    public void shouldUnlockGlobalStateDirectory() throws IOException {
         directory.lockGlobalState(1);
         directory.unlockGlobalState();
 

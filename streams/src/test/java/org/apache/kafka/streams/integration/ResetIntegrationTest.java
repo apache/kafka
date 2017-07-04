@@ -49,11 +49,13 @@ import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
+import java.io.IOException;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -105,7 +107,7 @@ public class ResetIntegrationTest {
     }
 
     @Before
-    public void cleanup() throws Exception {
+    public void cleanup() throws InterruptedException, ExecutionException {
         ++testNo;
 
         if (adminClient == null) {
@@ -129,7 +131,7 @@ public class ResetIntegrationTest {
     }
 
     @Test
-    public void testReprocessingFromScratchAfterResetWithIntermediateUserTopic() throws Exception {
+    public void testReprocessingFromScratchAfterResetWithIntermediateUserTopic() throws InterruptedException, ExecutionException, IOException {
         CLUSTER.createTopic(INTERMEDIATE_USER_TOPIC);
 
         final Properties streamsConfiguration = prepareTest();
@@ -197,7 +199,7 @@ public class ResetIntegrationTest {
     }
 
     @Test
-    public void testReprocessingFromScratchAfterResetWithoutIntermediateUserTopic() throws Exception {
+    public void testReprocessingFromScratchAfterResetWithoutIntermediateUserTopic() throws InterruptedException, IOException {
         final Properties streamsConfiguration = prepareTest();
         final Properties resultTopicConsumerConfig = TestUtils.consumerConfig(
                 CLUSTER.bootstrapServers(),
@@ -241,7 +243,7 @@ public class ResetIntegrationTest {
         cleanGlobal(null);
     }
 
-    private Properties prepareTest() throws Exception {
+    private Properties prepareTest() throws IOException {
         final Properties streamsConfiguration = new Properties();
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + testNo);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
@@ -261,7 +263,7 @@ public class ResetIntegrationTest {
         return streamsConfiguration;
     }
 
-    private void prepareInputData() throws Exception {
+    private void prepareInputData() throws InterruptedException, ExecutionException {
         CLUSTER.deleteAndRecreateTopics(INPUT_TOPIC, OUTPUT_TOPIC, OUTPUT_TOPIC_2, OUTPUT_TOPIC_2_RERUN);
 
         final Properties producerConfig = TestUtils.producerConfig(CLUSTER.bootstrapServers(), LongSerializer.class, StringSerializer.class);

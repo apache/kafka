@@ -142,14 +142,14 @@ public class StreamThreadStateStoreProviderTest {
     }
     
     @Test
-    public void shouldFindKeyValueStores() throws Exception {
+    public void shouldFindKeyValueStores() {
         final List<ReadOnlyKeyValueStore<String, String>> kvStores =
             provider.stores("kv-store", QueryableStoreTypes.<String, String>keyValueStore());
         assertEquals(2, kvStores.size());
     }
 
     @Test
-    public void shouldFindWindowStores() throws Exception {
+    public void shouldFindWindowStores() {
         final List<ReadOnlyWindowStore<Object, Object>>
             windowStores =
             provider.stores("window-store", windowStore());
@@ -157,32 +157,32 @@ public class StreamThreadStateStoreProviderTest {
     }
 
     @Test(expected = InvalidStateStoreException.class)
-    public void shouldThrowInvalidStoreExceptionIfWindowStoreClosed() throws Exception {
+    public void shouldThrowInvalidStoreExceptionIfWindowStoreClosed() {
         taskOne.getStore("window-store").close();
         provider.stores("window-store", QueryableStoreTypes.windowStore());
     }
 
     @Test(expected = InvalidStateStoreException.class)
-    public void shouldThrowInvalidStoreExceptionIfKVStoreClosed() throws Exception {
+    public void shouldThrowInvalidStoreExceptionIfKVStoreClosed() {
         taskOne.getStore("kv-store").close();
         provider.stores("kv-store", QueryableStoreTypes.keyValueStore());
     }
 
     @Test
-    public void shouldReturnEmptyListIfNoStoresFoundWithName() throws Exception {
+    public void shouldReturnEmptyListIfNoStoresFoundWithName() {
         assertEquals(Collections.emptyList(), provider.stores("not-a-store", QueryableStoreTypes
             .keyValueStore()));
     }
 
 
     @Test
-    public void shouldReturnEmptyListIfStoreExistsButIsNotOfTypeValueStore() throws Exception {
+    public void shouldReturnEmptyListIfStoreExistsButIsNotOfTypeValueStore() {
         assertEquals(Collections.emptyList(), provider.stores("window-store",
                                                               QueryableStoreTypes.keyValueStore()));
     }
 
     @Test(expected = InvalidStateStoreException.class)
-    public void shouldThrowInvalidStoreExceptionIfNotAllStoresAvailable() throws Exception {
+    public void shouldThrowInvalidStoreExceptionIfNotAllStoresAvailable() {
         storesAvailable = false;
         provider.stores("kv-store", QueryableStoreTypes.keyValueStore());
     }

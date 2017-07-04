@@ -57,7 +57,7 @@ public class CompositeReadOnlySessionStoreTest {
     }
 
     @Test
-    public void shouldFetchResulstFromUnderlyingSessionStore() throws Exception {
+    public void shouldFetchResulstFromUnderlyingSessionStore() {
         underlyingSessionStore.put(new Windowed<>("a", new SessionWindow(0, 0)), 1L);
         underlyingSessionStore.put(new Windowed<>("a", new SessionWindow(10, 10)), 2L);
 
@@ -68,13 +68,13 @@ public class CompositeReadOnlySessionStoreTest {
     }
 
     @Test
-    public void shouldReturnEmptyIteratorIfNoData() throws Exception {
+    public void shouldReturnEmptyIteratorIfNoData() {
         final KeyValueIterator<Windowed<String>, Long> result = sessionStore.fetch("b");
         assertFalse(result.hasNext());
     }
 
     @Test
-    public void shouldFindValueForKeyWhenMultiStores() throws Exception {
+    public void shouldFindValueForKeyWhenMultiStores() {
         final ReadOnlySessionStoreStub<String, Long> secondUnderlying = new
                 ReadOnlySessionStoreStub<>();
         stubProviderTwo.addStore(storeName, secondUnderlying);
@@ -92,7 +92,7 @@ public class CompositeReadOnlySessionStoreTest {
     }
 
     @Test
-    public void shouldNotGetValueFromOtherStores() throws Exception {
+    public void shouldNotGetValueFromOtherStores() {
         final Windowed<String> expectedKey = new Windowed<>("foo", new SessionWindow(0, 0));
         otherUnderlyingStore.put(new Windowed<>("foo", new SessionWindow(10, 10)), 10L);
         underlyingSessionStore.put(expectedKey, 1L);
@@ -103,7 +103,7 @@ public class CompositeReadOnlySessionStoreTest {
     }
 
     @Test(expected = InvalidStateStoreException.class)
-    public void shouldThrowInvalidStateStoreExceptionOnRebalance() throws Exception {
+    public void shouldThrowInvalidStateStoreExceptionOnRebalance() {
         final CompositeReadOnlySessionStore<String, String> store
                 = new CompositeReadOnlySessionStore<>(new StateStoreProviderStub(true),
                                                       QueryableStoreTypes.<String, String>sessionStore(),

@@ -205,7 +205,7 @@ public class ProcessorTopologyTest {
 
     @SuppressWarnings("unchecked")
     @Test
-    public void shouldDriveGlobalStore() throws Exception {
+    public void shouldDriveGlobalStore() {
         final StateStoreSupplier storeSupplier = Stores.create("my-store")
                 .withStringKeys().withStringValues().inMemory().disableLogging().build();
         final String global = "global";
@@ -272,7 +272,7 @@ public class ProcessorTopologyTest {
     }
 
     @Test
-    public void shouldCreateStringWithSourceAndTopics() throws Exception {
+    public void shouldCreateStringWithSourceAndTopics() {
         builder.addSource("source", "topic1", "topic2");
         final ProcessorTopology topology = builder.build(null);
         final String result = topology.toString();
@@ -280,7 +280,7 @@ public class ProcessorTopologyTest {
     }
 
     @Test
-    public void shouldCreateStringWithMultipleSourcesAndTopics() throws Exception {
+    public void shouldCreateStringWithMultipleSourcesAndTopics() {
         builder.addSource("source", "topic1", "topic2");
         builder.addSource("source2", "t", "t1", "t2");
         final ProcessorTopology topology = builder.build(null);
@@ -290,7 +290,7 @@ public class ProcessorTopologyTest {
     }
 
     @Test
-    public void shouldCreateStringWithProcessors() throws Exception {
+    public void shouldCreateStringWithProcessors() {
         builder.addSource("source", "t")
                 .addProcessor("processor", mockProcessorSupplier, "source")
                 .addProcessor("other", mockProcessorSupplier, "source");
@@ -302,7 +302,7 @@ public class ProcessorTopologyTest {
     }
 
     @Test
-    public void shouldRecursivelyPrintChildren() throws Exception {
+    public void shouldRecursivelyPrintChildren() {
         builder.addSource("source", "t")
                 .addProcessor("processor", mockProcessorSupplier, "source")
                 .addProcessor("child-one", mockProcessorSupplier, "processor")

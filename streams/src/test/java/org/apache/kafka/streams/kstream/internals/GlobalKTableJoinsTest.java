@@ -50,7 +50,7 @@ public class GlobalKTableJoinsTest {
     private KStreamTestDriver driver = null;
 
     @Before
-    public void setUp() throws Exception {
+    public void setUp() {
         stateDir = TestUtils.tempDirectory();
         global = builder.globalTable(Serdes.String(), Serdes.String(), null, globalTopic, "global-store");
         stream = builder.stream(Serdes.String(), Serdes.String(), streamTopic);
@@ -77,7 +77,7 @@ public class GlobalKTableJoinsTest {
     }
 
     @Test
-    public void shouldLeftJoinWithStream() throws Exception {
+    public void shouldLeftJoinWithStream() {
         stream.leftJoin(global, keyValueMapper, MockValueJoiner.TOSTRING_JOINER)
                 .foreach(action);
 
@@ -91,7 +91,7 @@ public class GlobalKTableJoinsTest {
     }
 
     @Test
-    public void shouldInnerJoinWithStream() throws Exception {
+    public void shouldInnerJoinWithStream() {
         stream.join(global, keyValueMapper,  MockValueJoiner.TOSTRING_JOINER)
                 .foreach(action);
 

@@ -162,7 +162,7 @@ public class KTableKTableJoinTest {
     }
 
     @Test
-    public void testJoin() throws Exception {
+    public void testJoin() {
         final KStreamBuilder builder = new KStreamBuilder();
 
         final int[] expectedKeys = new int[]{0, 1, 2, 3};
@@ -183,7 +183,7 @@ public class KTableKTableJoinTest {
 
 
     @Test
-    public void testQueryableJoin() throws Exception {
+    public void testQueryableJoin() {
         final KStreamBuilder builder = new KStreamBuilder();
 
         final int[] expectedKeys = new int[]{0, 1, 2, 3};
@@ -284,7 +284,7 @@ public class KTableKTableJoinTest {
     }
 
     @Test
-    public void testNotSendingOldValues() throws Exception {
+    public void testNotSendingOldValues() {
         final KStreamBuilder builder = new KStreamBuilder();
 
         final int[] expectedKeys = new int[]{0, 1, 2, 3};
@@ -305,7 +305,7 @@ public class KTableKTableJoinTest {
     }
 
     @Test
-    public void testQueryableNotSendingOldValues() throws Exception {
+    public void testQueryableNotSendingOldValues() {
         final KStreamBuilder builder = new KStreamBuilder();
 
         final int[] expectedKeys = new int[]{0, 1, 2, 3};
@@ -326,7 +326,7 @@ public class KTableKTableJoinTest {
     }
 
     @Test
-    public void testSendingOldValues() throws Exception {
+    public void testSendingOldValues() {
         final KStreamBuilder builder = new KStreamBuilder();
 
         final int[] expectedKeys = new int[]{0, 1, 2, 3};

@@ -44,6 +44,7 @@ import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -51,6 +52,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.ExecutionException;
 import java.util.regex.Pattern;
 
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -103,7 +105,7 @@ public class KStreamsFineGrainedAutoResetIntegrationTest {
 
 
     @BeforeClass
-    public static void startKafkaCluster() throws Exception {
+    public static void startKafkaCluster() throws InterruptedException {
         CLUSTER.createTopics(
             TOPIC_1_0,
             TOPIC_2_0,
@@ -131,7 +133,7 @@ public class KStreamsFineGrainedAutoResetIntegrationTest {
     }
 
     @Before
-    public void setUp() throws Exception {
+    public void setUp() throws IOException {
 
         Properties props = new Properties();
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
@@ -179,7 +181,7 @@ public class KStreamsFineGrainedAutoResetIntegrationTest {
         final String topicY,
         final String topicZ,
         final String outputTopic,
-        final List<String> expectedReceivedValues) throws Exception {
+        final List<String> expectedReceivedValues) throws ExecutionException, InterruptedException {
 
         final KStreamBuilder builder = new KStreamBuilder();
 
@@ -261,7 +263,7 @@ public class KStreamsFineGrainedAutoResetIntegrationTest {
     }
 
     @Test
-    public void shouldThrowStreamsExceptionNoResetSpecified() throws Exception {
+    public void shouldThrowStreamsExceptionNoResetSpecified() throws InterruptedException {
         Properties props = new Properties();
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "none");
 

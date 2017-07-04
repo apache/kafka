@@ -59,7 +59,7 @@ public class RocksDBWindowStoreSupplierTest {
     }
 
     @Test
-    public void shouldCreateLoggingEnabledStoreWhenWindowStoreLogged() throws Exception {
+    public void shouldCreateLoggingEnabledStoreWhenWindowStoreLogged() {
         store = createStore(true, false, 3);
         final List<ProducerRecord> logged = new ArrayList<>();
         final NoOpRecordCollector collector = new NoOpRecordCollector() {
@@ -86,7 +86,7 @@ public class RocksDBWindowStoreSupplierTest {
     }
 
     @Test
-    public void shouldNotBeLoggingEnabledStoreWhenLogginNotEnabled() throws Exception {
+    public void shouldNotBeLoggingEnabledStoreWhenLogginNotEnabled() {
         store = createStore(false, false, 3);
         final List<ProducerRecord> logged = new ArrayList<>();
         final NoOpRecordCollector collector = new NoOpRecordCollector() {
@@ -113,7 +113,7 @@ public class RocksDBWindowStoreSupplierTest {
     }
 
     @Test
-    public void shouldBeCachedWindowStoreWhenCachingEnabled() throws Exception {
+    public void shouldBeCachedWindowStoreWhenCachingEnabled() {
         store = createStore(false, true, 3);
         store.init(context, store);
         context.setTime(1);
@@ -124,20 +124,20 @@ public class RocksDBWindowStoreSupplierTest {
     }
 
     @Test
-    public void shouldReturnRocksDbStoreWhenCachingAndLoggingDisabled() throws Exception {
+    public void shouldReturnRocksDbStoreWhenCachingAndLoggingDisabled() {
         store = createStore(false, false, 3);
         assertThat(store, is(instanceOf(RocksDBWindowStore.class)));
     }
 
     @Test
-    public void shouldReturnRocksDbStoreWhenCachingDisabled() throws Exception {
+    public void shouldReturnRocksDbStoreWhenCachingDisabled() {
         store = createStore(true, false, 3);
         assertThat(store, is(instanceOf(RocksDBWindowStore.class)));
     }
 
     @SuppressWarnings("unchecked")
     @Test
-    public void shouldHaveMeteredStoreWhenCached() throws Exception {
+    public void shouldHaveMeteredStoreWhenCached() {
         store = createStore(false, true, 3);
         store.init(context, store);
         final StreamsMetrics metrics = context.metrics();
@@ -146,7 +146,7 @@ public class RocksDBWindowStoreSupplierTest {
 
     @SuppressWarnings("unchecked")
     @Test
-    public void shouldHaveMeteredStoreWhenLogged() throws Exception {
+    public void shouldHaveMeteredStoreWhenLogged() {
         store = createStore(true, false, 3);
         store.init(context, store);
         final StreamsMetrics metrics = context.metrics();
@@ -155,7 +155,7 @@ public class RocksDBWindowStoreSupplierTest {
 
     @SuppressWarnings("unchecked")
     @Test
-    public void shouldHaveMeteredStoreWhenNotLoggedOrCached() throws Exception {
+    public void shouldHaveMeteredStoreWhenNotLoggedOrCached() {
         store = createStore(false, false, 3);
         store.init(context, store);
         final StreamsMetrics metrics = context.metrics();
@@ -163,7 +163,7 @@ public class RocksDBWindowStoreSupplierTest {
     }
 
     @Test(expected = IllegalArgumentException.class)
-    public void shouldThrowIllegalArgumentExceptionIfNumSegmentsLessThanTwo() throws Exception {
+    public void shouldThrowIllegalArgumentExceptionIfNumSegmentsLessThanTwo() {
         createStore(true, true, 1);
     }
 

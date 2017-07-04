@@ -37,13 +37,13 @@ public class MergedSortedCacheKeyValueStoreIteratorTest {
     private ThreadCache cache;
 
     @Before
-    public void setUp() throws Exception {
+    public void setUp() {
         store = new InMemoryKeyValueStore<>(namespace, Serdes.Bytes(), Serdes.ByteArray());
         cache = new ThreadCache("testCache", 10000L, new MockStreamsMetrics(new Metrics()));
     }
 
     @Test
-    public void shouldIterateOverRange() throws Exception {
+    public void shouldIterateOverRange() {
         final byte[][] bytes = {{0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9}, {10}, {11}};
         for (int i = 0; i < bytes.length; i += 2) {
             store.put(Bytes.wrap(bytes[i]), bytes[i]);
@@ -68,7 +68,7 @@ public class MergedSortedCacheKeyValueStoreIteratorTest {
 
 
     @Test
-    public void shouldSkipLargerDeletedCacheValue() throws Exception {
+    public void shouldSkipLargerDeletedCacheValue() {
         final byte[][] bytes = {{0}, {1}};
         store.put(Bytes.wrap(bytes[0]), bytes[0]);
         cache.put(namespace, Bytes.wrap(bytes[1]), new LRUCacheEntry(null));
@@ -78,7 +78,7 @@ public class MergedSortedCacheKeyValueStoreIteratorTest {
     }
 
     @Test
-    public void shouldSkipSmallerDeletedCachedValue() throws Exception {
+    public void shouldSkipSmallerDeletedCachedValue() {
         final byte[][] bytes = {{0}, {1}};
         cache.put(namespace, Bytes.wrap(bytes[0]), new LRUCacheEntry(null));
         store.put(Bytes.wrap(bytes[1]), bytes[1]);
@@ -88,7 +88,7 @@ public class MergedSortedCacheKeyValueStoreIteratorTest {
     }
 
     @Test
-    public void shouldIgnoreIfDeletedInCacheButExistsInStore() throws Exception {
+    public void shouldIgnoreIfDeletedInCacheButExistsInStore() {
         final byte[][] bytes = {{0}};
         cache.put(namespace, Bytes.wrap(bytes[0]), new LRUCacheEntry(null));
         store.put(Bytes.wrap(bytes[0]), bytes[0]);
@@ -97,7 +97,7 @@ public class MergedSortedCacheKeyValueStoreIteratorTest {
     }
 
     @Test
-    public void shouldNotHaveNextIfAllCachedItemsDeleted() throws Exception {
+    public void shouldNotHaveNextIfAllCachedItemsDeleted() {
         final byte[][] bytes = {{0}, {1}, {2}};
         for (byte[] aByte : bytes) {
             Bytes aBytes = Bytes.wrap(aByte);
@@ -108,7 +108,7 @@ public class MergedSortedCacheKeyValueStoreIteratorTest {
     }
 
     @Test
-    public void shouldNotHaveNextIfOnlyCacheItemsAndAllDeleted() throws Exception {
+    public void shouldNotHaveNextIfOnlyCacheItemsAndAllDeleted() {
         final byte[][] bytes = {{0}, {1}, {2}};
         for (byte[] aByte : bytes) {
             cache.put(namespace, Bytes.wrap(aByte), new LRUCacheEntry(null));
@@ -117,7 +117,7 @@ public class MergedSortedCacheKeyValueStoreIteratorTest {
     }
 
     @Test
-    public void shouldSkipAllDeletedFromCache() throws Exception {
+    public void shouldSkipAllDeletedFromCache() {
         final byte[][] bytes = {{0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9}, {10}, {11}};
         for (byte[] aByte : bytes) {
             Bytes aBytes = Bytes.wrap(aByte);
@@ -143,7 +143,7 @@ public class MergedSortedCacheKeyValueStoreIteratorTest {
     }
 
     @Test
-    public void shouldPeekNextKey() throws Exception {
+    public void shouldPeekNextKey() {
         final KeyValueStore<Bytes, byte[]> kv = new InMemoryKeyValueStore<>("one", Serdes.Bytes(), Serdes.ByteArray());
         final ThreadCache cache = new ThreadCache("testCache", 1000000L, new MockStreamsMetrics(new Metrics()));
         byte[][] bytes = {{0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9}, {10}};

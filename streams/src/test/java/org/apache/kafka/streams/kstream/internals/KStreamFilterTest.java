@@ -89,7 +89,7 @@ public class KStreamFilterTest {
     }
 
     @Test
-    public void testTypeVariance() throws Exception {
+    public void testTypeVariance() {
         Predicate<Number, Object> numberKeyPredicate = new Predicate<Number, Object>() {
             @Override
             public boolean test(Number key, Object value) {

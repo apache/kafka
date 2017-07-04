@@ -54,7 +54,7 @@ public class KStreamWindowAggregateTest {
     }
 
     @After
-    public void tearDown() throws Exception {
+    public void tearDown() throws IOException {
         if (driver != null) {
             driver.close();
             driver = null;
@@ -63,7 +63,7 @@ public class KStreamWindowAggregateTest {
     }
 
     @Test
-    public void testAggBasic() throws Exception {
+    public void testAggBasic() {
         final KStreamBuilder builder = new KStreamBuilder();
         String topic1 = "topic1";
 
@@ -155,7 +155,7 @@ public class KStreamWindowAggregateTest {
     }
 
     @Test
-    public void testJoin() throws Exception {
+    public void testJoin() {
         final KStreamBuilder builder = new KStreamBuilder();
         String topic1 = "topic1";
         String topic2 = "topic2";

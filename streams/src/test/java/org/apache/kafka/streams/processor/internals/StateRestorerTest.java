@@ -31,34 +31,34 @@ public class StateRestorerTest {
     private final StateRestorer restorer = new StateRestorer(new TopicPartition("topic", 1), callback, null, OFFSET_LIMIT, true);
 
     @Test
-    public void shouldCallRestoreOnRestoreCallback() throws Exception {
+    public void shouldCallRestoreOnRestoreCallback() {
         restorer.restore(new byte[0], new byte[0]);
         assertThat(callback.restored.size(), equalTo(1));
     }
 
     @Test
-    public void shouldBeCompletedIfRecordOffsetGreaterThanEndOffset() throws Exception {
+    public void shouldBeCompletedIfRecordOffsetGreaterThanEndOffset() {
         assertTrue(restorer.hasCompleted(11, 10));
     }
 
     @Test
-    public void shouldBeCompletedIfRecordOffsetGreaterThanOffsetLimit() throws Exception {
+    public void shouldBeCompletedIfRecordOffsetGreaterThanOffsetLimit() {
         assertTrue(restorer.hasCompleted(51, 100));
     }
 
     @Test
-    public void shouldBeCompletedIfEndOffsetAndRecordOffsetAreZero() throws Exception {
+    public void shouldBeCompletedIfEndOffsetAndRecordOffsetAreZero() {
         assertTrue(restorer.hasCompleted(0, 0));
     }
 
     @Test
-    public void shouldBeCompletedIfOffsetAndOffsetLimitAreZero() throws Exception {
+    public void shouldBeCompletedIfOffsetAndOffsetLimitAreZero() {
         final StateRestorer restorer = new StateRestorer(new TopicPartition("topic", 1), callback, null, 0, true);
         assertTrue(restorer.hasCompleted(0, 10));
     }
 
     @Test
-    public void shouldSetRestoredOffsetToMinOfLimitAndOffset() throws Exception {
+    public void shouldSetRestoredOffsetToMinOfLimitAndOffset() {
         restorer.setRestoredOffset(20);
         assertThat(restorer.restoredOffset(), equalTo(20L));
         restorer.setRestoredOffset(100);
@@ -66,7 +66,7 @@ public class StateRestorerTest {
     }
 
     @Test
-    public void shouldSetStartingOffsetToMinOfLimitAndOffset() throws Exception {
+    public void shouldSetStartingOffsetToMinOfLimitAndOffset() {
         restorer.setStartingOffset(20);
         assertThat(restorer.startingOffset(), equalTo(20L));
         restorer.setRestoredOffset(100);
@@ -74,7 +74,7 @@ public class StateRestorerTest {
     }
 
     @Test
-    public void shouldReturnCorrectNumRestoredRecords() throws Exception {
+    public void shouldReturnCorrectNumRestoredRecords() {
         restorer.setStartingOffset(20);
         restorer.setRestoredOffset(40);
         assertThat(restorer.restoredNumRecords(), equalTo(20L));

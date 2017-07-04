@@ -48,7 +48,7 @@ public class MeteredSegmentedBytesStoreTest {
 
     @SuppressWarnings("unchecked")
     @Before
-    public void setUp() throws Exception {
+    public void setUp() {
         final Metrics metrics = new Metrics();
         final StreamsMetrics streamsMetrics = new StreamsMetrics() {
 
@@ -116,48 +116,48 @@ public class MeteredSegmentedBytesStoreTest {
     }
 
     @Test
-    public void shouldRecordRestoreLatencyOnInit() throws Exception {
+    public void shouldRecordRestoreLatencyOnInit() {
         assertTrue(latencyRecorded.contains("restore"));
         assertTrue(bytesStore.initialized);
     }
 
     @Test
-    public void shouldRecordPutLatency() throws Exception {
+    public void shouldRecordPutLatency() {
         store.put(Bytes.wrap(new byte[0]), new byte[0]);
         assertTrue(latencyRecorded.contains("put"));
         assertTrue(bytesStore.putCalled);
     }
 
     @Test
-    public void shouldRecordFetchLatency() throws Exception {
+    public void shouldRecordFetchLatency() {
         store.fetch(Bytes.wrap(new byte[0]), 1, 1).close(); // recorded on close;
         assertTrue(latencyRecorded.contains("fetch"));
         assertTrue(bytesStore.fetchCalled);
     }
 
     @Test
-    public void shouldRecordRemoveLatency() throws Exception {
+    public void shouldRecordRemoveLatency() {
         store.remove(null);
         assertTrue(latencyRecorded.contains("remove"));
         assertTrue(bytesStore.removeCalled);
     }
 
     @Test
-    public void shouldRecordFlushLatency() throws Exception {
+    public void shouldRecordFlushLatency() {
         store.flush();
         assertTrue(latencyRecorded.contains("flush"));
         assertTrue(bytesStore.flushed);
     }
 
     @Test
-    public void shouldRecordGetLatency() throws Exception {
+    public void shouldRecordGetLatency() {
         store.get(null);
         assertTrue(latencyRecorded.contains("get"));
         assertTrue(bytesStore.getCalled);
     }
 
     @Test
-    public void shouldCloseUnderlyingStore() throws Exception {
+    public void shouldCloseUnderlyingStore() {
         store.close();
         assertTrue(bytesStore.closed);
     }

@@ -70,6 +70,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -254,7 +255,7 @@ public class QueryableStateIntegrationTest {
 
     private void verifyAllKVKeys(final StreamRunnable[] streamRunnables, final KafkaStreams streams,
                                  final KafkaStreamsTest.StateListenerStub stateListenerStub,
-                                 final Set<String> keys, final String storeName) throws Exception {
+                                 final Set<String> keys, final String storeName) throws InterruptedException {
         for (final String key : keys) {
             TestUtils.waitForCondition(new TestCondition() {
                 @Override
@@ -286,7 +287,7 @@ public class QueryableStateIntegrationTest {
     private void verifyAllWindowedKeys(final StreamRunnable[] streamRunnables, final KafkaStreams streams,
                                        final KafkaStreamsTest.StateListenerStub stateListenerStub,
                                        final Set<String> keys, final String storeName,
-                                       final Long from, final Long to) throws Exception {
+                                       final Long from, final Long to) throws InterruptedException {
         for (final String key : keys) {
             TestUtils.waitForCondition(new TestCondition() {
                 @Override
@@ -316,7 +317,7 @@ public class QueryableStateIntegrationTest {
 
 
     @Test
-    public void queryOnRebalance() throws Exception {
+    public void queryOnRebalance() throws InterruptedException {
         final int numThreads = STREAM_TWO_PARTITIONS;
         final StreamRunnable[] streamRunnables = new StreamRunnable[numThreads];
         final Thread[] streamThreads = new Thread[numThreads];
@@ -368,7 +369,7 @@ public class QueryableStateIntegrationTest {
     }
 
     @Test
-    public void concurrentAccesses() throws Exception {
+    public void concurrentAccesses() throws InterruptedException {
 
         final int numIterations = 500000;
 
@@ -406,17 +407,17 @@ public class QueryableStateIntegrationTest {
     }
 
     @Test
-    public void shouldBeAbleToQueryStateWithZeroSizedCache() throws Exception {
+    public void shouldBeAbleToQueryStateWithZeroSizedCache() throws ExecutionException, InterruptedException {
         verifyCanQueryState(0);
     }
 
     @Test
-    public void shouldBeAbleToQueryStateWithNonZeroSizedCache() throws Exception {
+    public void shouldBeAbleToQueryStateWithNonZeroSizedCache() throws ExecutionException, InterruptedException {
         verifyCanQueryState(10 * 1024 * 1024);
     }
 
     @Test
-    public void shouldBeAbleToQueryFilterState() throws Exception {
+    public void shouldBeAbleToQueryFilterState() throws ExecutionException, InterruptedException {
         streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Long().getClass());
         final KStreamBuilder builder = new KStreamBuilder();
@@ -482,7 +483,7 @@ public class QueryableStateIntegrationTest {
     }
 
     @Test
-    public void shouldBeAbleToQueryMapValuesState() throws Exception {
+    public void shouldBeAbleToQueryMapValuesState() throws ExecutionException, InterruptedException {
         streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         final KStreamBuilder builder = new KStreamBuilder();
@@ -528,7 +529,7 @@ public class QueryableStateIntegrationTest {
     }
 
     @Test
-    public void shouldBeAbleToQueryMapValuesAfterFilterState() throws Exception {
+    public void shouldBeAbleToQueryMapValuesAfterFilterState() throws ExecutionException, InterruptedException {
         streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         final KStreamBuilder builder = new KStreamBuilder();
@@ -644,7 +645,7 @@ public class QueryableStateIntegrationTest {
     }
 
     @Test
-    public void shouldNotMakeStoreAvailableUntilAllStoresAvailable() throws Exception {
+    public void shouldNotMakeStoreAvailableUntilAllStoresAvailable() throws ExecutionException, InterruptedException {
         final KStreamBuilder builder = new KStreamBuilder();
         final KStream<String, String> stream = builder.stream(streamThree);
 
@@ -716,7 +717,7 @@ public class QueryableStateIntegrationTest {
     }
 
     @Test
-    public void shouldAllowToQueryAfterThreadDied() throws Exception {
+    public void shouldAllowToQueryAfterThreadDied() throws ExecutionException, InterruptedException {
         final AtomicBoolean beforeFailure = new AtomicBoolean(true);
         final AtomicBoolean failed = new AtomicBoolean(false);
         final String storeName = "store";

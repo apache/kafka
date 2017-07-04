@@ -66,7 +66,7 @@ public class KStreamKStreamLeftJoinTest {
 
 
     @Test
-    public void testLeftJoin() throws Exception {
+    public void testLeftJoin() {
         final KStreamBuilder builder = new KStreamBuilder();
 
         final int[] expectedKeys = new int[]{0, 1, 2, 3};
@@ -154,7 +154,7 @@ public class KStreamKStreamLeftJoinTest {
     }
 
     @Test
-    public void testWindowing() throws Exception {
+    public void testWindowing() {
         final KStreamBuilder builder = new KStreamBuilder();
 
         final int[] expectedKeys = new int[]{0, 1, 2, 3};

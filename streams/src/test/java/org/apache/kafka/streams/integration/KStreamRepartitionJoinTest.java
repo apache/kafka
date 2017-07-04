@@ -116,16 +116,16 @@ public class KStreamRepartitionJoinTest {
     }
 
     @Test
-    public void shouldCorrectlyRepartitionOnJoinOperationsWithZeroSizedCache() throws Exception {
+    public void shouldCorrectlyRepartitionOnJoinOperationsWithZeroSizedCache() throws ExecutionException, InterruptedException {
         verifyRepartitionOnJoinOperations(0);
     }
 
     @Test
-    public void shouldCorrectlyRepartitionOnJoinOperationsWithNonZeroSizedCache() throws Exception {
+    public void shouldCorrectlyRepartitionOnJoinOperationsWithNonZeroSizedCache() throws ExecutionException, InterruptedException {
         verifyRepartitionOnJoinOperations(10 * 1024 * 1024);
     }
 
-    private void verifyRepartitionOnJoinOperations(final int cacheSizeBytes) throws Exception {
+    private void verifyRepartitionOnJoinOperations(final int cacheSizeBytes) throws ExecutionException, InterruptedException {
         streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, cacheSizeBytes);
         produceMessages();
         final ExpectedOutputOnTopic mapOne = mapStreamOneAndJoin();
@@ -155,7 +155,7 @@ public class KStreamRepartitionJoinTest {
         return new ExpectedOutputOnTopic(expectedStreamOneTwoJoin, mapOneStreamAndJoinOutput);
     }
 
-    private ExpectedOutputOnTopic mapBothStreamsAndJoin() throws Exception {
+    private ExpectedOutputOnTopic mapBothStreamsAndJoin() throws InterruptedException {
         final KStream<Integer, Integer> map1 = streamOne.map(keyMapper);
         final KStream<Integer, String> map2 = streamTwo.map(MockKeyValueMapper.<Integer, String>NoOpKeyValueMapper());
 
@@ -163,7 +163,7 @@ public class KStreamRepartitionJoinTest {
         return new ExpectedOutputOnTopic(expectedStreamOneTwoJoin, "map-both-streams-and-join-" + testNo);
     }
 
-    private ExpectedOutputOnTopic mapMapJoin() throws Exception {
+    private ExpectedOutputOnTopic mapMapJoin() throws InterruptedException {
         final KStream<Integer, Integer> mapMapStream = streamOne.map(
             new KeyValueMapper<Long, Integer, KeyValue<Long, Integer>>() {
                 @Override
@@ -190,7 +190,7 @@ public class KStreamRepartitionJoinTest {
         return new ExpectedOutputOnTopic(expectedStreamOneTwoJoin, outputTopic);
     }
 
-    private ExpectedOutputOnTopic flatMapJoin() throws Exception {
+    private ExpectedOutputOnTopic flatMapJoin() throws InterruptedException {
         final KStream<Integer, Integer> flatMapped = streamOne.flatMap(
             new KeyValueMapper<Long, Integer, Iterable<KeyValue<Integer, Integer>>>() {
                 @Override
@@ -205,7 +205,7 @@ public class KStreamRepartitionJoinTest {
         return new ExpectedOutputOnTopic(expectedStreamOneTwoJoin, outputTopic);
     }
 
-    private ExpectedOutputOnTopic joinMappedRhsStream() throws Exception {
+    private ExpectedOutputOnTopic joinMappedRhsStream() throws InterruptedException {
 
         final String output = "join-rhs-stream-mapped-" + testNo;
         CLUSTER.createTopic(output);
@@ -221,7 +221,7 @@ public class KStreamRepartitionJoinTest {
         return new ExpectedOutputOnTopic(Arrays.asList("A:1", "B:2", "C:3", "D:4", "E:5"), output);
     }
 
-    private ExpectedOutputOnTopic mapBothStreamsAndLeftJoin() throws Exception {
+    private ExpectedOutputOnTopic mapBothStreamsAndLeftJoin() throws InterruptedException {
         final KStream<Integer, Integer> map1 = streamOne.map(keyMapper);
 
         final KStream<Integer, String> map2 = streamTwo.map(MockKeyValueMapper.<Integer, String>NoOpKeyValueMapper());
@@ -247,7 +247,7 @@ public class KStreamRepartitionJoinTest {
         return new ExpectedOutputOnTopic(expectedStreamOneTwoJoin, outputTopic);
     }
 
-    private ExpectedOutputOnTopic joinTwoMappedStreamsOneThatHasBeenPreviouslyJoined() throws Exception {
+    private ExpectedOutputOnTopic joinTwoMappedStreamsOneThatHasBeenPreviouslyJoined() throws InterruptedException {
         final KStream<Integer, Integer> map1 = streamOne.map(keyMapper);
 
         final KeyValueMapper<Integer, String, KeyValue<Integer, String>>

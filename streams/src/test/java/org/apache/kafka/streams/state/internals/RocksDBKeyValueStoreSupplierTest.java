@@ -57,7 +57,7 @@ public class RocksDBKeyValueStoreSupplierTest {
     }
 
     @Test
-    public void shouldCreateLoggingEnabledStoreWhenStoreLogged() throws Exception {
+    public void shouldCreateLoggingEnabledStoreWhenStoreLogged() {
         store = createStore(true, false);
         final List<ProducerRecord> logged = new ArrayList<>();
         final NoOpRecordCollector collector = new NoOpRecordCollector() {
@@ -84,7 +84,7 @@ public class RocksDBKeyValueStoreSupplierTest {
     }
 
     @Test
-    public void shouldNotBeLoggingEnabledStoreWhenLoggingNotEnabled() throws Exception {
+    public void shouldNotBeLoggingEnabledStoreWhenLoggingNotEnabled() {
         store = createStore(false, false);
         final List<ProducerRecord> logged = new ArrayList<>();
         final NoOpRecordCollector collector = new NoOpRecordCollector() {
@@ -111,7 +111,7 @@ public class RocksDBKeyValueStoreSupplierTest {
     }
 
     @Test
-    public void shouldReturnCachedKeyValueStoreWhenCachingEnabled() throws Exception {
+    public void shouldReturnCachedKeyValueStoreWhenCachingEnabled() {
         store = createStore(false, true);
         store.init(context, store);
         context.setTime(1);
@@ -122,20 +122,20 @@ public class RocksDBKeyValueStoreSupplierTest {
     }
 
     @Test
-    public void shouldReturnMeteredStoreWhenCachingAndLoggingDisabled() throws Exception {
+    public void shouldReturnMeteredStoreWhenCachingAndLoggingDisabled() {
         store = createStore(false, false);
         assertThat(store, is(instanceOf(MeteredKeyValueStore.class)));
     }
 
     @Test
-    public void shouldReturnMeteredStoreWhenCachingDisabled() throws Exception {
+    public void shouldReturnMeteredStoreWhenCachingDisabled() {
         store = createStore(true, false);
         assertThat(store, is(instanceOf(MeteredKeyValueStore.class)));
     }
 
     @SuppressWarnings("unchecked")
     @Test
-    public void shouldHaveMeteredStoreWhenCached() throws Exception {
+    public void shouldHaveMeteredStoreWhenCached() {
         store = createStore(false, true);
         store.init(context, store);
         final StreamsMetrics metrics = context.metrics();
@@ -144,7 +144,7 @@ public class RocksDBKeyValueStoreSupplierTest {
 
     @SuppressWarnings("unchecked")
     @Test
-    public void shouldHaveMeteredStoreWhenLogged() throws Exception {
+    public void shouldHaveMeteredStoreWhenLogged() {
         store = createStore(true, false);
         store.init(context, store);
         final StreamsMetrics metrics = context.metrics();
