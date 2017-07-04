@@ -323,6 +323,25 @@
       can result in lost messages.</dd>
   </dl>
 
+  <h4><a id="exampleconfig-latency" href="#exampleconfig-latency">3.7.2 Configuration for low latency</a></h4>
+
+  The following partial configurations are suitable in circumstances where
+  low latency is the overriding consideration, and reliability and throughput
+  are secondary considerations:
+
+  <h5>Producer</h5>
+  <dl>
+    <dt>linger.ms</dt>
+    <dd>This setting directly affects how long your messages are
+      delayed (with the aim of batching messages for higher throughput).</dd>
+
+    <dt>acks</dt>
+    <dd>Setting <code>acks=0</code> means the message is considered delivered
+      as soon as it's sent over the network, thus avoiding having to wait
+      for a reply. Use <code>acks=1</code> to know that the message was at
+      least received by one broker.</dd>
+  </dl>
+
 </script>
 
 <div class="p-configuration"></div>
