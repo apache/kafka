@@ -593,6 +593,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         long now = time.milliseconds();
         long startMs = now;
         long remainingMs = timeoutMs;
+        boolean isFutureCompleted = false;
         do {
             if (coordinatorUnknown()) {
                 if (!ensureCoordinatorReady(now, remainingMs))
@@ -602,7 +603,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             }
 
             RequestFuture<Void> future = sendOffsetCommitRequest(offsets);
-            client.poll(future, remainingMs);
+            isFutureCompleted = client.poll(future, remainingMs);
 
             if (future.succeeded()) {
                 if (interceptors != null)
@@ -617,7 +618,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
             now = time.milliseconds();
             remainingMs = timeoutMs - (now - startMs);
-        } while (remainingMs > 0);
+        } while (remainingMs > 0 && !isFutureCompleted);
 
         return false;
     }
