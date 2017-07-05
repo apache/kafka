@@ -217,7 +217,7 @@ public class StreamsKafkaClient {
                 }
             }
             try {
-                kafkaClient.poll(500, Time.SYSTEM.milliseconds());
+                kafkaClient.poll(0, Time.SYSTEM.milliseconds());
             } catch (final Exception e) {
                 throw new StreamsException("Could not poll.", e);
             }
@@ -266,7 +266,7 @@ public class StreamsKafkaClient {
         while (Time.SYSTEM.milliseconds() < responseTimeout) {
             final List<ClientResponse> responseList;
             try {
-                responseList = kafkaClient.poll(500, Time.SYSTEM.milliseconds());
+                responseList = kafkaClient.poll(100, Time.SYSTEM.milliseconds());
             } catch (final IllegalStateException e) {
                 throw new StreamsException("Could not poll.", e);
             }
