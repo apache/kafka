@@ -88,10 +88,9 @@ public class RecordQueue {
      * @return the size of this queue
      */
     public int addRawRecords(Iterable<ConsumerRecord<byte[], byte[]>> rawRecords) {
-        ConsumerRecord<Object, Object> record = null;
         for (ConsumerRecord<byte[], byte[]> rawRecord : rawRecords) {
 
-            record = recordDeserializer.tryDeserialize(processorContext, rawRecord);
+            ConsumerRecord<Object, Object> record = recordDeserializer.tryDeserialize(processorContext, rawRecord);
             if (record == null) {
                 continue;
             }
