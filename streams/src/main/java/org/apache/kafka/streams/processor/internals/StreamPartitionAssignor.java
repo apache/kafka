@@ -362,11 +362,12 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                                     } else {
                                         numPartitionsCandidate = metadata.partitionCountForTopic(sourceTopicName);
                                         if (numPartitionsCandidate == null) {
-                                            repartitionTopicMetadata.get(topicName).numPartitions = NOT_AVAILABLE;
+                                            numPartitionsCandidate = NOT_AVAILABLE;
                                         }
                                     }
 
-                                    if (numPartitionsCandidate != null && numPartitionsCandidate > numPartitions) {
+                                    // assign NOT_AVAILABLE to avoid infinite loop and to propagate this information downstream
+                                    if (numPartitionsCandidate == NOT_AVAILABLE || numPartitionsCandidate > numPartitions) {
                                         numPartitions = numPartitionsCandidate;
                                     }
                                 }
@@ -374,14 +375,20 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                         }
                         // if we still have not find the right number of partitions,
                         // another iteration is needed
-                        if (numPartitions == UNKNOWN)
+                        if (numPartitions == UNKNOWN) {
                             numPartitionsNeeded = true;
-                        else
+                        } else {
                             repartitionTopicMetadata.get(topicName).numPartitions = numPartitions;
+                        }
                     }
                 }
             }
         } while (numPartitionsNeeded);
+
+        // ensure the co-partitioning of topics within the group so that they have the same number of partitions,
+        // and enforce the number of partitions for those repartition topics to be the same if they
+        // are co-partitioned as well.
+        ensureCopartitioning(streamThread.builder.copartitionGroups(), repartitionTopicMetadata, metadata);
 
         // augment the metadata with the newly computed number of partitions for all the
         // repartition source topics
@@ -395,11 +402,6 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                         new PartitionInfo(topic, partition, null, new Node[0], new Node[0]));
             }
         }
-
-        // ensure the co-partitioning topics within the group have the same number of partitions,
-        // and enforce the number of partitions for those repartition topics to be the same if they
-        // are co-partitioned as well.
-        ensureCopartitioning(streamThread.builder.copartitionGroups(), repartitionTopicMetadata, metadata);
 
         // make sure the repartition source topics exist with the right number of partitions,
         // create these topics if necessary
@@ -781,7 +783,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                     final Integer partitions = metadata.partitionCountForTopic(topic);
 
                     if (partitions == null) {
-                        throw new TopologyBuilderException(String.format("stream-thread [%s] Topic not found: %s", threadName, topic));
+                        continue;
                     }
 
                     if (numPartitions == UNKNOWN) {

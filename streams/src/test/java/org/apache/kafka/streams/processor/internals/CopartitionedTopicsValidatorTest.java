@@ -47,13 +47,6 @@ public class CopartitionedTopicsValidatorTest {
     }
 
     @Test(expected = TopologyBuilderException.class)
-    public void shouldThrowTopologyBuilderExceptionIfNoPartitionsFoundForCoPartitionedTopic() throws Exception {
-        validator.validate(Collections.singleton("topic"),
-                           Collections.<String, StreamPartitionAssignor.InternalTopicMetadata>emptyMap(),
-                           cluster);
-    }
-
-    @Test(expected = TopologyBuilderException.class)
     public void shouldThrowTopologyBuilderExceptionIfPartitionCountsForCoPartitionedTopicsDontMatch() throws Exception {
         partitions.remove(new TopicPartition("second", 0));
         validator.validate(Utils.mkSet("first", "second"),
