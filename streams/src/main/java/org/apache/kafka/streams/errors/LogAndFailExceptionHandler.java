@@ -22,8 +22,6 @@ import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.PrintWriter;
-import java.io.StringWriter;
 import java.util.Map;
 
 public class LogAndFailExceptionHandler implements DeserializationExceptionHandler {
@@ -33,13 +31,11 @@ public class LogAndFailExceptionHandler implements DeserializationExceptionHandl
     public DeserializationHandlerResponse handle(final ProcessorContext context,
                                                  final ConsumerRecord<byte[], byte[]> record,
                                                  final Exception exception) {
-        StringWriter sWriter = new StringWriter();
-        PrintWriter pWriter = new PrintWriter(sWriter);
-        exception.printStackTrace(pWriter);
 
-        log.warn("Deserialization exception {}. Processor context is {} and record is {}. " +
-                        "Exception stack trace: {}",
-                exception.toString(), context, sWriter.toString());
+        log.warn("Exception caught during Deserialization, " +
+                        "taskId: {}, topic:{}, partition:{}, offset:{}",
+                context.taskId(), record.topic(), record.partition(), record.offset(),
+                exception);
 
         return DeserializationHandlerResponse.FAIL;
     }
