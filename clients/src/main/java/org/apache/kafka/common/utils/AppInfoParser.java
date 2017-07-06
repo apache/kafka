@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.utils;
 
+import org.apache.kafka.common.KafkaException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -56,7 +57,7 @@ public class AppInfoParser {
             AppInfo mBean = new AppInfo();
             ManagementFactory.getPlatformMBeanServer().registerMBean(mBean, name);
         } catch (JMException e) {
-            log.error("Error registering AppInfo mbean", e);
+            throw new KafkaException(e);
         }
     }
 
@@ -67,7 +68,7 @@ public class AppInfoParser {
             if (server.isRegistered(name))
                 server.unregisterMBean(name);
         } catch (JMException e) {
-            log.error("Error unregistering AppInfo mbean", e);
+            throw new KafkaException(e);
         }
     }
 
