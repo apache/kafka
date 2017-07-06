@@ -21,18 +21,25 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.streams.processor.ProcessorContext;
 
+/**
+ * Interface that specifies how an exception from source node deserialization
+ * (e.g., reading from Kafka) should be handled.
+ */
 public interface DeserializationExceptionHandler extends Configurable {
     /**
-     * Inspect a record and the exception received
+     * Inspect a record and the exception received.
      * @param context processor context
      * @param record record that failed deserialization
      * @param exception the actual exception
      */
-    DeserializationHandlerResponse handle(ProcessorContext context,
-                                          ConsumerRecord<byte[], byte[]> record,
-                                          Exception exception);
+    DeserializationHandlerResponse handle(final ProcessorContext context,
+                                          final ConsumerRecord<byte[], byte[]> record,
+                                          final Exception exception);
 
-    public enum DeserializationHandlerResponse {
+    /**
+     * Enumeration that describes the response from the exception handler.
+     */
+    enum DeserializationHandlerResponse {
         /* continue with processing */
         CONTINUE(0, "CONTINUE"),
         /* fail the processing and stop */
@@ -42,10 +49,10 @@ public interface DeserializationExceptionHandler extends Configurable {
         public final String name;
 
         /** the permanent and immutable id of an API--this can't change ever */
-        public final short id;
+        public final int id;
 
-        DeserializationHandlerResponse(int id, String name) {
-            this.id = (short) id;
+        DeserializationHandlerResponse(final int id, final String name) {
+            this.id = id;
             this.name = name;
         }
     }

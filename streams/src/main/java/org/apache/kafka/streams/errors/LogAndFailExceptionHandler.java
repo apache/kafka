@@ -24,6 +24,11 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Map;
 
+
+/**
+ * Deserialization handler that logs a deserialization exception and then
+ * signals the processing pipeline to stop processing more records and fail.
+ */
 public class LogAndFailExceptionHandler implements DeserializationExceptionHandler {
     private static final Logger log = LoggerFactory.getLogger(StreamThread.class);
 
@@ -33,7 +38,7 @@ public class LogAndFailExceptionHandler implements DeserializationExceptionHandl
                                                  final Exception exception) {
 
         log.warn("Exception caught during Deserialization, " +
-                        "taskId: {}, topic:{}, partition:{}, offset:{}",
+                        "taskId: {}, topic: {}, partition: {}, offset: {}",
                 context.taskId(), record.topic(), record.partition(), record.offset(),
                 exception);
 
