@@ -1121,13 +1121,31 @@ public class StreamThread extends Thread {
 
             @Override
             public void apply(final StreamTask task) {
-                task.suspend();
+                try {
+                    task.suspend();
+                } catch (final Exception e) {
+                    try {
+                        task.close(false);
+                    } catch (final Exception f) {
+                        log.error("{} Closing task {} failed: ", logPrefix, task.id, f);
+                    }
+                    throw e;
+                }
             }
         }));
 
         for (final StandbyTask task : standbyTasks.values()) {
             try {
-                task.suspend();
+                try {
+                    task.suspend();
+                } catch (final Exception e) {
+                    try {
+                        task.close(false);
+                    } catch (final Exception f) {
+                        log.error("{} Closing standby task {} failed: ", logPrefix, task.id, f);
+                    }
+                    throw e;
+                }
             } catch (final RuntimeException e) {
                 firstException.compareAndSet(null, e);
             }
@@ -1231,6 +1249,7 @@ public class StreamThread extends Thread {
         }
     }
 
+    // visible for testing
     protected StreamTask createStreamTask(final TaskId id, final Collection<TopicPartition> partitions) {
         streamsMetrics.taskCreatedSensor.record();
 
@@ -1317,7 +1336,8 @@ public class StreamThread extends Thread {
         taskCreator.retryWithBackoff(newTasks, start);
     }
 
-    private StandbyTask createStandbyTask(final TaskId id, final Collection<TopicPartition> partitions) {
+    // visible for testing
+    protected StandbyTask createStandbyTask(final TaskId id, final Collection<TopicPartition> partitions) {
         streamsMetrics.taskCreatedSensor.record();
 
         final ProcessorTopology topology = builder.build(id.topicGroupId);
