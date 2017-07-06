@@ -429,7 +429,11 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
     public Map<TopicPartition, OffsetAndTimestamp> getOffsetsByTimes(Map<TopicPartition, Long> timestampsToSearch,
                                                                      long timeout) {
         Map<TopicPartition, OffsetData> offsetData = retrieveOffsetsByTimes(timestampsToSearch, timeout, true);
-        HashMap<TopicPartition, OffsetAndTimestamp> offsetsByTimes = new HashMap<>(offsetData.size());
+
+        HashMap<TopicPartition, OffsetAndTimestamp> offsetsByTimes = new HashMap<>(timestampsToSearch.size());
+        for (Map.Entry<TopicPartition, Long> entry : timestampsToSearch.entrySet())
+            offsetsByTimes.put(entry.getKey(), null);
+
         for (Map.Entry<TopicPartition, OffsetData> entry : offsetData.entrySet()) {
             OffsetData data = entry.getValue();
             if (data == null)
