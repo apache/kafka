@@ -65,6 +65,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.ArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -219,22 +220,22 @@ public class StreamTaskTest {
     @Test
     public void testMetrics() throws Exception {
         final String name = task.id().toString();
-        final String[] entities = {"all", name};
+        List<Map<String, String>> tags = new ArrayList<>();
+        tags.add(Collections.singletonMap("all", "all"));
+        tags.add(Collections.singletonMap("streams-task-id", name));
         final String operation = "commit";
 
         final String groupName = "stream-task-metrics";
-        final Map<String, String> tags = Collections.singletonMap("streams-task-id", name);
 
         assertNotNull(metrics.getSensor(operation));
-        assertNotNull(metrics.getSensor(name + "-" + operation));
 
-        for (final String entity : entities) {
-            assertNotNull(metrics.metrics().get(metrics.metricName(entity + "-" + operation + "-latency-avg", groupName,
-                "The average latency in milliseconds of " + entity + " " + operation + " operation.", tags)));
-            assertNotNull(metrics.metrics().get(metrics.metricName(entity + "-" + operation + "-latency-max", groupName,
-                "The max latency in milliseconds of " + entity + " " + operation + " operation.", tags)));
-            assertNotNull(metrics.metrics().get(metrics.metricName(entity + "-" + operation + "-rate", groupName,
-                "The average number of occurrence of " + entity + " " + operation + " operation per second.", tags)));
+        for (Map<String, String> tag : tags) {
+            assertNotNull(metrics.metrics().get(metrics.metricName(operation + "-latency-avg", groupName,
+                "The average latency of " + operation + " operation.", tag)));
+            assertNotNull(metrics.metrics().get(metrics.metricName(operation + "-latency-max", groupName,
+                "The max latency of " + operation + " operation.", tag)));
+            assertNotNull(metrics.metrics().get(metrics.metricName(operation + "-rate", groupName,
+                "The average number of occurrence of " + operation + " operation per second.", tag)));
         }
     }
 

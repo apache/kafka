@@ -83,15 +83,15 @@ public class NamedCacheTest {
         final Map<String, String> metricTags = new LinkedHashMap<>();
         metricTags.put(tagKey, tagValue);
 
-        assertNotNull(streamMetrics.registry().getSensor(entityName + "-" + opName));
-        assertNotNull(streamMetrics.registry().metrics().get(streamMetrics.registry().metricName(entityName +
-            "-" + opName + "-avg", groupName, "The current count of " + entityName + " " + opName +
+        assertNotNull(streamMetrics.registry().getSensor(opName));
+        assertNotNull(streamMetrics.registry().metrics().get(streamMetrics.registry().metricName(opName + "-avg",
+                groupName, "The current count of " + entityName + " " + opName +
             " operation.", metricTags)));
-        assertNotNull(streamMetrics.registry().metrics().get(streamMetrics.registry().metricName(entityName +
-            "-" + opName + "-min", groupName, "The current count of " + entityName + " " + opName +
+        assertNotNull(streamMetrics.registry().metrics().get(streamMetrics.registry().metricName(opName + "-min",
+                groupName, "The current count of " + entityName + " " + opName +
             " operation.", metricTags)));
-        assertNotNull(streamMetrics.registry().metrics().get(streamMetrics.registry().metricName(entityName +
-            "-" + opName + "-max", groupName, "The current count of " + entityName + " " + opName +
+        assertNotNull(streamMetrics.registry().metrics().get(streamMetrics.registry().metricName(opName + "-max",
+                groupName, "The current count of " + entityName + " " + opName +
             " operation.", metricTags)));
 
     }

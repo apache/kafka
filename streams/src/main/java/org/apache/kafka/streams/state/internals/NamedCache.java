@@ -363,7 +363,6 @@ class NamedCache {
 
         public NamedCacheMetrics(StreamsMetrics metrics) {
             final String scope = "record-cache";
-            final String entityName = name;
             final String opName = "hitRatio";
             final String tagKey = "record-cache-id";
             final String tagValue = name;
@@ -372,14 +371,14 @@ class NamedCache {
             this.metricTags = new LinkedHashMap<>();
             this.metricTags.put(tagKey, tagValue);
 
-            hitRatioSensor = this.metrics.registry().sensor(entityName + "-" + opName, Sensor.RecordingLevel.DEBUG);
+            hitRatioSensor = this.metrics.registry().sensor(opName, Sensor.RecordingLevel.DEBUG);
 
-            hitRatioSensor.add(this.metrics.registry().metricName(entityName + "-" + opName + "-avg", groupName,
-                "The average cache hit ratio of " + entityName, metricTags), new Avg());
-            hitRatioSensor.add(this.metrics.registry().metricName(entityName + "-" + opName + "-min", groupName,
-                "The minimum cache hit ratio of " + entityName, metricTags), new Min());
-            hitRatioSensor.add(this.metrics.registry().metricName(entityName + "-" + opName + "-max", groupName,
-                "The maximum cache hit ratio of " + entityName, metricTags), new Max());
+            hitRatioSensor.add(this.metrics.registry().metricName(opName + "-avg", groupName,
+                "The average cache hit ratio of " + name, metricTags), new Avg());
+            hitRatioSensor.add(this.metrics.registry().metricName(opName + "-min", groupName,
+                "The minimum cache hit ratio of " + name, metricTags), new Min());
+            hitRatioSensor.add(this.metrics.registry().metricName(opName + "-max", groupName,
+                "The maximum cache hit ratio of " + name, metricTags), new Max());
 
         }
 

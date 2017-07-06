@@ -25,7 +25,9 @@ import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.test.MockProcessorContext;
 import org.junit.Test;
 
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.Assert.assertNotNull;
@@ -99,30 +101,36 @@ public class ProcessorNodeTest {
         node.init(context);
 
         Metrics metrics = context.baseMetrics();
-        String name = "task." + context.taskId() + "." + node.name();
-        String[] entities = {"all", name};
+        String name = "task." + context.taskId();
         String[] latencyOperations = {"process", "punctuate", "create", "destroy"};
         String throughputOperation =  "forward";
         String groupName = "stream-processor-node-metrics";
-        Map<String, String> tags = Collections.singletonMap("processor-node-id", node.name());
+        List<Map<String, String>> tags = new ArrayList<>();
+        tags.add(Collections.singletonMap("all", "all"));
+        tags.add(Collections.singletonMap("processor-node-id", node.name()));
+
 
         for (String operation : latencyOperations) {
             assertNotNull(metrics.getSensor(operation));
-            assertNotNull(metrics.getSensor(name + "-" + operation));
         }
         assertNotNull(metrics.getSensor(throughputOperation));
 
-        for (String entity : entities) {
+        for (Map<String, String> tag : tags) {
             for (String operation : latencyOperations) {
-                assertNotNull(metrics.metrics().get(metrics.metricName(entity + "-" + operation + "-latency-avg", groupName,
-                    "The average latency in milliseconds of " + entity + " " + operation + " operation.", tags)));
-                assertNotNull(metrics.metrics().get(metrics.metricName(entity + "-" + operation + "-latency-max", groupName,
-                    "The max latency in milliseconds of " + entity + " " + operation + " operation.", tags)));
-                assertNotNull(metrics.metrics().get(metrics.metricName(entity + "-" + operation + "-rate", groupName,
-                    "The average number of occurrence of " + entity + " " + operation + " operation per second.", tags)));
+                final String tmpName = tag.containsKey("all") ? operation :
+                        name + "-" + operation;
+                assertNotNull(metrics.metrics().get(metrics.metricName(tmpName + "-latency-avg", groupName,
+                    "The average latency of " + tmpName + " operation.", tag)));
+                assertNotNull(metrics.metrics().get(metrics.metricName(tmpName + "-latency-max", groupName,
+                    "The max latency of " + tmpName + " operation.", tag)));
+                assertNotNull(metrics.metrics().get(metrics.metricName(tmpName + "-rate", groupName,
+                    "The average number of occurrence of " + operation + " operation per second.", tag)));
             }
-            assertNotNull(metrics.metrics().get(metrics.metricName(entity + "-" + throughputOperation + "-rate", groupName,
-                "The average number of occurrence of " + entity + " " + throughputOperation + " operation per second.", tags)));
+
+            final String tmpName = tag.containsKey("all") ? throughputOperation :
+                    name + "-" + throughputOperation;
+            assertNotNull(metrics.metrics().get(metrics.metricName(tmpName + "-rate", groupName,
+                "The average number of occurrence of " + tmpName + " operation per second.", tag)));
         }
 
         context.close();

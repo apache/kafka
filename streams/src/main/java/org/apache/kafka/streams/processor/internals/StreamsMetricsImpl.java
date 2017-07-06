@@ -97,12 +97,13 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     private Map<String, String> tagMap(String... tags) {
         // extract the additional tags if there are any
         Map<String, String> tagMap = new HashMap<>(this.tags);
-        if ((tags.length % 2) != 0)
-            throw new IllegalArgumentException("Tags needs to be specified in key-value pairs");
+        if (tags != null) {
+            if ((tags.length % 2) != 0)
+                throw new IllegalArgumentException("Tags needs to be specified in key-value pairs");
 
-        for (int i = 0; i < tags.length; i += 2)
-            tagMap.put(tags[i], tags[i + 1]);
-
+            for (int i = 0; i < tags.length; i += 2)
+                tagMap.put(tags[i], tags[i + 1]);
+        }
         return tagMap;
     }
 
@@ -117,7 +118,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
 
         // first add the global operation metrics if not yet, with the global tags only
         Sensor parent = metrics.sensor(sensorName(operationName, null), recordingLevel);
-        addLatencyMetrics(scopeName, parent, "all", operationName, tagMap);
+        addLatencyMetrics(scopeName, parent, null, operationName, tagMap("all", "all"));
 
         // add the operation metrics with additional tags
         Sensor sensor = metrics.sensor(sensorName(operationName, entityName), recordingLevel, parent);
@@ -137,7 +138,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
 
         // first add the global operation metrics if not yet, with the global tags only
         Sensor parent = metrics.sensor(sensorName(operationName, null), recordingLevel);
-        addThroughputMetrics(scopeName, parent, "all", operationName, tagMap);
+        addThroughputMetrics(scopeName, parent, null, operationName, tagMap("all", "all"));
 
         // add the operation metrics with additional tags
         Sensor sensor = metrics.sensor(sensorName(operationName, entityName), recordingLevel, parent);
@@ -149,16 +150,17 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     }
 
     private void addLatencyMetrics(String scopeName, Sensor sensor, String entityName, String opName, Map<String, String> tags) {
-        maybeAddMetric(sensor, metrics.metricName(entityName + "-" + opName + "-latency-avg", groupNameFromScope(scopeName),
-            "The average latency of " + entityName + " " + opName + " operation.", tags), new Avg());
-        maybeAddMetric(sensor, metrics.metricName(entityName + "-" + opName + "-latency-max", groupNameFromScope(scopeName),
-            "The max latency of " + entityName + " " + opName + " operation.", tags), new Max());
+
+        maybeAddMetric(sensor, metrics.metricName(sensorName(opName, entityName) + "-latency-avg", groupNameFromScope(scopeName),
+            "The average latency of " + sensorName(opName, entityName) + " operation.", tags), new Avg());
+        maybeAddMetric(sensor, metrics.metricName(sensorName(opName, entityName) + "-latency-max", groupNameFromScope(scopeName),
+            "The max latency of " + sensorName(opName, entityName) + " operation.", tags), new Max());
         addThroughputMetrics(scopeName, sensor, entityName, opName, tags);
     }
 
     private void addThroughputMetrics(String scopeName, Sensor sensor, String entityName, String opName, Map<String, String> tags) {
-        maybeAddMetric(sensor, metrics.metricName(entityName + "-" + opName + "-rate", groupNameFromScope(scopeName),
-            "The average number of occurrence of " + entityName + " " + opName + " operation per second.", tags), new Rate(new Count()));
+        maybeAddMetric(sensor, metrics.metricName(sensorName(opName, entityName) + "-rate", groupNameFromScope(scopeName),
+            "The average number of occurrence of " + sensorName(opName, entityName) + " operation per second.", tags), new Rate(new Count()));
     }
 
     private void maybeAddMetric(Sensor sensor, MetricName name, MeasurableStat stat) {
