@@ -94,6 +94,7 @@ abstract class BaseConsumerTest extends IntegrationTestHarness {
     val listener = new TestConsumerReassignmentListener()
     this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "5000")
     this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "2000")
+    this.consumerConfig.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, consumerConfig.get(ConsumerConfig.CLIENT_ID_CONFIG) + "-new")
     val consumer0 = new KafkaConsumer(this.consumerConfig, new ByteArrayDeserializer(), new ByteArrayDeserializer())
     consumers += consumer0
 

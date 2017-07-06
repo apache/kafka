@@ -212,7 +212,7 @@ public class KafkaProducerTest {
         final Cluster cluster = new Cluster(
                 "dummy",
                 Collections.singletonList(new Node(0, "host1", 1000)),
-                Arrays.asList(new PartitionInfo(topic, 0, null, null, null)),
+                Collections.singletonList(new PartitionInfo(topic, 0, null, null, null)),
                 Collections.<String>emptySet(),
                 Collections.<String>emptySet());
 
@@ -247,6 +247,7 @@ public class KafkaProducerTest {
     public void testMetadataFetchOnStaleMetadata() throws Exception {
         Properties props = new Properties();
         props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        props.setProperty(ProducerConfig.CLIENT_ID_CONFIG, "testMetadataFetchOnStaleMetadata");
         KafkaProducer<String, String> producer = new KafkaProducer<>(props, new StringSerializer(), new StringSerializer());
         Metadata metadata = PowerMock.createNiceMock(Metadata.class);
         MemberModifier.field(KafkaProducer.class, "metadata").set(producer, metadata);
@@ -263,7 +264,7 @@ public class KafkaProducerTest {
         final Cluster initialCluster = new Cluster(
                 "dummy",
                 Collections.singletonList(new Node(0, "host1", 1000)),
-                Arrays.asList(new PartitionInfo(topic, 0, null, null, null)),
+                Collections.singletonList(new PartitionInfo(topic, 0, null, null, null)),
                 Collections.<String>emptySet(),
                 Collections.<String>emptySet());
         final Cluster extendedCluster = new Cluster(
@@ -361,6 +362,7 @@ public class KafkaProducerTest {
     public void testHeaders() throws Exception {
         Properties props = new Properties();
         props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        props.setProperty(ProducerConfig.CLIENT_ID_CONFIG, "testHeaders");
         ExtendedSerializer keySerializer = PowerMock.createNiceMock(ExtendedSerializer.class);
         ExtendedSerializer valueSerializer = PowerMock.createNiceMock(ExtendedSerializer.class);
 
@@ -374,7 +376,7 @@ public class KafkaProducerTest {
         final Cluster cluster = new Cluster(
                 "dummy",
                 Collections.singletonList(new Node(0, "host1", 1000)),
-                Arrays.asList(new PartitionInfo(topic, 0, null, null, null)),
+                Collections.singletonList(new PartitionInfo(topic, 0, null, null, null)),
                 Collections.<String>emptySet(),
                 Collections.<String>emptySet());
 
@@ -442,6 +444,7 @@ public class KafkaProducerTest {
     public void testInterceptorPartitionSetOnTooLargeRecord() throws Exception {
         Properties props = new Properties();
         props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        props.setProperty(ProducerConfig.CLIENT_ID_CONFIG, "testInterceptorPartitionSetOnTooLargeRecord");
         props.setProperty(ProducerConfig.MAX_REQUEST_SIZE_CONFIG, "1");
         String topic = "topic";
         ProducerRecord<String, String> record = new ProducerRecord<>(topic, "value");
@@ -453,7 +456,7 @@ public class KafkaProducerTest {
         final Cluster cluster = new Cluster(
             "dummy",
             Collections.singletonList(new Node(0, "host1", 1000)),
-            Arrays.asList(new PartitionInfo(topic, 0, null, null, null)),
+            Collections.singletonList(new PartitionInfo(topic, 0, null, null, null)),
             Collections.<String>emptySet(),
             Collections.<String>emptySet());
         EasyMock.expect(metadata.fetch()).andReturn(cluster).once();
@@ -470,7 +473,6 @@ public class KafkaProducerTest {
         producer.send(record);
         
         EasyMock.verify(interceptors);
-        
     }
 
 }

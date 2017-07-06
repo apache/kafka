@@ -70,7 +70,9 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
     consumerConfig.putAll(consumerSecurityProps)
     for (_ <- 0 until producerCount)
       producers += createNewProducer
-    for (_ <- 0 until consumerCount) {
+    for (i <- 0 until consumerCount) {
+      if (consumerCount > 1)
+        consumerConfig.put(ConsumerConfig.CLIENT_ID_CONFIG, consumerConfig.get(ConsumerConfig.CLIENT_ID_CONFIG) + "-" + i)
       consumers += createNewConsumer
     }
 

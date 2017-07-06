@@ -292,6 +292,7 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
     this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, "60000")
     this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "1000")
     this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
+    this.consumerConfig.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, this.consumerConfig.getProperty(ConsumerConfig.CLIENT_ID_CONFIG) + "-new")
     checkCloseDuringRebalance("group1", topic, executor, true)
   }
 
@@ -355,6 +356,7 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
 
   private def createConsumer(groupId: String) : KafkaConsumer[Array[Byte], Array[Byte]] = {
     this.consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groupId)
+    this.consumerConfig.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, this.consumerConfig.getProperty(ConsumerConfig.CLIENT_ID_CONFIG) + "-new")
     val consumer = createNewConsumer
     consumers += consumer
     consumer
