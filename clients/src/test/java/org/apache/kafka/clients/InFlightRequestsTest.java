@@ -24,7 +24,7 @@ import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AlterConfigsRequest;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.requests.Resource;
-import org.apache.kafka.common.utils.SystemTime;
+import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.junit.Before;
 import org.junit.Test;
@@ -36,11 +36,13 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 public class InFlightRequestsTest {
 
-    private final InFlightRequests inFlightRequests = new InFlightRequests(Integer.MAX_VALUE);
+    private final int maxInFlightRequestsPerConnection = 20;
+    private final InFlightRequests inFlightRequests = new InFlightRequests(maxInFlightRequestsPerConnection);
     private final List<NetworkClient.InFlightRequest> requests = new ArrayList<>();
     private final Map<String, Integer> nodeWiseRequestCounter = new HashMap<>();
     private Integer nodeIdCounter = 0;
@@ -99,6 +101,12 @@ public class InFlightRequestsTest {
 
     @Test
     public void testCanSendMore() {
+        String nodeId = (nodeIdCounter++).toString();
+        assertTrue("On Node addition, it should be able to handle the incoming InFlight requests",
+                inFlightRequests.canSendMore(nodeId));
+        pushRequests(nodeId, maxInFlightRequestsPerConnection);
+        assertFalse("Once the max inFlightRequests per node reached, it should reject the requests",
+                inFlightRequests.canSendMore(nodeId));
     }
 
     @Test
@@ -122,7 +130,7 @@ public class InFlightRequestsTest {
     @Test
     public void testIsEmptyInSingleNode()  {
         String nodeId = (nodeIdCounter++).toString();
-        assertTrue(inFlightRequests.isEmpty(nodeId));
+        assertTrue("New node InFlight requests should be empty", inFlightRequests.isEmpty(nodeId));
 
         nodeId = (nodeIdCounter++).toString();
         int totalRequest = 10;
@@ -130,7 +138,7 @@ public class InFlightRequestsTest {
 
         assertEquals(totalRequest, inFlightRequests.count(nodeId));
         inFlightRequests.clearAll(nodeId);
-        assertTrue(inFlightRequests.isEmpty(nodeId));
+        assertTrue("Once the InFlight requests are cleared, it should be empty", inFlightRequests.isEmpty(nodeId));
     }
 
     @Test
@@ -146,6 +154,9 @@ public class InFlightRequestsTest {
 
     @Test
     public void testGetNodesWithTimedOutRequests() {
+        MockTime time = new MockTime(100);
+        List<String> nodesWithTimedOutRequests = inFlightRequests.getNodesWithTimedOutRequests(time.milliseconds(), 10);
+        assertEquals(nodeWiseRequestCounter.size(), nodesWithTimedOutRequests.size());
     }
 
     private void pushRequests(String nodeIdString, int totalRequest) {
@@ -159,7 +170,7 @@ public class InFlightRequestsTest {
 
     private NetworkClient.InFlightRequest createInFlightRequest(String nodeIdString) {
         RequestHeader header = new RequestHeader((short) 0, (short) 0, "client", 1);
-        Time time = new SystemTime();
+        Time time = new MockTime();
         RequestCompletionHandler handler = new RequestCompletionHandler() {
             @Override
             public void onComplete(ClientResponse response) {
@@ -183,6 +194,10 @@ public class InFlightRequestsTest {
 
     private void decrementCounter(String nodeId) {
         Integer counter = nodeWiseRequestCounter.get(nodeId);
-        nodeWiseRequestCounter.put(nodeId, counter - 1);
+        if (counter - 1 == 0) {
+            nodeWiseRequestCounter.remove(nodeId);
+        } else {
+            nodeWiseRequestCounter.put(nodeId, counter - 1);
+        }
     }
 }
