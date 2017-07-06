@@ -1817,7 +1817,6 @@ public class StreamThreadTest {
         final TaskId taskId = new TaskId(0, 0);
 
         final StreamThread thread = setupTest(taskId);
-
         final StateDirectory testStateDir = new StateDirectory(
             applicationId,
             config.getString(StreamsConfig.STATE_DIR_CONFIG),
@@ -1830,6 +1829,7 @@ public class StreamThreadTest {
         } catch (final Exception e) {
             assertTrue(testStateDir.lock(taskId, 0));
         } finally {
+            thread.close();
             testStateDir.unlock(taskId);
         }
     }
@@ -1839,7 +1839,6 @@ public class StreamThreadTest {
         final TaskId taskId = new TaskId(0, 0);
 
         final StreamThread thread = setupTest(taskId);
-        thread.start();
 
         final StateDirectory testStateDir = new StateDirectory(
             applicationId,
@@ -1856,7 +1855,7 @@ public class StreamThreadTest {
         }
     }
 
-    private StreamThread setupTest(final TaskId taskId) {
+    private StreamThread setupTest(final TaskId taskId) throws InterruptedException {
         final TopologyBuilder builder = new TopologyBuilder();
         builder.setApplicationId(applicationId);
         builder.addSource("source", "topic");
@@ -1896,6 +1895,15 @@ public class StreamThreadTest {
         final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
         activeTasks.put(testStreamTask.id, testStreamTask.partitions);
         thread.setPartitionAssignor(new MockStreamsPartitionAssignor(activeTasks));
+        thread.start();
+
+        TestUtils.waitForCondition(new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                return thread.state() == StreamThread.State.RUNNING;
+            }
+        }, "thread didn't transition to running");
+        thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptySet());
         thread.rebalanceListener.onPartitionsAssigned(testStreamTask.partitions);
 
         return thread;
@@ -1906,7 +1914,7 @@ public class StreamThreadTest {
         final TaskId taskId = new TaskId(0, 0);
 
         final StreamThread thread = setupStandbyTest(taskId);
-
+        startThreadAndRebalance(thread);
         final StateDirectory testStateDir = new StateDirectory(applicationId,
             config.getString(StreamsConfig.STATE_DIR_CONFIG),
             mockTime);
@@ -1918,8 +1926,21 @@ public class StreamThreadTest {
         } catch (final Exception e) {
             assertTrue(testStateDir.lock(taskId, 0));
         } finally {
+            thread.close();
             testStateDir.unlock(taskId);
         }
+    }
+
+    private void startThreadAndRebalance(final StreamThread thread) throws InterruptedException {
+        thread.start();
+        TestUtils.waitForCondition(new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                return thread.state() == StreamThread.State.RUNNING;
+            }
+        }, "thread didn't transition to running");
+        thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptySet());
+        thread.rebalanceListener.onPartitionsAssigned(Collections.<TopicPartition>emptySet());
     }
 
     @Test
@@ -1927,8 +1948,7 @@ public class StreamThreadTest {
         final TaskId taskId = new TaskId(0, 0);
 
         final StreamThread thread = setupStandbyTest(taskId);
-        thread.start();
-
+        startThreadAndRebalance(thread);
         final StateDirectory testStateDir = new StateDirectory(applicationId,
             config.getString(StreamsConfig.STATE_DIR_CONFIG),
             mockTime);
@@ -1939,6 +1959,7 @@ public class StreamThreadTest {
             thread.join();
             assertTrue(testStateDir.lock(taskId, 0));
         } finally {
+            thread.close();
             testStateDir.unlock(taskId);
         }
     }
@@ -1998,7 +2019,6 @@ public class StreamThreadTest {
         final Map<TaskId, Set<TopicPartition>> standbyTasks = new HashMap<>();
         standbyTasks.put(taskId, Collections.singleton(new TopicPartition("topic", 0)));
         thread.setPartitionAssignor(new MockStreamsPartitionAssignor(Collections.<TaskId, Set<TopicPartition>>emptyMap(), standbyTasks));
-        thread.rebalanceListener.onPartitionsAssigned(Collections.<TopicPartition>emptySet());
 
         return thread;
     }
