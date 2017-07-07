@@ -32,6 +32,8 @@ import java.nio.channels.OverlappingFileLockException;
 import java.nio.file.StandardOpenOption;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -264,6 +266,53 @@ public class StateDirectoryTest {
             // should lock without any exceptions
             channel.lock();
         }
+    }
+
+    @Test
+    public void shouldNotLockStateDirLockedByAnotherThread() throws IOException, InterruptedException {
+        final TaskId taskId = new TaskId(0, 0);
+        final Thread thread = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    directory.lock(taskId, 1);
+                } catch (IOException e) {
+                    //
+                }
+            }
+        });
+        thread.start();
+        thread.join();
+        assertFalse(directory.lock(taskId, 1));
+    }
+
+    @Test
+    public void shouldNotUnLockStateDirLockedByAnotherThread() throws IOException, InterruptedException {
+        final TaskId taskId = new TaskId(0, 0);
+        final CountDownLatch lockLatch = new CountDownLatch(1);
+        final CountDownLatch unlockLatch = new CountDownLatch(1);
+        final Thread thread = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    directory.lock(taskId, 1);
+                    lockLatch.countDown();
+                    unlockLatch.await();
+                    directory.unlock(taskId);
+                } catch (Exception e) {
+                    //
+                }
+            }
+        });
+        thread.start();
+        lockLatch.await(5, TimeUnit.SECONDS);
+
+        directory.unlock(taskId);
+        assertFalse(directory.lock(taskId, 1));
+
+        unlockLatch.countDown();
+        thread.join();
+        assertTrue(directory.lock(taskId, 1));
     }
 
 }
