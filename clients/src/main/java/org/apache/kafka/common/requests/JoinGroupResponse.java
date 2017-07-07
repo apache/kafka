@@ -22,6 +22,7 @@ import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -201,5 +202,18 @@ public class JoinGroupResponse extends AbstractResponse {
         struct.set(MEMBERS_KEY_NAME, memberArray.toArray());
 
         return struct;
+    }
+
+    @Override
+    public String toString() {
+        return "JoinGroupResponse" +
+            "(throttleTimeMs=" + throttleTimeMs +
+            ", error=" + error +
+            ", generationId=" + generationId +
+            ", groupProtocol=" + groupProtocol +
+            ", memberId=" + memberId +
+            ", leaderId=" + leaderId +
+            ", members=" + ((members == null) ? "null" :
+                Utils.join(members.keySet(), ",")) + ")";
     }
 }
