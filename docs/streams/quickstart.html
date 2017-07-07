@@ -21,14 +21,21 @@
 
 <p>
   This tutorial assumes you are starting fresh and have no existing Kafka or ZooKeeper data. However, if you have already started Kafka and
-  Zookeeper, feel free to skip the first two steps
+  Zookeeper, feel free to skip the first two steps.
+</p>
 
   <p>
-Kafka Streams is a client library of Kafka for real-time stream processing and analyzing data stored in Kafka brokers.
+ Kafka Streams is a client library for building mission-critical real-time applications and microservices,
+  where the input and/or output data is stored in Kafka clusters. Kafka Streams combines the simplicity of
+  writing and deploying standard Java and Scala applications on the client side with the benefits of Kafka's
+  server-side cluster technology to make these applications highly scalable, elastic, fault-tolerant, distributed,
+ and much more.
+  </p>
+  <p>
 This quickstart example will demonstrate how to run a streaming application coded in this library. Here is the gist
 of the <code><a href="https://github.com/apache/kafka/blob/{{dotVersion}}/streams/examples/src/main/java/org/apache/kafka/streams/examples/wordcount/WordCountDemo.java">WordCountDemo</a></code> example code (converted to use Java 8 lambda expressions for easy reading).
 </p>
-<pre class="brush: bash;">
+<pre class="brush: java;">
 // Serializers/deserializers (serde) for String and Long types
 final Serde&lt;String&gt; stringSerde = Serdes.String();
 final Serde&lt;Long&gt; longSerde = Serdes.Long();
@@ -73,7 +80,7 @@ because it cannot know when it has processed "all" the input data.
 &gt; tar -xzf kafka_2.11-0.10.2.0.tgz
 &gt; cd kafka_2.11-0.10.2.0
 </pre>
-
+</p>
 <h4><a id="quickstart_streams_startserver" href="#quickstart_streams_startserver">Step 2: Start the Kafka server</a></h4>
 
 <p>
@@ -93,7 +100,7 @@ Kafka uses <a href="https://zookeeper.apache.org/">ZooKeeper</a> so you need to 
 [2013-04-22 15:01:47,051] INFO Property socket.send.buffer.bytes is overridden to 1048576 (kafka.utils.VerifiableProperties)
 ...
 </pre>
-</p>
+
 
 <h4><a id="quickstart_streams_prepare" href="#quickstart_streams_prepare">Step 3: Prepare data</a></h4>
 
@@ -138,9 +145,7 @@ stream data will likely be flowing continuously into Kafka where the application
 &gt; bin/kafka-console-producer.sh --broker-list localhost:9092 --topic streams-file-input < file-input.txt
 </pre>
 
-<p>
 <h4><a id="quickstart_streams_process" href="#quickstart_streams_process">Step 4: Process data</a></h4>
-</p>
 
 <pre class="brush: bash;">
 &gt; bin/kafka-run-class.sh org.apache.kafka.streams.examples.wordcount.WordCountDemo
@@ -202,7 +207,7 @@ First the text line “all streams lead to kafka” is being processed.
 The <code>KTable</code> is being built up as each new word results in a new table entry (highlighted with a green background), and a corresponding change record is sent to the downstream <code>KStream</code>.
 </p>
 <p>
-When the second text line “hello kafka streams” is processed, we observe, for the first time, that existing entries in the <code>KTable</code> are being updated (here: for the words “kafka” and for “streams”). And again, change records are being sent to the output topic.
+When the second text line “hello kafka streams” is processed, we observe, for the first time, that existing entries in the <code>KTable</code> are being updated (here: for the words "kafka" and for "streams"). And again, change records are being sent to the output topic.
 </p>
 <p>
 And so on (we skip the illustration of how the third line is being processed). This explains why the output topic has the contents we showed above, because it contains the full record of changes.
@@ -220,11 +225,15 @@ console consumer, as described above).
 
 <p>You can stop the console consumer via <b>Ctrl-C</b>.</p>
 
+ <div class="pagination">
+        <a href="/{{version}}/documentation/streams" class="pagination__btn pagination__btn__prev">Previous</a>
+        <a href="/{{version}}/documentation/streams/code-concepts" class="pagination__btn pagination__btn__next">Next</a>
+    </div>
 </script>
 
 <div class="p-quickstart-streams"></div>
 
-  <!--#include virtual="../../includes/_header.htm" -->
+<!--#include virtual="../../includes/_header.htm" -->
 <!--#include virtual="../../includes/_top.htm" -->
 <div class="content documentation documentation--current">
     <!--#include virtual="../../includes/_nav.htm" -->
