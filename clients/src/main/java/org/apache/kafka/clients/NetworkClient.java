@@ -87,7 +87,7 @@ public class NetworkClient implements KafkaClient {
     private int correlation;
 
     /* max time in ms for the producer to wait for acknowledgement from server*/
-    private final int requestTimeoutMs;
+    private final int defaultRequestTimeoutMs;
 
     /* time in ms to wait before retrying to create connection to a server */
     private final long reconnectBackoffMs;
@@ -172,7 +172,7 @@ public class NetworkClient implements KafkaClient {
                           long reconnectBackoffMax,
                           int socketSendBuffer,
                           int socketReceiveBuffer,
-                          int requestTimeoutMs,
+                          int defaultRequestTimeoutMs,
                           Time time,
                           boolean discoverBrokerVersions,
                           ApiVersions apiVersions,
@@ -196,7 +196,7 @@ public class NetworkClient implements KafkaClient {
         this.socketReceiveBuffer = socketReceiveBuffer;
         this.correlation = 0;
         this.randOffset = new Random();
-        this.requestTimeoutMs = requestTimeoutMs;
+        this.defaultRequestTimeoutMs = defaultRequestTimeoutMs;
         this.reconnectBackoffMs = reconnectBackoffMs;
         this.time = time;
         this.discoverBrokerVersions = discoverBrokerVersions;
@@ -403,7 +403,8 @@ public class NetworkClient implements KafkaClient {
                 isInternalRequest,
                 request,
                 send,
-                now);
+                now,
+                clientRequest.timeoutMs());
         this.inFlightRequests.add(inFlightRequest);
         selector.send(inFlightRequest.send);
     }
@@ -411,14 +412,14 @@ public class NetworkClient implements KafkaClient {
     /**
      * Do actual reads and writes to sockets.
      *
-     * @param timeout The maximum amount of time to wait (in ms) for responses if there are none immediately,
-     *                must be non-negative. The actual timeout will be the minimum of timeout, request timeout and
-     *                metadata timeout
+     * @param timeoutMs The maximum amount of time to wait (in ms) for responses if there are none immediately,
+     *                  must be non-negative. The actual timeout will be the minimum of this parameter,
+     *                  the default request timeout, in-flight requests timeouts and metadata timeout
      * @param now The current time in milliseconds
      * @return The list of responses received
      */
     @Override
-    public List<ClientResponse> poll(long timeout, long now) {
+    public List<ClientResponse> poll(long timeoutMs, long now) {
         if (!abortedSends.isEmpty()) {
             // If there are aborted sends because of unsupported version exceptions or disconnects,
             // handle them immediately without waiting for Selector#poll.
@@ -428,9 +429,9 @@ public class NetworkClient implements KafkaClient {
             return responses;
         }
 
-        long metadataTimeout = metadataUpdater.maybeUpdate(now);
+        long metadataTimeoutMs = metadataUpdater.maybeUpdate(now);
         try {
-            this.selector.poll(Utils.min(timeout, metadataTimeout, requestTimeoutMs));
+            this.selector.poll(selectorPollTimeoutMs(timeoutMs, metadataTimeoutMs));
         } catch (IOException e) {
             log.error("Unexpected error during I/O", e);
         }
@@ -447,6 +448,14 @@ public class NetworkClient implements KafkaClient {
         completeResponses(responses);
 
         return responses;
+    }
+
+    private long selectorPollTimeoutMs(long pollTimeoutMs, long metadataTimeoutMs) {
+        long result = Utils.min(pollTimeoutMs, metadataTimeoutMs, defaultRequestTimeoutMs);
+        Integer minRequestsTimeoutMs = inFlightRequests.minTimeoutMs();
+        if (minRequestsTimeoutMs != null)
+            result = Math.min(minRequestsTimeoutMs, pollTimeoutMs);
+        return result;
     }
 
     private void completeResponses(List<ClientResponse> responses) {
@@ -609,7 +618,7 @@ public class NetworkClient implements KafkaClient {
      * @param now The current time
      */
     private void handleTimedOutRequests(List<ClientResponse> responses, long now) {
-        List<String> nodeIds = this.inFlightRequests.getNodesWithTimedOutRequests(now, this.requestTimeoutMs);
+        List<String> nodeIds = this.inFlightRequests.getNodesWithTimedOutRequests(now);
         for (String nodeId : nodeIds) {
             // close connection to the node
             this.selector.close(nodeId);
@@ -801,7 +810,7 @@ public class NetworkClient implements KafkaClient {
         public long maybeUpdate(long now) {
             // should we update our metadata?
             long timeToNextMetadataUpdate = metadata.timeToNextUpdate(now);
-            long waitForMetadataFetch = this.metadataFetchInProgress ? requestTimeoutMs : 0;
+            long waitForMetadataFetch = this.metadataFetchInProgress ? defaultRequestTimeoutMs : 0;
 
             long metadataTimeout = Math.max(timeToNextMetadataUpdate, waitForMetadataFetch);
             if (metadataTimeout > 0) {
@@ -926,8 +935,14 @@ public class NetworkClient implements KafkaClient {
     @Override
     public ClientRequest newClientRequest(String nodeId, AbstractRequest.Builder<?> requestBuilder, long createdTimeMs,
                                           boolean expectResponse, RequestCompletionHandler callback) {
-        return new ClientRequest(nodeId, requestBuilder, correlation++, clientId, createdTimeMs, expectResponse,
-                callback);
+        return newClientRequest(nodeId, requestBuilder, createdTimeMs, expectResponse, callback, defaultRequestTimeoutMs);
+    }
+
+    @Override
+    public ClientRequest newClientRequest(String nodeId, AbstractRequest.Builder<?> requestBuilder, long createdTimeMs,
+                                          boolean expectResponse, RequestCompletionHandler callback, int timeoutMs) {
+        return new ClientRequest(nodeId, requestBuilder, correlation++, clientId, createdTimeMs, timeoutMs,
+                expectResponse, callback);
     }
 
     static class InFlightRequest {
@@ -940,6 +955,7 @@ public class NetworkClient implements KafkaClient {
         final Send send;
         final long sendTimeMs;
         final long createdTimeMs;
+        final int timeoutMs;
 
         public InFlightRequest(RequestHeader header,
                                long createdTimeMs,
@@ -949,7 +965,8 @@ public class NetworkClient implements KafkaClient {
                                boolean isInternalRequest,
                                AbstractRequest request,
                                Send send,
-                               long sendTimeMs) {
+                               long sendTimeMs,
+                               int timeoutMs) {
             this.header = header;
             this.destination = destination;
             this.callback = callback;
@@ -959,6 +976,7 @@ public class NetworkClient implements KafkaClient {
             this.send = send;
             this.sendTimeMs = sendTimeMs;
             this.createdTimeMs = createdTimeMs;
+            this.timeoutMs = timeoutMs;
         }
 
         public ClientResponse completed(AbstractResponse response, long timeMs) {

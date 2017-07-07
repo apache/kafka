@@ -83,6 +83,10 @@ public class ConsumerNetworkClient implements Closeable {
         this.unsentExpiryMs = requestTimeoutMs;
     }
 
+    public RequestFuture<ClientResponse> send(Node node, AbstractRequest.Builder<?> requestBuilder) {
+        return doSend(node, requestBuilder, null);
+    }
+
     /**
      * Send a new request. Note that the request is not actually transmitted on the
      * network until one of the {@link #poll(long)} variants is invoked. At this
@@ -95,13 +99,22 @@ public class ConsumerNetworkClient implements Closeable {
      * @param requestBuilder A builder for the request payload
      * @return A future which indicates the result of the send.
      */
-    public RequestFuture<ClientResponse> send(Node node, AbstractRequest.Builder<?> requestBuilder) {
+    public RequestFuture<ClientResponse> send(Node node, AbstractRequest.Builder<?> requestBuilder, int requestTimeoutMs) {
+        return doSend(node, requestBuilder, requestTimeoutMs);
+    }
+
+    private RequestFuture<ClientResponse> doSend(Node node,  AbstractRequest.Builder<?> requestBuilder,
+                                                 Integer requestTimeoutMs) {
         long now = time.milliseconds();
         RequestFutureCompletionHandler completionHandler = new RequestFutureCompletionHandler();
-        ClientRequest clientRequest = client.newClientRequest(node.idString(), requestBuilder, now, true,
-                completionHandler);
+        ClientRequest clientRequest;
+        if (requestTimeoutMs == null)
+            clientRequest = client.newClientRequest(node.idString(), requestBuilder, now, true,
+                    completionHandler);
+        else
+            clientRequest = client.newClientRequest(node.idString(), requestBuilder, now, true,
+                    completionHandler, requestTimeoutMs);
         unsent.put(node, clientRequest);
-
         // wakeup the client in case it is blocking in poll so that we can send the queued request
         client.wakeup();
         return completionHandler.future;
