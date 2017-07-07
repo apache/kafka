@@ -107,7 +107,7 @@ public class ConsumerNetworkClientTest {
         NetworkClient mockNetworkClient = EasyMock.mock(NetworkClient.class);
         ConsumerNetworkClient consumerClient = new ConsumerNetworkClient(mockNetworkClient, metadata, time, 100, 1000);
 
-        EasyMock.expect(mockNetworkClient.inFlightRequestCount()).andReturn(1);
+        EasyMock.expect(mockNetworkClient.hasInFlightRequests()).andReturn(true);
         EasyMock.expect(mockNetworkClient.poll(EasyMock.eq(timeout), EasyMock.anyLong())).andReturn(Collections.<ClientResponse>emptyList());
 
         EasyMock.replay(mockNetworkClient);
@@ -130,7 +130,7 @@ public class ConsumerNetworkClientTest {
         ConsumerNetworkClient consumerClient = new ConsumerNetworkClient(mockNetworkClient, metadata, time,
                 retryBackoffMs, 1000);
 
-        EasyMock.expect(mockNetworkClient.inFlightRequestCount()).andReturn(0);
+        EasyMock.expect(mockNetworkClient.hasInFlightRequests()).andReturn(false);
         EasyMock.expect(mockNetworkClient.poll(EasyMock.eq(retryBackoffMs), EasyMock.anyLong())).andReturn(Collections.<ClientResponse>emptyList());
 
         EasyMock.replay(mockNetworkClient);

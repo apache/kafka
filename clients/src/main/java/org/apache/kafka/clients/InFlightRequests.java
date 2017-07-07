@@ -17,10 +17,10 @@
 package org.apache.kafka.clients;
 
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
@@ -160,19 +160,16 @@ final class InFlightRequests {
      * @return list of nodes
      */
     public List<String> getNodesWithTimedOutRequests(long now) {
-        List<String> nodeIds = new LinkedList<>();
+        List<String> nodeIds = new ArrayList<>();
         for (Map.Entry<String, Deque<NetworkClient.InFlightRequest>> nodeRequests : requests.entrySet()) {
             String nodeId = nodeRequests.getKey();
             Deque<NetworkClient.InFlightRequest> deque = nodeRequests.getValue();
 
-            if (!deque.isEmpty()) {
-                int timeoutMs = Integer.MAX_VALUE;
-                for (NetworkClient.InFlightRequest request : deque)
-                    timeoutMs = Math.min(request.timeoutMs, timeoutMs);
-                NetworkClient.InFlightRequest lastRequest = deque.peekLast();
-                long timeSinceSend = now - lastRequest.sendTimeMs;
-                if (timeSinceSend >= timeoutMs)
+            for (NetworkClient.InFlightRequest request : deque) {
+                if (request.hasExpired(now)) {
                     nodeIds.add(nodeId);
+                    break;
+                }
             }
         }
         return nodeIds;

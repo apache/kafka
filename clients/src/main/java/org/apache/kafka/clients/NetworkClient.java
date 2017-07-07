@@ -979,6 +979,10 @@ public class NetworkClient implements KafkaClient {
             this.timeoutMs = timeoutMs;
         }
 
+        public boolean hasExpired(long now) {
+            return now - sendTimeMs >= timeoutMs;
+        }
+
         public ClientResponse completed(AbstractResponse response, long timeMs) {
             return new ClientResponse(header, callback, destination, createdTimeMs, timeMs, false, null, response);
         }

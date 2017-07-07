@@ -255,7 +255,9 @@ public class NetworkClientTest {
         long now = time.milliseconds();
         ClientRequest request = client.newClientRequest(node.idString(), builder, now, true);
         client.send(request, now);
-        client.poll(requestTimeoutMs, now);
+        // MockSelector.poll increments MockTime by timeoutMs, so we pass a value lower than the request timeout to
+        // avoid expiring the request
+        client.poll(requestTimeoutMs - 1, now);
         assertEquals(1, client.inFlightRequestCount(node.idString()));
         assertTrue(client.hasInFlightRequests(node.idString()));
         assertTrue(client.hasInFlightRequests());
