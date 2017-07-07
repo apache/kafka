@@ -439,8 +439,19 @@ public abstract class AbstractCoordinator implements Closeable {
                 metadata()).setRebalanceTimeout(this.rebalanceTimeoutMs);
 
         log.debug("Sending JoinGroup ({}) to coordinator {}", requestBuilder, this.coordinator);
-        return client.send(coordinator, requestBuilder)
+        return client.send(coordinator, requestBuilder, joinRequestTimeoutMs())
                 .compose(new JoinGroupResponseHandler());
+    }
+
+    /**
+     * The join request blocks until the rebalance is completed, so the request timeout should be a little higher than
+     * the rebalance timeout.
+     */
+    private int joinRequestTimeoutMs() {
+        int result = rebalanceTimeoutMs + 5000;
+        if (result < 0)
+            return Integer.MAX_VALUE;
+        return result;
     }
 
     private class JoinGroupResponseHandler extends CoordinatorResponseHandler<JoinGroupResponse, ByteBuffer> {
@@ -526,8 +537,7 @@ public abstract class AbstractCoordinator implements Closeable {
     private RequestFuture<ByteBuffer> sendSyncGroupRequest(SyncGroupRequest.Builder requestBuilder) {
         if (coordinatorUnknown())
             return RequestFuture.coordinatorNotAvailable();
-        return client.send(coordinator, requestBuilder)
-                .compose(new SyncGroupResponseHandler());
+        return client.send(coordinator, requestBuilder).compose(new SyncGroupResponseHandler());
     }
 
     private class SyncGroupResponseHandler extends CoordinatorResponseHandler<SyncGroupResponse, ByteBuffer> {
@@ -711,8 +721,7 @@ public abstract class AbstractCoordinator implements Closeable {
             log.debug("Sending LeaveGroup request to coordinator {} for group {}", coordinator, groupId);
             LeaveGroupRequest.Builder request =
                     new LeaveGroupRequest.Builder(groupId, generation.memberId);
-            client.send(coordinator, request)
-                    .compose(new LeaveGroupResponseHandler());
+            client.send(coordinator, request).compose(new LeaveGroupResponseHandler());
             client.pollNoWakeup();
         }
 
@@ -738,8 +747,7 @@ public abstract class AbstractCoordinator implements Closeable {
         log.debug("Sending Heartbeat request for group {} to coordinator {}", groupId, coordinator);
         HeartbeatRequest.Builder requestBuilder =
                 new HeartbeatRequest.Builder(this.groupId, this.generation.generationId, this.generation.memberId);
-        return client.send(coordinator, requestBuilder)
-                .compose(new HeartbeatResponseHandler());
+        return client.send(coordinator, requestBuilder).compose(new HeartbeatResponseHandler());
     }
 
     private class HeartbeatResponseHandler extends CoordinatorResponseHandler<HeartbeatResponse, Void> {
