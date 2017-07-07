@@ -127,7 +127,8 @@ public class ConsumerNetworkClientTest {
         long retryBackoffMs = 100L;
 
         NetworkClient mockNetworkClient = EasyMock.mock(NetworkClient.class);
-        ConsumerNetworkClient consumerClient = new ConsumerNetworkClient(mockNetworkClient, metadata, time, retryBackoffMs, 1000L);
+        ConsumerNetworkClient consumerClient = new ConsumerNetworkClient(mockNetworkClient, metadata, time,
+                retryBackoffMs, 1000);
 
         EasyMock.expect(mockNetworkClient.inFlightRequestCount()).andReturn(0);
         EasyMock.expect(mockNetworkClient.poll(EasyMock.eq(retryBackoffMs), EasyMock.anyLong())).andReturn(Collections.<ClientResponse>emptyList());
@@ -166,7 +167,7 @@ public class ConsumerNetworkClientTest {
 
     @Test
     public void sendExpiry() throws InterruptedException {
-        long unsentExpiryMs = 10;
+        int unsentExpiryMs = 10;
         final AtomicBoolean isReady = new AtomicBoolean();
         final AtomicBoolean disconnected = new AtomicBoolean();
         client = new MockClient(time) {

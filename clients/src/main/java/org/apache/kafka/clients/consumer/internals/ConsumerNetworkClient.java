@@ -60,7 +60,7 @@ public class ConsumerNetworkClient implements Closeable {
     private final Metadata metadata;
     private final Time time;
     private final long retryBackoffMs;
-    private final long unsentExpiryMs;
+    private final int unsentExpiryMs;
     private final AtomicBoolean wakeupDisabled = new AtomicBoolean();
 
     // when requests complete, they are transferred to this queue prior to invocation. The purpose
@@ -75,12 +75,12 @@ public class ConsumerNetworkClient implements Closeable {
                                  Metadata metadata,
                                  Time time,
                                  long retryBackoffMs,
-                                 long requestTimeoutMs) {
+                                 int defaultRequestTimeoutMs) {
         this.client = client;
         this.metadata = metadata;
         this.time = time;
         this.retryBackoffMs = retryBackoffMs;
-        this.unsentExpiryMs = requestTimeoutMs;
+        this.unsentExpiryMs = defaultRequestTimeoutMs;
     }
 
     public RequestFuture<ClientResponse> send(Node node, AbstractRequest.Builder<?> requestBuilder) {
@@ -240,7 +240,7 @@ public class ConsumerNetworkClient implements Closeable {
             // handler), the client will be woken up.
             if (pollCondition == null || pollCondition.shouldBlock()) {
                 // if there are no requests in flight, do not block longer than the retry backoff
-                if (client.inFlightRequestCount() == 0)
+                if (!client.hasInFlightRequests())
                     timeout = Math.min(timeout, retryBackoffMs);
                 client.poll(Math.min(MAX_POLL_TIMEOUT_MS, timeout), now);
                 now = time.milliseconds();

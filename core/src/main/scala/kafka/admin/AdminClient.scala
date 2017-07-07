@@ -473,7 +473,7 @@ object AdminClient {
       metadata,
       time,
       retryBackoffMs,
-      requestTimeoutMs.toLong)
+      requestTimeoutMs)
 
     new AdminClient(
       time,

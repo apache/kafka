@@ -57,7 +57,7 @@ public class AbstractCoordinatorTest {
     private static final int SESSION_TIMEOUT_MS = 10000;
     private static final int HEARTBEAT_INTERVAL_MS = 3000;
     private static final long RETRY_BACKOFF_MS = 100;
-    private static final long REQUEST_TIMEOUT_MS = 40000;
+    private static final int REQUEST_TIMEOUT_MS = 40000;
     private static final String GROUP_ID = "dummy-group";
     private static final String METRIC_GROUP_PREFIX = "consumer";
 
@@ -74,8 +74,8 @@ public class AbstractCoordinatorTest {
         this.mockClient = new MockClient(mockTime);
 
         Metadata metadata = new Metadata(100L, 60 * 60 * 1000L, true);
-        this.consumerClient = new ConsumerNetworkClient(mockClient, metadata, mockTime,
-                RETRY_BACKOFF_MS, REQUEST_TIMEOUT_MS);
+        this.consumerClient = new ConsumerNetworkClient(mockClient, metadata, mockTime, RETRY_BACKOFF_MS,
+                REQUEST_TIMEOUT_MS);
         Metrics metrics = new Metrics();
 
         Cluster cluster = TestUtils.singletonCluster("topic", 1);
