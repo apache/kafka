@@ -728,9 +728,10 @@ public class QueryableStateIntegrationTest {
             .reduce(new Reducer<String>() {
                 @Override
                 public String apply(final String value1, final String value2) {
-                    if (beforeFailure.get() && value1.length() > 1) {
-                        beforeFailure.set(false);
-                        throw new RuntimeException("Injected test exception");
+                    if (value1.length() > 1) {
+                        if (beforeFailure.compareAndSet(true, false)) {
+                            throw new RuntimeException("Injected test exception");
+                        }
                     }
                     return value1 + value2;
                 }

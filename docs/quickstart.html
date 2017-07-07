@@ -25,11 +25,11 @@ Since Kafka console scripts are different for Unix-based and Windows platforms, 
 
 <h4><a id="quickstart_download" href="#quickstart_download">Step 1: Download the code</a></h4>
 
-<a href="https://www.apache.org/dyn/closer.cgi?path=/kafka/0.10.2.0/kafka_2.11-0.10.2.0.tgz" title="Kafka downloads">Download</a> the 0.10.2.0 release and un-tar it.
+<a href="https://www.apache.org/dyn/closer.cgi?path=/kafka/{{fullDotVersion}}/kafka_2.11-{{fullDotVersion}}.tgz" title="Kafka downloads">Download</a> the {{fullDotVersion}} release and un-tar it.
 
 <pre class="brush: bash;">
-&gt; tar -xzf kafka_2.11-0.10.2.0.tgz
-&gt; cd kafka_2.11-0.10.2.0
+&gt; tar -xzf kafka_2.11-{{fullDotVersion}}.tgz
+&gt; cd kafka_2.11-{{fullDotVersion}}
 </pre>
 
 <h4><a id="quickstart_startserver" href="#quickstart_startserver">Step 2: Start the server</a></h4>
@@ -187,7 +187,7 @@ my test message 2
 On Windows use:
 <pre class="brush: bash;">
 &gt; wmic process get processid,caption,commandline | find "java.exe" | find "server-1.properties"
-java.exe    java  -Xmx1G -Xms1G -server -XX:+UseG1GC ... build\libs\kafka_2.11-0.10.2.0.jar"  kafka.Kafka config\server-1.properties    644
+java.exe    java  -Xmx1G -Xms1G -server -XX:+UseG1GC ... build\libs\kafka_2.11-{{fullDotVersion}}.jar"  kafka.Kafka config\server-1.properties    644
 &gt; taskkill /pid 644 /f
 </pre>
 
