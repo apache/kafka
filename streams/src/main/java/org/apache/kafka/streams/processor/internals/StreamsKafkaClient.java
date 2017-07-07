@@ -203,7 +203,7 @@ public class StreamsKafkaClient {
                 }
             }
             try {
-                kafkaClient.poll(0, Time.SYSTEM.milliseconds());
+                kafkaClient.poll(50, Time.SYSTEM.milliseconds());
             } catch (final Exception e) {
                 throw new StreamsException("Could not poll.", e);
             }
