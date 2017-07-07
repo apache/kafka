@@ -482,7 +482,7 @@ public class NetworkClient implements KafkaClient {
 
     @Override
     public boolean hasInFlightRequests(String node) {
-        return this.inFlightRequests.isEmpty(node);
+        return !this.inFlightRequests.isEmpty(node);
     }
 
     @Override

@@ -446,7 +446,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       // When this callback is triggered, the remote API call has completed
       request.apiRemoteCompleteTimeNanos = time.nanoseconds
 
-      quotas.produce.recordAndMaybeThrottle(
+      quotas.produce.maybeRecordAndThrottle(
         request.session.sanitizedUser,
         request.header.clientId,
         numBytesAppended,
@@ -594,7 +594,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         // result in data being loaded into memory, it is better to do this after throttling to avoid OOM.
         val response = new FetchResponse(fetchedPartitionData, 0)
         val responseStruct = response.toStruct(versionId)
-        quotas.fetch.recordAndMaybeThrottle(request.session.sanitizedUser, clientId, responseStruct.sizeOf,
+        quotas.fetch.maybeRecordAndThrottle(request.session.sanitizedUser, clientId, responseStruct.sizeOf,
           fetchResponseCallback)
       }
     }
@@ -631,17 +631,13 @@ class KafkaApis(val requestChannel: RequestChannel,
   def replicationQuota(fetchRequest: FetchRequest): ReplicaQuota =
     if (fetchRequest.isFromFollower) quotas.leader else UnboundedQuota
 
-  /**
-   * Handle an offset request
-   */
   def handleListOffsetRequest(request: RequestChannel.Request) {
     val version = request.header.apiVersion()
 
-    val mergedResponseMap =
-      if (version == 0)
-        handleListOffsetRequestV0(request)
-      else
-        handleListOffsetRequestV1AndAbove(request)
+    val mergedResponseMap = if (version == 0)
+      handleListOffsetRequestV0(request)
+    else
+      handleListOffsetRequestV1AndAbove(request)
 
     sendResponseMaybeThrottle(request, requestThrottleMs => new ListOffsetResponse(requestThrottleMs, mergedResponseMap.asJava))
   }
@@ -721,30 +717,31 @@ class KafkaApis(val requestChannel: RequestChannel,
                                                               ListOffsetResponse.UNKNOWN_OFFSET))
       } else {
         try {
-          val fromConsumer = offsetRequest.replicaId == ListOffsetRequest.CONSUMER_REPLICA_ID
-
           // ensure leader exists
           val localReplica = if (offsetRequest.replicaId != ListOffsetRequest.DEBUGGING_REPLICA_ID)
             replicaManager.getLeaderReplicaIfLocal(topicPartition)
           else
             replicaManager.getReplicaOrException(topicPartition)
 
-          val found = {
-            if (fromConsumer && timestamp == ListOffsetRequest.LATEST_TIMESTAMP) {
-              val lastFetchableOffset = offsetRequest.isolationLevel match {
-                case IsolationLevel.READ_COMMITTED => localReplica.lastStableOffset.messageOffset
-                case IsolationLevel.READ_UNCOMMITTED => localReplica.highWatermark.messageOffset
-              }
-              TimestampOffset(RecordBatch.NO_TIMESTAMP, lastFetchableOffset)
-            } else {
-              def allowed(timestampOffset: TimestampOffset): Boolean =
-                !fromConsumer || timestampOffset.offset <= localReplica.highWatermark.messageOffset
-
-              fetchOffsetForTimestamp(replicaManager.logManager, topicPartition, timestamp) match {
-                case Some(timestampOffset) if allowed(timestampOffset) => timestampOffset
-                case _ => TimestampOffset(ListOffsetResponse.UNKNOWN_TIMESTAMP, ListOffsetResponse.UNKNOWN_OFFSET)
-              }
+          val fromConsumer = offsetRequest.replicaId == ListOffsetRequest.CONSUMER_REPLICA_ID
+          val found = if (fromConsumer) {
+            val lastFetchableOffset = offsetRequest.isolationLevel match {
+              case IsolationLevel.READ_COMMITTED => localReplica.lastStableOffset.messageOffset
+              case IsolationLevel.READ_UNCOMMITTED => localReplica.highWatermark.messageOffset
             }
+
+            if (timestamp == ListOffsetRequest.LATEST_TIMESTAMP)
+              TimestampOffset(RecordBatch.NO_TIMESTAMP, lastFetchableOffset)
+            else {
+              def allowed(timestampOffset: TimestampOffset): Boolean =
+                timestamp == ListOffsetRequest.EARLIEST_TIMESTAMP || timestampOffset.offset < lastFetchableOffset
+
+              fetchOffsetForTimestamp(topicPartition, timestamp)
+                .filter(allowed).getOrElse(TimestampOffset.Unknown)
+            }
+          } else {
+            fetchOffsetForTimestamp(topicPartition, timestamp)
+              .getOrElse(TimestampOffset.Unknown)
           }
 
           (topicPartition, new ListOffsetResponse.PartitionData(Errors.NONE, found.timestamp, found.offset))
@@ -782,8 +779,8 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
   }
 
-  private def fetchOffsetForTimestamp(logManager: LogManager, topicPartition: TopicPartition, timestamp: Long) : Option[TimestampOffset] = {
-    logManager.getLog(topicPartition) match {
+  private def fetchOffsetForTimestamp(topicPartition: TopicPartition, timestamp: Long): Option[TimestampOffset] = {
+    replicaManager.getLog(topicPartition) match {
       case Some(log) =>
         log.fetchOffsetsByTimestamp(timestamp)
       case None =>
@@ -2003,16 +2000,9 @@ class KafkaApis(val requestChannel: RequestChannel,
       // When this callback is triggered, the remote API call has completed
       request.apiRemoteCompleteTimeNanos = time.nanoseconds
     }
-    val quotaSensors = quotas.request.getOrCreateQuotaSensors(request.session.sanitizedUser, clientId)
-    def recordNetworkThreadTimeNanos(timeNanos: Long) {
-      quotas.request.recordNoThrottle(quotaSensors, nanosToPercentage(timeNanos))
-    }
-    request.recordNetworkThreadTimeCallback = Some(recordNetworkThreadTimeNanos)
-
-    quotas.request.recordAndThrottleOnQuotaViolation(
-        quotaSensors,
-        nanosToPercentage(request.requestThreadTimeNanos),
-        sendResponseCallback)
+    quotas.request.maybeRecordAndThrottle(request.session.sanitizedUser, clientId,
+        request.requestThreadTimeNanos, sendResponseCallback,
+        callback => request.recordNetworkThreadTimeCallback = Some(callback))
   }
 
   private def sendResponseExemptThrottle(response: RequestChannel.Response) {
@@ -2020,18 +2010,12 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   private def sendResponseExemptThrottle(request: RequestChannel.Request, sendResponseCallback: () => Unit) {
-    def recordNetworkThreadTimeNanos(timeNanos: Long) {
-      quotas.request.recordExempt(nanosToPercentage(timeNanos))
-    }
-    request.recordNetworkThreadTimeCallback = Some(recordNetworkThreadTimeNanos)
-
-    quotas.request.recordExempt(nanosToPercentage(request.requestThreadTimeNanos))
+    quotas.request.maybeRecordExempt(request.requestThreadTimeNanos,
+        callback => request.recordNetworkThreadTimeCallback = Some(callback))
     sendResponseCallback()
   }
 
   private def sendResponse(request: RequestChannel.Request, response: AbstractResponse) {
     requestChannel.sendResponse(RequestChannel.Response(request, response))
   }
-
-  private def nanosToPercentage(nanos: Long): Double = nanos * ClientQuotaManagerConfig.NanosToPercentagePerSecond
 }

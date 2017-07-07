@@ -323,6 +323,38 @@ public class SchemaBuilderTest {
         schemaBuilder.version(456);
     }
 
+    @Test(expected = SchemaBuilderException.class)
+    public void testFieldNameNull() {
+        Schema schema = SchemaBuilder.struct()
+            .field(null, Schema.STRING_SCHEMA)
+            .build();
+    }
+
+    @Test(expected = SchemaBuilderException.class)
+    public void testFieldSchemaNull() {
+        Schema schema = SchemaBuilder.struct()
+            .field("fieldName", null)
+            .build();
+    }
+
+    @Test(expected = SchemaBuilderException.class)
+    public void testArraySchemaNull() {
+        Schema schema = SchemaBuilder.array(null)
+            .build();
+    }
+
+    @Test(expected = SchemaBuilderException.class)
+    public void testMapKeySchemaNull() {
+        Schema schema = SchemaBuilder.map(null, Schema.STRING_SCHEMA)
+            .build();
+    }
+
+    @Test(expected = SchemaBuilderException.class)
+    public void testMapValueSchemaNull() {
+        Schema schema = SchemaBuilder.map(Schema.STRING_SCHEMA, null)
+            .build();
+    }
+
     private void assertTypeAndDefault(Schema schema, Schema.Type type, boolean optional, Object defaultValue) {
         assertEquals(type, schema.type());
         assertEquals(optional, schema.isOptional());

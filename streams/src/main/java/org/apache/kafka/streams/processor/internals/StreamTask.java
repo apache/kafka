@@ -258,12 +258,12 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
      */
     @Override
     public void commit() {
-        commitImpl(true);
+        commit(true);
 
     }
 
     // visible for testing
-    void commitImpl(final boolean startNewTransaction) {
+    void commit(final boolean startNewTransaction) {
         log.debug("{} Committing", logPrefix);
         metrics.metrics.measureLatencyNs(
             time,
@@ -365,10 +365,11 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
      *   - commit offsets
      * </pre>
      */
-    private void suspend(final boolean clean) {
+    // visible for testing
+    void suspend(final boolean clean) {
         closeTopology(); // should we call this only on clean suspend?
         if (clean) {
-            commitImpl(false);
+            commit(false);
         }
     }
 
@@ -396,33 +397,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         }
     }
 
-    /**
-     * <pre>
-     * - {@link #suspend(boolean) suspend(clean)}
-     *   - close topology
-     *   - if (clean) {@link #commit()}
-     *     - flush state and producer
-     *     - commit offsets
-     * - close state
-     *   - if (clean) write checkpoint
-     * - if (eos) close producer
-     * </pre>
-     * @param clean shut down cleanly (ie, incl. flush and commit) if {@code true} --
-     *              otherwise, just close open resources
-     */
-    @Override
-    public void close(boolean clean) {
-        log.debug("{} Closing", logPrefix);
-
-        RuntimeException firstException = null;
-        try {
-            suspend(clean);
-        } catch (final RuntimeException e) {
-            clean = false;
-            firstException = e;
-            log.error("{} Could not close task: ", logPrefix, e);
-        }
-
+    // helper to avoid calling suspend() twice if a suspended task is not reassigned and closed
+    void closeSuspended(boolean clean, RuntimeException firstException) {
         try {
             closeStateManager(clean);
         } catch (final RuntimeException e) {
@@ -457,6 +433,36 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         if (firstException != null) {
             throw firstException;
         }
+    }
+
+        /**
+         * <pre>
+         * - {@link #suspend(boolean) suspend(clean)}
+         *   - close topology
+         *   - if (clean) {@link #commit()}
+         *     - flush state and producer
+         *     - commit offsets
+         * - close state
+         *   - if (clean) write checkpoint
+         * - if (eos) close producer
+         * </pre>
+         * @param clean shut down cleanly (ie, incl. flush and commit) if {@code true} --
+         *              otherwise, just close open resources
+         */
+    @Override
+    public void close(boolean clean) {
+        log.debug("{} Closing", logPrefix);
+
+        RuntimeException firstException = null;
+        try {
+            suspend(clean);
+        } catch (final RuntimeException e) {
+            clean = false;
+            firstException = e;
+            log.error("{} Could not close task: ", logPrefix, e);
+        }
+
+        closeSuspended(clean, firstException);
     }
 
     /**

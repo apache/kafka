@@ -19,15 +19,36 @@ MAINTAINER Apache Kafka dev@kafka.apache.org
 VOLUME ["/opt/kafka-dev"]
 ENV MIRROR="http://apache.cs.utah.edu/"
 
-ADD ssh /root/.ssh
-RUN chmod 600 /root/.ssh/id_rsa
-RUN apt update && apt install -y unzip wget curl jq coreutils openssh-server net-tools vim python-pip python-dev libffi-dev libssl-dev
-RUN pip install -U pip && pip install --upgrade cffi ducktape==0.6.0
-# Test with multiple Scala version
+# Set the timezone.
+ENV TZ="/usr/share/zoneinfo/America/Los_Angeles"
+
+# Do not ask for confirmations when running apt-get, etc.
+ENV DEBIAN_FRONTEND noninteractive
+
+# Set the ducker.creator label so that we know that this is a ducker image.  This will make it
+# visible to 'ducker purge'.  The ducker.creator label also lets us know what UNIX user built this
+# image.
+ARG ducker_creator=default
+LABEL ducker.creator=$ducker_creator
+
+# Update Linux and install necessary utilities.
+RUN apt update && apt install -y sudo netcat iptables rsync unzip wget curl jq coreutils openssh-server net-tools vim python-pip python-dev libffi-dev libssl-dev && apt-get -y clean
+RUN pip install -U pip && pip install --upgrade cffi virtualenv pyasn1 && pip install --upgrade ducktape==0.6.0
+
+# Set up ssh
+COPY ./ssh-config /root/.ssh/config
+RUN ssh-keygen -q -t rsa -N '' -f /root/.ssh/id_rsa && cp -f /root/.ssh/id_rsa.pub /root/.ssh/authorized_keys
+
+# Install binary test dependencies.
 RUN mkdir -p "/opt/kafka-0.8.2.2" && curl -s "${MIRROR}kafka/0.8.2.2/kafka_2.10-0.8.2.2.tgz" | tar xz --strip-components=1 -C "/opt/kafka-0.8.2.2"
 RUN mkdir -p "/opt/kafka-0.9.0.1" && curl -s "${MIRROR}kafka/0.9.0.1/kafka_2.11-0.9.0.1.tgz" | tar xz --strip-components=1 -C "/opt/kafka-0.9.0.1"
 RUN mkdir -p "/opt/kafka-0.10.0.1" && curl -s "${MIRROR}kafka/0.10.0.1/kafka_2.11-0.10.0.1.tgz" | tar xz --strip-components=1 -C "/opt/kafka-0.10.0.1"
 RUN mkdir -p "/opt/kafka-0.10.1.1" && curl -s "${MIRROR}kafka/0.10.1.1/kafka_2.11-0.10.1.1.tgz" | tar xz --strip-components=1 -C "/opt/kafka-0.10.1.1"
 RUN mkdir -p "/opt/kafka-0.10.2.1" && curl -s "${MIRROR}kafka/0.10.2.1/kafka_2.11-0.10.2.1.tgz" | tar xz --strip-components=1 -C "/opt/kafka-0.10.2.1"
+RUN mkdir -p "/opt/kafka-0.11.0.0" && curl -s "${MIRROR}kafka/0.11.0.0/kafka_2.11-0.11.0.0.tgz" | tar xz --strip-components=1 -C "/opt/kafka-0.11.0.0"
 
-CMD service ssh start && tail -f /dev/null
+# Set up the ducker user.
+RUN useradd -ms /bin/bash ducker && mkdir -p /home/ducker/ && rsync -aiq /root/.ssh/ /home/ducker/.ssh && chown -R ducker /home/ducker/ /mnt/ && echo 'ducker ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers
+USER ducker
+
+CMD sudo service ssh start && tail -f /dev/null
