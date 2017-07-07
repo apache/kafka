@@ -16,6 +16,7 @@
   */
 package kafka.server
 
+import java.io.File
 import java.util.Properties
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -33,6 +34,7 @@ import org.junit.Assert._
 import org.junit.{After, Test}
 
 import scala.collection.JavaConverters._
+import scala.collection.mutable.ArrayBuffer
 
 class ReplicaManagerQuotasTest {
   val configs = TestUtils.createBrokerConfigs(2, TestUtils.MockZkConnect).map(KafkaConfig.fromProps(_, new Properties()))
@@ -178,6 +180,7 @@ class ReplicaManagerQuotasTest {
 
     //Return the same log for each partition as it doesn't matter
     expect(logManager.getLog(anyObject())).andReturn(Some(log)).anyTimes()
+    expect(logManager.liveLogDirs).andReturn(ArrayBuffer.empty[File]).anyTimes()
     replay(logManager)
 
     replicaManager = new ReplicaManager(configs.head, metrics, time, zkUtils, scheduler, logManager,

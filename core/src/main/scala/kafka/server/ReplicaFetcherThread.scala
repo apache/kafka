@@ -18,7 +18,7 @@
 package kafka.server
 
 import java.util
-
+import java.io.IOException
 import kafka.admin.AdminUtils
 import kafka.api.{FetchRequest => _, _}
 import kafka.cluster.{BrokerEndPoint, Replica}
@@ -27,7 +27,6 @@ import kafka.log.LogConfig
 import kafka.server.ReplicaFetcherThread._
 import kafka.server.epoch.LeaderEpochCache
 import org.apache.kafka.common.requests.EpochEndOffset._
-import kafka.utils.Exit
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.metrics.Metrics
@@ -83,10 +82,10 @@ class ReplicaFetcherThread(name: String,
 
   // process fetched data
   def processPartitionData(topicPartition: TopicPartition, fetchOffset: Long, partitionData: PartitionData) {
-    try {
-      val replica = replicaMgr.getReplica(topicPartition).get
-      val records = partitionData.toRecords
+    val replica = replicaMgr.getReplica(topicPartition).get
+    val records = partitionData.toRecords
 
+    try {
       maybeWarnIfOversizedRecords(records, topicPartition)
 
       if (fetchOffset != replica.logEndOffset.messageOffset)
@@ -114,9 +113,9 @@ class ReplicaFetcherThread(name: String,
         quota.record(records.sizeInBytes)
       replicaMgr.brokerTopicStats.updateReplicationBytesIn(records.sizeInBytes)
     } catch {
-      case e: KafkaStorageException =>
-        fatal(s"Disk error while replicating data for $topicPartition", e)
-        Exit.halt(1)
+      case e@ (_: KafkaStorageException | _: IOException) =>
+        error(s"Disk error while replicating data for $topicPartition", e)
+        throw new KafkaStorageException(s"Disk error while replicating data for $topicPartition", e)
     }
   }
 
@@ -199,8 +198,12 @@ class ReplicaFetcherThread(name: String,
   }
 
   // any logic for partitions whose leader has changed
-  def handlePartitionsWithErrors(partitions: Iterable[TopicPartition]) {
-    delayPartitions(partitions, brokerConfig.replicaFetchBackoffMs.toLong)
+  def handlePartitionsWithErrors(partitions: Map[TopicPartition, Option[Exception]]) {
+    val (partitionsWithStorageException, partitionsWithoutStorageException) = partitions.partition{ case (_, exception) =>
+        exception.isDefined && exception.get.isInstanceOf[KafkaStorageException]
+    }
+    partitionsWithStorageException.keys.foreach(tp => replicaMgr.getLogDir(tp).foreach(replicaMgr.handleLogDirFailure))
+    delayPartitions(partitionsWithoutStorageException.keys, brokerConfig.replicaFetchBackoffMs.toLong)
   }
 
   protected def fetch(fetchRequest: FetchRequest): Seq[(TopicPartition, PartitionData)] = {

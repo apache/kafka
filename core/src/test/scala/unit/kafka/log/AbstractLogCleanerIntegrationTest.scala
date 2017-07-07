@@ -24,9 +24,10 @@ import kafka.server.BrokerTopicStats
 import kafka.utils.{MockTime, Pool, TestUtils}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.utils.Utils
+import org.easymock.EasyMock.createNiceMock
 import org.junit.After
 
-import scala.collection.mutable.ListBuffer
+import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 
 abstract class AbstractLogCleanerIntegrationTest {
 
@@ -108,8 +109,9 @@ abstract class AbstractLogCleanerIntegrationTest {
       maxMessageSize = maxMessageSize,
       backOffMs = backOffMs)
     new LogCleaner(cleanerConfig,
-      logDirs = Array(logDir),
+      logDirs = ArrayBuffer(logDir),
       logs = logMap,
+      logManager = createNiceMock(classOf[kafka.log.LogManager]),
       time = time)
   }
 }

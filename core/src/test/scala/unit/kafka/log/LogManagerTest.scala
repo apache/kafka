@@ -24,6 +24,7 @@ import kafka.common._
 import kafka.server.FetchDataInfo
 import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.utils._
+import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.OffsetOutOfRangeException
 import org.apache.kafka.common.requests.IsolationLevel
@@ -31,7 +32,7 @@ import org.apache.kafka.common.utils.Utils
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
 
-class LogManagerTest {
+class LogManagerTest extends ZooKeeperTestHarness {
 
   val time: MockTime = new MockTime()
   val maxRollInterval = 100
@@ -48,19 +49,21 @@ class LogManagerTest {
   val veryLargeLogFlushInterval = 10000000L
 
   @Before
-  def setUp() {
+  override def setUp() {
+    super.setUp()
     logDir = TestUtils.tempDir()
     logManager = createLogManager()
     logManager.startup()
-    logDir = logManager.logDirs(0)
+    logDir = logManager.liveLogDirs(0)
   }
 
   @After
-  def tearDown() {
+  override def tearDown() {
+    super.tearDown()
     if(logManager != null)
       logManager.shutdown()
     Utils.delete(logDir)
-    logManager.logDirs.foreach(Utils.delete)
+    logManager.liveLogDirs.foreach(Utils.delete)
   }
 
   /**
@@ -264,7 +267,7 @@ class LogManagerTest {
     logManager.shutdown()
     logDir = TestUtils.tempDir()
     logManager = TestUtils.createLogManager(
-      logDirs = Array(new File(logDir.getAbsolutePath + File.separator)))
+      logDirs = Array(new File(logDir.getAbsolutePath + File.separator)), zkUtils = zkUtils)
     logManager.startup()
     verifyCheckpointRecovery(Seq(new TopicPartition("test-a", 1)), logManager)
   }
@@ -294,7 +297,7 @@ class LogManagerTest {
       log.flush()
     })
 
-    logManager.checkpointRecoveryPointOffsets()
+    logManager.checkpointLogRecoveryOffsets()
     val checkpoints = new OffsetCheckpointFile(new File(logDir, logManager.RecoveryPointCheckpointFile)).read()
 
     topicPartitions.zip(logs).foreach {
@@ -306,6 +309,7 @@ class LogManagerTest {
 
   private def createLogManager(logDirs: Array[File] = Array(this.logDir)): LogManager = {
     TestUtils.createLogManager(
+      zkUtils = zkUtils,
       defaultConfig = logConfig,
       logDirs = logDirs,
       time = this.time)

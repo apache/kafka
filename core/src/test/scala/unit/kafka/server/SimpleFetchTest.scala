@@ -16,6 +16,8 @@
  */
 package kafka.server
 
+import java.io.File
+
 import kafka.api._
 import kafka.utils._
 import kafka.cluster.Replica
@@ -32,6 +34,8 @@ import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRec
 import org.apache.kafka.common.requests.IsolationLevel
 import org.easymock.EasyMock
 import org.junit.Assert._
+
+import scala.collection.mutable.ArrayBuffer
 
 class SimpleFetchTest {
 
@@ -105,6 +109,7 @@ class SimpleFetchTest {
     // create the log manager that is aware of this mock log
     val logManager = EasyMock.createMock(classOf[kafka.log.LogManager])
     EasyMock.expect(logManager.getLog(topicPartition)).andReturn(Some(log)).anyTimes()
+    EasyMock.expect(logManager.liveLogDirs).andReturn(ArrayBuffer.empty[File]).anyTimes()
     EasyMock.replay(logManager)
 
     // create the replica manager
