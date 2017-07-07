@@ -74,6 +74,13 @@ public class EosTestClient extends SmokeTestUtil {
                         uncaughtException = true;
                     }
                 });
+                streams.setStateListener(new KafkaStreams.StateListener() {
+                    @Override
+                    public void onChange(KafkaStreams.State newState, KafkaStreams.State oldState) {
+                        // don't remove this -- it's required test output
+                        System.out.println("StateChange: " + oldState + " -> " + newState);
+                    }
+                });
                 streams.start();
             }
             if (uncaughtException) {
@@ -90,7 +97,7 @@ public class EosTestClient extends SmokeTestUtil {
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID);
         props.put(StreamsConfig.STATE_DIR_CONFIG, stateDir.toString());
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);
-        props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 2);
+        props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 1);
         props.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 2);
         props.put(StreamsConfig.REPLICATION_FACTOR_CONFIG, 3);
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);

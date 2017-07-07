@@ -54,7 +54,7 @@ import java.util.Set;
 public class EosTestDriver extends SmokeTestUtil {
 
     private static final int MAX_NUMBER_OF_KEYS = 100;
-    private static final long MAX_IDLE_TIME_MS = 300000L;
+    private static final long MAX_IDLE_TIME_MS = 600000L;
 
     private static boolean isRunning = true;
 
@@ -89,7 +89,8 @@ public class EosTestDriver extends SmokeTestUtil {
                 @Override
                 public void onCompletion(final RecordMetadata metadata, final Exception exception) {
                     if (exception != null) {
-                        exception.printStackTrace();
+                        exception.printStackTrace(System.err);
+                        System.err.flush();
                         Exit.exit(1);
                     }
                 }
@@ -99,7 +100,7 @@ public class EosTestDriver extends SmokeTestUtil {
             if (numRecordsProduced % 1000 == 0) {
                 System.out.println(numRecordsProduced + " records produced");
             }
-            Utils.sleep(rand.nextInt(50));
+            Utils.sleep(rand.nextInt(10));
         }
         producer.close();
         System.out.println(numRecordsProduced + " records produced");
@@ -190,7 +191,7 @@ public class EosTestDriver extends SmokeTestUtil {
             final long maxWaitTime = System.currentTimeMillis() + MAX_IDLE_TIME_MS;
             while (!adminClient.describeConsumerGroup(EosTestClient.APP_ID, 10000).consumers().get().isEmpty()) {
                 if (System.currentTimeMillis() > maxWaitTime) {
-                    throw new RuntimeException("Streams application not down after 30 seconds.");
+                    throw new RuntimeException("Streams application not down after 60 seconds.");
                 }
                 sleep(1000);
             }
@@ -240,16 +241,19 @@ public class EosTestDriver extends SmokeTestUtil {
                                                                                                      final Map<TopicPartition, Long> readEndOffsets,
                                                                                                      final boolean withRepartitioning,
                                                                                                      final boolean isInputTopic) {
+        System.err.println("read end offset: " + readEndOffsets);
         final Map<String, Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>>> recordPerTopicPerPartition = new HashMap<>();
+        final Map<TopicPartition, Long> maxReceivedOffsetPerPartition = new HashMap<>();
 
         long maxWaitTime = System.currentTimeMillis() + MAX_IDLE_TIME_MS;
         boolean allRecordsReceived = false;
         while (!allRecordsReceived && System.currentTimeMillis() < maxWaitTime) {
-            final ConsumerRecords<byte[], byte[]> receivedRecords = consumer.poll(500);
+            final ConsumerRecords<byte[], byte[]> receivedRecords = consumer.poll(100);
 
             for (final ConsumerRecord<byte[], byte[]> record : receivedRecords) {
                 maxWaitTime = System.currentTimeMillis() + MAX_IDLE_TIME_MS;
                 final TopicPartition tp = new TopicPartition(record.topic(), record.partition());
+                maxReceivedOffsetPerPartition.put(tp, record.offset());
                 final long readEndOffset = readEndOffsets.get(tp);
                 if (record.offset() < readEndOffset) {
                     addRecord(record, recordPerTopicPerPartition, withRepartitioning);
@@ -266,7 +270,9 @@ public class EosTestDriver extends SmokeTestUtil {
         }
 
         if (!allRecordsReceived) {
-            throw new RuntimeException("FAIL: did not receive all records after 30 sec idle time.");
+            System.err.println("Pause partitions (ie, received all data): " + consumer.paused());
+            System.err.println("Max received offset per partition: " + maxReceivedOffsetPerPartition);
+            throw new RuntimeException("FAIL: did not receive all records after 60 sec idle time.");
         }
 
         return recordPerTopicPerPartition;
@@ -530,7 +536,8 @@ public class EosTestDriver extends SmokeTestUtil {
                     @Override
                     public void onCompletion(final RecordMetadata metadata, final Exception exception) {
                         if (exception != null) {
-                            exception.printStackTrace();
+                            exception.printStackTrace(System.err);
+                            System.err.flush();
                             Exit.exit(1);
                         }
                     }
@@ -540,10 +547,11 @@ public class EosTestDriver extends SmokeTestUtil {
 
         final StringDeserializer stringDeserializer = new StringDeserializer();
 
-        final long maxWaitTime = System.currentTimeMillis() + MAX_IDLE_TIME_MS;
+        long maxWaitTime = System.currentTimeMillis() + MAX_IDLE_TIME_MS;
         while (!partitions.isEmpty() && System.currentTimeMillis() < maxWaitTime) {
             final ConsumerRecords<byte[], byte[]> records = consumer.poll(100);
             for (final ConsumerRecord<byte[], byte[]> record : records) {
+                maxWaitTime = System.currentTimeMillis() + MAX_IDLE_TIME_MS;
                 final String topic = record.topic();
                 final TopicPartition tp = new TopicPartition(topic, record.partition());
 
