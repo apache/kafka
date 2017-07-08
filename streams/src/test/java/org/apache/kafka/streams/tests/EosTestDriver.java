@@ -91,7 +91,6 @@ public class EosTestDriver extends SmokeTestUtil {
                     if (exception != null) {
                         exception.printStackTrace(System.err);
                         System.err.flush();
-                        Exit.exit(1);
                     }
                 }
             });
@@ -244,6 +243,7 @@ public class EosTestDriver extends SmokeTestUtil {
         System.err.println("read end offset: " + readEndOffsets);
         final Map<String, Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>>> recordPerTopicPerPartition = new HashMap<>();
         final Map<TopicPartition, Long> maxReceivedOffsetPerPartition = new HashMap<>();
+        final Map<TopicPartition, Long> maxConsumerPositionPerPartition = new HashMap<>();
 
         long maxWaitTime = System.currentTimeMillis() + MAX_IDLE_TIME_MS;
         boolean allRecordsReceived = false;
@@ -261,7 +261,11 @@ public class EosTestDriver extends SmokeTestUtil {
                     throw new RuntimeException("FAIL: did receive more records than expected for " + tp
                         + " (expected EOL offset: " + readEndOffset + "; current offset: " + record.offset());
                 }
-                if (consumer.position(tp) >= readEndOffset) {
+            }
+
+            for (final TopicPartition tp : readEndOffsets.keySet()) {
+                maxConsumerPositionPerPartition.put(tp, consumer.position(tp));
+                if (consumer.position(tp) >= readEndOffsets.get(tp)) {
                     consumer.pause(Collections.singletonList(tp));
                 }
             }
@@ -272,6 +276,7 @@ public class EosTestDriver extends SmokeTestUtil {
         if (!allRecordsReceived) {
             System.err.println("Pause partitions (ie, received all data): " + consumer.paused());
             System.err.println("Max received offset per partition: " + maxReceivedOffsetPerPartition);
+            System.err.println("Max consumer position per partition: " + maxConsumerPositionPerPartition);
             throw new RuntimeException("FAIL: did not receive all records after 60 sec idle time.");
         }
 

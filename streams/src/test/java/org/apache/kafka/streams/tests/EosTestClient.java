@@ -56,6 +56,7 @@ public class EosTestClient extends SmokeTestUtil {
                 streams.close(5, TimeUnit.SECONDS);
                 // do not remove these printouts since they are needed for health scripts
                 if (!uncaughtException) {
+                    System.out.println(System.currentTimeMillis());
                     System.out.println("EOS-TEST-CLIENT-CLOSED");
                 }
             }
@@ -69,6 +70,7 @@ public class EosTestClient extends SmokeTestUtil {
                 streams.setUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
                     @Override
                     public void uncaughtException(final Thread t, final Throwable e) {
+                        System.out.println(System.currentTimeMillis());
                         System.out.println("EOS-TEST-CLIENT-EXCEPTION");
                         e.printStackTrace();
                         uncaughtException = true;
@@ -78,6 +80,7 @@ public class EosTestClient extends SmokeTestUtil {
                     @Override
                     public void onChange(KafkaStreams.State newState, KafkaStreams.State oldState) {
                         // don't remove this -- it's required test output
+                        System.out.println(System.currentTimeMillis());
                         System.out.println("StateChange: " + oldState + " -> " + newState);
                     }
                 });
