@@ -96,9 +96,10 @@ public class ThreadCache {
         }
         cache.flush();
 
-        if (log.isTraceEnabled())
+        if (log.isTraceEnabled()) {
             log.trace("{} Cache stats on flush: #puts={}, #gets={}, #evicts={}, #flushes={}",
-                    logPrefix, puts(), gets(), evicts(), flushes());
+                logPrefix, puts(), gets(), evicts(), flushes());
+        }
     }
 
     public LRUCacheEntry get(final String namespace, Bytes key) {
@@ -216,8 +217,9 @@ public class ThreadCache {
             numEvicts++;
             numEvicted++;
         }
-
-        log.debug("{} Evicted {} entries from cache {}", logPrefix, numEvicted, namespace);
+        if (log.isTraceEnabled()) {
+            log.trace("{} Evicted {} entries from cache {}", logPrefix, numEvicted, namespace);
+        }
     }
 
     private synchronized NamedCache getCache(final String namespace) {
