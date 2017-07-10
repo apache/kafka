@@ -792,9 +792,16 @@ public class QueryableStateIntegrationTest {
             TestUtils.waitForCondition(new TestCondition() {
                 @Override
                 public boolean conditionMet() {
-                    return store2.get("a").endsWith("125") && store2.get("b").endsWith("34");
+                    return
+                        ("125".equals(store2.get("a"))
+                        || "1225".equals(store2.get("a"))
+                        || "12125".equals(store2.get("a")))
+                        &&
+                        ("34".equals(store2.get("b"))
+                        || "344".equals(store2.get("b"))
+                        || "3434".equals(store2.get("b")));
                 }
-            }, maxWaitMs, "wait for agg to be <a,125> and <b,34>");
+            }, maxWaitMs, "wait for agg to be <a,125>||<a,1225>||<a,12125> and <b,34>||<b,344>||<b,3434>");
         } catch (final Throwable t) {
             throw new RuntimeException("Store content is a: " + store2.get("a") + "; b: " + store2.get("b"), t);
         }
