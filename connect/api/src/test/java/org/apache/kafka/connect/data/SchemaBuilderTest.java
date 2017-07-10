@@ -27,6 +27,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 
 public class SchemaBuilderTest {
@@ -358,6 +359,80 @@ public class SchemaBuilderTest {
     @Test(expected = SchemaBuilderException.class)
     public void testTypeNotNull() {
         SchemaBuilder.type(null);
+    }
+
+    @Test(expected = SchemaBuilderException.class)
+    public void fromSchemaNullSchema() {
+        SchemaBuilder.from(null);
+    }
+
+    void assertSchema(final Schema expected, final Schema actual) {
+        if (null == expected) {
+            assertNull("actual should be null.", actual);
+            return;
+        }
+        assertEquals("type does not match.", expected.type(), actual.type());
+        assertEquals("name does not match.", expected.name(), actual.name());
+        assertEquals("doc does not match.", expected.doc(), actual.doc());
+        assertEquals("isOptional does not match.", expected.isOptional(), actual.isOptional());
+        assertEquals("version does not match.", expected.version(), actual.version());
+
+        if (null != expected.parameters()) {
+            assertNotNull("actual.parameters() should not be null.", actual.parameters());
+            assertEquals("parameters().size() does not match.", expected.parameters().size(), actual.parameters().size());
+            for (String key : expected.parameters().keySet()) {
+                assertEquals(
+                    String.format("parameters(\"%s\") does not match", key),
+                    expected.parameters().get(key),
+                    actual.parameters().get(key)
+                );
+            }
+        }
+
+        if (Schema.Type.STRUCT == expected.type()) {
+            assertEquals("fields.size should match", expected.fields().size(), actual.fields().size());
+            for (int i = 0; i < expected.fields().size(); i++) {
+                final Field expectedField = expected.fields().get(i);
+                final Field actualField = actual.fields().get(i);
+                assertEquals("type does not match.", expectedField.name(), actualField.name());
+                assertEquals("schema().name() does not match.", expectedField.schema().name(), actualField.schema().name());
+                assertEquals("schema().type() does not match.", expectedField.schema().type(), actualField.schema().type());
+                assertEquals("schema().doc() does not match.", expectedField.schema().doc(), actualField.schema().doc());
+                assertEquals("schema().isOptional() does not match.", expectedField.schema().isOptional(), actualField.schema().isOptional());
+            }
+        }
+
+        if (Schema.Type.ARRAY == expected.type() || Schema.Type.MAP == expected.type()) {
+            assertSchema(expected.valueSchema(), actual.valueSchema());
+        }
+
+        if (Schema.Type.MAP == expected.type()) {
+            assertSchema(expected.keySchema(), actual.keySchema());
+        }
+    }
+
+    @Test
+    public void fromSchema() {
+        final List<Schema> schemas = Arrays.asList(
+            SchemaBuilder.struct()
+                .name("Testing")
+                .doc("This is a test schema.")
+                .parameter("parm1", "value")
+                .field("first", Schema.OPTIONAL_STRING_SCHEMA)
+                .field("second", Schema.STRING_SCHEMA)
+                .build(),
+            SchemaBuilder.map(Schema.STRING_SCHEMA, Schema.STRING_SCHEMA),
+            SchemaBuilder.array(Schema.STRING_SCHEMA),
+            Schema.STRING_SCHEMA,
+            Schema.OPTIONAL_INT32_SCHEMA,
+            Timestamp.SCHEMA
+        );
+        for (final Schema expected : schemas) {
+            final SchemaBuilder schemaBuilder = SchemaBuilder.from(expected);
+            assertNotNull("schemaBuilder should not be null.", schemaBuilder);
+            final Schema actual = schemaBuilder.build();
+            assertSchema(expected, actual);
+        }
     }
 
     private void assertTypeAndDefault(Schema schema, Schema.Type type, boolean optional, Object defaultValue) {

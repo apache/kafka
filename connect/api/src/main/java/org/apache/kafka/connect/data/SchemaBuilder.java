@@ -390,6 +390,34 @@ public class SchemaBuilder implements Schema {
         return valueSchema;
     }
 
+    /**
+     * @param schema the schema to clone the SchemaBuilder from.
+     * @return a new SchemaBuilder from the supplied schema.
+     */
+    public static SchemaBuilder from(Schema schema) {
+        if (null == schema)
+            throw new SchemaBuilderException("schema cannot be null.");
+
+        SchemaBuilder builder = new SchemaBuilder(schema.type());
+        builder.name = schema.name();
+        builder.doc = schema.doc();
+        builder.optional = schema.isOptional();
+        builder.parameters = schema.parameters();
+        builder.defaultValue = schema.defaultValue();
+        builder.version = schema.version();
+        if (Type.MAP == schema.type()) {
+            builder.keySchema = schema.keySchema();
+        }
+        if (Type.MAP == schema.type() || Type.ARRAY == schema.type()) {
+            builder.valueSchema = schema.valueSchema();
+        }
+        if (Type.STRUCT == schema.type()) {
+            for (Field field : schema.fields()) {
+                builder.field(field.name(), field.schema());
+            }
+        }
+        return builder;
+    }
 
     /**
      * Build the Schema using the current settings
