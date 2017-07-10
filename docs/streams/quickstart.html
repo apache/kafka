@@ -203,11 +203,11 @@ The second column shows the change records that result from state updates to the
 <img src="/{{version}}/images/streams-table-updates-01.png" style="float: right; width: 25%;">
 
 <p>
-First the text line “all streams lead to kafka” is being processed.
+First the text line "all streams lead to kafka" is being processed.
 The <code>KTable</code> is being built up as each new word results in a new table entry (highlighted with a green background), and a corresponding change record is sent to the downstream <code>KStream</code>.
 </p>
 <p>
-When the second text line “hello kafka streams” is processed, we observe, for the first time, that existing entries in the <code>KTable</code> are being updated (here: for the words "kafka" and for "streams"). And again, change records are being sent to the output topic.
+When the second text line "hello kafka streams" is processed, we observe, for the first time, that existing entries in the <code>KTable</code> are being updated (here: for the words "kafka" and for "streams"). And again, change records are being sent to the output topic.
 </p>
 <p>
 And so on (we skip the illustration of how the third line is being processed). This explains why the output topic has the contents we showed above, because it contains the full record of changes.
@@ -227,7 +227,7 @@ console consumer, as described above).
 
  <div class="pagination">
         <a href="/{{version}}/documentation/streams" class="pagination__btn pagination__btn__prev">Previous</a>
-        <a href="/{{version}}/documentation/streams/code-concepts" class="pagination__btn pagination__btn__next">Next</a>
+        <a href="/{{version}}/documentation/streams/core-concepts" class="pagination__btn pagination__btn__next">Next</a>
     </div>
 </script>
 
