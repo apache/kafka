@@ -29,7 +29,6 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.hamcrest.CoreMatchers;
-import org.hamcrest.MatcherAssert;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -46,7 +45,6 @@ import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE;
 import static org.apache.kafka.streams.StreamsConfig.consumerPrefix;
 import static org.apache.kafka.streams.StreamsConfig.producerPrefix;
 import static org.apache.kafka.test.StreamsTestUtils.minimalStreamsConfig;
-import static org.hamcrest.core.Is.is;
 import static org.hamcrest.core.IsEqual.equalTo;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
@@ -404,9 +402,9 @@ public class StreamsConfigTest {
         props.put(StreamsConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, MockTimestampExtractor.class);
 
         final StreamsConfig config = new StreamsConfig(props);
-        MatcherAssert.assertThat(config.defaultKeySerde() instanceof Serdes.DoubleSerde, is(true));
-        MatcherAssert.assertThat(config.defaultValueSerde() instanceof Serdes.DoubleSerde, is(true));
-        MatcherAssert.assertThat(config.defaultTimestampExtractor() instanceof MockTimestampExtractor, is(true));
+        assertTrue(config.defaultKeySerde() instanceof Serdes.DoubleSerde);
+        assertTrue(config.defaultValueSerde() instanceof Serdes.DoubleSerde);
+        assertTrue(config.defaultTimestampExtractor() instanceof MockTimestampExtractor);
     }
 
     @Test
@@ -417,17 +415,17 @@ public class StreamsConfigTest {
         props.put(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, MockTimestampExtractor.class);
 
         final StreamsConfig config = new StreamsConfig(props);
-        MatcherAssert.assertThat(config.defaultKeySerde() instanceof Serdes.LongSerde, is(true));
-        MatcherAssert.assertThat(config.defaultValueSerde() instanceof Serdes.LongSerde, is(true));
-        MatcherAssert.assertThat(config.defaultTimestampExtractor() instanceof MockTimestampExtractor, is(true));
+        assertTrue(config.defaultKeySerde() instanceof Serdes.LongSerde);
+        assertTrue(config.defaultValueSerde() instanceof Serdes.LongSerde);
+        assertTrue(config.defaultTimestampExtractor() instanceof MockTimestampExtractor);
     }
 
     @Test
     public void shouldUseCorrectDefaultsWhenNoneSpecified() {
         final StreamsConfig config = new StreamsConfig(minimalStreamsConfig());
-        MatcherAssert.assertThat(config.defaultKeySerde() instanceof Serdes.ByteArraySerde, is(true));
-        MatcherAssert.assertThat(config.defaultValueSerde() instanceof Serdes.ByteArraySerde, is(true));
-        MatcherAssert.assertThat(config.defaultTimestampExtractor() instanceof FailOnInvalidTimestamp, is(true));
+        assertTrue(config.defaultKeySerde() instanceof Serdes.ByteArraySerde);
+        assertTrue(config.defaultValueSerde() instanceof Serdes.ByteArraySerde);
+        assertTrue(config.defaultTimestampExtractor() instanceof FailOnInvalidTimestamp);
     }
 
     static class MisconfiguredSerde implements Serde {
@@ -455,7 +453,7 @@ public class StreamsConfigTest {
     public static class MockTimestampExtractor implements TimestampExtractor {
 
         @Override
-        public long extract(ConsumerRecord<Object, Object> record, long previousTimestamp) {
+        public long extract(final ConsumerRecord<Object, Object> record, final long previousTimestamp) {
             return 0;
         }
     }
