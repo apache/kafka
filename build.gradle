@@ -796,6 +796,7 @@ project(':tools') {
   dependencies {
     compile project(':clients')
     compile project(':log4j-appender')
+    compile libs.joptSimple
     compile libs.argparse4j
     compile libs.jacksonDatabind
     compile libs.slf4jlog4j
