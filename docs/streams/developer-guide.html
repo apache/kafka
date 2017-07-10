@@ -505,7 +505,7 @@
         A Kafka Streams application is typically running on many instances.
         The state that is locally available on any given instance is only a subset of the application's entire state.
         Querying the local stores on an instance will, by definition, <i>only return data locally available on that particular instance</i>.
-        We explain how to access data in state stores that are not locally available in section <a href="#streams_developer-guide_interactive-queries_discovery">Querying remote state stores (for the entire application)</a>.
+        We explain how to access data in state stores that are not locally available in section <a href="#streams_developer-guide_interactive-queries_discovery"><b>Querying remote state stores</b></a> (for the entire application).
     </p>
 
     <p>
@@ -536,7 +536,7 @@
         This read-only constraint is important to guarantee that the underlying state stores will never be mutated (e.g. new entries added) out-of-band, i.e. only the corresponding processing topology of Kafka Streams is allowed to mutate and update the state stores in order to ensure data consistency.
     </p>
     <p>
-        You can also implement your own <code>QueryableStoreType</code> as described in section <a href="#streams_developer-guide_interactive-queries_custom-stores#">Querying local custom stores</a>
+        You can also implement your own <code>QueryableStoreType</code> as described in section <a href="#streams_developer-guide_interactive-queries_custom-stores#"><b>Querying local custom stores</b></a>
     </p>
 
     <p>
