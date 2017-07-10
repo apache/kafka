@@ -59,7 +59,7 @@ object ConsumerPerformance {
       if (!config.showDetailedStats)
         println("start.time, end.time, data.consumed.in.MB, MB.sec, data.consumed.in.nMsg, nMsg.sec")
       else
-        println("time, data.consumed.in.MB, MB.sec, data.consumed.in.nMsg, nMsg.sec")
+        println("time, thread.id, data.consumed.in.MB, MB.sec, data.consumed.in.nMsg, nMsg.sec")
     }
 
     var startMs, endMs = 0L
