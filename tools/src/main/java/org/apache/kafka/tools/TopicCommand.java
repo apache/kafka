@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -48,7 +48,7 @@ public class TopicCommand {
 
         TopicCommandOptions opts = new TopicCommandOptions(args);
 
-        if(args.length == 0)
+        if (args.length == 0)
             CommandLineUtils.printUsageAndDie(opts.parser, "Create, delete, describe, or change a topic.");
 
         // TODO : should have exactly one action
@@ -200,7 +200,7 @@ public class TopicCommand {
             CommandLineUtils.checkInvalidArgs(parser, options, partitionsOpt, Arrays.asList(describeOpt, listOpt, deleteOpt));
             CommandLineUtils.checkInvalidArgs(parser, options, replicationFactorOpt, Arrays.asList(alterOpt, describeOpt, listOpt, deleteOpt));
             CommandLineUtils.checkInvalidArgs(parser, options, replicaAssignmentOpt, Arrays.asList(describeOpt, listOpt, deleteOpt));
-            if(options.has(createOpt))
+            if (options.has(createOpt))
                 CommandLineUtils.checkInvalidArgs(parser, options, replicaAssignmentOpt, Arrays.asList(partitionsOpt, replicationFactorOpt));
 
             CommandLineUtils.checkInvalidArgs(parser, options, ifNotExistsOpt, Arrays.asList(alterOpt, describeOpt, listOpt, deleteOpt));
