@@ -29,6 +29,8 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
+import org.apache.kafka.streams.errors.LogAndFailExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.DefaultPartitionGrouper;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
@@ -145,6 +147,13 @@ public class StreamsConfig extends AbstractConfig {
 
     /** {@code connections.max.idle.ms} */
     public static final String CONNECTIONS_MAX_IDLE_MS_CONFIG = CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG;
+
+    /**
+     * {@code default.deserialization.exception.handler}
+     */
+    public static final String DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG = "default.deserialization.exception.handler";
+    private static final String DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_DOC = "Exception handling class that implements the <code>DeserializationExceptionHandler</code> interface.";
+
 
     /** {@code default key.serde} */
     public static final String DEFAULT_KEY_SERDE_CLASS_CONFIG = "default.key.serde";
@@ -303,6 +312,11 @@ public class StreamsConfig extends AbstractConfig {
                     "",
                     Importance.MEDIUM,
                     CommonClientConfigs.CLIENT_ID_DOC)
+            .define(DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG,
+                Type.CLASS,
+                LogAndFailExceptionHandler.class.getName(),
+                Importance.MEDIUM,
+                DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_DOC)
             .define(DEFAULT_KEY_SERDE_CLASS_CONFIG,
                     Type.CLASS,
                     Serdes.ByteArraySerde.class.getName(),
@@ -714,14 +728,7 @@ public class StreamsConfig extends AbstractConfig {
     @Deprecated
     public Serde keySerde() {
         try {
-            Serde<?> serde = getConfiguredInstance(KEY_SERDE_CLASS_CONFIG, Serde.class);
-            // the default value of deprecated key serde is null
-            if (serde == null) {
-                serde = defaultKeySerde();
-            } else {
-                serde.configure(originals(), true);
-            }
-            return serde;
+            return defaultKeySerde();
         } catch (final Exception e) {
             throw new StreamsException(String.format("Failed to configure key serde %s", get(KEY_SERDE_CLASS_CONFIG)), e);
         }
@@ -735,11 +742,15 @@ public class StreamsConfig extends AbstractConfig {
      */
     public Serde defaultKeySerde() {
         try {
-            Serde<?> serde = getConfiguredInstance(DEFAULT_KEY_SERDE_CLASS_CONFIG, Serde.class);
+            Serde<?> serde = getConfiguredInstance(KEY_SERDE_CLASS_CONFIG, Serde.class);
+            if (serde == null) {
+                serde = getConfiguredInstance(DEFAULT_KEY_SERDE_CLASS_CONFIG, Serde.class);
+            }
             serde.configure(originals(), true);
             return serde;
         } catch (final Exception e) {
-            throw new StreamsException(String.format("Failed to configure key serde %s", get(DEFAULT_KEY_SERDE_CLASS_CONFIG)), e);
+            throw new StreamsException(
+                String.format("Failed to configure key serde %s", get(DEFAULT_KEY_SERDE_CLASS_CONFIG)), e);
         }
     }
 
@@ -752,14 +763,7 @@ public class StreamsConfig extends AbstractConfig {
     @Deprecated
     public Serde valueSerde() {
         try {
-            Serde<?> serde = getConfiguredInstance(VALUE_SERDE_CLASS_CONFIG, Serde.class);
-            // the default value of deprecated value serde is null
-            if (serde == null) {
-                serde = defaultValueSerde();
-            } else {
-                serde.configure(originals(), false);
-            }
-            return serde;
+            return defaultValueSerde();
         } catch (final Exception e) {
             throw new StreamsException(String.format("Failed to configure value serde %s", get(VALUE_SERDE_CLASS_CONFIG)), e);
         }
@@ -773,11 +777,16 @@ public class StreamsConfig extends AbstractConfig {
      */
     public Serde defaultValueSerde() {
         try {
-            Serde<?> serde = getConfiguredInstance(DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serde.class);
+            Serde<?> serde = getConfiguredInstance(VALUE_SERDE_CLASS_CONFIG, Serde.class);
+            if (serde == null) {
+                serde = getConfiguredInstance(DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serde.class);
+            }
             serde.configure(originals(), false);
+
             return serde;
         } catch (final Exception e) {
-            throw new StreamsException(String.format("Failed to configure value serde %s", get(DEFAULT_VALUE_SERDE_CLASS_CONFIG)), e);
+            throw new StreamsException(
+                String.format("Failed to configure value serde %s", get(DEFAULT_VALUE_SERDE_CLASS_CONFIG)), e);
         }
     }
 
@@ -788,6 +797,10 @@ public class StreamsConfig extends AbstractConfig {
             return getConfiguredInstance(DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, TimestampExtractor.class);
         }
         return timestampExtractor;
+    }
+
+    public DeserializationExceptionHandler defaultDeserializationExceptionHandler() {
+        return getConfiguredInstance(DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG, DeserializationExceptionHandler.class);
     }
 
     /**
