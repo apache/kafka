@@ -107,11 +107,10 @@ public class RecordCollectorImpl implements RecordCollector {
                         } else {
                             if (sendException == null) {
                                 sendException = exception;
-                                if (sendException instanceof ProducerFencedException) {
-                                    log.error("{} Error sending record to topic {}. No more offsets will be recorded for this task and it will be closed as it is a zombie.", logPrefix, topic, exception);
-                                } else {
-                                    log.error("{} Error sending record to topic {}. No more offsets will be recorded for this task and the exception will eventually be thrown", logPrefix, topic, exception);
-                                }
+                                log.error("{} Error sending record with key {} to topic {}, partition {}. " +
+                                                "Exception will be handled by caller.",
+                                        logPrefix, key, topic, partition, exception);
+
                             }
                         }
                     }

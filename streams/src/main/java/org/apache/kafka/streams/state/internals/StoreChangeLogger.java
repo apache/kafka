@@ -17,10 +17,13 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.state.StateSerdes;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Note that the use of array-typed keys is discouraged because they result in incorrect caching behavior.
@@ -31,7 +34,7 @@ import org.apache.kafka.streams.state.StateSerdes;
  * @param <V>
  */
 class StoreChangeLogger<K, V> {
-
+    private static final Logger log = LoggerFactory.getLogger(StoreChangeLogger.class);
     protected final StateSerdes<K, V> serialization;
 
     private final String topic;
@@ -56,7 +59,14 @@ class StoreChangeLogger<K, V> {
         if (collector != null) {
             final Serializer<K> keySerializer = serialization.keySerializer();
             final Serializer<V> valueSerializer = serialization.valueSerializer();
-            collector.send(this.topic, key, value, this.partition, context.timestamp(), keySerializer, valueSerializer);
+            try {
+                collector.send(this.topic, key, value, this.partition, context.timestamp(), keySerializer, valueSerializer);
+            } catch (final StreamsException e) {
+                log.error("Aborting sending record with key {} to topic {} " +
+                                "because of a previous exception while sending {}.",
+                            key, topic, e.toString());
+                throw e;
+            }
         }
     }
 
