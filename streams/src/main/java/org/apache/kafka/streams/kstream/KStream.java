@@ -122,7 +122,7 @@ public interface KStream<K, V> {
      * The example below normalizes the String key to upper-case letters and counts the number of token of the value string.
      * <pre>{@code
      * KStream<String, String> inputStream = builder.stream("topic");
-     * KStream<Integer, String> outputStream = inputStream.map(new KeyValueMapper<String, String, KeyValue<String, Integer>> {
+     * KStream<String, Integer> outputStream = inputStream.map(new KeyValueMapper<String, String, KeyValue<String, Integer>> {
      *     KeyValue<String, Integer> apply(String key, String value) {
      *         return new KeyValue<>(key.toUpperCase(), value.split(" ").length);
      *     }
