@@ -133,7 +133,7 @@ public class TopicCommand {
     /**
      * Options for TopicCommand
      */
-    public class TopicCommandOptions extends CommandOptions {
+    public static class TopicCommandOptions extends CommandOptions {
 
         public static final String BROKER_LIST = "brokerList";
         public static final String LIST = "list";
