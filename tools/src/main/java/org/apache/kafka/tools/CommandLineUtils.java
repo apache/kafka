@@ -17,9 +17,7 @@
 
 package org.apache.kafka.tools;
 
-import joptsimple.OptionParser;
-import joptsimple.OptionSet;
-import joptsimple.OptionSpec;
+import net.sourceforge.argparse4j.inf.ArgumentParser;
 import org.apache.kafka.common.utils.Exit;
 
 import java.io.IOException;
@@ -37,9 +35,9 @@ public class CommandLineUtils {
      * @param message   message to print as an error before die
      * @throws IOException
      */
-    public static void printUsageAndDie(OptionParser parser, String message) throws IOException {
+    public static void printUsageAndDie(ArgumentParser parser, String message) throws IOException {
         System.err.println(message);
-        parser.printHelpOn(System.err);
+        parser.printHelp();
         Exit.exit(1);
     }
 
@@ -51,8 +49,8 @@ public class CommandLineUtils {
      * @param required  required options on the command line
      * @throws IOException
      */
-    public static void checkRequiredArgs(OptionParser parser, OptionSet options, List<OptionSpec> required) throws IOException {
-        for (OptionSpec arg: required) {
+    public static void checkRequiredArgs(ArgumentParser parser, CommandOptions options, List<String> required) throws IOException {
+        for (String arg: required) {
             if (!options.has(arg))
                 printUsageAndDie(parser, "Missing required argument \"" + arg + "\"");
         }
@@ -67,9 +65,9 @@ public class CommandLineUtils {
      * @param invalidOptions    invalid options to check against the specified used option
      * @throws IOException
      */
-    public static void checkInvalidArgs(OptionParser parser, OptionSet options, OptionSpec usedOption, List<OptionSpec> invalidOptions) throws IOException {
+    public static void checkInvalidArgs(ArgumentParser parser, CommandOptions options, String usedOption, List<String> invalidOptions) throws IOException {
         if (options.has(usedOption)) {
-            for (OptionSpec arg: invalidOptions) {
+            for (String arg: invalidOptions) {
                 if (options.has(arg))
                     printUsageAndDie(parser, "Option \"" + usedOption + "\" can't be used with option\"" + arg + "\"");
             }

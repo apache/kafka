@@ -17,9 +17,8 @@
 
 package org.apache.kafka.tools;
 
-import joptsimple.OptionParser;
-import joptsimple.OptionSet;
-import joptsimple.OptionSpec;
+import net.sourceforge.argparse4j.inf.ArgumentParserException;
+import net.sourceforge.argparse4j.inf.MutuallyExclusiveGroup;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.ListTopicsOptions;
@@ -35,6 +34,11 @@ import java.util.Collections;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 
+import static net.sourceforge.argparse4j.impl.Arguments.storeTrue;
+
+/**
+ * Command class for operations on topics
+ */
 public class TopicCommand {
 
     private AdminClient client;
@@ -51,29 +55,30 @@ public class TopicCommand {
         if (args.length == 0)
             CommandLineUtils.printUsageAndDie(opts.parser, "Create, delete, describe, or change a topic.");
 
-        // TODO : should have exactly one action
-
         opts.checkArgs();
 
         Properties props = new Properties();
-        props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, opts.options.valuesOf(opts.brokerListOpt));
+        props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, opts.brokerList());
 
         this.client = AdminClient.create(props);
 
         try {
 
-            if (opts.options.has(opts.createOpt)) {
+            if (opts.has("create")) {
                 this.createTopics(opts);
-            } else if (opts.options.has(opts.alterOpt)) {
+            } else if (opts.has("alter")) {
                 // TODO
-            } else if (opts.options.has(opts.listOpt)) {
+            } else if (opts.has("list")) {
                 this.listTopics(opts);
-            } else if (opts.options.has(opts.describeOpt)) {
+            } else if (opts.has("describe")) {
                 // TODO
-            } else if (opts.options.has(opts.deleteOpt)) {
+            } else if (opts.has("delete")) {
                 // TODO
             }
 
+        } catch (ArgumentParserException e) {
+            opts.parser.handleError(e);
+            Exit.exit(1);
         } catch (Exception e) {
             System.out.println("Error while executing topic command : " + e.getMessage());
             e.printStackTrace();
@@ -96,22 +101,22 @@ public class TopicCommand {
 
     private void createTopics(TopicCommandOptions opts) throws Exception {
 
-        String topic = String.valueOf(opts.options.valueOf(opts.topicOpt));
-        boolean ifNotExists = opts.options.has(opts.ifNotExistsOpt);
+        String topic = opts.topic();
+        boolean ifNotExists = opts.ifNotExists();
 
         if (Topic.hasCollisionChars(topic))
             System.out.println("WARNING: Due to limitations in metric names, topics with a period ('.') or underscore ('_') could collide. To avoid issues it is best to use either, but not both.");
 
         try {
-            if (opts.options.has(opts.replicaAssignmentOpt)) {
+            if (opts.has("replicaAssignment")) {
 
                 // TODO
 
             } else {
 
-                CommandLineUtils.checkRequiredArgs(opts.parser, opts.options, Arrays.asList(opts.partitionsOpt, opts.replicationFactorOpt));
-                int partitions = (Integer) opts.options.valueOf(opts.partitionsOpt);
-                short replicas = (Short) opts.options.valueOf(opts.replicationFactorOpt);
+                CommandLineUtils.checkRequiredArgs(opts.parser, opts, Arrays.asList(opts.PARTITIONS, opts.REPLICATION_FACTOR));
+                int partitions = opts.partitions();
+                short replicas = opts.replicationFactor();
 
                 client.createTopics(Collections.singleton(new NewTopic(topic, partitions, replicas))).all().get();
                 System.out.println(String.format("Created topic %s .", topic));
@@ -125,85 +130,134 @@ public class TopicCommand {
         }
     }
 
-    public class TopicCommandOptions {
+    /**
+     * Options for TopicCommand
+     */
+    public class TopicCommandOptions extends CommandOptions {
 
-        private OptionParser parser;
+        public static final String BROKER_LIST = "brokerList";
+        public static final String LIST = "list";
+        public static final String CREATE = "create";
+        public static final String DELETE = "delete";
+        public static final String DESCRIBE = "describe";
+        public static final String ALTER = "alter";
+        public static final String TOPIC = "topic";
+        public static final String PARTITIONS = "partitions";
+        public static final String REPLICATION_FACTOR = "replicationFactor";
+        public static final String REPLICA_ASSIGNMENT = "replicaAssignment";
+        public static final String IF_NOT_EXISTS = "ifNotExists";
 
-        public OptionSpec brokerListOpt;
-        public OptionSpec listOpt;
-        public OptionSpec deleteOpt;
-        public OptionSpec alterOpt;
-        public OptionSpec describeOpt;
-        public OptionSpec createOpt;
-        public OptionSpec helpOpt;
+        public TopicCommandOptions(String[] args) throws ArgumentParserException {
 
-        public OptionSpec topicOpt;
-        public OptionSpec partitionsOpt;
-        public OptionSpec replicationFactorOpt;
-        public OptionSpec replicaAssignmentOpt;
-        public OptionSpec ifNotExistsOpt;
+            super("topic-command", "Create, delete, describe, or change a topic.");
 
+            this.parser.addArgument("--broker-list")
+                    .required(true)
+                    .type(String.class)
+                    .dest(BROKER_LIST)
+                    .help("REQUIRED: The broker list string in the form HOST1:PORT1,HOST2:PORT2.");
 
-        public OptionSet options;
+            MutuallyExclusiveGroup operationOptions = parser
+                    .addMutuallyExclusiveGroup()
+                    .required(true)
+                    .description("specifying only one in --list, --create, --delete, --alter, --describe");
 
-        public TopicCommandOptions(String[] args) {
-            this.parser = new OptionParser(false);
+            operationOptions.addArgument("--list")
+                    .action(storeTrue())
+                    .dest(LIST)
+                    .help("List all available topics.");
 
-            this.brokerListOpt = this.parser.accepts("broker-list",
-                    "REQUIRED: The broker list string in the form HOST1:PORT1,HOST2:PORT2.")
-                    .withRequiredArg()
-                    .describedAs("urls")
-                    .ofType(String.class);
+            operationOptions.addArgument("--create")
+                    .action(storeTrue())
+                    .dest(CREATE)
+                    .help("Create a new topic.");
 
-            this.listOpt = this.parser.accepts("list", "List all available topics.");
-            this.createOpt = parser.accepts("create", "Create a new topic.");
-            this.deleteOpt = parser.accepts("delete", "Delete a topic");
-            this.alterOpt = parser.accepts("alter", "Alter the number of partitions, replica assignment, and/or configuration for the topic.");
-            this.describeOpt = parser.accepts("describe", "List details for the given topics.");
-            this.helpOpt = parser.accepts("help", "Print usage information.");
+            operationOptions.addArgument("--delete")
+                    .action(storeTrue())
+                    .dest(DELETE)
+                    .help("Delete a topic");
 
-            this.topicOpt = parser.accepts("topic", "The topic to be create, alter or describe. Can also accept a regular " +
-                    "expression except for --create option")
-                    .withRequiredArg()
-                    .describedAs("topic")
-                    .ofType(String.class);
+            operationOptions.addArgument("--describe")
+                    .action(storeTrue())
+                    .dest(DESCRIBE)
+                    .help("List details for the given topics.");
 
-            this.partitionsOpt = parser.accepts("partitions", "The number of partitions for the topic being created or " +
-                    "altered (WARNING: If partitions are increased for a topic that has a key, the partition logic or ordering of the messages will be affected")
-                    .withRequiredArg()
-                    .describedAs("# of partitions")
-                    .ofType(Integer.class);
-            this.replicationFactorOpt = parser.accepts("replication-factor", "The replication factor for each partition in the topic being created.")
-                    .withRequiredArg()
-                    .describedAs("replication factor")
-                    .ofType(Short.class);
-            this.replicaAssignmentOpt = parser.accepts("replica-assignment", "A list of manual partition-to-broker assignments for the topic being created or altered.")
-                    .withRequiredArg()
-                    .describedAs("broker_id_for_part1_replica1 : broker_id_for_part1_replica2 , " +
-                            "broker_id_for_part2_replica1 : broker_id_for_part2_replica2 , ...")
-                    .ofType(String.class);
+            operationOptions.addArgument("--alter")
+                    .action(storeTrue())
+                    .dest(ALTER)
+                    .help("Alter the number of partitions, replica assignment, and/or configuration for the topic.");
 
-            this.ifNotExistsOpt = parser.accepts("if-not-exists",
-                    "if set when creating topics, the action will only execute if the topic does not already exist");
+            this.parser.addArgument("--topic")
+                    .dest(TOPIC)
+                    .type(String.class)
+                    .help("The topic to be create, alter or describe. Can also accept a regular " +
+                            "expression except for --create option");
 
-            this.options = this.parser.parse(args);
+            this.parser.addArgument("--partitions")
+                    .dest(PARTITIONS)
+                    .type(Integer.class)
+                    .help("The number of partitions for the topic being created or \n" +
+                            "altered (WARNING: If partitions are increased for a topic that has a key, the partition logic or ordering of the messages will be affected");
+
+            this.parser.addArgument("--replication-factor")
+                    .dest(REPLICATION_FACTOR)
+                    .type(Short.class)
+                    .help("The replication factor for each partition in the topic being created.");
+
+            this.parser.addArgument("--replica-assignment")
+                    .dest(REPLICA_ASSIGNMENT)
+                    .type(String.class)
+                    .help("A list of manual partition-to-broker assignments for the topic being created or altered. " +
+                            "broker_id_for_part1_replica1 : broker_id_for_part1_replica2 , " +
+                            "broker_id_for_part2_replica1 : broker_id_for_part2_replica2 , ...");
+
+            this.parser.addArgument("--if-not-exists")
+                    .dest(IF_NOT_EXISTS)
+                    .action(storeTrue())
+                    .type(Boolean.class)
+                    .setDefault(false)
+                    .help("if set when creating topics, the action will only execute if the topic does not already exist");
+
+            this.ns = this.parser.parseArgs(args);
+        }
+
+        public String brokerList() {
+            return this.ns.getString(BROKER_LIST);
+        }
+
+        public String topic() {
+            return this.ns.getString(TOPIC);
+        }
+
+        public int partitions() {
+            return this.ns.getInt(PARTITIONS);
+        }
+
+        public short replicationFactor() {
+            return this.ns.getShort(REPLICATION_FACTOR);
+        }
+
+        public String replicaAssignment() {
+            return this.ns.getString(REPLICA_ASSIGNMENT);
+        }
+
+        public boolean ifNotExists() {
+            return this.ns.getBoolean(IF_NOT_EXISTS);
         }
 
         public void checkArgs() throws Exception {
 
-            // check required args
-            CommandLineUtils.checkRequiredArgs(parser, options, Collections.singletonList(brokerListOpt));
-            if (!options.has(listOpt) && !options.has(describeOpt))
-                CommandLineUtils.checkRequiredArgs(parser, options, Collections.singletonList(topicOpt));
+            if (!this.has(LIST) && !this.has(DESCRIBE))
+                CommandLineUtils.checkRequiredArgs(this.parser, this, Collections.singletonList(TOPIC));
 
             // check invalid args
-            CommandLineUtils.checkInvalidArgs(parser, options, partitionsOpt, Arrays.asList(describeOpt, listOpt, deleteOpt));
-            CommandLineUtils.checkInvalidArgs(parser, options, replicationFactorOpt, Arrays.asList(alterOpt, describeOpt, listOpt, deleteOpt));
-            CommandLineUtils.checkInvalidArgs(parser, options, replicaAssignmentOpt, Arrays.asList(describeOpt, listOpt, deleteOpt));
-            if (options.has(createOpt))
-                CommandLineUtils.checkInvalidArgs(parser, options, replicaAssignmentOpt, Arrays.asList(partitionsOpt, replicationFactorOpt));
+            CommandLineUtils.checkInvalidArgs(this.parser, this, PARTITIONS, Arrays.asList(DESCRIBE, LIST, DELETE));
+            CommandLineUtils.checkInvalidArgs(this.parser, this, REPLICATION_FACTOR, Arrays.asList(ALTER, DESCRIBE, LIST, DELETE));
+            CommandLineUtils.checkInvalidArgs(this.parser, this, REPLICA_ASSIGNMENT, Arrays.asList(DESCRIBE, LIST, DELETE));
+            if (this.has(CREATE))
+                CommandLineUtils.checkInvalidArgs(this.parser, this, REPLICA_ASSIGNMENT, Arrays.asList(PARTITIONS, REPLICATION_FACTOR));
 
-            CommandLineUtils.checkInvalidArgs(parser, options, ifNotExistsOpt, Arrays.asList(alterOpt, describeOpt, listOpt, deleteOpt));
+            CommandLineUtils.checkInvalidArgs(this.parser, this, IF_NOT_EXISTS, Arrays.asList(ALTER, DESCRIBE, LIST, DELETE));
         }
     }
 }
