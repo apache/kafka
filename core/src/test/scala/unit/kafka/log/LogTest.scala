@@ -199,6 +199,23 @@ class LogTest {
   }
 
   @Test
+  def testSizeForLargeLogs(): Unit = {
+    val megaByte = 1024 * 1024
+    val log = createLog(megaByte, messagesPerSegment = 1024)
+    val blob = new Array[Byte](1024)
+    val maximum = Int.MaxValue / 1024
+
+    assertEquals(0L, log.size)
+
+    for (_ <- 1 to maximum) {
+      log.appendAsLeader(TestUtils.records(List(new SimpleRecord(blob))), leaderEpoch = 0)
+    }
+
+    assertTrue(log.size > Int.MaxValue)
+    log.close()
+  }
+
+  @Test
   def testPidMapOffsetUpdatedForNonIdempotentData() {
     val log = createLog(2048)
     val records = TestUtils.records(List(new SimpleRecord(time.milliseconds, "key".getBytes, "value".getBytes)))

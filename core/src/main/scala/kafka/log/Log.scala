@@ -1144,7 +1144,7 @@ class Log(@volatile var dir: File,
   /**
    * The size of the log in bytes
    */
-  def size: Long = logSegments.map(_.size).foldLeft(0L)(_ + _)
+  def size: Long = logSegments.map(_.size.toLong).sum
 
   /**
    * The offset metadata of the next message that will be appended to the log
