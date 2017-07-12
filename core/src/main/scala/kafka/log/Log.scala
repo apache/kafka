@@ -1144,7 +1144,7 @@ class Log(@volatile var dir: File,
   /**
    * The size of the log in bytes
    */
-  def size: Long = logSegments.map(_.size).sum
+  def size: Long = Log.sizeInBytes(logSegments)
 
   /**
    * The offset metadata of the next message that will be appended to the log
@@ -1646,6 +1646,15 @@ object Log {
 
   def offsetFromFilename(filename: String): Long =
     filename.substring(0, filename.indexOf('.')).toLong
+
+  /**
+    * Calculate a log's size (in bytes) based on its log segments
+    *
+    * @param segments The log segments to calculate the size of
+    * @return Sum of the log segments' sizes (in bytes)
+    */
+  def sizeInBytes(segments: Iterable[LogSegment]): Long =
+    segments.map(_.size.toLong).sum
 
   /**
    * Parse the topic and partition out of the directory name of a log
