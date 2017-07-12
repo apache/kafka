@@ -200,19 +200,16 @@ class LogTest {
 
   @Test
   def testSizeForLargeLogs(): Unit = {
-    val megaByte = 1024 * 1024
-    val log = createLog(megaByte, messagesPerSegment = 1024)
-    val blob = new Array[Byte](1024)
-    val maximum = Int.MaxValue / 1024
+    val largeSize = Int.MaxValue.toLong * 2
+    val logSegment = EasyMock.createMock(classOf[LogSegment])
 
-    assertEquals(0L, log.size)
+    EasyMock.expect(logSegment.size).andReturn(Int.MaxValue)
+    EasyMock.expectLastCall().anyTimes()
+    EasyMock.replay(logSegment)
 
-    for (_ <- 1 to maximum) {
-      log.appendAsLeader(TestUtils.records(List(new SimpleRecord(blob))), leaderEpoch = 0)
-    }
-
-    assertTrue(log.size > Int.MaxValue)
-    log.close()
+    assertEquals(Int.MaxValue, Log.size(Seq(logSegment)))
+    assertEquals(largeSize, Log.size(Seq(logSegment, logSegment)))
+    assertTrue(Log.size(Seq(logSegment, logSegment)) > Int.MaxValue)
   }
 
   @Test
