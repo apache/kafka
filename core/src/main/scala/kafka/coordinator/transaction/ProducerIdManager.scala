@@ -42,8 +42,8 @@ object ProducerIdManager extends Logging {
     try {
       Json.parseFull(jsonData).map(_.asJsonObject).flatMap { js =>
         val brokerId = js("broker").to[Int]
-        val blockStart = js("block_start").to[Long]
-        val blockEnd = js("block_end").to[Long]
+        val blockStart = js("block_start").to[String].toLong
+        val blockEnd = js("block_end").to[String].toLong
         Some(ProducerIdBlock(brokerId, blockStart, blockEnd))
       }.getOrElse(throw new KafkaException(s"Failed to parse the producerId block json $jsonData"))
     } catch {
