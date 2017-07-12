@@ -693,7 +693,7 @@ class GroupCoordinator(val brokerId: Int,
   }
 
   private def onMemberFailure(group: GroupMetadata, member: MemberMetadata) {
-    debug(s"Member ${member.memberId} in group ${group.groupId} has failed")
+    info(s"Member ${member.memberId} in group ${group.groupId} has failed")
     group.remove(member.memberId)
     group.currentState match {
       case Dead | Empty =>
