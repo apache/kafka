@@ -320,6 +320,7 @@ class GroupCoordinator(val brokerId: Int,
             } else {
               val member = group.get(memberId)
               removeHeartbeatForLeavingMember(group, member)
+              info(s"Member ${member.memberId} in group ${group.groupId} has left, removing it from the group")
               onMemberFailure(group, member)
               responseCallback(Errors.NONE)
             }
@@ -693,7 +694,6 @@ class GroupCoordinator(val brokerId: Int,
   }
 
   private def onMemberFailure(group: GroupMetadata, member: MemberMetadata) {
-    info(s"Member ${member.memberId} in group ${group.groupId} has failed")
     group.remove(member.memberId)
     group.currentState match {
       case Dead | Empty =>
@@ -774,8 +774,10 @@ class GroupCoordinator(val brokerId: Int,
 
   def onExpireHeartbeat(group: GroupMetadata, member: MemberMetadata, heartbeatDeadline: Long) {
     group synchronized {
-      if (!shouldKeepMemberAlive(member, heartbeatDeadline))
+      if (!shouldKeepMemberAlive(member, heartbeatDeadline)) {
+        info(s"Member ${member.memberId} in group ${group.groupId} has failed, removing it from the group")
         onMemberFailure(group, member)
+      }
     }
   }
 
