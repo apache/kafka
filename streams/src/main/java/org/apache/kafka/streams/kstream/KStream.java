@@ -1234,7 +1234,7 @@ public interface KStream<K, V> {
                                      final Serde<VO> otherValueSerde);
 
     /**
-     * Join records of this stream with another {@code KStream}'s records using windowed left equi join with default
+     * Join records of this stream with another {@code KStream}'s records using windowed outer equi join with default
      * serializers and deserializers.
      * In contrast to {@link #join(KStream, ValueJoiner, JoinWindows) inner-join} or
      * {@link #leftJoin(KStream, ValueJoiner, JoinWindows) left-join}, all records from both streams will produce at
@@ -1315,7 +1315,7 @@ public interface KStream<K, V> {
                                       final JoinWindows windows);
 
     /**
-     * Join records of this stream with another {@code KStream}'s records using windowed left equi join.
+     * Join records of this stream with another {@code KStream}'s records using windowed outer equi join.
      * In contrast to {@link #join(KStream, ValueJoiner, JoinWindows, Serde, Serde, Serde) inner-join} or
      * {@link #leftJoin(KStream, ValueJoiner, JoinWindows, Serde, Serde, Serde) left-join}, all records from both
      * streams will produce at least one output record (cf. below).
