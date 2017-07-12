@@ -202,4 +202,9 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
     public int size() {
         return this.map.size();
     }
+
+	@Override
+	public KeyValueIterator<K, V> prefixScan(K prefix) {
+		 throw new UnsupportedOperationException("MemoryLRUCache does not support prefixScan() function.");
+	}
 }

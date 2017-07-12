@@ -58,6 +58,14 @@ public interface ReadOnlyKeyValueStore<K, V> {
      * @throws InvalidStateStoreException if the store is not initialized
      */
     KeyValueIterator<K, V> all();
+    
+    /**
+     * Return an iterator over all keys that share the same prefix byte[] 
+     * as the provided key. 
+     * 
+     */
+    
+    KeyValueIterator<K, V> prefixScan(K prefix);
 
     /**
      * Return an approximate count of key-value mappings in this store.

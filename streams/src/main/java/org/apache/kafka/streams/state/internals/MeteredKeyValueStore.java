@@ -46,6 +46,7 @@ public class MeteredKeyValueStore<K, V> extends WrappedStateStore.AbstractStateS
     private Sensor deleteTime;
     private Sensor putAllTime;
     private Sensor allTime;
+    private Sensor prefixTime;
     private Sensor rangeTime;
     private Sensor flushTime;
     private Sensor restoreTime;
@@ -122,6 +123,7 @@ public class MeteredKeyValueStore<K, V> extends WrappedStateStore.AbstractStateS
         this.deleteTime = this.metrics.addLatencyAndThroughputSensor(metricScope, name, "delete", Sensor.RecordingLevel.DEBUG);
         this.putAllTime = this.metrics.addLatencyAndThroughputSensor(metricScope, name, "put-all", Sensor.RecordingLevel.DEBUG);
         this.allTime = this.metrics.addLatencyAndThroughputSensor(metricScope, name, "all", Sensor.RecordingLevel.DEBUG);
+        this.prefixTime = this.metrics.addLatencyAndThroughputSensor(metricScope, name, "prefix", Sensor.RecordingLevel.DEBUG);
         this.rangeTime = this.metrics.addLatencyAndThroughputSensor(metricScope, name, "range", Sensor.RecordingLevel.DEBUG);
         this.flushTime = this.metrics.addLatencyAndThroughputSensor(metricScope, name, "flush", Sensor.RecordingLevel.DEBUG);
         this.restoreTime = this.metrics.addLatencyAndThroughputSensor(metricScope, name, "restore", Sensor.RecordingLevel.DEBUG);
@@ -226,4 +228,9 @@ public class MeteredKeyValueStore<K, V> extends WrappedStateStore.AbstractStateS
             return iter.peekNextKey();
         }
     }
+
+	@Override
+	public KeyValueIterator<K, V> prefixScan(K prefix) {
+		return new MeteredKeyValueIterator<>(inner.prefixScan(prefix), this.prefixTime);
+	}
 }

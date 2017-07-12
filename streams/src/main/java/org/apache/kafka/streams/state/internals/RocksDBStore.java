@@ -493,4 +493,49 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
             return super.hasNext() && comparator.compare(super.peekRawKey(), this.rawToKey) <= 0;
         }
     }
+    
+    private class RocksDbPrefixIterator extends RocksDbIterator {
+
+    	private byte[] rawPrefix; 
+    
+		public RocksDbPrefixIterator(String name, RocksIterator newIterator,
+				StateSerdes<K, V> serdes, K prefix) {
+			super(name, newIterator, serdes);
+		}
+		
+		@Override
+        public synchronized boolean hasNext() {
+            if(!super.hasNext()){
+            	return false;
+            }
+            
+            byte[] rawNextKey = super.peekRawKey();
+            for (int i = 0; i < rawPrefix.length; i++) {
+                if (i == rawNextKey.length) {
+                	//rocks db should have skipped that one with seek()
+                    throw new ArrayIndexOutOfBoundsException("WTF just happend?");
+                }
+
+                if (rawNextKey[i] != rawPrefix[i]) {
+                    return false;
+                }
+            }
+            return true;
+            
+        }
+    }
+
+	@Override
+	public KeyValueIterator<K, V> prefixScan(K prefix) {
+		 Objects.requireNonNull(prefix, "prefix cannot be null");
+	     validateStoreOpen();
+
+	     // query rocksdb
+	     final RocksDBStore<K, V>.RocksDbPrefixIterator rocksDBRangeIterator = new RocksDbPrefixIterator(name, db.newIterator(), serdes, prefix);
+	        openIterators.add(rocksDBRangeIterator);
+	        return rocksDBRangeIterator;
+	}
+    
+
+    
 }

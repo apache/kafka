@@ -84,7 +84,7 @@ class ChangeLoggingKeyValueStore<K, V> extends WrappedStateStore.AbstractStateSt
 
     @Override
     public void putAll(final List<KeyValue<K, V>> entries) {
-        final List<KeyValue<Bytes, byte[]>> keyValues = new ArrayList<>();
+        final List<KeyValue<Bytes, byte[]>> keyValues = new ArrayList<>(entries.size());
         for (final KeyValue<K, V> entry : entries) {
             keyValues.add(KeyValue.pair(Bytes.wrap(serdes.rawKey(entry.key)), serdes.rawValue(entry.value)));
         }
@@ -120,4 +120,9 @@ class ChangeLoggingKeyValueStore<K, V> extends WrappedStateStore.AbstractStateSt
     public KeyValueIterator<K, V> all() {
         return new SerializedKeyValueIterator<>(innerBytes.all(), serdes);
     }
+    
+    @Override
+	public KeyValueIterator<K, V> prefixScan(K prefix) {
+		throw new UnsupportedOperationException(getClass().getSimpleName() + " can't perform a prefix scan");
+	}
 }

@@ -188,4 +188,9 @@ public class InMemoryKeyValueStore<K, V> implements KeyValueStore<K, V> {
             throw new UnsupportedOperationException("peekNextKey() not supported in " + getClass().getName());
         }
     }
+
+	@Override
+	public KeyValueIterator<K, V> prefixScan(K prefix) {
+		throw new UnsupportedOperationException(getClass().getSimpleName() + " can't perform a prefix scan");
+	}
 }
