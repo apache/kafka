@@ -21,8 +21,13 @@ package kafka.server
 import java.util.concurrent.{ArrayBlockingQueue, ConcurrentHashMap, TimeUnit}
 
 /*
- * LogDirFailureChannel allows an external thread to block waiting for new offline log dir
- * Classes such as ReplicaManager and LogManager can announce new offline log dir via LogDirFailureChannel.
+ * LogDirFailureChannel allows an external thread to block waiting for new offline log dir.
+ *
+ * LogDirFailureChannel should be a singleton object which can be accessed by any class that does disk-IO operation.
+ * If IOException is encountered while accessing a log directory, the corresponding class can insert the the log directory name
+ * to the LogDirFailureChannel using maybeAddLogFailureEvent(). Then a thread which is blocked waiting for new offline log directories
+ * can take the name of the new offline log directory out of the LogDirFailureChannel and handles the log failure properly.
+ *
  */
 class LogDirFailureChannel(logDirNum: Int) {
 
@@ -41,10 +46,10 @@ class LogDirFailureChannel(logDirNum: Int) {
 
   /*
    * Get the next offline log dir from logDirFailureEvent queue.
-   * Block waiting for up to 300 ms if there is no new offline log dir.
+   * The method will block waiting if there is no new offline log dir.
    */
-  def takeNextLogFailureEvent(timeout: Long): String = {
-    logDirFailureEvent.poll(timeout, TimeUnit.MILLISECONDS)
+  def takeNextLogFailureEvent(): String = {
+    logDirFailureEvent.take()
   }
 
 }

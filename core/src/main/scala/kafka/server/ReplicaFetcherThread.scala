@@ -22,7 +22,6 @@ import java.io.IOException
 import kafka.admin.AdminUtils
 import kafka.api.{FetchRequest => _, _}
 import kafka.cluster.{BrokerEndPoint, Replica}
-import kafka.common.KafkaStorageException
 import kafka.log.LogConfig
 import kafka.server.ReplicaFetcherThread._
 import kafka.server.epoch.LeaderEpochCache
@@ -34,7 +33,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.requests.{EpochEndOffset, FetchResponse, ListOffsetRequest, ListOffsetResponse, OffsetsForLeaderEpochRequest, OffsetsForLeaderEpochResponse, FetchRequest => JFetchRequest}
 import org.apache.kafka.common.utils.Time
-
+import org.apache.kafka.common.errors.KafkaStorageException
 import scala.collection.JavaConverters._
 import scala.collection.{Map, mutable}
 
@@ -113,8 +112,8 @@ class ReplicaFetcherThread(name: String,
         quota.record(records.sizeInBytes)
       replicaMgr.brokerTopicStats.updateReplicationBytesIn(records.sizeInBytes)
     } catch {
-      case e@ (_: KafkaStorageException | _: IOException) =>
-        error(s"Disk error while replicating data for $topicPartition", e)
+      case e: IOException =>
+        replicaMgr.getLogDir(topicPartition).foreach(replicaMgr.maybeAddLogFailureEvent)
         throw new KafkaStorageException(s"Disk error while replicating data for $topicPartition", e)
     }
   }
@@ -198,12 +197,8 @@ class ReplicaFetcherThread(name: String,
   }
 
   // any logic for partitions whose leader has changed
-  def handlePartitionsWithErrors(partitions: Map[TopicPartition, Option[Exception]]) {
-    val (partitionsWithStorageException, partitionsWithoutStorageException) = partitions.partition{ case (_, exception) =>
-        exception.isDefined && exception.get.isInstanceOf[KafkaStorageException]
-    }
-    partitionsWithStorageException.keys.foreach(tp => replicaMgr.getLogDir(tp).foreach(replicaMgr.maybeAddLogFailureEvent))
-    delayPartitions(partitionsWithoutStorageException.keys, brokerConfig.replicaFetchBackoffMs.toLong)
+  def handlePartitionsWithErrors(partitions: Iterable[TopicPartition]) {
+    delayPartitions(partitions, brokerConfig.replicaFetchBackoffMs.toLong)
   }
 
   protected def fetch(fetchRequest: FetchRequest): Seq[(TopicPartition, PartitionData)] = {

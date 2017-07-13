@@ -20,7 +20,8 @@ package kafka.server
 import java.util.concurrent.locks.ReentrantLock
 import kafka.cluster.BrokerEndPoint
 import kafka.utils.{DelayedItem, Pool, ShutdownableThread}
-import kafka.common.{ClientIdAndBroker, KafkaException, KafkaStorageException}
+import org.apache.kafka.common.errors.KafkaStorageException
+import kafka.common.{ClientIdAndBroker, KafkaException}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.CoreUtils.inLock
 import org.apache.kafka.common.errors.CorruptRecordException
@@ -68,7 +69,7 @@ abstract class AbstractFetcherThread(name: String,
   protected def handleOffsetOutOfRange(topicPartition: TopicPartition): Long
 
   // deal with partitions with errors, potentially due to leadership changes
-  protected def handlePartitionsWithErrors(partitions: Map[TopicPartition, Option[Exception]])
+  protected def handlePartitionsWithErrors(partitions: Iterable[TopicPartition])
 
   protected def buildLeaderEpochRequest(allPartitions: Seq[(TopicPartition, PartitionFetchState)]): Map[TopicPartition, Int]
 
@@ -133,10 +134,10 @@ abstract class AbstractFetcherThread(name: String,
   }
 
   private def processFetchRequest(fetchRequest: REQ) {
-    val partitionsWithError = mutable.HashMap[TopicPartition, Option[Exception]]()
+    val partitionsWithError = mutable.Set[TopicPartition]()
 
-    def updatePartitionsWithError(partition: TopicPartition, e: Option[Exception]): Unit = {
-      partitionsWithError.put(partition, e)
+    def updatePartitionsWithError(partition: TopicPartition): Unit = {
+      partitionsWithError += partition
       partitionStates.moveToEnd(partition)
     }
 
@@ -150,7 +151,7 @@ abstract class AbstractFetcherThread(name: String,
         if (isRunning.get) {
           warn(s"Error in fetch to broker ${sourceBroker.id}, request ${fetchRequest}", t)
           inLock(partitionMapLock) {
-            partitionStates.partitionSet.asScala.foreach(updatePartitionsWithError(_, None))
+            partitionStates.partitionSet.asScala.foreach(updatePartitionsWithError)
             // there is an error occurred while fetching partitions, sleep a while
             // note that `ReplicaFetcherThread.handlePartitionsWithError` will also introduce the same delay for every
             // partition with error effectively doubling the delay. It would be good to improve this.
@@ -194,9 +195,10 @@ abstract class AbstractFetcherThread(name: String,
                       // 2. If the message is corrupt due to a transient state in the log (truncation, partial writes can cause this), we simply continue and
                       // should get fixed in the subsequent fetches
                       logger.error("Found invalid messages during fetch for partition [" + topic + "," + partitionId + "] offset " + currentPartitionFetchState.fetchOffset  + " error " + ime.getMessage)
-                      updatePartitionsWithError(topicPartition, None)
+                      updatePartitionsWithError(topicPartition)
                     case e: KafkaStorageException =>
-                      updatePartitionsWithError(topicPartition, Some(e))
+                      logger.error(s"Error while processing data for partition $topicPartition", e)
+                      updatePartitionsWithError(topicPartition)
                     case e: Throwable =>
                       throw new KafkaException("error processing data for partition [%s,%d] offset %d"
                         .format(topic, partitionId, currentPartitionFetchState.fetchOffset), e)
@@ -211,13 +213,13 @@ abstract class AbstractFetcherThread(name: String,
                     case e: FatalExitError => throw e
                     case e: Throwable =>
                       error("Error getting offset for partition [%s,%d] to broker %d".format(topic, partitionId, sourceBroker.id), e)
-                      updatePartitionsWithError(topicPartition, None)
+                      updatePartitionsWithError(topicPartition)
                   }
                 case e =>
                   if (isRunning.get) {
                     error("Error for partition [%s,%d] to broker %d:%s".format(topic, partitionId, sourceBroker.id,
                       partitionData.exception.get))
-                    updatePartitionsWithError(topicPartition, None)
+                    updatePartitionsWithError(topicPartition)
                   }
               }
             })

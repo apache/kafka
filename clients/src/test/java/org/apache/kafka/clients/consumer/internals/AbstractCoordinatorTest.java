@@ -124,7 +124,7 @@ public class AbstractCoordinatorTest {
                     throw e;
                 return false;
             }
-        }, heartbeatResponse(Errors.UNKNOWN));
+        }, heartbeatResponse(Errors.UNKNOWN_SERVER_ERROR));
 
         try {
             coordinator.ensureActiveGroup();
@@ -499,7 +499,7 @@ public class AbstractCoordinatorTest {
                     heartbeatReceived.set(true);
                 return isHeartbeatRequest;
             }
-        }, heartbeatResponse(Errors.UNKNOWN));
+        }, heartbeatResponse(Errors.UNKNOWN_SERVER_ERROR));
         return heartbeatReceived;
     }
 

@@ -30,4 +30,12 @@ public class KafkaStorageException extends RetriableException {
     public KafkaStorageException(String message) {
         super(message);
     }
+
+    public KafkaStorageException(Throwable cause) {
+        super(cause);
+    }
+
+    public KafkaStorageException(String message, Throwable cause) {
+        super(message, cause);
+    }
 }

@@ -87,7 +87,7 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
           checkpoint.read()
         } catch {
           case e: IOException =>
-            error(s"Failed to access checkpoint file ${checkpoint.f}", e)
+            error(s"Failed to access checkpoint file ${checkpoint.f.getName} in dir ${checkpoint.f.getParentFile.getAbsolutePath}", e)
             logDirFailureChannel.maybeAddLogFailureEvent(checkpoint.f.getParentFile.getAbsolutePath)
             Map.empty[TopicPartition, Long]
         }
@@ -239,7 +239,7 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
           checkpoint.write(existing)
         } catch {
           case e: IOException =>
-            error(s"Failed to access checkpoint file ${checkpoint.f}", e)
+            error(s"Failed to access checkpoint file ${checkpoint.f.getName} in dir ${checkpoint.f.getParentFile.getAbsolutePath}", e)
             logDirFailureChannel.maybeAddLogFailureEvent(checkpoint.f.getParentFile.getAbsolutePath)
         }
       }
@@ -265,7 +265,7 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
               checkpoint.write(existing + (topicPartition -> offset))
           } catch {
             case e: IOException =>
-              error(s"Failed to access checkpoint file ${checkpoint.f}", e)
+              error(s"Failed to access checkpoint file ${checkpoint.f.getName} in dir ${checkpoint.f.getParentFile.getAbsolutePath}", e)
               logDirFailureChannel.maybeAddLogFailureEvent(checkpoint.f.getParentFile.getAbsolutePath)
           }
         }

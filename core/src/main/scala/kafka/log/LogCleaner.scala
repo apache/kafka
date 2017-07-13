@@ -224,7 +224,8 @@ class LogCleaner(val config: CleanerConfig,
                               dupBufferLoadFactor = config.dedupeBufferLoadFactor,
                               throttler = throttler,
                               time = time,
-                              checkDone = checkDone)
+                              checkDone = checkDone,
+                              logDirFailureChannel = logDirFailureChannel)
 
     @volatile var lastStats: CleanerStats = new CleanerStats()
     private val backOffWaitLatch = new CountDownLatch(1)
@@ -265,7 +266,7 @@ class LogCleaner(val config: CleanerConfig,
           } catch {
             case _: LogCleaningAbortedException => // task can be aborted, let it go.
             case e: IOException =>
-              error(s"Failed to cleanup log for ${cleanable.topicPartition} due to IOException", e)
+              error(s"Failed to cleanup log for ${cleanable.topicPartition} in dir ${cleanable.log.dir.getParent} due to IOException", e)
               logDirFailureChannel.maybeAddLogFailureEvent(cleanable.log.dir.getParent)
           } finally {
             cleanerManager.doneCleaning(cleanable.topicPartition, cleanable.log.dir.getParentFile, endOffset)
@@ -279,7 +280,7 @@ class LogCleaner(val config: CleanerConfig,
             log.deleteOldSegments()
           } catch {
             case e: IOException =>
-              error(s"Failed to delete old segments for $topicPartition due to IOException", e)
+              error(s"Failed to delete old segments for $topicPartition in dir ${log.dir.getParent} due to IOException", e)
               logDirFailureChannel.maybeAddLogFailureEvent(log.dir.getParent)
           } finally {
             cleanerManager.doneDeleting(topicPartition)
@@ -339,7 +340,8 @@ private[log] class Cleaner(val id: Int,
                            dupBufferLoadFactor: Double,
                            throttler: Throttler,
                            time: Time,
-                           checkDone: (TopicPartition) => Unit) extends Logging {
+                           checkDone: (TopicPartition) => Unit,
+                           logDirFailureChannel: LogDirFailureChannel) extends Logging {
 
   override val loggerName = classOf[LogCleaner].getName
 
@@ -435,7 +437,7 @@ private[log] class Cleaner(val id: Int,
     val timeIndex = new TimeIndex(timeIndexFile, startOffset, segments.head.timeIndex.maxIndexSize)
     val txnIndex = new TransactionIndex(startOffset, txnIndexFile)
     val cleaned = new LogSegment(records, index, timeIndex, txnIndex, startOffset,
-      segments.head.indexIntervalBytes, log.config.randomSegmentJitter, time)
+      segments.head.indexIntervalBytes, log.config.randomSegmentJitter, time, logDirFailureChannel)
 
     try {
       // clean segments into the new destination segment

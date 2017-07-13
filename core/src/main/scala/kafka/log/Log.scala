@@ -24,11 +24,11 @@ import java.util.concurrent.atomic._
 import java.util.concurrent.{ConcurrentNavigableMap, ConcurrentSkipListMap, TimeUnit}
 
 import kafka.api.KAFKA_0_10_0_IV0
-import kafka.common._
+import kafka.common.{InvalidOffsetException, KafkaException, LongRef}
 import kafka.metrics.KafkaMetricsGroup
-import kafka.server.{BrokerTopicStats, FetchDataInfo, LogOffsetMetadata}
+import kafka.server.{BrokerTopicStats, FetchDataInfo, LogDirFailureChannel, LogOffsetMetadata}
 import kafka.utils._
-import org.apache.kafka.common.errors.{CorruptRecordException, OffsetOutOfRangeException, RecordBatchTooLargeException, RecordTooLargeException, UnsupportedForMessageFormatException}
+import org.apache.kafka.common.errors.{KafkaStorageException, CorruptRecordException, OffsetOutOfRangeException, RecordBatchTooLargeException, RecordTooLargeException, UnsupportedForMessageFormatException}
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.{IsolationLevel, ListOffsetRequest}
 
@@ -136,7 +136,8 @@ class Log(@volatile var dir: File,
           val maxProducerIdExpirationMs: Int,
           val producerIdExpirationCheckIntervalMs: Int,
           val topicPartition: TopicPartition,
-          val producerStateManager: ProducerStateManager) extends Logging with KafkaMetricsGroup {
+          val producerStateManager: ProducerStateManager,
+          val logDirFailureChannel: LogDirFailureChannel) extends Logging with KafkaMetricsGroup {
 
   import kafka.log.Log._
 
@@ -164,7 +165,7 @@ class Log(@volatile var dir: File,
    * temporary abuse seems justifiable and saves us from scanning the log after deletion to find the first offsets
    * of each ongoing transaction in order to compute a new first unstable offset. It is possible, however,
    * that this could result in disagreement between replicas depending on when they began replicating the log.
-   * In the worst case, the LSO could be seen by a consumer to go backwards. 
+   * In the worst case, the LSO could be seen by a consumer to go backwards.
    */
   @volatile var firstUnstableOffset: Option[LogOffsetMetadata] = None
 
@@ -294,7 +295,8 @@ class Log(@volatile var dir: File,
           maxIndexSize = config.maxIndexSize,
           rollJitterMs = config.randomSegmentJitter,
           time = time,
-          fileAlreadyExists = true)
+          fileAlreadyExists = true,
+          logDirFailureChannel = logDirFailureChannel)
 
         if (indexFileExists) {
           try {
@@ -358,7 +360,8 @@ class Log(@volatile var dir: File,
         baseOffset = startOffset,
         indexIntervalBytes = config.indexInterval,
         rollJitterMs = config.randomSegmentJitter,
-        time = time)
+        time = time,
+        logDirFailureChannel = logDirFailureChannel)
       info("Found log file %s from interrupted swap operation, repairing.".format(swapFile.getPath))
       recoverSegment(swapSegment)
       val oldSegments = logSegments(swapSegment.baseOffset, swapSegment.nextOffset())
@@ -383,14 +386,15 @@ class Log(@volatile var dir: File,
     if(logSegments.isEmpty) {
       // no existing segments, create a new mutable segment beginning at offset 0
       segments.put(0L, new LogSegment(dir = dir,
-                                     startOffset = 0,
-                                     indexIntervalBytes = config.indexInterval,
-                                     maxIndexSize = config.maxIndexSize,
-                                     rollJitterMs = config.randomSegmentJitter,
-                                     time = time,
-                                     fileAlreadyExists = false,
-                                     initFileSize = this.initFileSize(),
-                                     preallocate = config.preallocate))
+                                      startOffset = 0,
+                                      indexIntervalBytes = config.indexInterval,
+                                      maxIndexSize = config.maxIndexSize,
+                                      rollJitterMs = config.randomSegmentJitter,
+                                      time = time,
+                                      fileAlreadyExists = false,
+                                      initFileSize = this.initFileSize(),
+                                      preallocate = config.preallocate,
+                                      logDirFailureChannel = logDirFailureChannel))
     } else if (!dir.getAbsolutePath.endsWith(Log.DeleteDirSuffix)) {
       recoverLog()
       // reset the index size of the currently active log segment to allow more entries
@@ -706,7 +710,9 @@ class Log(@volatile var dir: File,
         appendInfo
       }
     } catch {
-      case e: IOException => throw new KafkaStorageException("I/O exception in append to log '%s'".format(name), e)
+      case e: IOException =>
+        logDirFailureChannel.maybeAddLogFailureEvent(dir.getParent)
+        throw new KafkaStorageException("I/O exception in append to log '%s'".format(name), e)
     }
   }
 
@@ -1253,7 +1259,8 @@ class Log(@volatile var dir: File,
                                    time = time,
                                    fileAlreadyExists = false,
                                    initFileSize = initFileSize,
-                                   preallocate = config.preallocate)
+                                   preallocate = config.preallocate,
+                                   logDirFailureChannel = logDirFailureChannel)
       val prev = addSegment(segment)
       if(prev != null)
         throw new KafkaException("Trying to roll a new log segment for topic partition %s with start offset %d while it already exists.".format(name, newOffset))
@@ -1395,7 +1402,8 @@ class Log(@volatile var dir: File,
                                 time = time,
                                 fileAlreadyExists = false,
                                 initFileSize = initFileSize,
-                                preallocate = config.preallocate))
+                                preallocate = config.preallocate,
+                                logDirFailureChannel = logDirFailureChannel))
       updateLogEndOffset(newOffset)
       leaderEpochCache.clearAndFlush()
 
@@ -1584,11 +1592,12 @@ object Log {
             brokerTopicStats: BrokerTopicStats,
             time: Time = Time.SYSTEM,
             maxProducerIdExpirationMs: Int = 60 * 60 * 1000,
-            producerIdExpirationCheckIntervalMs: Int = 10 * 60 * 1000): Log = {
+            producerIdExpirationCheckIntervalMs: Int = 10 * 60 * 1000,
+            logDirFailureChannel: LogDirFailureChannel = null): Log = {
     val topicPartition = Log.parseTopicPartitionName(dir)
     val producerStateManager = new ProducerStateManager(topicPartition, dir, maxProducerIdExpirationMs)
     new Log(dir, config, logStartOffset, recoveryPoint, scheduler, brokerTopicStats, time, maxProducerIdExpirationMs,
-      producerIdExpirationCheckIntervalMs, topicPartition, producerStateManager)
+      producerIdExpirationCheckIntervalMs, topicPartition, producerStateManager, logDirFailureChannel)
   }
 
   /**

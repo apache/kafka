@@ -18,14 +18,13 @@ package kafka.api
 
 import java.util.Collections
 import java.util.concurrent.{ExecutionException, TimeUnit}
-import org.apache.kafka.common.errors.NotLeaderForPartitionException
 import kafka.server.KafkaConfig
 import kafka.utils.{CoreUtils, TestUtils}
 import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.errors.UnknownTopicOrPartitionException
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.errors.KafkaStorageException
 import org.junit.{Before, Test}
 import org.junit.Assert.assertTrue
 
@@ -81,16 +80,14 @@ class LogDirFailureTest extends IntegrationTestHarness {
     // The second send() should fail due to UnknownTopicOrPartitionException
     try {
       producer.send(record).get(6000, TimeUnit.MILLISECONDS)
-      fail("send() should fail with either UnknownTopicOrPartitionException or NotLeaderForPartitionException")
+      fail("send() should fail with either KafkaStorageException")
     } catch {
       case e: ExecutionException =>
         e.getCause match {
-          case t: UnknownTopicOrPartitionException =>
-          case t: NotLeaderForPartitionException => // This may happen if broker receives LeaderAndIsrRequest in between the first two ProduceRequest
-          case t: Throwable =>
-            fail(s"send() should fail with either UnknownTopicOrPartitionException or NotLeaderForPartitionException instead of ${t.toString}")
+          case t: KafkaStorageException =>
+          case t: Throwable => fail(s"send() should fail with either KafkaStorageException instead of ${t.toString}")
         }
-      case e: Throwable => fail(s"send() should fail with UnknownTopicOrPartitionException instead of ${e.toString}")
+      case e: Throwable => fail(s"send() should fail with KafkaStorageException instead of ${e.toString}")
     }
 
     // Wait for producer to update metadata for the partition

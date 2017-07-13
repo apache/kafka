@@ -23,14 +23,14 @@ import java.util.concurrent._
 
 import com.yammer.metrics.core.Gauge
 import kafka.admin.AdminUtils
-import kafka.common.{KafkaException, KafkaStorageException}
+import kafka.common.KafkaException
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.server.{BrokerState, RecoveringFromUncleanShutdown, _}
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.utils.Time
-
+import org.apache.kafka.common.errors.KafkaStorageException
 import scala.collection.JavaConverters._
 import scala.collection._
 import scala.collection.mutable.ArrayBuffer
@@ -105,7 +105,7 @@ class LogManager(private val logDirs: Array[File],
 
   for (dir <- logDirs) {
     newGauge(
-      "OfflineLogDirectoryCount",
+      "isLogDirectorOffline",
       new Gauge[Int] {
         def value = if (_liveLogDirs.contains(dir)) 0 else 1
       },
@@ -114,7 +114,7 @@ class LogManager(private val logDirs: Array[File],
   }
 
   /**
-   * Create and check validity of the given directories, specifically:
+   * Create and check validity of the given directories that are not in the given offline directories, specifically:
    * <ol>
    * <li> Ensure that there are no duplicates in the directory list
    * <li> Create each directory if it doesn't exist
@@ -133,13 +133,13 @@ class LogManager(private val logDirs: Array[File],
           info("Log directory '" + dir.getAbsolutePath + "' not found, creating it.")
           val created = dir.mkdirs()
           if (!created)
-            throw new KafkaStorageException("Failed to create data directory " + dir.getAbsolutePath)
+            throw new IOException("Failed to create data directory " + dir.getAbsolutePath)
         }
         if (!dir.isDirectory || !dir.canRead)
-          throw new KafkaStorageException(dir.getAbsolutePath + " is not a readable log directory.")
+          throw new IOException(dir.getAbsolutePath + " is not a readable log directory.")
         liveLogDirs.add(dir)
       } catch {
-        case e@ ( _: IOException | _: KafkaStorageException ) =>
+        case e: IOException =>
           error(s"Failed to create or validate data directory $dir.getAbsolutePath", e)
       }
     }
@@ -180,7 +180,7 @@ class LogManager(private val logDirs: Array[File],
         }
       })
       info(s"Partitions ${offlineTopicPartitions.mkString(",")} are offline due to failure on log directory $dir")
-      dirLocks.filter(_.file.getParent == dir).foreach(_.destroy())
+      dirLocks.filter(_.file.getParent == dir).foreach(dir => CoreUtils.swallow(dir.destroy()))
     }
   }
 
@@ -279,7 +279,7 @@ class LogManager(private val logDirs: Array[File],
             } catch {
               case e: IOException =>
                 offlineDirs.append(dir.getAbsolutePath)
-                error("Error while load log dir " + dir.getAbsolutePath, e)
+                error("Error while loading log dir " + dir.getAbsolutePath, e)
             }
           }
         }
@@ -289,7 +289,7 @@ class LogManager(private val logDirs: Array[File],
       } catch {
         case e: IOException =>
           offlineDirs.append(dir.getAbsolutePath)
-          error("Error while load log dir " + dir.getAbsolutePath, e)
+          error("Error while loading log dir " + dir.getAbsolutePath, e)
       }
     }
 
@@ -357,7 +357,7 @@ class LogManager(private val logDirs: Array[File],
 
     removeMetric("OfflineLogDirectoryCount")
     for (dir <- logDirs) {
-      removeMetric("OfflineLogDirectoryCount", Map("logDirectory" -> dir.getAbsolutePath))
+      removeMetric("isLogDirectorOffline", Map("logDirectory" -> dir.getAbsolutePath))
     }
 
     val threadPools = ArrayBuffer.empty[ExecutorService]
@@ -437,8 +437,8 @@ class LogManager(private val logDirs: Array[File],
             cleaner.maybeTruncateCheckpoint(log.dir.getParentFile, topicPartition, log.activeSegment.baseOffset)
         } catch {
           case e: IOException =>
-            error(s"Failed to truncate the log for $topicPartition due to IOException", e)
             logDirFailureChannel.maybeAddLogFailureEvent(log.dir.getParent)
+            throw new KafkaStorageException(s"Failed to truncate the log for $topicPartition in dir ${log.dir.getParent} due to IOException", e)
         } finally {
           if (needToStopCleaner)
             cleaner.resumeCleaning(topicPartition)
@@ -464,8 +464,8 @@ class LogManager(private val logDirs: Array[File],
         log.truncateFullyAndStartAt(newOffset)
       } catch {
         case e: IOException =>
-          error(s"Failed to fully truncate the log for $topicPartition due to IOException", e)
           logDirFailureChannel.maybeAddLogFailureEvent(log.dir.getParent)
+          throw new KafkaStorageException(s"Failed to fully truncate the log for $topicPartition in dir ${log.dir.getParent} due to IOException", e)
       }
       if (cleaner != null) {
         cleaner.maybeTruncateCheckpoint(log.dir.getParentFile, topicPartition, log.activeSegment.baseOffset)
@@ -501,7 +501,7 @@ class LogManager(private val logDirs: Array[File],
         this.recoveryPointCheckpoints.get(dir).foreach(_.write(recoveryPoints.get.mapValues(_.recoveryPoint)))
       } catch {
         case e: IOException =>
-          error("Disk error while writing to recovery point file", e)
+          error(s"Disk error while writing to recovery point file in directory $dir", e)
           logDirFailureChannel.maybeAddLogFailureEvent(dir.getAbsolutePath)
       }
     }
@@ -519,7 +519,7 @@ class LogManager(private val logDirs: Array[File],
         ))
       } catch {
         case e: IOException =>
-          error("Disk error while writing to logStartOffset file", e)
+          error(s"Disk error while writing to logStartOffset file in directory $dir", e)
           logDirFailureChannel.maybeAddLogFailureEvent(dir.getAbsolutePath)
       }
     }
@@ -583,7 +583,7 @@ class LogManager(private val logDirs: Array[File],
             info(s"Deleted log for partition ${removedLog.topicPartition} in ${removedLog.dir.getAbsolutePath}.")
           } catch {
             case e: IOException =>
-              error(s"Exception while deleting $removedLog.", e)
+              error(s"Exception while deleting $removedLog in dir ${removedLog.dir.getParentFile.getAbsolutePath}.", e)
               logDirFailureChannel.maybeAddLogFailureEvent(removedLog.dir.getParentFile.getAbsolutePath)
           }
         }
@@ -627,6 +627,7 @@ class LogManager(private val logDirs: Array[File],
         removedLog.removeLogMetrics()
         info(s"Log for partition ${removedLog.topicPartition} is renamed to ${removedLog.dir.getAbsolutePath} and is scheduled for deletion")
       } else {
+        logDirFailureChannel.maybeAddLogFailureEvent(removedLog.dir.getParent)
         throw new KafkaStorageException("Failed to rename log directory from " + removedLog.dir.getAbsolutePath + " to " + renamedDir.getAbsolutePath)
       }
     } else if (offlineLogDirs.nonEmpty) {

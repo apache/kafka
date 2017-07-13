@@ -18,23 +18,25 @@ package org.apache.kafka.common.errors;
 
 /**
  * An error code on the server for which the client doesn't have a corresponding error.
+ * UnknownErrorCodeException can only occur on the client side when client's library version is lower than the server's version.
+ * This exception should be retriable to handle the scenario that the corresponding new exception defined in the server side is retriable.
  */
-public class UnknownRetriableException extends RetriableException {
+public class UnknownErrorCodeException extends RetriableException {
 
     private static final long serialVersionUID = 1L;
 
-    public UnknownRetriableException() {
+    public UnknownErrorCodeException() {
     }
 
-    public UnknownRetriableException(String message) {
+    public UnknownErrorCodeException(String message) {
         super(message);
     }
 
-    public UnknownRetriableException(Throwable cause) {
+    public UnknownErrorCodeException(Throwable cause) {
         super(cause);
     }
 
-    public UnknownRetriableException(String message, Throwable cause) {
+    public UnknownErrorCodeException(String message, Throwable cause) {
         super(message, cause);
     }
 }
