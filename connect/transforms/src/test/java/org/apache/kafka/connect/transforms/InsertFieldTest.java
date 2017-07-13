@@ -22,6 +22,7 @@ import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.data.Timestamp;
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.source.SourceRecord;
+import org.junit.After;
 import org.junit.Test;
 
 import java.util.Collections;
@@ -32,6 +33,12 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertSame;
 
 public class InsertFieldTest {
+    private InsertField<SourceRecord> xform = new InsertField.Value<>();
+
+    @After
+    public void teardown() {
+        xform.close();
+    }
 
     @Test(expected = DataException.class)
     public void topLevelStructRequired() {
@@ -50,7 +57,6 @@ public class InsertFieldTest {
         props.put("static.field", "instance_id");
         props.put("static.value", "my-instance-id");
 
-        final InsertField<SourceRecord> xform = new InsertField.Value<>();
         xform.configure(props);
 
         final Schema simpleStructSchema = SchemaBuilder.struct().name("name").version(1).doc("doc").field("magic", Schema.OPTIONAL_INT64_SCHEMA).build();
@@ -82,7 +88,6 @@ public class InsertFieldTest {
         final SourceRecord transformedRecord2 = xform.apply(
                 new SourceRecord(null, null, "test", 1, simpleStructSchema, new Struct(simpleStructSchema)));
         assertSame(transformedRecord.valueSchema(), transformedRecord2.valueSchema());
-        xform.close();
     }
 
     @Test
@@ -94,7 +99,6 @@ public class InsertFieldTest {
         props.put("static.field", "instance_id");
         props.put("static.value", "my-instance-id");
 
-        final InsertField<SourceRecord> xform = new InsertField.Value<>();
         xform.configure(props);
 
         final SourceRecord record = new SourceRecord(null, null, "test", 0,
@@ -107,7 +111,6 @@ public class InsertFieldTest {
         assertEquals(0, ((Map) transformedRecord.value()).get("partition_field"));
         assertEquals(null, ((Map) transformedRecord.value()).get("timestamp_field"));
         assertEquals("my-instance-id", ((Map) transformedRecord.value()).get("instance_id"));
-        xform.close();
     }
 
 }

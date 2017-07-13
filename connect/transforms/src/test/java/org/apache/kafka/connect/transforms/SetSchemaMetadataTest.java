@@ -21,6 +21,7 @@ import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.sink.SinkRecord;
+import org.junit.After;
 import org.junit.Test;
 
 import java.util.Collections;
@@ -31,25 +32,27 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertSame;
 
 public class SetSchemaMetadataTest {
+    private final SetSchemaMetadata<SinkRecord> xform = new SetSchemaMetadata.Value<>();
 
-    @Test
-    public void schemaNameUpdate() {
-        final SetSchemaMetadata<SinkRecord> xform = new SetSchemaMetadata.Value<>();
-        xform.configure(Collections.singletonMap("schema.name", "foo"));
-        final SinkRecord record = new SinkRecord("", 0, null, null, SchemaBuilder.struct().build(), null, 0);
-        final SinkRecord updatedRecord = xform.apply(record);
-        assertEquals("foo", updatedRecord.valueSchema().name());
+    @After
+    public void teardown() {
         xform.close();
     }
 
     @Test
+    public void schemaNameUpdate() {
+        xform.configure(Collections.singletonMap("schema.name", "foo"));
+        final SinkRecord record = new SinkRecord("", 0, null, null, SchemaBuilder.struct().build(), null, 0);
+        final SinkRecord updatedRecord = xform.apply(record);
+        assertEquals("foo", updatedRecord.valueSchema().name());
+    }
+
+    @Test
     public void schemaVersionUpdate() {
-        final SetSchemaMetadata<SinkRecord> xform = new SetSchemaMetadata.Value<>();
         xform.configure(Collections.singletonMap("schema.version", 42));
         final SinkRecord record = new SinkRecord("", 0, null, null, SchemaBuilder.struct().build(), null, 0);
         final SinkRecord updatedRecord = xform.apply(record);
         assertEquals(new Integer(42), updatedRecord.valueSchema().version());
-        xform.close();
     }
 
     @Test
@@ -58,7 +61,6 @@ public class SetSchemaMetadataTest {
         props.put("schema.name", "foo");
         props.put("schema.version", "42");
 
-        final SetSchemaMetadata<SinkRecord> xform = new SetSchemaMetadata.Value<>();
         xform.configure(props);
 
         final SinkRecord record = new SinkRecord("", 0, null, null, SchemaBuilder.struct().build(), null, 0);
@@ -67,7 +69,6 @@ public class SetSchemaMetadataTest {
 
         assertEquals("foo", updatedRecord.valueSchema().name());
         assertEquals(new Integer(42), updatedRecord.valueSchema().version());
-        xform.close();
     }
 
     @Test
@@ -86,7 +87,6 @@ public class SetSchemaMetadataTest {
         final Map<String, String> props = new HashMap<>();
         props.put("schema.name", "foo");
         props.put("schema.version", "42");
-        final SetSchemaMetadata<SinkRecord> xform = new SetSchemaMetadata.Value<>();
         xform.configure(props);
 
         final SinkRecord record = new SinkRecord("", 0, null, null, schema, value, 0);
@@ -98,7 +98,6 @@ public class SetSchemaMetadataTest {
 
         // Make sure the struct's schema and fields all point to the new schema
         assertMatchingSchema((Struct) updatedRecord.value(), updatedRecord.valueSchema());
-        xform.close();
     }
 
     @Test

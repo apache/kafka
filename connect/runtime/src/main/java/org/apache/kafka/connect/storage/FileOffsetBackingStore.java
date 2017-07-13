@@ -71,10 +71,8 @@ public class FileOffsetBackingStore extends MemoryOffsetBackingStore {
     private void load() {
         try (ObjectInputStream is = new ObjectInputStream(new FileInputStream(file))) {
             Object obj = is.readObject();
-            if (!(obj instanceof HashMap)) {
-                is.close();
+            if (!(obj instanceof HashMap))
                 throw new ConnectException("Expected HashMap but found " + obj.getClass());
-            }
             Map<byte[], byte[]> raw = (Map<byte[], byte[]>) obj;
             data = new HashMap<>();
             for (Map.Entry<byte[], byte[]> mapEntry : raw.entrySet()) {
