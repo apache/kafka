@@ -356,8 +356,8 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                             if (otherSinkTopics.contains(topicName)) {
                                 // if this topic is one of the sink topics of this topology,
                                 // use the maximum of all its source topic partitions as the number of partitions
-                                for (String sourceTopicName : otherTopicsInfo.sourceTopics) {
-                                    Integer numPartitionsCandidate;
+                                for (final String sourceTopicName : otherTopicsInfo.sourceTopics) {
+                                    final Integer numPartitionsCandidate;
                                     // It is possible the sourceTopic is another internal topic, i.e,
                                     // map().join().join(map())
                                     if (repartitionTopicMetadata.containsKey(sourceTopicName)) {
@@ -377,10 +377,11 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                         }
                         // if we still have not find the right number of partitions,
                         // another iteration is needed
-                        if (numPartitions == UNKNOWN)
+                        if (numPartitions == UNKNOWN) {
                             numPartitionsNeeded = true;
-                        else
+                        } else {
                             repartitionTopicMetadata.get(topicName).numPartitions = numPartitions;
+                        }
                     }
                 }
             }
