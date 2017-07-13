@@ -45,35 +45,35 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
   protected val lock = new ReentrantLock
 
   @volatile
+  protected var raf: RandomAccessFile = _
+
+  @volatile
   protected var mmap: MappedByteBuffer = {
     val newlyCreated = file.createNewFile()
-    val raf = if (writable) new RandomAccessFile(file, "rw") else new RandomAccessFile(file, "r")
-    try {
-      /* pre-allocate the file if necessary */
-      if(newlyCreated) {
-        if(maxIndexSize < entrySize)
-          throw new IllegalArgumentException("Invalid max index size: " + maxIndexSize)
-        raf.setLength(roundDownToExactMultiple(maxIndexSize, entrySize))
-      }
+    raf = if (writable) new RandomAccessFile(file, "rw") else new RandomAccessFile(file, "r")
 
-      /* memory-map the file */
-      val len = raf.length()
-      val idx = {
-        if (writable)
-          raf.getChannel.map(FileChannel.MapMode.READ_WRITE, 0, len)
-        else
-          raf.getChannel.map(FileChannel.MapMode.READ_ONLY, 0, len)
-      }
-      /* set the position in the index for the next entry */
-      if(newlyCreated)
-        idx.position(0)
-      else
-        // if this is a pre-existing index, assume it is valid and set position to last entry
-        idx.position(roundDownToExactMultiple(idx.limit, entrySize))
-      idx
-    } finally {
-      CoreUtils.swallow(raf.close())
+    /* pre-allocate the file if necessary */
+    if(newlyCreated) {
+      if(maxIndexSize < entrySize)
+        throw new IllegalArgumentException("Invalid max index size: " + maxIndexSize)
+      raf.setLength(roundDownToExactMultiple(maxIndexSize, entrySize))
     }
+
+    /* memory-map the file */
+    val len = raf.length()
+    val idx = {
+      if (writable)
+        raf.getChannel.map(FileChannel.MapMode.READ_WRITE, 0, len)
+      else
+        raf.getChannel.map(FileChannel.MapMode.READ_ONLY, 0, len)
+    }
+    /* set the position in the index for the next entry */
+    if(newlyCreated)
+      idx.position(0)
+    else
+      // if this is a pre-existing index, assume it is valid and set position to last entry
+      idx.position(roundDownToExactMultiple(idx.limit, entrySize))
+    idx
   }
 
   /**
@@ -103,21 +103,28 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
    */
   def resize(newSize: Int) {
     inLock(lock) {
-      val raf = new RandomAccessFile(file, "rw")
-      val roundedNewSize = roundDownToExactMultiple(newSize, entrySize)
-      val position = mmap.position
-
-      /* Windows won't let us modify the file length while the file is mmapped :-( */
-      if (OperatingSystem.IS_WINDOWS)
-        forceUnmap(mmap);
-      try {
-        raf.setLength(roundedNewSize)
-        mmap = raf.getChannel().map(FileChannel.MapMode.READ_WRITE, 0, roundedNewSize)
-        _maxEntries = mmap.limit / entrySize
-        mmap.position(position)
-      } finally {
-        CoreUtils.swallow(raf.close())
+      if (!file.exists()) {
+        raf.close()
+        raf = new RandomAccessFile(file, "rw");
       }
+
+      val pos = mmap.position()
+      val roundedNewSize = roundDownToExactMultiple(newSize, entrySize)
+
+      if (OperatingSystem.IS_WINDOWS) {
+        // Windows won't let us modify the file length while the file is mmapped :-(
+        forceUnmap(mmap)
+      }
+
+      raf.setLength(roundedNewSize)
+
+      if (OperatingSystem.IS_WINDOWS || mmap.capacity() < roundedNewSize) {
+        mmap = raf.getChannel.map(FileChannel.MapMode.READ_WRITE, 0, roundedNewSize)
+      }
+
+      mmap.limit(roundedNewSize)
+      mmap.position(pos)
+      _maxEntries = mmap.limit / entrySize
     }
   }
 
@@ -175,7 +182,10 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
 
   /** Close the index */
   def close() {
-    trimToValidSize()
+    inLock(lock) {
+      trimToValidSize()
+      raf.close()
+    }
   }
 
   /**
