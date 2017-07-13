@@ -20,7 +20,6 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.log4j.AppenderSkeleton;
@@ -254,7 +253,7 @@ public class KafkaLog4jAppender extends AppenderSkeleton {
             try {
                 response.get();
             } catch (InterruptedException | ExecutionException ex) {
-                throw new KafkaException(ex);
+                throw new RuntimeException(ex);
             }
         }
     }
