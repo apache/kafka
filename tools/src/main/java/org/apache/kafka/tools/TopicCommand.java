@@ -28,9 +28,13 @@ import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.utils.Exit;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 
@@ -110,7 +114,9 @@ public class TopicCommand {
         try {
             if (opts.has("replicaAssignment")) {
 
-                // TODO
+                Map<Integer, List<Integer>> assignment = this.parseReplicaAssignment(opts.replicaAssignment());
+                client.createTopics(Collections.singleton(new NewTopic(topic, assignment)));
+                // TODO : rach aware mode ?
 
             } else {
 
@@ -119,8 +125,8 @@ public class TopicCommand {
                 short replicas = opts.replicationFactor();
 
                 client.createTopics(Collections.singleton(new NewTopic(topic, partitions, replicas))).all().get();
-                System.out.println(String.format("Created topic %s .", topic));
             }
+            System.out.println(String.format("Created topic %s .", topic));
         } catch (ExecutionException e) {
 
             boolean isTopicExists = e.getCause() instanceof TopicExistsException;
@@ -128,6 +134,29 @@ public class TopicCommand {
                 throw e;
             }
         }
+    }
+
+    private Map<Integer, List<Integer>> parseReplicaAssignment(String replicaAssignmentList) throws Exception {
+
+        String[] partitionList = replicaAssignmentList.split(",");
+        Map<Integer, List<Integer>> ret = new HashMap<>();
+        for (int i = 0; i < partitionList.length; i++) {
+
+            String[] brokerList = partitionList[i].split(":");
+            List<Integer> intBrokerList = new ArrayList<>();
+            for (String broker: brokerList) {
+                intBrokerList.add(Integer.valueOf(broker.trim()));
+            }
+
+            List<Integer> duplicateBrokers = CoreUtils.duplicates(intBrokerList);
+            if (!duplicateBrokers.isEmpty())
+                throw new Exception("Partition replica lists may not contain duplicate entries: " + duplicateBrokers);
+
+            ret.put(i, intBrokerList);
+            if (ret.get(i).size() != ret.get(0).size())
+                throw new Exception("Partition " + i + " has different replication factor: " + intBrokerList);
+        }
+        return ret;
     }
 
     /**
