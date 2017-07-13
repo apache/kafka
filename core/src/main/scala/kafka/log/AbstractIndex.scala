@@ -22,6 +22,7 @@ import java.nio.{ByteBuffer, MappedByteBuffer}
 import java.nio.channels.FileChannel
 import java.util.concurrent.locks.{Lock, ReentrantLock}
 
+import kafka.common.KafkaStorageException
 import kafka.log.IndexSearchType.IndexSearchEntity
 import kafka.utils.CoreUtils.inLock
 import kafka.utils.{CoreUtils, Logging}
@@ -109,7 +110,7 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
 
       /* Windows won't let us modify the file length while the file is mmapped :-( */
       if (OperatingSystem.IS_WINDOWS)
-        forceUnmap(mmap);
+        forceUnmap()
       try {
         raf.setLength(roundedNewSize)
         mmap = raf.getChannel().map(FileChannel.MapMode.READ_WRITE, 0, roundedNewSize)
@@ -127,8 +128,26 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
    * @throws IOException if rename fails
    */
   def renameTo(f: File) {
-    try Utils.atomicMoveWithFallback(file.toPath, f.toPath)
-    finally file = f
+    inLock(lock) {
+      val position = this.mmap.position
+      if(OperatingSystem.IS_WINDOWS)
+        forceUnmap()
+      try {
+        Utils.atomicMoveWithFallback(file.toPath, f.toPath)
+        if (OperatingSystem.IS_WINDOWS) {
+          val raf = new RandomAccessFile(f, "rw")
+          try {
+            val len = raf.length()
+            this.mmap = raf.getChannel.map(FileChannel.MapMode.READ_WRITE, 0, len)
+            this.mmap.position(position)
+          } finally {
+            CoreUtils.swallow(raf.close())
+          }
+        }
+      } finally {
+        file = f
+      }
+    }
   }
 
   /**
@@ -150,12 +169,35 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
       // However, in some cases it can pause application threads(STW) for a long moment reading metadata from a physical disk.
       // To prevent this, we forcefully cleanup memory mapping within proper execution which never affects API responsiveness.
       // See https://issues.apache.org/jira/browse/KAFKA-4614 for the details.
-      CoreUtils.swallow(forceUnmap(mmap))
+      CoreUtils.swallow(forceUnmap())
       // Accessing unmapped mmap crashes JVM by SEGV.
       // Accessing it after this method called sounds like a bug but for safety, assign null and do not allow later access.
       mmap = null
     }
     file.delete()
+  }
+
+  /**
+    * Resets back to a sane state after corruption is noticed, to prepare for overall segment recovery.  Deletes the
+    * corrupted file, creates a new and empty one, and maps the latter.
+    */
+  def resetToSane(): Unit = {
+    inLock(lock) {
+      CoreUtils.swallow(forceUnmap())
+
+      val deleted = file.delete()
+      if(!deleted && file.exists)
+        throw new KafkaStorageException("Delete of index " + file.getAbsolutePath + " failed.")
+
+      val raf = new RandomAccessFile(file, "rw")
+      try {
+        raf.setLength(roundDownToExactMultiple(maxIndexSize, entrySize))
+        val len = raf.length()
+        mmap = raf.getChannel.map(FileChannel.MapMode.READ_WRITE, 0, len)
+      } finally {
+        CoreUtils.swallow(raf.close())
+      }
+    }
   }
 
   /**
@@ -176,6 +218,10 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
   /** Close the index */
   def close() {
     trimToValidSize()
+    inLock(lock) {
+      if (OperatingSystem.IS_WINDOWS)
+        forceUnmap()
+    }
   }
 
   /**
@@ -199,14 +245,15 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
   /**
    * Forcefully free the buffer's mmap.
    */
-  protected def forceUnmap(m: MappedByteBuffer) {
+  protected def forceUnmap() {
     try {
-      m match {
+      mmap match {
         case buffer: DirectBuffer =>
           val bufferCleaner = buffer.cleaner()
           /* cleaner can be null if the mapped region has size 0 */
           if (bufferCleaner != null)
             bufferCleaner.clean()
+          mmap = null
         case _ =>
       }
     } catch {

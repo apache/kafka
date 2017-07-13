@@ -308,8 +308,8 @@ class Log(@volatile var dir: File,
             case e: java.lang.IllegalArgumentException =>
               warn(s"Found a corrupted index file due to ${e.getMessage}}. deleting ${timeIndexFile.getAbsolutePath}, " +
                 s"${indexFile.getAbsolutePath}, and ${txnIndexFile.getAbsolutePath} and rebuilding index...")
-              Files.deleteIfExists(timeIndexFile.toPath)
-              Files.delete(indexFile.toPath)
+              segment.timeIndex.resetToSane()
+              segment.index.resetToSane()
               segment.txnIndex.delete()
               recoverSegment(segment)
           }
@@ -1455,7 +1455,11 @@ class Log(@volatile var dir: File,
    * @throws KafkaStorageException if the file can't be renamed and still exists
    */
   private def asyncDeleteSegment(segment: LogSegment) {
-    segment.changeFileSuffixes("", Log.DeletedFileSuffix)
+    val deletedFileSuffix = new StringBuilder(".")
+      .append(java.util.UUID.randomUUID.toString.replaceAll("-",""))
+      .append(DeletedFileSuffix)
+      .toString()
+    segment.changeFileSuffixes("", deletedFileSuffix)
     def deleteSeg() {
       info("Deleting segment %d from log %s.".format(segment.baseOffset, name))
       segment.delete()

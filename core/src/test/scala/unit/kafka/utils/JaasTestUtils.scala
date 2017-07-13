@@ -16,10 +16,11 @@
  */
 package kafka.utils
 
-import java.io.{File, BufferedWriter, FileWriter}
+import java.io.{BufferedWriter, File, FileWriter}
 import java.util.Properties
+
 import kafka.server.KafkaConfig
-import org.apache.kafka.common.utils.Java
+import org.apache.kafka.common.utils.{Java, OperatingSystem}
 
 object JaasTestUtils {
 
@@ -170,7 +171,7 @@ object JaasTestUtils {
         Krb5LoginModule(
           useKeyTab = true,
           storeKey = true,
-          keyTab = keytabLocation.getOrElse(throw new IllegalArgumentException("Keytab location not specified for GSSAPI")).getAbsolutePath,
+          keyTab = keytabFileToString(keytabLocation.getOrElse(throw new IllegalArgumentException("Keytab location not specified for GSSAPI"))),
           principal = KafkaServerPrincipal,
           debug = true,
           serviceName = Some(serviceName))
@@ -194,6 +195,10 @@ object JaasTestUtils {
     new JaasSection(contextName, modules)
   }
 
+  private def keytabFileToString(f: File): String = {
+    if (OperatingSystem.IS_WINDOWS) f.getAbsolutePath.replace('\\', '/') else f.getAbsolutePath
+  }
+
   // consider refactoring if more mechanisms are added
   private def kafkaClientModule(mechanism: String, 
       keytabLocation: Option[File], clientPrincipal: String,
@@ -204,7 +209,7 @@ object JaasTestUtils {
         Krb5LoginModule(
           useKeyTab = true,
           storeKey = true,
-          keyTab = keytabLocation.getOrElse(throw new IllegalArgumentException("Keytab location not specified for GSSAPI")).getAbsolutePath,
+          keyTab = keytabFileToString(keytabLocation.getOrElse(throw new IllegalArgumentException("Keytab location not specified for GSSAPI"))),
           principal = clientPrincipal,
           debug = true,
           serviceName = Some(serviceName)

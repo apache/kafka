@@ -24,12 +24,15 @@ import java.net.InetSocketAddress
 
 import kafka.utils.CoreUtils
 import org.apache.kafka.common.utils.Utils
+import org.apache.zookeeper.server.ZooKeeperServer.BasicDataTreeBuilder
+import org.apache.zookeeper.server.persistence.FileTxnSnapLog
 
 class EmbeddedZookeeper() {
   val snapshotDir = TestUtils.tempDir()
   val logDir = TestUtils.tempDir()
   val tickTime = 500
-  val zookeeper = new ZooKeeperServer(snapshotDir, logDir, tickTime)
+  val txnLog = new FileTxnSnapLog(snapshotDir, logDir)
+  val zookeeper = new ZooKeeperServer(txnLog, tickTime, new BasicDataTreeBuilder())
   val factory = new NIOServerCnxnFactory()
   private val addr = new InetSocketAddress("127.0.0.1", TestUtils.RandomPort)
   factory.configure(addr, 0)
@@ -49,6 +52,7 @@ class EmbeddedZookeeper() {
 
     Iterator.continually(isDown()).exists(identity)
 
+    txnLog.close()
     Utils.delete(logDir)
     Utils.delete(snapshotDir)
   }

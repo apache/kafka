@@ -67,7 +67,9 @@ class LogManager(val logDirs: Array[File],
   private val logsToBeDeleted = new LinkedBlockingQueue[Log]()
 
   createAndValidateLogDirs(logDirs)
-  private val dirLocks = lockLogDirs(logDirs)
+  // public, so we can access this from kafka.server.HighwatermarkPersistenceTest
+  val dirLocks = lockLogDirs(logDirs)
+
   private val recoveryPointCheckpoints = logDirs.map(dir => (dir, new OffsetCheckpointFile(new File(dir, RecoveryPointCheckpointFile)))).toMap
   private val logStartOffsetCheckpoints = logDirs.map(dir => (dir, new OffsetCheckpointFile(new File(dir, LogStartOffsetCheckpointFile)))).toMap
   loadLogs()
@@ -106,13 +108,18 @@ class LogManager(val logDirs: Array[File],
    * Lock all the given directories
    */
   private def lockLogDirs(dirs: Seq[File]): Seq[FileLock] = {
-    dirs.map { dir =>
+    val locks = mutable.ArrayBuffer.empty[FileLock]
+    for (dir <- dirs) {
       val lock = new FileLock(new File(dir, LockFile))
-      if(!lock.tryLock())
-        throw new KafkaException("Failed to acquire lock on file .lock in " + lock.file.getParentFile.getAbsolutePath + 
-                               ". A Kafka instance in another process or thread is using this directory.")
-      lock
+      if (!lock.tryLock()) {
+        lock.destroy()
+        locks.foreach(_.destroy())
+        throw new KafkaException("Failed to acquire lock on file .lock in " + lock.file.getParentFile.getAbsolutePath +
+          ". A Kafka instance in another process or thread is using this directory.")
+      }
+      locks.append(lock)
     }
+    locks
   }
   
   /**

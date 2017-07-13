@@ -21,6 +21,8 @@ import java.io._
 import java.nio._
 import java.nio.channels._
 import java.nio.charset.{Charset, StandardCharsets}
+import java.nio.file.attribute.BasicFileAttributes
+import java.nio.file._
 import java.security.cert.X509Certificate
 import java.util.{Collections, Properties}
 import java.util.concurrent.{Callable, Executors, TimeUnit}
@@ -1460,6 +1462,27 @@ object TestUtils extends Logging {
     try scala.Console.withOut(out)(f)
     finally scala.Console.out.flush
     out.toString
+  }
+
+  /**
+    * Recursively copy the contents of a source directory to a target directory.
+    */
+  def copyDir(source: Path, target: Path): Unit = {
+    Files.walkFileTree(source, new SimpleFileVisitor[Path]() {
+      override def preVisitDirectory(dir: Path, attrs: BasicFileAttributes): FileVisitResult = {
+        val copyToDir = target.resolve(source.relativize(dir))
+        try {
+          Files.copy(dir, copyToDir)
+        } catch {
+          case e: FileAlreadyExistsException => if (!Files.isDirectory(copyToDir)) throw e
+        }
+        return FileVisitResult.CONTINUE
+      }
+      override def visitFile(file: Path, attrs: BasicFileAttributes): FileVisitResult = {
+        Files.copy(file, target.resolve(source.relativize(file)))
+        return FileVisitResult.CONTINUE
+      }
+    })
   }
 
 }

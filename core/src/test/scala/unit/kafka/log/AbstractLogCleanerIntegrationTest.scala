@@ -33,7 +33,7 @@ abstract class AbstractLogCleanerIntegrationTest {
   var cleaner: LogCleaner = _
   val logDir = TestUtils.tempDir()
 
-  private val logs = ListBuffer.empty[Log]
+  protected val logs = ListBuffer.empty[Log]
   private val defaultMaxMessageSize = 128
   private val defaultMinCleanableDirtyRatio = 0.0F
   private val defaultCompactionLag = 0L
