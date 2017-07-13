@@ -27,13 +27,13 @@
       <li><code>zookeeper.connect</code>
   </ul>
 
-  Topic-level configurations and defaults are discussed in more detail <a href="#topic-config">below</a>.
+  Topic-level configurations and defaults are discussed in more detail <a href="#topicconfigs">below</a>.
 
   <!--#include virtual="generated/kafka_config.html" -->
 
   <p>More details about broker configuration can be found in the scala class <code>kafka.server.KafkaConfig</code>.</p>
 
-  <h3><a id="topic-config" href="#topic-config">3.2 Topic-Level Configs</a></h3>
+  <h3><a id="topicconfigs" href="#topicconfigs">3.2 Topic-Level Configs</a></h3>
 
   Configurations pertinent to topics have both a server default as well an optional per-topic override. If no per-topic configuration is given the server default is used. The override can be set at topic creation time by giving one or more <code>--config</code> options. This example creates a topic named <i>my-topic</i> with a custom max message size and flush rate:
   <pre class="brush: bash;">
