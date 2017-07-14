@@ -45,8 +45,8 @@ class ZookeeperConsumerConnectorTest extends KafkaServerTestHarness with Logging
   val overridingProps = new Properties()
   overridingProps.put(KafkaConfig.NumPartitionsProp, numParts.toString)
 
-  override def generateConfigs() = TestUtils.createBrokerConfigs(numNodes, zkConnect)
-    .map(KafkaConfig.fromProps(_, overridingProps))
+  override def generateConfigs =
+    TestUtils.createBrokerConfigs(numNodes, zkConnect).map(KafkaConfig.fromProps(_, overridingProps))
 
   val group = "group1"
   val consumer0 = "consumer0"

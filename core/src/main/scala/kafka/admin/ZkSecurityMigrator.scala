@@ -17,8 +17,6 @@
 
 package kafka.admin
 
-import java.util.concurrent.LinkedBlockingQueue
-
 import joptsimple.OptionParser
 import org.I0Itec.zkclient.exception.ZkException
 import kafka.utils.{CommandLineUtils, Logging, ZkUtils}

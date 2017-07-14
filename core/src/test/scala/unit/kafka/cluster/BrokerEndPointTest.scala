@@ -67,7 +67,7 @@ class BrokerEndPointTest extends Logging {
   }
 
   @Test
-  def testFromJsonV2 {
+  def testFromJsonV2(): Unit = {
     val brokerInfoStr = """{
       "version":2,
       "host":"localhost",

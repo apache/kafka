@@ -72,7 +72,7 @@ class ZKEphemeralTest(val secure: Boolean) extends ZooKeeperTestHarness {
   }
   
   @Test
-  def testEphemeralNodeCleanup = {
+  def testEphemeralNodeCleanup(): Unit = {
     val config = new ConsumerConfig(TestUtils.createConsumerProperties(zkConnect, "test", "1"))
     var zkUtils = ZkUtils(zkConnect, zkSessionTimeoutMs, config.zkConnectionTimeoutMs, JaasUtils.isZkSecurityEnabled())
 
@@ -100,7 +100,7 @@ class ZKEphemeralTest(val secure: Boolean) extends ZooKeeperTestHarness {
    * Tests basic creation
    */
   @Test
-  def testZkWatchedEphemeral = {
+  def testZkWatchedEphemeral(): Unit = {
     testCreation("/zwe-test")
     testCreation("/zwe-test-parent/zwe-test")
   }
@@ -128,7 +128,7 @@ class ZKEphemeralTest(val secure: Boolean) extends ZooKeeperTestHarness {
    * session.
    */
   @Test
-  def testOverlappingSessions = {
+  def testOverlappingSessions(): Unit = {
     val path = "/zwe-test"
     val zk1 = zkUtils.zkConnection.getZookeeper
 
@@ -156,7 +156,7 @@ class ZKEphemeralTest(val secure: Boolean) extends ZooKeeperTestHarness {
    * Tests if succeeds with znode from the same session
    */
   @Test
-  def testSameSession = {
+  def testSameSession(): Unit = {
     val path = "/zwe-test"
     val zk = zkUtils.zkConnection.getZookeeper
     // Creates znode for path in the first session

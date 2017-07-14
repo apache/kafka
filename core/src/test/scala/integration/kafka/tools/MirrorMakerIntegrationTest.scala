@@ -30,8 +30,8 @@ import org.junit.Test
 
 class MirrorMakerIntegrationTest extends KafkaServerTestHarness {
 
-  override def generateConfigs(): Seq[KafkaConfig] = TestUtils.createBrokerConfigs(1, zkConnect)
-    .map(KafkaConfig.fromProps(_, new Properties()))
+  override def generateConfigs: Seq[KafkaConfig] =
+    TestUtils.createBrokerConfigs(1, zkConnect).map(KafkaConfig.fromProps(_, new Properties()))
 
   @Test
   def testCommaSeparatedRegex(): Unit = {
