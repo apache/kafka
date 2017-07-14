@@ -320,8 +320,8 @@ class GroupCoordinator(val brokerId: Int,
             } else {
               val member = group.get(memberId)
               removeHeartbeatForLeavingMember(group, member)
-              info(s"Member ${member.memberId} in group ${group.groupId} has left, removing it from the group")
-              onMemberFailure(group, member)
+              debug(s"Member ${member.memberId} in group ${group.groupId} has left, removing it from the group")
+              removeMemberAndUpdateGroup(group, member)
               responseCallback(Errors.NONE)
             }
           }
@@ -693,7 +693,7 @@ class GroupCoordinator(val brokerId: Int,
     joinPurgatory.tryCompleteElseWatch(delayedRebalance, Seq(groupKey))
   }
 
-  private def onMemberFailure(group: GroupMetadata, member: MemberMetadata) {
+  private def removeMemberAndUpdateGroup(group: GroupMetadata, member: MemberMetadata) {
     group.remove(member.memberId)
     group.currentState match {
       case Dead | Empty =>
@@ -776,7 +776,7 @@ class GroupCoordinator(val brokerId: Int,
     group synchronized {
       if (!shouldKeepMemberAlive(member, heartbeatDeadline)) {
         info(s"Member ${member.memberId} in group ${group.groupId} has failed, removing it from the group")
-        onMemberFailure(group, member)
+        removeMemberAndUpdateGroup(group, member)
       }
     }
   }
