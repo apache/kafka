@@ -270,11 +270,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
       TestUtils.waitAndVerifyAcls(GroupReadAcl, s.apis.authorizer.get, groupResource)
     }
   }
- 
-  /**
-    * Tests that a consumer fails to consume messages without the appropriate
-    * ACL set.
-    */
+  
   @Test
   def testNoConsumeWithDescribeAclViaAssign(): Unit = {
     noConsumeWithDescribeAclSetup
