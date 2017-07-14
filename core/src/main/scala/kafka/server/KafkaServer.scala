@@ -410,21 +410,20 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
           // Get the current controller info. This is to ensure we use the most recent info to issue the
           // controlled shutdown request
           val controllerId = zkUtils.getController()
-          zkUtils.getBrokerInfo(controllerId) match {
-            case Some(broker) =>
-              // if this is the first attempt, if the controller has changed or if an exception was thrown in a previous
-              // attempt, connect to the most recent controller
-              if (ioException || broker != prevController) {
+          //If this method returns None ignore and try again
+          zkUtils.getBrokerInfo(controllerId).foreach { broker =>
+            // if this is the first attempt, if the controller has changed or if an exception was thrown in a previous
+            // attempt, connect to the most recent controller
+            if (ioException || broker != prevController) {
 
-                ioException = false
+              ioException = false
 
-                if (prevController != null)
-                  networkClient.close(node(prevController).idString)
+              if (prevController != null)
+                networkClient.close(node(prevController).idString)
 
-                prevController = broker
-                metadataUpdater.setNodes(Seq(node(prevController)).asJava)
-              }
-            case None => //ignore and try again
+              prevController = broker
+              metadataUpdater.setNodes(Seq(node(prevController)).asJava)
+            }
           }
 
           // 2. issue a controlled shutdown to the controller
@@ -483,24 +482,23 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
           // Get the current controller info. This is to ensure we use the most recent info to issue the
           // controlled shutdown request
           val controllerId = zkUtils.getController()
-          zkUtils.getBrokerInfo(controllerId) match {
-            case Some(broker) =>
-              if (channel == null || prevController == null || !prevController.equals(broker)) {
-                // if this is the first attempt or if the controller has changed, create a channel to the most recent
-                // controller
-                if (channel != null)
-                  channel.disconnect()
+          //If this method returns None ignore and try again
+          zkUtils.getBrokerInfo(controllerId).foreach { broker =>
+            if (channel == null || prevController == null || !prevController.equals(broker)) {
+              // if this is the first attempt or if the controller has changed, create a channel to the most recent
+              // controller
+              if (channel != null)
+                channel.disconnect()
 
-                val brokerEndPoint = broker.getBrokerEndPoint(config.interBrokerListenerName)
-                channel = new BlockingChannel(brokerEndPoint.host,
-                  brokerEndPoint.port,
-                  BlockingChannel.UseDefaultBufferSize,
-                  BlockingChannel.UseDefaultBufferSize,
-                  config.controllerSocketTimeoutMs)
-                channel.connect()
-                prevController = broker
-              }
-            case None => //ignore and try again
+              val brokerEndPoint = broker.getBrokerEndPoint(config.interBrokerListenerName)
+              channel = new BlockingChannel(brokerEndPoint.host,
+                brokerEndPoint.port,
+                BlockingChannel.UseDefaultBufferSize,
+                BlockingChannel.UseDefaultBufferSize,
+                config.controllerSocketTimeoutMs)
+              channel.connect()
+              prevController = broker
+            }
           }
 
           // 2. issue a controlled shutdown to the controller
