@@ -696,7 +696,7 @@ public class Selector implements Selectable, AutoCloseable {
     }
 
     // only for testing
-    int stagedReceives(KafkaChannel channel) {
+    int numStagedReceives(KafkaChannel channel) {
         Deque<NetworkReceive> deque = stagedReceives.get(channel);
         return deque == null ? 0 : deque.size();
     }

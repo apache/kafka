@@ -297,17 +297,18 @@ public class SelectorTest {
             selector.poll(1000);
         } while (selector.completedReceives().isEmpty());
 
-        int stagedReceives = selector.stagedReceives(channel);
+        int stagedReceives = selector.numStagedReceives(channel);
         int completedReceives = 0;
         while (selector.disconnected().isEmpty()) {
             time.sleep(6000); // The max idle time is 5000ms
             selector.poll(0);
             completedReceives += selector.completedReceives().size();
             // With SSL, more receives may be staged from buffered data
-            int newStaged = selector.stagedReceives(channel) - (stagedReceives - completedReceives);
+            int newStaged = selector.numStagedReceives(channel) - (stagedReceives - completedReceives);
             if (newStaged > 0) {
                 stagedReceives += newStaged;
                 assertNotNull("Channel should not have been expired", selector.channel(id));
+                assertFalse("Channel should not have been disconnected", selector.disconnected().containsKey(id));
             } else if (!selector.completedReceives().isEmpty()) {
                 assertEquals(1, selector.completedReceives().size());
                 assertTrue("Channel not found", selector.closingChannel(id) != null || selector.channel(id) != null);
