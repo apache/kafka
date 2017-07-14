@@ -141,7 +141,7 @@ done
 shopt -u nullglob
 
 if [ -z "$CLASSPATH" ] ; then
-  echo "Classpath is empty. Please build the project first e.g. by running './gradlew jarAll'"
+  echo 'Classpath is empty. Please build the project first e.g. by running ''./gradlew jar -Pscala_version=$SCALA_VERSION'''
   exit 1
 fi
 
