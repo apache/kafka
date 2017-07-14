@@ -44,7 +44,7 @@ case class ControlledShutdownResponse(correlationId: Int,
                                       error: Errors = Errors.NONE,
                                       partitionsRemaining: Set[TopicAndPartition])
   extends RequestOrResponse() {
-  def sizeInBytes(): Int ={
+  def sizeInBytes: Int = {
     var size =
       4 /* correlation id */ +
         2 /* error code */ +

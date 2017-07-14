@@ -25,7 +25,7 @@ import org.junit.Test
 class ApiVersionsTest {
 
   @Test
-  def testApiVersions {
+  def testApiVersions(): Unit = {
     val apiVersions = ApiVersionsResponse.API_VERSIONS_RESPONSE.apiVersions
     assertEquals("API versions for all API keys must be maintained.", apiVersions.size, ApiKeys.values().length)
 

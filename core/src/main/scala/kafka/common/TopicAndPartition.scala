@@ -1,7 +1,6 @@
 package kafka.common
 
 import kafka.cluster.{Partition, Replica}
-import kafka.utils.Json
 import org.apache.kafka.common.TopicPartition
 
 /**

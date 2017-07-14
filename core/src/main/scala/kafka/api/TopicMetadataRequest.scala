@@ -47,7 +47,7 @@ case class TopicMetadataRequest(versionId: Short,
     topics.foreach(topic => writeShortString(buffer, topic))
   }
 
-  def sizeInBytes(): Int = {
+  def sizeInBytes: Int = {
     2 +  /* version id */
     4 + /* correlation id */
     shortStringLength(clientId)  + /* client id */
