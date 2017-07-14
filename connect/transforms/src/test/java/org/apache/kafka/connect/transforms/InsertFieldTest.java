@@ -42,10 +42,8 @@ public class InsertFieldTest {
 
     @Test(expected = DataException.class)
     public void topLevelStructRequired() {
-        try (final InsertField<SourceRecord> xform = new InsertField.Value<>()) {
-            xform.configure(Collections.singletonMap("topic.field", "topic_field"));
-            xform.apply(new SourceRecord(null, null, "", 0, Schema.INT32_SCHEMA, 42));
-        }
+        xform.configure(Collections.singletonMap("topic.field", "topic_field"));
+        xform.apply(new SourceRecord(null, null, "", 0, Schema.INT32_SCHEMA, 42));
     }
 
     @Test

@@ -46,37 +46,27 @@ public class CastTest {
 
     @Test(expected = ConfigException.class)
     public void testConfigEmpty() {
-        try (final Cast<SourceRecord> xform = new Cast.Key<>()) {
-            xform.configure(Collections.singletonMap(Cast.SPEC_CONFIG, ""));
-        }
+        xformKey.configure(Collections.singletonMap(Cast.SPEC_CONFIG, ""));
     }
 
     @Test(expected = ConfigException.class)
     public void testConfigInvalidSchemaType() {
-        try (final Cast<SourceRecord> xform = new Cast.Key<>()) {
-            xform.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "foo:faketype"));
-        }
+        xformKey.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "foo:faketype"));
     }
 
     @Test(expected = ConfigException.class)
     public void testConfigInvalidTargetType() {
-        try (final Cast<SourceRecord> xform = new Cast.Key<>()) {
-            xform.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "foo:array"));
-        }
+        xformKey.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "foo:array"));
     }
 
     @Test(expected = ConfigException.class)
     public void testConfigInvalidMap() {
-        try (final Cast<SourceRecord> xform = new Cast.Key<>()) {
-            xform.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "foo:int8:extra"));
-        }
+        xformKey.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "foo:int8:extra"));
     }
 
     @Test(expected = ConfigException.class)
     public void testConfigMixWholeAndFieldTransformation() {
-        try (final Cast<SourceRecord> xform = new Cast.Key<>()) {
-            xform.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "foo:int8,int32"));
-        }
+        xformKey.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "foo:int8,int32"));
     }
 
     @Test
@@ -293,10 +283,8 @@ public class CastTest {
 
     @Test(expected = DataException.class)
     public void castWholeRecordValueSchemalessUnsupportedType() {
-        try (final Cast<SourceRecord> xform = new Cast.Value<>()) {
-            xform.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "int8"));
-            xform.apply(new SourceRecord(null, null, "topic", 0, null, Collections.singletonList("foo")));
-        }
+        xformValue.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "int8"));
+        xformValue.apply(new SourceRecord(null, null, "topic", 0, null, Collections.singletonList("foo")));
     }
 
 
