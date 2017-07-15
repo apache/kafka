@@ -81,10 +81,10 @@ class ReplicaFetcherThread(name: String,
 
   // process fetched data
   def processPartitionData(topicPartition: TopicPartition, fetchOffset: Long, partitionData: PartitionData) {
-    val replica = replicaMgr.getReplica(topicPartition).get
-    val records = partitionData.toRecords
-
     try {
+      val replica = replicaMgr.getReplica(topicPartition).get
+      val records = partitionData.toRecords
+
       maybeWarnIfOversizedRecords(records, topicPartition)
 
       if (fetchOffset != replica.logEndOffset.messageOffset)

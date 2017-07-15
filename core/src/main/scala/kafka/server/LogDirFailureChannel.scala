@@ -46,7 +46,7 @@ class LogDirFailureChannel(logDirNum: Int) {
 
   /*
    * Get the next offline log dir from logDirFailureEvent queue.
-   * The method will block waiting if there is no new offline log dir.
+   * The method will wait if necessary until a new offline log directory becomes available
    */
   def takeNextLogFailureEvent(): String = {
     logDirFailureEvent.take()

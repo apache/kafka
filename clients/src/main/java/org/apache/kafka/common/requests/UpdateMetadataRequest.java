@@ -102,7 +102,7 @@ public class UpdateMetadataRequest extends AbstractRequest {
 
         @Override
         public String toString() {
-            return "UpdateMetadataRequestPartitionState(controllerEpoch=" + controllerEpoch +
+            return "PartitionState(controllerEpoch=" + controllerEpoch +
                 ", leader=" + leader +
                 ", leaderEpoch=" + leaderEpoch +
                 ", isr=" + Arrays.toString(isr.toArray()) +
@@ -159,7 +159,7 @@ public class UpdateMetadataRequest extends AbstractRequest {
     private static final String PARTITION_STATES_KEY_NAME = "partition_states";
     private static final String LIVE_BROKERS_KEY_NAME = "live_brokers";
 
-    // UpdateMetadataRequestPartitionState key names
+    // PartitionState key names
     private static final String TOPIC_KEY_NAME = "topic";
     private static final String PARTITION_KEY_NAME = "partition";
     private static final String LEADER_KEY_NAME = "leader";

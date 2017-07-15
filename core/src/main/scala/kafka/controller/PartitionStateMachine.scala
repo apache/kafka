@@ -260,7 +260,6 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
             topicAndPartition.partition,
             leaderIsrAndControllerEpoch,
             replicaAssignment,
-            callback = null,
             isNew = true
           )
         } catch {

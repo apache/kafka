@@ -49,6 +49,7 @@ class Partition(val topic: String,
 
   val topicPartition = new TopicPartition(topic, partitionId)
 
+  // replicaManager will be null only if this partition is ReplicaManager.OfflinePartition
   private val localBrokerId = if (replicaManager != null) replicaManager.config.brokerId else -1
   private val logManager = if (replicaManager != null) replicaManager.logManager else null
   private val zkUtils = if (replicaManager != null) replicaManager.zkUtils else null
@@ -71,7 +72,7 @@ class Partition(val topic: String,
   private def isReplicaLocal(replicaId: Int) : Boolean = replicaId == localBrokerId
   val tags = Map("topic" -> topic, "partition" -> partitionId.toString)
 
-  if (partitionId >= 0) {
+  if (replicaManager != null) {
     newGauge("UnderReplicated",
       new Gauge[Int] {
         def value = {

@@ -71,6 +71,7 @@ object ApiVersion {
     "0.11.0-IV2" -> KAFKA_0_11_0_IV2,
     "0.11.0" -> KAFKA_0_11_0_IV2,
     // Introduced LeaderAndIsrRequest V1, UpdateMetadataRequest V4 and MetadataResponse V5 via KIP-112
+    // Introduced ProduceRequest V4 and FetchRequest V6 in order to use KafkaStorageException for KIP-112
     "0.11.1-IV0" -> KAFKA_0_11_1_IV0,
     "0.11.1" -> KAFKA_0_11_1_IV0
   )

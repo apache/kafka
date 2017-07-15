@@ -283,8 +283,8 @@ public class Protocol {
 
     /**
      * The body of PRODUCE_RESPONSE_V4 is the same as PRODUCE_RESPONSE_V3.
-     * The version number is bumped up to indicate that the client supports RetriableUnknownException.
-     * The KafkaStorageException will be translated to NotLeaderForPartitionException if version <= 3
+     * The version number is bumped up to indicate that the client supports UnknownCodeException.
+     * The KafkaStorageException will be translated to NotLeaderForPartitionException in the response if version <= 3
      */
     public static final Schema PRODUCE_RESPONSE_V4 = PRODUCE_RESPONSE_V3;
 
@@ -812,8 +812,8 @@ public class Protocol {
 
     /**
      * The body of FETCH_RESPONSE_V6 is the same as FETCH_RESPONSE_V5.
-     * The version number is bumped up to indicate that the client supports RetriableUnknownException.
-     * The KafkaStorageException will be translated to NotLeaderForPartitionException if version <= 5
+     * The version number is bumped up to indicate that the client supports UnknownCodeException.
+     * The KafkaStorageException will be translated to NotLeaderForPartitionException in the response if version <= 5
      */
     public static final Schema FETCH_RESPONSE_V6 = FETCH_RESPONSE_V5;
 
@@ -1097,6 +1097,8 @@ public class Protocol {
                        new Field("zk_version", INT32, "The ZK version."),
                        new Field("replicas", new ArrayOf(INT32), "The replica ids."));
 
+    // LEADER_AND_ISR_REQUEST_PARTITION_STATE_V1 added a per-partition is_new field.
+    // This field specifies Whether the replica should have existed on the broker or not.
     public static final Schema LEADER_AND_ISR_REQUEST_PARTITION_STATE_V1 =
             new Schema(new Field("topic", STRING, "Topic name."),
                        new Field("partition", INT32, "Topic partition id."),

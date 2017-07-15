@@ -29,8 +29,6 @@ import org.junit.Assert._
 import org.junit.{After, Test}
 import org.scalatest.junit.JUnitSuite
 
-import scala.collection.mutable.ArrayBuffer
-
 /**
   * Unit tests for the log cleaning logic
   */

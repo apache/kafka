@@ -21,18 +21,15 @@ import java.io._
 import java.util.Properties
 
 import kafka.common._
-import kafka.server.FetchDataInfo
 import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.utils._
-import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.OffsetOutOfRangeException
-import org.apache.kafka.common.requests.IsolationLevel
 import org.apache.kafka.common.utils.Utils
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
 
-class LogManagerTest extends ZooKeeperTestHarness {
+class LogManagerTest {
 
   val time: MockTime = new MockTime()
   val maxRollInterval = 100
@@ -49,8 +46,7 @@ class LogManagerTest extends ZooKeeperTestHarness {
   val veryLargeLogFlushInterval = 10000000L
 
   @Before
-  override def setUp() {
-    super.setUp()
+  def setUp() {
     logDir = TestUtils.tempDir()
     logManager = createLogManager()
     logManager.startup()
@@ -58,8 +54,7 @@ class LogManagerTest extends ZooKeeperTestHarness {
   }
 
   @After
-  override def tearDown() {
-    super.tearDown()
+  def tearDown() {
     if(logManager != null)
       logManager.shutdown()
     Utils.delete(logDir)
@@ -267,7 +262,7 @@ class LogManagerTest extends ZooKeeperTestHarness {
     logManager.shutdown()
     logDir = TestUtils.tempDir()
     logManager = TestUtils.createLogManager(
-      logDirs = Array(new File(logDir.getAbsolutePath + File.separator)), zkUtils = zkUtils)
+      logDirs = Array(new File(logDir.getAbsolutePath + File.separator)))
     logManager.startup()
     verifyCheckpointRecovery(Seq(new TopicPartition("test-a", 1)), logManager)
   }
@@ -309,7 +304,6 @@ class LogManagerTest extends ZooKeeperTestHarness {
 
   private def createLogManager(logDirs: Array[File] = Array(this.logDir)): LogManager = {
     TestUtils.createLogManager(
-      zkUtils = zkUtils,
       defaultConfig = logConfig,
       logDirs = logDirs,
       time = this.time)

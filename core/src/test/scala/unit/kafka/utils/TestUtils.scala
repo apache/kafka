@@ -1008,11 +1008,9 @@ object TestUtils extends Logging {
    * Create new LogManager instance with default configuration for testing
    */
   def createLogManager(logDirs: Array[File] = Array.empty[File],
-                       zkUtils: ZkUtils,
                        defaultConfig: LogConfig = LogConfig(),
                        cleanerConfig: CleanerConfig = CleanerConfig(enableCleaner = false),
-                       time: MockTime = new MockTime(),
-                       brokerId: Int = 0): LogManager = {
+                       time: MockTime = new MockTime()): LogManager = {
     new LogManager(logDirs = logDirs,
                    initialOfflineDirs = Array.empty[File],
                    topicConfigs = Map(),
@@ -1026,7 +1024,7 @@ object TestUtils extends Logging {
                    maxPidExpirationMs = 60 * 60 * 1000,
                    scheduler = time.scheduler,
                    time = time,
-                   brokerState = new BrokerState(),
+                   brokerState = BrokerState(),
                    brokerTopicStats = new BrokerTopicStats,
                    logDirFailureChannel = new LogDirFailureChannel(logDirs.size))
   }

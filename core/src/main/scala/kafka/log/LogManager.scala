@@ -73,21 +73,23 @@ class LogManager(private val logDirs: Array[File],
 
   private val _liveLogDirs: ConcurrentLinkedQueue[File] = createAndValidateLogDirs(logDirs, initialOfflineDirs)
 
-  def liveLogDirs: Seq[File] = {
+  def liveLogDirs: Array[File] = {
     if (_liveLogDirs.size() == logDirs.size)
       logDirs
     else
-      _liveLogDirs.asScala.toSeq
+      _liveLogDirs.asScala.toArray
   }
 
-  @volatile private var recoveryPointCheckpoints = liveLogDirs.map(dir => (dir, new OffsetCheckpointFile(new File(dir, RecoveryPointCheckpointFile)))).toMap
-  @volatile private var logStartOffsetCheckpoints = liveLogDirs.map(dir => (dir, new OffsetCheckpointFile(new File(dir, LogStartOffsetCheckpointFile)))).toMap
+  private val dirLocks = lockLogDirs(liveLogDirs)
+  @volatile private var recoveryPointCheckpoints = liveLogDirs.map(dir =>
+    (dir, new OffsetCheckpointFile(new File(dir, RecoveryPointCheckpointFile), logDirFailureChannel))).toMap
+  @volatile private var logStartOffsetCheckpoints = liveLogDirs.map(dir =>
+    (dir, new OffsetCheckpointFile(new File(dir, LogStartOffsetCheckpointFile), logDirFailureChannel))).toMap
 
   private def offlineLogDirs = logDirs.filterNot(_liveLogDirs.contains)
 
   loadLogs()
 
-  private val dirLocks = lockLogDirs(liveLogDirs)
 
   // public, so we can access this from kafka.admin.DeleteTopicTest
   val cleaner: LogCleaner =
@@ -239,6 +241,7 @@ class LogManager(private val logDirs: Array[File],
     for (dir <- liveLogDirs) {
       try {
         val pool = Executors.newFixedThreadPool(ioThreads)
+        threadPools.append(pool)
 
         val cleanShutdownFile = new File(dir, Log.CleanShutdownFile)
 
@@ -283,8 +286,6 @@ class LogManager(private val logDirs: Array[File],
             }
           }
         }
-
-        threadPools.append(pool)
         jobs(cleanShutdownFile) = jobsForDir.map(pool.submit)
       } catch {
         case e: IOException =>
@@ -597,7 +598,6 @@ class LogManager(private val logDirs: Array[File],
   /**
     * Rename the directory of the given topic-partition "logdir" as "logdir.uuid.delete" and
     * add it in the queue for deletion.
-    *
     * @param topicPartition TopicPartition that needs to be deleted
     */
   def asyncDelete(topicPartition: TopicPartition) = {

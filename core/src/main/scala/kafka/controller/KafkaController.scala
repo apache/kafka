@@ -19,7 +19,7 @@ package kafka.controller
 import java.util.concurrent.TimeUnit
 
 import org.apache.kafka.common.requests.LeaderAndIsrResponse
-import com.yammer.metrics.core.{Gauge, Meter}
+import com.yammer.metrics.core.Gauge
 import kafka.admin.{AdminUtils, PreferredReplicaLeaderElectionCommand}
 import kafka.api._
 import kafka.cluster.Broker
@@ -108,8 +108,9 @@ class ControllerContext(val zkUtils: ZkUtils) {
     partitionReplicaAssignment.keySet.filter(topicAndPartition => topicAndPartition.topic == topic)
 
   def allLiveReplicas(): Set[PartitionAndReplica] = {
-    replicasOnBrokers(liveBrokerIds).filter{partitionAndReplica =>
-      isReplicaOnline(partitionAndReplica.replica, TopicAndPartition(partitionAndReplica.topic, partitionAndReplica.partition))}
+    replicasOnBrokers(liveBrokerIds).filter { partitionAndReplica =>
+      isReplicaOnline(partitionAndReplica.replica, TopicAndPartition(partitionAndReplica.topic, partitionAndReplica.partition))
+    }
   }
 
   def replicasForPartition(partitions: collection.Set[TopicAndPartition]): collection.Set[PartitionAndReplica] = {
@@ -346,6 +347,11 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, time: Time, met
    */
   def isActive: Boolean = activeControllerId == config.brokerId
 
+  /*
+   * This callback is invoked by the controller's LogDirEventNotificationListener with the list of broker ids whose
+   * has experienced new log directory failures. In response the controller should send LeaderAndIsrRequest
+   * to all these brokers to query the state of all replicas
+   */
   def onBrokerLogDirFailure(brokerIds: Seq[Int]) {
     // send LeaderAndIsrRequest for all live replicas on those brokers to see if they are still online.
     val replicasOnBrokers = controllerContext.replicasOnBrokers(brokerIds.toSet)
@@ -398,6 +404,10 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, time: Time, met
     }
   }
 
+  /*
+   * This callback is invoked by the replica state machine's broker change listener with the list of failed brokers
+   * as input. It will call onReplicaBecomeOffline(...) with the list of replicas on those failed brokers as input.
+   */
   def onBrokerFailure(deadBrokers: Seq[Int]) {
     info("Broker failure callback for %s".format(deadBrokers.mkString(",")))
     deadBrokers.foreach(controllerContext.replicasOnOfflineDisks.remove)
@@ -409,11 +419,10 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, time: Time, met
   }
 
   /**
-    * This callback is invoked by the replica state machine's broker change listener with the list of failed brokers
-    * as input. It does the following -
-    * 1. Mark partitions with dead leaders as offline
+    * This method marks the given replicas as offline. It does the following -
+    * 1. Mark the given partitions as offline
     * 2. Triggers the OnlinePartition state change for all new/offline partitions
-    * 3. Invokes the OfflineReplica state change on the input list of newly started brokers
+    * 3. Invokes the OfflineReplica state change on the input list of newly offline replicas
     * 4. If no partitions are effected then send UpdateMetadataRequest to live or shutting down brokers
     *
     * Note that we don't need to refresh the leader/isr cache for all topic/partitions at this point.  This is because
@@ -432,7 +441,7 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, time: Time, met
     partitionStateMachine.handleStateChanges(partitionsWithoutLeader, OfflinePartition)
     // trigger OnlinePartition state changes for offline or new partitions
     partitionStateMachine.triggerOnlinePartitionStateChange()
-    // trigger OfflineReplica state change for those newly-discovered offline replicas
+    // trigger OfflineReplica state change for those newly offline replicas
     replicaStateMachine.handleStateChanges(newOfflineReplicasNotForDeletion, OfflineReplica)
 
     // fail deletion of topics that affected by the offline replicas

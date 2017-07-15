@@ -55,7 +55,9 @@
         <code>inter.broker.protocol.version</code> is 0.11.0 or earlier, the broker will not create this replica and the replica will
         be offline until the log failure on that broker is fixed. In order to make sure that new topics not be created with offline replicas,
         user can use upgrade <code>inter.broker.protocol.version</code> to 0.11.1 or simply shutdown the broker before the hardware issue is fixed.</li>
-    <li>Added KafkaStorageException which is a retriable exception.</li>
+    <li>Added KafkaStorageException which is a retriable exception. KafkaStorageException will be converted to NotLeaderForPartitionException in the response
+        if the version of client's FetchRequest or ProducerRequest does not support KafkaStorageException. </li>
+    <li>Added UnknownCodeException which is a retriable exception.</li>
 </ul>
 
 <h5><a id="upgrade_1110_new_protocols" href="#upgrade_1110_new_protocols">New Protocol Versions</a></h5>
@@ -145,7 +147,7 @@ To upgrade from earlier versions, please review the <a href="#upgrade_11_0_0">0.
         individual messages is only reduced by the overhead of the batch format. However, there are some subtle implications
         for message format conversion (see <a href="#upgrade_11_message_format">below</a> for more detail). Note also
         that while previously the broker would ensure that at least one message is returned in each fetch request (regardless of the
-        total and partition-level fetch sizes), the same behavior now applies to one message batch.</li> 
+        total and partition-level fetch sizes), the same behavior now applies to one message batch.</li>
     <li>GC log rotation is enabled by default, see KAFKA-3754 for details.</li>
     <li>Deprecated constructors of RecordMetadata, MetricName and Cluster classes have been removed.</li>
     <li>Added user headers support through a new Headers interface providing user headers read and write access.</li>
@@ -198,7 +200,7 @@ To upgrade from earlier versions, please review the <a href="#upgrade_11_0_0">0.
   <li>EoS in Kafka introduces new request APIs and modifies several existing ones. See
     <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-98+-+Exactly+Once+Delivery+and+Transactional+Messaging#KIP-98-ExactlyOnceDeliveryandTransactionalMessaging-RPCProtocolSummary">KIP-98</a>
     for the full details</code></li>
-</ol>    
+</ol>
 
 <h5><a id="upgrade_11_message_format" href="#upgrade_11_message_format">Notes on the new message format in 0.11.0</a></h5>
 <p>The 0.11.0 message format includes several major enhancements in order to support better delivery semantics for the producer
@@ -229,7 +231,7 @@ To upgrade from earlier versions, please review the <a href="#upgrade_11_0_0">0.
   are upgraded to the latest 0.11.0 client. Significantly, since the old consumer has been deprecated in 0.11.0.0, it does not support
   the new message format. You must upgrade to use the new consumer to use the new message format without the cost of down-conversion.
   Note that 0.11.0 consumers support backwards compability with brokers 0.10.0 brokers and upward, so it is possible to upgrade the
-  clients first before the brokers. 
+  clients first before the brokers.
 </p>
 
 <h4><a id="upgrade_10_2_0" href="#upgrade_10_2_0">Upgrading from 0.8.x, 0.9.x, 0.10.0.x or 0.10.1.x to 0.10.2.0</a></h4>

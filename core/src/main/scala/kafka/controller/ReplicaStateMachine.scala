@@ -149,7 +149,7 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
                   .format(replicaId, topicAndPartition) + "state as it is being requested to become leader")
               brokerRequestBatch.addLeaderAndIsrRequestForBrokers(List(replicaId),
                                                                   topic, partition, leaderIsrAndControllerEpoch,
-                                                                  replicaAssignment, callback = null, isNew = true)
+                                                                  replicaAssignment, isNew = true)
             case None => // new leader request will be sent to this replica when one gets elected
           }
           replicaState.put(partitionAndReplica, NewReplica)

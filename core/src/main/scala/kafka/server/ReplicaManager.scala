@@ -177,7 +177,7 @@ class ReplicaManager(val config: KafkaConfig,
   val replicaFetcherManager = createReplicaFetcherManager(metrics, time, threadNamePrefix, quotaManager)
   private val highWatermarkCheckPointThreadStarted = new AtomicBoolean(false)
   @volatile var highWatermarkCheckpoints = logManager.liveLogDirs.map(dir =>
-    (dir.getAbsolutePath, new OffsetCheckpointFile(new File(dir.getAbsolutePath, ReplicaManager.HighWatermarkFilename)))).toMap
+    (dir.getAbsolutePath, new OffsetCheckpointFile(new File(dir.getAbsolutePath, ReplicaManager.HighWatermarkFilename), logDirFailureChannel))).toMap
 
   private var hwThreadInitialized = false
   this.logIdent = "[Replica Manager on Broker " + localBrokerId + "]: "
@@ -322,7 +322,7 @@ class ReplicaManager(val config: KafkaConfig,
       case None =>
         // Delete log and corresponding folders in case replica manager doesn't hold them anymore.
         // This could happen when topic is being deleted while broker is down and recovers.
-        if (deletePartition)
+        if (deletePartition && logManager.getLog(topicPartition).isDefined)
           logManager.asyncDelete(topicPartition)
         stateChangeLogger.trace(s"Broker $localBrokerId ignoring stop replica (delete=$deletePartition) for partition $topicPartition as replica doesn't exist on broker")
     }
@@ -344,11 +344,11 @@ class ReplicaManager(val config: KafkaConfig,
         replicaFetcherManager.removeFetcherForPartitions(partitions)
         for (topicPartition <- partitions){
           try {
-            val errorCode = stopReplica(topicPartition, stopReplicaRequest.deletePartitions)
-            responseMap.put(topicPartition, errorCode)
+            val error = stopReplica(topicPartition, stopReplicaRequest.deletePartitions)
+            responseMap.put(topicPartition, error)
           } catch {
             case e: IOException =>
-              stateChangeLogger.error(s"Broker $localBrokerId ignoring stop replica (delete=${stopReplicaRequest.deletePartitions}) for partition $topicPartition due to storage exception", e)
+              stateChangeLogger.error(s"Broker $localBrokerId ignoring stop replica (delete=${stopReplicaRequest.deletePartitions}) for partition $topicPartition due to IO exception", e)
               error(s"Error while stopping replicas of partition $topicPartition in dir ${getLogDir(topicPartition)}", e)
               getLogDir(topicPartition).foreach(logDirFailureChannel.maybeAddLogFailureEvent)
               responseMap.put(topicPartition, Errors.KAFKA_STORAGE_ERROR)
@@ -504,7 +504,7 @@ class ReplicaManager(val config: KafkaConfig,
           // it is supposed to indicate un-expected failures of a broker in handling a produce request
           case e: IOException =>
             val dirOpt = getLogDir(topicPartition)
-            error("Error while deleting records of partition %s in dir %s".format(topicPartition, dirOpt.getOrElse("None")), e)
+            error(s"Error while deleting records of partition $topicPartition in dir $dirOpt", e)
             dirOpt.foreach(maybeAddLogFailureEvent)
             (topicPartition, LogDeleteRecordsResult(-1L, -1L, Some(new KafkaStorageException(e))))
           case e@ (_: UnknownTopicOrPartitionException |
@@ -632,7 +632,7 @@ class ReplicaManager(val config: KafkaConfig,
           // it is supposed to indicate un-expected failures of a broker in handling a produce request
           case e: IOException =>
             val dirOpt = getLogDir(topicPartition)
-            error("Error while appending records to partition %s in dir %s".format(topicPartition, dirOpt.getOrElse("None")), e)
+            error(s"Error while appending records to partition $topicPartition in dir $dirOpt", e)
             dirOpt.foreach(maybeAddLogFailureEvent)
             (topicPartition, LogAppendResult(LogAppendInfo.UnknownLogAppendInfo, Some(new KafkaStorageException(e))))
           case e@ (_: UnknownTopicOrPartitionException |
@@ -965,7 +965,7 @@ class ReplicaManager(val config: KafkaConfig,
 
         leaderAndISRRequest.partitionStates.asScala.keys.foreach( topicPartition =>
           // Remove the partition from cache if the local replica can not be created due to KafkaStorageException
-          if (getReplica(topicPartition).isEmpty)
+          if (getReplica(topicPartition).isEmpty && allPartitions.get(topicPartition) != ReplicaManager.OfflinePartition)
             allPartitions.put(topicPartition, ReplicaManager.OfflinePartition)
         )
 

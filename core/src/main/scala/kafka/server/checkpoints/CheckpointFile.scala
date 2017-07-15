@@ -19,8 +19,12 @@ package kafka.server.checkpoints
 import java.io._
 import java.nio.charset.StandardCharsets
 import java.nio.file.{FileAlreadyExistsException, FileSystems, Files, Paths}
+
+import kafka.common.KafkaStorageException
+import kafka.server.LogDirFailureChannel
 import kafka.utils.{Exit, Logging}
 import org.apache.kafka.common.utils.Utils
+
 import scala.collection.{Seq, mutable}
 
 trait CheckpointFileFormatter[T]{
@@ -29,7 +33,7 @@ trait CheckpointFileFormatter[T]{
   def fromLine(line: String): Option[T]
 }
 
-class CheckpointFile[T](val file: File, version: Int, formatter: CheckpointFileFormatter[T]) extends Logging {
+class CheckpointFile[T](val file: File, version: Int, formatter: CheckpointFileFormatter[T], logDirFailureChannel: LogDirFailureChannel) extends Logging {
   private val path = file.toPath.toAbsolutePath
   private val tempPath = Paths.get(path.toString + ".tmp")
   private val lock = new Object()
@@ -58,11 +62,8 @@ class CheckpointFile[T](val file: File, version: Int, formatter: CheckpointFileF
         fileOutputStream.getFD().sync()
       } catch {
         case e: FileNotFoundException =>
-          if (FileSystems.getDefault.isReadOnly) {
-            fatal(s"Halting writes to checkpoint file (${file.getAbsolutePath}) because the underlying file system is inaccessible: ", e)
-            Exit.halt(1)
-          }
-          throw e
+          logDirFailureChannel.maybeAddLogFailureEvent(file.getParentFile.getParent)
+          throw new KafkaStorageException(s"Halting writes to checkpoint file (${file.getAbsolutePath}) because the underlying file system is inaccessible", e)
       } finally {
         writer.close()
       }

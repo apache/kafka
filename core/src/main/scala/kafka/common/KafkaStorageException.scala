@@ -18,7 +18,8 @@ package kafka.common
 
 /**
  * Kafka exception caused by disk-related IOException
-*/
+ * This class is deprecated and will be replaced by org.apache.kafka.common.errors.KafkaStorageException
+ */
 class KafkaStorageException(message: String, t: Throwable) extends RuntimeException(message, t) {
   def this(message: String) = this(message, null)
   def this(t: Throwable) = this("", t)

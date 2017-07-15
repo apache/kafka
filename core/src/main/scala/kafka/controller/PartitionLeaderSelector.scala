@@ -63,7 +63,7 @@ class OfflinePartitionLeaderSelector(controllerContext: ControllerContext, confi
             if (!LogConfig.fromProps(config.originals, AdminUtils.fetchEntityConfig(controllerContext.zkUtils,
               ConfigType.Topic, topicAndPartition.topic)).uncleanLeaderElectionEnable) {
               throw new NoReplicaOnlineException(
-                s"No broker in ISR for partition $topicAndPartition is alive. Live brokers are: [${controllerContext.liveBrokerIds}], " +
+                s"No replicas in ISR for partition $topicAndPartition is alive. Live brokers are: [${controllerContext.liveBrokerIds}], " +
                   s"ISR brokers are: [${currentLeaderAndIsr.isr.mkString(",")}]"
               )
             }
@@ -150,7 +150,7 @@ class PreferredReplicaPartitionLeaderSelector(controllerContext: ControllerConte
       info("Current leader %d for partition %s is not the preferred replica.".format(currentLeader, topicAndPartition) +
         " Triggering preferred replica leader election")
       // check if preferred replica is not the current leader and is alive and in the isr
-      if (controllerContext.liveBrokerIds.contains(preferredReplica) && currentLeaderAndIsr.isr.contains(preferredReplica)) {
+      if (controllerContext.isReplicaOnline(preferredReplica, topicAndPartition) && currentLeaderAndIsr.isr.contains(preferredReplica)) {
         val newLeaderAndIsr = currentLeaderAndIsr.newLeader(preferredReplica)
         (newLeaderAndIsr, assignedReplicas)
       } else {

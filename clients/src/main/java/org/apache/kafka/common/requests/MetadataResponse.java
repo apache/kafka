@@ -392,7 +392,8 @@ public class MetadataResponse extends AbstractResponse {
                     ", partition=" + partition +
                     ", leader=" + leader +
                     ", replicas=" + Utils.join(replicas, ",") +
-                    ", isr=" + Utils.join(isr, ",") + ')';
+                    ", isr=" + Utils.join(isr, ",") +
+                    ", offlineReplicas=" + Utils.join(offlineReplicas, ",") + ')';
         }
     }
 

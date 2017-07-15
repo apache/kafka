@@ -92,7 +92,7 @@ class OffsetCheckpointFileTest extends JUnitSuite with Logging {
   @Test(expected = classOf[IOException])
   def shouldThrowIfVersionIsNotRecognised(): Unit = {
     val checkpointFile = new CheckpointFile(TestUtils.tempFile(), OffsetCheckpointFile.CurrentVersion + 1,
-      OffsetCheckpointFile.Formatter)
+      OffsetCheckpointFile.Formatter, null)
     checkpointFile.write(Seq(new TopicPartition("foo", 5) -> 10L))
     new OffsetCheckpointFile(checkpointFile.file).read()
   }
