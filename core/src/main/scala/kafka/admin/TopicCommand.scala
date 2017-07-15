@@ -84,7 +84,7 @@ object TopicCommand extends Logging {
     val allTopics = zkUtils.getAllTopics().sorted
     if (opts.options.has(opts.topicOpt)) {
       val topicsSpec = opts.options.valueOf(opts.topicOpt)
-      val topicsFilter = new Whitelist(topicsSpec)
+      val topicsFilter = new Whitelist(topicsSpec.replaceAll("\\.", "\\\\."))
       allTopics.filter(topicsFilter.isTopicAllowed(_, excludeInternalTopics = false))
     } else
       allTopics
