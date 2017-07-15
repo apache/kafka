@@ -35,8 +35,8 @@ import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockReducer;
 import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 
 import java.io.File;
@@ -51,19 +51,11 @@ import static org.junit.Assert.assertTrue;
 public class KTableImplTest {
 
     final private Serde<String> stringSerde = Serdes.String();
-
-    private KStreamTestDriver driver = null;
+    @Rule
+    public final KStreamTestDriver driver = new KStreamTestDriver();
     private File stateDir = null;
     private StreamsBuilder builder;
     private KTable<String, String> table;
-
-    @After
-    public void tearDown() {
-        if (driver != null) {
-            driver.close();
-        }
-        driver = null;
-    }
 
     @Before
     public void setUp() throws IOException {
@@ -111,7 +103,7 @@ public class KTableImplTest {
         MockProcessorSupplier<String, String> proc4 = new MockProcessorSupplier<>();
         table4.toStream().process(proc4);
 
-        driver = new KStreamTestDriver(builder, stateDir);
+        driver.setUp(builder, stateDir);
 
         driver.process(topic1, "A", "01");
         driver.flushState();
@@ -162,7 +154,7 @@ public class KTableImplTest {
         KTableValueGetterSupplier<String, Integer> getterSupplier3 = table3.valueGetterSupplier();
         KTableValueGetterSupplier<String, String> getterSupplier4 = table4.valueGetterSupplier();
 
-        driver = new KStreamTestDriver(builder, stateDir, null, null);
+        driver.setUp(builder, stateDir, null, null);
 
         // two state store should be created
         assertEquals(2, driver.allStateStores().size());
@@ -285,7 +277,7 @@ public class KTableImplTest {
                     }
                 });
 
-        driver = new KStreamTestDriver(builder, stateDir, null, null);
+        driver.setUp(builder, stateDir, null, null);
         driver.setTime(0L);
 
         // two state stores should be created
@@ -328,7 +320,7 @@ public class KTableImplTest {
                     }
                 });
 
-        driver = new KStreamTestDriver(builder, stateDir, null, null);
+        driver.setUp(builder, stateDir, null, null);
         driver.setTime(0L);
 
         // two state store should be created
@@ -352,7 +344,7 @@ public class KTableImplTest {
         table1.groupBy(MockKeyValueMapper.<String, String>NoOpKeyValueMapper())
             .reduce(MockReducer.STRING_ADDER, MockReducer.STRING_REMOVER, "mock-result2");
 
-        driver = new KStreamTestDriver(builder, stateDir, stringSerde, stringSerde);
+        driver.setUp(builder, stateDir, stringSerde, stringSerde);
         driver.setTime(0L);
 
         // three state store should be created, one for source, one for aggregate and one for reduce
