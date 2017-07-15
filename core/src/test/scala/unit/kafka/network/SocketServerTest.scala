@@ -185,6 +185,24 @@ class SocketServerTest extends JUnitSuite {
   }
 
   @Test
+  def testConnectionId() {
+    val socket1 = connect(protocol = SecurityProtocol.PLAINTEXT)
+    val socket2 = connect(protocol = SecurityProtocol.PLAINTEXT)
+    val serializedBytes = producerRequestBytes
+
+    sendRequest(socket1, serializedBytes)
+    sendRequest(socket2, serializedBytes)
+    val request1 = server.requestChannel.receiveRequest(2000)
+    val request2 = server.requestChannel.receiveRequest(2000)
+    val conn1Uniquifier = request1.connectionId.split("-")(2)
+    val conn2Uniquifier = request2.connectionId.split("-")(2)
+    assertNotEquals(conn1Uniquifier, conn2Uniquifier)
+
+    socket1.close()
+    socket2.close()
+  }
+
+  @Test
   def testSocketsCloseOnShutdown() {
     // open a connection
     val plainSocket = connect(protocol = SecurityProtocol.PLAINTEXT)

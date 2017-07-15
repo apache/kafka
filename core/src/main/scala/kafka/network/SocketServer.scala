@@ -399,17 +399,17 @@ private[kafka] class Processor(val id: Int,
 
   private object ConnectionId {
     def fromString(s: String): Option[ConnectionId] = s.split("-") match {
-      case Array(local, remote) => BrokerEndPoint.parseHostPort(local).flatMap { case (localHost, localPort) =>
+      case Array(local, remote, uniquifier) => BrokerEndPoint.parseHostPort(local).flatMap { case (localHost, localPort) =>
         BrokerEndPoint.parseHostPort(remote).map { case (remoteHost, remotePort) =>
-          ConnectionId(localHost, localPort, remoteHost, remotePort)
+          ConnectionId(localHost, localPort, remoteHost, remotePort, Integer.parseInt(uniquifier))
         }
       }
       case _ => None
     }
   }
 
-  private case class ConnectionId(localHost: String, localPort: Int, remoteHost: String, remotePort: Int) {
-    override def toString: String = s"$localHost:$localPort-$remoteHost:$remotePort"
+  private case class ConnectionId(localHost: String, localPort: Int, remoteHost: String, remotePort: Int, uniquifier: Int) {
+    override def toString: String = s"$localHost:$localPort-$remoteHost:$remotePort-$uniquifier"
   }
 
   private val newConnections = new ConcurrentLinkedQueue[SocketChannel]()
@@ -441,6 +441,7 @@ private[kafka] class Processor(val id: Int,
     true,
     ChannelBuilders.serverChannelBuilder(listenerName, securityProtocol, config, credentialProvider.credentialCache),
     memoryPool)
+  private var nextConnectionIndex = 0
 
   override def run() {
     startupComplete()
@@ -596,7 +597,8 @@ private[kafka] class Processor(val id: Int,
         val localPort = channel.socket().getLocalPort
         val remoteHost = channel.socket().getInetAddress.getHostAddress
         val remotePort = channel.socket().getPort
-        val connectionId = ConnectionId(localHost, localPort, remoteHost, remotePort).toString
+        nextConnectionIndex = if (nextConnectionIndex == Int.MaxValue) 0 else nextConnectionIndex + 1
+        val connectionId = ConnectionId(localHost, localPort, remoteHost, remotePort, nextConnectionIndex).toString
         selector.register(connectionId, channel)
       } catch {
         // We explicitly catch all non fatal exceptions and close the socket to avoid a socket leak. The other
