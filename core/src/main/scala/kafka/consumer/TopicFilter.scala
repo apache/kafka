@@ -29,6 +29,7 @@ sealed abstract class TopicFilter(rawRegex: String) extends Logging {
           .trim
           .replace(',', '|')
           .replace(" ", "")
+          .replaceAll("\\.", "\\\\.")
           .replaceAll("""^["']+""","")
           .replaceAll("""["']+$""","") // property files may bring quotes
 
