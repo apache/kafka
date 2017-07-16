@@ -32,6 +32,8 @@
     <suppress checks="ParameterNumber"
               files="Fetcher.java"/>
     <suppress checks="ParameterNumber"
+              files="Sender.java"/>
+    <suppress checks="ParameterNumber"
               files="ConfigDef.java"/>
     <suppress checks="ParameterNumber"
               files="DefaultRecordBatch.java"/>
