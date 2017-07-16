@@ -585,7 +585,7 @@ class LogManager(private val logDirs: Array[File],
             info(s"Deleted log for partition ${removedLog.topicPartition} in ${removedLog.dir.getAbsolutePath}.")
           } catch {
             case e: IOException =>
-              error(s"Exception while deleting $removedLog in dir ${removedLog.dir.getParentFile.getAbsolutePath}.", e)
+              error(s"Exception while deleting $removedLog in dir ${removedLog.dir.getParent}.", e)
               logDirFailureChannel.maybeAddLogFailureEvent(removedLog.dir.getParentFile.getAbsolutePath)
           }
         }

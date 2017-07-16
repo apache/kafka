@@ -162,7 +162,6 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, time: Time, met
   this.logIdent = "[Controller " + config.brokerId + "]: "
   private val stateChangeLogger = KafkaController.stateChangeLogger
   val controllerContext = new ControllerContext(zkUtils)
-
   val partitionStateMachine = new PartitionStateMachine(this)
   val replicaStateMachine = new ReplicaStateMachine(this)
 

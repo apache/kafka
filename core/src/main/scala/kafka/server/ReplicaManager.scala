@@ -315,7 +315,9 @@ class ReplicaManager(val config: KafkaConfig,
               brokerTopicStats.removeMetrics(topicPartition.topic)
             // this will delete the local log. This call may throw exception if the log is on offline directory
             removedPartition.delete()
-          } else {
+          } else if (logManager.getLog(topicPartition).isDefined) {
+            // Delete log and corresponding folders in case replica manager doesn't hold them anymore.
+            // This could happen when topic is being deleted while broker is down and recovers.
             logManager.asyncDelete(topicPartition)
           }
         }
@@ -977,7 +979,6 @@ class ReplicaManager(val config: KafkaConfig,
         }
         replicaFetcherManager.shutdownIdleFetcherThreads()
         onLeadershipChange(partitionsBecomeLeader, partitionsBecomeFollower)
-
         BecomeLeaderOrFollowerResult(responseMap, Errors.NONE)
       }
     }
@@ -1256,7 +1257,7 @@ class ReplicaManager(val config: KafkaConfig,
           false
         else partition.getReplica(config.brokerId) match {
           case Some(replica) =>
-            replica.log.isDefined && replica.log.get.dir.getParentFile.getAbsolutePath == dir
+            replica.log.isDefined && replica.log.get.dir.getParent == dir
           case None => false
         }
       }.map(_.topicPartition)

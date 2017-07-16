@@ -72,6 +72,7 @@ class Partition(val topic: String,
   private def isReplicaLocal(replicaId: Int) : Boolean = replicaId == localBrokerId
   val tags = Map("topic" -> topic, "partition" -> partitionId.toString)
 
+  // Do not create metrics if this partition is ReplicaManager.OfflinePartition
   if (replicaManager != null) {
     newGauge("UnderReplicated",
       new Gauge[Int] {
