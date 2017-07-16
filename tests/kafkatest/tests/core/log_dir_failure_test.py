@@ -75,11 +75,11 @@ class LogDirFailureTest(ProduceConsumeValidateTest):
                                       self.topic1: {"partitions": 1, "replication-factor": 3, "configs": {"min.insync.replicas": 2}},
                                       self.topic2: {"partitions": 1, "replication-factor": 3, "configs": {"min.insync.replicas": 1}}
                                   },
-                                  server_prop_overides={
-                                      config_property.LOG_FLUSH_INTERVAL_MESSAGE: 5,
-                                      config_property.REPLICA_HIGHWATERMARK_CHECKPOINT_INTERVAL_MS: 60000,
-                                      config_property.LOG_ROLL_TIME_MS: 3000
-                                  })
+                                  server_prop_overides=[
+                                      [config_property.LOG_FLUSH_INTERVAL_MESSAGE, "5"],
+                                      [config_property.REPLICA_HIGHWATERMARK_CHECKPOINT_INTERVAL_MS, "60000"],
+                                      [config_property.LOG_ROLL_TIME_MS, "3000"]
+                                  ])
 
         self.producer_throughput = 1000
         self.num_producers = 1
