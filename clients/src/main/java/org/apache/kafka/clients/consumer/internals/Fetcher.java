@@ -864,11 +864,13 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                     log.trace("Updating last stable offset for partition {} to {}", tp, partition.lastStableOffset);
                     subscriptions.updateLastStableOffset(tp, partition.lastStableOffset);
                 }
-            } else if (error == Errors.NOT_LEADER_FOR_PARTITION) {
+            } else if (error == Errors.NOT_LEADER_FOR_PARTITION ||
+                       error == Errors.KAFKA_STORAGE_ERROR) {
                 log.debug("Error in fetch for partition {}: {}", tp, error.exceptionName());
                 this.metadata.requestUpdate();
-            } else if (error == Errors.KAFKA_STORAGE_ERROR) {
-                log.debug("Error in fetch for partition {}: {}", tp, error.exceptionName());
+            } else if (error == Errors.UNKNOWN_ERROR_CODE) {
+                log.warn("Received unknown error code in fetch for partition {}. Need to upgrade the client library to " +
+                         "recognize the new error code", tp);
                 this.metadata.requestUpdate();
             } else if (error == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
                 log.warn("Received unknown topic or partition error in fetch for partition {}. The topic/partition " +

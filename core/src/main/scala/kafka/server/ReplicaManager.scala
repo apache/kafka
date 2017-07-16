@@ -964,7 +964,7 @@ class ReplicaManager(val config: KafkaConfig,
           Set.empty[Partition]
 
         leaderAndISRRequest.partitionStates.asScala.keys.foreach( topicPartition =>
-          // Remove the partition from cache if the local replica can not be created due to KafkaStorageException
+          // Remove the partition from cache if the local replica creation has failed due to KafkaStorageException
           if (getReplica(topicPartition).isEmpty && allPartitions.get(topicPartition) != ReplicaManager.OfflinePartition)
             allPartitions.put(topicPartition, ReplicaManager.OfflinePartition)
         )
@@ -1124,8 +1124,7 @@ class ReplicaManager(val config: KafkaConfig,
           case e@ (_: KafkaStorageException | _: IOException) =>
             stateChangeLogger.error(("Broker %d skipped the become-follower state change with correlation id %d from " +
               "controller %d epoch %d for partition [%s,%d] since the replica for the partition is offline due to disk error %s")
-              .format(localBrokerId, correlationId, controllerId, partitionStateInfo.controllerEpoch,
-                partition.topic, partition.partitionId, e))
+              .format(localBrokerId, correlationId, controllerId, partitionStateInfo.controllerEpoch, partition.topic, partition.partitionId, e))
             val dirOpt = getLogDir(new TopicPartition(partition.topic, partition.partitionId))
             error(s"Error while making broker the follower for partition $partition in dir $dirOpt", e)
             dirOpt.foreach(maybeAddLogFailureEvent)
@@ -1217,8 +1216,12 @@ class ReplicaManager(val config: KafkaConfig,
     allPartitions.values.filter(partition => partition != ReplicaManager.OfflinePartition && partition.leaderReplicaIfLocal.isDefined).toList
 
   def getLogEndOffset(topicPartition: TopicPartition): Option[Long] = {
-    getPartition(topicPartition).filter(_ != ReplicaManager.OfflinePartition).flatMap{ partition =>
-      partition.leaderReplicaIfLocal.map(_.logEndOffset.messageOffset)
+    getPartition(topicPartition) match {
+      case Some(partition) =>
+        if (partition == ReplicaManager.OfflinePartition)
+          throw new KafkaStorageException(s"Failed to get log end offset for $topicPartition because it in offline log directory")
+        partition.leaderReplicaIfLocal.map(_.logEndOffset.messageOffset)
+      case None => None
     }
   }
 

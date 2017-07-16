@@ -163,10 +163,6 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, time: Time, met
   private val stateChangeLogger = KafkaController.stateChangeLogger
   val controllerContext = new ControllerContext(zkUtils)
 
-  // visible for testing
-  private[controller] val eventManager = new ControllerEventManager(controllerContext.stats.rateAndTimeMetrics,
-    _ => updateMetrics())
-
   val partitionStateMachine = new PartitionStateMachine(this)
   val replicaStateMachine = new ReplicaStateMachine(this)
 
@@ -174,6 +170,9 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, time: Time, met
   // visible for testing
   private[controller] val kafkaScheduler = new KafkaScheduler(1)
 
+  // visible for testing
+  private[controller] val eventManager = new ControllerEventManager(controllerContext.stats.rateAndTimeMetrics,
+    _ => updateMetrics())
 
   val topicDeletionManager = new TopicDeletionManager(this, eventManager)
   val offlinePartitionSelector = new OfflinePartitionLeaderSelector(controllerContext, config)
@@ -348,9 +347,9 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, time: Time, met
   def isActive: Boolean = activeControllerId == config.brokerId
 
   /*
-   * This callback is invoked by the controller's LogDirEventNotificationListener with the list of broker ids whose
-   * has experienced new log directory failures. In response the controller should send LeaderAndIsrRequest
-   * to all these brokers to query the state of all replicas
+   * This callback is invoked by the controller's LogDirEventNotificationListener with the list of broker ids who
+   * have experienced new log directory failures. In response the controller should send LeaderAndIsrRequest
+   * to all these brokers to query the state of their replicas
    */
   def onBrokerLogDirFailure(brokerIds: Seq[Int]) {
     // send LeaderAndIsrRequest for all live replicas on those brokers to see if they are still online.

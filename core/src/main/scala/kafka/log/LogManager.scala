@@ -170,7 +170,8 @@ class LogManager(private val logDirs: Array[File],
 
       recoveryPointCheckpoints = recoveryPointCheckpoints.filterKeys(file => file.getAbsolutePath != dir)
       logStartOffsetCheckpoints = logStartOffsetCheckpoints.filterKeys(file => file.getAbsolutePath != dir)
-      cleaner.handleLogDirFailure(dir)
+      if (cleaner != null)
+        cleaner.handleLogDirFailure(dir)
 
       val offlineTopicPartitions = logs.filter { case (tp, log) => log.dir.getParent == dir}.map { case (tp, log) => tp}
 

@@ -18,8 +18,9 @@ package org.apache.kafka.common.errors;
 
 /**
  * Miscellaneous disk-related IOException occurred when handling a request.
+ * Client should request metadata update and retry if the response shows KafkaStorageException
  */
-public class KafkaStorageException extends RetriableException {
+public class KafkaStorageException extends InvalidMetadataException {
 
     private static final long serialVersionUID = 1L;
 

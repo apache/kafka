@@ -584,7 +584,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.logger.debug(output)
         return output
 
-    def bootstrap_servers(self, protocol='PLAINTEXT', validate=True):
+    def bootstrap_servers(self, protocol='PLAINTEXT', validate=True, offline_nodes=[]):
         """Return comma-delimited list of brokers in this cluster formatted as HOSTNAME1:PORT1,HOSTNAME:PORT2,...
 
         This is the format expected by many config files.
@@ -595,7 +595,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         if validate and not port_mapping.open:
             raise ValueError("We are retrieving bootstrap servers for the port: %s which is not currently open. - " % str(port_mapping))
 
-        return ','.join([node.account.hostname + ":" + str(port_mapping.number) for node in self.nodes])
+        return ','.join([node.account.hostname + ":" + str(port_mapping.number) for node in self.nodes if node not in offline_nodes])
 
     def controller(self):
         """ Get the controller node

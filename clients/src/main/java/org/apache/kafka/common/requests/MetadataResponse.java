@@ -338,7 +338,7 @@ public class MetadataResponse extends AbstractResponse {
 
     }
 
-    // This is used to describe MetadataResponsePartitionState
+    // This is used to describe per-partition state in the MetadataResponse
     public static class PartitionMetadata {
         private final Errors error;
         private final int partition;

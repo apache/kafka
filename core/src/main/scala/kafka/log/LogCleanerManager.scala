@@ -22,7 +22,7 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.ReentrantLock
 
 import com.yammer.metrics.core.Gauge
-import kafka.common.LogCleaningAbortedException
+import kafka.common.{KafkaStorageException, LogCleaningAbortedException}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.LogDirFailureChannel
 import kafka.server.checkpoints.OffsetCheckpointFile
@@ -265,8 +265,8 @@ private[log] class LogCleanerManager(val logDirs: Array[File],
               checkpoint.write(existing + (topicPartition -> offset))
           } catch {
             case e: IOException =>
-              error(s"Failed to access checkpoint file ${checkpoint.f.getName} in dir ${checkpoint.f.getParentFile.getAbsolutePath}", e)
               logDirFailureChannel.maybeAddLogFailureEvent(checkpoint.f.getParentFile.getAbsolutePath)
+              throw new KafkaStorageException(s"Failed to access checkpoint file ${checkpoint.f.getName} in dir ${checkpoint.f.getParentFile.getAbsolutePath}", e)
           }
         }
       }

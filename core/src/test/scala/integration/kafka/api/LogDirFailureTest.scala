@@ -39,7 +39,7 @@ class LogDirFailureTest extends IntegrationTestHarness {
 
   this.logDirCount = 2
   this.producerConfig.setProperty(ProducerConfig.RETRIES_CONFIG, "0")
-  this.producerConfig.setProperty(ProducerConfig.METADATA_MAX_AGE_CONFIG, "100")
+  this.producerConfig.setProperty(ProducerConfig.RETRY_BACKOFF_MS_CONFIG, "100")
   this.serverConfig.setProperty(KafkaConfig.ReplicaHighWatermarkCheckpointIntervalMsProp, "100")
 
   @Before
@@ -92,14 +92,15 @@ class LogDirFailureTest extends IntegrationTestHarness {
 
     // Wait for producer to update metadata for the partition
     TestUtils.waitUntilTrue(() => {
+      // ProduceResponse may contain KafkaStorageException and trigger metadata update
+      producer.send(record)
       producer.partitionsFor(topic).get(0).leader().id() != leaderServerId
-    }, "Expected new leader for the partition", 10000L)
+    }, "Expected new leader for the partition", 6000L)
 
-    // The third send() should succeed
-    producer.send(record).get()
+    // Consumer should receive some messages
     TestUtils.waitUntilTrue(() => {
-      consumer.poll(0).count() == 1
-    }, "Expected the second message", 3000L)
+      consumer.poll(0).count() > 0
+    }, "Expected some messages", 3000L)
   }
 
   private def subscribeAndWaitForAssignment(topic: String, consumer: KafkaConsumer[Array[Byte], Array[Byte]]) {

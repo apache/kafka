@@ -183,8 +183,7 @@ class Partition(val topic: String,
 
       //We cache the leader epoch here, persisting it only if it's local (hence having a log dir)
       leaderEpoch = partitionStateInfo.leaderEpoch
-      // We don't need to specify isNew flag since the local replica would have been created already
-      allReplicas.foreach(id => getOrCreateReplica(id))
+      allReplicas.foreach(id => getOrCreateReplica(id, partitionStateInfo.isNew))
 
       zkVersion = partitionStateInfo.zkVersion
       val isNewLeader =

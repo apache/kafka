@@ -505,7 +505,8 @@ public enum Errors {
                 return new KafkaStorageException(message);
             }
     }),
-    UNKNOWN_ERROR_CODE(57, "The client received an unexpected error code when processing the response.",
+    UNKNOWN_ERROR_CODE(57, "The client received an unknown error code when processing the response. This may happen if " +
+            "the client library version is lower than the server library version",
         new ApiExceptionBuilder() {
         @Override
         public ApiException build(String message) {

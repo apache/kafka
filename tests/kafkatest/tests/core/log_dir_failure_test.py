@@ -151,8 +151,10 @@ class LogDirFailureTest(ProduceConsumeValidateTest):
             self.validate()
 
             # Shutdown all other brokers so that the broker with offline log dir is the only online broker
+            offline_nodes = []
             for node in self.kafka.nodes:
                 if broker_node != node:
+                    offline_nodes.append(node)
                     self.logger.debug("Hard shutdown broker %d" % (self.kafka.idx(node)))
                     self.kafka.signal_node(node, sig=signal.SIGKILL)
 
@@ -160,7 +162,7 @@ class LogDirFailureTest(ProduceConsumeValidateTest):
             # 1) The broker with offline directory is the only in-sync broker of the partition of topic2
             # 2) Messages can still be produced and consumed from topic2
             self.producer = VerifiableProducer(self.test_context, self.num_producers, self.kafka, self.topic2,
-                                               throughput=self.producer_throughput)
+                                               throughput=self.producer_throughput, offline_nodes=offline_nodes)
             self.consumer = ConsoleConsumer(self.test_context, self.num_consumers, self.kafka, self.topic2, group_id="test-consumer-group-2",
                                             new_consumer=False, consumer_timeout_ms=60000, message_validator=is_int)
             self.start_producer_and_consumer()

@@ -17,7 +17,7 @@
 package org.apache.kafka.common;
 
 /**
- * Information about a topic-partition. This is used to describe MetadataPartitionInfo.
+ * This is used to describe per-partition state in the MetadataResponse.
  */
 public class PartitionInfo {
 

@@ -20,7 +20,7 @@ import org.apache.kafka.common.utils.Utils;
 
 import java.util.List;
 
-// This is used to describe LeaderAndIsrPartitionInfo
+// This is used to describe per-partition state in the LeaderAndIsrRequest
 public class PartitionState {
     public final int controllerEpoch;
     public final int leader;

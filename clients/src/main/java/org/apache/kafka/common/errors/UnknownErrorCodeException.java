@@ -19,9 +19,10 @@ package org.apache.kafka.common.errors;
 /**
  * An error code on the server for which the client doesn't have a corresponding error.
  * UnknownErrorCodeException can only occur on the client side when client's library version is lower than the server's version.
- * This exception should be retriable to handle the scenario that the corresponding new exception defined in the server side is retriable.
+ * This exception should extend InvalidMetadataException to handle the scenario that the
+ * corresponding new exception defined in the server requires client to update metadata and retry.
  */
-public class UnknownErrorCodeException extends RetriableException {
+public class UnknownErrorCodeException extends InvalidMetadataException {
 
     private static final long serialVersionUID = 1L;
 

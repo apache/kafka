@@ -124,6 +124,7 @@ public class Protocol {
 
     public static final Schema PARTITION_METADATA_V1 = PARTITION_METADATA_V0;
 
+    // PARTITION_METADATA_V2 added a per-partition offline_replicas field. This field specifies the list of replicas that are offline.
     public static final Schema PARTITION_METADATA_V2 = new Schema(new Field("partition_error_code",
                                                                             INT16,
                                                                             "The error code for the partition, if any."),
@@ -150,6 +151,7 @@ public class Protocol {
                                                               new Field("partition_metadata", new ArrayOf(PARTITION_METADATA_V1),
                                                                   "Metadata for each partition of the topic."));
 
+    // TOPIC_METADATA_V2 added a per-partition offline_replicas field. This field specifies the list of replicas that are offline.
     public static final Schema TOPIC_METADATA_V2 = new Schema(new Field("topic_error_code", INT16, "The error code for the given topic."),
                                                               new Field("topic", STRING, "The name of the topic"),
                                                               new Field("is_internal", BOOLEAN,
@@ -245,6 +247,11 @@ public class Protocol {
             new Field("timeout", INT32, "The time to await a response in ms."),
             new Field("topic_data", new ArrayOf(TOPIC_PRODUCE_DATA_V0)));
 
+    /**
+     * The body of PRODUCE_REQUEST_V4 is the same as PRODUCE_REQUEST_V3.
+     * The version number is bumped up to indicate that the client supports UnknownErrorCodeException.
+     * The KafkaStorageException will be translated to NotLeaderForPartitionException in the response if version <= 3
+     */
     public static final Schema PRODUCE_REQUEST_V4 = PRODUCE_REQUEST_V3;
 
     public static final Schema PRODUCE_RESPONSE_V1 = new Schema(new Field("responses",
@@ -283,7 +290,7 @@ public class Protocol {
 
     /**
      * The body of PRODUCE_RESPONSE_V4 is the same as PRODUCE_RESPONSE_V3.
-     * The version number is bumped up to indicate that the client supports UnknownCodeException.
+     * The version number is bumped up to indicate that the client supports UnknownErrorCodeException.
      * The KafkaStorageException will be translated to NotLeaderForPartitionException in the response if version <= 3
      */
     public static final Schema PRODUCE_RESPONSE_V4 = PRODUCE_RESPONSE_V3;
@@ -716,6 +723,11 @@ public class Protocol {
                     new ArrayOf(FETCH_REQUEST_TOPIC_V5),
                     "Topics to fetch in the order provided."));
 
+    /**
+     * The body of FETCH_REQUEST_V6 is the same as FETCH_REQUEST_V5.
+     * The version number is bumped up to indicate that the client supports UnknownErrorCodeException.
+     * The KafkaStorageException will be translated to NotLeaderForPartitionException in the response if version <= 5
+     */
     public static final Schema FETCH_REQUEST_V6 = FETCH_REQUEST_V5;
 
     public static final Schema FETCH_RESPONSE_PARTITION_HEADER_V0 = new Schema(new Field("partition",
@@ -812,7 +824,7 @@ public class Protocol {
 
     /**
      * The body of FETCH_RESPONSE_V6 is the same as FETCH_RESPONSE_V5.
-     * The version number is bumped up to indicate that the client supports UnknownCodeException.
+     * The version number is bumped up to indicate that the client supports UnknownErrorCodeException.
      * The KafkaStorageException will be translated to NotLeaderForPartitionException in the response if version <= 5
      */
     public static final Schema FETCH_RESPONSE_V6 = FETCH_RESPONSE_V5;
