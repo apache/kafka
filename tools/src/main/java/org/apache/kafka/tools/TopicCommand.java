@@ -27,6 +27,7 @@ import org.apache.kafka.clients.admin.TopicListing;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.utils.Exit;
+import org.apache.kafka.common.utils.Utils;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -49,7 +50,7 @@ public class TopicCommand {
 
     public static void main(String[] args) throws Exception {
 
-        (new TopicCommand()).run(args);
+        new TopicCommand().run(args);
     }
 
     void run(String[] args) throws Exception {
@@ -116,13 +117,14 @@ public class TopicCommand {
 
                 Map<Integer, List<Integer>> assignment = this.parseReplicaAssignment(opts.replicaAssignment());
                 client.createTopics(Collections.singleton(new NewTopic(topic, assignment)));
-                // TODO : rach aware mode ?
 
             } else {
 
                 CommandLineUtils.checkRequiredArgs(opts.parser, opts, Arrays.asList(opts.PARTITIONS, opts.REPLICATION_FACTOR));
                 int partitions = opts.partitions();
                 short replicas = opts.replicationFactor();
+
+                // TODO : rach aware mode ?
 
                 client.createTopics(Collections.singleton(new NewTopic(topic, partitions, replicas))).all().get();
             }
@@ -148,7 +150,7 @@ public class TopicCommand {
                 intBrokerList.add(Integer.valueOf(broker.trim()));
             }
 
-            List<Integer> duplicateBrokers = CoreUtils.duplicates(intBrokerList);
+            List<Integer> duplicateBrokers = Utils.duplicates(intBrokerList);
             if (!duplicateBrokers.isEmpty())
                 throw new Exception("Partition replica lists may not contain duplicate entries: " + duplicateBrokers);
 
