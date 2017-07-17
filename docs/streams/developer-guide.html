@@ -343,17 +343,17 @@
 	  among other things, for supporting interactive queries against the table.
 
 	  <pre class="brush: java;">
-	  import org.apache.kafka.common.serialization.Serdes;
-	  import org.apache.kafka.streams.kstream.KStreamBuilder;
-	  import org.apache.kafka.streams.kstream.KTable;
+        import org.apache.kafka.common.serialization.Serdes;
+        import org.apache.kafka.streams.kstream.KStreamBuilder;
+        import org.apache.kafka.streams.kstream.KTable;
 
-	  KStreamBuilder builder = new KStreamBuilder();
+        KStreamBuilder builder = new KStreamBuilder();
 
-	  KTable&lt;String, Long&gt; wordCounts = builder.table(
-	    Serdes.String(), /* key serde */
-	    Serdes.Long(),   /* value serde */
-	    "word-counts-input-topic", /* input topic */
-	    "word-counts-partitioned-store" /* table/store name */);
+        KTable&lt;String, Long&gt; wordCounts = builder.table(
+	        Serdes.String(), /* key serde */
+	        Serdes.Long(),   /* value serde */
+	        "word-counts-input-topic", /* input topic */
+	        "word-counts-partitioned-store" /* table/store name */);
 	  </pre>
 
 	  When to provide serdes explicitly:
@@ -382,17 +382,17 @@
 	    This is required, among other things, for supporting interactive queries against the table.
 
 	    <pre class="brush: java;">
-	      import org.apache.kafka.common.serialization.Serdes;
-	      import org.apache.kafka.streams.kstream.KStreamBuilder;
-	      import org.apache.kafka.streams.kstream.GlobalKTable;
+        import org.apache.kafka.common.serialization.Serdes;
+        import org.apache.kafka.streams.kstream.KStreamBuilder;
+        import org.apache.kafka.streams.kstream.GlobalKTable;
 
-	      KStreamBuilder builder = new KStreamBuilder();
+	        KStreamBuilder builder = new KStreamBuilder();
 
-	      GlobalKTable&lt;String, Long&gt; wordCounts = builder.globalTable(
-		Serdes.String(), /* key serde */
-		Serdes.Long(),   /* value serde */
-		"word-counts-input-topic", /* input topic */
-		"word-counts-global-store" /* table/store name */);
+	        GlobalKTable&lt;String, Long&gt; wordCounts = builder.globalTable(
+		        Serdes.String(), /* key serde */
+		        Serdes.Long(),   /* value serde */
+		        "word-counts-input-topic", /* input topic */
+		        "word-counts-global-store" /* table/store name */);
 	    </pre>
 	    
 	    When to provide serdes explicitly:
@@ -448,19 +448,17 @@
             Branching is useful, for example, to route records to different downstream topics.
 
             <pre class="brush: java;">
-	     KStream&lt;String, Long&gt; stream = ...;
-	       KStream&lt;String, Long&gt;[] branches = stream.branch(
-		    (key, value) -> key.startsWith("A"), /* first predicate  */
-		    (key, value) -> key.startsWith("B"), /* second predicate */
-		    (key, value) -> true                 /* third predicate  */
-		    );
-
-              // KStream branches[0] contains all records whose keys start with "A"
-   	      // KStream branches[1] contains all records whose keys start with "B"
-	      // KStream branches[2] contains all other records
-
-	      // Java 7 example: cf. `filter` for how to create `Predicate` instances
-	     </pre>
+            KStream&lt;String, Long&gt; stream = ...;
+            KStream&lt;String, Long&gt;[] branches = stream.branch(
+		            (key, value) -> key.startsWith("A"), /* first predicate  */
+		            (key, value) -> key.startsWith("B"), /* second predicate */
+		            (key, value) -> true                 /* third predicate  */
+            );
+            // KStream branches[0] contains all records whose keys start with "A"
+            // KStream branches[1] contains all records whose keys start with "B"
+            // KStream branches[2] contains all other records
+            // Java 7 example: cf. `filter` for how to create `Predicate` instances
+	        </pre>
         </td>
     </tr>
 	 <tr>
@@ -469,20 +467,20 @@
 	     Evaluates a boolean function for each element and retains those for which the function returns true. 
 
 	     <pre class="brush: java;">
-	       KStream&lt;String, Long&gt; stream = ...;
+             KStream&lt;String, Long&gt; stream = ...;
 
-	       // A filter that selects (keeps) only positive numbers
-	       // Java 8+ example, using lambda expressions
-	       KStream&lt;String, Long&gt; onlyPositives = stream.filter((key, value) -> value > 0);
-		   
-		 // Java 7 example
-		 KStream&lt;String, Long&gt; onlyPositives = stream.filter(
-		   new Predicate&lt;String, Long&gt;() {
-		     @Override
-		     public boolean test(String key, Long value) {
-		       return value > 0;
-		     }
-		   });
+             // A filter that selects (keeps) only positive numbers
+             // Java 8+ example, using lambda expressions
+             KStream&lt;String, Long&gt; onlyPositives = stream.filter((key, value) -> value > 0);
+
+             // Java 7 example
+             KStream&lt;String, Long&gt; onlyPositives = stream.filter(
+               new Predicate&lt;String, Long&gt;() {
+                 @Override
+                 public boolean test(String key, Long value) {
+                   return value > 0;
+                 }
+               });
 	     </pre>
 	   </td>
 	 </tr>
@@ -492,21 +490,21 @@
 	     Evaluates a boolean function for each element and drops those for which the function returns true.
 
 	     <pre class="brush: java;">
-	       KStream&lt;String, Long&gt; stream = ...;
+             KStream&lt;String, Long&gt; stream = ...;
 		 
-   	       // An inverse filter that discards any negative numbers or zero
-   	       // Java 8+ example, using lambda expressions
-	       KStream&lt;String, Long&gt; onlyPositives = stream.filterNot((key, value) -> value <= 0);
-												 
-		 // Java 7 example
-		KStream&lt;String, Long&gt; onlyPositives = stream.filterNot(
-		  new Predicate&lt;String, Long&gt;() {
-		  @Override
-		  public boolean test(String key, Long value) {
-		    return value <= 0;
-		  }
+             // An inverse filter that discards any negative numbers or zero
+             // Java 8+ example, using lambda expressions
+             KStream&lt;String, Long&gt; onlyPositives = stream.filterNot((key, value) -> value <= 0);
+
+             // Java 7 example
+             KStream&lt;String, Long&gt; onlyPositives = stream.filterNot(
+              new Predicate&lt;String, Long&gt;() {
+                @Override
+                public boolean test(String key, Long value) {
+                    return value <= 0;
+                }
              });
-	      </pre>
+         </pre>
 	      </td>
 	 </tr>
 	 <tr>
@@ -531,9 +529,8 @@
                      return result;
                  }
              );
-             </pre>
-
              // Java 7 example: cf. `map` for how to create `KeyValueMapper` instances
+         </pre>
          </td>
      </tr>
        <tr>
@@ -571,11 +568,11 @@
 
                // Java 7 example
                stream.foreach(
-               new ForeachAction&lt;String, Long&gt;() {
-               @Override
-               public void apply(String key, Long value) {
-                 System.out.println(key + " => " + value);
-               }
+                   new ForeachAction&lt;String, Long&gt;() {
+                       @Override
+                       public void apply(String key, Long value) {
+                         System.out.println(key + " => " + value);
+                       }
                });
                </pre>
            </td>
@@ -675,7 +672,7 @@
 
                // Group the table by a new key and key type, and also modify the value and value type.
                KGroupedTable&lt;String, Integer&gt; groupedTable = table.groupBy(
-                    new KeyValueMapper&lt;byte[], String, KeyValue<String, Integer&gt;&gt;() {
+                    new KeyValueMapper&lt;byte[], String, KeyValue&lt;String, Integer&gt;&gt;() {
                     @Override
                         public KeyValue&lt;String, Integer&gt; apply(byte[] key, String value) {
                            return KeyValue.pair(value, value.length());
@@ -706,12 +703,12 @@
 
                // Java 7 example
                KStream&lt;String, Integer&gt; transformed = stream.map(
-                   new KeyValueMapper&lt;byte[], String, KeyValue<String, Integer>>() {
+                   new KeyValueMapper&lt;byte[], String, KeyValue&lt;String, Integer&gt;&gt;() {
                    @Override
                    public KeyValue&lt;String, Integer&gt; apply(byte[] key, String value) {
                        return new KeyValue&lt;&gt;(value.toLowerCase(), value.length());
                    }
-                   });
+               });
                </pre>
            </td>
        </tr>
