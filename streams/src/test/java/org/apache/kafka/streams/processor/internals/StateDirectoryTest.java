@@ -276,7 +276,7 @@ public class StateDirectoryTest {
             public void run() {
                 try {
                     directory.lock(taskId, 1);
-                } catch (IOException e) {
+                } catch (final IOException e) {
                     //
                 }
             }
@@ -299,7 +299,7 @@ public class StateDirectoryTest {
                     lockLatch.countDown();
                     unlockLatch.await();
                     directory.unlock(taskId);
-                } catch (Exception e) {
+                } catch (final Exception e) {
                     //
                 }
             }

@@ -452,7 +452,7 @@ public class KafkaStreamsTest {
                 }
             }
         });
-        final String appDir = stateDir + "/" + appId;
+        final String appDir = stateDir + File.separator + appId;
         final File oldTaskDir = new File(appDir, "10_1");
         assertTrue(oldTaskDir.mkdirs());
         try {

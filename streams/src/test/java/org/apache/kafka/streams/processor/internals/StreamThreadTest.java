@@ -444,16 +444,17 @@ public class StreamThreadTest {
     public void testStateChangeStartClose() throws InterruptedException {
 
         final StreamThread thread = new StreamThread(
-                builder,
-                config,
-                clientSupplier,
-                applicationId,
-                clientId,
-                processId,
-                metrics,
-                Time.SYSTEM,
-                new StreamsMetadataState(builder, StreamsMetadataState.UNKNOWN_HOST),
-                0, stateDirectory);
+            builder,
+            config,
+            clientSupplier,
+            applicationId,
+            clientId,
+            processId,
+            metrics,
+            Time.SYSTEM,
+            new StreamsMetadataState(builder, StreamsMetadataState.UNKNOWN_HOST),
+            0,
+            stateDirectory);
 
         final StateListenerStub stateListener = new StateListenerStub();
         thread.setStateListener(stateListener);
@@ -496,27 +497,29 @@ public class StreamThreadTest {
         //clientSupplier.consumer.assign(Arrays.asList(new TopicPartition(TOPIC, 0), new TopicPartition(TOPIC, 1)));
 
         final StreamThread thread1 = new StreamThread(
-                builder,
-                config,
-                clientSupplier,
-                applicationId,
-                clientId + 1,
-                processId,
-                metrics,
-                Time.SYSTEM,
-                new StreamsMetadataState(builder, StreamsMetadataState.UNKNOWN_HOST),
-                0, stateDirectory);
+            builder,
+            config,
+            clientSupplier,
+            applicationId,
+            clientId + 1,
+            processId,
+            metrics,
+            Time.SYSTEM,
+            new StreamsMetadataState(builder, StreamsMetadataState.UNKNOWN_HOST),
+            0,
+            stateDirectory);
         final StreamThread thread2 = new StreamThread(
-                builder,
-                config,
-                clientSupplier,
-                applicationId,
-                clientId + 2,
-                processId,
-                metrics,
-                Time.SYSTEM,
-                new StreamsMetadataState(builder, StreamsMetadataState.UNKNOWN_HOST),
-                0, stateDirectory);
+            builder,
+            config,
+            clientSupplier,
+            applicationId,
+            clientId + 2,
+            processId,
+            metrics,
+            Time.SYSTEM,
+            new StreamsMetadataState(builder, StreamsMetadataState.UNKNOWN_HOST),
+            0,
+            stateDirectory);
 
         final Map<TaskId, Set<TopicPartition>> task0 = Collections.singletonMap(new TaskId(0, 0), task0Assignment);
         final Map<TaskId, Set<TopicPartition>> task1 = Collections.singletonMap(new TaskId(0, 1), task1Assignment);

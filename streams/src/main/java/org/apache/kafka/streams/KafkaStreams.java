@@ -497,7 +497,8 @@ public class KafkaStreams {
                                           metrics,
                                           time,
                                           streamsMetadataState,
-                                          cacheSizeBytes, stateDirectory);
+                                          cacheSizeBytes,
+                                          stateDirectory);
             threadState.put(threads[i].getId(), threads[i].state());
             storeProviders.add(new StreamThreadStateStoreProvider(threads[i]));
         }
