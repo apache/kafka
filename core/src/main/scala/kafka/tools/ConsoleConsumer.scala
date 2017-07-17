@@ -269,7 +269,7 @@ object ConsoleConsumer extends Logging {
       .withRequiredArg
       .describedAs("metrics directory")
       .ofType(classOf[java.lang.String])
-    val newConsumerOpt = parser.accepts("new-consumer", "Use the new consumer implementation. This is the default.")
+    val newConsumerOpt = parser.accepts("new-consumer", "DEPRECATED Use the new consumer implementation. This is the default.")
     val bootstrapServerOpt = parser.accepts("bootstrap-server", "REQUIRED (unless old consumer is used): The server to connect to.")
       .withRequiredArg
       .describedAs("server to connect to")
@@ -386,8 +386,14 @@ object ConsoleConsumer extends Logging {
       else if (fromBeginning) OffsetRequest.EarliestTime
       else OffsetRequest.LatestTime
 
-    if (!useOldConsumer)
+    if (!useOldConsumer) {
       CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServerOpt)
+
+      if (options.has(newConsumerOpt)) {
+        Console.err.println("Using the --new-consumer option is deprecated and will be removed " +
+          "in a future major release. For using the new consumer just use only the --bootstrap-server option")
+      }
+    }
 
     if (options.has(csvMetricsReporterEnabledOpt)) {
       val csvReporterProps = new Properties()
