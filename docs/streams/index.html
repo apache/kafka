@@ -15,12 +15,15 @@
  limitations under the License.
 -->
 
-<script><!--#include virtual="js/templateData.js" --></script>
+<script><!--#include virtual="../js/templateData.js" --></script>
 
 <script id="streams-template" type="text/x-handlebars-template">
     <h1>Streams</h1>
 
     <ol class="toc">
+        <li>
+            <a href="/{{version}}/documentation/streams/quickstart">Play with a Streams Application</a>
+        </li>
         <li>
             <a href="/{{version}}/documentation/streams/core-concepts">Core Concepts</a>
         </li>
@@ -32,6 +35,7 @@
             <ul>
                 <li><a href="/{{version}}/documentation/streams/developer-guide#streams_processor">Low-level Processor API</a></li>
                 <li><a href="/{{version}}/documentation/streams/developer-guide#streams_dsl">High-level Streams DSL</a></li>
+                <li><a href="/{{version}}/documentation/streams/developer-guide#streams_interactive_querie">Interactive Queries</a></li>
                 <li><a href="/{{version}}/documentation/streams/developer-guide#streams_execute">Application Configuration and Execution</a></li>
             </ul>
         </li>
@@ -66,23 +70,23 @@
 
     <div class="pagination">
         <a href="#" class="pagination__btn pagination__btn__prev pagination__btn--disabled">Previous</a>
-        <a href="/{{version}}/documentation/streams/core-concepts" class="pagination__btn pagination__btn__next">Next</a>
+        <a href="/{{version}}/documentation/streams/quickstart" class="pagination__btn pagination__btn__next">Next</a>
     </div>
 </script>
 
-<!--#include virtual="../includes/_header.htm" -->
-<!--#include virtual="../includes/_top.htm" -->
+<!--#include virtual="../../includes/_header.htm" -->
+<!--#include virtual="../../includes/_top.htm" -->
 <div class="content documentation documentation--current">
-    <!--#include virtual="../includes/_nav.htm" -->
+    <!--#include virtual="../../includes/_nav.htm" -->
     <div class="right">
-        <!--#include virtual="../includes/_docs_banner.htm" -->
+        <!--#include virtual="../../includes/_docs_banner.htm" -->
         <ul class="breadcrumbs">
             <li><a href="/documentation">Documentation</a></li>
         </ul>
         <div class="p-streams"></div>
     </div>
 </div>
-<!--#include virtual="../includes/_footer.htm" -->
+<!--#include virtual="../../includes/_footer.htm" -->
 <script>
 $(function() {
   // Show selected style on nav item

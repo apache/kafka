@@ -613,7 +613,7 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, time: Time, met
 
   def incrementControllerEpoch() = {
     try {
-      var newControllerEpoch = controllerContext.epoch + 1
+      val newControllerEpoch = controllerContext.epoch + 1
       val (updateSucceeded, newVersion) = zkUtils.conditionalUpdatePersistentPathIfExists(
         ZkUtils.ControllerEpochPath, newControllerEpoch.toString, controllerContext.epochZkVersion)
       if(!updateSucceeded)
@@ -1273,29 +1273,27 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, time: Time, met
     override def process(): Unit = {
       if (!isActive) return
         // check if this partition is still being reassigned or not
-      controllerContext.partitionsBeingReassigned.get(topicAndPartition) match {
-        case Some(reassignedPartitionContext) =>
-          // need to re-read leader and isr from zookeeper since the zkclient callback doesn't return the Stat object
-          val newLeaderAndIsrOpt = zkUtils.getLeaderAndIsrForPartition(topicAndPartition.topic, topicAndPartition.partition)
-          newLeaderAndIsrOpt match {
-            case Some(leaderAndIsr) => // check if new replicas have joined ISR
-              val caughtUpReplicas = reassignedReplicas & leaderAndIsr.isr.toSet
-              if(caughtUpReplicas == reassignedReplicas) {
-                // resume the partition reassignment process
-                info("%d/%d replicas have caught up with the leader for partition %s being reassigned."
-                  .format(caughtUpReplicas.size, reassignedReplicas.size, topicAndPartition) +
-                  "Resuming partition reassignment")
-                onPartitionReassignment(topicAndPartition, reassignedPartitionContext)
-              }
-              else {
-                info("%d/%d replicas have caught up with the leader for partition %s being reassigned."
-                  .format(caughtUpReplicas.size, reassignedReplicas.size, topicAndPartition) +
-                  "Replica(s) %s still need to catch up".format((reassignedReplicas -- leaderAndIsr.isr.toSet).mkString(",")))
-              }
-            case None => error("Error handling reassignment of partition %s to replicas %s as it was never created"
-              .format(topicAndPartition, reassignedReplicas.mkString(",")))
-          }
-        case None =>
+      controllerContext.partitionsBeingReassigned.get(topicAndPartition).foreach { reassignedPartitionContext =>
+        // need to re-read leader and isr from zookeeper since the zkclient callback doesn't return the Stat object
+        val newLeaderAndIsrOpt = zkUtils.getLeaderAndIsrForPartition(topicAndPartition.topic, topicAndPartition.partition)
+        newLeaderAndIsrOpt match {
+          case Some(leaderAndIsr) => // check if new replicas have joined ISR
+            val caughtUpReplicas = reassignedReplicas & leaderAndIsr.isr.toSet
+            if(caughtUpReplicas == reassignedReplicas) {
+              // resume the partition reassignment process
+              info("%d/%d replicas have caught up with the leader for partition %s being reassigned."
+                .format(caughtUpReplicas.size, reassignedReplicas.size, topicAndPartition) +
+                "Resuming partition reassignment")
+              onPartitionReassignment(topicAndPartition, reassignedPartitionContext)
+            }
+            else {
+              info("%d/%d replicas have caught up with the leader for partition %s being reassigned."
+                .format(caughtUpReplicas.size, reassignedReplicas.size, topicAndPartition) +
+                "Replica(s) %s still need to catch up".format((reassignedReplicas -- leaderAndIsr.isr.toSet).mkString(",")))
+            }
+          case None => error("Error handling reassignment of partition %s to replicas %s as it was never created"
+            .format(topicAndPartition, reassignedReplicas.mkString(",")))
+        }
       }
     }
   }

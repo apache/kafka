@@ -366,7 +366,7 @@ object TopicCommand extends Logging {
     }
   }
 
-  def askToProceed: Unit = {
+  def askToProceed(): Unit = {
     println("Are you sure you want to continue? [y/n]")
     if (!Console.readLine().equalsIgnoreCase("y")) {
       println("Ending your session")

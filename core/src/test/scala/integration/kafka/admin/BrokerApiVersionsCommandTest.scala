@@ -30,7 +30,7 @@ import org.junit.Test
 
 class BrokerApiVersionsCommandTest extends KafkaServerTestHarness {
 
-  def generateConfigs(): Seq[KafkaConfig] = TestUtils.createBrokerConfigs(1, zkConnect).map(KafkaConfig.fromProps)
+  def generateConfigs: Seq[KafkaConfig] = TestUtils.createBrokerConfigs(1, zkConnect).map(KafkaConfig.fromProps)
 
   @Test(timeout=120000)
   def checkBrokerApiVersionCommandOutput() {

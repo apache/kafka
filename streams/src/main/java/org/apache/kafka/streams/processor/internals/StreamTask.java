@@ -28,6 +28,7 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
+import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -122,15 +123,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         // to corresponding source nodes in the processor topology
         final Map<TopicPartition, RecordQueue> partitionQueues = new HashMap<>();
 
-        final TimestampExtractor defaultTimestampExtractor  = config.defaultTimestampExtractor();
-        for (final TopicPartition partition : partitions) {
-            final SourceNode source = topology.source(partition.topic());
-            final TimestampExtractor sourceTimestampExtractor = source.getTimestampExtractor() != null ? source.getTimestampExtractor() : defaultTimestampExtractor;
-            final RecordQueue queue = new RecordQueue(partition, source, sourceTimestampExtractor);
-            partitionQueues.put(partition, queue);
-        }
-
-        partitionGroup = new PartitionGroup(partitionQueues);
 
         // initialize the consumed offset cache
         consumedOffsets = new HashMap<>();
@@ -140,6 +132,17 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
 
         // initialize the topology with its own context
         processorContext = new ProcessorContextImpl(id, this, config, recordCollector, stateMgr, metrics, cache);
+
+        final TimestampExtractor defaultTimestampExtractor  = config.defaultTimestampExtractor();
+        final DeserializationExceptionHandler defaultDeserializationExceptionHandler = config.defaultDeserializationExceptionHandler();
+        for (final TopicPartition partition : partitions) {
+            final SourceNode source = topology.source(partition.topic());
+            final TimestampExtractor sourceTimestampExtractor = source.getTimestampExtractor() != null ? source.getTimestampExtractor() : defaultTimestampExtractor;
+            final RecordQueue queue = new RecordQueue(partition, source, sourceTimestampExtractor, defaultDeserializationExceptionHandler, processorContext);
+            partitionQueues.put(partition, queue);
+        }
+
+        partitionGroup = new PartitionGroup(partitionQueues);
         this.time = time;
         log.debug("{} Initializing", logPrefix);
         initializeStateStores();

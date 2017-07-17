@@ -121,7 +121,7 @@ class KafkaConfigTest {
   }
 
   @Test
-  def testLogRetentionValid {
+  def testLogRetentionValid(): Unit = {
     val props1 = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
     val props2 = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
     val props3 = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
