@@ -1654,7 +1654,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     for (_ <- 0 until numOfConsumersToAdd) {
       val newConsumer = new KafkaConsumer[Array[Byte], Array[Byte]](this.consumerConfig)
       consumerGroup += newConsumer
-      consumers += newConsumer
       consumerPollers += subscribeConsumerAndStartPolling(newConsumer, topicsToSubscribe)
     }
 
