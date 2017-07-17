@@ -491,7 +491,7 @@
     <h4><a id="streams_topic_config" href="#streams_topic_config">Internal Topic Configuration</a></h4>
     <p>
         Kafka Streams automatically creates internal repartitioning and changelog topics.
-        You can override the configs used when creating these topics by adding any configs from <code>TopicConfig</code> to your <code>StreamsConfig</code> with the prefix <code>topic.</code>:
+        You can override the default configs used when creating these topics by adding any configs from <code>TopicConfig</code> to your <code>StreamsConfig</code> with the prefix <code>StreamsConfig.TOPIC_PREFIX</code>:
     </p>
 
     <pre class="brush: java;">
@@ -500,11 +500,32 @@
     settings.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "kafka-broker-01:9092");
 
     // Add a topic config by prefixing with topic.
-    settings.put("topic." + TopicConfig.SEGMENT_BYTES_CONFIG, 1024 * 1024);
+    settings.put(StreamsConfig.TOPIC_PREFIX + TopicConfig.SEGMENT_BYTES_CONFIG, 1024 * 1024);
 
     // Alternatively, you can use
     settings.put(StreamsConfig.topicPrefix(ConsumerConfig.SEGMENT_BYTES_CONFIG), 1024 * 1024);
     </pre>
+
+    <p>
+        For changelog topics you can also override the default configs on a per store basis.
+        This can be done by using any method overload that has a <code>StateStoreSupplier</code> as a parameter:
+    </p>
+
+    <pre class="brush: java;">
+        // a map to add topic config
+        Map&lt;String, String&gt; topicConfig = new HashMap<>();
+        topicConfig.put(TopicConfig.SEGMENT_MS_CONFIG, "10000");
+
+        StateStoreSupplier supplier = Stores.create("store")
+                .withKeys(Serdes.String())
+                .withValues(Serdes.String())
+                .persistent()
+                .enableLogging(topicConfig) // pass in the config overrides
+                .build();
+        
+        groupedStream.count(supplier)
+    </pre>
+
 
 
     <h4><a id="streams_execute" href="#streams_execute">Executing Your Kafka Streams Application</a></h4>
