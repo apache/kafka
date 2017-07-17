@@ -167,7 +167,7 @@ public class KafkaStreamsTest {
     }
 
     @Test
-    public void testStateGlobalThreadClose() throws InterruptedException {
+    public void testStateGlobalThreadClose() throws Exception {
         final int numThreads = 2;
         final KStreamBuilder builder = new KStreamBuilder();
         // make sure we have the global state thread running too
