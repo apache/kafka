@@ -58,9 +58,13 @@ help|-h|--help
     Display this help message
 
 up [-n|--num-nodes NUM_NODES] [-f|--force] [docker-image]
+        [-E|--custom-ducktape DIR]
     Bring up a cluster with the specified amount of nodes (defaults to ${default_num_nodes}).
     The docker image name defaults to ${default_image_name}.  If --force is specified, we will
     attempt to bring up an image even some parameters are not valid.
+
+    If --custom-ducktape is specified, we will install the provided custom
+    ducktape directory before bringing up the nodes.
 
 test [test-name(s)]
     Run a test or set of tests inside the currently active Ducker nodes.
@@ -217,10 +221,40 @@ $((${duration} % 60))s.  See ${build_log} for details."
 $((${duration} % 60))s.  See ${build_log} for details."
 }
 
+docker_run() {
+    local node=${1}
+    local image_name=${2}
+
+    # Invoke docker-run. We need privileged mode to be able to run iptables
+    # and mount FUSE filesystems inside the container.  We also need it to
+    # run iptables inside the container.
+    must_do 1 0 docker run --privileged \
+        -d -t --net=host -h "${node}" --network ducknet \
+        --memory=${docker_run_memory_limit} --memory-swappiness=1 \
+        -v "${kafka_dir}:/opt/kafka-dev" --name "${node}" -- "${image_name}"
+}
+
+setup_custom_ducktape() {
+    local custom_ducktape="${1}"
+    local image_name="${2}"
+
+    [[ -f "${custom_ducktape}/README.md" ]] || \
+        die "You must supply a valid ducktape directory to --custom-ducktape"
+    docker_run ducker01 "${image_name}"
+    local running_container="$(docker ps -f=network=ducknet -q)"
+    must_do 1 1 docker cp "${custom_ducktape}" "${running_container}:/opt/ducktape"
+    docker exec --user=root ducker01 bash -c 'set -x && cd /opt/ducktape && python ./setup.py develop && cd /opt/kafka-dev/tests && python ./setup.py develop'
+    [[ $? -ne 0 ]] && die "failed to install the new ducktape."
+    must_do 1 1 docker commit ducker01 "${image_name}"
+    must_do 1 0 docker kill "${running_container}"
+    must_do 1 0 docker rm ducker01
+}
+
 ducker_up() {
     require_commands docker
     while [[ $# -ge 1 ]]; do
         case "${1}" in
+            -E|--custom-ducktape) set_once custom_ducktape "${2}" "the custom ducktape directory"; shift 2;;
             -f|--force) force=1; shift;;
             -n|--num-nodes) set_once num_nodes "${2}" "number of nodes"; shift 2;;
             *) set_once image_name "${1}" "docker image name"; shift;;
@@ -239,9 +273,11 @@ use only ${num_nodes}."
             exit 1
         fi
     fi
-    ducker_build "${image_name}"
 
     docker ps >/dev/null || die "ducker_up: failed to run docker.  Please check that the daemon is started."
+
+    ducker_build "${image_name}"
+
     docker inspect --format='{{.Config.Labels}}' --type=image "${image_name}" | grep -q 'ducker.type'
     local docker_status=${PIPESTATUS[0]}
     local grep_status=${PIPESTATUS[1]}
@@ -268,14 +304,12 @@ attempting to start new ones."
         must_do 1 0 docker network rm ducknet
     fi
     must_do 1 0 docker network create ducknet
+    if [[ -n "${custom_ducktape}" ]]; then
+        setup_custom_ducktape "${custom_ducktape}" "${image_name}"
+    fi
     for n in $(seq -f %02g 1 ${num_nodes}); do
         local node="ducker${n}"
-        # Invoke docker-run. Enable the NET_ADMIN and NET_RAW capabilities so that we can use
-        # iptables inside the container.
-        must_do 1 0 docker run --cap-add=NET_ADMIN --cap-add=NET_RAW \
-            -d -t --net=host -h "${node}" --network ducknet \
-            --memory=${docker_run_memory_limit} --memory-swappiness=1 \
-            -v "${kafka_dir}:/opt/kafka-dev" --name "${node}" -- "${image_name}"
+        docker_run "${node}" "${image_name}"
     done
     mkdir -p "${ducker_dir}/build"
     exec 3<> "${ducker_dir}/build/node_hosts"
