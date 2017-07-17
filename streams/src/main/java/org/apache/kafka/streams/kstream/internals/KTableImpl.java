@@ -225,56 +225,68 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
 
     @Override
     public void print() {
-        print(null, null, null);
+        print(null, null, this.name);
     }
 
     @Override
-    public void print(String streamName) {
-        print(null, null, streamName);
+    public void print(String label) {
+        print(null, null, label);
     }
 
     @Override
     public void print(Serde<K> keySerde, Serde<V> valSerde) {
-        print(keySerde, valSerde, null);
+        print(keySerde, valSerde, this.name);
     }
 
 
     @Override
-    public void print(Serde<K> keySerde, Serde<V> valSerde, String streamName) {
+    public void print(Serde<K> keySerde, final Serde<V> valSerde, String label) {
+        Objects.requireNonNull(label, "label can't be null");
         String name = topology.newName(PRINTING_NAME);
-        streamName = (streamName == null) ? this.name : streamName;
-        topology.addProcessor(name, new KStreamPrint<>(new PrintForeachAction(null, streamName), keySerde, valSerde), this.name);
+        KeyValueMapper<? super K, ? super V, String> mapper = new KeyValueMapper<K, V, String>() {
+            @Override
+            public String apply(K key, V value) {
+                return String.format("%s, %s", key, value);
+            }
+        };
+        topology.addProcessor(name, new KStreamPrint<>(new PrintForeachAction(null, mapper, label), keySerde, valSerde), this.name);
     }
 
     @Override
     public void writeAsText(String filePath) {
-        writeAsText(filePath, null, null, null);
+        writeAsText(filePath, this.name, null, null);
     }
 
     @Override
-    public void writeAsText(String filePath, String streamName) {
-        writeAsText(filePath, streamName, null, null);
+    public void writeAsText(String filePath, String label) {
+        writeAsText(filePath, label, null, null);
     }
 
     @Override
     public void writeAsText(String filePath, Serde<K> keySerde, Serde<V> valSerde) {
-        writeAsText(filePath, null, keySerde, valSerde);
+        writeAsText(filePath, this.name, keySerde, valSerde);
     }
 
     /**
      * @throws TopologyBuilderException if file is not found
      */
     @Override
-    public void writeAsText(String filePath, String streamName, Serde<K> keySerde, Serde<V> valSerde) {
+    public void writeAsText(String filePath, String label, Serde<K> keySerde, Serde<V> valSerde) {
         Objects.requireNonNull(filePath, "filePath can't be null");
+        Objects.requireNonNull(label, "label can't be null");
         if (filePath.trim().isEmpty()) {
             throw new TopologyBuilderException("filePath can't be an empty string");
         }
         String name = topology.newName(PRINTING_NAME);
-        streamName = (streamName == null) ? this.name : streamName;
+        KeyValueMapper<? super K, ? super V, String> mapper = new KeyValueMapper<K, V, String>() {
+            @Override
+            public String apply(K key, V value) {
+                return String.format("%s, %s", key, value);
+            }
+        };
         try {
             PrintWriter printWriter = new PrintWriter(filePath, StandardCharsets.UTF_8.name());
-            topology.addProcessor(name, new KStreamPrint<>(new PrintForeachAction(printWriter, streamName), keySerde, valSerde), this.name);
+            topology.addProcessor(name, new KStreamPrint<>(new PrintForeachAction(printWriter, mapper, label), keySerde, valSerde), this.name);
         } catch (FileNotFoundException | UnsupportedEncodingException e) {
             String message = "Unable to write stream to file at [" + filePath + "] " + e.getMessage();
             throw new TopologyBuilderException(message);

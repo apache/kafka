@@ -287,9 +287,9 @@ public interface KStream<K, V> {
      * Implementors will need to override {@code toString()} for keys and values that are not of type {@link String},
      * {@link Integer} etc. to get meaningful information.
      *
-     * @param streamName the name used to label the key/value pairs printed to the console
+     * @param label the name used to label the key/value pairs printed to the console
      */
-    void print(final String streamName);
+    void print(final String label);
 
     /**
      * Print the records of this stream to {@code System.out}.
@@ -319,11 +319,11 @@ public interface KStream<K, V> {
      *
      * @param keySerde   key serde used to deserialize key if type is {@code byte[]},
      * @param valSerde   value serde used to deserialize value if type is {@code byte[]},
-     * @param streamName the name used to label the key/value pairs printed to the console
+     * @param label the name used to label the key/value pairs printed to the console
      */
     void print(final Serde<K> keySerde,
                final Serde<V> valSerde,
-               final String streamName);
+               final String label);
 
     /**
      * Print the customized output with {@code System.out}.
@@ -366,9 +366,9 @@ public interface KStream<K, V> {
      * The KeyValueMapper's mapped value type must be {@code String}.
      *
      * @param mapper a {@link KeyValueMapper} that computes output type {@code String}.
-     * @param streamName The given name which labels output will be printed.
+     * @param label The given name which labels output will be printed.
      */
-    void print(final KeyValueMapper<? super K, ? super V, String> mapper, final String streamName);
+    void print(final KeyValueMapper<? super K, ? super V, String> mapper, final String label);
 
     /**
      * Print the customized output with {@code System.out}.
@@ -387,6 +387,9 @@ public interface KStream<K, V> {
      * }</pre>
      * <p>
      * The provided KeyValueMapper's mapped value type must be {@code String}.
+     * <p>
+     * Implementors will need to override {@code toString()} for keys and values that are not of type {@link String},
+     * {@link Integer} etc. to get meaningful information.
      *
      * @param mapper a {@link KeyValueMapper} that computes output type {@code String}.
      * @param keySerde a {@link Serde<K>} used to deserialize key if type is {@code byte[]}.
@@ -411,13 +414,16 @@ public interface KStream<K, V> {
      * }</pre>
      * <p>
      * The provided KeyValueMapper's mapped value type must be {@code String}.
+     * <p>
+     * Implementors will need to override {@code toString()} for keys and values that are not of type {@link String},
+     * {@link Integer} etc. to get meaningful information.
      *
      * @param mapper a {@link KeyValueMapper} that computes output type {@code String}.
      * @param keySerde a {@link Serde<K>} used to deserialize key if type is {@code byte[]}.
      * @param valSerde a {@link Serde<V>} used to deserialize value if type is {@code byte[]}.
-     * @param streamName The given name which labels output will be printed.
+     * @param label The given name which labels output will be printed.
      */
-    void print(final KeyValueMapper<? super K, ? super V, String> mapper, final Serde<K> keySerde, final Serde<V> valSerde, final String streamName);
+    void print(final KeyValueMapper<? super K, ? super V, String> mapper, final Serde<K> keySerde, final Serde<V> valSerde, final String label);
 
     /**
      * Write the records of this stream to a file at the given path.
@@ -445,10 +451,10 @@ public interface KStream<K, V> {
      * {@link Integer} etc. to get meaningful information.
      *
      * @param filePath   name of the file to write to
-     * @param streamName the name used to label the key/value pairs written to the file
+     * @param label the name used to label the key/value pairs written to the file
      */
     void writeAsText(final String filePath,
-                     final String streamName);
+                     final String label);
 
     /**
      * Write the records of this stream to a file at the given path.
@@ -480,12 +486,12 @@ public interface KStream<K, V> {
      * {@link Integer} etc. to get meaningful information.
      *
      * @param filePath   name of the file to write to
-     * @param streamName the name used to label the key/value pairs written to the file
+     * @param label the name used to label the key/value pairs written to the file
      * @param keySerde   key serde used to deserialize key if type is {@code byte[]},
      * @param valSerde   value serde used deserialize value if type is {@code byte[]},
      */
     void writeAsText(final String filePath,
-                     final String streamName,
+                     final String label,
                      final Serde<K> keySerde,
                      final Serde<V> valSerde);
 
@@ -535,10 +541,10 @@ public interface KStream<K, V> {
      * The KeyValueMapper's mapped value type must be {@code String}.
      *
      * @param filePath path of the file to write to.
-     * @param streamName the name used to label records written to file.
+     * @param label the name used to label records written to file.
      * @param mapper a {@link KeyValueMapper} that computes output type {@code String}.
      */
-    void writeAsText(final String filePath, final String streamName, final KeyValueMapper<? super K, ? super V, String> mapper);
+    void writeAsText(final String filePath, final String label, final KeyValueMapper<? super K, ? super V, String> mapper);
 
     /**
      * Write the customised output to a given file path.
@@ -559,6 +565,9 @@ public interface KStream<K, V> {
      * }</pre>
      * <p>
      * The KeyValueMapper's mapped value type must be {@code String}.
+     * <p>
+     * Implementors will need to override {@code toString()} for keys and values that are not of type {@link String},
+     * {@link Integer} etc. to get meaningful information.
      *
      * @param filePath path of the file to write to.
      * @param keySerde key serde used to deserialize key if type is {@code byte[]}.
@@ -586,14 +595,17 @@ public interface KStream<K, V> {
      * }</pre>
      * <p>
      * The KeyValueMapper's mapped value type must be {@code String}.
+     * <p>
+     * Implementors will need to override {@code toString()} for keys and values that are not of type {@link String},
+     * {@link Integer} etc. to get meaningful information.
      *
      * @param filePath path of the file to write to.
-     * @param streamName the name used to label records written to file.
+     * @param label the name used to label records written to file.
      * @param keySerde key serde used to deserialize key if type is {@code byte[]}.
      * @param valSerde value serde used to deserialize value if type is {@code byte[]}.
      * @param mapper a {@link KeyValueMapper} that computes output type {@code String}.
      */
-    void writeAsText(final String filePath, final String streamName, final Serde<K> keySerde, final Serde<V> valSerde, final KeyValueMapper<? super K, ? super V, String> mapper);
+    void writeAsText(final String filePath, final String label, final Serde<K> keySerde, final Serde<V> valSerde, final KeyValueMapper<? super K, ? super V, String> mapper);
 
     /**
      * Perform an action on each record of {@code KStream}.

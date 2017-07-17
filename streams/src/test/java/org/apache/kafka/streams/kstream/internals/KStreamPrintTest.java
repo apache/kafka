@@ -64,7 +64,13 @@ public class KStreamPrintTest {
     
     @Test
     public void testPrintKeyValueWithName() {
-        final KStreamPrint<Integer, String> kStreamPrint = new KStreamPrint<>(new PrintForeachAction(printWriter, "test-stream"), intSerd, stringSerd);
+        KeyValueMapper<Integer, String, String> mapper = new KeyValueMapper<Integer, String, String>() {
+            @Override
+            public String apply(Integer key, String value) {
+                return String.format("%d, %s", key, value);
+            }
+        };
+        final KStreamPrint<Integer, String> kStreamPrint = new KStreamPrint<>(new PrintForeachAction<>(printWriter, mapper, "test-stream"), intSerd, stringSerd);
 
         final List<KeyValue<Integer, String>> inputRecords = Arrays.asList(
                 new KeyValue<>(0, "zero"),
@@ -90,14 +96,14 @@ public class KStreamPrintTest {
     }
 
     @Test
-    public void testPrintKeyValueMapperWithName() {
+    public void testPrintStreamWithProvidedKeyValueMapper() {
         final KeyValueMapper<Integer, String, String> mapper = new KeyValueMapper<Integer, String, String>() {
             @Override
             public String apply(Integer key, String value) {
                 return String.format("(%d, %s)", key, value);
             }
         };
-        final KStreamPrint<Integer, String> kStreamPrint = new KStreamPrint<>(new PrintForeachAction(printWriter, mapper, "test-stream"), intSerd, stringSerd);
+        final KStreamPrint<Integer, String> kStreamPrint = new KStreamPrint<>(new PrintForeachAction<>(printWriter, mapper, "test-stream"), intSerd, stringSerd);
 
         final List<KeyValue<Integer, String>> inputRecords = Arrays.asList(
                 new KeyValue<>(0, "zero"),
@@ -116,9 +122,9 @@ public class KStreamPrintTest {
             driver.process(topicName, record.key, record.value);
         }
         printWriter.flush();
-        final String[] flushOutDatas = new String(byteOutStream.toByteArray(), Charset.forName("UTF-8")).split("\\r*\\n");
-        for (int i = 0; i < flushOutDatas.length; i++) {
-            assertEquals(expectedResult[i], flushOutDatas[i]);
+        final String[] results = new String(byteOutStream.toByteArray(), Charset.forName("UTF-8")).split("\\r*\\n");
+        for (int i = 0; i < results.length; i++) {
+            assertEquals(expectedResult[i], results[i]);
         }
     }
 
