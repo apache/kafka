@@ -910,8 +910,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
    */
   @Test
   def testMultiConsumerStickyAssignment() {
-    //consumers.foreach(_.close())
-    //this.consumers.clear()
     this.consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "sticky-group")
     this.consumerConfig.setProperty(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, classOf[StickyAssignor].getName)
 
