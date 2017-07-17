@@ -40,7 +40,7 @@ of the <code><a href="https://github.com/apache/kafka/blob/{{dotVersion}}/stream
 final Serde&lt;String&gt; stringSerde = Serdes.String();
 final Serde&lt;Long&gt; longSerde = Serdes.Long();
 
-// Construct a `KStream` from the input topic ""streams-wordcount-input", where message values
+// Construct a `KStream` from the input topic "streams-wordcount-input", where message values
 // represent lines of text (for the sake of this example, we ignore whatever may be stored
 // in the message keys).
 KStream&lt;String, String&gt; textLines = builder.stream(stringSerde, stringSerde, "streams-wordcount-input");
