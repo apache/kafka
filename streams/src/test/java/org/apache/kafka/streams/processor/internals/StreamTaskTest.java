@@ -221,7 +221,7 @@ public class StreamTaskTest {
     public void testMetrics() throws Exception {
         final String name = task.id().toString();
         List<Map<String, String>> tags = new ArrayList<>();
-        tags.add(Collections.singletonMap("all", "all"));
+        tags.add(Collections.singletonMap("streams-task-id", "all"));
         tags.add(Collections.singletonMap("streams-task-id", name));
         final String operation = "commit";
 

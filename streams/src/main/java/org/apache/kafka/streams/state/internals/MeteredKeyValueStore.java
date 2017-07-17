@@ -116,15 +116,24 @@ public class MeteredKeyValueStore<K, V> extends WrappedStateStore.AbstractStateS
         this.context = context;
         this.root = root;
         this.metrics = (StreamsMetricsImpl) context.metrics();
-        this.putTime = this.metrics.addLatencyAndThroughputSensor(metricScope, name, "put", Sensor.RecordingLevel.DEBUG);
-        this.putIfAbsentTime = this.metrics.addLatencyAndThroughputSensor(metricScope, name, "put-if-absent", Sensor.RecordingLevel.DEBUG);
-        this.getTime = this.metrics.addLatencyAndThroughputSensor(metricScope, name, "get", Sensor.RecordingLevel.DEBUG);
-        this.deleteTime = this.metrics.addLatencyAndThroughputSensor(metricScope, name, "delete", Sensor.RecordingLevel.DEBUG);
-        this.putAllTime = this.metrics.addLatencyAndThroughputSensor(metricScope, name, "put-all", Sensor.RecordingLevel.DEBUG);
-        this.allTime = this.metrics.addLatencyAndThroughputSensor(metricScope, name, "all", Sensor.RecordingLevel.DEBUG);
-        this.rangeTime = this.metrics.addLatencyAndThroughputSensor(metricScope, name, "range", Sensor.RecordingLevel.DEBUG);
-        this.flushTime = this.metrics.addLatencyAndThroughputSensor(metricScope, name, "flush", Sensor.RecordingLevel.DEBUG);
-        this.restoreTime = this.metrics.addLatencyAndThroughputSensor(metricScope, name, "restore", Sensor.RecordingLevel.DEBUG);
+        this.putTime = this.metrics.addLatencyAndThroughputSensor(metricScope, null, "put",
+                Sensor.RecordingLevel.DEBUG, "store-name", name);
+        this.putIfAbsentTime = this.metrics.addLatencyAndThroughputSensor(metricScope, null, "put-if-absent",
+                Sensor.RecordingLevel.DEBUG, "store-name", name);
+        this.getTime = this.metrics.addLatencyAndThroughputSensor(metricScope, null, "get",
+                Sensor.RecordingLevel.DEBUG, "store-name", name);
+        this.deleteTime = this.metrics.addLatencyAndThroughputSensor(metricScope, null, "delete",
+                Sensor.RecordingLevel.DEBUG, "store-name", name);
+        this.putAllTime = this.metrics.addLatencyAndThroughputSensor(metricScope, null, "put-all",
+                Sensor.RecordingLevel.DEBUG, "store-name", name);
+        this.allTime = this.metrics.addLatencyAndThroughputSensor(metricScope, null, "all",
+                Sensor.RecordingLevel.DEBUG, "store-name", name);
+        this.rangeTime = this.metrics.addLatencyAndThroughputSensor(metricScope, null, "range",
+                Sensor.RecordingLevel.DEBUG, "store-name", name);
+        this.flushTime = this.metrics.addLatencyAndThroughputSensor(metricScope, null, "flush",
+                Sensor.RecordingLevel.DEBUG, "store-name", name);
+        this.restoreTime = this.metrics.addLatencyAndThroughputSensor(metricScope, null, "restore",
+                Sensor.RecordingLevel.DEBUG, "store-name", name);
 
         // register and possibly restore the state from the logs
         metrics.measureLatencyNs(time, initDelegate, this.restoreTime);

@@ -118,7 +118,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
 
         // first add the global operation metrics if not yet, with the global tags only
         Sensor parent = metrics.sensor(sensorName(operationName, null), recordingLevel);
-        addLatencyMetrics(scopeName, parent, null, operationName, tagMap("all", "all"));
+        addLatencyMetrics(scopeName, parent, null, operationName, tagMap(tags != null && tags.length > 1 ? tags[0] : "all", "all"));
 
         // add the operation metrics with additional tags
         Sensor sensor = metrics.sensor(sensorName(operationName, entityName), recordingLevel, parent);
@@ -138,7 +138,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
 
         // first add the global operation metrics if not yet, with the global tags only
         Sensor parent = metrics.sensor(sensorName(operationName, null), recordingLevel);
-        addThroughputMetrics(scopeName, parent, null, operationName, tagMap("all", "all"));
+        addThroughputMetrics(scopeName, parent, null, operationName, tagMap(tags != null && tags.length > 1 ? tags[0] : "all", "all"));
 
         // add the operation metrics with additional tags
         Sensor sensor = metrics.sensor(sensorName(operationName, entityName), recordingLevel, parent);

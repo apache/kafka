@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.metrics.MeasurableStat;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Max;
@@ -360,6 +362,13 @@ class NamedCache {
         final Map<String, String> metricTags;
         final Sensor hitRatioSensor;
 
+        private void maybeAddMetric(Sensor sensor, MetricName name, MeasurableStat stat) {
+            if (!metrics.metrics().containsKey(name)) {
+                sensor.add(name, stat);
+            } else {
+                log.trace("Trying to add metric twice: {}", name);
+            }
+        }
 
         public NamedCacheMetrics(StreamsMetrics metrics) {
             final String scope = "record-cache";
@@ -369,15 +378,26 @@ class NamedCache {
             this.groupName = "stream-" + scope + "-metrics";
             this.metrics = (StreamsMetricsImpl) metrics;
             this.metricTags = new LinkedHashMap<>();
+
+
+            // add parent
+            this.metricTags.put(tagKey, "all");
+            Sensor parent = this.metrics.registry().sensor(opName, Sensor.RecordingLevel.DEBUG);
+            maybeAddMetric(parent, this.metrics.registry().metricName(opName + "-avg", groupName,
+                    "The average cache hit ratio of " + name, metricTags), new Avg());
+            maybeAddMetric(parent, this.metrics.registry().metricName(opName + "-min", groupName,
+                    "The minimum cache hit ratio of " + name, metricTags), new Min());
+            maybeAddMetric(parent, this.metrics.registry().metricName(opName + "-max", groupName,
+                    "The maximum cache hit ratio of " + name, metricTags), new Max());
+
+            // add child
             this.metricTags.put(tagKey, tagValue);
-
-            hitRatioSensor = this.metrics.registry().sensor(opName, Sensor.RecordingLevel.DEBUG);
-
-            hitRatioSensor.add(this.metrics.registry().metricName(opName + "-avg", groupName,
+            hitRatioSensor = this.metrics.registry().sensor(opName, Sensor.RecordingLevel.DEBUG, parent);
+            maybeAddMetric(hitRatioSensor, this.metrics.registry().metricName(opName + "-avg", groupName,
                 "The average cache hit ratio of " + name, metricTags), new Avg());
-            hitRatioSensor.add(this.metrics.registry().metricName(opName + "-min", groupName,
+            maybeAddMetric(hitRatioSensor, this.metrics.registry().metricName(opName + "-min", groupName,
                 "The minimum cache hit ratio of " + name, metricTags), new Min());
-            hitRatioSensor.add(this.metrics.registry().metricName(opName + "-max", groupName,
+            maybeAddMetric(hitRatioSensor, this.metrics.registry().metricName(opName + "-max", groupName,
                 "The maximum cache hit ratio of " + name, metricTags), new Max());
 
         }

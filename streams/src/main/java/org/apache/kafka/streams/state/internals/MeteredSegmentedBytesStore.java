@@ -52,13 +52,19 @@ class MeteredSegmentedBytesStore extends WrappedStateStore.AbstractStateStore im
     public void init(ProcessorContext context, StateStore root) {
         final String name = name();
         this.metrics = context.metrics();
-        this.putTime = this.metrics.addLatencyAndThroughputSensor(metricScope, name, "put", Sensor.RecordingLevel.DEBUG);
-        this.fetchTime = this.metrics.addLatencyAndThroughputSensor(metricScope, name, "fetch", Sensor.RecordingLevel.DEBUG);
-        this.flushTime = this.metrics.addLatencyAndThroughputSensor(metricScope, name, "flush", Sensor.RecordingLevel.DEBUG);
-        this.getTime = this.metrics.addLatencyAndThroughputSensor(metricScope, name, "get", Sensor.RecordingLevel.DEBUG);
-        this.removeTime = this.metrics.addLatencyAndThroughputSensor(metricScope, name, "remove", Sensor.RecordingLevel.DEBUG);
+        this.putTime = this.metrics.addLatencyAndThroughputSensor(metricScope, null, "put",
+                Sensor.RecordingLevel.DEBUG, "segmented-store-name", name);
+        this.fetchTime = this.metrics.addLatencyAndThroughputSensor(metricScope, null, "fetch",
+                Sensor.RecordingLevel.DEBUG, "segmented-store-name", name);
+        this.flushTime = this.metrics.addLatencyAndThroughputSensor(metricScope, null, "flush",
+                Sensor.RecordingLevel.DEBUG, "segmented-store-name", name);
+        this.getTime = this.metrics.addLatencyAndThroughputSensor(metricScope, null, "get",
+                Sensor.RecordingLevel.DEBUG, "segmented-store-name", name);
+        this.removeTime = this.metrics.addLatencyAndThroughputSensor(metricScope, null, "remove",
+                Sensor.RecordingLevel.DEBUG, "segmented-store-name", name);
 
-        final Sensor restoreTime = this.metrics.addLatencyAndThroughputSensor(metricScope, name, "restore", Sensor.RecordingLevel.DEBUG);
+        final Sensor restoreTime = this.metrics.addLatencyAndThroughputSensor(metricScope, name, "restore",
+                Sensor.RecordingLevel.DEBUG, "segmented-store-name", name);
         // register and possibly restore the state from the logs
         final long startNs = time.nanoseconds();
         try {

@@ -106,7 +106,7 @@ public class ProcessorNodeTest {
         String throughputOperation =  "forward";
         String groupName = "stream-processor-node-metrics";
         List<Map<String, String>> tags = new ArrayList<>();
-        tags.add(Collections.singletonMap("all", "all"));
+        tags.add(Collections.singletonMap("processor-node-id", "all"));
         tags.add(Collections.singletonMap("processor-node-id", node.name()));
 
 
@@ -117,7 +117,7 @@ public class ProcessorNodeTest {
 
         for (Map<String, String> tag : tags) {
             for (String operation : latencyOperations) {
-                final String tmpName = tag.containsKey("all") ? operation :
+                final String tmpName = tag.containsValue("all") ? operation :
                         name + "-" + operation;
                 assertNotNull(metrics.metrics().get(metrics.metricName(tmpName + "-latency-avg", groupName,
                     "The average latency of " + tmpName + " operation.", tag)));
@@ -127,7 +127,7 @@ public class ProcessorNodeTest {
                     "The average number of occurrence of " + operation + " operation per second.", tag)));
             }
 
-            final String tmpName = tag.containsKey("all") ? throughputOperation :
+            final String tmpName = tag.containsValue("all") ? throughputOperation :
                     name + "-" + throughputOperation;
             assertNotNull(metrics.metrics().get(metrics.metricName(tmpName + "-rate", groupName,
                 "The average number of occurrence of " + tmpName + " operation per second.", tag)));
