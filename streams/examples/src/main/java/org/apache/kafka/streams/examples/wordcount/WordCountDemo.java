@@ -62,7 +62,7 @@ public class WordCountDemo {
 
         KStreamBuilder builder = new KStreamBuilder();
 
-        KStream<String, String> source = builder.stream("streams-file-input");
+        KStream<String, String> source = builder.stream("streams-wordcount-input");
 
         KTable<String, Long> counts = source
                 .flatMapValues(new ValueMapper<String, Iterable<String>>() {
