@@ -482,16 +482,17 @@ private[kafka] class Processor(val id: Int,
 
   /* `protected` for test usage */
   protected[network] def sendResponse(response: RequestChannel.Response, responseSend: Send) {
-    trace(s"Socket server received response to send, registering for write and sending data: $response")
-    val channel = selector.channel(responseSend.destination)
+    val connectionId = response.request.connectionId
+    trace(s"Socket server received response to send to $connectionId, registering for write and sending data: $response")
+    val channel = selector.channel(connectionId)
     // `channel` can be null if the selector closed the connection because it was idle for too long
     if (channel == null) {
-      warn(s"Attempting to send response via channel for which there is no open connection, connection id $id")
+      warn(s"Attempting to send response via channel for which there is no open connection, connection id $connectionId")
       response.request.updateRequestMetrics(0L)
     }
     else {
       selector.send(responseSend)
-      inflightResponses += (response.request.connectionId -> response)
+      inflightResponses += (connectionId -> response)
     }
   }
 
