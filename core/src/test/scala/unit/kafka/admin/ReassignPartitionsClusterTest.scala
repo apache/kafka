@@ -30,7 +30,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
   var servers: Seq[KafkaServer] = null
   val topicName = "my-topic"
   val delayMs = 1000
-  def zkUpdateDelay = {Thread.sleep(delayMs)}
+  def zkUpdateDelay(): Unit = Thread.sleep(delayMs)
 
   @Before
   override def setUp() {
@@ -49,7 +49,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
   }
 
   @Test
-  def shouldMoveSinglePartition {
+  def shouldMoveSinglePartition(): Unit = {
     //Given a single replica on server 100
     startBrokers(Seq(100, 101))
     val partition = 0

@@ -17,6 +17,7 @@
 package org.apache.kafka.streams;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.serialization.Deserializer;
@@ -25,6 +26,8 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
+import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.hamcrest.CoreMatchers;
 import org.junit.Before;
 import org.junit.Test;
@@ -41,6 +44,7 @@ import static org.apache.kafka.common.requests.IsolationLevel.READ_UNCOMMITTED;
 import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE;
 import static org.apache.kafka.streams.StreamsConfig.consumerPrefix;
 import static org.apache.kafka.streams.StreamsConfig.producerPrefix;
+import static org.apache.kafka.test.StreamsTestUtils.minimalStreamsConfig;
 import static org.hamcrest.core.IsEqual.equalTo;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
@@ -390,6 +394,40 @@ public class StreamsConfigTest {
         assertThat(streamsConfig.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG), equalTo(commitIntervalMs));
     }
 
+    @Test
+    public void shouldBeBackwardsCompatibleWithDeprecatedConfigs() {
+        final Properties props = minimalStreamsConfig();
+        props.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG, Serdes.Double().getClass());
+        props.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, Serdes.Double().getClass());
+        props.put(StreamsConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, MockTimestampExtractor.class);
+
+        final StreamsConfig config = new StreamsConfig(props);
+        assertTrue(config.defaultKeySerde() instanceof Serdes.DoubleSerde);
+        assertTrue(config.defaultValueSerde() instanceof Serdes.DoubleSerde);
+        assertTrue(config.defaultTimestampExtractor() instanceof MockTimestampExtractor);
+    }
+
+    @Test
+    public void shouldUseNewConfigsWhenPresent() {
+        final Properties props = minimalStreamsConfig();
+        props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Long().getClass());
+        props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Long().getClass());
+        props.put(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, MockTimestampExtractor.class);
+
+        final StreamsConfig config = new StreamsConfig(props);
+        assertTrue(config.defaultKeySerde() instanceof Serdes.LongSerde);
+        assertTrue(config.defaultValueSerde() instanceof Serdes.LongSerde);
+        assertTrue(config.defaultTimestampExtractor() instanceof MockTimestampExtractor);
+    }
+
+    @Test
+    public void shouldUseCorrectDefaultsWhenNoneSpecified() {
+        final StreamsConfig config = new StreamsConfig(minimalStreamsConfig());
+        assertTrue(config.defaultKeySerde() instanceof Serdes.ByteArraySerde);
+        assertTrue(config.defaultValueSerde() instanceof Serdes.ByteArraySerde);
+        assertTrue(config.defaultTimestampExtractor() instanceof FailOnInvalidTimestamp);
+    }
+
     static class MisconfiguredSerde implements Serde {
         @Override
         public void configure(final Map configs, final boolean isKey) {
@@ -409,6 +447,14 @@ public class StreamsConfigTest {
         @Override
         public Deserializer deserializer() {
             return null;
+        }
+    }
+
+    public static class MockTimestampExtractor implements TimestampExtractor {
+
+        @Override
+        public long extract(final ConsumerRecord<Object, Object> record, final long previousTimestamp) {
+            return 0;
         }
     }
 }

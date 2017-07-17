@@ -168,6 +168,7 @@ public class ProcessorNode<K, V> {
         final Sensor nodeProcessTimeSensor;
         final Sensor nodePunctuateTimeSensor;
         final Sensor sourceNodeForwardSensor;
+        final Sensor sourceNodeSkippedDueToDeserializationError;
         final Sensor nodeCreationSensor;
         final Sensor nodeDestructionSensor;
 
@@ -186,6 +187,7 @@ public class ProcessorNode<K, V> {
             this.nodeCreationSensor = metrics.addLatencyAndThroughputSensor(scope, sensorNamePrefix + "." + name, "create", Sensor.RecordingLevel.DEBUG, tagKey, tagValue);
             this.nodeDestructionSensor = metrics.addLatencyAndThroughputSensor(scope, sensorNamePrefix + "." + name, "destroy", Sensor.RecordingLevel.DEBUG, tagKey, tagValue);
             this.sourceNodeForwardSensor = metrics.addThroughputSensor(scope, sensorNamePrefix + "." + name, "forward", Sensor.RecordingLevel.DEBUG, tagKey, tagValue);
+            this.sourceNodeSkippedDueToDeserializationError = metrics.addThroughputSensor(scope, sensorNamePrefix + "." + name, "skippedDueToDeserializationError", Sensor.RecordingLevel.DEBUG, tagKey, tagValue);
         }
 
         public void removeAllSensors() {
@@ -194,6 +196,7 @@ public class ProcessorNode<K, V> {
             metrics.removeSensor(sourceNodeForwardSensor);
             metrics.removeSensor(nodeCreationSensor);
             metrics.removeSensor(nodeDestructionSensor);
+            metrics.removeSensor(sourceNodeSkippedDueToDeserializationError);
         }
     }
 }

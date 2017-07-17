@@ -28,8 +28,6 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.clients.CommonClientConfigs
 import joptsimple._
 
-import scala.util.{Failure, Success}
-
 /**
  * A command for delete records of the given partitions down to the specified offset.
  */

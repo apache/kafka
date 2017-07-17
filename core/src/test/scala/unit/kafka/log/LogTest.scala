@@ -199,6 +199,19 @@ class LogTest {
   }
 
   @Test
+  def testSizeForLargeLogs(): Unit = {
+    val largeSize = Int.MaxValue.toLong * 2
+    val logSegment = EasyMock.createMock(classOf[LogSegment])
+
+    EasyMock.expect(logSegment.size).andReturn(Int.MaxValue).anyTimes
+    EasyMock.replay(logSegment)
+
+    assertEquals(Int.MaxValue, Log.sizeInBytes(Seq(logSegment)))
+    assertEquals(largeSize, Log.sizeInBytes(Seq(logSegment, logSegment)))
+    assertTrue(Log.sizeInBytes(Seq(logSegment, logSegment)) > Int.MaxValue)
+  }
+
+  @Test
   def testPidMapOffsetUpdatedForNonIdempotentData() {
     val log = createLog(2048)
     val records = TestUtils.records(List(new SimpleRecord(time.milliseconds, "key".getBytes, "value".getBytes)))

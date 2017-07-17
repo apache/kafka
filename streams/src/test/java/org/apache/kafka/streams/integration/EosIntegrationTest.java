@@ -193,7 +193,7 @@ public class EosIntegrationTest {
                                 put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT));
                             }
                         }),
-                    inputTopic,
+                    outputTopic,
                     inputData.size()
                 );
 

@@ -263,7 +263,7 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
   /**
     * Simulates how the Replica Fetcher Thread requests leader offsets for epochs
     */
-  private class TestFetcherThread(sender: BlockingSend) extends Logging {
+  private[epoch] class TestFetcherThread(sender: BlockingSend) extends Logging {
 
     def leaderOffsetsFor(partitions: Map[TopicPartition, Int]): Map[TopicPartition, EpochEndOffset] = {
       val request = new OffsetsForLeaderEpochRequest.Builder(toJavaFormat(partitions))
