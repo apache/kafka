@@ -199,7 +199,8 @@ class GroupMetadataManager(brokerId: Int,
                    | Errors.NOT_ENOUGH_REPLICAS_AFTER_APPEND =>
                 Errors.COORDINATOR_NOT_AVAILABLE
 
-              case Errors.NOT_LEADER_FOR_PARTITION =>
+              case Errors.NOT_LEADER_FOR_PARTITION
+                   | Errors.KAFKA_STORAGE_ERROR =>
                 Errors.NOT_COORDINATOR
 
               case Errors.REQUEST_TIMED_OUT =>
@@ -342,7 +343,8 @@ class GroupMetadataManager(brokerId: Int,
                        | Errors.NOT_ENOUGH_REPLICAS_AFTER_APPEND =>
                     Errors.COORDINATOR_NOT_AVAILABLE
 
-                  case Errors.NOT_LEADER_FOR_PARTITION =>
+                  case Errors.NOT_LEADER_FOR_PARTITION
+                       | Errors.KAFKA_STORAGE_ERROR =>
                     Errors.NOT_COORDINATOR
 
                   case Errors.MESSAGE_TOO_LARGE
@@ -455,10 +457,6 @@ class GroupMetadataManager(brokerId: Int,
         loadGroupsAndOffsets(topicPartition, onGroupLoaded)
         info(s"Finished loading offsets and group metadata from $topicPartition in ${time.milliseconds() - startMs} milliseconds.")
       } catch {
-        case e: IOException =>
-          val dirOpt = replicaManager.getLogDir(topicPartition)
-          error(s"Error loading offsets from $topicPartition in dir $dirOpt", e)
-          dirOpt.foreach(replicaManager.maybeAddLogFailureEvent)
         case t: Throwable => error(s"Error loading offsets from $topicPartition", t)
       } finally {
         inLock(partitionLock) {

@@ -54,7 +54,7 @@ trait OffsetCheckpoint {
   */
 class OffsetCheckpointFile(val f: File, logDirFailureChannel: LogDirFailureChannel = null) {
   val checkpoint = new CheckpointFile[(TopicPartition, Long)](f, OffsetCheckpointFile.CurrentVersion,
-    OffsetCheckpointFile.Formatter, logDirFailureChannel)
+    OffsetCheckpointFile.Formatter, logDirFailureChannel, f.getParent)
 
   def write(offsets: Map[TopicPartition, Long]): Unit = checkpoint.write(offsets.toSeq)
 

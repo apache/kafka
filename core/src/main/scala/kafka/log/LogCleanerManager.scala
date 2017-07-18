@@ -17,7 +17,7 @@
 
 package kafka.log
 
-import java.io.{File, IOException}
+import java.io.File
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.ReentrantLock
 
@@ -87,9 +87,8 @@ private[log] class LogCleanerManager(val logDirs: Array[File],
         try {
           checkpoint.read()
         } catch {
-          case e: IOException =>
+          case e: KafkaStorageException =>
             error(s"Failed to access checkpoint file ${checkpoint.f.getName} in dir ${checkpoint.f.getParentFile.getAbsolutePath}", e)
-            logDirFailureChannel.maybeAddLogFailureEvent(checkpoint.f.getParentFile.getAbsolutePath)
             Map.empty[TopicPartition, Long]
         }
       }).toMap
@@ -239,9 +238,8 @@ private[log] class LogCleanerManager(val logDirs: Array[File],
           val existing = checkpoint.read().filterKeys(logs.keys) ++ update
           checkpoint.write(existing)
         } catch {
-          case e: IOException =>
+          case e: KafkaStorageException =>
             error(s"Failed to access checkpoint file ${checkpoint.f.getName} in dir ${checkpoint.f.getParentFile.getAbsolutePath}", e)
-            logDirFailureChannel.maybeAddLogFailureEvent(checkpoint.f.getParentFile.getAbsolutePath)
         }
       }
     }
@@ -258,17 +256,10 @@ private[log] class LogCleanerManager(val logDirs: Array[File],
     inLock(lock) {
       if (logs.get(topicPartition).config.compact) {
         val checkpoint = checkpoints(dataDir)
-
         if (checkpoint != null) {
-          try {
-            val existing = checkpoint.read()
-            if (existing.getOrElse(topicPartition, 0L) > offset)
-              checkpoint.write(existing + (topicPartition -> offset))
-          } catch {
-            case e: IOException =>
-              logDirFailureChannel.maybeAddLogFailureEvent(checkpoint.f.getParentFile.getAbsolutePath)
-              throw new KafkaStorageException(s"Failed to access checkpoint file ${checkpoint.f.getName} in dir ${checkpoint.f.getParentFile.getAbsolutePath}", e)
-          }
+          val existing = checkpoint.read()
+          if (existing.getOrElse(topicPartition, 0L) > offset)
+            checkpoint.write(existing + (topicPartition -> offset))
         }
       }
     }

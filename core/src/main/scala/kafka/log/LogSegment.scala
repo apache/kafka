@@ -56,7 +56,7 @@ class LogSegment(val log: FileRecords,
                  val indexIntervalBytes: Int,
                  val rollJitterMs: Long,
                  time: Time,
-                 val logDirFailureChannel: LogDirFailureChannel) extends Logging {
+                 logDirFailureChannel: LogDirFailureChannel) extends Logging {
 
   private var created = time.milliseconds
 

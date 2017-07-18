@@ -70,7 +70,7 @@ object ApiVersion {
     // Introduced leader epoch fetches to the replica fetcher via KIP-101
     "0.11.0-IV2" -> KAFKA_0_11_0_IV2,
     "0.11.0" -> KAFKA_0_11_0_IV2,
-    // Introduced LeaderAndIsrRequest V1, UpdateMetadataRequest V4 via KIP-112
+    // Introduced LeaderAndIsrRequest V1, UpdateMetadataRequest V4 and FetchRequest V6 via KIP-112
     "0.11.1-IV0" -> KAFKA_0_11_1_IV0,
     "0.11.1" -> KAFKA_0_11_1_IV0
   )

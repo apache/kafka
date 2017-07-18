@@ -46,14 +46,14 @@ class Partition(val topic: String,
                 val partitionId: Int,
                 time: Time,
                 replicaManager: ReplicaManager,
-                isOffline: Boolean = false) extends Logging with KafkaMetricsGroup {
+                val isOffline: Boolean = false) extends Logging with KafkaMetricsGroup {
 
   val topicPartition = new TopicPartition(topic, partitionId)
 
   // Do not use replicaManager if this partition is ReplicaManager.OfflinePartition
   private val localBrokerId = if (!isOffline) replicaManager.config.brokerId else -1
-  private val logManager = if (replicaManager != null) replicaManager.logManager else null
-  private val zkUtils = if (replicaManager != null) replicaManager.zkUtils else null
+  private val logManager = if (!isOffline) replicaManager.logManager else null
+  private val zkUtils = if (!isOffline) replicaManager.zkUtils else null
   private val assignedReplicaMap = new Pool[Int, Replica]
   // The read lock is only required when multiple reads are executed and needs to be in a consistent manner
   private val leaderIsrUpdateLock = new ReentrantReadWriteLock
@@ -565,12 +565,12 @@ class Partition(val topic: String,
   }
 
   override def equals(that: Any): Boolean = that match {
-    case other: Partition => partitionId == other.partitionId && topic == other.topic
+    case other: Partition => partitionId == other.partitionId && topic == other.topic && isOffline == other.isOffline
     case _ => false
   }
 
   override def hashCode: Int =
-    31 + topic.hashCode + 17 * partitionId
+    31 + topic.hashCode + 17 * partitionId + (if (isOffline) 1 else 0)
 
   override def toString: String = {
     val partitionString = new StringBuilder

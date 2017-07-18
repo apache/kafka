@@ -70,7 +70,6 @@ import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.errors.TransactionalIdAuthorizationException;
 import org.apache.kafka.common.errors.TransactionCoordinatorFencedException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
-import org.apache.kafka.common.errors.UnknownErrorCodeException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.UnsupportedForMessageFormatException;
@@ -504,15 +503,8 @@ public enum Errors {
             public ApiException build(String message) {
                 return new KafkaStorageException(message);
             }
-    }),
-    UNKNOWN_ERROR_CODE(57, "The client received an unknown error code when processing the response. This may happen if " +
-            "the client library version is lower than the server library version",
-        new ApiExceptionBuilder() {
-        @Override
-        public ApiException build(String message) {
-            return new UnknownErrorCodeException(message);
-        }
     });
+
     private interface ApiExceptionBuilder {
         ApiException build(String message);
     }
@@ -603,8 +595,8 @@ public enum Errors {
         if (error != null) {
             return error;
         } else {
-            log.warn("Unknown error code: {}.", code);
-            return UNKNOWN_ERROR_CODE;
+            log.warn("Unexpected error code: {}.", code);
+            return UNKNOWN_SERVER_ERROR;
         }
     }
 

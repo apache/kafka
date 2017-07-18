@@ -154,12 +154,6 @@ class LogManager(private val logDirs: Array[File],
   }
 
   def handleLogDirFailure(dir: String) {
-    if (!logDirs.exists(_.getAbsolutePath == dir))
-      throw new RuntimeException(s"Log dir $dir is not found in the config.")
-
-    if (!_liveLogDirs.contains(new File(dir)))
-      return
-
     info(s"Stopping serving logs in dir $dir")
     logCreationOrDeletionLock synchronized {
       _liveLogDirs.remove(new File(dir))
@@ -173,7 +167,7 @@ class LogManager(private val logDirs: Array[File],
       if (cleaner != null)
         cleaner.handleLogDirFailure(dir)
 
-      val offlineTopicPartitions = logs.filter { case (tp, log) => log.dir.getParent == dir}.map { case (tp, log) => tp}
+      val offlineTopicPartitions = logs.filter { case (tp, log) => log.dir.getParent == dir}.map { case (tp, log) => tp }
 
       offlineTopicPartitions.foreach(topicPartition => {
         val removedLog = logs.remove(topicPartition)
@@ -194,7 +188,7 @@ class LogManager(private val logDirs: Array[File],
     dirs.map { dir =>
       val lock = new FileLock(new File(dir, LockFile))
       if(!lock.tryLock())
-        throw new KafkaException("Failed to acquire lock on file .lock in " + lock.file.getParentFile.getAbsolutePath +
+        throw new KafkaException("Failed to acquire lock on file .lock in " + lock.file.getParent +
                                ". A Kafka instance in another process or thread is using this directory.")
       lock
     }
@@ -298,7 +292,13 @@ class LogManager(private val logDirs: Array[File],
     try {
       for ((cleanShutdownFile, dirJobs) <- jobs) {
         dirJobs.foreach(_.get)
-        cleanShutdownFile.delete()
+        try {
+          cleanShutdownFile.delete()
+        } catch {
+          case e: IOException =>
+            offlineDirs.append(cleanShutdownFile.getParent)
+            error(s"Error while deleting the clean shutdown file $cleanShutdownFile", e)
+        }
       }
       offlineDirs.foreach(logDirFailureChannel.maybeAddLogFailureEvent)
     } catch {
@@ -513,7 +513,7 @@ class LogManager(private val logDirs: Array[File],
    * Checkpoint log start offset for all logs in provided directory.
    */
   private def checkpointLogStartOffsetsInDir(dir: File): Unit = {
-    val logs = this.logsByDir.get(dir.toString)
+    val logs = this.logsByDir.get(dir.getAbsolutePath)
     if (logs.isDefined) {
       try {
         this.logStartOffsetCheckpoints.get(dir).foreach(_.write(
@@ -548,26 +548,32 @@ class LogManager(private val logDirs: Array[File],
           throw new KafkaStorageException(s"Can not create log for $topicPartition because log directories ${offlineLogDirs.mkString(",")} are offline")
 
         val dataDir = nextLogDir()
-        val dir = new File(dataDir, topicPartition.topic + "-" + topicPartition.partition)
-        Files.createDirectories(dir.toPath)
+        try {
+          val dir = new File(dataDir, topicPartition.topic + "-" + topicPartition.partition)
+          Files.createDirectories(dir.toPath)
 
-        val log = Log(
-          dir = dir,
-          config = config,
-          logStartOffset = 0L,
-          recoveryPoint = 0L,
-          maxProducerIdExpirationMs = maxPidExpirationMs,
-          scheduler = scheduler,
-          time = time,
-          brokerTopicStats = brokerTopicStats)
-        logs.put(topicPartition, log)
+          val log = Log(
+            dir = dir,
+            config = config,
+            logStartOffset = 0L,
+            recoveryPoint = 0L,
+            maxProducerIdExpirationMs = maxPidExpirationMs,
+            scheduler = scheduler,
+            time = time,
+            brokerTopicStats = brokerTopicStats)
+          logs.put(topicPartition, log)
 
-        info("Created log for partition [%s,%d] in %s with properties {%s}."
-          .format(topicPartition.topic,
-            topicPartition.partition,
-            dataDir.getAbsolutePath,
-            config.originals.asScala.mkString(", ")))
-        log
+          info("Created log for partition [%s,%d] in %s with properties {%s}."
+            .format(topicPartition.topic,
+              topicPartition.partition,
+              dataDir.getAbsolutePath,
+              config.originals.asScala.mkString(", ")))
+          log
+        } catch {
+          case e: IOException =>
+            logDirFailureChannel.maybeAddLogFailureEvent(dataDir.getAbsolutePath)
+            throw new KafkaStorageException(s"Error while creating log for $topicPartition in dir ${dataDir.getAbsolutePath}", e)
+        }
       }
     }
   }
@@ -586,7 +592,7 @@ class LogManager(private val logDirs: Array[File],
           } catch {
             case e: IOException =>
               error(s"Exception while deleting $removedLog in dir ${removedLog.dir.getParent}.", e)
-              logDirFailureChannel.maybeAddLogFailureEvent(removedLog.dir.getParentFile.getAbsolutePath)
+              logDirFailureChannel.maybeAddLogFailureEvent(removedLog.dir.getParent)
           }
         }
       }
@@ -606,33 +612,38 @@ class LogManager(private val logDirs: Array[File],
       logs.remove(topicPartition)
     }
     if (removedLog != null) {
-      //We need to wait until there is no more cleaning task on the log to be deleted before actually deleting it.
-      if (cleaner != null) {
-        cleaner.abortCleaning(topicPartition)
-        cleaner.updateCheckpoints(removedLog.dir.getParentFile)
-      }
-      val dirName = Log.logDeleteDirName(removedLog.name)
-      removedLog.close()
-      val renamedDir = new File(removedLog.dir.getParent, dirName)
-      val renameSuccessful = removedLog.dir.renameTo(renamedDir)
-      if (renameSuccessful) {
-        checkpointLogStartOffsetsInDir(removedLog.dir.getParentFile)
-        removedLog.dir = renamedDir
-        // change the file pointers for log and index file
-        for (logSegment <- removedLog.logSegments) {
-          logSegment.log.setFile(new File(renamedDir, logSegment.log.file.getName))
-          logSegment.index.file = new File(renamedDir, logSegment.index.file.getName)
+      try {
+        //We need to wait until there is no more cleaning task on the log to be deleted before actually deleting it.
+        if (cleaner != null) {
+          cleaner.abortCleaning(topicPartition)
+          cleaner.updateCheckpoints(removedLog.dir.getParentFile)
         }
+        val dirName = Log.logDeleteDirName(removedLog.name)
+        removedLog.close()
+        val renamedDir = new File(removedLog.dir.getParent, dirName)
+        val renameSuccessful = removedLog.dir.renameTo(renamedDir)
+        if (renameSuccessful) {
+          checkpointLogStartOffsetsInDir(removedLog.dir.getParentFile)
+          removedLog.dir = renamedDir
+          // change the file pointers for log and index file
+          for (logSegment <- removedLog.logSegments) {
+            logSegment.log.setFile(new File(renamedDir, logSegment.log.file.getName))
+            logSegment.index.file = new File(renamedDir, logSegment.index.file.getName)
+          }
 
-        logsToBeDeleted.add(removedLog)
-        removedLog.removeLogMetrics()
-        info(s"Log for partition ${removedLog.topicPartition} is renamed to ${removedLog.dir.getAbsolutePath} and is scheduled for deletion")
-      } else {
-        logDirFailureChannel.maybeAddLogFailureEvent(removedLog.dir.getParent)
-        throw new KafkaStorageException("Failed to rename log directory from " + removedLog.dir.getAbsolutePath + " to " + renamedDir.getAbsolutePath)
+          logsToBeDeleted.add(removedLog)
+          removedLog.removeLogMetrics()
+          info(s"Log for partition ${removedLog.topicPartition} is renamed to ${removedLog.dir.getAbsolutePath} and is scheduled for deletion")
+        } else {
+          throw new IOException("Failed to rename log directory from " + removedLog.dir.getAbsolutePath + " to " + renamedDir.getAbsolutePath)
+        }
+      } catch {
+        case e: IOException =>
+          logDirFailureChannel.maybeAddLogFailureEvent(removedLog.dir.getParent)
+          throw new KafkaStorageException(s"Error while deleting $topicPartition in dir ${removedLog.dir.getParent}.", e)
       }
     } else if (offlineLogDirs.nonEmpty) {
-      throw new KafkaStorageException("Can not delete log for " + topicPartition + " because it may be on offline directories " + offlineLogDirs.mkString(","))
+      throw new KafkaStorageException("Failed to delete log for " + topicPartition + " because it may be in one of the offline directories " + offlineLogDirs.mkString(","))
     }
   }
 
@@ -692,6 +703,9 @@ class LogManager(private val logDirs: Array[File],
   }
 
   def isLogDirOnline(logDir: String): Boolean = {
+    if (!logDirs.exists(_.getAbsolutePath == logDir))
+      throw new RuntimeException(s"Log dir $logDir is not found in the config.")
+
     _liveLogDirs.contains(new File(logDir))
   }
 

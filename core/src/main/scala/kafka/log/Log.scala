@@ -137,7 +137,7 @@ class Log(@volatile var dir: File,
           val producerIdExpirationCheckIntervalMs: Int,
           val topicPartition: TopicPartition,
           val producerStateManager: ProducerStateManager,
-          val logDirFailureChannel: LogDirFailureChannel) extends Logging with KafkaMetricsGroup {
+          logDirFailureChannel: LogDirFailureChannel) extends Logging with KafkaMetricsGroup {
 
   import kafka.log.Log._
 
@@ -712,7 +712,7 @@ class Log(@volatile var dir: File,
     } catch {
       case e: IOException =>
         logDirFailureChannel.maybeAddLogFailureEvent(dir.getParent)
-        throw new KafkaStorageException("I/O exception in append to log '%s'".format(name), e)
+        throw new KafkaStorageException(s"Error while appending records to $topicPartition in dir ${dir.getParent}", e)
     }
   }
 
@@ -746,13 +746,19 @@ class Log(@volatile var dir: File,
     // We don't have to write the log start offset to log-start-offset-checkpoint immediately.
     // The deleteRecordsOffset may be lost only if all in-sync replicas of this broker are shutdown
     // in an unclean manner within log.flush.start.offset.checkpoint.interval.ms. The chance of this happening is low.
-    lock synchronized {
-      if (offset > logStartOffset) {
-        logStartOffset = offset
-        leaderEpochCache.clearAndFlushEarliest(logStartOffset)
-        producerStateManager.truncateHead(logStartOffset)
-        updateFirstUnstableOffset()
+    try {
+      lock synchronized {
+        if (offset > logStartOffset) {
+          logStartOffset = offset
+          leaderEpochCache.clearAndFlushEarliest(logStartOffset)
+          producerStateManager.truncateHead(logStartOffset)
+          updateFirstUnstableOffset()
+        }
       }
+    } catch {
+      case e: IOException =>
+        logDirFailureChannel.maybeAddLogFailureEvent(dir.getParent)
+        throw new KafkaStorageException(s"Exception while increasing log start offset for $topicPartition to $offset in dir ${dir.getParent}", e)
     }
   }
 
@@ -908,64 +914,70 @@ class Log(@volatile var dir: File,
    */
   def read(startOffset: Long, maxLength: Int, maxOffset: Option[Long] = None, minOneMessage: Boolean = false,
            isolationLevel: IsolationLevel): FetchDataInfo = {
-    trace("Reading %d bytes from offset %d in log %s of length %d bytes".format(maxLength, startOffset, name, size))
+    try {
+      trace("Reading %d bytes from offset %d in log %s of length %d bytes".format(maxLength, startOffset, name, size))
 
-    // Because we don't use lock for reading, the synchronization is a little bit tricky.
-    // We create the local variables to avoid race conditions with updates to the log.
-    val currentNextOffsetMetadata = nextOffsetMetadata
-    val next = currentNextOffsetMetadata.messageOffset
-    if (startOffset == next) {
-      val abortedTransactions =
-        if (isolationLevel == IsolationLevel.READ_COMMITTED) Some(List.empty[AbortedTransaction])
-        else None
-      return FetchDataInfo(currentNextOffsetMetadata, MemoryRecords.EMPTY, firstEntryIncomplete = false,
-        abortedTransactions = abortedTransactions)
-    }
+      // Because we don't use lock for reading, the synchronization is a little bit tricky.
+      // We create the local variables to avoid race conditions with updates to the log.
+      val currentNextOffsetMetadata = nextOffsetMetadata
+      val next = currentNextOffsetMetadata.messageOffset
+      if (startOffset == next) {
+        val abortedTransactions =
+          if (isolationLevel == IsolationLevel.READ_COMMITTED) Some(List.empty[AbortedTransaction])
+          else None
+        return FetchDataInfo(currentNextOffsetMetadata, MemoryRecords.EMPTY, firstEntryIncomplete = false,
+          abortedTransactions = abortedTransactions)
+      }
 
-    var segmentEntry = segments.floorEntry(startOffset)
+      var segmentEntry = segments.floorEntry(startOffset)
 
-    // return error on attempt to read beyond the log end offset or read below log start offset
-    if (startOffset > next || segmentEntry == null || startOffset < logStartOffset)
-      throw new OffsetOutOfRangeException("Request for offset %d but we only have log segments in the range %d to %d.".format(startOffset, logStartOffset, next))
+      // return error on attempt to read beyond the log end offset or read below log start offset
+      if (startOffset > next || segmentEntry == null || startOffset < logStartOffset)
+        throw new OffsetOutOfRangeException("Request for offset %d but we only have log segments in the range %d to %d.".format(startOffset, logStartOffset, next))
 
-    // Do the read on the segment with a base offset less than the target offset
-    // but if that segment doesn't contain any messages with an offset greater than that
-    // continue to read from successive segments until we get some messages or we reach the end of the log
-    while(segmentEntry != null) {
-      val segment = segmentEntry.getValue
+      // Do the read on the segment with a base offset less than the target offset
+      // but if that segment doesn't contain any messages with an offset greater than that
+      // continue to read from successive segments until we get some messages or we reach the end of the log
+      while (segmentEntry != null) {
+        val segment = segmentEntry.getValue
 
-      // If the fetch occurs on the active segment, there might be a race condition where two fetch requests occur after
-      // the message is appended but before the nextOffsetMetadata is updated. In that case the second fetch may
-      // cause OffsetOutOfRangeException. To solve that, we cap the reading up to exposed position instead of the log
-      // end of the active segment.
-      val maxPosition = {
-        if (segmentEntry == segments.lastEntry) {
-          val exposedPos = nextOffsetMetadata.relativePositionInSegment.toLong
-          // Check the segment again in case a new segment has just rolled out.
-          if (segmentEntry != segments.lastEntry)
+        // If the fetch occurs on the active segment, there might be a race condition where two fetch requests occur after
+        // the message is appended but before the nextOffsetMetadata is updated. In that case the second fetch may
+        // cause OffsetOutOfRangeException. To solve that, we cap the reading up to exposed position instead of the log
+        // end of the active segment.
+        val maxPosition = {
+          if (segmentEntry == segments.lastEntry) {
+            val exposedPos = nextOffsetMetadata.relativePositionInSegment.toLong
+            // Check the segment again in case a new segment has just rolled out.
+            if (segmentEntry != segments.lastEntry)
             // New log segment has rolled out, we can read up to the file end.
+              segment.size
+            else
+              exposedPos
+          } else {
             segment.size
-          else
-            exposedPos
+          }
+        }
+        val fetchInfo = segment.read(startOffset, maxOffset, maxLength, maxPosition, minOneMessage)
+        if (fetchInfo == null) {
+          segmentEntry = segments.higherEntry(segmentEntry.getKey)
         } else {
-          segment.size
+          return isolationLevel match {
+            case IsolationLevel.READ_UNCOMMITTED => fetchInfo
+            case IsolationLevel.READ_COMMITTED => addAbortedTransactions(startOffset, segmentEntry, fetchInfo)
+          }
         }
       }
-      val fetchInfo = segment.read(startOffset, maxOffset, maxLength, maxPosition, minOneMessage)
-      if (fetchInfo == null) {
-        segmentEntry = segments.higherEntry(segmentEntry.getKey)
-      } else {
-        return isolationLevel match {
-          case IsolationLevel.READ_UNCOMMITTED => fetchInfo
-          case IsolationLevel.READ_COMMITTED => addAbortedTransactions(startOffset, segmentEntry, fetchInfo)
-        }
-      }
-    }
 
-    // okay we are beyond the end of the last segment with no data fetched although the start offset is in range,
-    // this can happen when all messages with offset larger than start offsets have been deleted.
-    // In this case, we will return the empty set with log end offset metadata
-    FetchDataInfo(nextOffsetMetadata, MemoryRecords.EMPTY)
+      // okay we are beyond the end of the last segment with no data fetched although the start offset is in range,
+      // this can happen when all messages with offset larger than start offsets have been deleted.
+      // In this case, we will return the empty set with log end offset metadata
+      FetchDataInfo(nextOffsetMetadata, MemoryRecords.EMPTY)
+    } catch {
+      case e: IOException =>
+        logDirFailureChannel.maybeAddLogFailureEvent(dir.getParent)
+        throw new KafkaStorageException(s"Exception while reading from $topicPartition in dir ${dir.getParent}", e)
+    }
   }
 
   private[log] def collectAbortedTransactions(startOffset: Long, upperBoundOffset: Long): List[AbortedTxn] = {
@@ -1220,59 +1232,65 @@ class Log(@volatile var dir: File,
    * @return The newly rolled segment
    */
   def roll(expectedNextOffset: Long = 0): LogSegment = {
-    val start = time.nanoseconds
-    lock synchronized {
-      val newOffset = math.max(expectedNextOffset, logEndOffset)
-      val logFile = Log.logFile(dir, newOffset)
-      val offsetIdxFile = offsetIndexFile(dir, newOffset)
-      val timeIdxFile = timeIndexFile(dir, newOffset)
-      val txnIdxFile = transactionIndexFile(dir, newOffset)
-      for(file <- List(logFile, offsetIdxFile, timeIdxFile, txnIdxFile) if file.exists) {
-        warn("Newly rolled segment file " + file.getName + " already exists; deleting it first")
-        file.delete()
-      }
-
-      segments.lastEntry() match {
-        case null =>
-        case entry => {
-          val seg = entry.getValue
-          seg.onBecomeInactiveSegment()
-          seg.index.trimToValidSize()
-          seg.timeIndex.trimToValidSize()
-          seg.log.trim()
+    try {
+      val start = time.nanoseconds
+      lock synchronized {
+        val newOffset = math.max(expectedNextOffset, logEndOffset)
+        val logFile = Log.logFile(dir, newOffset)
+        val offsetIdxFile = offsetIndexFile(dir, newOffset)
+        val timeIdxFile = timeIndexFile(dir, newOffset)
+        val txnIdxFile = transactionIndexFile(dir, newOffset)
+        for (file <- List(logFile, offsetIdxFile, timeIdxFile, txnIdxFile) if file.exists) {
+          warn("Newly rolled segment file " + file.getName + " already exists; deleting it first")
+          file.delete()
         }
+
+        segments.lastEntry() match {
+          case null =>
+          case entry => {
+            val seg = entry.getValue
+            seg.onBecomeInactiveSegment()
+            seg.index.trimToValidSize()
+            seg.timeIndex.trimToValidSize()
+            seg.log.trim()
+          }
+        }
+
+        // take a snapshot of the producer state to facilitate recovery. It is useful to have the snapshot
+        // offset align with the new segment offset since this ensures we can recover the segment by beginning
+        // with the corresponding snapshot file and scanning the segment data. Because the segment base offset
+        // may actually be ahead of the current producer state end offset (which corresponds to the log end offset),
+        // we manually override the state offset here prior to taking the snapshot.
+        producerStateManager.updateMapEndOffset(newOffset)
+        producerStateManager.takeSnapshot()
+
+        val segment = new LogSegment(dir,
+          startOffset = newOffset,
+          indexIntervalBytes = config.indexInterval,
+          maxIndexSize = config.maxIndexSize,
+          rollJitterMs = config.randomSegmentJitter,
+          time = time,
+          fileAlreadyExists = false,
+          initFileSize = initFileSize,
+          preallocate = config.preallocate,
+          logDirFailureChannel = logDirFailureChannel)
+        val prev = addSegment(segment)
+        if (prev != null)
+          throw new KafkaException("Trying to roll a new log segment for topic partition %s with start offset %d while it already exists.".format(name, newOffset))
+        // We need to update the segment base offset and append position data of the metadata when log rolls.
+        // The next offset should not change.
+        updateLogEndOffset(nextOffsetMetadata.messageOffset)
+        // schedule an asynchronous flush of the old segment
+        scheduler.schedule("flush-log", () => flush(newOffset), delay = 0L)
+
+        info("Rolled new log segment for '" + name + "' in %.0f ms.".format((System.nanoTime - start) / (1000.0 * 1000.0)))
+
+        segment
       }
-
-      // take a snapshot of the producer state to facilitate recovery. It is useful to have the snapshot
-      // offset align with the new segment offset since this ensures we can recover the segment by beginning
-      // with the corresponding snapshot file and scanning the segment data. Because the segment base offset
-      // may actually be ahead of the current producer state end offset (which corresponds to the log end offset),
-      // we manually override the state offset here prior to taking the snapshot.
-      producerStateManager.updateMapEndOffset(newOffset)
-      producerStateManager.takeSnapshot()
-
-      val segment = new LogSegment(dir,
-                                   startOffset = newOffset,
-                                   indexIntervalBytes = config.indexInterval,
-                                   maxIndexSize = config.maxIndexSize,
-                                   rollJitterMs = config.randomSegmentJitter,
-                                   time = time,
-                                   fileAlreadyExists = false,
-                                   initFileSize = initFileSize,
-                                   preallocate = config.preallocate,
-                                   logDirFailureChannel = logDirFailureChannel)
-      val prev = addSegment(segment)
-      if(prev != null)
-        throw new KafkaException("Trying to roll a new log segment for topic partition %s with start offset %d while it already exists.".format(name, newOffset))
-      // We need to update the segment base offset and append position data of the metadata when log rolls.
-      // The next offset should not change.
-      updateLogEndOffset(nextOffsetMetadata.messageOffset)
-      // schedule an asynchronous flush of the old segment
-      scheduler.schedule("flush-log", () => flush(newOffset), delay = 0L)
-
-      info("Rolled new log segment for '" + name + "' in %.0f ms.".format((System.nanoTime - start) / (1000.0*1000.0)))
-
-      segment
+    } catch {
+      case e: IOException =>
+        logDirFailureChannel.maybeAddLogFailureEvent(dir.getParent)
+        throw new KafkaStorageException(s"Error while rolling log segment for $topicPartition in dir ${dir.getParent}", e)
     }
   }
 

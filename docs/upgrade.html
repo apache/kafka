@@ -48,16 +48,12 @@
 
 <h5><a id="upgrade_1110_notable" href="#upgrade_1100_notable">Notable changes in 0.11.1.0</a></h5>
 <ul>
-    <li>A broker will now stay online to serve replicas on live log directories even if there are offline log directories. A log
-        directory may become offline due to IOException caused by hardware failure. Users need to monitor the per-broker metric
-        <code>offlineLogDirectoryCount</code> to check whether there is offline log directory. </li>
-    <li>If a new replica is assigned to be created on a broker with offline log directory AND the
-        <code>inter.broker.protocol.version</code> is 0.11.0 or earlier, the broker will not create this replica and the replica will
-        be offline until the log failure on that broker is fixed. In order to make sure that new topics not be created with offline replicas,
-        user can use upgrade <code>inter.broker.protocol.version</code> to 0.11.1 or simply shutdown the broker before the hardware issue is fixed.</li>
+    <li>If the <code>inter.broker.protocol.version</code> is 0.11.1 or later, a broker will now stay online to serve replicas
+        on live log directories even if there are offline log directories. A log directory may become offline due to IOException
+        caused by hardware failure. Users need to monitor the per-broker metric <code>offlineLogDirectoryCount</code> to check
+        whether there is offline log directory. </li>
     <li>Added KafkaStorageException which is a retriable exception. KafkaStorageException will be converted to NotLeaderForPartitionException in the response
         if the version of client's FetchRequest or ProducerRequest does not support KafkaStorageException. </li>
-    <li>Added UnknownErrorCodeException which is a retriable exception.</li>
 </ul>
 
 <h5><a id="upgrade_1110_new_protocols" href="#upgrade_1110_new_protocols">New Protocol Versions</a></h5>
@@ -65,6 +61,8 @@
     <li> <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-112%3A+Handle+disk+failure+for+JBOD">KIP-112</a>: LeaderAndIsrRequest v1 introduces a partition-level <code>is_new</code> field. </li>
     <li> <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-112%3A+Handle+disk+failure+for+JBOD">KIP-112</a>: UpdateMetadataRequest v4 introduces a partition-level <code>offline_replicas</code> field. </li>
     <li> <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-112%3A+Handle+disk+failure+for+JBOD">KIP-112</a>: MetadataResponse v5 introduces a partition-level <code>offline_replicas</code> field. </li>
+    <li> <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-112%3A+Handle+disk+failure+for+JBOD">KIP-112</a>: ProduceResponse v4 introduces error code for KafkaStorageException. </li>
+    <li> <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-112%3A+Handle+disk+failure+for+JBOD">KIP-112</a>: FetchResponse v6 introduces error code for KafkaStorageException. </li>
 </ul>
 
 

@@ -278,10 +278,6 @@ class LogCleaner(val config: CleanerConfig,
         case (topicPartition, log) =>
           try {
             log.deleteOldSegments()
-          } catch {
-            case e: IOException =>
-              error(s"Failed to delete old segments for $topicPartition in dir ${log.dir.getParent} due to IOException", e)
-              logDirFailureChannel.maybeAddLogFailureEvent(log.dir.getParent)
           } finally {
             cleanerManager.doneDeleting(topicPartition)
           }

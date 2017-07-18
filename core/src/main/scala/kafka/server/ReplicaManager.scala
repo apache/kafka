@@ -16,7 +16,7 @@
  */
 package kafka.server
 
-import java.io.{File, IOException}
+import java.io.File
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong}
 
@@ -123,7 +123,7 @@ object ReplicaManager {
   val HighWatermarkFilename = "replication-offset-checkpoint"
   val IsrChangePropagationBlackOut = 5000L
   val IsrChangePropagationInterval = 60000L
-  val OfflinePartition = new Partition(null, -1, null, null, isOffline = true)
+  val OfflinePartition = new Partition("", -1, null, null, isOffline = true)
 }
 
 class ReplicaManager(val config: KafkaConfig,
@@ -187,9 +187,13 @@ class ReplicaManager(val config: KafkaConfig,
   private val lastIsrPropagationMs = new AtomicLong(System.currentTimeMillis())
   private var logDirFailureHandler: LogDirFailureHandler = null
 
-  private class LogDirFailureHandler(name: String) extends ShutdownableThread(name) {
+  private class LogDirFailureHandler(name: String, haltBrokerOnDirFailure: Boolean) extends ShutdownableThread(name) {
     override def doWork() {
       val newOfflineLogDir = logDirFailureChannel.takeNextLogFailureEvent()
+      if (haltBrokerOnDirFailure) {
+        fatal(s"Halting broker because dir $newOfflineLogDir is offline")
+        Exit.halt(1)
+      }
       handleLogDirFailure(newOfflineLogDir)
     }
   }
@@ -296,7 +300,8 @@ class ReplicaManager(val config: KafkaConfig,
     // A follower can lag behind leader for up to config.replicaLagTimeMaxMs x 1.5 before it is removed from ISR
     scheduler.schedule("isr-expiration", maybeShrinkIsr _, period = config.replicaLagTimeMaxMs / 2, unit = TimeUnit.MILLISECONDS)
     scheduler.schedule("isr-change-propagation", maybePropagateIsrChanges _, period = 2500L, unit = TimeUnit.MILLISECONDS)
-    logDirFailureHandler = new LogDirFailureHandler("LogDirFailureHandler")
+    val haltBrokerOnFailure = config.interBrokerProtocolVersion < KAFKA_0_11_1_IV0
+    logDirFailureHandler = new LogDirFailureHandler("LogDirFailureHandler", haltBrokerOnFailure)
     logDirFailureHandler.start()
   }
 
@@ -349,11 +354,6 @@ class ReplicaManager(val config: KafkaConfig,
             val error = stopReplica(topicPartition, stopReplicaRequest.deletePartitions)
             responseMap.put(topicPartition, error)
           } catch {
-            case e: IOException =>
-              stateChangeLogger.error(s"Broker $localBrokerId ignoring stop replica (delete=${stopReplicaRequest.deletePartitions}) for partition $topicPartition due to IO exception", e)
-              error(s"Error while stopping replicas of partition $topicPartition in dir ${getLogDir(topicPartition)}", e)
-              getLogDir(topicPartition).foreach(logDirFailureChannel.maybeAddLogFailureEvent)
-              responseMap.put(topicPartition, Errors.KAFKA_STORAGE_ERROR)
             case e: KafkaStorageException =>
               stateChangeLogger.error(s"Broker $localBrokerId ignoring stop replica (delete=${stopReplicaRequest.deletePartitions}) for partition $topicPartition due to storage exception", e)
               responseMap.put(topicPartition, Errors.KAFKA_STORAGE_ERROR)
@@ -504,11 +504,6 @@ class ReplicaManager(val config: KafkaConfig,
         } catch {
           // NOTE: Failed produce requests metric is not incremented for known exceptions
           // it is supposed to indicate un-expected failures of a broker in handling a produce request
-          case e: IOException =>
-            val dirOpt = getLogDir(topicPartition)
-            error(s"Error while deleting records of partition $topicPartition in dir $dirOpt", e)
-            dirOpt.foreach(maybeAddLogFailureEvent)
-            (topicPartition, LogDeleteRecordsResult(-1L, -1L, Some(new KafkaStorageException(e))))
           case e@ (_: UnknownTopicOrPartitionException |
                    _: NotLeaderForPartitionException |
                    _: OffsetOutOfRangeException |
@@ -632,11 +627,6 @@ class ReplicaManager(val config: KafkaConfig,
         } catch {
           // NOTE: Failed produce requests metric is not incremented for known exceptions
           // it is supposed to indicate un-expected failures of a broker in handling a produce request
-          case e: IOException =>
-            val dirOpt = getLogDir(topicPartition)
-            error(s"Error while appending records to partition $topicPartition in dir $dirOpt", e)
-            dirOpt.foreach(maybeAddLogFailureEvent)
-            (topicPartition, LogAppendResult(LogAppendInfo.UnknownLogAppendInfo, Some(new KafkaStorageException(e))))
           case e@ (_: UnknownTopicOrPartitionException |
                    _: NotLeaderForPartitionException |
                    _: RecordTooLargeException |
@@ -811,19 +801,6 @@ class ReplicaManager(val config: KafkaConfig,
       } catch {
         // NOTE: Failed fetch requests metric is not incremented for known exceptions since it
         // is supposed to indicate un-expected failure of a broker in handling a fetch request
-        case e: IOException =>
-          val dirOpt = getLogDir(tp)
-          error(s"Error processing fetch operation on partition $tp, offset $offset in dir $dirOpt", e)
-          dirOpt.foreach(maybeAddLogFailureEvent)
-          LogReadResult(info = FetchDataInfo(LogOffsetMetadata.UnknownOffsetMetadata, MemoryRecords.EMPTY),
-                        highWatermark = -1L,
-                        leaderLogStartOffset = -1L,
-                        leaderLogEndOffset = -1L,
-                        followerLogStartOffset = -1L,
-                        fetchTimeMs = -1L,
-                        readSize = partitionFetchSize,
-                        lastStableOffset = None,
-                        exception = Some(new KafkaStorageException(e)))
         case e@ (_: UnknownTopicOrPartitionException |
                  _: NotLeaderForPartitionException |
                  _: ReplicaNotAvailableException |
@@ -1029,7 +1006,7 @@ class ReplicaManager(val config: KafkaConfig,
               "controller %d epoch %d for partition %s since it is already the leader for the partition.")
               .format(localBrokerId, correlationId, controllerId, epoch, partition.topicPartition))
         } catch {
-          case e@ (_: KafkaStorageException | _: IOException) =>
+          case e: KafkaStorageException =>
             stateChangeLogger.error(("Broker %d skipped the become-leader state change with correlation id %d from " +
               "controller %d epoch %d for partition %s since the replica for the partition is offline due to disk error %s.")
               .format(localBrokerId, correlationId, controllerId, epoch, partition.topicPartition, e))
@@ -1122,7 +1099,7 @@ class ReplicaManager(val config: KafkaConfig,
               partition.getOrCreateReplica(isNew = partitionStateInfo.isNew)
           }
         } catch {
-          case e@ (_: KafkaStorageException | _: IOException) =>
+          case e: KafkaStorageException =>
             stateChangeLogger.error(("Broker %d skipped the become-follower state change with correlation id %d from " +
               "controller %d epoch %d for partition [%s,%d] since the replica for the partition is offline due to disk error %s")
               .format(localBrokerId, correlationId, controllerId, partitionStateInfo.controllerEpoch, partition.topic, partition.partitionId, e))
@@ -1230,15 +1207,14 @@ class ReplicaManager(val config: KafkaConfig,
   // Flushes the highwatermark value for all partitions to the highwatermark file
   def checkpointHighWatermarks() {
     val replicas = allPartitions.values.filter(_ ne ReplicaManager.OfflinePartition).flatMap(_.getReplica(localBrokerId))
-    val replicasByDir = replicas.filter(_.log.isDefined).groupBy(_.log.get.dir.getParentFile.getAbsolutePath)
+    val replicasByDir = replicas.filter(_.log.isDefined).groupBy(_.log.get.dir.getParent)
     for ((dir, reps) <- replicasByDir) {
       val hwms = reps.map(r => r.partition.topicPartition -> r.highWatermark.messageOffset).toMap
       try {
         highWatermarkCheckpoints.get(dir).foreach(_.write(hwms))
       } catch {
-        case e: IOException =>
+        case e: KafkaStorageException =>
           error(s"Error while writing to highwatermark file in directory $dir", e)
-          maybeAddLogFailureEvent(dir)
       }
     }
   }
