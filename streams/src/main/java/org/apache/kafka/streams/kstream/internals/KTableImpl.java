@@ -74,6 +74,8 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
 
     private final ProcessorSupplier<?, ?> processorSupplier;
 
+    private final KeyValueMapper<K, V, String> defaultKeyValueMapper;
+
     private final String queryableStoreName;
     private final boolean isQueryable;
 
@@ -93,6 +95,12 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         this.keySerde = null;
         this.valSerde = null;
         this.isQueryable = isQueryable;
+        this.defaultKeyValueMapper = new KeyValueMapper<K, V, String>() {
+            @Override
+            public String apply(K key, V value) {
+                return String.format("%s, %s", key, value);
+            }
+        };
     }
 
     public KTableImpl(KStreamBuilder topology,
@@ -109,6 +117,12 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         this.keySerde = keySerde;
         this.valSerde = valSerde;
         this.isQueryable = isQueryable;
+        this.defaultKeyValueMapper = new KeyValueMapper<K, V, String>() {
+            @Override
+            public String apply(K key, V value) {
+                return String.format("%s, %s", key, value);
+            }
+        };
     }
 
     @Override
@@ -243,8 +257,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     public void print(Serde<K> keySerde, final Serde<V> valSerde, String label) {
         Objects.requireNonNull(label, "label can't be null");
         String name = topology.newName(PRINTING_NAME);
-        final KeyValueMapper<? super K, ? super V, String> mapper = createDefaultKeyValueMapper();
-        topology.addProcessor(name, new KStreamPrint<>(new PrintForeachAction(null, mapper, label), keySerde, valSerde), this.name);
+        topology.addProcessor(name, new KStreamPrint<>(new PrintForeachAction(null, defaultKeyValueMapper, label), keySerde, valSerde), this.name);
     }
 
     @Override
@@ -273,10 +286,9 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
             throw new TopologyBuilderException("filePath can't be an empty string");
         }
         String name = topology.newName(PRINTING_NAME);
-        final KeyValueMapper<? super K, ? super V, String> mapper = createDefaultKeyValueMapper();
         try {
             PrintWriter printWriter = new PrintWriter(filePath, StandardCharsets.UTF_8.name());
-            topology.addProcessor(name, new KStreamPrint<>(new PrintForeachAction(printWriter, mapper, label), keySerde, valSerde), this.name);
+            topology.addProcessor(name, new KStreamPrint<>(new PrintForeachAction(printWriter, defaultKeyValueMapper, label), keySerde, valSerde), this.name);
         } catch (FileNotFoundException | UnsupportedEncodingException e) {
             String message = "Unable to write stream to file at [" + filePath + "] " + e.getMessage();
             throw new TopologyBuilderException(message);
@@ -617,15 +629,6 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
 
     boolean sendingOldValueEnabled() {
         return sendOldValues;
-    }
-
-    private <K, V> KeyValueMapper<K, V, String> createDefaultKeyValueMapper() {
-        return new KeyValueMapper<K, V, String>() {
-            @Override
-            public String apply(K key, V value) {
-                return String.format("%s, %s", key, value);
-            }
-        };
     }
 
 }
