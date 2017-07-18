@@ -448,7 +448,7 @@ object TestUtils extends Logging {
       var cur: Iterator[T] = null
       val topIterator = s.iterator
 
-      def hasNext() : Boolean = {
+      def hasNext: Boolean = {
         while (true) {
           if (cur == null) {
             if (topIterator.hasNext)

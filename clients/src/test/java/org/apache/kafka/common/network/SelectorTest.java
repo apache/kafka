@@ -17,6 +17,9 @@
 package org.apache.kafka.common.network;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import java.util.HashMap;
@@ -268,6 +271,57 @@ public class SelectorTest {
         assertEquals(ChannelState.EXPIRED, selector.disconnected().get(id));
     }
 
+    @Test
+    public void testCloseOldestConnectionWithOneStagedReceive() throws Exception {
+        verifyCloseOldestConnectionWithStagedReceives(1);
+    }
+
+    @Test
+    public void testCloseOldestConnectionWithMultipleStagedReceives() throws Exception {
+        verifyCloseOldestConnectionWithStagedReceives(5);
+    }
+
+    private void verifyCloseOldestConnectionWithStagedReceives(int maxStagedReceives) throws Exception {
+        String id = "0";
+        blockingConnect(id);
+        KafkaChannel channel = selector.channel(id);
+
+        selector.mute(id);
+        for (int i = 0; i <= maxStagedReceives; i++) {
+            selector.send(createSend(id, String.valueOf(i)));
+            selector.poll(1000);
+        }
+
+        selector.unmute(id);
+        do {
+            selector.poll(1000);
+        } while (selector.completedReceives().isEmpty());
+
+        int stagedReceives = selector.numStagedReceives(channel);
+        int completedReceives = 0;
+        while (selector.disconnected().isEmpty()) {
+            time.sleep(6000); // The max idle time is 5000ms
+            selector.poll(0);
+            completedReceives += selector.completedReceives().size();
+            // With SSL, more receives may be staged from buffered data
+            int newStaged = selector.numStagedReceives(channel) - (stagedReceives - completedReceives);
+            if (newStaged > 0) {
+                stagedReceives += newStaged;
+                assertNotNull("Channel should not have been expired", selector.channel(id));
+                assertFalse("Channel should not have been disconnected", selector.disconnected().containsKey(id));
+            } else if (!selector.completedReceives().isEmpty()) {
+                assertEquals(1, selector.completedReceives().size());
+                assertTrue("Channel not found", selector.closingChannel(id) != null || selector.channel(id) != null);
+                assertFalse("Disconnect notified too early", selector.disconnected().containsKey(id));
+            }
+        }
+        assertEquals(maxStagedReceives, completedReceives);
+        assertEquals(stagedReceives, completedReceives);
+        assertNull("Channel not removed", selector.channel(id));
+        assertNull("Channel not removed", selector.closingChannel(id));
+        assertTrue("Disconnect not notified", selector.disconnected().containsKey(id));
+        assertTrue("Unexpected receive", selector.completedReceives().isEmpty());
+    }
 
     private String blockingRequest(String node, String s) throws IOException {
         selector.send(createSend(node, s));
