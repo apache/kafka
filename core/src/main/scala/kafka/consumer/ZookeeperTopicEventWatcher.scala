@@ -39,7 +39,7 @@ class ZookeeperTopicEventWatcher(val zkUtils: ZkUtils,
     val topics = zkUtils.subscribeChildChanges(ZkUtils.BrokerTopicsPath, topicEventListener)
 
     // call to bootstrap topic list
-    topicEventListener.handleChildChange(ZkUtils.BrokerTopicsPath, topics)
+    topicEventListener.handleChildChange(ZkUtils.BrokerTopicsPath, topics.asJava)
   }
 
   private def stopWatchingTopicEvents() { zkUtils.unsubscribeAll() }

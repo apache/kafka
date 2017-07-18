@@ -647,8 +647,8 @@ class ZkUtils(val zkClient: ZkClient,
     zkClient.subscribeStateChanges(listener)
   }
 
-  def subscribeChildChanges(path: String, listener: IZkChildListener): java.util.List[String] = {
-    zkClient.subscribeChildChanges(path, listener)
+  def subscribeChildChanges(path: String, listener: IZkChildListener): Seq[String] = {
+    zkClient.subscribeChildChanges(path, listener).asScala
   }
 
   def unsubscribeChildChanges(path: String, childListener: IZkChildListener): Unit = {
