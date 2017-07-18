@@ -315,7 +315,6 @@ public class SelectorTest {
                 assertFalse("Disconnect notified too early", selector.disconnected().containsKey(id));
             }
         }
-        assertEquals(maxStagedReceives, completedReceives);
         assertEquals(stagedReceives, completedReceives);
         assertNull("Channel not removed", selector.channel(id));
         assertNull("Channel not removed", selector.closingChannel(id));
