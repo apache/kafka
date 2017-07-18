@@ -107,7 +107,7 @@ class LogManager(private val logDirs: Array[File],
 
   for (dir <- logDirs) {
     newGauge(
-      "isLogDirectorOffline",
+      "isLogDirectoryOffline",
       new Gauge[Int] {
         def value = if (_liveLogDirs.contains(dir)) 0 else 1
       },
@@ -359,7 +359,7 @@ class LogManager(private val logDirs: Array[File],
 
     removeMetric("OfflineLogDirectoryCount")
     for (dir <- logDirs) {
-      removeMetric("isLogDirectorOffline", Map("logDirectory" -> dir.getAbsolutePath))
+      removeMetric("isLogDirectoryOffline", Map("logDirectory" -> dir.getAbsolutePath))
     }
 
     val threadPools = ArrayBuffer.empty[ExecutorService]

@@ -17,8 +17,8 @@
 
 package kafka.utils
 
-import kafka.controller.{LogDirEventNotificationListener}
-import scala.collection.{Map, Seq, Set}
+import kafka.controller.LogDirEventNotificationListener
+import scala.collection.Map
 
 object LogDirUtils extends Logging {
 
@@ -48,11 +48,14 @@ object LogDirUtils extends Logging {
 
       json match {
         case Some(m) =>
-          val brokerAndTopics = m.asInstanceOf[Map[String, Any]]
-          val brokerId = brokerAndTopics.get("broker").get.asInstanceOf[Int]
+          val brokerAndEventType = m.asInstanceOf[Map[String, Any]]
+          val brokerId = brokerAndEventType.get("broker").get.asInstanceOf[Int]
+          val eventType = brokerAndEventType.get("event").get.asInstanceOf[Int]
+          if (eventType != LogDirFailureEvent)
+            throw new IllegalArgumentException(s"The event type $eventType in znode $changeZnode is not recognized")
           Some(brokerId)
         case None =>
-          error("Invalid topic and partition JSON: " + jsonOpt.get + " in ZK: " + changeZnode)
+          error("Invalid LogDirEvent JSON: " + jsonOpt.get + " in ZK: " + changeZnode)
           None
       }
     } else {

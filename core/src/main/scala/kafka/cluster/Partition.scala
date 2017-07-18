@@ -45,12 +45,13 @@ import scala.collection.JavaConverters._
 class Partition(val topic: String,
                 val partitionId: Int,
                 time: Time,
-                replicaManager: ReplicaManager) extends Logging with KafkaMetricsGroup {
+                replicaManager: ReplicaManager,
+                isOffline: Boolean = false) extends Logging with KafkaMetricsGroup {
 
   val topicPartition = new TopicPartition(topic, partitionId)
 
-  // replicaManager will be null only if this partition is ReplicaManager.OfflinePartition
-  private val localBrokerId = if (replicaManager != null) replicaManager.config.brokerId else -1
+  // Do not use replicaManager if this partition is ReplicaManager.OfflinePartition
+  private val localBrokerId = if (!isOffline) replicaManager.config.brokerId else -1
   private val logManager = if (replicaManager != null) replicaManager.logManager else null
   private val zkUtils = if (replicaManager != null) replicaManager.zkUtils else null
   private val assignedReplicaMap = new Pool[Int, Replica]
@@ -73,7 +74,7 @@ class Partition(val topic: String,
   val tags = Map("topic" -> topic, "partition" -> partitionId.toString)
 
   // Do not create metrics if this partition is ReplicaManager.OfflinePartition
-  if (replicaManager != null) {
+  if (!isOffline) {
     newGauge("UnderReplicated",
       new Gauge[Int] {
         def value = {

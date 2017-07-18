@@ -20,9 +20,9 @@ import java.io._
 import java.nio.charset.StandardCharsets
 import java.nio.file.{FileAlreadyExistsException, Files, Paths}
 
-import kafka.common.KafkaStorageException
 import kafka.server.LogDirFailureChannel
 import kafka.utils.Logging
+import org.apache.kafka.common.errors.KafkaStorageException
 import org.apache.kafka.common.utils.Utils
 
 import scala.collection.{Seq, mutable}

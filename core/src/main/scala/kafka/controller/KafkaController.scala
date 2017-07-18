@@ -351,7 +351,7 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, time: Time, met
    * to all these brokers to query the state of their replicas
    */
   def onBrokerLogDirFailure(brokerIds: Seq[Int]) {
-    // send LeaderAndIsrRequest for all live replicas on those brokers to see if they are still online.
+    // send LeaderAndIsrRequest for all replicas on those brokers to see if they are still online.
     val replicasOnBrokers = controllerContext.replicasOnBrokers(brokerIds.toSet)
     replicaStateMachine.handleStateChanges(replicasOnBrokers, OnlineReplica)
   }

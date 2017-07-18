@@ -74,7 +74,7 @@ class DelayedDeleteRecords(delayMs: Long,
       if (status.acksPending) {
         val (lowWatermarkReached, error, lw) = replicaManager.getPartition(topicPartition) match {
           case Some(partition) =>
-            if (partition == ReplicaManager.OfflinePartition) {
+            if (partition eq ReplicaManager.OfflinePartition) {
               (false, Errors.KAFKA_STORAGE_ERROR, DeleteRecordsResponse.INVALID_LOW_WATERMARK)
             } else {
               partition.leaderReplicaIfLocal match {

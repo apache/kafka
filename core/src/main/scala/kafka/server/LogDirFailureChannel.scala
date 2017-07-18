@@ -18,7 +18,7 @@
 
 package kafka.server
 
-import java.util.concurrent.{ArrayBlockingQueue, ConcurrentHashMap, TimeUnit}
+import java.util.concurrent.{ArrayBlockingQueue, ConcurrentHashMap}
 
 /*
  * LogDirFailureChannel allows an external thread to block waiting for new offline log dir.

@@ -203,7 +203,7 @@ public class FetchResponse extends AbstractResponse {
                 long logStartOffset = INVALID_LOG_START_OFFSET;
                 if (partitionResponseHeader.hasField(LOG_START_OFFSET_KEY_NAME))
                     logStartOffset = partitionResponseHeader.getLong(LOG_START_OFFSET_KEY_NAME);
-                
+
                 Records records = partitionResponse.getRecords(RECORD_SET_KEY_NAME);
 
                 List<AbortedTransaction> abortedTransactions = null;
@@ -327,6 +327,10 @@ public class FetchResponse extends AbstractResponse {
             for (Map.Entry<Integer, PartitionData> partitionEntry : topicEntry.partitions.entrySet()) {
                 PartitionData fetchPartitionData = partitionEntry.getValue();
                 short errorCode = fetchPartitionData.error.code();
+                // If consumer sends FetchRequest V5 or earlier, the client library is not guaranteed to recognize the error code
+                // for KafkaStorageException. In this case the client library will translate KafkaStorageException to
+                // UnknownServerException which is not retriable. We can ensure that consumer will update metadata and retry
+                // by converting the KafkaStorageException to NotLeaderForPartitionException in the response if FetchRequest version <= 5
                 if (errorCode == Errors.KAFKA_STORAGE_ERROR.code() && version <= 5)
                     errorCode = Errors.NOT_LEADER_FOR_PARTITION.code();
                 Struct partitionData = topicData.instance(PARTITIONS_KEY_NAME);

@@ -31,8 +31,7 @@ import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.{Node, TopicPartition}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.UpdateMetadataRequest.PartitionState
-import org.apache.kafka.common.requests.{MetadataResponse, PartitionState, UpdateMetadataRequest}
+import org.apache.kafka.common.requests.{MetadataResponse, UpdateMetadataRequest}
 
 /**
  *  A cache for the state (e.g., current leader) of each partition. This cache is updated through

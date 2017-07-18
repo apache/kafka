@@ -22,7 +22,7 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.ReentrantLock
 
 import com.yammer.metrics.core.Gauge
-import kafka.common.{KafkaStorageException, LogCleaningAbortedException}
+import kafka.common.LogCleaningAbortedException
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.LogDirFailureChannel
 import kafka.server.checkpoints.OffsetCheckpointFile
@@ -30,6 +30,7 @@ import kafka.utils.CoreUtils._
 import kafka.utils.{Logging, Pool}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.errors.KafkaStorageException
 
 import scala.collection.{immutable, mutable}
 

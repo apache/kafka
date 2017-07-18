@@ -1148,6 +1148,7 @@ public class Protocol {
                                                                        new Field("partitions",
                                                                                  new ArrayOf(LEADER_AND_ISR_RESPONSE_PARTITION_V0)));
 
+    // LeaderAndIsrResponse V1 may receive KAFKA_STORAGE_ERROR in the response
     public static final Schema LEADER_AND_ISR_RESPONSE_V1 = LEADER_AND_ISR_RESPONSE_V0;
 
     public static final Schema[] LEADER_AND_ISR_REQUEST = {LEADER_AND_ISR_REQUEST_V0, LEADER_AND_ISR_REQUEST_V1};
