@@ -34,9 +34,11 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -271,18 +273,20 @@ public class StateDirectoryTest {
     @Test
     public void shouldNotLockStateDirLockedByAnotherThread() throws IOException, InterruptedException {
         final TaskId taskId = new TaskId(0, 0);
+        final AtomicReference<IOException> exceptionOnThread = new AtomicReference<>();
         final Thread thread = new Thread(new Runnable() {
             @Override
             public void run() {
                 try {
                     directory.lock(taskId, 1);
                 } catch (final IOException e) {
-                    //
+                    exceptionOnThread.set(e);
                 }
             }
         });
         thread.start();
-        thread.join();
+        thread.join(30000);
+        assertNull("should not have had an exception during locking on other thread", exceptionOnThread.get());
         assertFalse(directory.lock(taskId, 1));
     }
 
@@ -291,6 +295,7 @@ public class StateDirectoryTest {
         final TaskId taskId = new TaskId(0, 0);
         final CountDownLatch lockLatch = new CountDownLatch(1);
         final CountDownLatch unlockLatch = new CountDownLatch(1);
+        final AtomicReference<Exception> exceptionOnThread = new AtomicReference<>();
         final Thread thread = new Thread(new Runnable() {
             @Override
             public void run() {
@@ -300,18 +305,21 @@ public class StateDirectoryTest {
                     unlockLatch.await();
                     directory.unlock(taskId);
                 } catch (final Exception e) {
-                    //
+                    exceptionOnThread.set(e);
                 }
             }
         });
         thread.start();
         lockLatch.await(5, TimeUnit.SECONDS);
 
+        assertNull("should not have had an exception on other thread", exceptionOnThread.get());
         directory.unlock(taskId);
         assertFalse(directory.lock(taskId, 1));
 
         unlockLatch.countDown();
-        thread.join();
+        thread.join(30000);
+
+        assertNull("should not have had an exception on other thread", exceptionOnThread.get());
         assertTrue(directory.lock(taskId, 1));
     }
 
