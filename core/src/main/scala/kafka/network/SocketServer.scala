@@ -399,17 +399,17 @@ private[kafka] class Processor(val id: Int,
 
   private object ConnectionId {
     def fromString(s: String): Option[ConnectionId] = s.split("-") match {
-      case Array(local, remote, uniquifier) => BrokerEndPoint.parseHostPort(local).flatMap { case (localHost, localPort) =>
+      case Array(local, remote, index) => BrokerEndPoint.parseHostPort(local).flatMap { case (localHost, localPort) =>
         BrokerEndPoint.parseHostPort(remote).map { case (remoteHost, remotePort) =>
-          ConnectionId(localHost, localPort, remoteHost, remotePort, Integer.parseInt(uniquifier))
+          ConnectionId(localHost, localPort, remoteHost, remotePort, Integer.parseInt(index))
         }
       }
       case _ => None
     }
   }
 
-  private case class ConnectionId(localHost: String, localPort: Int, remoteHost: String, remotePort: Int, uniquifier: Int) {
-    override def toString: String = s"$localHost:$localPort-$remoteHost:$remotePort-$uniquifier"
+  private case class ConnectionId(localHost: String, localPort: Int, remoteHost: String, remotePort: Int, index: Int) {
+    override def toString: String = s"$localHost:$localPort-$remoteHost:$remotePort-$index"
   }
 
   private val newConnections = new ConcurrentLinkedQueue[SocketChannel]()
@@ -441,6 +441,10 @@ private[kafka] class Processor(val id: Int,
     true,
     ChannelBuilders.serverChannelBuilder(listenerName, securityProtocol, config, credentialProvider.credentialCache),
     memoryPool)
+
+  // Connection ids have the format `localAddr:localPort-remoteAddr:remotePort-index`. The index is a
+  // non-negative incrementing value that ensures that even if remotePort is reused after a connection is
+  // closed, connection ids are not reused while requests from the closed connection are being processed.
   private var nextConnectionIndex = 0
 
   override def run() {
@@ -503,9 +507,11 @@ private[kafka] class Processor(val id: Int,
   protected[network] def sendResponse(response: RequestChannel.Response, responseSend: Send) {
     val connectionId = response.request.connectionId
     trace(s"Socket server received response to send to $connectionId, registering for write and sending data: $response")
-    val channel = selector.channel(connectionId)
+    // Invoke send for closingChannel as well so that the send is failed and the channel closed properly after
+    // discarding any pending staged receives.
+    val channel = openOrClosingChannel(responseSend.destination)
     // `channel` can be null if the selector closed the connection because it was idle for too long
-    if (channel == null) {
+    if (channel.isEmpty) {
       warn(s"Attempting to send response via channel for which there is no open connection, connection id $connectionId")
       response.request.updateRequestMetrics(0L)
     }
@@ -560,9 +566,7 @@ private[kafka] class Processor(val id: Int,
   }
 
   private def updateRequestMetrics(request: RequestChannel.Request) {
-    val channel = selector.channel(request.connectionId)
-    val openOrClosingChannel = if (channel != null) channel else selector.closingChannel(request.connectionId)
-    val networkThreadTimeNanos = if (openOrClosingChannel != null) openOrClosingChannel.getAndResetNetworkThreadTimeNanos() else 0L
+    val networkThreadTimeNanos = openOrClosingChannel(request.connectionId).fold(0L) (_.getAndResetNetworkThreadTimeNanos())
     request.updateRequestMetrics(networkThreadTimeNanos)
   }
 
@@ -597,8 +601,8 @@ private[kafka] class Processor(val id: Int,
         val localPort = channel.socket().getLocalPort
         val remoteHost = channel.socket().getInetAddress.getHostAddress
         val remotePort = channel.socket().getPort
-        nextConnectionIndex = if (nextConnectionIndex == Int.MaxValue) 0 else nextConnectionIndex + 1
         val connectionId = ConnectionId(localHost, localPort, remoteHost, remotePort, nextConnectionIndex).toString
+        nextConnectionIndex = if (nextConnectionIndex == Int.MaxValue) 0 else nextConnectionIndex + 1
         selector.register(connectionId, channel)
       } catch {
         // We explicitly catch all non fatal exceptions and close the socket to avoid a socket leak. The other
@@ -620,6 +624,11 @@ private[kafka] class Processor(val id: Int,
       close(selector, channel.id)
     }
     selector.close()
+  }
+
+  private[network] def openOrClosingChannel(connectionId: String): Option[KafkaChannel] = {
+    val channel = selector.channel(connectionId)
+    if (channel != null) Some(channel) else Option(selector.closingChannel(connectionId))
   }
 
   /* For test usage */

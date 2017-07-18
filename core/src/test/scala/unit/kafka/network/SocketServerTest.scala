@@ -31,12 +31,12 @@ import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.network.{ListenerName, NetworkSend, Send}
+import org.apache.kafka.common.network.{KafkaChannel, ListenerName, NetworkSend, Send}
 import org.apache.kafka.common.protocol.{ApiKeys, SecurityProtocol}
 import org.apache.kafka.common.record.{MemoryRecords, RecordBatch}
 import org.apache.kafka.common.requests.{AbstractRequest, ProduceRequest, RequestHeader}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
-import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.{Time, MockTime}
 import org.junit.Assert._
 import org.junit._
 import org.scalatest.junit.JUnitSuite
@@ -186,20 +186,66 @@ class SocketServerTest extends JUnitSuite {
 
   @Test
   def testConnectionId() {
-    val socket1 = connect(protocol = SecurityProtocol.PLAINTEXT)
-    val socket2 = connect(protocol = SecurityProtocol.PLAINTEXT)
+    val sockets = (1 to 5).map(_ => connect(protocol = SecurityProtocol.PLAINTEXT))
     val serializedBytes = producerRequestBytes
 
-    sendRequest(socket1, serializedBytes)
-    sendRequest(socket2, serializedBytes)
-    val request1 = server.requestChannel.receiveRequest(2000)
-    val request2 = server.requestChannel.receiveRequest(2000)
-    val conn1Uniquifier = request1.connectionId.split("-")(2)
-    val conn2Uniquifier = request2.connectionId.split("-")(2)
-    assertNotEquals(conn1Uniquifier, conn2Uniquifier)
+    val requests = sockets.map(socket => {
+      sendRequest(socket, serializedBytes)
+      server.requestChannel.receiveRequest(2000)
+    })
+    for (i <- 0 until requests.length) {
+      val index = requests(i).connectionId.split("-")(2)
+      assertEquals(i.toString, index)
+    }
 
-    socket1.close()
-    socket2.close()
+    sockets.foreach(_.close)
+  }
+
+  @Test
+  def testIdleConnection() {
+    val idleTimeMs = 60000
+    val time = new MockTime()
+    props.put(KafkaConfig.ConnectionsMaxIdleMsProp, idleTimeMs.toString)
+    val serverMetrics = new Metrics
+    val overrideServer = new SocketServer(KafkaConfig.fromProps(props), serverMetrics, time, credentialProvider)
+
+    def openChannel(request: RequestChannel.Request): Option[KafkaChannel] =
+      overrideServer.processor(request.processor).channel(request.connectionId)
+    def openOrClosingChannel(request: RequestChannel.Request): Option[KafkaChannel] =
+      overrideServer.processor(request.processor).openOrClosingChannel(request.connectionId)
+
+    try {
+      overrideServer.startup()
+      val serializedBytes = producerRequestBytes
+
+      // Connection with no staged receives
+      val socket1 = connect(overrideServer, protocol = SecurityProtocol.PLAINTEXT)
+      sendRequest(socket1, serializedBytes)
+      val request1 = overrideServer.requestChannel.receiveRequest(2000)
+      assertTrue("Channel not open", openChannel(request1).nonEmpty)
+      assertEquals(openChannel(request1), openOrClosingChannel(request1))
+
+      time.sleep(idleTimeMs + 1)
+      TestUtils.waitUntilTrue(() => openOrClosingChannel(request1).isEmpty, "Failed to close idle channel")
+      assertTrue("Channel not removed", openChannel(request1).isEmpty)
+      processRequest(overrideServer.requestChannel, request1)
+
+      // Connection with staged receives
+      val socket2 = connect(overrideServer, protocol = SecurityProtocol.PLAINTEXT)
+      sendRequest(socket2, serializedBytes)
+      sendRequest(socket2, serializedBytes)
+      val request2 = overrideServer.requestChannel.receiveRequest(2000)
+
+      time.sleep(idleTimeMs + 1)
+      TestUtils.waitUntilTrue(() => openChannel(request2).isEmpty, "Failed to close idle channel")
+      assertTrue("Channel removed without processing staging receives", openOrClosingChannel(request2).nonEmpty)
+      processRequest(overrideServer.requestChannel, request2) // this triggers a failed send since channel has been closed
+      TestUtils.waitUntilTrue(() => openOrClosingChannel(request2).isEmpty, "Failed to remove channel with failed sends")
+      assertNull("Received request after failed send", overrideServer.requestChannel.receiveRequest(200))
+
+    } finally {
+      overrideServer.shutdown()
+    }
   }
 
   @Test
