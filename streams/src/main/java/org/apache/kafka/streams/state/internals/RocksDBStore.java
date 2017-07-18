@@ -54,8 +54,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
-import java.util.Set;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * A persistent key-value store based on RocksDB.
@@ -98,9 +98,11 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     private WriteOptions wOptions;
     private FlushOptions fOptions;
 
-    protected volatile boolean open = false;
-    protected volatile boolean prepareForBulkload = false;
+    private volatile boolean prepareForBulkload = false;
     private ProcessorContext internalProcessorContext;
+
+    protected volatile boolean open = false;
+
 
     RocksDBStore(String name, Serde<K> keySerde, Serde<V> valueSerde) {
         this(name, DB_FILE_DIR, keySerde, valueSerde);

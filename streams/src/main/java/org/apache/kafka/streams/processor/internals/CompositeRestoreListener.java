@@ -27,29 +27,29 @@ import java.util.Collection;
 
 class CompositeRestoreListener implements BatchingStateRestoreCallback, StateRestoreListener {
 
-    private final StateRestoreCallback stateRestoreCallback;
-    private final BatchingStateRestoreCallback batchingStateRestoreCallback;
+    private final InternalStateRestoreAdapter stateRestoreAdapter;
     private final StateRestoreListener storeRestoreListener;
-    private StateRestoreListener reportingStoreListener;
+    private StateRestoreListener reportingStoreListener = new NoOpStateRestoreListener();
 
     CompositeRestoreListener(StateRestoreCallback stateRestoreCallback) {
-        this.stateRestoreCallback = stateRestoreCallback;
-        this.batchingStateRestoreCallback = stateRestoreCallback instanceof BatchingStateRestoreCallback ?
-                                            (BatchingStateRestoreCallback) stateRestoreCallback : null;
 
         if (stateRestoreCallback instanceof StateRestoreListener) {
             storeRestoreListener = (StateRestoreListener) stateRestoreCallback;
-        } else if (batchingStateRestoreCallback instanceof StateRestoreListener) {
-            storeRestoreListener = (StateRestoreListener) batchingStateRestoreCallback;
         } else {
             storeRestoreListener = new NoOpStateRestoreListener();
         }
+
+        if (stateRestoreCallback == null) {
+            stateRestoreCallback = new NoOpStateRestoreCallback();
+        }
+
+        this.stateRestoreAdapter = new InternalStateRestoreAdapter(stateRestoreCallback);
     }
 
     @Override
     public void onRestoreStart(String storeName, long startingOffset, long endingOffset) {
         reportingStoreListener.onRestoreStart(storeName, startingOffset, endingOffset);
-        storeRestoreListener.onBatchRestored(storeName, startingOffset, endingOffset);
+        storeRestoreListener.onRestoreStart(storeName, startingOffset, endingOffset);
     }
 
     @Override
@@ -67,22 +67,19 @@ class CompositeRestoreListener implements BatchingStateRestoreCallback, StateRes
 
     @Override
     public void restoreAll(Collection<KeyValue<byte[], byte[]>> records) {
-        if (batchingStateRestoreCallback != null) {
-            batchingStateRestoreCallback.restoreAll(records);
-        } else {
-            for (KeyValue<byte[], byte[]> record : records) {
-                restore(record.key, record.value);
-            }
-        }
+        stateRestoreAdapter.restoreAll(records);
     }
 
     void setReportingStoreListener(StateRestoreListener reportingStoreListener) {
-        this.reportingStoreListener = (reportingStoreListener != null) ? reportingStoreListener : new NoOpStateRestoreListener();
+        if (reportingStoreListener != null) {
+            this.reportingStoreListener = reportingStoreListener;
+        }
     }
 
     @Override
     public void restore(byte[] key, byte[] value) {
-        stateRestoreCallback.restore(key, value);
+        throw new UnsupportedOperationException("Single restore functionality shouldn't be called directly but "
+                                                + "through the delegated StateRestoreCallback instance");
     }
 
 
@@ -100,6 +97,14 @@ class CompositeRestoreListener implements BatchingStateRestoreCallback, StateRes
 
         @Override
         public void onRestoreEnd(String storeName, long totalRestored) {
+
+        }
+    }
+
+    private static final class NoOpStateRestoreCallback implements StateRestoreCallback {
+
+        @Override
+        public void restore(byte[] key, byte[] value) {
 
         }
     }

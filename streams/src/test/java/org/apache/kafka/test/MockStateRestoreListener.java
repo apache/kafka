@@ -17,23 +17,65 @@
 
 package org.apache.kafka.test;
 
-import org.apache.kafka.streams.processor.StateRestoreListener;
+import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.processor.AbstractNotifyingRestoreCallback;
 
-public class MockStateRestoreListener implements StateRestoreListener {
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
+public class MockStateRestoreListener extends AbstractNotifyingRestoreCallback {
+
+    //Verifies store name called for each state
+    public final Map<String, String> storeNameCalledStates = new HashMap<>();
+    public final List<KeyValue<byte[], byte[]>> restored = new ArrayList<>();
+    public long restoreStartOffset;
+    public long restoreEndOffset;
+    public long restoredBatchOffset;
+    public long numBatchRestored;
+    public long totalNumRestored;
+
+    public static final String RESTORE_START = "restore_start";
+    public static final String RESTORE_BATCH = "restore_batch";
+    public static final String RESTORE_END = "restore_end";
+
+    @Override
+    public void restore(byte[] key, byte[] value) {
+        restored.add(KeyValue.pair(key, value));
+    }
 
     @Override
     public void onRestoreStart(String storeName, long startingOffset, long endingOffset) {
-
+        storeNameCalledStates.put(RESTORE_START, storeName);
+        restoreStartOffset = startingOffset;
+        restoreEndOffset = endingOffset;
     }
 
     @Override
     public void onBatchRestored(String storeName, long batchEndOffset, long numRestored) {
+        storeNameCalledStates.put(RESTORE_BATCH, storeName);
+        restoredBatchOffset = batchEndOffset;
+        numBatchRestored = numRestored;
 
     }
 
     @Override
     public void onRestoreEnd(String storeName, long totalRestored) {
+        storeNameCalledStates.put(RESTORE_END, storeName);
+        totalNumRestored = totalRestored;
+    }
 
+    @Override
+    public String toString() {
+        return "MockStateRestoreListener{" +
+               "storeNameCalledStates=" + storeNameCalledStates +
+               ", restored=" + restored +
+               ", restoreStartOffset=" + restoreStartOffset +
+               ", restoreEndOffset=" + restoreEndOffset +
+               ", restoredBatchOffset=" + restoredBatchOffset +
+               ", numBatchRestored=" + numBatchRestored +
+               ", totalNumRestored=" + totalNumRestored +
+               '}';
     }
 }

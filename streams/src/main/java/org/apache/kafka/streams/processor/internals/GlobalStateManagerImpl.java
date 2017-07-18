@@ -25,7 +25,6 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.processor.BatchingStateRestoreCallback;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
@@ -171,6 +170,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
 
             long offset = consumer.position(topicPartition);
             final Long highWatermark = highWatermarks.get(topicPartition);
+            InternalStateRestoreAdapter stateRestoreAdapter = new InternalStateRestoreAdapter(stateRestoreCallback);
 
             while (offset < highWatermark) {
                 final ConsumerRecords<byte[], byte[]> records = consumer.poll(100);
@@ -178,16 +178,10 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                 for (ConsumerRecord<byte[], byte[]> record : records) {
                     offset = record.offset() + 1;
                     if (record.key() != null) {
-                        if (stateRestoreCallback instanceof BatchingStateRestoreCallback) {
-                            restoreRecords.add(KeyValue.pair(record.key(), record.value()));
-                        } else {
-                            stateRestoreCallback.restore(record.key(), record.value());
-                        }
+                        restoreRecords.add(KeyValue.pair(record.key(), record.value()));
                     }
                 }
-                if (!restoreRecords.isEmpty()) {
-                    ((BatchingStateRestoreCallback) stateRestoreCallback).restoreAll(restoreRecords);
-                }
+                stateRestoreAdapter.restoreAll(restoreRecords);
             }
             checkpointableOffsets.put(topicPartition, offset);
         }

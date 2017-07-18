@@ -18,7 +18,6 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 
 import java.util.Collection;
@@ -38,13 +37,13 @@ public class StateRestorer {
     private boolean restoreStarted;
 
     StateRestorer(final TopicPartition partition,
-                  final StateRestoreCallback stateRestoreCallback,
+                  final CompositeRestoreListener compositeRestoreListener,
                   final Long checkpoint,
                   final long offsetLimit,
                   final boolean persistent,
                   final String storeName) {
         this.partition = partition;
-        this.compositeRestoreListener = new CompositeRestoreListener(stateRestoreCallback);
+        this.compositeRestoreListener = compositeRestoreListener;
         this.checkpoint = checkpoint;
         this.offsetLimit = offsetLimit;
         this.persistent = persistent;
