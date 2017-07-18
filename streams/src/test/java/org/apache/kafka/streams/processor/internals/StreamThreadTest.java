@@ -1870,7 +1870,8 @@ public class StreamThreadTest {
                     partitions,
                     builder.build(0),
                     clientSupplier.consumer,
-                    new StoreChangelogReader(getName(), clientSupplier.restoreConsumer, mockTime, 1000),
+                    new StoreChangelogReader(getName(), clientSupplier.restoreConsumer, mockTime, 1000,
+                                             new MockStateRestoreListener()),
                     StreamThreadTest.this.config,
                     new StreamsMetricsImpl(new Metrics(), "groupName", Collections.<String, String>emptyMap()),
                     stateDirectory) {
