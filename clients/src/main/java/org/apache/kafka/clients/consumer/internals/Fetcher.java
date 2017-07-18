@@ -436,9 +436,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
 
         for (Map.Entry<TopicPartition, OffsetData> entry : offsetData.entrySet()) {
             OffsetData data = entry.getValue();
-            if (data == null)
-                offsetsByTimes.put(entry.getKey(), null);
-            else
+            if (data != null)
                 offsetsByTimes.put(entry.getKey(), new OffsetAndTimestamp(data.offset, data.timestamp));
         }
         return offsetsByTimes;
@@ -687,8 +685,8 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
      * @param listOffsetResponse The response from the server.
      * @param future The future to be completed when the response returns. Note that any partition-level errors will
      *               generally fail the entire future result. The one exception is UNSUPPORTED_FOR_MESSAGE_FORMAT,
-     *               which indicates that the broker does not support the v1 message format and results in a null
-     *               being inserted into the resulting map.
+     *               which indicates that the broker does not support the v1 message format and causes a null value
+     *               to be reported in the resulting map.
      */
     @SuppressWarnings("deprecation")
     private void handleListOffsetResponse(Map<TopicPartition, Long> timestampsToSearch,
@@ -731,7 +729,6 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                 // The message format on the broker side is before 0.10.0, we simply put null in the response.
                 log.debug("Cannot search by timestamp for partition {} because the message format version " +
                         "is before 0.10.0", topicPartition);
-                timestampOffsetMap.put(topicPartition, null);
             } else if (error == Errors.NOT_LEADER_FOR_PARTITION) {
                 log.debug("Attempt to fetch offsets for partition {} failed due to obsolete leadership information, retrying.",
                         topicPartition);
