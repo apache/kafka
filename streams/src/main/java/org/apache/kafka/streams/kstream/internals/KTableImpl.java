@@ -243,12 +243,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     public void print(Serde<K> keySerde, final Serde<V> valSerde, String label) {
         Objects.requireNonNull(label, "label can't be null");
         String name = topology.newName(PRINTING_NAME);
-        KeyValueMapper<? super K, ? super V, String> mapper = new KeyValueMapper<K, V, String>() {
-            @Override
-            public String apply(K key, V value) {
-                return String.format("%s, %s", key, value);
-            }
-        };
+        final KeyValueMapper<? super K, ? super V, String> mapper = createDefaultKeyValueMapper();
         topology.addProcessor(name, new KStreamPrint<>(new PrintForeachAction(null, mapper, label), keySerde, valSerde), this.name);
     }
 
@@ -278,12 +273,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
             throw new TopologyBuilderException("filePath can't be an empty string");
         }
         String name = topology.newName(PRINTING_NAME);
-        KeyValueMapper<? super K, ? super V, String> mapper = new KeyValueMapper<K, V, String>() {
-            @Override
-            public String apply(K key, V value) {
-                return String.format("%s, %s", key, value);
-            }
-        };
+        final KeyValueMapper<? super K, ? super V, String> mapper = createDefaultKeyValueMapper();
         try {
             PrintWriter printWriter = new PrintWriter(filePath, StandardCharsets.UTF_8.name());
             topology.addProcessor(name, new KStreamPrint<>(new PrintForeachAction(printWriter, mapper, label), keySerde, valSerde), this.name);
@@ -627,6 +617,15 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
 
     boolean sendingOldValueEnabled() {
         return sendOldValues;
+    }
+
+    private <K, V> KeyValueMapper<K, V, String> createDefaultKeyValueMapper() {
+        return new KeyValueMapper<K, V, String>() {
+            @Override
+            public String apply(K key, V value) {
+                return String.format("%s, %s", key, value);
+            }
+        };
     }
 
 }

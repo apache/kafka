@@ -177,45 +177,25 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
     @Override
     public void print() {
-        final KeyValueMapper<? super K, ? super V, String> mapper = new KeyValueMapper<K, V, String>() {
-            @Override
-            public String apply(K key, V value) {
-                return String.format("%s, %s", key, value);
-            }
-        };
+        final KeyValueMapper<? super K, ? super V, String> mapper = createDefaultKeyValueMapper();
         print(mapper, null, null, this.name);
     }
 
     @Override
     public void print(final String label) {
-        final KeyValueMapper<? super K, ? super V, String> mapper = new KeyValueMapper<K, V, String>() {
-            @Override
-            public String apply(K key, V value) {
-                return String.format("%s, %s", key, value);
-            }
-        };
+        final KeyValueMapper<? super K, ? super V, String> mapper = createDefaultKeyValueMapper();
         print(mapper, null, null, label);
     }
 
     @Override
     public void print(final Serde<K> keySerde, final Serde<V> valSerde) {
-        final KeyValueMapper<? super K, ? super V, String> mapper = new KeyValueMapper<K, V, String>() {
-            @Override
-            public String apply(K key, V value) {
-                return String.format("%s, %s", key, value);
-            }
-        };
+        final KeyValueMapper<? super K, ? super V, String> mapper = createDefaultKeyValueMapper();
         print(mapper, keySerde, valSerde, this.name);
     }
 
     @Override
     public void print(final Serde<K> keySerde, final Serde<V> valSerde, final String label) {
-        final KeyValueMapper<? super K, ? super V, String> mapper = new KeyValueMapper<K, V, String>() {
-            @Override
-            public String apply(K key, V value) {
-                return String.format("%s, %s", key, value);
-            }
-        };
+        final KeyValueMapper<? super K, ? super V, String> mapper = createDefaultKeyValueMapper();
         print(mapper, keySerde, valSerde, label);
     }
 
@@ -244,45 +224,25 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
     @Override
     public void writeAsText(final String filePath) {
-        final KeyValueMapper<? super K, ? super V, String> mapper = new KeyValueMapper<K, V, String>() {
-            @Override
-            public String apply(K key, V value) {
-                return String.format("%s, %s", key, value);
-            }
-        };
+        final KeyValueMapper<? super K, ? super V, String> mapper = createDefaultKeyValueMapper();
         writeAsText(filePath, this.name, null, null, mapper);
     }
 
     @Override
     public void writeAsText(final String filePath, final String label) {
-        final KeyValueMapper<? super K, ? super V, String> mapper = new KeyValueMapper<K, V, String>() {
-            @Override
-            public String apply(K key, V value) {
-                return String.format("%s, %s", key, value);
-            }
-        };
+        final KeyValueMapper<? super K, ? super V, String> mapper = createDefaultKeyValueMapper();
         writeAsText(filePath, label, null, null, mapper);
     }
 
     @Override
     public void writeAsText(final String filePath, final Serde<K> keySerde, final Serde<V> valSerde) {
-        final KeyValueMapper<? super K, ? super V, String> mapper = new KeyValueMapper<K, V, String>() {
-            @Override
-            public String apply(K key, V value) {
-                return String.format("%s, %s", key, value);
-            }
-        };
+        final KeyValueMapper<? super K, ? super V, String> mapper = createDefaultKeyValueMapper();
         writeAsText(filePath, this.name, keySerde, valSerde, mapper);
     }
 
     @Override
     public void writeAsText(final String filePath, final String label, final Serde<K> keySerde, final Serde<V> valSerde) {
-        final KeyValueMapper<? super K, ? super V, String> mapper = new KeyValueMapper<K, V, String>() {
-            @Override
-            public String apply(K key, V value) {
-                return String.format("%s, %s", key, value);
-            }
-        };
+        final KeyValueMapper<? super K, ? super V, String> mapper = createDefaultKeyValueMapper();
         writeAsText(filePath, label, keySerde, valSerde, mapper);
     }
 
@@ -760,8 +720,14 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                         this.repartitionRequired);
     }
 
-
-
+    private <K, V> KeyValueMapper<K, V, String> createDefaultKeyValueMapper() {
+        return new KeyValueMapper<K, V, String>() {
+            @Override
+            public String apply(K key, V value) {
+                return String.format("%s, %s", key, value);
+            }
+        };
+    }
 
     private static <K, V> StateStoreSupplier createWindowedStateStore(final JoinWindows windows,
                                                                      final Serde<K> keySerde,
