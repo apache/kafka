@@ -89,6 +89,35 @@ class LogCleanerTest extends JUnitSuite {
   }
 
   @Test
+  def testCleanedSegmentSizeTrimmedWhenPreallocationEnabled(): Unit = {
+    val originalMaxFileSize = 1024;
+    val cleaner = makeCleaner(Int.MaxValue)
+    val logProps = new Properties()
+    logProps.put(LogConfig.SegmentBytesProp, originalMaxFileSize: java.lang.Integer)
+    logProps.put(LogConfig.CleanupPolicyProp, "compact": java.lang.String)
+    logProps.put(LogConfig.PreAllocateEnableProp, "true": java.lang.String)
+
+    val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
+
+    // append messages to the log until we have three segments
+    val random = new java.util.Random()
+    while(log.numberOfSegments < 3)
+      log.appendAsLeader(record(random.nextInt(5), log.logEndOffset.toInt), leaderEpoch = 0)
+
+    // pretend we have the following keys
+    val keys = immutable.ListSet(0, 1, 2, 3, 4)
+    val map = new FakeOffsetMap(Int.MaxValue)
+    keys.foreach(k => map.put(key(k), Long.MaxValue))
+
+    // clean the first log segment
+    val segments = log.logSegments.take(1).toSeq
+    val stats = new CleanerStats()
+    cleaner.cleanSegments(log, segments, map, 0L, stats)
+    // the file field of FileRecords for the segment was already renamed with suffix '.deleted'
+    assertNotEquals(new File(segments.head.log.file().getAbsolutePath.replace(Log.DeletedFileSuffix, "")).length(), originalMaxFileSize)
+  }
+
+  @Test
   def testDuplicateCheckAfterCleaning(): Unit = {
     val cleaner = makeCleaner(Int.MaxValue)
     val logProps = new Properties()
