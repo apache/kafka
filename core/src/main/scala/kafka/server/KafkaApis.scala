@@ -1543,15 +1543,19 @@ class KafkaApis(val requestChannel: RequestChannel,
     var skippedMarkers = 0
     for (marker <- markers.asScala) {
       val producerId = marker.producerId
-      val (goodPartitions, partitionsWithIncorrectMessageFormat) = marker.partitions.asScala.partition { partition =>
+
+      val (goodPartitions, unknownOrIncorrectMessageFormatPartitions) = marker.partitions.asScala.partition { partition =>
         replicaManager.getMagic(partition) match {
           case Some(magic) if magic >= RecordBatch.MAGIC_VALUE_V2 => true
           case _ => false
         }
       }
 
-      if (partitionsWithIncorrectMessageFormat.nonEmpty) {
+      val (partitionsWithIncorrectMessageFormat, unknownPartitions) = unknownOrIncorrectMessageFormatPartitions.partition(metadataCache.contains(_))
+
+      if (unknownOrIncorrectMessageFormatPartitions.nonEmpty) {
         val currentErrors = new ConcurrentHashMap[TopicPartition, Errors]()
+        unknownPartitions.foreach { partition => currentErrors.put(partition, Errors.UNKNOWN_TOPIC_OR_PARTITION)}
         partitionsWithIncorrectMessageFormat.foreach { partition => currentErrors.put(partition, Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT) }
         updateErrors(producerId, currentErrors)
       }
