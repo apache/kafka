@@ -22,7 +22,7 @@ import java.util.concurrent.{ArrayBlockingQueue, ConcurrentHashMap, CountDownLat
 
 import kafka.utils.CoreUtils.{inLock, inReadLock, inWriteLock}
 import org.apache.zookeeper.AsyncCallback.{ACLCallback, Children2Callback, DataCallback, StatCallback, StringCallback, VoidCallback}
-import org.apache.zookeeper.Watcher.Event.EventType
+import org.apache.zookeeper.Watcher.Event.{EventType, KeeperState}
 import org.apache.zookeeper.data.{ACL, Stat}
 import org.apache.zookeeper.{CreateMode, WatchedEvent, Watcher, ZooKeeper}
 
@@ -155,10 +155,12 @@ class ZookeeperClient(connectString: String, sessionTimeout: Int, sessionExpirat
         inLock(isConnectedOrExpiredLock) {
           isConnectedOrExpiredCondition.signalAll()
         }
-        inWriteLock(initializationLock) {
-          sessionExpirationHandler.beforeInitializingSession
-          initialize()
-          sessionExpirationHandler.afterInitializingSession
+        if (event.getState == KeeperState.Expired) {
+          inWriteLock(initializationLock) {
+            sessionExpirationHandler.beforeInitializingSession
+            initialize()
+            sessionExpirationHandler.afterInitializingSession
+          }
         }
       } else if (event.getType == EventType.NodeCreated) {
         Option(zNodeChangeHandlers.remove(event.getPath)).foreach(_.handleCreation)
