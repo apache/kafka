@@ -137,10 +137,10 @@ object JmxTool extends Logging {
           Thread.sleep(500)
         }
         names = queries.flatMap((name: ObjectName) => mbsc.queryNames(name, null).asScala)
-      } while (wait && retries < maxNumRetries && !queries.equals(names))
+      } while (wait && retries < maxNumRetries && !queries.toSet.equals(names.toSet))
     }
 
-    if (wait && !queries.equals(names)) {
+    if (wait && !queries.toSet.equals(names.toSet)) {
       System.err.println(s"Could not find all requested object names after $maxNumRetries retries.")
       System.err.println("Exiting.")
       sys.exit(1)
