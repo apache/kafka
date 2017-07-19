@@ -34,7 +34,7 @@ class ZookeeperClient(connectString: String, sessionTimeout: Int, sessionExpirat
   private val zNodeChildChangeHandlers = new ConcurrentHashMap[String, ZNodeChildChangeHandler]()
   @volatile private var zooKeeper = new ZooKeeper(connectString, sessionTimeout, ZookeeperClientWatcher)
 
-  def handle(request: AsyncRequest): AsyncResponse = inReadLock(initializationLock) {
+  def handle(request: AsyncRequest): AsyncResponse = {
     handle(Seq(request)).head
   }
 
@@ -107,31 +107,31 @@ class ZookeeperClient(connectString: String, sessionTimeout: Int, sessionExpirat
     state.isConnected
   }
 
-  def registerZNodeChangeHandler(zNodeChangeHandler: ZNodeChangeHandler): ExistsResponse = inReadLock(initializationLock) {
+  def registerZNodeChangeHandler(zNodeChangeHandler: ZNodeChangeHandler): ExistsResponse = {
     registerZNodeChangeHandlers(Seq(zNodeChangeHandler)).head
   }
 
-  def registerZNodeChangeHandlers(handlers: Seq[ZNodeChangeHandler]): Seq[ExistsResponse] = inReadLock(initializationLock) {
+  def registerZNodeChangeHandlers(handlers: Seq[ZNodeChangeHandler]): Seq[ExistsResponse] = {
     handlers.foreach(handler => zNodeChangeHandlers.put(handler.path, handler))
     val asyncRequests = handlers.map(handler => ExistsWithWatcherRequest(handler.path))
     handle(asyncRequests).asInstanceOf[Seq[ExistsResponse]]
   }
 
-  def unregisterZNodeChangeHandler(path: String): Unit = inReadLock(initializationLock) {
+  def unregisterZNodeChangeHandler(path: String): Unit = {
     zNodeChangeHandlers.remove(path)
   }
 
-  def registerZNodeChildChangeHandler(zNodeChildChangeHandler: ZNodeChildChangeHandler): GetChildrenResponse = inReadLock(initializationLock) {
+  def registerZNodeChildChangeHandler(zNodeChildChangeHandler: ZNodeChildChangeHandler): GetChildrenResponse = {
     registerZNodeChildChangeHandlers(Seq(zNodeChildChangeHandler)).head
   }
 
-  def registerZNodeChildChangeHandlers(handlers: Seq[ZNodeChildChangeHandler]): Seq[GetChildrenResponse] = inReadLock(initializationLock) {
+  def registerZNodeChildChangeHandlers(handlers: Seq[ZNodeChildChangeHandler]): Seq[GetChildrenResponse] = {
     handlers.foreach(handler => zNodeChildChangeHandlers.put(handler.path, handler))
     val asyncRequests = handlers.map(handler => GetChildrenWithWatcherRequest(handler.path))
     handle(asyncRequests).asInstanceOf[Seq[GetChildrenResponse]]
   }
 
-  def unregisterZNodeChildChangeHandler(path: String): Unit = inReadLock(initializationLock) {
+  def unregisterZNodeChildChangeHandler(path: String): Unit = {
     zNodeChildChangeHandlers.remove(path)
   }
 
