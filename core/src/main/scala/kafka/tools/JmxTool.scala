@@ -95,10 +95,10 @@ object JmxTool extends Logging {
 
     var jmxc: JMXConnector = null
     var mbsc: MBeanServerConnection = null
-    var retries = 0
-    val maxNumRetries = 10
     var connected = false
-    while (retries < maxNumRetries && !connected) {
+    val connectTimeoutMs = 10000
+    val connectTestStarted = System.currentTimeMillis
+    do {
       try {
         System.err.println(s"Trying to connect to JMX url: $url.")
         jmxc = JMXConnectorFactory.connect(url, null)
@@ -108,13 +108,12 @@ object JmxTool extends Logging {
         case e : Exception =>
           System.err.println(s"Could not connect to JMX url: $url. Exception ${e.getMessage}.")
           e.printStackTrace()
-          retries += 1
-          Thread.sleep(500)
+          Thread.sleep(100)
       }
-    }
+    } while (System.currentTimeMillis - connectTestStarted < connectTimeoutMs && !connected)
 
     if (!connected) {
-      System.err.println(s"Could not connect to JMX url $url after $maxNumRetries retries.")
+      System.err.println(s"Could not connect to JMX url $url after $connectTimeoutMs ms.")
       System.err.println("Exiting.")
       sys.exit(1)
     }
@@ -127,21 +126,21 @@ object JmxTool extends Logging {
 
     val hasPatternQueries = queries.exists((name: ObjectName) => name.isPattern)
 
-    retries = 0
     var names : Iterable[ObjectName] = null
+    val waitTimeoutMs = 10000
     if (!hasPatternQueries) {
+      val start = System.currentTimeMillis
       do {
         if (names != null) {
           System.err.println("Could not find all object names, retrying")
-          retries += 1
-          Thread.sleep(500)
+          Thread.sleep(100)
         }
         names = queries.flatMap((name: ObjectName) => mbsc.queryNames(name, null).asScala)
-      } while (wait && retries < maxNumRetries && !queries.toSet.equals(if (names == null) null else names.toSet))
+      } while (wait && System.currentTimeMillis - start < waitTimeoutMs && !queries.toSet.equals(if (names == null) null else names.toSet))
     }
 
     if (wait && !queries.toSet.equals(if (names == null) null else names.toSet)) {
-      System.err.println(s"Could not find all requested object names after $maxNumRetries retries.")
+      System.err.println(s"Could not find all requested object names after $waitTimeoutMs ms.")
       System.err.println("Exiting.")
       sys.exit(1)
     }
