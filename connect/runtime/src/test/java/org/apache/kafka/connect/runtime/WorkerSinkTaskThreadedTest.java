@@ -115,7 +115,6 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
     private long recordsReturned;
 
 
-    @SuppressWarnings("unchecked")
     @Override
     public void setup() {
         super.setup();

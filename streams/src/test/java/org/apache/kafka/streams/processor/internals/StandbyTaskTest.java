@@ -177,7 +177,6 @@ public class StandbyTaskTest {
 
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void testUpdate() throws Exception {
         StreamsConfig config = createConfig(baseDir);
@@ -224,7 +223,6 @@ public class StandbyTaskTest {
 
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void testUpdateKTable() throws Exception {
         consumer.assign(Utils.mkList(ktable));

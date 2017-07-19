@@ -49,7 +49,6 @@ public class GlobalStateUpdateTask implements GlobalStateMaintainer {
         this.deserializationExceptionHandler = deserializationExceptionHandler;
     }
 
-    @SuppressWarnings("unchecked")
     public Map<TopicPartition, Long> initialize() {
         final Set<String> storeNames = stateMgr.initialize(processorContext);
         final Map<String, String> storeNameToTopic = topology.storeToChangelogTopic();
