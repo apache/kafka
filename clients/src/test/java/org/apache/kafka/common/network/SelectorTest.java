@@ -43,6 +43,8 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -111,13 +113,20 @@ public class SelectorTest {
     /**
      * Sending a request with one already in flight should result in an exception
      */
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void testCantSendWithInProgress() throws Exception {
         String node = "0";
         blockingConnect(node);
         selector.send(createSend(node, "test1"));
-        selector.send(createSend(node, "test2"));
-        selector.poll(1000L);
+        try {
+            selector.send(createSend(node, "test2"));
+            fail("IllegalStateException not thrown when sending a request with one in flight");
+        } catch (IllegalStateException e) {
+            // Expected exception
+        }
+        selector.poll(0);
+        assertTrue("Channel not closed", selector.disconnected().containsKey(node));
+        assertEquals(ChannelState.FAILED_SEND, selector.disconnected().get(node));
     }
 
     /**
@@ -274,6 +283,22 @@ public class SelectorTest {
         assertEquals("The response should be from the previously muted node", "1", selector.completedReceives().get(0).source());
     }
 
+    @Test
+    public void testCloseConnectionInClosingState() throws Exception {
+        KafkaChannel channel = createConnectionWithStagedReceives(5);
+        String id = channel.id();
+        time.sleep(6000); // The max idle time is 5000ms
+        selector.poll(0);
+        assertEquals(channel, selector.closingChannel(id));
+        assertNull("Channel not expired", selector.channel(id));
+        assertEquals(ChannelState.EXPIRED, channel.state());
+        selector.close(id);
+        assertNull("Channel not closed", selector.closingChannel(id));
+        assertTrue("Unexpected disconnect notification", selector.disconnected().isEmpty());
+        assertEquals(ChannelState.EXPIRED, channel.state());
+        selector.poll(0);
+        assertTrue("Unexpected disconnect notification", selector.disconnected().isEmpty());
+    }
 
     @Test
     public void testCloseOldestConnection() throws Exception {
@@ -297,22 +322,32 @@ public class SelectorTest {
         verifyCloseOldestConnectionWithStagedReceives(5);
     }
 
-    private void verifyCloseOldestConnectionWithStagedReceives(int maxStagedReceives) throws Exception {
+    private KafkaChannel createConnectionWithStagedReceives(int maxStagedReceives) throws Exception {
         String id = "0";
         blockingConnect(id);
         KafkaChannel channel = selector.channel(id);
+        int retries = 100;
 
-        selector.mute(id);
-        for (int i = 0; i <= maxStagedReceives; i++) {
-            selector.send(createSend(id, String.valueOf(i)));
-            selector.poll(1000);
-        }
-
-        selector.unmute(id);
         do {
-            selector.poll(1000);
-        } while (selector.completedReceives().isEmpty());
+            selector.mute(id);
+            for (int i = 0; i <= maxStagedReceives; i++) {
+                selector.send(createSend(id, String.valueOf(i)));
+                selector.poll(1000);
+            }
 
+            selector.unmute(id);
+            do {
+                selector.poll(1000);
+            } while (selector.completedReceives().isEmpty());
+        } while (selector.numStagedReceives(channel) == 0 && --retries > 0);
+        assertTrue("No staged receives after 100 attempts", selector.numStagedReceives(channel) > 0);
+
+        return channel;
+    }
+
+    private void verifyCloseOldestConnectionWithStagedReceives(int maxStagedReceives) throws Exception {
+        KafkaChannel channel = createConnectionWithStagedReceives(maxStagedReceives);
+        String id = channel.id();
         int stagedReceives = selector.numStagedReceives(channel);
         int completedReceives = 0;
         while (selector.disconnected().isEmpty()) {

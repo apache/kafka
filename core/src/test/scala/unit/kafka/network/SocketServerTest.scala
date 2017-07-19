@@ -20,6 +20,7 @@ package kafka.network
 import java.io._
 import java.net._
 import java.nio.ByteBuffer
+import java.nio.channels.SocketChannel
 import java.util.{HashMap, Random}
 import javax.net.ssl._
 
@@ -32,7 +33,7 @@ import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.network.{KafkaChannel, ListenerName, NetworkSend, Send}
+import org.apache.kafka.common.network.{ChannelBuilder, ChannelState, KafkaChannel, ListenerName, NetworkSend, Selector, Send}
 import org.apache.kafka.common.protocol.{ApiKeys, SecurityProtocol}
 import org.apache.kafka.common.record.{MemoryRecords, RecordBatch}
 import org.apache.kafka.common.requests.{AbstractRequest, ProduceRequest, RequestHeader}
@@ -43,7 +44,9 @@ import org.junit._
 import org.scalatest.junit.JUnitSuite
 
 import scala.collection.JavaConverters._
+import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
+import scala.util.control.ControlThrowable
 
 class SocketServerTest extends JUnitSuite {
   val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 0)
@@ -593,4 +596,278 @@ class SocketServerTest extends JUnitSuite {
     }
   }
 
+  @Test
+  def configureNewConnectionException(): Unit = {
+    val testableServer = startTestableServer()
+    try {
+      testableServer.testableSelector.failures += SelectorOperation.REGISTER -> new IllegalStateException("Test exception during Selector.register()")
+      val socket = connect(testableServer)
+      testableServer.testableSelector.waitForOperations(SelectorOperation.REGISTER, 1)
+      TestUtils.waitUntilTrue(() =>  testableServer.connectionCount(socket.getLocalAddress) == 0, "Channel not removed")
+
+      assertProcessorHealthy(testableServer)
+    } finally {
+      testableServer.shutdown()
+      testableServer.metrics.close()
+    }
+  }
+
+  @Test
+  def processNewResponseException(): Unit = {
+    val testableServer = startTestableServer()
+    try {
+      val socket = connect(testableServer)
+      sendRequest(socket, producerRequestBytes)
+      val requestChannel = testableServer.requestChannel
+
+      testableServer.testableSelector.failures += SelectorOperation.SEND -> new IllegalStateException("Test exception for Selector.send()")
+      val request = receiveRequest(requestChannel)
+      processRequest(requestChannel, request)
+      testableServer.waitForChannelException(request.context.connectionId, socket, SelectorOperation.SEND)
+
+      assertProcessorHealthy(testableServer)
+    } finally {
+      testableServer.shutdown()
+      testableServer.metrics.close()
+    }
+  }
+
+  @Test
+  def closingChannelException(): Unit = {
+    val testableServer = startTestableServer()
+    try {
+      val socket = connect(testableServer)
+      val request = sendRequestsUntilStagedReceive(testableServer, socket, producerRequestBytes)
+
+      testableServer.testableSelector.failures += SelectorOperation.SEND -> new IllegalStateException("Test exception during Selector.send()")
+      socket.close()
+      processRequest(testableServer.requestChannel, request)
+      testableServer.waitForChannelException(request.context.connectionId, socket, SelectorOperation.SEND)
+
+      assertProcessorHealthy(testableServer)
+    } finally {
+      testableServer.shutdown()
+      testableServer.metrics.close()
+    }
+  }
+
+  @Test
+  def processCompletedReceiveException(): Unit = {
+    val testableServer = startTestableServer()
+    try {
+      val socket = connect(testableServer)
+
+      testableServer.testableSelector.failures += SelectorOperation.MUTE -> new IllegalStateException("Test exception during Selector.mute()")
+      sendRequest(socket, producerRequestBytes)
+      val requestChannel = testableServer.requestChannel
+      val request = receiveRequest(requestChannel)
+      testableServer.waitForChannelException(request.context.connectionId, socket, SelectorOperation.MUTE)
+
+      assertProcessorHealthy(testableServer)
+    } finally {
+      testableServer.shutdown()
+      testableServer.metrics.close()
+    }
+  }
+
+  @Test
+  def processCompletedSendException(): Unit = {
+    val testableServer = startTestableServer()
+    try {
+      val socket = connect(testableServer)
+      sendRequest(socket, producerRequestBytes)
+      val requestChannel = testableServer.requestChannel
+
+      testableServer.testableSelector.failures += SelectorOperation.UNMUTE -> new IllegalStateException("Test exception during Selector.unmute()")
+      val request = receiveRequest(requestChannel)
+      processRequest(requestChannel, request)
+      testableServer.waitForChannelException(request.context.connectionId, socket, SelectorOperation.UNMUTE)
+
+      assertProcessorHealthy(testableServer)
+    } finally {
+      testableServer.shutdown()
+      testableServer.metrics.close()
+    }
+  }
+
+  @Test
+  def controlThrowable(): Unit = {
+    val testableServer = startTestableServer()
+    try {
+      val socket = connect(testableServer)
+      sendRequest(socket, producerRequestBytes)
+      receiveRequest(testableServer.requestChannel)
+      val testableSelector = testableServer.testableSelector
+
+      testableSelector.failures += SelectorOperation.POLL -> new RuntimeException("ControlThrowable exception during poll()") with ControlThrowable
+      testableSelector.operationCounts.clear()
+      testableSelector.waitForOperations(SelectorOperation.POLL, 1)
+
+      TestUtils.waitUntilTrue(() =>  testableSelector.closed, "Selector not closed")
+      val pollCount = testableSelector.operationCounts.getOrElse(SelectorOperation.POLL, 0)
+      Thread.sleep(300)
+      assertEquals(pollCount, testableSelector.operationCounts.getOrElse(SelectorOperation.POLL, -1))
+    } finally {
+      testableServer.shutdown()
+      testableServer.metrics.close()
+    }
+  }
+
+  @Test
+  def processDisconnectedException(): Unit = {
+    selectorException(SelectorOperation.DISCONNECTED)
+  }
+
+  @Test
+  def pollException(): Unit = {
+    selectorException(SelectorOperation.POLL)
+  }
+
+  private def selectorException(operation: SelectorOperation.Value): Unit = {
+    val testableServer = startTestableServer()
+    try {
+      val socket = connect(testableServer)
+      sendRequest(socket, producerRequestBytes)
+      receiveRequest(testableServer.requestChannel)
+      val testableSelector = testableServer.testableSelector
+
+      testableSelector.failures += operation -> new IllegalStateException("Test exception")
+      socket.close()
+      testableSelector.operationCounts.clear()
+      testableSelector.waitForOperations(operation, 1)
+
+      assertProcessorHealthy(testableServer)
+    } finally {
+      testableServer.shutdown()
+      testableServer.metrics.close()
+    }
+  }
+
+  private def startTestableServer(): TestableSocketServer = {
+    props.put("listeners", "PLAINTEXT://localhost:0")
+    val testableServer = new TestableSocketServer
+    testableServer.startup()
+    testableServer
+  }
+
+  private def assertProcessorHealthy(testableServer: TestableSocketServer): Unit = {
+    val selector = testableServer.testableSelector
+    selector.failures.clear()
+    val socket = connect(testableServer)
+    val serializedBytes = producerRequestBytes
+    sendRequest(socket, serializedBytes)
+    val requestChannel = testableServer.requestChannel
+
+    val request = receiveRequest(requestChannel)
+    val connectionId = request.context.connectionId
+    processRequest(requestChannel, request)
+    assertEquals(serializedBytes.toSeq, receiveResponse(socket).toSeq)
+    assertNotNull("Channel should not have been closed", selector.channel(connectionId))
+    assertNull("Channel should not be closing", selector.closingChannel(connectionId))
+  }
+
+  class TestableSocketServer extends SocketServer(KafkaConfig.fromProps(props), new Metrics, Time.SYSTEM, credentialProvider) {
+
+    @volatile var selector: Option[TestableSelector] = None
+
+    override def newProcessor(id: Int, connectionQuotas: ConnectionQuotas, listenerName: ListenerName,
+                                protocol: SecurityProtocol, memoryPool: MemoryPool): Processor = {
+      new Processor(id, time, config.socketRequestMaxBytes, requestChannel, connectionQuotas,
+        config.connectionsMaxIdleMs, listenerName, protocol, config, metrics, credentialProvider, memoryPool) {
+        override protected[network] def createSelector(maxReceiveSize: Int, connectionMaxIdleMs: Long,
+             metrics: Metrics, time: Time, metricGrpPrefix: String, metricTags: java.util.Map[String, String],
+             metricsPerConnection: Boolean, recordTimePerConnection: Boolean,
+             channelBuilder: ChannelBuilder, memoryPool: MemoryPool): Selector = {
+
+           val testableSelector = new TestableSelector(maxReceiveSize, connectionMaxIdleMs, metrics, time, metricGrpPrefix, metricTags,
+                            metricsPerConnection, recordTimePerConnection, channelBuilder, memoryPool)
+           selector = Some(testableSelector)
+           testableSelector
+        }
+      }
+    }
+    def testableSelector = selector.getOrElse(throw new IllegalStateException("Selector not created"))
+
+    def waitForChannelException(connectionId: String, socket: Socket, operation: SelectorOperation.Value): Unit = {
+      val selector = testableSelector
+      selector.waitForOperations(operation, 1)
+      TestUtils.waitUntilTrue(() =>  selector.allLocallyClosedChannels.contains(connectionId), "Channel not closed")
+      assertEquals(0, connectionCount(socket.getLocalAddress))
+      assertTrue("Inflight responses not cleared", processor(0).inflightResponses.isEmpty)
+      assertNull("Channel not removed", selector.channel(connectionId))
+      assertNull("Closing channel not removed", selector.closingChannel(connectionId))
+      assertTrue("Unexpected disconnect notification",testableSelector.allDisconnectedChannels.isEmpty)
+    }
+  }
+
+  object SelectorOperation extends Enumeration {
+    type SelectorOperation = Value
+    val REGISTER, POLL, SEND, MUTE, UNMUTE, CLOSE, DISCONNECTED = Value
+  }
+
+  class TestableSelector(maxReceiveSize: Int, connectionMaxIdleMs: Long,
+                         metrics: Metrics, time: Time, metricGrpPrefix: String, metricTags: java.util.Map[String, String], metricsPerConnection: Boolean,
+                         recordTimePerConnection: Boolean, channelBuilder: ChannelBuilder, memoryPool: MemoryPool)
+        extends Selector(maxReceiveSize, connectionMaxIdleMs, metrics, time, metricGrpPrefix, metricTags, metricsPerConnection,
+                         recordTimePerConnection, channelBuilder, memoryPool) {
+
+    val failures = new mutable.HashMap[SelectorOperation.Value, Exception]
+    val operationCounts = new mutable.HashMap[SelectorOperation.Value, Int]
+    val allChannels = new mutable.HashSet[String]
+    val allLocallyClosedChannels = new mutable.HashSet[String]
+    val allDisconnectedChannels = new mutable.HashSet[String]
+    @volatile var closed = false
+
+    private def onOperation(operation: SelectorOperation.Value): Unit = {
+      operationCounts.put(operation, operationCounts.getOrElse(operation, 0) + 1)
+      failures.get(operation).foreach(e => throw e)
+    }
+
+    def waitForOperations(operation: SelectorOperation.Value, minExpectedTotal: Int): Unit = {
+      TestUtils.waitUntilTrue(() => operationCounts.getOrElse(operation, 0) >= minExpectedTotal, "Operations not performed within timeout")
+    }
+
+    override def register(id: String, socketChannel: SocketChannel): Unit = {
+      onOperation(SelectorOperation.REGISTER)
+      super.register(id, socketChannel)
+    }
+
+    override def send(s: Send): Unit = {
+      onOperation(SelectorOperation.SEND)
+      super.send(s)
+    }
+
+    override def poll(timeout: Long): Unit = {
+      onOperation(SelectorOperation.POLL)
+      super.poll(timeout)
+      super.channels.asScala.foreach(allChannels += _.id)
+      super.disconnected.asScala.foreach(allDisconnectedChannels += _._1)
+    }
+
+    override def mute(id: String): Unit = {
+      super.mute(id)
+      onOperation(SelectorOperation.MUTE)
+    }
+
+    override def unmute(id: String): Unit = {
+      super.unmute(id)
+      onOperation(SelectorOperation.UNMUTE)
+    }
+
+    override def disconnected(): java.util.Map[String, ChannelState] = {
+      onOperation(SelectorOperation.DISCONNECTED)
+      super.disconnected
+    }
+
+    override def close(id: String): Unit = {
+      super.close(id)
+      allLocallyClosedChannels += id
+      onOperation(SelectorOperation.CLOSE)
+    }
+
+    override def close(): Unit  = {
+      closed = true
+      super.close()
+    }
+  }
 }
