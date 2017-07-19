@@ -270,32 +270,29 @@ class SocketServerTest extends JUnitSuite {
     def openChannel: Option[KafkaChannel] = overrideServer.processor(0).channel(overrideConnectionId)
     def openOrClosingChannel: Option[KafkaChannel] = overrideServer.processor(0).openOrClosingChannel(overrideConnectionId)
     def connectionCount = overrideServer.connectionCount(InetAddress.getByName("127.0.0.1"))
-    def createChannelAndVerify(socket: Socket, numRequests: Int): KafkaChannel = {
-      val serializedBytes = producerRequestBytes
-      (1 to numRequests).foreach(_ => sendRequest(socket, serializedBytes))
-      TestUtils.waitUntilTrue(() => connectionCount == 1, "Failed to close old channel")
-      val channel = openChannel
-      channel.foreach(c => c.id == overrideConnectionId)
-      channel.getOrElse(fail("Channel not found"))
-    }
 
     try {
       overrideServer.startup()
-      val channel1 = createChannelAndVerify(connect(overrideServer), 0)
+      val socket1 = connect(overrideServer)
+      TestUtils.waitUntilTrue(() => connectionCount == 1, "Failed to create channel")
+      val channel1 = openChannel
 
       // Create new connection with same id when channel1 is still open and in Selector.channels
-      val socket2 = connect(overrideServer)
-      val channel2 = createChannelAndVerify(socket2, 3)
-      assertNotEquals(channel1, channel2)
+      connect(overrideServer)
+      TestUtils.waitUntilTrue(() => connectionCount == 1, "Failed to close channel")
+      assertEquals(channel1, openChannel)
 
-      // Create new connection with same id when channel2 is closed with staged receives and in Selector.closingChannels
+      // Create new connection with same id when channel1 is closed with staged receives and in Selector.closingChannels
+      val serializedBytes = producerRequestBytes
+      (1 to 3).foreach(_ => sendRequest(socket1, serializedBytes))
       val request = overrideServer.requestChannel.receiveRequest(2000)
       time.sleep(idleTimeMs + 1)
       TestUtils.waitUntilTrue(() => openChannel.isEmpty, "Idle channel not closed")
       assertTrue("Channel removed without processing staging receives", openOrClosingChannel.nonEmpty)
 
-      val channel3 = createChannelAndVerify(connect(overrideServer), 1)
-      assertNotEquals(channel2, channel3)
+      connect(overrideServer)
+      TestUtils.waitUntilTrue(() => connectionCount == 1, "Failed to close channel")
+      assertEquals(channel1, openOrClosingChannel)
 
     } finally {
       overrideServer.shutdown()

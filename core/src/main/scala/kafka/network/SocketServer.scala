@@ -458,7 +458,7 @@ private[kafka] class Processor(val id: Int,
         poll()
         processCompletedReceives()
         processCompletedSends()
-        processDisconnected(selector.disconnected.keySet.asScala)
+        processDisconnected()
       } catch {
         // We catch all the throwables here to prevent the processor thread from exiting. We do this because
         // letting a processor exit might cause a bigger impact on the broker. Usually the exceptions thrown would
@@ -570,8 +570,8 @@ private[kafka] class Processor(val id: Int,
     request.updateRequestMetrics(networkThreadTimeNanos)
   }
 
-  private def processDisconnected(disconnected: Set[String]) {
-    disconnected.foreach { connectionId =>
+  private def processDisconnected() {
+    selector.disconnected.keySet.asScala.foreach { connectionId =>
       val remoteHost = ConnectionId.fromString(connectionId).getOrElse {
         throw new IllegalStateException(s"connectionId has unexpected format: $connectionId")
       }.remoteHost
@@ -593,7 +593,6 @@ private[kafka] class Processor(val id: Int,
    * Register any new connections that have been queued up
    */
   private def configureNewConnections() {
-    val alreadyDisconnected = selector.disconnected.keySet.asScala.toSet
     while (!newConnections.isEmpty) {
       val channel = newConnections.poll()
       try {
@@ -609,9 +608,6 @@ private[kafka] class Processor(val id: Int,
           error(s"Processor $id closed connection from $remoteAddress", e)
       }
     }
-    // Process any disconnections due to connection id reuse
-    val newDisconnected = selector.disconnected.keySet.asScala -- alreadyDisconnected
-    processDisconnected(newDisconnected)
   }
 
   /**

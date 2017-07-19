@@ -191,8 +191,10 @@ public class Selector implements Selectable, AutoCloseable {
      */
     @Override
     public void connect(String id, InetSocketAddress address, int sendBufferSize, int receiveBufferSize) throws IOException {
-        if (this.channels.containsKey(id) || this.closingChannels.containsKey(id))
+        if (this.channels.containsKey(id))
             throw new IllegalStateException("There is already a connection for id " + id);
+        if (this.closingChannels.containsKey(id))
+            throw new IllegalStateException("There is already a connection for id " + id + " that is still being closed");
 
         SocketChannel socketChannel = SocketChannel.open();
         socketChannel.configureBlocking(false);
@@ -240,23 +242,18 @@ public class Selector implements Selectable, AutoCloseable {
      * Register the nioSelector with an existing channel
      * Use this on server-side, when a connection is accepted by a different thread but processed by the Selector
      * <p>
-     * If a connection already exists with the same connection id, the existing zombie connection is closed.
-     * These disconnections are notified and may be processed by the caller using {@link #disconnected()} before
-     * the next {@link #poll(long)}. Kafka brokers add an incrementing index to the connection id to avoid
-     * connection ids being reused even when remote port is reused, so this scenario is highly unlikely.
+     * If a connection already exists with the same connection id in `channels` or `closingChannels`,
+     * an exception is thrown. Connection ids must be chosen to avoid conflict when remote ports are reused.
+     * Kafka brokers add an incrementing index to the connection id to avoid reuse in the timing window
+     * where an existing connection may not yet have been closed by the broker when a new connection with
+     * the same remote host:port is processed.
      * </p>
-     *
      */
     public void register(String id, SocketChannel socketChannel) throws ClosedChannelException {
-
-        KafkaChannel existingChannel = channels.remove(id);
-        if (existingChannel != null) {
-            log.warn("Closing channel with connection id " + id + " because a new connection has been registered with the same id.");
-            close(existingChannel, false, true);
-        }
-        KafkaChannel closingChannel = closingChannels.remove(id);
-        if (closingChannel != null)
-            close(closingChannel, false, true);
+        if (this.channels.containsKey(id))
+            throw new IllegalStateException("There is already a connection for id " + id);
+        if (this.closingChannels.containsKey(id))
+            throw new IllegalStateException("There is already a connection for id " + id + " that is still being closed");
 
         SelectionKey key = socketChannel.register(nioSelector, SelectionKey.OP_READ);
         KafkaChannel channel = channelBuilder.buildChannel(id, key, maxReceiveSize, memoryPool);
@@ -303,7 +300,7 @@ public class Selector implements Selectable, AutoCloseable {
                 channel.setSend(send);
             } catch (CancelledKeyException e) {
                 this.failedSends.add(connectionId);
-                close(channel, false, false);
+                close(channel, false);
             }
         }
     }
@@ -461,7 +458,7 @@ public class Selector implements Selectable, AutoCloseable {
 
                 /* cancel any defunct sockets */
                 if (!key.isValid())
-                    close(channel, true, true);
+                    close(channel, true);
 
             } catch (Exception e) {
                 String desc = channel.socketDescription();
@@ -469,7 +466,7 @@ public class Selector implements Selectable, AutoCloseable {
                     log.debug("Connection with {} disconnected", desc, e);
                 else
                     log.warn("Unexpected error from {}; closing connection", desc, e);
-                close(channel, true, true);
+                close(channel, true);
             } finally {
                 maybeRecordTimePerConnection(channel, channelStartTimeNanos);
             }
@@ -582,7 +579,7 @@ public class Selector implements Selectable, AutoCloseable {
                     log.trace("About to close the idle connection from {} due to being idle for {} millis",
                             connectionId, (currentTimeNanos - expiredConnection.getValue()) / 1000 / 1000);
                 channel.state(ChannelState.EXPIRED);
-                close(channel, true, true);
+                close(channel, true);
             }
         }
     }
@@ -642,7 +639,7 @@ public class Selector implements Selectable, AutoCloseable {
             // There is no disconnect notification for local close, but updating
             // channel state here anyway to avoid confusion.
             channel.state(ChannelState.LOCAL_CLOSE);
-            close(channel, false, false);
+            close(channel, false);
         }
     }
 
@@ -654,10 +651,10 @@ public class Selector implements Selectable, AutoCloseable {
      * is requested. The channel will be added to disconnect list when it is actually closed.
      *
      * If 'processOutstanding' is false, outstanding receives are discarded and the channel is
-     * closed immediately. If 'notifyDisconnect' is false, The channel will not be added to
-     * disconnected list and it is the responsibility of the caller to handle disconnect notifications.
+     * closed immediately. The channel will not be added to disconnected list and it is the
+     * responsibility of the caller to handle disconnect notifications.
      */
-    private void close(KafkaChannel channel, boolean processOutstanding, boolean notifyDisconnect) {
+    private void close(KafkaChannel channel, boolean processOutstanding) {
 
         channel.disconnect();
 
@@ -672,7 +669,7 @@ public class Selector implements Selectable, AutoCloseable {
             // stagedReceives will be moved to completedReceives later along with receives from other channels
             closingChannels.put(channel.id(), channel);
         } else
-            doClose(channel, notifyDisconnect);
+            doClose(channel, processOutstanding);
         this.channels.remove(channel.id());
 
         if (idleExpiryManager != null)
