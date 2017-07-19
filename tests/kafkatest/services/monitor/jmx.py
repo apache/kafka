@@ -23,6 +23,7 @@ class JmxMixin(object):
     A couple things worth noting:
     - this is not a service in its own right.
     - we assume the service using JmxMixin also uses KafkaPathResolverMixin
+    - this uses the --wait option for JmxTool, so the list of object names must be explicit; no patterns are permitted
     """
     def __init__(self, num_nodes, jmx_object_names=None, jmx_attributes=None):
         self.jmx_object_names = jmx_object_names
@@ -61,6 +62,7 @@ class JmxMixin(object):
 
         cmd = "%s kafka.tools.JmxTool " % self.path.script("kafka-run-class.sh", node)
         cmd += "--reporting-interval 1000 --jmx-url service:jmx:rmi:///jndi/rmi://127.0.0.1:%d/jmxrmi" % self.jmx_port
+        cmd += " --wait"
         for jmx_object_name in self.jmx_object_names:
             cmd += " --object-name %s" % jmx_object_name
         for jmx_attribute in self.jmx_attributes:

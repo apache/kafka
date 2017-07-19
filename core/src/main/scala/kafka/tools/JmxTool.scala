@@ -72,7 +72,9 @@ object JmxTool extends Logging {
         .describedAs("service-url")
         .ofType(classOf[String])
         .defaultsTo("service:jmx:rmi:///jndi/rmi://:9999/jmxrmi")
-        
+    val waitOpt = parser.accepts("wait", "Wait for requested JMX objects to become available before starting output. " +
+      "Only supported when the list of objects is non-empty and contains no object name patterns.")
+
     if(args.length == 0)
       CommandLineUtils.printUsageAndDie(parser, "Dump JMX values to standard output.")
 
@@ -89,6 +91,7 @@ object JmxTool extends Logging {
     val attributesWhitelist = if(attributesWhitelistExists) Some(options.valueOf(attributesOpt).split(",")) else None
     val dateFormatExists = options.has(dateFormatOpt)
     val dateFormat = if(dateFormatExists) Some(new SimpleDateFormat(options.valueOf(dateFormatOpt))) else None
+    val wait = options.has(waitOpt)
 
     var jmxc: JMXConnector = null
     var mbsc: MBeanServerConnection = null
@@ -122,7 +125,26 @@ object JmxTool extends Logging {
       else
         List(null)
 
-    val names = queries.flatMap((name: ObjectName) => mbsc.queryNames(name, null).asScala)
+    val hasPatternQueries = queries.exists((name: ObjectName) => name.isPattern)
+
+    retries = 0
+    var names : Iterable[ObjectName] = null
+    if (!hasPatternQueries) {
+      do {
+        if (names != null) {
+          System.err.println("Could not find all object names, retrying")
+          retries += 1
+          Thread.sleep(500)
+        }
+        names = queries.flatMap((name: ObjectName) => mbsc.queryNames(name, null).asScala)
+      } while (wait && retries < maxNumRetries && !queries.equals(names))
+    }
+
+    if (wait && !queries.equals(names)) {
+      System.err.println(s"Could not find all requested object names after $maxNumRetries retries.")
+      System.err.println("Exiting.")
+      sys.exit(1)
+    }
 
     val numExpectedAttributes: Map[ObjectName, Int] =
       if (attributesWhitelistExists)
