@@ -20,6 +20,7 @@ package kafka.network
 import java.io._
 import java.net._
 import java.nio.ByteBuffer
+import java.nio.channels.SocketChannel
 import java.util.{HashMap, Random}
 import javax.net.ssl._
 
@@ -189,12 +190,12 @@ class SocketServerTest extends JUnitSuite {
     val sockets = (1 to 5).map(_ => connect(protocol = SecurityProtocol.PLAINTEXT))
     val serializedBytes = producerRequestBytes
 
-    val requests = sockets.map(socket => {
+    val requests = sockets.map{ socket =>
       sendRequest(socket, serializedBytes)
       server.requestChannel.receiveRequest(2000)
-    })
-    for (i <- 0 until requests.length) {
-      val index = requests(i).connectionId.split("-")(2)
+    }
+    requests.zipWithIndex.foreach { case (request, i) =>
+      val index = requests(i).connectionId.split("-").last
       assertEquals(i.toString, index)
     }
 
@@ -245,6 +246,60 @@ class SocketServerTest extends JUnitSuite {
 
     } finally {
       overrideServer.shutdown()
+      serverMetrics.close()
+    }
+  }
+
+  @Test
+  def testConnectionIdReuse() {
+    val idleTimeMs = 60000
+    val time = new MockTime()
+    props.put(KafkaConfig.ConnectionsMaxIdleMsProp, idleTimeMs.toString)
+    val serverMetrics = new Metrics
+    val overrideConnectionId = "127.0.0.1:1-127.0.0.1:2-0"
+    val overrideServer = new SocketServer(KafkaConfig.fromProps(props), serverMetrics, time, credentialProvider) {
+      override def newProcessor(id: Int, connectionQuotas: ConnectionQuotas, listenerName: ListenerName,
+                                protocol: SecurityProtocol): Processor = {
+        new Processor(id, time, config.socketRequestMaxBytes, requestChannel, connectionQuotas,
+          config.connectionsMaxIdleMs, listenerName, protocol, config, metrics, credentialProvider) {
+          override private[network] def connectionId(channel: SocketChannel): String = overrideConnectionId
+        }
+      }
+    }
+
+    def openChannel: Option[KafkaChannel] = overrideServer.processor(0).channel(overrideConnectionId)
+    def openOrClosingChannel: Option[KafkaChannel] = overrideServer.processor(0).openOrClosingChannel(overrideConnectionId)
+    def connectionCount = overrideServer.connectionCount(InetAddress.getByName("127.0.0.1"))
+    def createChannelAndVerify(socket: Socket, numRequests: Int): KafkaChannel = {
+      val serializedBytes = producerRequestBytes
+      (1 to numRequests).foreach(_ => sendRequest(socket, serializedBytes))
+      TestUtils.waitUntilTrue(() => connectionCount == 1, "Failed to close old channel")
+      val channel = openChannel
+      channel.foreach(c => c.id == overrideConnectionId)
+      channel.getOrElse(fail("Channel not found"))
+    }
+
+    try {
+      overrideServer.startup()
+      val channel1 = createChannelAndVerify(connect(overrideServer), 0)
+
+      // Create new connection with same id when channel1 is still open and in Selector.channels
+      val socket2 = connect(overrideServer)
+      val channel2 = createChannelAndVerify(socket2, 3)
+      assertNotEquals(channel1, channel2)
+
+      // Create new connection with same id when channel2 is closed with staged receives and in Selector.closingChannels
+      val request = overrideServer.requestChannel.receiveRequest(2000)
+      time.sleep(idleTimeMs + 1)
+      TestUtils.waitUntilTrue(() => openChannel.isEmpty, "Idle channel not closed")
+      assertTrue("Channel removed without processing staging receives", openOrClosingChannel.nonEmpty)
+
+      val channel3 = createChannelAndVerify(connect(overrideServer), 1)
+      assertNotEquals(channel2, channel3)
+
+    } finally {
+      overrideServer.shutdown()
+      serverMetrics.close()
     }
   }
 
