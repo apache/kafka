@@ -28,6 +28,8 @@ To upgrade from earlier versions, please review the <a href="#upgrade_11_0_0">0.
 <ul>
     <li>Topic deletion is now enabled by default, since the functionality is now stable. Users who wish to
         to retain the previous behavior should set the broker config <code>delete.topic.enable</code> to <code>false</code>. Keep in mind that topic deletion removes data and the operation is not reversible (i.e. there is no "undelete" operation)</li>
+    <li>For topics that support timestamp search if no offset can be found for a partition, that partition is now included in the search result with a null offset value. Previously, the partition was not included in the map.
+        This change was made to make the search behavior consistent with the case of topics not supporting timestamp search.
 </ul>
 
 <h4><a id="upgrade_11_0_0" href="#upgrade_11_0_0">Upgrading from 0.8.x, 0.9.x, 0.10.0.x, 0.10.1.x or 0.10.2.x to 0.11.0.0</a></h4>

@@ -434,11 +434,9 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         for (Map.Entry<TopicPartition, Long> entry : timestampsToSearch.entrySet())
             offsetsByTimes.put(entry.getKey(), null);
 
-        for (Map.Entry<TopicPartition, OffsetData> entry : offsetData.entrySet()) {
-            OffsetData data = entry.getValue();
-            if (data != null)
-                offsetsByTimes.put(entry.getKey(), new OffsetAndTimestamp(data.offset, data.timestamp));
-        }
+        for (Map.Entry<TopicPartition, OffsetData> entry : offsetData.entrySet())
+            offsetsByTimes.put(entry.getKey(), new OffsetAndTimestamp(entry.getValue().offset, entry.getValue().timestamp));
+
         return offsetsByTimes;
     }
 
@@ -685,8 +683,10 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
      * @param listOffsetResponse The response from the server.
      * @param future The future to be completed when the response returns. Note that any partition-level errors will
      *               generally fail the entire future result. The one exception is UNSUPPORTED_FOR_MESSAGE_FORMAT,
-     *               which indicates that the broker does not support the v1 message format and causes a null value
-     *               to be reported in the resulting map.
+     *               which indicates that the broker does not support the v1 message format. Partitions with this
+     *               particular error are simply left out of the future map. Note that the corresponding timestamp
+     *               value of each partition may be null only for v0. In v1 and later the ListOffset API would not
+     *               return a null timestamp (-1 is returned instead when necessary).
      */
     @SuppressWarnings("deprecation")
     private void handleListOffsetResponse(Map<TopicPartition, Long> timestampsToSearch,
