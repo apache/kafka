@@ -437,11 +437,11 @@ class WorkerSinkTask extends WorkerTask {
             log.trace("{} Applying transformations to record in topic '{}' partition {} at offset {} and timestamp {} with key {} and value {}",
                     this, msg.topic(), msg.partition(), msg.offset(), timestamp, keyAndSchema.value(), valueAndSchema.value());
             SinkRecord transRecord = transformationChain.apply(origRecord);
+            origOffsets.put(
+                    new TopicPartition(origRecord.topic(), origRecord.kafkaPartition()),
+                    new OffsetAndMetadata(origRecord.kafkaOffset() + 1)
+            );
             if (transRecord != null) {
-                origOffsets.put(
-                        new TopicPartition(origRecord.topic(), origRecord.kafkaPartition()),
-                        new OffsetAndMetadata(origRecord.kafkaOffset() + 1)
-                );
                 messageBatch.add(transRecord);
             } else {
                 log.trace("{} Transformations returned null, so dropping record in topic '{}' partition {} at offset {} and timestamp {} with key {} and value {}",
