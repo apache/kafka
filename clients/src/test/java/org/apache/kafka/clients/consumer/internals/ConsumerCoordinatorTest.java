@@ -1288,12 +1288,12 @@ public class ConsumerCoordinatorTest {
     }
 
     @Test(expected = CommitFailedException.class)
-    public void testCommitOffsetSyncCallbackWithoutNonRetriableException() {
+    public void testCommitOffsetSyncCallbackWithCommitFailedExceptionForTimeout() {
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         coordinator.ensureCoordinatorReady();
 
         // sync commit will check if future has failed and is not retriable before throwing CommitFailedException
-        client.prepareResponse(offsetCommitResponse(Collections.singletonMap(t1p, Errors.UNKNOWN_MEMBER_ID)), false);
+        client.prepareResponse(offsetCommitResponse(Collections.singletonMap(t1p, Errors.NONE)), false, 1000);
         coordinator.commitOffsetsSync(Collections.singletonMap(t1p, new OffsetAndMetadata(100L)), Long.MAX_VALUE);
     }
 
