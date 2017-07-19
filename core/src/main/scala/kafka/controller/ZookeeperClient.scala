@@ -172,8 +172,12 @@ class ZookeeperClient(connectString: String, sessionTimeout: Int, sessionExpirat
     }
   }
 
-  private[this] case class ExistsWithWatcherRequest(path: String) extends AsyncRequest
-  private[this] case class GetChildrenWithWatcherRequest(path: String) extends AsyncRequest
+  private[this] case class ExistsWithWatcherRequest(path: String) extends AsyncRequest {
+    val ctx = null
+  }
+  private[this] case class GetChildrenWithWatcherRequest(path: String) extends AsyncRequest {
+    val ctx = null
+  }
 }
 
 trait SessionExpirationHandler {
@@ -193,7 +197,10 @@ trait ZNodeChildChangeHandler {
   def handleChildChange: Unit
 }
 
-sealed trait AsyncRequest
+sealed trait AsyncRequest {
+  val path: String
+  val ctx: Any
+}
 case class CreateRequest(path: String, data: Array[Byte], acl: Seq[ACL], createMode: CreateMode, ctx: Any) extends AsyncRequest
 case class DeleteRequest(path: String, version: Int, ctx: Any) extends AsyncRequest
 case class ExistsRequest(path: String, ctx: Any) extends AsyncRequest
@@ -203,7 +210,11 @@ case class GetACLRequest(path: String, ctx: Any) extends AsyncRequest
 case class SetACLRequest(path: String, acl: Seq[ACL], version: Int, ctx: Any) extends AsyncRequest
 case class GetChildrenRequest(path: String, ctx: Any) extends AsyncRequest
 
-sealed trait AsyncResponse
+sealed trait AsyncResponse {
+  val rc: Int
+  val path: String
+  val ctx: Any
+}
 case class CreateResponse(rc: Int, path: String, ctx: Any, name: String) extends AsyncResponse
 case class DeleteResponse(rc: Int, path: String, ctx: Any) extends AsyncResponse
 case class ExistsResponse(rc: Int, path: String, ctx: Any, stat: Stat) extends AsyncResponse
