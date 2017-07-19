@@ -131,7 +131,6 @@ public class StreamPartitionAssignorTest {
         partitionAssignor.configure(configurationMap);
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void testSubscription() throws Exception {
         builder.addSource("source1", "topic1");
