@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.BatchingStateRestoreCallback;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
@@ -53,6 +54,7 @@ public class CompositeRestoreListenerTest {
     private final long endOffset = 1L;
     private final long batchOffset = 1L;
     private final long numberRestored = 1L;
+    private final TopicPartition topicPartition = new TopicPartition("testTopic", 1);
 
     private CompositeRestoreListener compositeRestoreListener;
 
@@ -63,9 +65,9 @@ public class CompositeRestoreListenerTest {
         compositeRestoreListener.setReportingStoreListener(reportingStoreListener);
 
         compositeRestoreListener.restoreAll(records);
-        compositeRestoreListener.onRestoreStart(storeName, startOffset, endOffset);
-        compositeRestoreListener.onBatchRestored(storeName, batchOffset, numberRestored);
-        compositeRestoreListener.onRestoreEnd(storeName, numberRestored);
+        compositeRestoreListener.onRestoreStart(topicPartition, storeName, startOffset, endOffset);
+        compositeRestoreListener.onBatchRestored(topicPartition, storeName, batchOffset, numberRestored);
+        compositeRestoreListener.onRestoreEnd(topicPartition, storeName, numberRestored);
 
         assertThat(stateRestoreCallback.restoredKey, is(key));
         assertThat(stateRestoreCallback.restoredValue, is(value));
@@ -80,9 +82,9 @@ public class CompositeRestoreListenerTest {
         compositeRestoreListener.setReportingStoreListener(reportingStoreListener);
 
         compositeRestoreListener.restoreAll(records);
-        compositeRestoreListener.onRestoreStart(storeName, startOffset, endOffset);
-        compositeRestoreListener.onBatchRestored(storeName, batchOffset, numberRestored);
-        compositeRestoreListener.onRestoreEnd(storeName, numberRestored);
+        compositeRestoreListener.onRestoreStart(topicPartition, storeName, startOffset, endOffset);
+        compositeRestoreListener.onBatchRestored(topicPartition, storeName, batchOffset, numberRestored);
+        compositeRestoreListener.onRestoreEnd(topicPartition, storeName, numberRestored);
 
         assertThat(batchingStateRestoreCallback.restoredRecords, is(records));
         assertStateRestoreListener(batchingStateRestoreCallback);
@@ -95,9 +97,9 @@ public class CompositeRestoreListenerTest {
         compositeRestoreListener.setReportingStoreListener(null);
 
         compositeRestoreListener.restoreAll(records);
-        compositeRestoreListener.onRestoreStart(storeName, startOffset, endOffset);
-        compositeRestoreListener.onBatchRestored(storeName, batchOffset, numberRestored);
-        compositeRestoreListener.onRestoreEnd(storeName, numberRestored);
+        compositeRestoreListener.onRestoreStart(topicPartition, storeName, startOffset, endOffset);
+        compositeRestoreListener.onBatchRestored(topicPartition, storeName, batchOffset, numberRestored);
+        compositeRestoreListener.onRestoreEnd(topicPartition, storeName, numberRestored);
 
         assertThat(batchingStateRestoreCallback.restoredRecords, is(records));
         assertStateRestoreListener(batchingStateRestoreCallback);
@@ -109,9 +111,9 @@ public class CompositeRestoreListenerTest {
         compositeRestoreListener.setReportingStoreListener(null);
 
         compositeRestoreListener.restoreAll(records);
-        compositeRestoreListener.onRestoreStart(storeName, startOffset, endOffset);
-        compositeRestoreListener.onBatchRestored(storeName, batchOffset, numberRestored);
-        compositeRestoreListener.onRestoreEnd(storeName, numberRestored);
+        compositeRestoreListener.onRestoreStart(topicPartition, storeName, startOffset, endOffset);
+        compositeRestoreListener.onBatchRestored(topicPartition, storeName, batchOffset, numberRestored);
+        compositeRestoreListener.onRestoreEnd(topicPartition, storeName, numberRestored);
 
         assertThat(noListenBatchingStateRestoreCallback.restoredRecords, is(records));
     }
@@ -128,6 +130,7 @@ public class CompositeRestoreListenerTest {
         assertTrue(restoreListener.storeNameCalledStates.containsKey(RESTORE_START));
         assertTrue(restoreListener.storeNameCalledStates.containsKey(RESTORE_BATCH));
         assertTrue(restoreListener.storeNameCalledStates.containsKey(RESTORE_END));
+        assertThat(restoreListener.restoreTopicPartition, is(topicPartition));
         assertThat(restoreListener.restoreStartOffset, is(startOffset));
         assertThat(restoreListener.restoreEndOffset, is(endOffset));
         assertThat(restoreListener.restoredBatchOffset, is(batchOffset));

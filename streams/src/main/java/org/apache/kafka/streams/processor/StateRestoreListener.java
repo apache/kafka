@@ -17,6 +17,8 @@
 
 package org.apache.kafka.streams.processor;
 
+import org.apache.kafka.common.TopicPartition;
+
 /**
  * Class for listening to various states of the restoration process of a StateStore.
  *
@@ -38,11 +40,13 @@ public interface StateRestoreListener {
     /**
      * Method called at the very beginning of the restoration of a StateStore
      *
+     * @param topicPartition the TopicPartition containing the values to restore.
      * @param storeName      the name of the store undergoing restoration.
-     * @param startingOffset the starting offset of the entire restoration process.
-     * @param endingOffset   the ending offset of the entire restoration process.
+     * @param startingOffset the starting offset of the entire restoration process for this TopicPartition.
+     * @param endingOffset   the ending offset of the entire restoration process for this TopicPartition.
      */
-    void onRestoreStart(String storeName, long startingOffset, long endingOffset);
+    void onRestoreStart(TopicPartition topicPartition, String storeName, long startingOffset,
+                        long endingOffset);
 
     /**
      * Method called after a batch of records has been restored.  In this case the size of the batch is whatever the
@@ -54,18 +58,21 @@ public interface StateRestoreListener {
      *
      * If you need to do any extended processing or connecting to an external service consider doing so asynchronously.
      *
+     * @param topicPartition the TopicPartition containing the values to restore.
      * @param storeName the name of the store undergoing restoration.
-     * @param batchEndOffset the ending offset for the current restored batch.
-     * @param numRestored the total number of records restored in this batch.
+     * @param batchEndOffset the ending offset for the current restored batch for this TopicPartition.
+     * @param numRestored the total number of records restored in this batch for this TopicPartition.
      */
-    void onBatchRestored(String storeName, long batchEndOffset, long numRestored);
+    void onBatchRestored(TopicPartition topicPartition, String storeName, long batchEndOffset,
+                         long numRestored);
 
     /**
      * Method called when restoration of the StateStore is complete.
      *
+     * @param topicPartition the TopicPartition containing the values to restore.
      * @param storeName the name of the store just restored.
-     * @param totalRestored the total number of records restored
+     * @param totalRestored the total number of records restored for this TopicPartition.
      */
-    void onRestoreEnd(String storeName, long totalRestored);
+    void onRestoreEnd(TopicPartition topicPartition, String storeName, long totalRestored);
 
 }

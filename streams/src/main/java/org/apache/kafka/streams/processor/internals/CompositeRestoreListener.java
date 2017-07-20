@@ -18,6 +18,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.BatchingStateRestoreCallback;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
@@ -47,21 +48,24 @@ class CompositeRestoreListener implements BatchingStateRestoreCallback, StateRes
     }
 
     @Override
-    public void onRestoreStart(String storeName, long startingOffset, long endingOffset) {
-        reportingStoreListener.onRestoreStart(storeName, startingOffset, endingOffset);
-        storeRestoreListener.onRestoreStart(storeName, startingOffset, endingOffset);
+    public void onRestoreStart(TopicPartition topicPartition, String storeName,
+                               long startingOffset, long endingOffset) {
+        reportingStoreListener.onRestoreStart(topicPartition, storeName, startingOffset, endingOffset);
+        storeRestoreListener.onRestoreStart(topicPartition, storeName, startingOffset, endingOffset);
     }
 
     @Override
-    public void onBatchRestored(String storeName, long batchEndOffset, long numRestored) {
-        reportingStoreListener.onBatchRestored(storeName, batchEndOffset, numRestored);
-        storeRestoreListener.onBatchRestored(storeName, batchEndOffset, numRestored);
+    public void onBatchRestored(TopicPartition topicPartition, String storeName,
+                                long batchEndOffset, long numRestored) {
+        reportingStoreListener.onBatchRestored(topicPartition, storeName, batchEndOffset, numRestored);
+        storeRestoreListener.onBatchRestored(topicPartition, storeName, batchEndOffset, numRestored);
     }
 
     @Override
-    public void onRestoreEnd(String storeName, long totalRestored) {
-        reportingStoreListener.onRestoreEnd(storeName, totalRestored);
-        storeRestoreListener.onRestoreEnd(storeName, totalRestored);
+    public void onRestoreEnd(TopicPartition topicPartition, String storeName,
+                             long totalRestored) {
+        reportingStoreListener.onRestoreEnd(topicPartition, storeName, totalRestored);
+        storeRestoreListener.onRestoreEnd(topicPartition, storeName, totalRestored);
 
     }
 
@@ -86,17 +90,20 @@ class CompositeRestoreListener implements BatchingStateRestoreCallback, StateRes
     private static final class NoOpStateRestoreListener implements StateRestoreListener {
 
         @Override
-        public void onRestoreStart(String storeName, long startingOffset, long endingOffset) {
+        public void onRestoreStart(TopicPartition topicPartition, String storeName,
+                                   long startingOffset, long endingOffset) {
 
         }
 
         @Override
-        public void onBatchRestored(String storeName, long batchEndOffset, long numRestored) {
+        public void onBatchRestored(TopicPartition topicPartition, String storeName,
+                                    long batchEndOffset, long numRestored) {
 
         }
 
         @Override
-        public void onRestoreEnd(String storeName, long totalRestored) {
+        public void onRestoreEnd(TopicPartition topicPartition, String storeName,
+                                 long totalRestored) {
 
         }
     }

@@ -60,18 +60,18 @@ public class StateRestorer {
 
     void maybeNotifyRestoreStarted(long startingOffset, long endingOffset) {
         if (!restoreStarted) {
-            compositeRestoreListener.onRestoreStart(storeName, startingOffset, endingOffset);
+            compositeRestoreListener.onRestoreStart(partition, storeName, startingOffset, endingOffset);
             restoreStarted = true;
         }
     }
 
     void restoreDone() {
-        compositeRestoreListener.onRestoreEnd(storeName, restoredNumRecords());
+        compositeRestoreListener.onRestoreEnd(partition, storeName, restoredNumRecords());
         restoreStarted = false;
     }
 
     void restoreBatchCompleted(long currentRestoredOffset, int numRestored) {
-        compositeRestoreListener.onBatchRestored(storeName, currentRestoredOffset, numRestored);
+        compositeRestoreListener.onBatchRestored(partition, storeName, currentRestoredOffset, numRestored);
     }
 
     void restore(final Collection<KeyValue<byte[], byte[]>> records) {

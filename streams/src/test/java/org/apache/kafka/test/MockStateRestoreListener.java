@@ -17,6 +17,7 @@
 
 package org.apache.kafka.test;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.AbstractNotifyingRestoreCallback;
 
@@ -35,6 +36,7 @@ public class MockStateRestoreListener extends AbstractNotifyingRestoreCallback {
     public long restoredBatchOffset;
     public long numBatchRestored;
     public long totalNumRestored;
+    public TopicPartition restoreTopicPartition;
 
     public static final String RESTORE_START = "restore_start";
     public static final String RESTORE_BATCH = "restore_batch";
@@ -46,14 +48,18 @@ public class MockStateRestoreListener extends AbstractNotifyingRestoreCallback {
     }
 
     @Override
-    public void onRestoreStart(String storeName, long startingOffset, long endingOffset) {
+    public void onRestoreStart(TopicPartition topicPartition, String storeName,
+                               long startingOffset, long endingOffset) {
+        restoreTopicPartition = topicPartition;
         storeNameCalledStates.put(RESTORE_START, storeName);
         restoreStartOffset = startingOffset;
         restoreEndOffset = endingOffset;
     }
 
     @Override
-    public void onBatchRestored(String storeName, long batchEndOffset, long numRestored) {
+    public void onBatchRestored(TopicPartition topicPartition, String storeName,
+                                long batchEndOffset, long numRestored) {
+        restoreTopicPartition = topicPartition;
         storeNameCalledStates.put(RESTORE_BATCH, storeName);
         restoredBatchOffset = batchEndOffset;
         numBatchRestored = numRestored;
@@ -61,7 +67,9 @@ public class MockStateRestoreListener extends AbstractNotifyingRestoreCallback {
     }
 
     @Override
-    public void onRestoreEnd(String storeName, long totalRestored) {
+    public void onRestoreEnd(TopicPartition topicPartition, String storeName,
+                             long totalRestored) {
+        restoreTopicPartition = topicPartition;
         storeNameCalledStates.put(RESTORE_END, storeName);
         totalNumRestored = totalRestored;
     }
@@ -76,6 +84,7 @@ public class MockStateRestoreListener extends AbstractNotifyingRestoreCallback {
                ", restoredBatchOffset=" + restoredBatchOffset +
                ", numBatchRestored=" + numBatchRestored +
                ", totalNumRestored=" + totalNumRestored +
+               ", restoreTopicPartition=" + restoreTopicPartition +
                '}';
     }
 }

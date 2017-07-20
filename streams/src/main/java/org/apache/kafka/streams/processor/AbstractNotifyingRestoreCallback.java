@@ -17,11 +17,13 @@
 
 package org.apache.kafka.streams.processor;
 
+import org.apache.kafka.common.TopicPartition;
+
 /**
  * Abstract implementation of the  {@link StateRestoreCallback} used for batch restoration operations.
  *
- * Includes default no-op methods of the {@link StateRestoreListener} {@link #onRestoreStart(String, long, long)},
- * {@link #onBatchRestored(String, long, long)}, and {@link #onRestoreEnd(String, long)}.
+ * Includes default no-op methods of the {@link StateRestoreListener} {@link StateRestoreListener#onRestoreStart(TopicPartition, String, long, long)},
+ * {@link StateRestoreListener#onBatchRestored(TopicPartition, String, long, long)}, and {@link StateRestoreListener#onRestoreEnd(TopicPartition, String, long)}.
  */
 public abstract class AbstractNotifyingRestoreCallback implements StateRestoreCallback, StateRestoreListener {
 
@@ -32,14 +34,17 @@ public abstract class AbstractNotifyingRestoreCallback implements StateRestoreCa
      * This method does nothing by default; if desired, subclasses should override it with custom functionality.
      * </p>
      *
+     * @param topicPartition the TopicPartition containing the values to restore.
      * @param storeName      the name of the store undergoing restoration.
-     * @param startingOffset the starting offset of the entire restoration process.
-     * @param endingOffset   the ending offset of the entire restoration process.
+     * @param startingOffset the starting offset of the entire restoration process for this TopicPartition.
+     * @param endingOffset   the ending offset of the entire restoration process for this TopicPartition.
      */
     @Override
-    public void onRestoreStart(String storeName, long startingOffset, long endingOffset) {
+    public void onRestoreStart(TopicPartition topicPartition, String storeName, long startingOffset,
+                               long endingOffset) {
 
     }
+
 
     /**
      * Method called after a batch of records has been restored.  In this case the size of the batch is whatever the
@@ -54,13 +59,14 @@ public abstract class AbstractNotifyingRestoreCallback implements StateRestoreCa
      * This method does nothing by default; if desired, subclasses should override it with custom functionality.
      * </p>
      *
+     * @param topicPartition the TopicPartition containing the values to restore.
      * @param storeName the name of the store undergoing restoration.
-     * @param batchEndOffset the ending offset for the current restored batch.
-     * @param numRestored the total number of records restored in this batch.
+     * @param batchEndOffset the ending offset for the current restored batch for this TopicPartition.
+     * @param numRestored the total number of records restored in this batch for this TopicPartition.
      */
-
     @Override
-    public void onBatchRestored(String storeName, long batchEndOffset, long numRestored) {
+    public void onBatchRestored(TopicPartition topicPartition, String storeName, long batchEndOffset,
+                                long numRestored) {
 
     }
 
@@ -70,11 +76,13 @@ public abstract class AbstractNotifyingRestoreCallback implements StateRestoreCa
      * This method does nothing by default; if desired, subclasses should override it with custom functionality.
      * </p>
      *
+     *
+     * @param topicPartition the TopicPartition containing the values to restore.
      * @param storeName the name of the store just restored.
-     * @param totalRestored the total number of records restored
+     * @param totalRestored the total number of records restored for this TopicPartition.
      */
     @Override
-    public void onRestoreEnd(String storeName, long totalRestored) {
+    public void onRestoreEnd(TopicPartition topicPartition, String storeName, long totalRestored) {
 
     }
 }

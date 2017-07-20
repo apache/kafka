@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
@@ -190,12 +191,14 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
             }
 
             @Override
-            public void onRestoreStart(String storeName, long startingOffset, long endingOffset) {
+            public void onRestoreStart(TopicPartition topicPartition, String storeName,
+                                       long startingOffset, long endingOffset) {
                 toggleDbForBulkLoading(true);
             }
 
             @Override
-            public void onRestoreEnd(String storeName, long totalRestored) {
+            public void onRestoreEnd(TopicPartition topicPartition, String storeName,
+                                     long totalRestored) {
                 toggleDbForBulkLoading(false);
             }
         });
