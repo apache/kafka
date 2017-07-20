@@ -25,7 +25,7 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
-import org.apache.kafka.streams.processor.AbstractBatchingRestoreCallback;
+import org.apache.kafka.streams.processor.AbstractNotifyingBatchingRestoreCallback;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
@@ -183,7 +183,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
         // value getter should always read directly from rocksDB
         // since it is only for values that are already flushed
-        context.register(root, false, new AbstractBatchingRestoreCallback() {
+        context.register(root, false, new AbstractNotifyingBatchingRestoreCallback() {
             @Override
             public void restoreAll(Collection<KeyValue<byte[], byte[]>> records) {
                 restoreAllInternal(records);

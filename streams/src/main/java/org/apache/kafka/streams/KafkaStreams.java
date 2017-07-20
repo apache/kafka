@@ -780,11 +780,10 @@ public class KafkaStreams {
     }
 
     /**
-     * Set the state restore listener invoked at the beginning, end of batch updates and the conclusion of
-     * restoring a {@link StateStore} for each internal threads assignments.
+     * Set the listener which is triggered whenever a {@link StateStore} is being restored in order to resume
+     * processing.
      *
-     * @param stateRestoreListener listener for all internal threads capturing state store
-     *                             restoration status.
+     * @param stateRestoreListener The listener triggered when {@link StateStore} is being restored.
      */
     public void setStateRestoreListener(final StateRestoreListener stateRestoreListener) {
         for (StreamThread thread : threads) {

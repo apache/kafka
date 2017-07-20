@@ -26,10 +26,11 @@ import org.apache.kafka.common.TopicPartition;
  * Includes default no-op methods of the {@link StateRestoreListener} {@link StateRestoreListener#onRestoreStart(TopicPartition, String, long, long)},
  * {@link StateRestoreListener#onBatchRestored(TopicPartition, String, long, long)}, and {@link StateRestoreListener#onRestoreEnd(TopicPartition, String, long)}.
  */
-public abstract class AbstractBatchingRestoreCallback implements BatchingStateRestoreCallback, StateRestoreListener {
+public abstract class AbstractNotifyingBatchingRestoreCallback
+    implements BatchingStateRestoreCallback, StateRestoreListener {
 
     /**
-     * Single put restore operations not supported use {@link AbstractNotifyingRestoreCallback}
+     * Single put restore operations not supported, please use {@link AbstractNotifyingRestoreCallback}
      * or {@link StateRestoreCallback} instead for single action restores.
      */
     @Override
@@ -39,7 +40,8 @@ public abstract class AbstractBatchingRestoreCallback implements BatchingStateRe
 
 
     /**
-     * Method called at the very beginning of the restoration of a StateStore
+     * @see StateRestoreListener#onRestoreStart(TopicPartition, String, long, long)
+     *
      * <p>
      * This method does nothing by default; if desired, subclasses should override it with custom functionality.
      * </p>
@@ -57,14 +59,8 @@ public abstract class AbstractBatchingRestoreCallback implements BatchingStateRe
 
 
     /**
-     * Method called after a batch of records has been restored.  In this case the size of the batch is whatever the
-     * value of the MAX_POLL_RECORDS is set to.
+     * @see StateRestoreListener#onBatchRestored(TopicPartition, String, long, long)
      *
-     * This method is called after each restored batch and it is advised to keep processing to a minimum.
-     * Any heavy processing will hold up restoring the next batch, hence slowing down the restoration process as a
-     * whole.
-     *
-     * If you need to do any extended processing or connecting to an external service consider doing so asynchronously.
      * <p>
      * This method does nothing by default; if desired, subclasses should override it with custom functionality.
      * </p>
@@ -81,7 +77,8 @@ public abstract class AbstractBatchingRestoreCallback implements BatchingStateRe
     }
 
     /**
-     * Method called when restoration of the StateStore is complete.
+     * @see StateRestoreListener#onRestoreEnd(TopicPartition, String, long)
+     *
      * <p>
      * This method does nothing by default; if desired, subclasses should override it with custom functionality.
      * </p>
