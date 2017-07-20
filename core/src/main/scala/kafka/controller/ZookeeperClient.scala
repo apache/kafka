@@ -18,21 +18,23 @@
 package kafka.controller
 
 import java.util.concurrent.locks.{ReentrantLock, ReentrantReadWriteLock}
-import java.util.concurrent.{ArrayBlockingQueue, ConcurrentHashMap, CountDownLatch}
+import java.util.concurrent.{ArrayBlockingQueue, ConcurrentHashMap, CountDownLatch, TimeUnit}
 
 import kafka.utils.CoreUtils.{inLock, inReadLock, inWriteLock}
+import org.apache.kafka.common.utils.Time
 import org.apache.zookeeper.AsyncCallback.{ACLCallback, Children2Callback, DataCallback, StatCallback, StringCallback, VoidCallback}
 import org.apache.zookeeper.Watcher.Event.{EventType, KeeperState}
 import org.apache.zookeeper.data.{ACL, Stat}
 import org.apache.zookeeper.{CreateMode, WatchedEvent, Watcher, ZooKeeper}
 
-class ZookeeperClient(connectString: String, sessionTimeout: Int, sessionExpirationHandler: SessionExpirationHandler) {
+class ZookeeperClient(connectString: String, sessionTimeoutMs: Int, connectionTimeoutMs: Int, stateChangeHandler: StateChangeHandler, time: Time) {
   private val initializationLock = new ReentrantReadWriteLock()
   private val isConnectedOrExpiredLock = new ReentrantLock()
   private val isConnectedOrExpiredCondition = isConnectedOrExpiredLock.newCondition()
   private val zNodeChangeHandlers = new ConcurrentHashMap[String, ZNodeChangeHandler]()
   private val zNodeChildChangeHandlers = new ConcurrentHashMap[String, ZNodeChildChangeHandler]()
-  @volatile private var zooKeeper = new ZooKeeper(connectString, sessionTimeout, ZookeeperClientWatcher)
+  @volatile private var zooKeeper = new ZooKeeper(connectString, sessionTimeoutMs, ZookeeperClientWatcher)
+  waitUntilConnectedOrExpired(connectionTimeoutMs, TimeUnit.MILLISECONDS)
 
   def handle(request: AsyncRequest): AsyncResponse = {
     handle(Seq(request)).head
@@ -97,6 +99,21 @@ class ZookeeperClient(connectString: String, sessionTimeout: Int, sessionExpirat
     state.isConnected
   }
 
+  private def waitUntilConnectedOrExpired(timeout: Long, timeUnit: TimeUnit): Boolean = {
+    var nanos = timeUnit.toNanos(timeout)
+    inLock(isConnectedOrExpiredLock) {
+      var state = zooKeeper.getState
+      while (!state.isConnected && state.isAlive) {
+        if (nanos <= 0) {
+          throw new ZookeeperClientTimeoutException
+        }
+        nanos = isConnectedOrExpiredCondition.awaitNanos(nanos)
+        state = zooKeeper.getState
+      }
+      state.isConnected
+    }
+  }
+
   def registerZNodeChangeHandler(zNodeChangeHandler: ZNodeChangeHandler): ExistsResponse = {
     registerZNodeChangeHandlers(Seq(zNodeChangeHandler)).head
   }
@@ -133,7 +150,25 @@ class ZookeeperClient(connectString: String, sessionTimeout: Int, sessionExpirat
 
   private def initialize(): Unit = {
     if (!zooKeeper.getState.isAlive) {
-      zooKeeper = new ZooKeeper(connectString, sessionTimeout, ZookeeperClientWatcher)
+      var now = time.milliseconds()
+      val threshold = now + connectionTimeoutMs
+      while (now < threshold) {
+        try {
+          zooKeeper = new ZooKeeper(connectString, sessionTimeoutMs, ZookeeperClientWatcher)
+          if (waitUntilConnectedOrExpired(threshold - now, TimeUnit.MILLISECONDS)) {
+            return
+          }
+        } catch {
+          case _: Exception =>
+            zooKeeper.close()
+            now = time.milliseconds()
+            if (now < threshold) {
+              time.sleep(1000)
+              now = time.milliseconds()
+            }
+        }
+      }
+      stateChangeHandler.onConnectionTimeout
     }
   }
 
@@ -143,11 +178,13 @@ class ZookeeperClient(connectString: String, sessionTimeout: Int, sessionExpirat
         inLock(isConnectedOrExpiredLock) {
           isConnectedOrExpiredCondition.signalAll()
         }
-        if (event.getState == KeeperState.Expired) {
+        if (event.getState == KeeperState.AuthFailed) {
+          stateChangeHandler.onAuthFailure
+        } else if (event.getState == KeeperState.Expired) {
           inWriteLock(initializationLock) {
-            sessionExpirationHandler.beforeInitializingSession
+            stateChangeHandler.beforeInitializingSession
             initialize()
-            sessionExpirationHandler.afterInitializingSession
+            stateChangeHandler.afterInitializingSession
           }
         }
       } else if (event.getType == EventType.NodeCreated) {
@@ -163,9 +200,11 @@ class ZookeeperClient(connectString: String, sessionTimeout: Int, sessionExpirat
   }
 }
 
-trait SessionExpirationHandler {
+trait StateChangeHandler {
   def beforeInitializingSession: Unit
   def afterInitializingSession: Unit
+  def onAuthFailure: Unit
+  def onConnectionTimeout: Unit
 }
 
 trait ZNodeChangeHandler {
@@ -206,3 +245,5 @@ case class SetDataResponse(rc: Int, path: String, ctx: Any, stat: Stat) extends 
 case class GetACLResponse(rc: Int, path: String, ctx: Any, acl: Seq[ACL], stat: Stat) extends AsyncResponse
 case class SetACLResponse(rc: Int, path: String, ctx: Any, stat: Stat) extends AsyncResponse
 case class GetChildrenResponse(rc: Int, path: String, ctx: Any, children: Seq[String], stat: Stat) extends AsyncResponse
+
+class ZookeeperClientTimeoutException extends RuntimeException
