@@ -133,7 +133,6 @@ public class RocksDBKeyValueStoreSupplierTest {
         assertThat(store, is(instanceOf(MeteredKeyValueStore.class)));
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldHaveMeteredStoreWhenCached() throws Exception {
         store = createStore(false, true);
@@ -142,7 +141,6 @@ public class RocksDBKeyValueStoreSupplierTest {
         assertFalse(metrics.metrics().isEmpty());
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldHaveMeteredStoreWhenLogged() throws Exception {
         store = createStore(true, false);

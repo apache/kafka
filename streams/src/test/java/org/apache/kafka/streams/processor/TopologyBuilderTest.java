@@ -78,7 +78,7 @@ public class TopologyBuilderTest {
     @Test
     public void shouldAddSourcePatternWithOffsetReset() {
         final TopologyBuilder builder = new TopologyBuilder();
-        
+
         final String earliestTopicPattern = "earliest.*Topic";
         final String latestTopicPattern = "latest.*Topic";
 
@@ -107,7 +107,7 @@ public class TopologyBuilderTest {
         final TopologyBuilder builder = new TopologyBuilder();
         final Serde<String> stringSerde = Serdes.String();
         final Pattern expectedPattern = Pattern.compile("test-.*");
-        
+
         builder.addSource("source", stringSerde.deserializer(), stringSerde.deserializer(), Pattern.compile("test-.*"));
 
         assertEquals(expectedPattern.pattern(), builder.sourceTopicPattern().pattern());
@@ -143,7 +143,7 @@ public class TopologyBuilderTest {
     }
 
 
-    
+
     @Test(expected = TopologyBuilderException.class)
     public void testAddSourceWithSameName() {
         final TopologyBuilder builder = new TopologyBuilder();
@@ -579,7 +579,6 @@ public class TopologyBuilderTest {
         assertEquals(2, properties.size());
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldAddInternalTopicConfigWithCompactForNonWindowStores() throws Exception {
         final TopologyBuilder builder = new TopologyBuilder();
@@ -596,7 +595,6 @@ public class TopologyBuilderTest {
         assertEquals(1, properties.size());
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldAddInternalTopicConfigWithCleanupPolicyDeleteForInternalTopics() throws Exception {
         final TopologyBuilder builder = new TopologyBuilder();
@@ -702,7 +700,6 @@ public class TopologyBuilderTest {
 
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldAddTimestampExtractorPerSource() throws Exception {
         final TopologyBuilder builder = new TopologyBuilder();
@@ -711,7 +708,6 @@ public class TopologyBuilderTest {
         assertThat(processorTopology.source("topic").getTimestampExtractor(), instanceOf(MockTimestampExtractor.class));
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldAddTimestampExtractorWithOffsetResetPerSource() throws Exception {
         final TopologyBuilder builder = new TopologyBuilder();
@@ -720,7 +716,6 @@ public class TopologyBuilderTest {
         assertThat(processorTopology.source("topic").getTimestampExtractor(), instanceOf(MockTimestampExtractor.class));
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldAddTimestampExtractorWithPatternPerSource() throws Exception {
         final TopologyBuilder builder = new TopologyBuilder();
@@ -730,7 +725,6 @@ public class TopologyBuilderTest {
         assertThat(processorTopology.source(pattern.pattern()).getTimestampExtractor(), instanceOf(MockTimestampExtractor.class));
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldAddTimestampExtractorWithOffsetResetAndPatternPerSource() throws Exception {
         final TopologyBuilder builder = new TopologyBuilder();
@@ -740,7 +734,6 @@ public class TopologyBuilderTest {
         assertThat(processorTopology.source(pattern.pattern()).getTimestampExtractor(), instanceOf(MockTimestampExtractor.class));
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldAddTimestampExtractorWithOffsetResetAndKeyValSerdesPerSource() throws Exception {
         final TopologyBuilder builder = new TopologyBuilder();
@@ -749,7 +742,6 @@ public class TopologyBuilderTest {
         assertThat(processorTopology.source("topic").getTimestampExtractor(), instanceOf(MockTimestampExtractor.class));
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldAddTimestampExtractorWithOffsetResetAndKeyValSerdesAndPatternPerSource() throws Exception {
         final TopologyBuilder builder = new TopologyBuilder();

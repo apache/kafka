@@ -633,10 +633,9 @@ public class SenderTest {
         String topic = tp.topic();
         // Set a good compression ratio.
         CompressionRatioEstimator.setEstimation(topic, CompressionType.GZIP, 0.2f);
-        Metrics m = new Metrics();
-        accumulator = new RecordAccumulator(batchSize, 1024 * 1024, CompressionType.GZIP, 0L, 0L, m, time,
-                new ApiVersions(), txnManager);
-        try {
+        try (Metrics m = new Metrics()) {
+            accumulator = new RecordAccumulator(batchSize, 1024 * 1024, CompressionType.GZIP, 0L, 0L, m, time,
+                    new ApiVersions(), txnManager);
             Sender sender = new Sender(client, metadata, this.accumulator, true, MAX_REQUEST_SIZE, ACKS_ALL, maxRetries,
                     m, time, REQUEST_TIMEOUT, 1000L, txnManager, new ApiVersions());
             // Create a two broker cluster, with partition 0 on broker 0 and partition 1 on broker 1
@@ -701,8 +700,6 @@ public class SenderTest {
 
             assertTrue("There should be a split",
                     m.metrics().get(m.metricName("batch-split-rate", "producer-metrics")).value() > 0);
-        } finally {
-            m.close();
         }
     }
 
