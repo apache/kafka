@@ -17,7 +17,7 @@
 
 package kafka.coordinator.group
 
-import java.io.{IOException, PrintStream}
+import java.io.PrintStream
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
 import java.util.concurrent.TimeUnit

@@ -1133,7 +1133,7 @@ public class Protocol {
                                                                                 new ArrayOf(LEADER_AND_ISR_REQUEST_PARTITION_STATE_V0)),
                                                                       new Field("live_leaders", new ArrayOf(LEADER_AND_ISR_REQUEST_LIVE_LEADER_V0)));
 
-    // LEADER_AND_ISR_REQUEST_V1 added a per-partition is_new field. This field specifies Whether the replica should have existed on the broker or not.
+    // LEADER_AND_ISR_REQUEST_V1 added a per-partition is_new field. This field specifies whether the replica should have existed on the broker or not.
     public static final Schema LEADER_AND_ISR_REQUEST_V1 = new Schema(new Field("controller_id", INT32, "The controller id."),
                                                                       new Field("controller_epoch", INT32, "The controller epoch."),
                                                                       new Field("partition_states",

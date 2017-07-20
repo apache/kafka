@@ -64,12 +64,10 @@ case class LeaderAndIsrPartitionState(leaderIsrAndControllerEpoch: LeaderIsrAndC
 
 case class MetadataPartitionState(leaderIsrAndControllerEpoch: LeaderIsrAndControllerEpoch, allReplicas: Seq[Int], offlineReplicas: Seq[Int]) {
 
-  def replicationFactor = allReplicas.size
-
   override def toString: String = {
     val partitionStateInfo = new StringBuilder
     partitionStateInfo.append("(LeaderAndIsrInfo:" + leaderIsrAndControllerEpoch.toString)
-    partitionStateInfo.append(",ReplicationFactor:" + replicationFactor + ")")
+    partitionStateInfo.append(",ReplicationFactor:" + allReplicas.size + ")")
     partitionStateInfo.append(",AllReplicas:" + allReplicas.mkString(",") + ")")
     partitionStateInfo.append(",OfflineReplicas:" + offlineReplicas.mkString(",") + ")")
     partitionStateInfo.toString()

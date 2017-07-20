@@ -18,7 +18,6 @@
 package kafka.server
 
 import java.util
-import java.io.IOException
 import kafka.admin.AdminUtils
 import kafka.api.{FetchRequest => _, _}
 import kafka.cluster.{BrokerEndPoint, Replica}
@@ -33,7 +32,6 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.requests.{EpochEndOffset, FetchResponse, ListOffsetRequest, ListOffsetResponse, OffsetsForLeaderEpochRequest, OffsetsForLeaderEpochResponse, FetchRequest => JFetchRequest}
 import org.apache.kafka.common.utils.Time
-import org.apache.kafka.common.errors.KafkaStorageException
 import scala.collection.JavaConverters._
 import scala.collection.{Map, mutable}
 

@@ -24,7 +24,7 @@ import kafka.metrics.{KafkaMetricsGroup, KafkaTimer}
 import kafka.server.epoch.LeaderEpochCache
 import kafka.server.{FetchDataInfo, LogDirFailureChannel, LogOffsetMetadata}
 import kafka.utils._
-import org.apache.kafka.common.errors.{CorruptRecordException, KafkaStorageException}
+import org.apache.kafka.common.errors.CorruptRecordException
 import org.apache.kafka.common.record.FileRecords.LogOffsetPosition
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.Time
@@ -383,30 +383,13 @@ class LogSegment(val log: FileRecords,
 
   /**
    * Change the suffix for the index and log file for this log segment
+   * IOException from this method should be handled by the caller
    */
   def changeFileSuffixes(oldSuffix: String, newSuffix: String) {
-
-    def kafkaStorageException(fileType: String, e: IOException) = {
-      logDirFailureChannel.maybeAddLogFailureEvent(log.file.getParentFile.getParent)
-      new KafkaStorageException(s"Failed to change the $fileType file suffix from $oldSuffix to $newSuffix for log segment $baseOffset", e)
-    }
-
-    try log.renameTo(new File(CoreUtils.replaceSuffix(log.file.getPath, oldSuffix, newSuffix)))
-    catch {
-      case e: IOException => throw kafkaStorageException("log", e)
-    }
-    try index.renameTo(new File(CoreUtils.replaceSuffix(index.file.getPath, oldSuffix, newSuffix)))
-    catch {
-      case e: IOException => throw kafkaStorageException("index", e)
-    }
-    try timeIndex.renameTo(new File(CoreUtils.replaceSuffix(timeIndex.file.getPath, oldSuffix, newSuffix)))
-    catch {
-      case e: IOException => throw kafkaStorageException("timeindex", e)
-    }
-    try txnIndex.renameTo(new File(CoreUtils.replaceSuffix(txnIndex.file.getPath, oldSuffix, newSuffix)))
-    catch {
-      case e: IOException => throw kafkaStorageException("txnindex", e)
-    }
+    log.renameTo(new File(CoreUtils.replaceSuffix(log.file.getPath, oldSuffix, newSuffix)))
+    index.renameTo(new File(CoreUtils.replaceSuffix(index.file.getPath, oldSuffix, newSuffix)))
+    timeIndex.renameTo(new File(CoreUtils.replaceSuffix(timeIndex.file.getPath, oldSuffix, newSuffix)))
+    txnIndex.renameTo(new File(CoreUtils.replaceSuffix(txnIndex.file.getPath, oldSuffix, newSuffix)))
   }
 
   /**
@@ -494,28 +477,20 @@ class LogSegment(val log: FileRecords,
 
   /**
    * Delete this log segment from the filesystem.
-   *
-   * @throws KafkaStorageException if the delete fails.
    */
   def delete() {
-    try {
-      val deletedLog = log.delete()
-      val deletedIndex = index.delete()
-      val deletedTimeIndex = timeIndex.delete()
-      val deletedTxnIndex = txnIndex.delete()
-      if (!deletedLog && log.file.exists)
-        throw new IOException("Delete of log " + log.file.getName + " failed.")
-      if (!deletedIndex && index.file.exists)
-        throw new IOException("Delete of index " + index.file.getName + " failed.")
-      if (!deletedTimeIndex && timeIndex.file.exists)
-        throw new IOException("Delete of time index " + timeIndex.file.getName + " failed.")
-      if (!deletedTxnIndex && txnIndex.file.exists)
-        throw new IOException("Delete of transaction index " + txnIndex.file.getName + " failed.")
-    } catch {
-      case e: IOException =>
-        logDirFailureChannel.maybeAddLogFailureEvent(log.file.getParentFile.getParent)
-        throw new KafkaStorageException("Log segment deletion failed", e)
-    }
+    val deletedLog = log.delete()
+    val deletedIndex = index.delete()
+    val deletedTimeIndex = timeIndex.delete()
+    val deletedTxnIndex = txnIndex.delete()
+    if (!deletedLog && log.file.exists)
+      throw new IOException("Delete of log " + log.file.getName + " failed.")
+    if (!deletedIndex && index.file.exists)
+      throw new IOException("Delete of index " + index.file.getName + " failed.")
+    if (!deletedTimeIndex && timeIndex.file.exists)
+      throw new IOException("Delete of time index " + timeIndex.file.getName + " failed.")
+    if (!deletedTxnIndex && txnIndex.file.exists)
+      throw new IOException("Delete of transaction index " + txnIndex.file.getName + " failed.")
   }
 
   /**

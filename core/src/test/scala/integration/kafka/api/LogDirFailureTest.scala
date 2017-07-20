@@ -19,8 +19,9 @@ package kafka.api
 import java.util.Collections
 import java.util.concurrent.{ExecutionException, TimeUnit}
 
+import kafka.controller.{OfflineReplica, PartitionAndReplica}
 import kafka.server.KafkaConfig
-import kafka.utils.{CoreUtils, TestUtils}
+import kafka.utils.{CoreUtils, TestUtils, ZkUtils}
 import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
@@ -28,6 +29,7 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.errors.{KafkaStorageException, NotLeaderForPartitionException}
 import org.junit.{Before, Test}
 import org.junit.Assert.assertTrue
+import org.junit.Assert.assertEquals
 
 /**
   * Test whether clients can producer and consume when there is log directory failure
@@ -78,7 +80,7 @@ class LogDirFailureTest extends IntegrationTestHarness {
     TestUtils.waitUntilTrue(() => !leaderServer.logManager.liveLogDirs.contains(logDir), "Expected log directory offline", 3000L)
     assertTrue(leaderServer.replicaManager.getReplica(partition).isEmpty)
 
-    // The second send() should fail due to UnknownTopicOrPartitionException
+    // The second send() should fail due to either KafkaStorageException or NotLeaderForPartitionException
     try {
       producer.send(record).get(6000, TimeUnit.MILLISECONDS)
       fail("send() should fail with either KafkaStorageException or NotLeaderForPartitionException")
@@ -103,6 +105,14 @@ class LogDirFailureTest extends IntegrationTestHarness {
     TestUtils.waitUntilTrue(() => {
       consumer.poll(0).count() > 0
     }, "Expected some messages", 3000L)
+
+    // There should be no remaining LogDirEventNotification znode
+    assertTrue(zkUtils.getChildrenParentMayNotExist(ZkUtils.LogDirEventNotificationPath).isEmpty)
+
+    // The controller should have marked the replica on the original leader as offline
+    val controllerServer = servers.find(_.kafkaController.isActive).get
+    val replicaState = controllerServer.kafkaController.replicaStateMachine.getReplicaState(PartitionAndReplica(topic, 0, leaderServerId))
+    assertEquals(OfflineReplica, replicaState)
   }
 
   private def subscribeAndWaitForAssignment(topic: String, consumer: KafkaConsumer[Array[Byte], Array[Byte]]) {

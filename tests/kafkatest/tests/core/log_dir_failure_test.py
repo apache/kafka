@@ -13,11 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os.path
-
 from ducktape.utils.util import wait_until
 from ducktape.mark import matrix
-from ducktape.mark import parametrize
 from ducktape.mark.resource import cluster
 from kafkatest.services.kafka import config_property
 from kafkatest.services.zookeeper import ZookeeperService
@@ -26,8 +23,6 @@ from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.services.console_consumer import ConsoleConsumer
 from kafkatest.tests.produce_consume_validate import ProduceConsumeValidateTest
 from kafkatest.utils import is_int
-
-import signal
 
 
 def select_node(test, broker_type, topic):
@@ -75,6 +70,8 @@ class LogDirFailureTest(ProduceConsumeValidateTest):
                                       self.topic1: {"partitions": 1, "replication-factor": 3, "configs": {"min.insync.replicas": 2}},
                                       self.topic2: {"partitions": 1, "replication-factor": 3, "configs": {"min.insync.replicas": 1}}
                                   },
+                                  # Set log.roll.ms to 3 seconds so that broker will detect disk error sooner when it creates log segment
+                                  # Otherwise broker will still be able to read/write the log file even if the log directory is inaccessible.
                                   server_prop_overides=[
                                       [config_property.LOG_FLUSH_INTERVAL_MESSAGE, "5"],
                                       [config_property.REPLICA_HIGHWATERMARK_CHECKPOINT_INTERVAL_MS, "60000"],
@@ -100,7 +97,8 @@ class LogDirFailureTest(ProduceConsumeValidateTest):
         brokers is still available for consumption in the face of various failure scenarios.
 
         Setup: 1 zk, 3 kafka nodes, 1 topic with partitions=3, replication-factor=3, and min.insync.replicas=2
-
+               and another topic with partitions=3, replication-factor=3, and min.insync.replicas=1
+        
             - Produce messages in the background
             - Consume messages in the background
             - Drive broker failures (shutdown, or bounce repeatedly with kill -15 or kill -9)
@@ -125,10 +123,10 @@ class LogDirFailureTest(ProduceConsumeValidateTest):
             broker_node = select_node(self, broker_type, self.topic1)
             broker_idx = self.kafka.idx(broker_node)
             assert broker_idx in self.kafka.isr_idx_list(self.topic1), \
-                   "Leader node %d should be in isr set %s" % (broker_idx, str(self.kafka.isr_idx_list(self.topic1)))
+                   "Broker %d should be in isr set %s" % (broker_idx, str(self.kafka.isr_idx_list(self.topic1)))
 
             self.logger.debug("Making log dir %s inaccessible" % (KafkaService.DATA_LOG_DIR_1))
-            cmd = "sudo chmod a-rw %s -R" % (KafkaService.DATA_LOG_DIR_1)
+            cmd = "chmod a-w %s -R" % (KafkaService.DATA_LOG_DIR_1)
             broker_node.account.ssh(cmd, allow_fail=False)
 
             if bounce_broker:
@@ -156,7 +154,7 @@ class LogDirFailureTest(ProduceConsumeValidateTest):
                 if broker_node != node:
                     offline_nodes.append(node)
                     self.logger.debug("Hard shutdown broker %d" % (self.kafka.idx(node)))
-                    self.kafka.signal_node(node, sig=signal.SIGKILL)
+                    self.kafka.stop_node(node)
 
             # Verify the following:
             # 1) The broker with offline directory is the only in-sync broker of the partition of topic2

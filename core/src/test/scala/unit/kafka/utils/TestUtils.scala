@@ -228,8 +228,12 @@ object TestUtils extends Logging {
     val props = new Properties
     if (nodeId >= 0) props.put(KafkaConfig.BrokerIdProp, nodeId.toString)
     props.put(KafkaConfig.ListenersProp, listeners)
-    val logDir = (1 to logDirCount).toList.map(i => TestUtils.tempDir().getAbsolutePath).mkString(",")
-    props.put(KafkaConfig.LogDirProp, logDir)
+    if (logDirCount > 1) {
+      val logDirs = (1 to logDirCount).toList.map(i => TestUtils.tempDir().getAbsolutePath).mkString(",")
+      props.put(KafkaConfig.LogDirsProp, logDirs)
+    } else {
+      props.put(KafkaConfig.LogDirProp, TestUtils.tempDir().getAbsolutePath)
+    }
     props.put(KafkaConfig.ZkConnectProp, zkConnect)
     props.put(KafkaConfig.ZkConnectionTimeoutMsProp, "10000")
     props.put(KafkaConfig.ReplicaSocketTimeoutMsProp, "1500")

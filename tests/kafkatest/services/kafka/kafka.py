@@ -480,7 +480,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.start_node(node)
 
     def isr_idx_list(self, topic, partition=0):
-        """ Get the leader replica id for the given topic and partition.
+        """ Get in-sync replica list the given topic and partition.
         """
         self.logger.debug("Querying zookeeper to find in-sync replicas for topic %s and partition %d" % (topic, partition))
         zk_path = "/brokers/topics/%s/partitions/%d/state" % (topic, partition)
@@ -493,7 +493,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.logger.info(partition_state)
 
         isr_idx_list = partition_state["isr"]
-        self.logger.info("Leader for topic %s and partition %d is now: %s" % (topic, partition, isr_idx_list))
+        self.logger.info("Isr for topic %s and partition %d is now: %s" % (topic, partition, isr_idx_list))
         return isr_idx_list
 
     def replicas(self, topic, partition=0):

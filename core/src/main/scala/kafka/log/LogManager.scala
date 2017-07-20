@@ -46,8 +46,8 @@ import scala.collection.mutable.ArrayBuffer
  * A background thread handles log retention by periodically truncating excess log segments.
  */
 @threadsafe
-class LogManager(private val logDirs: Array[File],
-                 private val initialOfflineDirs: Array[File],
+class LogManager(logDirs: Array[File],
+                 initialOfflineDirs: Array[File],
                  val topicConfigs: Map[String, LogConfig], // note that this doesn't get updated after creation
                  val defaultConfig: LogConfig,
                  val cleanerConfig: CleanerConfig,
@@ -107,7 +107,7 @@ class LogManager(private val logDirs: Array[File],
 
   for (dir <- logDirs) {
     newGauge(
-      "isLogDirectoryOffline",
+      "LogDirectoryOffline",
       new Gauge[Int] {
         def value = if (_liveLogDirs.contains(dir)) 0 else 1
       },
@@ -147,7 +147,7 @@ class LogManager(private val logDirs: Array[File],
     }
     if (liveLogDirs.isEmpty) {
       fatal(s"Shutdown broker because none of the specified log dirs from " + dirs.mkString(", ") + " can be created or validated")
-      Runtime.getRuntime().halt(1)
+      Exit.halt(1)
     }
 
     liveLogDirs
@@ -159,7 +159,7 @@ class LogManager(private val logDirs: Array[File],
       _liveLogDirs.remove(new File(dir))
       if (_liveLogDirs.isEmpty) {
         fatal(s"Shutdown broker because all log dirs in ${logDirs.mkString(", ")} have failed")
-        Runtime.getRuntime().halt(1)
+        Exit.halt(1)
       }
 
       recoveryPointCheckpoints = recoveryPointCheckpoints.filterKeys(file => file.getAbsolutePath != dir)
@@ -359,7 +359,7 @@ class LogManager(private val logDirs: Array[File],
 
     removeMetric("OfflineLogDirectoryCount")
     for (dir <- logDirs) {
-      removeMetric("isLogDirectoryOffline", Map("logDirectory" -> dir.getAbsolutePath))
+      removeMetric("LogDirectoryOffline", Map("logDirectory" -> dir.getAbsolutePath))
     }
 
     val threadPools = ArrayBuffer.empty[ExecutorService]
@@ -437,10 +437,6 @@ class LogManager(private val logDirs: Array[File],
           log.truncateTo(truncateOffset)
           if (needToStopCleaner)
             cleaner.maybeTruncateCheckpoint(log.dir.getParentFile, topicPartition, log.activeSegment.baseOffset)
-        } catch {
-          case e: IOException =>
-            logDirFailureChannel.maybeAddLogFailureEvent(log.dir.getParent)
-            throw new KafkaStorageException(s"Failed to truncate the log for $topicPartition in dir ${log.dir.getParent} due to IOException", e)
         } finally {
           if (needToStopCleaner)
             cleaner.resumeCleaning(topicPartition)
@@ -462,13 +458,7 @@ class LogManager(private val logDirs: Array[File],
         //Abort and pause the cleaning of the log, and resume after truncation is done.
       if (cleaner != null)
         cleaner.abortAndPauseCleaning(topicPartition)
-      try {
-        log.truncateFullyAndStartAt(newOffset)
-      } catch {
-        case e: IOException =>
-          logDirFailureChannel.maybeAddLogFailureEvent(log.dir.getParent)
-          throw new KafkaStorageException(s"Failed to fully truncate the log for $topicPartition in dir ${log.dir.getParent} due to IOException", e)
-      }
+      log.truncateFullyAndStartAt(newOffset)
       if (cleaner != null) {
         cleaner.maybeTruncateCheckpoint(log.dir.getParentFile, topicPartition, log.activeSegment.baseOffset)
         cleaner.resumeCleaning(topicPartition)
@@ -590,9 +580,8 @@ class LogManager(private val logDirs: Array[File],
             removedLog.delete()
             info(s"Deleted log for partition ${removedLog.topicPartition} in ${removedLog.dir.getAbsolutePath}.")
           } catch {
-            case e: IOException =>
+            case e: KafkaStorageException =>
               error(s"Exception while deleting $removedLog in dir ${removedLog.dir.getParent}.", e)
-              logDirFailureChannel.maybeAddLogFailureEvent(removedLog.dir.getParent)
           }
         }
       }

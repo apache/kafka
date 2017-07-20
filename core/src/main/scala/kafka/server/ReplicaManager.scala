@@ -177,7 +177,7 @@ class ReplicaManager(val config: KafkaConfig,
   val replicaFetcherManager = createReplicaFetcherManager(metrics, time, threadNamePrefix, quotaManager)
   private val highWatermarkCheckPointThreadStarted = new AtomicBoolean(false)
   @volatile var highWatermarkCheckpoints = logManager.liveLogDirs.map(dir =>
-    (dir.getAbsolutePath, new OffsetCheckpointFile(new File(dir.getAbsolutePath, ReplicaManager.HighWatermarkFilename), logDirFailureChannel))).toMap
+    (dir.getAbsolutePath, new OffsetCheckpointFile(new File(dir, ReplicaManager.HighWatermarkFilename), logDirFailureChannel))).toMap
 
   private var hwThreadInitialized = false
   this.logIdent = "[Replica Manager on Broker " + localBrokerId + "]: "
@@ -1012,7 +1012,6 @@ class ReplicaManager(val config: KafkaConfig,
               .format(localBrokerId, correlationId, controllerId, epoch, partition.topicPartition, e))
             val dirOpt = getLogDir(new TopicPartition(partition.topic, partition.partitionId))
             error(s"Error while making broker the leader for partition $partition in dir $dirOpt", e)
-            dirOpt.foreach(maybeAddLogFailureEvent)
             responseMap.put(new TopicPartition(partition.topic, partition.partitionId), Errors.KAFKA_STORAGE_ERROR)
         }
       }
@@ -1105,7 +1104,6 @@ class ReplicaManager(val config: KafkaConfig,
               .format(localBrokerId, correlationId, controllerId, partitionStateInfo.controllerEpoch, partition.topic, partition.partitionId, e))
             val dirOpt = getLogDir(new TopicPartition(partition.topic, partition.partitionId))
             error(s"Error while making broker the follower for partition $partition in dir $dirOpt", e)
-            dirOpt.foreach(maybeAddLogFailureEvent)
             responseMap.put(new TopicPartition(partition.topic, partition.partitionId), Errors.KAFKA_STORAGE_ERROR)
         }
       }
@@ -1217,10 +1215,6 @@ class ReplicaManager(val config: KafkaConfig,
           error(s"Error while writing to highwatermark file in directory $dir", e)
       }
     }
-  }
-
-  def maybeAddLogFailureEvent(logDir: String): Unit = {
-    logDirFailureChannel.maybeAddLogFailureEvent(logDir)
   }
 
   def handleLogDirFailure(dir: String) {

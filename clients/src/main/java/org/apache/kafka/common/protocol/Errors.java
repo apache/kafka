@@ -85,6 +85,11 @@ import java.util.Map;
  * This class contains all the client-server errors--those errors that must be sent from the server to the client. These
  * are thus part of the protocol. The names can be changed but the error code cannot.
  *
+ * Note that client library will convert an unknown error code to the non-retriable UnknownServerException if the client library
+ * version is old and does not recognize the newly-added error code. Therefore when a new server-side error is added,
+ * we may need extra logic to convert the new error code to another existing error code before sending the response back to
+ * the client if the request version suggests that the client may not recognize the new error code.
+ *
  * Do not add exceptions that occur only on the client or only on the server here.
  */
 public enum Errors {

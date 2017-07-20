@@ -19,6 +19,14 @@ package org.apache.kafka.common.errors;
 /**
  * Miscellaneous disk-related IOException occurred when handling a request.
  * Client should request metadata update and retry if the response shows KafkaStorageException
+ *
+ * Here are the guidelines on how to handle KafkaStorageException and IOException:
+ *
+ * 1) If the server has not finished loading logs, IOException does not need to be converted to KafkaStorageException
+ * 2) After the server has finished loading logs, IOException should be caught and trigger LogDirFailureChannel.maybeAddLogFailureEvent
+ *    Then the IOException should either be swallowed and logged, or be converted and re-thrown as KafkaStorageException
+ * 3) It is preferred for IOException to be caught in Log rather than in ReplicaManager or LogSegment.
+ *
  */
 public class KafkaStorageException extends InvalidMetadataException {
 

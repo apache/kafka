@@ -63,7 +63,7 @@ class OfflinePartitionLeaderSelector(controllerContext: ControllerContext, confi
             if (!LogConfig.fromProps(config.originals, AdminUtils.fetchEntityConfig(controllerContext.zkUtils,
               ConfigType.Topic, topicAndPartition.topic)).uncleanLeaderElectionEnable) {
               throw new NoReplicaOnlineException(
-                s"No replicas in ISR for partition $topicAndPartition is alive. Live brokers are: [${controllerContext.liveBrokerIds}], " +
+                s"No replica in ISR for partition $topicAndPartition is alive. Live brokers are: [${controllerContext.liveBrokerIds}], " +
                   s"ISR brokers are: [${currentLeaderAndIsr.isr.mkString(",")}]"
               )
             }

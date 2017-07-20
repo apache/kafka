@@ -267,6 +267,7 @@ class Log(@volatile var dir: File,
     swapFiles
   }
 
+  // This method does not need to convert IOException to KafkaStorageException because it is only called before all logs are loaded
   private def loadSegmentFiles(): Unit = {
     // load segments in ascending order because transactional data from one segment may depend on the
     // segments that come before it
@@ -342,6 +343,7 @@ class Log(@volatile var dir: File,
     bytesTruncated
   }
 
+  // This method does not need to convert IOException to KafkaStorageException because it is only called before all logs are loaded
   private def completeSwapOperations(swapFiles: Set[File]): Unit = {
     for (swapFile <- swapFiles) {
       val logFile = new File(CoreUtils.replaceSuffix(swapFile.getPath, SwapFileSuffix, ""))
@@ -369,7 +371,8 @@ class Log(@volatile var dir: File,
     }
   }
 
-  /* Load the log segments from the log files on disk */
+  // Load the log segments from the log files on disk
+  // This method does not need to convert IOException to KafkaStorageException because it is only called before all logs are loaded
   private def loadSegments() {
     // first do a pass through the files in the log directory and remove any temporary files
     // and find any interrupted swap operations
@@ -407,6 +410,7 @@ class Log(@volatile var dir: File,
     nextOffsetMetadata = new LogOffsetMetadata(messageOffset, activeSegment.baseOffset, activeSegment.size)
   }
 
+  // This method does not need to convert IOException to KafkaStorageException because it is only called before all logs are loaded
   private def recoverLog() {
     // if we have the clean shutdown marker, skip recovery
     if(hasCleanShutdownFile) {
@@ -580,16 +584,16 @@ class Log(@volatile var dir: File,
    * @return Information about the appended messages including the first and last offset.
    */
   private def append(records: MemoryRecords, isFromClient: Boolean, assignOffsets: Boolean, leaderEpoch: Int): LogAppendInfo = {
-    val appendInfo = analyzeAndValidateRecords(records, isFromClient = isFromClient)
-
-    // return if we have no valid messages or if this is a duplicate of the last appended entry
-    if (appendInfo.shallowCount == 0)
-      return appendInfo
-
-    // trim any invalid bytes or partial messages before appending it to the on-disk log
-    var validRecords = trimInvalidBytes(records, appendInfo)
-
     try {
+      val appendInfo = analyzeAndValidateRecords(records, isFromClient = isFromClient)
+
+      // return if we have no valid messages or if this is a duplicate of the last appended entry
+      if (appendInfo.shallowCount == 0)
+        return appendInfo
+
+      // trim any invalid bytes or partial messages before appending it to the on-disk log
+      var validRecords = trimInvalidBytes(records, appendInfo)
+
       // they are valid, insert them in the log
       lock synchronized {
 
@@ -1039,35 +1043,41 @@ class Log(@volatile var dir: File,
    *         None if no such message is found.
    */
   def fetchOffsetsByTimestamp(targetTimestamp: Long): Option[TimestampOffset] = {
-    debug(s"Searching offset for timestamp $targetTimestamp")
+    try {
+      debug(s"Searching offset for timestamp $targetTimestamp")
 
-    if (config.messageFormatVersion < KAFKA_0_10_0_IV0 &&
+      if (config.messageFormatVersion < KAFKA_0_10_0_IV0 &&
         targetTimestamp != ListOffsetRequest.EARLIEST_TIMESTAMP &&
         targetTimestamp != ListOffsetRequest.LATEST_TIMESTAMP)
-      throw new UnsupportedForMessageFormatException(s"Cannot search offsets based on timestamp because message format version " +
+        throw new UnsupportedForMessageFormatException(s"Cannot search offsets based on timestamp because message format version " +
           s"for partition $topicPartition is ${config.messageFormatVersion} which is earlier than the minimum " +
           s"required version $KAFKA_0_10_0_IV0")
 
-    // Cache to avoid race conditions. `toBuffer` is faster than most alternatives and provides
-    // constant time access while being safe to use with concurrent collections unlike `toArray`.
-    val segmentsCopy = logSegments.toBuffer
-    // For the earliest and latest, we do not need to return the timestamp.
-    if (targetTimestamp == ListOffsetRequest.EARLIEST_TIMESTAMP)
+      // Cache to avoid race conditions. `toBuffer` is faster than most alternatives and provides
+      // constant time access while being safe to use with concurrent collections unlike `toArray`.
+      val segmentsCopy = logSegments.toBuffer
+      // For the earliest and latest, we do not need to return the timestamp.
+      if (targetTimestamp == ListOffsetRequest.EARLIEST_TIMESTAMP)
         return Some(TimestampOffset(RecordBatch.NO_TIMESTAMP, logStartOffset))
-    else if (targetTimestamp == ListOffsetRequest.LATEST_TIMESTAMP)
+      else if (targetTimestamp == ListOffsetRequest.LATEST_TIMESTAMP)
         return Some(TimestampOffset(RecordBatch.NO_TIMESTAMP, logEndOffset))
 
-    val targetSeg = {
-      // Get all the segments whose largest timestamp is smaller than target timestamp
-      val earlierSegs = segmentsCopy.takeWhile(_.largestTimestamp < targetTimestamp)
-      // We need to search the first segment whose largest timestamp is greater than the target timestamp if there is one.
-      if (earlierSegs.length < segmentsCopy.length)
-        Some(segmentsCopy(earlierSegs.length))
-      else
-        None
-    }
+      val targetSeg = {
+        // Get all the segments whose largest timestamp is smaller than target timestamp
+        val earlierSegs = segmentsCopy.takeWhile(_.largestTimestamp < targetTimestamp)
+        // We need to search the first segment whose largest timestamp is greater than the target timestamp if there is one.
+        if (earlierSegs.length < segmentsCopy.length)
+          Some(segmentsCopy(earlierSegs.length))
+        else
+          None
+      }
 
-    targetSeg.flatMap(_.findOffsetByTimestamp(targetTimestamp, logStartOffset))
+      targetSeg.flatMap(_.findOffsetByTimestamp(targetTimestamp, logStartOffset))
+    } catch {
+      case e: IOException =>
+        logDirFailureChannel.maybeAddLogFailureEvent(dir.getParent)
+        throw new KafkaStorageException(s"Error while fetching offset by timestamp for $topicPartition in dir ${dir.getParent}", e)
+    }
   }
 
   /**
@@ -1098,18 +1108,24 @@ class Log(@volatile var dir: File,
   }
 
   private def deleteSegments(deletable: Iterable[LogSegment]): Int = {
-    val numToDelete = deletable.size
-    if (numToDelete > 0) {
-      // we must always have at least one segment, so if we are going to delete all the segments, create a new one first
-      if (segments.size == numToDelete)
-        roll()
-      lock synchronized {
-        // remove the segments for lookups
-        deletable.foreach(deleteSegment)
-        maybeIncrementLogStartOffset(segments.firstEntry.getValue.baseOffset)
+    try {
+      val numToDelete = deletable.size
+      if (numToDelete > 0) {
+        // we must always have at least one segment, so if we are going to delete all the segments, create a new one first
+        if (segments.size == numToDelete)
+          roll()
+        lock synchronized {
+          // remove the segments for lookups
+          deletable.foreach(deleteSegment)
+          maybeIncrementLogStartOffset(segments.firstEntry.getValue.baseOffset)
+        }
       }
+      numToDelete
+    } catch {
+      case e: IOException =>
+        logDirFailureChannel.maybeAddLogFailureEvent(dir.getParent)
+        throw new KafkaStorageException(s"Error while deleting segments for $topicPartition in dir ${dir.getParent}", e)
     }
-    numToDelete
   }
 
   /**
@@ -1310,23 +1326,29 @@ class Log(@volatile var dir: File,
    * @param offset The offset to flush up to (non-inclusive); the new recovery point
    */
   def flush(offset: Long) : Unit = {
-    if (offset <= this.recoveryPoint)
-      return
-    debug("Flushing log '" + name + " up to offset " + offset + ", last flushed: " + lastFlushTime + " current time: " +
-          time.milliseconds + " unflushed = " + unflushedMessages)
-    for(segment <- logSegments(this.recoveryPoint, offset))
-      segment.flush()
+    try {
+      if (offset <= this.recoveryPoint)
+        return
+      debug("Flushing log '" + name + " up to offset " + offset + ", last flushed: " + lastFlushTime + " current time: " +
+        time.milliseconds + " unflushed = " + unflushedMessages)
+      for (segment <- logSegments(this.recoveryPoint, offset))
+        segment.flush()
 
-    // now that we have flushed, we can cleanup old producer snapshots. However, it is useful to retain
-    // the snapshots from the recent segments in case we need to truncate and rebuild the producer state.
-    // Otherwise, we would always need to rebuild from the earliest segment.
-    producerStateManager.deleteSnapshotsBefore(minSnapshotOffsetToRetain(offset))
+      // now that we have flushed, we can cleanup old producer snapshots. However, it is useful to retain
+      // the snapshots from the recent segments in case we need to truncate and rebuild the producer state.
+      // Otherwise, we would always need to rebuild from the earliest segment.
+      producerStateManager.deleteSnapshotsBefore(minSnapshotOffsetToRetain(offset))
 
-    lock synchronized {
-      if(offset > this.recoveryPoint) {
-        this.recoveryPoint = offset
-        lastflushedTime.set(time.milliseconds)
+      lock synchronized {
+        if (offset > this.recoveryPoint) {
+          this.recoveryPoint = offset
+          lastflushedTime.set(time.milliseconds)
+        }
       }
+    } catch {
+      case e: IOException =>
+        logDirFailureChannel.maybeAddLogFailureEvent(dir.getParent)
+        throw new KafkaStorageException(s"Error while flushing log for $topicPartition in dir ${dir.getParent} with offset $offset", e)
     }
   }
 
@@ -1345,11 +1367,17 @@ class Log(@volatile var dir: File,
    * Completely delete this log directory and all contents from the file system with no delay
    */
   private[log] def delete() {
-    lock synchronized {
-      logSegments.foreach(_.delete())
-      segments.clear()
-      leaderEpochCache.clear()
-      Utils.delete(dir)
+    try {
+      lock synchronized {
+        logSegments.foreach(_.delete())
+        segments.clear()
+        leaderEpochCache.clear()
+        Utils.delete(dir)
+      }
+    } catch {
+      case e: IOException =>
+        logDirFailureChannel.maybeAddLogFailureEvent(dir.getParent)
+        throw new KafkaStorageException(s"Error while deleting log for $topicPartition in dir ${dir.getParent}", e)
     }
   }
 
@@ -1379,26 +1407,32 @@ class Log(@volatile var dir: File,
    * @param targetOffset The offset to truncate to, an upper bound on all offsets in the log after truncation is complete.
    */
   private[log] def truncateTo(targetOffset: Long) {
-    if(targetOffset < 0)
-      throw new IllegalArgumentException("Cannot truncate to a negative offset (%d).".format(targetOffset))
-    if(targetOffset >= logEndOffset) {
-      info("Truncating %s to %d has no effect as the largest offset in the log is %d.".format(name, targetOffset, logEndOffset-1))
-      return
-    }
-    info("Truncating log %s to offset %d.".format(name, targetOffset))
-    lock synchronized {
-      if(segments.firstEntry.getValue.baseOffset > targetOffset) {
-        truncateFullyAndStartAt(targetOffset)
-      } else {
-        val deletable = logSegments.filter(segment => segment.baseOffset > targetOffset)
-        deletable.foreach(deleteSegment)
-        activeSegment.truncateTo(targetOffset)
-        updateLogEndOffset(targetOffset)
-        this.recoveryPoint = math.min(targetOffset, this.recoveryPoint)
-        this.logStartOffset = math.min(targetOffset, this.logStartOffset)
-        leaderEpochCache.clearAndFlushLatest(targetOffset)
-        loadProducerState(targetOffset, reloadFromCleanShutdown = false)
+    try {
+      if (targetOffset < 0)
+        throw new IllegalArgumentException("Cannot truncate to a negative offset (%d).".format(targetOffset))
+      if (targetOffset >= logEndOffset) {
+        info("Truncating %s to %d has no effect as the largest offset in the log is %d.".format(name, targetOffset, logEndOffset - 1))
+        return
       }
+      info("Truncating log %s to offset %d.".format(name, targetOffset))
+      lock synchronized {
+        if (segments.firstEntry.getValue.baseOffset > targetOffset) {
+          truncateFullyAndStartAt(targetOffset)
+        } else {
+          val deletable = logSegments.filter(segment => segment.baseOffset > targetOffset)
+          deletable.foreach(deleteSegment)
+          activeSegment.truncateTo(targetOffset)
+          updateLogEndOffset(targetOffset)
+          this.recoveryPoint = math.min(targetOffset, this.recoveryPoint)
+          this.logStartOffset = math.min(targetOffset, this.logStartOffset)
+          leaderEpochCache.clearAndFlushLatest(targetOffset)
+          loadProducerState(targetOffset, reloadFromCleanShutdown = false)
+        }
+      }
+    } catch {
+      case e: IOException =>
+        logDirFailureChannel.maybeAddLogFailureEvent(dir.getParent)
+        throw new KafkaStorageException(s"Error while truncating log to offset $targetOffset for $topicPartition in dir ${dir.getParent}", e)
     }
   }
 
@@ -1408,29 +1442,35 @@ class Log(@volatile var dir: File,
    *  @param newOffset The new offset to start the log with
    */
   private[log] def truncateFullyAndStartAt(newOffset: Long) {
-    debug(s"Truncate and start log '$name' at offset $newOffset")
-    lock synchronized {
-      val segmentsToDelete = logSegments.toList
-      segmentsToDelete.foreach(deleteSegment)
-      addSegment(new LogSegment(dir,
-                                newOffset,
-                                indexIntervalBytes = config.indexInterval,
-                                maxIndexSize = config.maxIndexSize,
-                                rollJitterMs = config.randomSegmentJitter,
-                                time = time,
-                                fileAlreadyExists = false,
-                                initFileSize = initFileSize,
-                                preallocate = config.preallocate,
-                                logDirFailureChannel = logDirFailureChannel))
-      updateLogEndOffset(newOffset)
-      leaderEpochCache.clearAndFlush()
+    try {
+      debug(s"Truncate and start log '$name' at offset $newOffset")
+      lock synchronized {
+        val segmentsToDelete = logSegments.toList
+        segmentsToDelete.foreach(deleteSegment)
+        addSegment(new LogSegment(dir,
+          newOffset,
+          indexIntervalBytes = config.indexInterval,
+          maxIndexSize = config.maxIndexSize,
+          rollJitterMs = config.randomSegmentJitter,
+          time = time,
+          fileAlreadyExists = false,
+          initFileSize = initFileSize,
+          preallocate = config.preallocate,
+          logDirFailureChannel = logDirFailureChannel))
+        updateLogEndOffset(newOffset)
+        leaderEpochCache.clearAndFlush()
 
-      producerStateManager.truncate()
-      producerStateManager.updateMapEndOffset(newOffset)
-      updateFirstUnstableOffset()
+        producerStateManager.truncate()
+        producerStateManager.updateMapEndOffset(newOffset)
+        updateFirstUnstableOffset()
 
-      this.recoveryPoint = math.min(newOffset, this.recoveryPoint)
-      this.logStartOffset = newOffset
+        this.recoveryPoint = math.min(newOffset, this.recoveryPoint)
+        this.logStartOffset = newOffset
+      }
+    } catch {
+      case e: IOException =>
+        logDirFailureChannel.maybeAddLogFailureEvent(dir.getParent)
+        throw new KafkaStorageException(s"Error while truncating the entire log for $topicPartition in dir ${dir.getParent}", e)
     }
   }
 
@@ -1475,6 +1515,8 @@ class Log(@volatile var dir: File,
    * This allows reads to happen concurrently without synchronization and without the possibility of physically
    * deleting a file while it is being read from.
    *
+   * This method does not need to convert IOException to KafkaStorageException because it is only called before all logs are loaded
+   *
    * @param segment The log segment to schedule for deletion
    */
   private def deleteSegment(segment: LogSegment) {
@@ -1488,13 +1530,22 @@ class Log(@volatile var dir: File,
   /**
    * Perform an asynchronous delete on the given file if it exists (otherwise do nothing)
    *
+   * This method does not need to convert IOException (thrown from changeFileSuffixes)
+   * to KafkaStorageException because it is only called before all logs are loaded
+   *
    * @throws KafkaStorageException if the file can't be renamed and still exists
    */
   private def asyncDeleteSegment(segment: LogSegment) {
     segment.changeFileSuffixes("", Log.DeletedFileSuffix)
     def deleteSeg() {
       info("Deleting segment %d from log %s.".format(segment.baseOffset, name))
-      segment.delete()
+      try {
+        segment.delete()
+      } catch {
+        case e: IOException =>
+          logDirFailureChannel.maybeAddLogFailureEvent(dir.getParent)
+          error(s"Error while deleting segments for $topicPartition in dir ${dir.getParent}", e)
+      }
     }
     scheduler.schedule("delete-file", deleteSeg _, delay = config.fileDeleteDelayMs)
   }
@@ -1502,6 +1553,8 @@ class Log(@volatile var dir: File,
   /**
    * Swap a new segment in place and delete one or more existing segments in a crash-safe manner. The old segments will
    * be asynchronously deleted.
+   *
+   * This method does not need to convert IOException to KafkaStorageException because it is only called before all logs are loaded
    *
    * The sequence of operations is:
    * <ol>
