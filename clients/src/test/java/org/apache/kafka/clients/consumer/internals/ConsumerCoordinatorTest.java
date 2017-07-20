@@ -1287,14 +1287,11 @@ public class ConsumerCoordinatorTest {
         assertTrue(mockOffsetCommitCallback.exception instanceof IllegalArgumentException);
     }
 
-    @Test(expected = CommitFailedException.class)
-    public void testCommitOffsetSyncCallbackWithCommitFailedExceptionForTimeout() {
+    @Test
+    public void testCommitOffsetSyncWithoutFutureGetsCompleted() {
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         coordinator.ensureCoordinatorReady();
-
-        // sync commit will check if future has failed and is not retriable before throwing CommitFailedException
-        client.prepareResponse(offsetCommitResponse(Collections.singletonMap(t1p, Errors.NONE)), false, 1000);
-        coordinator.commitOffsetsSync(Collections.singletonMap(t1p, new OffsetAndMetadata(100L)), Long.MAX_VALUE);
+        assertFalse(coordinator.commitOffsetsSync(Collections.singletonMap(t1p, new OffsetAndMetadata(100L)), 0));
     }
 
     @Test
