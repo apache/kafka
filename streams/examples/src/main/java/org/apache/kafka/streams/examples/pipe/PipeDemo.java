@@ -51,7 +51,7 @@ public class PipeDemo {
 
         KStreamBuilder builder = new KStreamBuilder();
 
-        builder.stream("streams-file-input").to("streams-pipe-output");
+        builder.stream("streams-plaintext-input").to("streams-pipe-output");
 
         final KafkaStreams streams = new KafkaStreams(builder, props);
         final CountDownLatch latch = new CountDownLatch(1);

@@ -121,7 +121,7 @@ public class WordCountProcessorDemo {
 
         TopologyBuilder builder = new TopologyBuilder();
 
-        builder.addSource("Source", "streams-wordcount-input");
+        builder.addSource("Source", "streams-plaintext-input");
 
         builder.addProcessor("Process", new MyProcessorSupplier(), "Source");
         builder.addStateStore(Stores.create("Counts").withStringKeys().withIntegerValues().inMemory().build(), "Process");
