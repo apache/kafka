@@ -19,6 +19,17 @@
 
 <script id="upgrade-template" type="text/x-handlebars-template">
 
+<h4><a id="upgrade_1_0_0" href="#upgrade_1_0_0"</h4> Upgrading from 0.8.x, 0.9.x, 0.10.0.x, 0.10.1.x, 0.10.2 or 0.11.0.0 to 1.0.0</a></h4>
+<p>1.0.0 is fully compatible with 0.11.0.0. The upgrade can be done one broker at a time by simply bringing it down, updating the code, and restarting it.
+To upgrade from earlier versions, please review the <a href="#upgrade_11_0_0">0.11.0.0 upgrade instructions</a>.
+</p>
+
+<h5><a id="upgrade_100_notable" href="#upgrade_100_notable">Notable changes in 1.0.0</a></h5>
+<ul>
+    <li>Topic deletion is now enabled by default, since the functionality is now stable. Users who wish to
+        to retain the previous behavior should set the broker config <code>delete.topic.enable</code> to <code>false</code>. Keep in mind that topic deletion removes data and the operation is not reversible (i.e. there is no "undelete" operation)</li>
+</ul>
+
 <h4><a id="upgrade_11_0_0" href="#upgrade_11_0_0">Upgrading from 0.8.x, 0.9.x, 0.10.0.x, 0.10.1.x or 0.10.2.x to 0.11.0.0</a></h4>
 <p>Kafka 0.11.0.0 introduces a new message format version as well as wire protocol changes. By following the recommended rolling upgrade plan below,
   you guarantee no downtime during the upgrade. However, please review the <a href="#upgrade_1100_notable">notable changes in 0.11.0.0</a> before upgrading.

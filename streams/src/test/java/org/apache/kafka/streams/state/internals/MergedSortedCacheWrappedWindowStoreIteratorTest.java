@@ -80,6 +80,7 @@ public class MergedSortedCacheWrappedWindowStoreIteratorTest {
             assertArrayEquals(expected.value, next.value);
             assertEquals(expected.key, next.key);
         }
+        iterator.close();
     }
 
     @Test
@@ -98,6 +99,7 @@ public class MergedSortedCacheWrappedWindowStoreIteratorTest {
         assertThat(iterator.peekNextKey(), equalTo(0L));
         iterator.next();
         assertThat(iterator.peekNextKey(), equalTo(10L));
+        iterator.close();
     }
 
     @Test
@@ -112,5 +114,6 @@ public class MergedSortedCacheWrappedWindowStoreIteratorTest {
         assertThat(iterator.peekNextKey(), equalTo(0L));
         iterator.next();
         assertThat(iterator.peekNextKey(), equalTo(10L));
+        iterator.close();
     }
 }
