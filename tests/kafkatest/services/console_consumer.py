@@ -311,8 +311,8 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
 
     def _init_jmx_attributes(self):
         # Must hold lock
-        if self.new_consumer is True:
-            if self.jmx_object_names is None:
+        if self.new_consumer:
+            if not self.jmx_object_names:
                 self.jmx_object_names = []
                 self.jmx_object_names += ["kafka.consumer:type=consumer-coordinator-metrics,client-id=%s" % self.client_id]
                 self.jmx_attributes += ["assigned-partitions"]
