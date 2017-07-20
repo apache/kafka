@@ -52,7 +52,6 @@ public class MockClient implements KafkaClient {
         public final boolean disconnected;
         public final RequestMatcher requestMatcher;
         public Node node;
-        public long requestDurationMs;
 
         public FutureResponse(AbstractResponse responseBody, boolean disconnected, RequestMatcher requestMatcher, Node node) {
             this.responseBody = responseBody;
@@ -61,13 +60,6 @@ public class MockClient implements KafkaClient {
             this.node = node;
         }
 
-        public FutureResponse(AbstractResponse responseBody, boolean disconnected, RequestMatcher requestMatcher, Node node, long requestDurationMs) {
-            this.responseBody = responseBody;
-            this.disconnected = disconnected;
-            this.requestMatcher = requestMatcher;
-            this.node = node;
-            this.requestDurationMs = requestDurationMs;
-        }
     }
 
     private final Time time;
@@ -165,7 +157,7 @@ public class MockClient implements KafkaClient {
             if (!futureResp.requestMatcher.matches(abstractRequest))
                 throw new IllegalStateException("Request matcher did not match next-in-line request " + abstractRequest);
             ClientResponse resp = new ClientResponse(request.makeHeader(version), request.callback(), request.destination(),
-                    request.createdTimeMs(), time.milliseconds()+futureResp.requestDurationMs, futureResp.disconnected, null, futureResp.responseBody);
+                    request.createdTimeMs(), time.milliseconds(), futureResp.disconnected, null, futureResp.responseBody);
             responses.add(resp);
             iterator.remove();
             return;
@@ -192,8 +184,7 @@ public class MockClient implements KafkaClient {
 
         ClientResponse response;
         while ((response = this.responses.poll()) != null) {
-            if(now + timeoutMs >= response.receivedTimeMs())
-                response.onComplete();
+            response.onComplete();
         }
 
         return copy;
@@ -275,10 +266,6 @@ public class MockClient implements KafkaClient {
         prepareResponseFrom(ALWAYS_TRUE, response, node, disconnected);
     }
 
-    public void prepareResponse(AbstractResponse response, boolean disconnected,long requestDurationMs) {
-        prepareResponse(ALWAYS_TRUE, response, disconnected, requestDurationMs);
-    }
-
     /**
      * Prepare a response for a request matching the provided matcher. If the matcher does not
      * match, {@link KafkaClient#send(ClientRequest, long)} will throw IllegalStateException
@@ -290,16 +277,8 @@ public class MockClient implements KafkaClient {
         prepareResponseFrom(matcher, response, null, disconnected);
     }
 
-    public void prepareResponse(RequestMatcher matcher, AbstractResponse response, boolean disconnected, long requestDurationMs) {
-        prepareResponseFrom(matcher, response, null, disconnected, requestDurationMs);
-    }
-
     public void prepareResponseFrom(RequestMatcher matcher, AbstractResponse response, Node node, boolean disconnected) {
         futureResponses.add(new FutureResponse(response, disconnected, matcher, node));
-    }
-
-    public void prepareResponseFrom(RequestMatcher matcher, AbstractResponse response, Node node, boolean disconnected, long requestDurationMs) {
-        futureResponses.add(new FutureResponse(response, disconnected, matcher, node, requestDurationMs));
     }
 
     public void waitForRequests(final int minRequests, long maxWaitMs) throws InterruptedException {
