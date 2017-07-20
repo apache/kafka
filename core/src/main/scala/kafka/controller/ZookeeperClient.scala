@@ -53,12 +53,12 @@ class ZookeeperClient(connectString: String, sessionTimeout: Int, sessionExpirat
           responseQueue.add(DeleteResponse(rc, path, ctx))
           countDownLatch.countDown()
         }}, ctx)
-      case ExistsRequest(path, ctx) => zooKeeper.exists(path, false, new StatCallback {
+      case ExistsRequest(path, ctx) => zooKeeper.exists(path, zNodeChangeHandlers.containsKey(path), new StatCallback {
         override def processResult(rc: Int, path: String, ctx: Any, stat: Stat) = {
           responseQueue.add(ExistsResponse(rc, path, ctx, stat))
           countDownLatch.countDown()
         }}, ctx)
-      case GetDataRequest(path, ctx) => zooKeeper.getData(path, false, new DataCallback {
+      case GetDataRequest(path, ctx) => zooKeeper.getData(path, zNodeChangeHandlers.containsKey(path), new DataCallback {
         override def processResult(rc: Int, path: String, ctx: Any, data: Array[Byte], stat: Stat) = {
           responseQueue.add(GetDataResponse(rc, path, ctx, data, stat))
           countDownLatch.countDown()
@@ -78,21 +78,11 @@ class ZookeeperClient(connectString: String, sessionTimeout: Int, sessionExpirat
           responseQueue.add(SetACLResponse(rc, path, ctx, stat))
           countDownLatch.countDown()
         }}, ctx)
-      case GetChildrenRequest(path, ctx) => zooKeeper.getChildren(path, false, new Children2Callback {
+      case GetChildrenRequest(path, ctx) => zooKeeper.getChildren(path, zNodeChildChangeHandlers.containsKey(path), new Children2Callback {
         override def processResult(rc: Int, path: String, ctx: Any, children: java.util.List[String], stat: Stat) = {
           responseQueue.add(GetChildrenResponse(rc, path, ctx, Option(children).map(_.asScala).orNull, stat))
           countDownLatch.countDown()
         }}, ctx)
-      case ExistsWithWatcherRequest(path) => zooKeeper.exists(path, true, new StatCallback {
-        override def processResult(rc: Int, path: String, ctx: Any, stat: Stat) = {
-          responseQueue.add(ExistsResponse(rc, path, ctx, stat))
-          countDownLatch.countDown()
-        }}, null)
-      case GetChildrenWithWatcherRequest(path) => zooKeeper.getChildren(path, true, new Children2Callback {
-        override def processResult(rc: Int, path: String, ctx: Any, children: java.util.List[String], stat: Stat) = {
-          responseQueue.add(GetChildrenResponse(rc, path, ctx, Option(children).map(_.asScala).orNull, stat))
-          countDownLatch.countDown()
-        }}, null)
     }
     countDownLatch.await()
     responseQueue.asScala.toSeq
@@ -113,7 +103,7 @@ class ZookeeperClient(connectString: String, sessionTimeout: Int, sessionExpirat
 
   def registerZNodeChangeHandlers(handlers: Seq[ZNodeChangeHandler]): Seq[ExistsResponse] = {
     handlers.foreach(handler => zNodeChangeHandlers.put(handler.path, handler))
-    val asyncRequests = handlers.map(handler => ExistsWithWatcherRequest(handler.path))
+    val asyncRequests = handlers.map(handler => ExistsRequest(handler.path, null))
     handle(asyncRequests).asInstanceOf[Seq[ExistsResponse]]
   }
 
@@ -127,7 +117,7 @@ class ZookeeperClient(connectString: String, sessionTimeout: Int, sessionExpirat
 
   def registerZNodeChildChangeHandlers(handlers: Seq[ZNodeChildChangeHandler]): Seq[GetChildrenResponse] = {
     handlers.foreach(handler => zNodeChildChangeHandlers.put(handler.path, handler))
-    val asyncRequests = handlers.map(handler => GetChildrenWithWatcherRequest(handler.path))
+    val asyncRequests = handlers.map(handler => GetChildrenRequest(handler.path, null))
     handle(asyncRequests).asInstanceOf[Seq[GetChildrenResponse]]
   }
 
@@ -143,8 +133,6 @@ class ZookeeperClient(connectString: String, sessionTimeout: Int, sessionExpirat
 
   private def initialize(): Unit = {
     if (!zooKeeper.getState.isAlive) {
-      zNodeChangeHandlers.clear()
-      zNodeChildChangeHandlers.clear()
       zooKeeper = new ZooKeeper(connectString, sessionTimeout, ZookeeperClientWatcher)
     }
   }
@@ -163,22 +151,15 @@ class ZookeeperClient(connectString: String, sessionTimeout: Int, sessionExpirat
           }
         }
       } else if (event.getType == EventType.NodeCreated) {
-        Option(zNodeChangeHandlers.remove(event.getPath)).foreach(_.handleCreation)
+        Option(zNodeChangeHandlers.get(event.getPath)).foreach(_.handleCreation)
       } else if (event.getType == EventType.NodeDeleted) {
-        Option(zNodeChangeHandlers.remove(event.getPath)).foreach(_.handleDeletion)
+        Option(zNodeChangeHandlers.get(event.getPath)).foreach(_.handleDeletion)
       } else if (event.getType == EventType.NodeDataChanged) {
-        Option(zNodeChangeHandlers.remove(event.getPath)).foreach(_.handleDataChange)
+        Option(zNodeChangeHandlers.get(event.getPath)).foreach(_.handleDataChange)
       } else if (event.getType == EventType.NodeChildrenChanged) {
-        Option(zNodeChildChangeHandlers.remove(event.getPath)).foreach(_.handleChildChange)
+        Option(zNodeChildChangeHandlers.get(event.getPath)).foreach(_.handleChildChange)
       }
     }
-  }
-
-  private[this] case class ExistsWithWatcherRequest(path: String) extends AsyncRequest {
-    val ctx = null
-  }
-  private[this] case class GetChildrenWithWatcherRequest(path: String) extends AsyncRequest {
-    val ctx = null
   }
 }
 
