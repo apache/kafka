@@ -65,7 +65,7 @@ class ZookeeperTopicEventWatcher(val zkUtils: ZkUtils,
       lock.synchronized {
         try {
           if (zkUtils != null) {
-            val latestTopics = zkUtils.zkClient.getChildren(ZkUtils.BrokerTopicsPath).asScala
+            val latestTopics = zkUtils.getChildren(ZkUtils.BrokerTopicsPath)
             debug("all topics: %s".format(latestTopics))
             eventHandler.handleTopicEvent(latestTopics)
           }
