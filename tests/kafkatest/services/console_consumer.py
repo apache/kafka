@@ -256,9 +256,10 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
 
         consumer_output = node.account.ssh_capture(cmd, allow_fail=False)
 
-        self.init_jmx_attributes()
-        self.logger.debug("collecting following jmx objects: %s", self.jmx_object_names)
-        self.start_jmx_tool(idx, node)
+        with self.lock:
+            self._init_jmx_attributes()
+            self.logger.debug("collecting following jmx objects: %s", self.jmx_object_names)
+            self.start_jmx_tool(idx, node)
 
         for line in consumer_output:
             msg = line.strip()
@@ -273,7 +274,8 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
                 if msg is not None:
                     self.messages_consumed[idx].append(msg)
 
-        self.read_jmx_output(idx, node)
+        with self.lock:
+            self.read_jmx_output(idx, node)
 
     def start_node(self, node):
         BackgroundThreadService.start_node(self, node)
@@ -295,20 +297,22 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
         self.security_config.clean_node(node)
 
     def has_partitions_assigned(self, node):
-       if self.new_consumer is False:
-          return False
-       idx = self.idx(node)
-       self.init_jmx_attributes()
-       self.start_jmx_tool(idx, node)
-       self.read_jmx_output(idx, node)
-       if not self.assigned_partitions_jmx_attr in self.maximum_jmx_value:
-           return False
-       self.logger.debug("Number of partitions assigned %f" % self.maximum_jmx_value[self.assigned_partitions_jmx_attr])
-       return self.maximum_jmx_value[self.assigned_partitions_jmx_attr] > 0.0
+        if self.new_consumer is False:
+            return False
+        idx = self.idx(node)
+        with self.lock:
+            self._init_jmx_attributes()
+            self.start_jmx_tool(idx, node)
+            self.read_jmx_output(idx, node)
+        if not self.assigned_partitions_jmx_attr in self.maximum_jmx_value:
+            return False
+        self.logger.debug("Number of partitions assigned %f" % self.maximum_jmx_value[self.assigned_partitions_jmx_attr])
+        return self.maximum_jmx_value[self.assigned_partitions_jmx_attr] > 0.0
 
-    def init_jmx_attributes(self):
-        if self.new_consumer is True:
-            if self.jmx_object_names is None:
+    def _init_jmx_attributes(self):
+        # Must hold lock
+        if self.new_consumer:
+            if not self.jmx_object_names:
                 self.jmx_object_names = []
                 self.jmx_object_names += ["kafka.consumer:type=consumer-coordinator-metrics,client-id=%s" % self.client_id]
                 self.jmx_attributes += ["assigned-partitions"]
