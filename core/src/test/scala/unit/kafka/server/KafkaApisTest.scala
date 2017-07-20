@@ -129,11 +129,8 @@ class KafkaApisTest {
 
     EasyMock.expect(replicaManager.getMagic(topicPartition))
       .andReturn(Some(RecordBatch.MAGIC_VALUE_V1))
-    EasyMock.expect(metadataCache.contains(topicPartition))
-      .andReturn(true)
     EasyMock.expect(requestChannel.sendResponse(EasyMock.capture(capturedResponse)))
     EasyMock.replay(replicaManager, replicaQuotaManager, requestChannel)
-    EasyMock.replay(metadataCache)
 
     createKafkaApis().handleWriteTxnMarkersRequest(request)
 
@@ -151,11 +148,8 @@ class KafkaApisTest {
 
     EasyMock.expect(replicaManager.getMagic(topicPartition))
       .andReturn(None)
-    EasyMock.expect(metadataCache.contains(topicPartition))
-      .andReturn(false)
     EasyMock.expect(requestChannel.sendResponse(EasyMock.capture(capturedResponse)))
     EasyMock.replay(replicaManager, replicaQuotaManager, requestChannel)
-    EasyMock.replay(metadataCache)
 
     createKafkaApis().handleWriteTxnMarkersRequest(request)
 
@@ -178,10 +172,6 @@ class KafkaApisTest {
       .andReturn(Some(RecordBatch.MAGIC_VALUE_V1))
     EasyMock.expect(replicaManager.getMagic(tp2))
       .andReturn(Some(RecordBatch.MAGIC_VALUE_V2))
-    EasyMock.expect(metadataCache.contains(tp1))
-      .andReturn(true)
-    EasyMock.expect(metadataCache.contains(tp2))
-      .andReturn(true)
 
     EasyMock.expect(replicaManager.appendRecords(EasyMock.anyLong(),
       EasyMock.anyShort(),
@@ -197,7 +187,6 @@ class KafkaApisTest {
 
     EasyMock.expect(requestChannel.sendResponse(EasyMock.capture(capturedResponse)))
     EasyMock.replay(replicaManager, replicaQuotaManager, requestChannel)
-    EasyMock.replay(metadataCache)
 
     createKafkaApis().handleWriteTxnMarkersRequest(request)
 
@@ -221,10 +210,6 @@ class KafkaApisTest {
       .andReturn(None)
     EasyMock.expect(replicaManager.getMagic(tp2))
       .andReturn(Some(RecordBatch.MAGIC_VALUE_V2))
-    EasyMock.expect(metadataCache.contains(tp1))
-      .andReturn(false)
-    EasyMock.expect(metadataCache.contains(tp2))
-      .andReturn(true)
 
     EasyMock.expect(replicaManager.appendRecords(EasyMock.anyLong(),
       EasyMock.anyShort(),
@@ -240,7 +225,6 @@ class KafkaApisTest {
 
     EasyMock.expect(requestChannel.sendResponse(EasyMock.capture(capturedResponse)))
     EasyMock.replay(replicaManager, replicaQuotaManager, requestChannel)
-    EasyMock.replay(metadataCache)
 
     createKafkaApis().handleWriteTxnMarkersRequest(request)
 

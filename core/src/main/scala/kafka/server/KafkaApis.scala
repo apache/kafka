@@ -1543,19 +1543,19 @@ class KafkaApis(val requestChannel: RequestChannel,
     var skippedMarkers = 0
     for (marker <- markers.asScala) {
       val producerId = marker.producerId
-      val partitionsWithCorrectMessageFormat = new mutable.ListBuffer[TopicPartition]
-      val partitionsWithIncorrectMessageFormat = new mutable.ListBuffer[TopicPartition]
-      val unknownPartitions = new mutable.ListBuffer[TopicPartition]
+      val partitionsWithCorrectMessageFormat = new mutable.ArrayBuffer[TopicPartition]
+      val partitionsWithIncorrectMessageFormat = new mutable.ArrayBuffer[TopicPartition]
+      val unknownPartitions = new mutable.ArrayBuffer[TopicPartition]
 
       marker.partitions.asScala.foreach { partition =>
         replicaManager.getMagic(partition) match {
           case Some(magic) =>
             if (magic < RecordBatch.MAGIC_VALUE_V2)
-              partitionsWithIncorrectMessageFormat.append(partition)
+              partitionsWithIncorrectMessageFormat += partition
             else
-              partitionsWithCorrectMessageFormat.append(partition)
+              partitionsWithCorrectMessageFormat += partition
           case None =>
-            unknownPartitions.append(partition)
+            unknownPartitions += partition
         }
       }
 
