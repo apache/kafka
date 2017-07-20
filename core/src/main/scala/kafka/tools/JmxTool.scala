@@ -126,7 +126,9 @@ object JmxTool extends Logging {
 
     val hasPatternQueries = queries.exists((name: ObjectName) => name.isPattern)
 
-    var names : Iterable[ObjectName] = null
+    var names: Iterable[ObjectName] = null
+    def namesSet = if (names == null) null else names.toSet
+    def foundAllObjects() = !queries.toSet.equals(namesSet)
     val waitTimeoutMs = 10000
     if (!hasPatternQueries) {
       val start = System.currentTimeMillis
@@ -136,11 +138,12 @@ object JmxTool extends Logging {
           Thread.sleep(100)
         }
         names = queries.flatMap((name: ObjectName) => mbsc.queryNames(name, null).asScala)
-      } while (wait && System.currentTimeMillis - start < waitTimeoutMs && !queries.toSet.equals(if (names == null) null else names.toSet))
+      } while (wait && System.currentTimeMillis - start < waitTimeoutMs && foundAllObjects)
     }
 
-    if (wait && !queries.toSet.equals(if (names == null) null else names.toSet)) {
-      System.err.println(s"Could not find all requested object names after $waitTimeoutMs ms.")
+    if (wait && foundAllObjects) {
+      val missing = (queries.toSet - namesSet).mkString(", ")
+      System.err.println(s"Could not find all requested object names after $waitTimeoutMs ms. Missing $missing")
       System.err.println("Exiting.")
       sys.exit(1)
     }
