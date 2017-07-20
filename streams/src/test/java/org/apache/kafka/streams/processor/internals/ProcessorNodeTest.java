@@ -25,10 +25,9 @@ import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.test.MockProcessorContext;
 import org.junit.Test;
 
-import java.util.ArrayList;
 import java.util.Collections;
-import java.util.List;
 import java.util.Map;
+import java.util.LinkedHashMap;
 
 import static org.junit.Assert.assertNotNull;
 
@@ -92,6 +91,17 @@ public class ProcessorNodeTest {
         }
     }
 
+    private void testSpecificMetrics(final Metrics metrics, final String groupName,
+                                     final String opName,
+                                     final Map<String, String> metricTags) {
+        assertNotNull(metrics.metrics().get(metrics.metricName(opName + "-latency-avg", groupName,
+                "The average latency of " + opName + " operation.", metricTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName(opName + "-latency-max", groupName,
+                "The max latency of " + opName + " operation.", metricTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName(opName + "-rate", groupName,
+                "The average number of occurrence of " + opName + " operation per second.", metricTags)));
+
+    }
     @Test
     public void testMetrics() {
         final StateSerdes anyStateSerde = StateSerdes.withBuiltinTypes("anyName", Bytes.class, Bytes.class);
@@ -105,9 +115,9 @@ public class ProcessorNodeTest {
         String[] latencyOperations = {"process", "punctuate", "create", "destroy"};
         String throughputOperation =  "forward";
         String groupName = "stream-processor-node-metrics";
-        List<Map<String, String>> tags = new ArrayList<>();
-        tags.add(Collections.singletonMap("processor-node-id", "all"));
-        tags.add(Collections.singletonMap("processor-node-id", node.name()));
+        final Map<String, String> metricTags = new LinkedHashMap<>();
+        metricTags.put("processor-node-id", node.name());
+        metricTags.put("task-id", context.taskId().toString());
 
 
         for (String operation : latencyOperations) {
@@ -115,23 +125,20 @@ public class ProcessorNodeTest {
         }
         assertNotNull(metrics.getSensor(throughputOperation));
 
-        for (Map<String, String> tag : tags) {
-            for (String operation : latencyOperations) {
-                final String tmpName = tag.containsValue("all") ? operation :
-                        name + "-" + operation;
-                assertNotNull(metrics.metrics().get(metrics.metricName(tmpName + "-latency-avg", groupName,
-                    "The average latency of " + tmpName + " operation.", tag)));
-                assertNotNull(metrics.metrics().get(metrics.metricName(tmpName + "-latency-max", groupName,
-                    "The max latency of " + tmpName + " operation.", tag)));
-                assertNotNull(metrics.metrics().get(metrics.metricName(tmpName + "-rate", groupName,
-                    "The average number of occurrence of " + operation + " operation per second.", tag)));
-            }
-
-            final String tmpName = tag.containsValue("all") ? throughputOperation :
-                    name + "-" + throughputOperation;
-            assertNotNull(metrics.metrics().get(metrics.metricName(tmpName + "-rate", groupName,
-                "The average number of occurrence of " + tmpName + " operation per second.", tag)));
+        for (String opName : latencyOperations) {
+            testSpecificMetrics(metrics, groupName, opName, metricTags);
         }
+        assertNotNull(metrics.metrics().get(metrics.metricName(throughputOperation + "-rate", groupName,
+                "The average number of occurrence of " + throughputOperation + " operation per second.", metricTags)));
+
+        // test "all"
+        metricTags.put("processor-node-id", "all");
+        for (String opName : latencyOperations) {
+            testSpecificMetrics(metrics, groupName, opName, metricTags);
+        }
+        assertNotNull(metrics.metrics().get(metrics.metricName(throughputOperation + "-rate", groupName,
+                "The average number of occurrence of " + throughputOperation + " operation per second.", metricTags)));
+
 
         context.close();
     }

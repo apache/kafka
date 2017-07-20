@@ -31,7 +31,6 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Iterator;
-import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -360,6 +359,7 @@ class NamedCache {
         final StreamsMetricsImpl metrics;
         final String groupName;
         final Map<String, String> metricTags;
+        final Map<String, String> allMetricTags;
         final Sensor hitRatioSensor;
 
         private void maybeAddMetric(Sensor sensor, MetricName name, MeasurableStat stat) {
@@ -374,24 +374,24 @@ class NamedCache {
             final String scope = "record-cache";
             final String opName = "hitRatio";
             final String tagKey = "record-cache-id";
-            final String tagValue = name;
+            final String tagValue = ThreadCache.underlyingStoreNamefromCacheName(name);
             this.groupName = "stream-" + scope + "-metrics";
             this.metrics = (StreamsMetricsImpl) metrics;
-            this.metricTags = new LinkedHashMap<>();
-
+            this.allMetricTags = ((StreamsMetricsImpl) metrics).tagMap(tagKey, "all",
+                    "task-id", ThreadCache.taskIDfromCacheName(name));
+            this.metricTags = ((StreamsMetricsImpl) metrics).tagMap(tagKey, tagValue,
+                    "task-id", ThreadCache.taskIDfromCacheName(name));
 
             // add parent
-            this.metricTags.put(tagKey, "all");
             Sensor parent = this.metrics.registry().sensor(opName, Sensor.RecordingLevel.DEBUG);
             maybeAddMetric(parent, this.metrics.registry().metricName(opName + "-avg", groupName,
-                    "The average cache hit ratio of " + name, metricTags), new Avg());
+                    "The average cache hit ratio of " + name, allMetricTags), new Avg());
             maybeAddMetric(parent, this.metrics.registry().metricName(opName + "-min", groupName,
-                    "The minimum cache hit ratio of " + name, metricTags), new Min());
+                    "The minimum cache hit ratio of " + name, allMetricTags), new Min());
             maybeAddMetric(parent, this.metrics.registry().metricName(opName + "-max", groupName,
-                    "The maximum cache hit ratio of " + name, metricTags), new Max());
+                    "The maximum cache hit ratio of " + name, allMetricTags), new Max());
 
             // add child
-            this.metricTags.put(tagKey, tagValue);
             hitRatioSensor = this.metrics.registry().sensor(opName, Sensor.RecordingLevel.DEBUG, parent);
             maybeAddMetric(hitRatioSensor, this.metrics.registry().metricName(opName + "-avg", groupName,
                 "The average cache hit ratio of " + name, metricTags), new Avg());

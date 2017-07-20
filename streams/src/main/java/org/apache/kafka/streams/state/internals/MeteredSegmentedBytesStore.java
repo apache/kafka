@@ -50,21 +50,22 @@ class MeteredSegmentedBytesStore extends WrappedStateStore.AbstractStateStore im
 
     @Override
     public void init(ProcessorContext context, StateStore root) {
-        final String name = name();
+        final String tagKey = "task-id";
+        final String tagValue = context.taskId().toString();
         this.metrics = context.metrics();
-        this.putTime = this.metrics.addLatencyAndThroughputSensor(metricScope, null, "put",
-                Sensor.RecordingLevel.DEBUG, "segmented-store-name", name);
-        this.fetchTime = this.metrics.addLatencyAndThroughputSensor(metricScope, null, "fetch",
-                Sensor.RecordingLevel.DEBUG, "segmented-store-name", name);
-        this.flushTime = this.metrics.addLatencyAndThroughputSensor(metricScope, null, "flush",
-                Sensor.RecordingLevel.DEBUG, "segmented-store-name", name);
-        this.getTime = this.metrics.addLatencyAndThroughputSensor(metricScope, null, "get",
-                Sensor.RecordingLevel.DEBUG, "segmented-store-name", name);
-        this.removeTime = this.metrics.addLatencyAndThroughputSensor(metricScope, null, "remove",
-                Sensor.RecordingLevel.DEBUG, "segmented-store-name", name);
+        this.putTime = this.metrics.addLatencyAndThroughputSensor(metricScope, name(), "put",
+                Sensor.RecordingLevel.DEBUG, tagKey, tagValue);
+        this.fetchTime = this.metrics.addLatencyAndThroughputSensor(metricScope, name(), "fetch",
+                Sensor.RecordingLevel.DEBUG, tagKey, tagValue);
+        this.flushTime = this.metrics.addLatencyAndThroughputSensor(metricScope, name(), "flush",
+                Sensor.RecordingLevel.DEBUG, tagKey, tagValue);
+        this.getTime = this.metrics.addLatencyAndThroughputSensor(metricScope, name(), "get",
+                Sensor.RecordingLevel.DEBUG, tagKey, tagValue);
+        this.removeTime = this.metrics.addLatencyAndThroughputSensor(metricScope, name(), "remove",
+                Sensor.RecordingLevel.DEBUG, tagKey, tagValue);
 
-        final Sensor restoreTime = this.metrics.addLatencyAndThroughputSensor(metricScope, name, "restore",
-                Sensor.RecordingLevel.DEBUG, "segmented-store-name", name);
+        final Sensor restoreTime = this.metrics.addLatencyAndThroughputSensor(metricScope, name(), "restore",
+                Sensor.RecordingLevel.DEBUG, tagKey, tagValue);
         // register and possibly restore the state from the logs
         final long startNs = time.nanoseconds();
         try {

@@ -62,10 +62,10 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
-import java.util.ArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -217,26 +217,30 @@ public class StreamTaskTest {
         assertEquals(3, source2.numReceived);
     }
 
+
+    private void testSpecificMetrics(final String operation, final String groupName, final Map<String, String> tags) {
+        assertNotNull(metrics.metrics().get(metrics.metricName(operation + "-latency-avg", groupName,
+                "The average latency of " + operation + " operation.", tags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName(operation + "-latency-max", groupName,
+                "The max latency of " + operation + " operation.", tags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName(operation + "-rate", groupName,
+                "The average number of occurrence of " + operation + " operation per second.", tags)));
+    }
+
+
     @Test
     public void testMetrics() throws Exception {
         final String name = task.id().toString();
-        List<Map<String, String>> tags = new ArrayList<>();
-        tags.add(Collections.singletonMap("streams-task-id", "all"));
-        tags.add(Collections.singletonMap("streams-task-id", name));
+        final Map<String, String> metricTags = new LinkedHashMap<>();
+        metricTags.put("task-id", name);
         final String operation = "commit";
 
         final String groupName = "stream-task-metrics";
 
         assertNotNull(metrics.getSensor(operation));
-
-        for (Map<String, String> tag : tags) {
-            assertNotNull(metrics.metrics().get(metrics.metricName(operation + "-latency-avg", groupName,
-                "The average latency of " + operation + " operation.", tag)));
-            assertNotNull(metrics.metrics().get(metrics.metricName(operation + "-latency-max", groupName,
-                "The max latency of " + operation + " operation.", tag)));
-            assertNotNull(metrics.metrics().get(metrics.metricName(operation + "-rate", groupName,
-                "The average number of occurrence of " + operation + " operation per second.", tag)));
-        }
+        testSpecificMetrics(operation, groupName, metricTags);
+        metricTags.put("task-id", "all");
+        testSpecificMetrics(operation, groupName, metricTags);
     }
 
     @SuppressWarnings("unchecked")
