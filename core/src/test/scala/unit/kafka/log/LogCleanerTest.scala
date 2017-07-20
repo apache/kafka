@@ -89,32 +89,28 @@ class LogCleanerTest extends JUnitSuite {
   }
 
   @Test
-  def testCleanedSegmentSizeTrimmedWhenPreallocationEnabled(): Unit = {
+  def testSizeTrimmedForPreallocatedAndCompactedTopic(): Unit = {
     val originalMaxFileSize = 1024;
-    val cleaner = makeCleaner(Int.MaxValue)
+    val cleaner = makeCleaner(2)
     val logProps = new Properties()
     logProps.put(LogConfig.SegmentBytesProp, originalMaxFileSize: java.lang.Integer)
     logProps.put(LogConfig.CleanupPolicyProp, "compact": java.lang.String)
     logProps.put(LogConfig.PreAllocateEnableProp, "true": java.lang.String)
-
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
 
-    // append messages to the log until we have three segments
-    val random = new java.util.Random()
-    while(log.numberOfSegments < 3)
-      log.appendAsLeader(record(random.nextInt(5), log.logEndOffset.toInt), leaderEpoch = 0)
+    log.appendAsLeader(record(0,0), leaderEpoch = 0) // offset 0
+    log.appendAsLeader(record(1,1), leaderEpoch = 0) // offset 1
+    log.appendAsLeader(record(0,0), leaderEpoch = 0) // offset 2
+    log.appendAsLeader(record(1,1), leaderEpoch = 0) // offset 3
+    log.appendAsLeader(record(0,0), leaderEpoch = 0) // offset 4
+    // roll the segment, so we can clean the messages already appended
+    log.roll()
 
-    // pretend we have the following keys
-    val keys = immutable.ListSet(0, 1, 2, 3, 4)
-    val map = new FakeOffsetMap(Int.MaxValue)
-    keys.foreach(k => map.put(key(k), Long.MaxValue))
+    // clean the log with only one message removed
+    cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 2, log.activeSegment.baseOffset))
 
-    // clean the first log segment
-    val segments = log.logSegments.take(1).toSeq
-    val stats = new CleanerStats()
-    cleaner.cleanSegments(log, segments, map, 0L, stats)
-    // the file field of FileRecords for the segment was already renamed with suffix '.deleted'
-    assertNotEquals(new File(segments.head.log.file().getAbsolutePath.replace(Log.DeletedFileSuffix, "")).length(), originalMaxFileSize)
+    assert(log.logSegments.iterator.next.log.channel().size() < originalMaxFileSize,
+      "Cleaned segment file should be trimmed to its real size.")
   }
 
   @Test
