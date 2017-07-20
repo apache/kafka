@@ -70,7 +70,7 @@ class CompositeRestoreListener implements BatchingStateRestoreCallback, StateRes
     }
 
     @Override
-    public void restoreAll(Collection<KeyValue<byte[], byte[]>> records) {
+    public void restoreAll(final Collection<KeyValue<byte[], byte[]>> records) {
         stateRestoreAdapter.restoreAll(records);
     }
 
@@ -81,7 +81,7 @@ class CompositeRestoreListener implements BatchingStateRestoreCallback, StateRes
     }
 
     @Override
-    public void restore(byte[] key, byte[] value) {
+    public void restore(final byte[] key, final byte[] value) {
         throw new UnsupportedOperationException("Single restore functionality shouldn't be called directly but "
                                                 + "through the delegated StateRestoreCallback instance");
     }
@@ -90,20 +90,20 @@ class CompositeRestoreListener implements BatchingStateRestoreCallback, StateRes
     private static final class NoOpStateRestoreListener implements StateRestoreListener {
 
         @Override
-        public void onRestoreStart(TopicPartition topicPartition, String storeName,
-                                   long startingOffset, long endingOffset) {
+        public void onRestoreStart(final TopicPartition topicPartition, final String storeName,
+                                   final long startingOffset, final long endingOffset) {
 
         }
 
         @Override
-        public void onBatchRestored(TopicPartition topicPartition, String storeName,
-                                    long batchEndOffset, long numRestored) {
+        public void onBatchRestored(final TopicPartition topicPartition, final String storeName,
+                                    final long batchEndOffset, final long numRestored) {
 
         }
 
         @Override
-        public void onRestoreEnd(TopicPartition topicPartition, String storeName,
-                                 long totalRestored) {
+        public void onRestoreEnd(final TopicPartition topicPartition, final String storeName,
+                                 final long totalRestored) {
 
         }
     }
@@ -111,7 +111,7 @@ class CompositeRestoreListener implements BatchingStateRestoreCallback, StateRes
     private static final class NoOpStateRestoreCallback implements StateRestoreCallback {
 
         @Override
-        public void restore(byte[] key, byte[] value) {
+        public void restore(final byte[] key, final byte[] value) {
 
         }
     }

@@ -104,7 +104,6 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
     protected volatile boolean open = false;
 
-
     RocksDBStore(String name, Serde<K> keySerde, Serde<V> valueSerde) {
         this(name, DB_FILE_DIR, keySerde, valueSerde);
     }
@@ -219,6 +218,11 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         } catch (RocksDBException e) {
             throw new ProcessorStateException("Error opening store " + this.name + " at location " + dir.toString(), e);
         }
+    }
+
+    //Visible for testing
+    boolean isPrepareForBulkload() {
+        return prepareForBulkload;
     }
 
     @Override

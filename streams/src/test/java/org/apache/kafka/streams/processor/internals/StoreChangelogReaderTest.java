@@ -49,9 +49,11 @@ public class StoreChangelogReaderTest {
 
     private final MockStateRestoreListener callback = new MockStateRestoreListener();
     private final CompositeRestoreListener restoreListener = new CompositeRestoreListener(callback);
-    private MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
-    private StateRestoreListener stateRestoreListener = new MockStateRestoreListener();
-    private StoreChangelogReader changelogReader = new StoreChangelogReader(consumer, new MockTime(), 0, stateRestoreListener);
+    private final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
+    private final StateRestoreListener stateRestoreListener = new MockStateRestoreListener();
+    private final StoreChangelogReader
+        changelogReader =
+        new StoreChangelogReader(consumer, new MockTime(), 0, stateRestoreListener);
     private final TopicPartition topicPartition = new TopicPartition("topic", 0);
     private final PartitionInfo partitionInfo = new PartitionInfo(topicPartition.topic(), 0, null, null, null);
 
@@ -243,29 +245,31 @@ public class StoreChangelogReaderTest {
         assertThat(callbackOne.restored.size(), equalTo(5));
         assertThat(callbackTwo.restored.size(), equalTo(3));
 
-        assertThat(callback.storeNameCalledStates.get(RESTORE_START), equalTo("storeName1"));
-        assertThat(callback.storeNameCalledStates.get(RESTORE_BATCH), equalTo("storeName1"));
-        assertThat(callback.storeNameCalledStates.get(RESTORE_END), equalTo("storeName1"));
+        assertAllCallbackStatesExecuted(callback, "storeName1");
+        assertCorrectOffsetsReportedByListener(callback, 0L, 10L, 10L);
 
-        assertThat(callback.restoreStartOffset, equalTo(0L));
-        assertThat(callback.restoredBatchOffset, equalTo(10L));
-        assertThat(callback.restoreEndOffset, equalTo(10L));
+        assertAllCallbackStatesExecuted(callbackOne, "storeName2");
+        assertCorrectOffsetsReportedByListener(callbackOne, 0L, 5L, 5L);
 
-        assertThat(callbackOne.storeNameCalledStates.get(RESTORE_START), equalTo("storeName2"));
-        assertThat(callbackOne.storeNameCalledStates.get(RESTORE_BATCH), equalTo("storeName2"));
-        assertThat(callbackOne.storeNameCalledStates.get(RESTORE_END), equalTo("storeName2"));
+        assertAllCallbackStatesExecuted(callbackTwo, "storeName3");
+        assertCorrectOffsetsReportedByListener(callbackTwo, 0L, 3L, 3L);
+    }
 
-        assertThat(callbackOne.restoreStartOffset, equalTo(0L));
-        assertThat(callbackOne.restoredBatchOffset, equalTo(5L));
-        assertThat(callbackOne.restoreEndOffset, equalTo(5L));
+    private void assertAllCallbackStatesExecuted(final MockStateRestoreListener restoreListener,
+                                                 final String storeName) {
+        assertThat(restoreListener.storeNameCalledStates.get(RESTORE_START), equalTo(storeName));
+        assertThat(restoreListener.storeNameCalledStates.get(RESTORE_BATCH), equalTo(storeName));
+        assertThat(restoreListener.storeNameCalledStates.get(RESTORE_END), equalTo(storeName));
+    }
 
-        assertThat(callbackTwo.storeNameCalledStates.get(RESTORE_START), equalTo("storeName3"));
-        assertThat(callbackTwo.storeNameCalledStates.get(RESTORE_BATCH), equalTo("storeName3"));
-        assertThat(callbackTwo.storeNameCalledStates.get(RESTORE_END), equalTo("storeName3"));
 
-        assertThat(callbackTwo.restoreStartOffset, equalTo(0L));
-        assertThat(callbackTwo.restoredBatchOffset, equalTo(3L));
-        assertThat(callbackTwo.restoreEndOffset, equalTo(3L));
+    private void assertCorrectOffsetsReportedByListener(final MockStateRestoreListener restoreListener,
+                                                        long startOffset,
+                                                        final long batchOffset, final long endOffset) {
+
+        assertThat(restoreListener.restoreStartOffset, equalTo(startOffset));
+        assertThat(restoreListener.restoredBatchOffset, equalTo(batchOffset));
+        assertThat(restoreListener.restoreEndOffset, equalTo(endOffset));
     }
 
     @Test

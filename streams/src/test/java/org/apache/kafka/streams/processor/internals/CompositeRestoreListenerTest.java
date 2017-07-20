@@ -61,8 +61,7 @@ public class CompositeRestoreListenerTest {
 
     @Test
     public void shouldReportRestoreProgressInSinglePutRestore() {
-        compositeRestoreListener = new CompositeRestoreListener(stateRestoreCallback);
-        compositeRestoreListener.setReportingStoreListener(reportingStoreListener);
+        setUpSinglePutRestoreListener();
 
         compositeRestoreListener.restoreAll(records);
         compositeRestoreListener.onRestoreStart(topicPartition, storeName, startOffset, endOffset);
@@ -74,6 +73,11 @@ public class CompositeRestoreListenerTest {
 
         assertStateRestoreListener(stateRestoreCallback);
         assertStateRestoreListener(reportingStoreListener);
+    }
+
+    private void setUpSinglePutRestoreListener() {
+        compositeRestoreListener = new CompositeRestoreListener(stateRestoreCallback);
+        compositeRestoreListener.setReportingStoreListener(reportingStoreListener);
     }
 
     @Test
@@ -145,7 +149,7 @@ public class CompositeRestoreListenerTest {
         byte[] restoredValue;
 
         @Override
-        public void restore(byte[] key, byte[] value) {
+        public void restore(final byte[] key, final byte[] value) {
             restoredKey = key;
             restoredValue = value;
         }
@@ -157,7 +161,7 @@ public class CompositeRestoreListenerTest {
         Collection<KeyValue<byte[], byte[]>> restoredRecords;
 
         @Override
-        public void restoreAll(Collection<KeyValue<byte[], byte[]>> records) {
+        public void restoreAll(final Collection<KeyValue<byte[], byte[]>> records) {
             restoredRecords = records;
         }
 
@@ -173,7 +177,7 @@ public class CompositeRestoreListenerTest {
         Collection<KeyValue<byte[], byte[]>> restoredRecords;
 
         @Override
-        public void restoreAll(Collection<KeyValue<byte[], byte[]>> records) {
+        public void restoreAll(final Collection<KeyValue<byte[], byte[]>> records) {
             restoredRecords = records;
         }
 

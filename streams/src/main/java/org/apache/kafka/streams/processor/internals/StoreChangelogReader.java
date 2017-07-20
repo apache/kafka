@@ -47,7 +47,7 @@ public class StoreChangelogReader implements ChangelogReader {
     private final long partitionValidationTimeoutMs;
     private final Map<String, List<PartitionInfo>> partitionInfo = new HashMap<>();
     private final Map<TopicPartition, StateRestorer> stateRestorers = new HashMap<>();
-    private  StateRestoreListener stateRestoreListener;
+    private final StateRestoreListener stateRestoreListener;
 
     public StoreChangelogReader(final String threadId, final Consumer<byte[], byte[]> consumer, final Time time,
                                 final long partitionValidationTimeoutMs, final StateRestoreListener stateRestoreListener) {

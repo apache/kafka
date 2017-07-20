@@ -29,13 +29,13 @@ public class InternalStateRestoreAdapter implements BatchingStateRestoreCallback
 
     private final StateRestoreCallback stateRestoreCallback;
 
-    InternalStateRestoreAdapter(StateRestoreCallback stateRestoreCallback) {
+    InternalStateRestoreAdapter(final StateRestoreCallback stateRestoreCallback) {
         Objects.requireNonNull(stateRestoreCallback, "StateRestoreCallback can't be null");
         this.stateRestoreCallback = stateRestoreCallback;
     }
 
     @Override
-    public void restoreAll(Collection<KeyValue<byte[], byte[]>> records) {
+    public void restoreAll(final Collection<KeyValue<byte[], byte[]>> records) {
         if (stateRestoreCallback instanceof BatchingStateRestoreCallback) {
             ((BatchingStateRestoreCallback) stateRestoreCallback).restoreAll(records);
         } else {
@@ -46,7 +46,7 @@ public class InternalStateRestoreAdapter implements BatchingStateRestoreCallback
     }
 
     @Override
-    public void restore(byte[] key, byte[] value) {
+    public void restore(final byte[] key, final byte[] value) {
         stateRestoreCallback.restore(key, value);
     }
 

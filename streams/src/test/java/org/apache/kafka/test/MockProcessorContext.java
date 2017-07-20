@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.test;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
@@ -29,6 +30,7 @@ import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
+import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
@@ -285,6 +287,11 @@ public class MockProcessorContext implements InternalProcessorContext, RecordCol
     public void restore(final String storeName, final Iterable<KeyValue<byte[], byte[]>> changeLog) {
 
         final StateRestoreCallback restoreCallback = restoreFuncs.get(storeName);
+        final StateRestoreListener restoreListener = (restoreCallback instanceof StateRestoreListener) ?
+                                                     (StateRestoreListener) restoreCallback : new NoOpRestoreListener();
+
+        restoreListener.onRestoreStart(null, storeName, 0L, 0L);
+
         if (restoreCallback instanceof BatchingStateRestoreCallback) {
             List<KeyValue<byte[], byte[]>> records = new ArrayList<>();
             for (KeyValue<byte[], byte[]> keyValue : changeLog) {
@@ -298,6 +305,8 @@ public class MockProcessorContext implements InternalProcessorContext, RecordCol
                 restoreCallback.restore(entry.key, entry.value);
             }
         }
+
+        restoreListener.onRestoreEnd(null, storeName, 0L);
     }
 
     @Override
@@ -317,5 +326,25 @@ public class MockProcessorContext implements InternalProcessorContext, RecordCol
 
     public void close() {
         metrics.close();
+    }
+
+    private static final class NoOpRestoreListener implements StateRestoreListener {
+
+        @Override
+        public void onRestoreStart(TopicPartition topicPartition, String storeName, long startingOffset,
+                                   long endingOffset) {
+
+        }
+
+        @Override
+        public void onBatchRestored(TopicPartition topicPartition, String storeName, long batchEndOffset,
+                                    long numRestored) {
+
+        }
+
+        @Override
+        public void onRestoreEnd(TopicPartition topicPartition, String storeName, long totalRestored) {
+
+        }
     }
 }
