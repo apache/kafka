@@ -1543,28 +1543,34 @@ class KafkaApis(val requestChannel: RequestChannel,
     var skippedMarkers = 0
     for (marker <- markers.asScala) {
       val producerId = marker.producerId
+      val partitionsWithCorrectMessageFormat = new mutable.ListBuffer[TopicPartition]
+      val partitionsWithIncorrectMessageFormat = new mutable.ListBuffer[TopicPartition]
+      val unknownPartitions = new mutable.ListBuffer[TopicPartition]
 
-      val (goodPartitions, unknownOrIncorrectMessageFormatPartitions) = marker.partitions.asScala.partition { partition =>
+      marker.partitions.asScala.foreach { partition =>
         replicaManager.getMagic(partition) match {
-          case Some(magic) if magic >= RecordBatch.MAGIC_VALUE_V2 => true
-          case _ => false
+          case Some(magic) =>
+            if (magic < RecordBatch.MAGIC_VALUE_V2)
+              partitionsWithIncorrectMessageFormat.append(partition)
+            else
+              partitionsWithCorrectMessageFormat.append(partition)
+          case None =>
+            unknownPartitions.append(partition)
         }
       }
 
-      val (partitionsWithIncorrectMessageFormat, unknownPartitions) = unknownOrIncorrectMessageFormatPartitions.partition(metadataCache.contains(_))
-
-      if (unknownOrIncorrectMessageFormatPartitions.nonEmpty) {
+      if (unknownPartitions.nonEmpty || partitionsWithIncorrectMessageFormat.nonEmpty) {
         val currentErrors = new ConcurrentHashMap[TopicPartition, Errors]()
         unknownPartitions.foreach { partition => currentErrors.put(partition, Errors.UNKNOWN_TOPIC_OR_PARTITION)}
         partitionsWithIncorrectMessageFormat.foreach { partition => currentErrors.put(partition, Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT) }
         updateErrors(producerId, currentErrors)
       }
 
-      if (goodPartitions.isEmpty) {
+      if (partitionsWithCorrectMessageFormat.isEmpty) {
         numAppends.decrementAndGet()
         skippedMarkers += 1
       } else {
-        val controlRecords = goodPartitions.map { partition =>
+        val controlRecords = partitionsWithCorrectMessageFormat.map { partition =>
           val controlRecordType = marker.transactionResult match {
             case TransactionResult.COMMIT => ControlRecordType.COMMIT
             case TransactionResult.ABORT => ControlRecordType.ABORT
