@@ -1543,24 +1543,29 @@ class KafkaApis(val requestChannel: RequestChannel,
     var skippedMarkers = 0
     for (marker <- markers.asScala) {
       val producerId = marker.producerId
-      val (goodPartitions, partitionsWithIncorrectMessageFormat) = marker.partitions.asScala.partition { partition =>
+      val partitionsWithCompatibleMessageFormat = new mutable.ArrayBuffer[TopicPartition]
+
+      val currentErrors = new ConcurrentHashMap[TopicPartition, Errors]()
+      marker.partitions.asScala.foreach { partition =>
         replicaManager.getMagic(partition) match {
-          case Some(magic) if magic >= RecordBatch.MAGIC_VALUE_V2 => true
-          case _ => false
+          case Some(magic) =>
+            if (magic < RecordBatch.MAGIC_VALUE_V2)
+              currentErrors.put(partition, Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT)
+            else
+              partitionsWithCompatibleMessageFormat += partition
+          case None =>
+            currentErrors.put(partition, Errors.UNKNOWN_TOPIC_OR_PARTITION)
         }
       }
 
-      if (partitionsWithIncorrectMessageFormat.nonEmpty) {
-        val currentErrors = new ConcurrentHashMap[TopicPartition, Errors]()
-        partitionsWithIncorrectMessageFormat.foreach { partition => currentErrors.put(partition, Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT) }
+      if (!currentErrors.isEmpty)
         updateErrors(producerId, currentErrors)
-      }
 
-      if (goodPartitions.isEmpty) {
+      if (partitionsWithCompatibleMessageFormat.isEmpty) {
         numAppends.decrementAndGet()
         skippedMarkers += 1
       } else {
-        val controlRecords = goodPartitions.map { partition =>
+        val controlRecords = partitionsWithCompatibleMessageFormat.map { partition =>
           val controlRecordType = marker.transactionResult match {
             case TransactionResult.COMMIT => ControlRecordType.COMMIT
             case TransactionResult.ABORT => ControlRecordType.ABORT

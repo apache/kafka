@@ -140,6 +140,25 @@ class KafkaApisTest {
   }
 
   @Test
+  def shouldRespondWithUnknownTopicWhenPartitionIsNotHosted(): Unit = {
+    val topicPartition = new TopicPartition("t", 0)
+    val (writeTxnMarkersRequest, request) = createWriteTxnMarkersRequest(Utils.mkList(topicPartition))
+    val expectedErrors = Map(topicPartition -> Errors.UNKNOWN_TOPIC_OR_PARTITION).asJava
+    val capturedResponse: Capture[RequestChannel.Response] = EasyMock.newCapture()
+
+    EasyMock.expect(replicaManager.getMagic(topicPartition))
+      .andReturn(None)
+    EasyMock.expect(requestChannel.sendResponse(EasyMock.capture(capturedResponse)))
+    EasyMock.replay(replicaManager, replicaQuotaManager, requestChannel)
+
+    createKafkaApis().handleWriteTxnMarkersRequest(request)
+
+    val markersResponse = readResponse(ApiKeys.WRITE_TXN_MARKERS, writeTxnMarkersRequest, capturedResponse)
+      .asInstanceOf[WriteTxnMarkersResponse]
+    assertEquals(expectedErrors, markersResponse.errors(1))
+  }
+
+  @Test
   def shouldRespondWithUnsupportedMessageFormatForBadPartitionAndNoErrorsForGoodPartition(): Unit = {
     val tp1 = new TopicPartition("t", 0)
     val tp2 = new TopicPartition("t1", 0)
@@ -151,6 +170,44 @@ class KafkaApisTest {
 
     EasyMock.expect(replicaManager.getMagic(tp1))
       .andReturn(Some(RecordBatch.MAGIC_VALUE_V1))
+    EasyMock.expect(replicaManager.getMagic(tp2))
+      .andReturn(Some(RecordBatch.MAGIC_VALUE_V2))
+
+    EasyMock.expect(replicaManager.appendRecords(EasyMock.anyLong(),
+      EasyMock.anyShort(),
+      EasyMock.eq(true),
+      EasyMock.eq(false),
+      EasyMock.anyObject(),
+      EasyMock.capture(responseCallback),
+      EasyMock.anyObject())).andAnswer(new IAnswer[Unit] {
+      override def answer(): Unit = {
+        responseCallback.getValue.apply(Map(tp2 -> new PartitionResponse(Errors.NONE)))
+      }
+    })
+
+    EasyMock.expect(requestChannel.sendResponse(EasyMock.capture(capturedResponse)))
+    EasyMock.replay(replicaManager, replicaQuotaManager, requestChannel)
+
+    createKafkaApis().handleWriteTxnMarkersRequest(request)
+
+    val markersResponse = readResponse(ApiKeys.WRITE_TXN_MARKERS, writeTxnMarkersRequest, capturedResponse)
+      .asInstanceOf[WriteTxnMarkersResponse]
+    assertEquals(expectedErrors, markersResponse.errors(1))
+    EasyMock.verify(replicaManager)
+  }
+
+  @Test
+  def shouldRespondWithUnknownTopicOrPartitionForBadPartitionAndNoErrorsForGoodPartition(): Unit = {
+    val tp1 = new TopicPartition("t", 0)
+    val tp2 = new TopicPartition("t1", 0)
+    val (writeTxnMarkersRequest, request) = createWriteTxnMarkersRequest(Utils.mkList(tp1, tp2))
+    val expectedErrors = Map(tp1 -> Errors.UNKNOWN_TOPIC_OR_PARTITION, tp2 -> Errors.NONE).asJava
+
+    val capturedResponse: Capture[RequestChannel.Response] = EasyMock.newCapture()
+    val responseCallback: Capture[Map[TopicPartition, PartitionResponse] => Unit]  = EasyMock.newCapture()
+
+    EasyMock.expect(replicaManager.getMagic(tp1))
+      .andReturn(None)
     EasyMock.expect(replicaManager.getMagic(tp2))
       .andReturn(Some(RecordBatch.MAGIC_VALUE_V2))
 
