@@ -269,7 +269,7 @@ object ConsoleConsumer extends Logging {
       .withRequiredArg
       .describedAs("metrics directory")
       .ofType(classOf[java.lang.String])
-    val newConsumerOpt = parser.accepts("new-consumer", "DEPRECATED Use the new consumer implementation. This is the default.")
+    val newConsumerOpt = parser.accepts("new-consumer", "This is the default, so this option is deprecated and will be removed in a future release.")
     val bootstrapServerOpt = parser.accepts("bootstrap-server", "REQUIRED (unless old consumer is used): The server to connect to.")
       .withRequiredArg
       .describedAs("server to connect to")
@@ -390,8 +390,8 @@ object ConsoleConsumer extends Logging {
       CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServerOpt)
 
       if (options.has(newConsumerOpt)) {
-        Console.err.println("Using the --new-consumer option is deprecated and will be removed " +
-          "in a future major release. For using the new consumer just use only the --bootstrap-server option")
+        Console.err.println("The --new-consumer option is deprecated and will be removed in a future major release." +
+          "The new consumer is used by default if the --bootstrap-server option is provided.")
       }
     }
 
