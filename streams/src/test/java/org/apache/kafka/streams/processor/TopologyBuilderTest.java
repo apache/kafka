@@ -751,6 +751,7 @@ public class TopologyBuilderTest {
         assertThat(processorTopology.source(pattern.pattern()).getTimestampExtractor(), instanceOf(MockTimestampExtractor.class));
     }
 
+    @Test
     public void shouldConnectRegexMatchedTopicsToStateStore() throws Exception {
 
         final TopologyBuilder topologyBuilder = new TopologyBuilder()
