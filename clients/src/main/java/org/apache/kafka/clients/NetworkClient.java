@@ -87,7 +87,7 @@ public class NetworkClient implements KafkaClient {
     private int correlation;
 
     /* max time in ms for the producer to wait for acknowledgement from server*/
-    private final int requestTimeoutMs;
+    private final int defaultRequestTimeoutMs;
 
     /* time in ms to wait before retrying to create connection to a server */
     private final long reconnectBackoffMs;
@@ -172,7 +172,7 @@ public class NetworkClient implements KafkaClient {
                           long reconnectBackoffMax,
                           int socketSendBuffer,
                           int socketReceiveBuffer,
-                          int requestTimeoutMs,
+                          int defaultRequestTimeoutMs,
                           Time time,
                           boolean discoverBrokerVersions,
                           ApiVersions apiVersions,
@@ -196,7 +196,7 @@ public class NetworkClient implements KafkaClient {
         this.socketReceiveBuffer = socketReceiveBuffer;
         this.correlation = 0;
         this.randOffset = new Random();
-        this.requestTimeoutMs = requestTimeoutMs;
+        this.defaultRequestTimeoutMs = defaultRequestTimeoutMs;
         this.reconnectBackoffMs = reconnectBackoffMs;
         this.time = time;
         this.discoverBrokerVersions = discoverBrokerVersions;
@@ -238,7 +238,7 @@ public class NetworkClient implements KafkaClient {
         List<ApiKeys> requestTypes = new ArrayList<>();
         long now = time.milliseconds();
         for (InFlightRequest request : inFlightRequests.clearAll(nodeId)) {
-            if (request.isInternalRequest) {
+            if (request.isInternal) {
                 if (request.header.apiKey() == ApiKeys.METADATA.id) {
                     metadataUpdater.handleDisconnection(request.destination);
                 }
@@ -267,7 +267,7 @@ public class NetworkClient implements KafkaClient {
     public void close(String nodeId) {
         selector.close(nodeId);
         for (InFlightRequest request : inFlightRequests.clearAll(nodeId))
-            if (request.isInternalRequest && request.header.apiKey() == ApiKeys.METADATA.id)
+            if (request.isInternal && request.header.apiKey() == ApiKeys.METADATA.id)
                 metadataUpdater.handleDisconnection(request.destination);
         connectionStates.remove(nodeId);
     }
@@ -332,10 +332,11 @@ public class NetworkClient implements KafkaClient {
         doSend(request, false, now);
     }
 
-    private void sendInternalMetadataRequest(MetadataRequest.Builder builder,
+    private ClientRequest sendInternalMetadataRequest(MetadataRequest.Builder builder,
                                              String nodeConnectionId, long now) {
         ClientRequest clientRequest = newClientRequest(nodeConnectionId, builder, now, true);
         doSend(clientRequest, true, now);
+        return clientRequest;
     }
 
     private void doSend(ClientRequest clientRequest, boolean isInternalRequest, long now) {
@@ -403,7 +404,8 @@ public class NetworkClient implements KafkaClient {
                 isInternalRequest,
                 request,
                 send,
-                now);
+                now,
+                clientRequest.timeoutMs());
         this.inFlightRequests.add(inFlightRequest);
         selector.send(inFlightRequest.send);
     }
@@ -411,14 +413,14 @@ public class NetworkClient implements KafkaClient {
     /**
      * Do actual reads and writes to sockets.
      *
-     * @param timeout The maximum amount of time to wait (in ms) for responses if there are none immediately,
-     *                must be non-negative. The actual timeout will be the minimum of timeout, request timeout and
-     *                metadata timeout
+     * @param timeoutMs The maximum amount of time to wait (in ms) for responses if there are none immediately,
+     *                  must be non-negative. The actual timeout will be the minimum of this parameter,
+     *                  the default request timeout, in-flight requests timeouts and metadata timeout
      * @param now The current time in milliseconds
      * @return The list of responses received
      */
     @Override
-    public List<ClientResponse> poll(long timeout, long now) {
+    public List<ClientResponse> poll(long timeoutMs, long now) {
         if (!abortedSends.isEmpty()) {
             // If there are aborted sends because of unsupported version exceptions or disconnects,
             // handle them immediately without waiting for Selector#poll.
@@ -428,9 +430,9 @@ public class NetworkClient implements KafkaClient {
             return responses;
         }
 
-        long metadataTimeout = metadataUpdater.maybeUpdate(now);
+        long metadataTimeoutMs = metadataUpdater.maybeUpdate(now);
         try {
-            this.selector.poll(Utils.min(timeout, metadataTimeout, requestTimeoutMs));
+            this.selector.poll(selectorPollTimeoutMs(timeoutMs, metadataTimeoutMs));
         } catch (IOException e) {
             log.error("Unexpected error during I/O", e);
         }
@@ -447,6 +449,14 @@ public class NetworkClient implements KafkaClient {
         completeResponses(responses);
 
         return responses;
+    }
+
+    private long selectorPollTimeoutMs(long pollTimeoutMs, long metadataTimeoutMs) {
+        long result = Utils.min(pollTimeoutMs, metadataTimeoutMs, defaultRequestTimeoutMs);
+        Integer minRequestsTimeoutMs = inFlightRequests.minTimeoutMs();
+        if (minRequestsTimeoutMs != null)
+            result = Math.min(minRequestsTimeoutMs, pollTimeoutMs);
+        return result;
     }
 
     private void completeResponses(List<ClientResponse> responses) {
@@ -594,7 +604,7 @@ public class NetworkClient implements KafkaClient {
         for (InFlightRequest request : this.inFlightRequests.clearAll(nodeId)) {
             log.trace("Cancelled request {} with correlation id {} due to node {} being disconnected", request.request,
                     request.header.correlationId(), nodeId);
-            if (request.isInternalRequest && request.header.apiKey() == ApiKeys.METADATA.id)
+            if (request.isInternal && request.header.apiKey() == ApiKeys.METADATA.id)
                 metadataUpdater.handleDisconnection(request.destination);
             else
                 responses.add(request.disconnected(now));
@@ -609,7 +619,7 @@ public class NetworkClient implements KafkaClient {
      * @param now The current time
      */
     private void handleTimedOutRequests(List<ClientResponse> responses, long now) {
-        List<String> nodeIds = this.inFlightRequests.getNodesWithTimedOutRequests(now, this.requestTimeoutMs);
+        List<String> nodeIds = this.inFlightRequests.getNodesWithTimedOutRequests(now);
         for (String nodeId : nodeIds) {
             // close connection to the node
             this.selector.close(nodeId);
@@ -661,9 +671,9 @@ public class NetworkClient implements KafkaClient {
                     ApiKeys.forId(req.header.apiKey()), req.header.correlationId(), responseStruct);
             }
             AbstractResponse body = createResponse(responseStruct, req.header);
-            if (req.isInternalRequest && body instanceof MetadataResponse)
+            if (req.isInternal && body instanceof MetadataResponse)
                 metadataUpdater.handleCompletedMetadataResponse(req.header, now, (MetadataResponse) body);
-            else if (req.isInternalRequest && body instanceof ApiVersionsResponse)
+            else if (req.isInternal && body instanceof ApiVersionsResponse)
                 handleApiVersionsResponse(responses, req, now, (ApiVersionsResponse) body);
             else
                 responses.add(req.completed(body, now));
@@ -801,7 +811,7 @@ public class NetworkClient implements KafkaClient {
         public long maybeUpdate(long now) {
             // should we update our metadata?
             long timeToNextMetadataUpdate = metadata.timeToNextUpdate(now);
-            long waitForMetadataFetch = this.metadataFetchInProgress ? requestTimeoutMs : 0;
+            long waitForMetadataFetch = this.metadataFetchInProgress ? defaultRequestTimeoutMs : 0;
 
             long metadataTimeout = Math.max(timeToNextMetadataUpdate, waitForMetadataFetch);
             if (metadataTimeout > 0) {
@@ -889,8 +899,7 @@ public class NetworkClient implements KafkaClient {
 
 
                 log.debug("Sending metadata request {} to node {}", metadataRequest, node);
-                sendInternalMetadataRequest(metadataRequest, nodeConnectionId, now);
-                return requestTimeoutMs;
+                return sendInternalMetadataRequest(metadataRequest, nodeConnectionId, now).timeoutMs();
             }
 
             // If there's any connection establishment underway, wait until it completes. This prevents
@@ -926,8 +935,14 @@ public class NetworkClient implements KafkaClient {
     @Override
     public ClientRequest newClientRequest(String nodeId, AbstractRequest.Builder<?> requestBuilder, long createdTimeMs,
                                           boolean expectResponse, RequestCompletionHandler callback) {
-        return new ClientRequest(nodeId, requestBuilder, correlation++, clientId, createdTimeMs, expectResponse,
-                callback);
+        return newClientRequest(nodeId, requestBuilder, createdTimeMs, expectResponse, callback, defaultRequestTimeoutMs);
+    }
+
+    @Override
+    public ClientRequest newClientRequest(String nodeId, AbstractRequest.Builder<?> requestBuilder, long createdTimeMs,
+                                          boolean expectResponse, RequestCompletionHandler callback, int timeoutMs) {
+        return new ClientRequest(nodeId, requestBuilder, correlation++, clientId, createdTimeMs, timeoutMs,
+                expectResponse, callback);
     }
 
     static class InFlightRequest {
@@ -936,29 +951,36 @@ public class NetworkClient implements KafkaClient {
         final RequestCompletionHandler callback;
         final boolean expectResponse;
         final AbstractRequest request;
-        final boolean isInternalRequest; // used to flag requests which are initiated internally by NetworkClient
+        final boolean isInternal; // used to flag requests which are initiated internally by NetworkClient
         final Send send;
         final long sendTimeMs;
         final long createdTimeMs;
+        final int timeoutMs;
 
         public InFlightRequest(RequestHeader header,
                                long createdTimeMs,
                                String destination,
                                RequestCompletionHandler callback,
                                boolean expectResponse,
-                               boolean isInternalRequest,
+                               boolean isInternal,
                                AbstractRequest request,
                                Send send,
-                               long sendTimeMs) {
+                               long sendTimeMs,
+                               int timeoutMs) {
             this.header = header;
             this.destination = destination;
             this.callback = callback;
             this.expectResponse = expectResponse;
-            this.isInternalRequest = isInternalRequest;
+            this.isInternal = isInternal;
             this.request = request;
             this.send = send;
             this.sendTimeMs = sendTimeMs;
             this.createdTimeMs = createdTimeMs;
+            this.timeoutMs = timeoutMs;
+        }
+
+        public boolean hasExpired(long now) {
+            return now - sendTimeMs >= timeoutMs;
         }
 
         public ClientResponse completed(AbstractResponse response, long timeMs) {

@@ -167,4 +167,17 @@ public interface KafkaClient extends Closeable {
     ClientRequest newClientRequest(String nodeId, AbstractRequest.Builder<?> requestBuilder, long createdTimeMs,
                                    boolean expectResponse, RequestCompletionHandler callback);
 
+    /**
+     * Create a new ClientRequest.
+     *
+     * @param nodeId the node to send to
+     * @param requestBuilder the request builder to use
+     * @param createdTimeMs the time in milliseconds to use as the creation time of the request
+     * @param expectResponse true iff we expect a response
+     * @param callback the callback to invoke when we get a response
+     * @param timeoutMs the request timeout in milliseconds
+     */
+    ClientRequest newClientRequest(String nodeId, AbstractRequest.Builder<?> requestBuilder, long createdTimeMs,
+                                   boolean expectResponse, RequestCompletionHandler callback, int timeoutMs);
+
 }

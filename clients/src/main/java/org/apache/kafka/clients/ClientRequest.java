@@ -30,6 +30,7 @@ public final class ClientRequest {
     private final int correlationId;
     private final String clientId;
     private final long createdTimeMs;
+    private final int timeoutMs;
     private final boolean expectResponse;
     private final RequestCompletionHandler callback;
 
@@ -39,6 +40,7 @@ public final class ClientRequest {
      * @param correlationId The correlation id for this client request
      * @param clientId The client ID to use for the header
      * @param createdTimeMs The unix timestamp in milliseconds for the time at which this request was created.
+*      @param timeoutMs The request timeout in milliseconds.
      * @param expectResponse Should we expect a response message or is this request complete once it is sent?
      * @param callback A callback to execute when the response has been received (or null if no callback is necessary)
      */
@@ -47,6 +49,7 @@ public final class ClientRequest {
                          int correlationId,
                          String clientId,
                          long createdTimeMs,
+                         int timeoutMs,
                          boolean expectResponse,
                          RequestCompletionHandler callback) {
         this.destination = destination;
@@ -54,6 +57,7 @@ public final class ClientRequest {
         this.correlationId = correlationId;
         this.clientId = clientId;
         this.createdTimeMs = createdTimeMs;
+        this.timeoutMs = timeoutMs;
         this.expectResponse = expectResponse;
         this.callback = callback;
     }
@@ -66,6 +70,7 @@ public final class ClientRequest {
             ", correlationId=" + correlationId +
             ", clientId=" + clientId +
             ", createdTimeMs=" + createdTimeMs +
+            ", timeoutMs=" + timeoutMs +
             ", requestBuilder=" + requestBuilder +
             ")";
     }
@@ -96,6 +101,10 @@ public final class ClientRequest {
 
     public long createdTimeMs() {
         return createdTimeMs;
+    }
+
+    public int timeoutMs() {
+        return timeoutMs;
     }
 
     public int correlationId() {

@@ -62,6 +62,8 @@ public class MockClient implements KafkaClient {
 
     }
 
+    private static final int DEFAUL_TIMEOUT_MS = 30_000;
+
     private final Time time;
     private final Metadata metadata;
     private Set<String> unavailableTopics;
@@ -350,8 +352,14 @@ public class MockClient implements KafkaClient {
     @Override
     public ClientRequest newClientRequest(String nodeId, AbstractRequest.Builder<?> requestBuilder, long createdTimeMs,
                                           boolean expectResponse, RequestCompletionHandler callback) {
+        return newClientRequest(nodeId, requestBuilder, createdTimeMs, expectResponse, callback, DEFAUL_TIMEOUT_MS);
+    }
+
+    @Override
+    public ClientRequest newClientRequest(String nodeId, AbstractRequest.Builder<?> requestBuilder, long createdTimeMs,
+                                          boolean expectResponse, RequestCompletionHandler callback, int timeoutMs) {
         return new ClientRequest(nodeId, requestBuilder, 0, "mockClientId", createdTimeMs,
-                expectResponse, callback);
+                timeoutMs, expectResponse, callback);
     }
 
     @Override

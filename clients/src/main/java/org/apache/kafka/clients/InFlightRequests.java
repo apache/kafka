@@ -17,10 +17,10 @@
 package org.apache.kafka.clients;
 
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
@@ -31,6 +31,7 @@ final class InFlightRequests {
 
     private final int maxInFlightRequestsPerConnection;
     private final Map<String, Deque<NetworkClient.InFlightRequest>> requests = new HashMap<>();
+    private Integer minTimeoutMs;
 
     public InFlightRequests(int maxInFlightRequestsPerConnection) {
         this.maxInFlightRequestsPerConnection = maxInFlightRequestsPerConnection;
@@ -46,6 +47,8 @@ final class InFlightRequests {
             reqs = new ArrayDeque<>();
             this.requests.put(destination, reqs);
         }
+        if (minTimeoutMs != null)
+            minTimeoutMs = Math.min(request.timeoutMs, minTimeoutMs);
         reqs.addFirst(request);
     }
 
@@ -60,10 +63,12 @@ final class InFlightRequests {
     }
 
     /**
-     * Get the oldest request (the one that that will be completed next) for the given node
+     * Complete the oldest request (the one that that will be completed next) for the given node
      */
     public NetworkClient.InFlightRequest completeNext(String node) {
-        return requestQueue(node).pollLast();
+        NetworkClient.InFlightRequest request = requestQueue(node).pollLast();
+        minTimeoutMs = null;
+        return request;
     }
 
     /**
@@ -80,7 +85,9 @@ final class InFlightRequests {
      * @return The request
      */
     public NetworkClient.InFlightRequest completeLastSent(String node) {
-        return requestQueue(node).pollFirst();
+        NetworkClient.InFlightRequest request = requestQueue(node).pollFirst();
+        minTimeoutMs = null;
+        return request;
     }
 
     /**
@@ -142,6 +149,7 @@ final class InFlightRequests {
      */
     public Iterable<NetworkClient.InFlightRequest> clearAll(String node) {
         Deque<NetworkClient.InFlightRequest> reqs = requests.remove(node);
+        minTimeoutMs = null;
         return (reqs == null) ? Collections.<NetworkClient.InFlightRequest>emptyList() : reqs;
     }
 
@@ -149,23 +157,36 @@ final class InFlightRequests {
      * Returns a list of nodes with pending in-flight request, that need to be timed out
      *
      * @param now current time in milliseconds
-     * @param requestTimeoutMs max time to wait for the request to be completed
      * @return list of nodes
      */
-    public List<String> getNodesWithTimedOutRequests(long now, int requestTimeoutMs) {
-        List<String> nodeIds = new LinkedList<>();
-        for (Map.Entry<String, Deque<NetworkClient.InFlightRequest>> requestEntry : requests.entrySet()) {
-            String nodeId = requestEntry.getKey();
-            Deque<NetworkClient.InFlightRequest> deque = requestEntry.getValue();
+    public List<String> getNodesWithTimedOutRequests(long now) {
+        List<String> nodeIds = new ArrayList<>();
+        for (Map.Entry<String, Deque<NetworkClient.InFlightRequest>> nodeRequests : requests.entrySet()) {
+            String nodeId = nodeRequests.getKey();
+            Deque<NetworkClient.InFlightRequest> deque = nodeRequests.getValue();
 
-            if (!deque.isEmpty()) {
-                NetworkClient.InFlightRequest request = deque.peekLast();
-                long timeSinceSend = now - request.sendTimeMs;
-                if (timeSinceSend > requestTimeoutMs)
+            for (NetworkClient.InFlightRequest request : deque) {
+                if (request.hasExpired(now)) {
                     nodeIds.add(nodeId);
+                    break;
+                }
             }
         }
         return nodeIds;
     }
-    
+
+    /**
+     * Return the minimum request timeout of all in flight requests or null if there are none.
+     */
+    public Integer minTimeoutMs() {
+        if (minTimeoutMs == null && !requests.isEmpty()) {
+            int timeoutMs = Integer.MAX_VALUE;
+            for (Deque<NetworkClient.InFlightRequest> nodeRequests : requests.values()) {
+                for (NetworkClient.InFlightRequest request : nodeRequests)
+                    timeoutMs = Math.min(request.timeoutMs, timeoutMs);
+            }
+            minTimeoutMs = timeoutMs;
+        }
+        return minTimeoutMs;
+    }
 }
