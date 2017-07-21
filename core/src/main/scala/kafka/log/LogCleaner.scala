@@ -446,6 +446,9 @@ private[log] class Cleaner(val id: Int,
         currentSegmentOpt = nextSegmentOpt
       }
 
+      // trim log segment
+      cleaned.log.trim()
+
       // trim excess index
       index.trimToValidSize()
 
