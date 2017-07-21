@@ -287,7 +287,7 @@ private[log] object LogCleanerManager extends Logging {
       if (offset < logStartOffset) {
         // don't bother with the warning if compact and delete are enabled.
         if (!isCompactAndDelete(log))
-          warn(s"Resetting first dirty offset to log start offset $logStartOffset since the checkpointed offset $offset is invalid.")
+          warn(s"Resetting first dirty offset of ${log.name} to log start offset $logStartOffset since the checkpointed offset $offset is invalid.")
         logStartOffset
       } else {
         offset
@@ -302,7 +302,7 @@ private[log] object LogCleanerManager extends Logging {
     // find first segment that cannot be cleaned
     // neither the active segment, nor segments with any messages closer to the head of the log than the minimum compaction lag time
     // may be cleaned
-    val firstUncleanableDirtyOffset: Long = Seq (
+    val firstUncleanableDirtyOffset: Long = Seq(
 
       // we do not clean beyond the first unstable offset
       log.firstUnstableOffset.map(_.messageOffset),
@@ -312,12 +312,11 @@ private[log] object LogCleanerManager extends Logging {
 
       // the first segment whose largest message timestamp is within a minimum time lag from now
       if (compactionLagMs > 0) {
-        dirtyNonActiveSegments.find {
-          s =>
-            val isUncleanable = s.largestTimestamp > now - compactionLagMs
-            debug(s"Checking if log segment may be cleaned: log='${log.name}' segment.baseOffset=${s.baseOffset} segment.largestTimestamp=${s.largestTimestamp}; now - compactionLag=${now - compactionLagMs}; is uncleanable=$isUncleanable")
-            isUncleanable
-        } map(_.baseOffset)
+        dirtyNonActiveSegments.find { s =>
+          val isUncleanable = s.largestTimestamp > now - compactionLagMs
+          debug(s"Checking if log segment may be cleaned: log='${log.name}' segment.baseOffset=${s.baseOffset} segment.largestTimestamp=${s.largestTimestamp}; now - compactionLag=${now - compactionLagMs}; is uncleanable=$isUncleanable")
+          isUncleanable
+        }.map(_.baseOffset)
       } else None
     ).flatten.min
 
