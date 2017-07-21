@@ -191,4 +191,14 @@ public class ListOffsetResponse extends AbstractResponse {
 
         return struct;
     }
+
+    @Override
+    public String toString() {
+        StringBuilder bld = new StringBuilder();
+        bld.append("(type=ListOffsetResponse")
+            .append(", throttleTimeMs=").append(throttleTimeMs)
+            .append(", responseData=").append(responseData)
+            .append(")");
+        return bld.toString();
+    }
 }
