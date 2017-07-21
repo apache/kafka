@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.common.MetricName;
-import org.apache.kafka.common.metrics.MeasurableStat;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Max;
@@ -362,18 +360,10 @@ class NamedCache {
         final Map<String, String> allMetricTags;
         final Sensor hitRatioSensor;
 
-        private void maybeAddMetric(Sensor sensor, MetricName name, MeasurableStat stat) {
-            if (!metrics.metrics().containsKey(name)) {
-                sensor.add(name, stat);
-            } else {
-                log.trace("Trying to add metric twice: {}", name);
-            }
-        }
-
         public NamedCacheMetrics(StreamsMetrics metrics) {
             final String scope = "record-cache";
             final String opName = "hitRatio";
-            final String tagKey = "record-cache-id";
+            final String tagKey = scope + "-id";
             final String tagValue = ThreadCache.underlyingStoreNamefromCacheName(name);
             this.groupName = "stream-" + scope + "-metrics";
             this.metrics = (StreamsMetricsImpl) metrics;
@@ -384,21 +374,21 @@ class NamedCache {
 
             // add parent
             Sensor parent = this.metrics.registry().sensor(opName, Sensor.RecordingLevel.DEBUG);
-            maybeAddMetric(parent, this.metrics.registry().metricName(opName + "-avg", groupName,
-                    "The average cache hit ratio of " + name, allMetricTags), new Avg());
-            maybeAddMetric(parent, this.metrics.registry().metricName(opName + "-min", groupName,
-                    "The minimum cache hit ratio of " + name, allMetricTags), new Min());
-            maybeAddMetric(parent, this.metrics.registry().metricName(opName + "-max", groupName,
-                    "The maximum cache hit ratio of " + name, allMetricTags), new Max());
+            ((StreamsMetricsImpl) metrics).maybeAddMetric(parent, this.metrics.registry().metricName(opName + "-avg", groupName,
+                    "The average cache hit ratio.", allMetricTags), new Avg());
+            ((StreamsMetricsImpl) metrics).maybeAddMetric(parent, this.metrics.registry().metricName(opName + "-min", groupName,
+                    "The minimum cache hit ratio.", allMetricTags), new Min());
+            ((StreamsMetricsImpl) metrics).maybeAddMetric(parent, this.metrics.registry().metricName(opName + "-max", groupName,
+                    "The maximum cache hit ratio.", allMetricTags), new Max());
 
             // add child
             hitRatioSensor = this.metrics.registry().sensor(opName, Sensor.RecordingLevel.DEBUG, parent);
-            maybeAddMetric(hitRatioSensor, this.metrics.registry().metricName(opName + "-avg", groupName,
-                "The average cache hit ratio of " + name, metricTags), new Avg());
-            maybeAddMetric(hitRatioSensor, this.metrics.registry().metricName(opName + "-min", groupName,
-                "The minimum cache hit ratio of " + name, metricTags), new Min());
-            maybeAddMetric(hitRatioSensor, this.metrics.registry().metricName(opName + "-max", groupName,
-                "The maximum cache hit ratio of " + name, metricTags), new Max());
+            ((StreamsMetricsImpl) metrics).maybeAddMetric(hitRatioSensor, this.metrics.registry().metricName(opName + "-avg", groupName,
+                "The average cache hit ratio.", metricTags), new Avg());
+            ((StreamsMetricsImpl) metrics).maybeAddMetric(hitRatioSensor, this.metrics.registry().metricName(opName + "-min", groupName,
+                "The minimum cache hit ratio.", metricTags), new Min());
+            ((StreamsMetricsImpl) metrics).maybeAddMetric(hitRatioSensor, this.metrics.registry().metricName(opName + "-max", groupName,
+                "The maximum cache hit ratio.", metricTags), new Max());
 
         }
 

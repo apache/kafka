@@ -70,7 +70,7 @@ class CachingKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore im
                                         valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
 
         this.cache = this.context.getCache();
-        this.cacheName = this.cache.nameSpaceFromTaskIdAndStore(context.taskId().toString(), underlying.name());
+        this.cacheName = ThreadCache.nameSpaceFromTaskIdAndStore(context.taskId().toString(), underlying.name());
         cache.addDirtyEntryFlushListener(cacheName, new ThreadCache.DirtyEntryFlushListener() {
             @Override
             public void apply(final List<ThreadCache.DirtyEntry> entries) {
