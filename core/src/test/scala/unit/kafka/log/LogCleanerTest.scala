@@ -109,8 +109,8 @@ class LogCleanerTest extends JUnitSuite {
     // clean the log with only one message removed
     cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 2, log.activeSegment.baseOffset))
 
-    assert(log.logSegments.iterator.next.log.channel().size() < originalMaxFileSize,
-      "Cleaned segment file should be trimmed to its real size.")
+    assertTrue("Cleaned segment file should be trimmed to its real size.",
+      log.logSegments.iterator.next.log.channel().size() < originalMaxFileSize)
   }
 
   @Test
