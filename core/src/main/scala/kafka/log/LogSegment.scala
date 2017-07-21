@@ -22,7 +22,7 @@ import java.nio.file.attribute.FileTime
 import java.util.concurrent.TimeUnit
 import kafka.metrics.{KafkaMetricsGroup, KafkaTimer}
 import kafka.server.epoch.LeaderEpochCache
-import kafka.server.{FetchDataInfo, LogDirFailureChannel, LogOffsetMetadata}
+import kafka.server.{FetchDataInfo, LogOffsetMetadata}
 import kafka.utils._
 import org.apache.kafka.common.errors.CorruptRecordException
 import org.apache.kafka.common.record.FileRecords.LogOffsetPosition
@@ -55,8 +55,7 @@ class LogSegment(val log: FileRecords,
                  val baseOffset: Long,
                  val indexIntervalBytes: Int,
                  val rollJitterMs: Long,
-                 time: Time,
-                 logDirFailureChannel: LogDirFailureChannel) extends Logging {
+                 time: Time) extends Logging {
 
   private var created = time.milliseconds
 
@@ -71,7 +70,7 @@ class LogSegment(val log: FileRecords,
   @volatile private var offsetOfMaxTimestamp: Long = timeIndex.lastEntry.offset
 
   def this(dir: File, startOffset: Long, indexIntervalBytes: Int, maxIndexSize: Int, rollJitterMs: Long, time: Time,
-           fileAlreadyExists: Boolean = false, initFileSize: Int = 0, preallocate: Boolean = false, logDirFailureChannel: LogDirFailureChannel = null) =
+           fileAlreadyExists: Boolean = false, initFileSize: Int = 0, preallocate: Boolean = false) =
     this(FileRecords.open(Log.logFile(dir, startOffset), fileAlreadyExists, initFileSize, preallocate),
          new OffsetIndex(Log.offsetIndexFile(dir, startOffset), baseOffset = startOffset, maxIndexSize = maxIndexSize),
          new TimeIndex(Log.timeIndexFile(dir, startOffset), baseOffset = startOffset, maxIndexSize = maxIndexSize),
@@ -79,8 +78,7 @@ class LogSegment(val log: FileRecords,
          startOffset,
          indexIntervalBytes,
          rollJitterMs,
-         time,
-         logDirFailureChannel)
+         time)
 
   /* Return the size in bytes of this log segment */
   def size: Int = log.sizeInBytes()

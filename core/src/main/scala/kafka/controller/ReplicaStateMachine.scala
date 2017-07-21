@@ -298,11 +298,6 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
     controllerContext.partitionReplicaAssignment.filter(_._2.contains(brokerId)).keySet.toSeq
   }
 
-  // Used only by test
-  def getReplicaState(partitionAndReplica: PartitionAndReplica): ReplicaState = {
-    replicaState(partitionAndReplica)
-  }
-
 }
 
 sealed trait ReplicaState {

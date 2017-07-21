@@ -296,8 +296,7 @@ class Log(@volatile var dir: File,
           maxIndexSize = config.maxIndexSize,
           rollJitterMs = config.randomSegmentJitter,
           time = time,
-          fileAlreadyExists = true,
-          logDirFailureChannel = logDirFailureChannel)
+          fileAlreadyExists = true)
 
         if (indexFileExists) {
           try {
@@ -362,8 +361,7 @@ class Log(@volatile var dir: File,
         baseOffset = startOffset,
         indexIntervalBytes = config.indexInterval,
         rollJitterMs = config.randomSegmentJitter,
-        time = time,
-        logDirFailureChannel = logDirFailureChannel)
+        time = time)
       info("Found log file %s from interrupted swap operation, repairing.".format(swapFile.getPath))
       recoverSegment(swapSegment)
       val oldSegments = logSegments(swapSegment.baseOffset, swapSegment.nextOffset())
@@ -396,8 +394,7 @@ class Log(@volatile var dir: File,
                                       time = time,
                                       fileAlreadyExists = false,
                                       initFileSize = this.initFileSize(),
-                                      preallocate = config.preallocate,
-                                      logDirFailureChannel = logDirFailureChannel))
+                                      preallocate = config.preallocate))
     } else if (!dir.getAbsolutePath.endsWith(Log.DeleteDirSuffix)) {
       recoverLog()
       // reset the index size of the currently active log segment to allow more entries
@@ -1288,8 +1285,7 @@ class Log(@volatile var dir: File,
           time = time,
           fileAlreadyExists = false,
           initFileSize = initFileSize,
-          preallocate = config.preallocate,
-          logDirFailureChannel = logDirFailureChannel)
+          preallocate = config.preallocate)
         val prev = addSegment(segment)
         if (prev != null)
           throw new KafkaException("Trying to roll a new log segment for topic partition %s with start offset %d while it already exists.".format(name, newOffset))
@@ -1455,8 +1451,7 @@ class Log(@volatile var dir: File,
           time = time,
           fileAlreadyExists = false,
           initFileSize = initFileSize,
-          preallocate = config.preallocate,
-          logDirFailureChannel = logDirFailureChannel))
+          preallocate = config.preallocate))
         updateLogEndOffset(newOffset)
         leaderEpochCache.clearAndFlush()
 
@@ -1515,7 +1510,8 @@ class Log(@volatile var dir: File,
    * This allows reads to happen concurrently without synchronization and without the possibility of physically
    * deleting a file while it is being read from.
    *
-   * This method does not need to convert IOException to KafkaStorageException because it is only called before all logs are loaded
+   * This method does not need to convert IOException to KafkaStorageException because it is either called before all logs are loaded
+   * or the immediate caller will catch and handle IOException
    *
    * @param segment The log segment to schedule for deletion
    */
@@ -1530,10 +1526,10 @@ class Log(@volatile var dir: File,
   /**
    * Perform an asynchronous delete on the given file if it exists (otherwise do nothing)
    *
-   * This method does not need to convert IOException (thrown from changeFileSuffixes)
-   * to KafkaStorageException because it is only called before all logs are loaded
+   * This method does not need to convert IOException (thrown from changeFileSuffixes) to KafkaStorageException because
+   * it is either called before all logs are loaded or the caller will catch and handle IOException
    *
-   * @throws KafkaStorageException if the file can't be renamed and still exists
+   * @throws IOException if the file can't be renamed and still exists
    */
   private def asyncDeleteSegment(segment: LogSegment) {
     segment.changeFileSuffixes("", Log.DeletedFileSuffix)
@@ -1554,7 +1550,8 @@ class Log(@volatile var dir: File,
    * Swap a new segment in place and delete one or more existing segments in a crash-safe manner. The old segments will
    * be asynchronously deleted.
    *
-   * This method does not need to convert IOException to KafkaStorageException because it is only called before all logs are loaded
+   * This method does not need to convert IOException to KafkaStorageException because it is either called before all logs are loaded
+   * or the caller will catch and handle IOException
    *
    * The sequence of operations is:
    * <ol>

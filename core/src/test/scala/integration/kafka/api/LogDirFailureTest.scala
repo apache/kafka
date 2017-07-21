@@ -111,8 +111,8 @@ class LogDirFailureTest extends IntegrationTestHarness {
 
     // The controller should have marked the replica on the original leader as offline
     val controllerServer = servers.find(_.kafkaController.isActive).get
-    val replicaState = controllerServer.kafkaController.replicaStateMachine.getReplicaState(PartitionAndReplica(topic, 0, leaderServerId))
-    assertEquals(OfflineReplica, replicaState)
+    val offlineReplicas = controllerServer.kafkaController.replicaStateMachine.replicasInState(topic, OfflineReplica)
+    assertTrue(offlineReplicas.contains(PartitionAndReplica(topic, 0, leaderServerId)))
   }
 
   private def subscribeAndWaitForAssignment(topic: String, consumer: KafkaConsumer[Array[Byte], Array[Byte]]) {

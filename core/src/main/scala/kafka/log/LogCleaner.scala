@@ -433,7 +433,7 @@ private[log] class Cleaner(val id: Int,
     val timeIndex = new TimeIndex(timeIndexFile, startOffset, segments.head.timeIndex.maxIndexSize)
     val txnIndex = new TransactionIndex(startOffset, txnIndexFile)
     val cleaned = new LogSegment(records, index, timeIndex, txnIndex, startOffset,
-      segments.head.indexIntervalBytes, log.config.randomSegmentJitter, time, logDirFailureChannel)
+      segments.head.indexIntervalBytes, log.config.randomSegmentJitter, time)
 
     try {
       // clean segments into the new destination segment
