@@ -235,8 +235,8 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
     val brokerResource1 = new ConfigResource(ConfigResource.Type.BROKER, servers(1).config.brokerId.toString)
     val brokerResource2 = new ConfigResource(ConfigResource.Type.BROKER, servers(2).config.brokerId.toString)
     val configResources = Seq(topicResource1, topicResource2, brokerResource1, brokerResource2)
-    var describeResult = client.describeConfigs(configResources.asJava)
-    var configs = describeResult.all.get
+    val describeResult = client.describeConfigs(configResources.asJava)
+    val configs = describeResult.all.get
 
     assertEquals(4, configs.size)
 
