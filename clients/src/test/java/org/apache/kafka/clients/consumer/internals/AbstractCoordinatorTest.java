@@ -57,7 +57,7 @@ public class AbstractCoordinatorTest {
     private static final int REBALANCE_TIMEOUT_MS = 60000;
     private static final int SESSION_TIMEOUT_MS = 10000;
     private static final int HEARTBEAT_INTERVAL_MS = 3000;
-    private static final long RETRY_BACKOFF_MS = 100;
+    private static final long RETRY_BACKOFF_MS = 20;
     private static final long LONG_RETRY_BACKOFF_MS = 10000;
     private static final long REQUEST_TIMEOUT_MS = 40000;
     private static final String GROUP_ID = "dummy-group";
@@ -95,9 +95,9 @@ public class AbstractCoordinatorTest {
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
 
-        // blackout the coordinator for 50 milliseconds to simulate a disconnect.
+        // blackout the coordinator for 10 milliseconds to simulate a disconnect.
         // after backing off, we should be able to connect.
-        mockClient.blackout(coordinatorNode, 50L);
+        mockClient.blackout(coordinatorNode, 10L);
 
         long initialTime = mockTime.milliseconds();
         coordinator.ensureCoordinatorReady();
@@ -505,10 +505,6 @@ public class AbstractCoordinatorTest {
 
     private void awaitFirstHeartbeat(final AtomicBoolean heartbeatReceived) throws Exception {
         mockTime.sleep(HEARTBEAT_INTERVAL_MS);
-        // Awake the heartbeat thread
-        synchronized (coordinator) {
-            coordinator.notify();
-        }
         TestUtils.waitForCondition(new TestCondition() {
             @Override
             public boolean conditionMet() {
