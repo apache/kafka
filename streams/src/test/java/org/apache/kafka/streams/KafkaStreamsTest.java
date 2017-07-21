@@ -45,7 +45,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -316,7 +315,7 @@ public class KafkaStreamsTest {
     }
 
     @Test
-    public void shouldReturnFalseOnCloseWhenThreadsHaventTerminated() throws InterruptedException, ExecutionException {
+    public void shouldReturnFalseOnCloseWhenThreadsHaventTerminated() throws Exception {
         final AtomicBoolean keepRunning = new AtomicBoolean(true);
         try {
             final Properties props = new Properties();

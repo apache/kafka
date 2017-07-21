@@ -42,7 +42,6 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Properties;
-import java.util.concurrent.ExecutionException;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.junit.Assert.assertThat;
@@ -84,7 +83,7 @@ public class FanoutIntegrationTest {
     }
 
     @Test
-    public void shouldFanoutTheInput() throws ExecutionException, InterruptedException {
+    public void shouldFanoutTheInput() throws Exception {
         final List<String> inputValues = Arrays.asList("Hello", "World");
         final List<String> expectedValuesForB = new ArrayList<>();
         final List<String> expectedValuesForC = new ArrayList<>();

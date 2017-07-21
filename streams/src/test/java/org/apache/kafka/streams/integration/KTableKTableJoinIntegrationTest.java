@@ -49,7 +49,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-import java.util.concurrent.ExecutionException;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.junit.Assert.assertEquals;
@@ -72,7 +71,7 @@ public class KTableKTableJoinIntegrationTest {
     private final static Properties CONSUMER_CONFIG = new Properties();
 
     @BeforeClass
-    public static void beforeTest() throws InterruptedException, ExecutionException {
+    public static void beforeTest() throws Exception {
         CLUSTER.createTopics(TABLE_1, TABLE_2, TABLE_3, OUTPUT);
 
         streamsConfig = new Properties();

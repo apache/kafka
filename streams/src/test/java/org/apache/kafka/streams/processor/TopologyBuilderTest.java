@@ -673,7 +673,7 @@ public class TopologyBuilderTest {
 
     @SuppressWarnings("unchecked")
     @Test
-    public void shouldSetCorrectSourceNodesWithRegexUpdatedTopics() throws NoSuchFieldException, IllegalAccessException {
+    public void shouldSetCorrectSourceNodesWithRegexUpdatedTopics() throws Exception {
         final TopologyBuilder builder = new TopologyBuilder();
         builder.addSource("source-1", "topic-foo");
         builder.addSource("source-2", Pattern.compile("topic-[A-C]"));
@@ -751,7 +751,7 @@ public class TopologyBuilderTest {
         assertThat(processorTopology.source(pattern.pattern()).getTimestampExtractor(), instanceOf(MockTimestampExtractor.class));
     }
 
-    public void shouldConnectRegexMatchedTopicsToStateStore() throws NoSuchFieldException, IllegalAccessException {
+    public void shouldConnectRegexMatchedTopicsToStateStore() throws Exception {
 
         final TopologyBuilder topologyBuilder = new TopologyBuilder()
                 .addSource("ingest", Pattern.compile("topic-\\d+"))

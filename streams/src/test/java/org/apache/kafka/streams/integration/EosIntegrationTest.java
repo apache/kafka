@@ -56,7 +56,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -112,39 +111,39 @@ public class EosIntegrationTest {
     }
 
     @Test
-    public void shouldBeAbleToRunWithEosEnabled() throws ExecutionException, InterruptedException {
+    public void shouldBeAbleToRunWithEosEnabled() throws Exception {
         runSimpleCopyTest(1, SINGLE_PARTITION_INPUT_TOPIC, null, SINGLE_PARTITION_OUTPUT_TOPIC);
     }
 
     @Test
-    public void shouldBeAbleToRestartAfterClose() throws ExecutionException, InterruptedException {
+    public void shouldBeAbleToRestartAfterClose() throws Exception {
         runSimpleCopyTest(2, SINGLE_PARTITION_INPUT_TOPIC, null, SINGLE_PARTITION_OUTPUT_TOPIC);
     }
 
     @Test
-    public void shouldBeAbleToCommitToMultiplePartitions() throws ExecutionException, InterruptedException {
+    public void shouldBeAbleToCommitToMultiplePartitions() throws Exception {
         runSimpleCopyTest(1, SINGLE_PARTITION_INPUT_TOPIC, null, MULTI_PARTITION_OUTPUT_TOPIC);
     }
 
     @Test
-    public void shouldBeAbleToCommitMultiplePartitionOffsets() throws ExecutionException, InterruptedException {
+    public void shouldBeAbleToCommitMultiplePartitionOffsets() throws Exception {
         runSimpleCopyTest(1, MULTI_PARTITION_INPUT_TOPIC, null, SINGLE_PARTITION_OUTPUT_TOPIC);
     }
 
     @Test
-    public void shouldBeAbleToRunWithTwoSubtopologies() throws ExecutionException, InterruptedException {
+    public void shouldBeAbleToRunWithTwoSubtopologies() throws Exception {
         runSimpleCopyTest(1, SINGLE_PARTITION_INPUT_TOPIC, SINGLE_PARTITION_THROUGH_TOPIC, SINGLE_PARTITION_OUTPUT_TOPIC);
     }
 
     @Test
-    public void shouldBeAbleToRunWithTwoSubtopologiesAndMultiplePartitions() throws ExecutionException, InterruptedException {
+    public void shouldBeAbleToRunWithTwoSubtopologiesAndMultiplePartitions() throws Exception {
         runSimpleCopyTest(1, MULTI_PARTITION_INPUT_TOPIC, MULTI_PARTITION_THROUGH_TOPIC, MULTI_PARTITION_OUTPUT_TOPIC);
     }
 
     private void runSimpleCopyTest(final int numberOfRestarts,
                                    final String inputTopic,
                                    final String throughTopic,
-                                   final String outputTopic) throws ExecutionException, InterruptedException {
+                                   final String outputTopic) throws Exception {
         final KStreamBuilder builder = new KStreamBuilder();
         final KStream<Long, Long> input = builder.stream(inputTopic);
         KStream<Long, Long> output = input;
@@ -235,7 +234,7 @@ public class EosIntegrationTest {
     }
 
     @Test
-    public void shouldBeAbleToPerformMultipleTransactions() throws ExecutionException, InterruptedException {
+    public void shouldBeAbleToPerformMultipleTransactions() throws Exception {
         final KStreamBuilder builder = new KStreamBuilder();
         builder.stream(SINGLE_PARTITION_INPUT_TOPIC).to(SINGLE_PARTITION_OUTPUT_TOPIC);
 
@@ -313,7 +312,7 @@ public class EosIntegrationTest {
     }
 
     @Test
-    public void shouldNotViolateEosIfOneTaskFails() throws ExecutionException, InterruptedException {
+    public void shouldNotViolateEosIfOneTaskFails() throws Exception {
         // this test writes 10 + 5 + 5 records per partition (running with 2 partitions)
         // the app is supposed to copy all 40 records into the output topic
         // the app commits after each 10 records per partition, and thus will have 2*5 uncommitted writes
@@ -387,7 +386,7 @@ public class EosIntegrationTest {
     }
 
     @Test
-    public void shouldNotViolateEosIfOneTaskFailsWithState() throws ExecutionException, InterruptedException {
+    public void shouldNotViolateEosIfOneTaskFailsWithState() throws Exception {
         // this test updates a store with 10 + 5 + 5 records per partition (running with 2 partitions)
         // the app is supposed to emit all 40 update records into the output topic
         // the app commits after each 10 records per partition, and thus will have 2*5 uncommitted writes
@@ -465,7 +464,7 @@ public class EosIntegrationTest {
     }
 
     @Test
-    public void shouldNotViolateEosIfOneTaskGetsFencedUsingIsolatedAppInstances() throws ExecutionException, InterruptedException {
+    public void shouldNotViolateEosIfOneTaskGetsFencedUsingIsolatedAppInstances() throws Exception {
         // this test writes 10 + 5 + 5 + 10 records per partition (running with 2 partitions)
         // the app is supposed to copy all 60 records into the output topic
         // the app commits after each 10 records per partition, and thus will have 2*5 uncommitted writes
@@ -692,7 +691,7 @@ public class EosIntegrationTest {
         return streams;
     }
 
-    private void writeInputData(final List<KeyValue<Long, Long>> records) throws ExecutionException, InterruptedException {
+    private void writeInputData(final List<KeyValue<Long, Long>> records) throws Exception {
         IntegrationTestUtils.produceKeyValuesSynchronously(
             MULTI_PARTITION_INPUT_TOPIC,
             records,

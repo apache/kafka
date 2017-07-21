@@ -52,7 +52,6 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.io.File;
-import java.io.IOException;
 import java.lang.reflect.Field;
 import java.nio.ByteBuffer;
 import java.nio.file.Files;
@@ -658,7 +657,7 @@ public class StreamThreadTest {
 
 
     @Test
-    public void testMaybeClean() throws IOException, InterruptedException, java.nio.file.NoSuchFileException {
+    public void testMaybeClean() throws Exception {
         final File baseDir = Files.createTempDirectory("test").toFile();
         try {
             final long cleanupDelay = 1000L;
@@ -802,7 +801,7 @@ public class StreamThreadTest {
     }
 
     @Test
-    public void testMaybeCommit() throws IOException, InterruptedException {
+    public void testMaybeCommit() throws Exception {
         final File baseDir = Files.createTempDirectory("test").toFile();
         try {
             final long commitInterval = 1000L;
@@ -1267,7 +1266,7 @@ public class StreamThreadTest {
     }
 
     @Test
-    public void shouldCloseActiveTasksThatAreAssignedToThisStreamThreadButAssignmentHasChangedBeforeCreatingNewTasks() throws NoSuchFieldException, IllegalAccessException {
+    public void shouldCloseActiveTasksThatAreAssignedToThisStreamThreadButAssignmentHasChangedBeforeCreatingNewTasks() throws Exception {
         final KStreamBuilder builder = new KStreamBuilder();
         builder.setApplicationId(applicationId);
         builder.stream(Pattern.compile("t.*")).to("out");
@@ -1728,7 +1727,7 @@ public class StreamThreadTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    public void shouldAlwaysUpdateWithLatestTopicsFromStreamPartitionAssignor() throws NoSuchFieldException, IllegalAccessException {
+    public void shouldAlwaysUpdateWithLatestTopicsFromStreamPartitionAssignor() throws Exception {
         final TopologyBuilder topologyBuilder = new TopologyBuilder();
         topologyBuilder.addSource("source", Pattern.compile("t.*"));
         topologyBuilder.addProcessor("processor", new MockProcessorSupplier(), "source");

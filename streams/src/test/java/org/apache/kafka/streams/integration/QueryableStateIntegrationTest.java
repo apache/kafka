@@ -70,7 +70,6 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.TreeSet;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -124,7 +123,7 @@ public class QueryableStateIntegrationTest {
     }
 
     @Before
-    public void before() throws IOException, InterruptedException {
+    public void before() throws Exception {
         testNo++;
         createTopics();
         streamsConfiguration = new Properties();
@@ -404,17 +403,17 @@ public class QueryableStateIntegrationTest {
     }
 
     @Test
-    public void shouldBeAbleToQueryStateWithZeroSizedCache() throws ExecutionException, InterruptedException {
+    public void shouldBeAbleToQueryStateWithZeroSizedCache() throws Exception {
         verifyCanQueryState(0);
     }
 
     @Test
-    public void shouldBeAbleToQueryStateWithNonZeroSizedCache() throws ExecutionException, InterruptedException {
+    public void shouldBeAbleToQueryStateWithNonZeroSizedCache() throws Exception {
         verifyCanQueryState(10 * 1024 * 1024);
     }
 
     @Test
-    public void shouldBeAbleToQueryFilterState() throws ExecutionException, InterruptedException {
+    public void shouldBeAbleToQueryFilterState() throws Exception {
         streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Long().getClass());
         final KStreamBuilder builder = new KStreamBuilder();
@@ -480,7 +479,7 @@ public class QueryableStateIntegrationTest {
     }
 
     @Test
-    public void shouldBeAbleToQueryMapValuesState() throws ExecutionException, InterruptedException {
+    public void shouldBeAbleToQueryMapValuesState() throws Exception {
         streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         final KStreamBuilder builder = new KStreamBuilder();
@@ -526,7 +525,7 @@ public class QueryableStateIntegrationTest {
     }
 
     @Test
-    public void shouldBeAbleToQueryMapValuesAfterFilterState() throws ExecutionException, InterruptedException {
+    public void shouldBeAbleToQueryMapValuesAfterFilterState() throws Exception {
         streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         final KStreamBuilder builder = new KStreamBuilder();
@@ -587,7 +586,7 @@ public class QueryableStateIntegrationTest {
         }
     }
 
-    private void verifyCanQueryState(final int cacheSizeBytes) throws java.util.concurrent.ExecutionException, InterruptedException {
+    private void verifyCanQueryState(final int cacheSizeBytes) throws Exception {
         streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, cacheSizeBytes);
         final KStreamBuilder builder = new KStreamBuilder();
         final String[] keys = {"hello", "goodbye", "welcome", "go", "kafka"};
@@ -642,7 +641,7 @@ public class QueryableStateIntegrationTest {
     }
 
     @Test
-    public void shouldNotMakeStoreAvailableUntilAllStoresAvailable() throws ExecutionException, InterruptedException {
+    public void shouldNotMakeStoreAvailableUntilAllStoresAvailable() throws Exception {
         final KStreamBuilder builder = new KStreamBuilder();
         final KStream<String, String> stream = builder.stream(streamThree);
 
@@ -714,7 +713,7 @@ public class QueryableStateIntegrationTest {
     }
 
     @Test
-    public void shouldAllowToQueryAfterThreadDied() throws ExecutionException, InterruptedException {
+    public void shouldAllowToQueryAfterThreadDied() throws Exception {
         final AtomicBoolean beforeFailure = new AtomicBoolean(true);
         final AtomicBoolean failed = new AtomicBoolean(false);
         final String storeName = "store";

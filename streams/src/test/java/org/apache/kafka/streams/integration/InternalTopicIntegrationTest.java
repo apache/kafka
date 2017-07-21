@@ -50,12 +50,10 @@ import scala.Tuple2;
 import scala.collection.Iterator;
 import scala.collection.Map;
 
-import java.io.IOException;
 import java.util.Properties;
 import java.util.Arrays;
 import java.util.Locale;
 import java.util.List;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.Assert.assertEquals;
@@ -127,7 +125,7 @@ public class InternalTopicIntegrationTest {
     }
 
     @Test
-    public void shouldCompactTopicsForStateChangelogs() throws ExecutionException, InterruptedException, IOException {
+    public void shouldCompactTopicsForStateChangelogs() throws Exception {
         //
         // Step 1: Configure and start a simple word count topology
         //
@@ -175,7 +173,7 @@ public class InternalTopicIntegrationTest {
         assertEquals(LogConfig.Compact(), properties.getProperty(LogConfig.CleanupPolicyProp()));
     }
 
-    private void produceData(final List<String> inputValues) throws java.util.concurrent.ExecutionException, InterruptedException {
+    private void produceData(final List<String> inputValues) throws Exception {
         final Properties producerConfig = new Properties();
         producerConfig.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         producerConfig.put(ProducerConfig.ACKS_CONFIG, "all");
@@ -186,7 +184,7 @@ public class InternalTopicIntegrationTest {
     }
 
     @Test
-    public void shouldUseCompactAndDeleteForWindowStoreChangelogs() throws IOException, ExecutionException, InterruptedException {
+    public void shouldUseCompactAndDeleteForWindowStoreChangelogs() throws Exception {
         KStreamBuilder builder = new KStreamBuilder();
 
         KStream<String, String> textLines = builder.stream(DEFAULT_INPUT_TOPIC);

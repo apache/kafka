@@ -62,7 +62,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
-import java.util.concurrent.ExecutionException;
 import java.util.regex.Pattern;
 
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -131,7 +130,7 @@ public class RegexSourceIntegrationTest {
     }
 
     @Test
-    public void testRegexMatchesTopicsAWhenCreated() throws InterruptedException, IllegalAccessException, NoSuchFieldException {
+    public void testRegexMatchesTopicsAWhenCreated() throws Exception {
 
         final Serde<String> stringSerde = Serdes.String();
         final List<String> expectedFirstAssignment = Arrays.asList("TEST-TOPIC-1");
@@ -185,7 +184,7 @@ public class RegexSourceIntegrationTest {
     }
 
     @Test
-    public void testRegexMatchesTopicsAWhenDeleted() throws InterruptedException, NoSuchFieldException, IllegalAccessException {
+    public void testRegexMatchesTopicsAWhenDeleted() throws Exception {
 
         final Serde<String> stringSerde = Serdes.String();
         final List<String> expectedFirstAssignment = Arrays.asList("TEST-TOPIC-A", "TEST-TOPIC-B");
@@ -273,7 +272,7 @@ public class RegexSourceIntegrationTest {
 
 
     @Test
-    public void testShouldReadFromRegexAndNamedTopics() throws ExecutionException, InterruptedException {
+    public void testShouldReadFromRegexAndNamedTopics() throws Exception {
 
         final String topic1TestMessage = "topic-1 test";
         final String topic2TestMessage = "topic-2 test";
@@ -324,7 +323,7 @@ public class RegexSourceIntegrationTest {
     }
 
     @Test
-    public void testMultipleConsumersCanReadFromPartitionedTopic() throws NoSuchFieldException, IllegalAccessException, InterruptedException {
+    public void testMultipleConsumersCanReadFromPartitionedTopic() throws Exception {
 
         final Serde<String> stringSerde = Serdes.String();
         final KStreamBuilder builderLeader = new KStreamBuilder();
@@ -397,7 +396,7 @@ public class RegexSourceIntegrationTest {
 
     // TODO should be updated to expected = TopologyBuilderException after KAFKA-3708
     @Test(expected = AssertionError.class)
-    public void testNoMessagesSentExceptionFromOverlappingPatterns() throws ExecutionException, InterruptedException {
+    public void testNoMessagesSentExceptionFromOverlappingPatterns() throws Exception {
 
         final String fooMessage = "fooMessage";
         final String fMessage = "fMessage";

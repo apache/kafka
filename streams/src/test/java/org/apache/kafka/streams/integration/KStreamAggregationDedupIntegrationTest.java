@@ -49,7 +49,6 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Properties;
-import java.util.concurrent.ExecutionException;
 
 import kafka.utils.MockTime;
 import org.junit.experimental.categories.Category;
@@ -125,7 +124,7 @@ public class KStreamAggregationDedupIntegrationTest {
 
 
     @Test
-    public void shouldReduce() throws ExecutionException, InterruptedException {
+    public void shouldReduce() throws Exception {
         produceMessages(System.currentTimeMillis());
         groupedStream
             .reduce(reducer, "reduce-by-key")
@@ -166,7 +165,7 @@ public class KStreamAggregationDedupIntegrationTest {
     }
 
     @Test
-    public void shouldReduceWindowed() throws ExecutionException, InterruptedException {
+    public void shouldReduceWindowed() throws Exception {
         long firstBatchTimestamp = System.currentTimeMillis() - 1000;
         produceMessages(firstBatchTimestamp);
         long secondBatchTimestamp = System.currentTimeMillis();
@@ -221,7 +220,7 @@ public class KStreamAggregationDedupIntegrationTest {
     }
 
     @Test
-    public void shouldGroupByKey() throws ExecutionException, InterruptedException {
+    public void shouldGroupByKey() throws Exception {
         final long timestamp = mockTime.milliseconds();
         produceMessages(timestamp);
         produceMessages(timestamp);
@@ -260,8 +259,7 @@ public class KStreamAggregationDedupIntegrationTest {
     }
 
 
-    private void produceMessages(long timestamp)
-        throws ExecutionException, InterruptedException {
+    private void produceMessages(long timestamp) throws Exception {
         IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
             streamOneInput,
             Arrays.asList(

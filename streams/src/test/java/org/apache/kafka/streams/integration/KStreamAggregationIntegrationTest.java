@@ -147,7 +147,7 @@ public class KStreamAggregationIntegrationTest {
 
 
     @Test
-    public void shouldReduce() throws ExecutionException, InterruptedException {
+    public void shouldReduce() throws Exception {
         produceMessages(mockTime.milliseconds());
         groupedStream
             .reduce(reducer, "reduce-by-key")
@@ -191,7 +191,7 @@ public class KStreamAggregationIntegrationTest {
     }
 
     @Test
-    public void shouldReduceWindowed() throws ExecutionException, InterruptedException {
+    public void shouldReduceWindowed() throws Exception {
         final long firstBatchTimestamp = mockTime.milliseconds();
         mockTime.sleep(1000);
         produceMessages(firstBatchTimestamp);
@@ -252,7 +252,7 @@ public class KStreamAggregationIntegrationTest {
     }
 
     @Test
-    public void shouldAggregate() throws ExecutionException, InterruptedException {
+    public void shouldAggregate() throws Exception {
         produceMessages(mockTime.milliseconds());
         groupedStream.aggregate(
             initializer,
@@ -292,7 +292,7 @@ public class KStreamAggregationIntegrationTest {
     }
 
     @Test
-    public void shouldAggregateWindowed() throws ExecutionException, InterruptedException {
+    public void shouldAggregateWindowed() throws Exception {
         final long firstTimestamp = mockTime.milliseconds();
         mockTime.sleep(1000);
         produceMessages(firstTimestamp);
@@ -355,7 +355,7 @@ public class KStreamAggregationIntegrationTest {
             )));
     }
 
-    private void shouldCountHelper() throws ExecutionException, InterruptedException {
+    private void shouldCountHelper() throws Exception {
         startStreams();
 
         produceMessages(mockTime.milliseconds());
@@ -386,7 +386,7 @@ public class KStreamAggregationIntegrationTest {
     }
 
     @Test
-    public void shouldCount() throws ExecutionException, InterruptedException {
+    public void shouldCount() throws Exception {
         produceMessages(mockTime.milliseconds());
 
         groupedStream.count("count-by-key")
@@ -396,7 +396,7 @@ public class KStreamAggregationIntegrationTest {
     }
 
     @Test
-    public void shouldCountWithInternalStore() throws ExecutionException, InterruptedException {
+    public void shouldCountWithInternalStore() throws Exception {
         produceMessages(mockTime.milliseconds());
 
         groupedStream.count()
@@ -406,7 +406,7 @@ public class KStreamAggregationIntegrationTest {
     }
 
     @Test
-    public void shouldGroupByKey() throws ExecutionException, InterruptedException {
+    public void shouldGroupByKey() throws Exception {
         final long timestamp = mockTime.milliseconds();
         produceMessages(timestamp);
         produceMessages(timestamp);
@@ -450,7 +450,7 @@ public class KStreamAggregationIntegrationTest {
     }
 
     @Test
-    public void shouldCountSessionWindows() throws ExecutionException, InterruptedException {
+    public void shouldCountSessionWindows() throws Exception {
         final long sessionGap = 5 * 60 * 1000L;
         final long maintainMillis = sessionGap * 3;
 
@@ -536,7 +536,7 @@ public class KStreamAggregationIntegrationTest {
     }
 
     @Test
-    public void shouldReduceSessionWindows() throws ExecutionException, InterruptedException {
+    public void shouldReduceSessionWindows() throws Exception {
         final long sessionGap = 1000L; // something to do with time
         final long maintainMillis = sessionGap * 3;
 
@@ -638,8 +638,7 @@ public class KStreamAggregationIntegrationTest {
     }
 
 
-    private void produceMessages(final long timestamp)
-        throws ExecutionException, InterruptedException {
+    private void produceMessages(final long timestamp) throws Exception {
         IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
             streamOneInput,
             Arrays.asList(

@@ -52,7 +52,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-import java.util.concurrent.ExecutionException;
 import java.util.regex.Pattern;
 
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -181,7 +180,7 @@ public class KStreamsFineGrainedAutoResetIntegrationTest {
         final String topicY,
         final String topicZ,
         final String outputTopic,
-        final List<String> expectedReceivedValues) throws ExecutionException, InterruptedException {
+        final List<String> expectedReceivedValues) throws Exception {
 
         final KStreamBuilder builder = new KStreamBuilder();
 

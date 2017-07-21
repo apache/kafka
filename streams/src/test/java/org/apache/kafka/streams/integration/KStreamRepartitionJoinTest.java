@@ -52,7 +52,6 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -116,16 +115,16 @@ public class KStreamRepartitionJoinTest {
     }
 
     @Test
-    public void shouldCorrectlyRepartitionOnJoinOperationsWithZeroSizedCache() throws ExecutionException, InterruptedException {
+    public void shouldCorrectlyRepartitionOnJoinOperationsWithZeroSizedCache() throws Exception {
         verifyRepartitionOnJoinOperations(0);
     }
 
     @Test
-    public void shouldCorrectlyRepartitionOnJoinOperationsWithNonZeroSizedCache() throws ExecutionException, InterruptedException {
+    public void shouldCorrectlyRepartitionOnJoinOperationsWithNonZeroSizedCache() throws Exception {
         verifyRepartitionOnJoinOperations(10 * 1024 * 1024);
     }
 
-    private void verifyRepartitionOnJoinOperations(final int cacheSizeBytes) throws ExecutionException, InterruptedException {
+    private void verifyRepartitionOnJoinOperations(final int cacheSizeBytes) throws Exception {
         streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, cacheSizeBytes);
         produceMessages();
         final ExpectedOutputOnTopic mapOne = mapStreamOneAndJoin();
@@ -180,7 +179,7 @@ public class KStreamRepartitionJoinTest {
         return new ExpectedOutputOnTopic(expectedStreamOneTwoJoin, outputTopic);
     }
 
-    private ExpectedOutputOnTopic selectKeyAndJoin() throws ExecutionException, InterruptedException {
+    private ExpectedOutputOnTopic selectKeyAndJoin() throws Exception {
 
         final KStream<Integer, Integer> keySelected =
             streamOne.selectKey(MockKeyValueMapper.<Long, Integer>SelectValueMapper());
@@ -300,16 +299,14 @@ public class KStreamRepartitionJoinTest {
             is(expectedOutputOnTopic.expectedOutput));
     }
 
-    private void produceMessages()
-        throws ExecutionException, InterruptedException {
+    private void produceMessages() throws Exception {
         produceToStreamOne();
         produceStreamTwoInputTo(streamTwoInput);
         produceStreamTwoInputTo(streamFourInput);
 
     }
 
-    private void produceStreamTwoInputTo(final String streamTwoInput)
-        throws ExecutionException, InterruptedException {
+    private void produceStreamTwoInputTo(final String streamTwoInput) throws Exception {
         IntegrationTestUtils.produceKeyValuesSynchronously(
             streamTwoInput,
             Arrays.asList(
@@ -326,8 +323,7 @@ public class KStreamRepartitionJoinTest {
             mockTime);
     }
 
-    private void produceToStreamOne()
-        throws ExecutionException, InterruptedException {
+    private void produceToStreamOne() throws Exception {
         IntegrationTestUtils.produceKeyValuesSynchronously(
             streamOneInput,
             Arrays.asList(
