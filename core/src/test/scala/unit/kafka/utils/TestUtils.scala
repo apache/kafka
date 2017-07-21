@@ -389,9 +389,9 @@ object TestUtils extends Logging {
    * Check that the buffer content from buffer.position() to buffer.limit() is equal
    */
   def checkEquals(b1: ByteBuffer, b2: ByteBuffer) {
-    assertEquals("Buffers should have equal length", b1.limit - b1.position, b2.limit - b2.position)
-    for(i <- 0 until b1.limit - b1.position)
-      assertEquals("byte " + i + " byte not equal.", b1.get(b1.position + i), b2.get(b1.position + i))
+    assertEquals("Buffers should have equal length", b1.limit() - b1.position(), b2.limit() - b2.position())
+    for(i <- 0 until b1.limit() - b1.position())
+      assertEquals("byte " + i + " byte not equal.", b1.get(b1.position() + i), b2.get(b1.position() + i))
   }
 
   /**
@@ -485,8 +485,8 @@ object TestUtils extends Logging {
    */
   def hexString(buffer: ByteBuffer): String = {
     val builder = new StringBuilder("0x")
-    for(i <- 0 until buffer.limit)
-      builder.append(String.format("%x", Integer.valueOf(buffer.get(buffer.position + i))))
+    for(i <- 0 until buffer.limit())
+      builder.append(String.format("%x", Integer.valueOf(buffer.get(buffer.position() + i))))
     builder.toString
   }
 

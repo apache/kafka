@@ -338,12 +338,12 @@ object ProducerStateManager {
     buffer.flip()
 
     // now fill in the CRC
-    val crc = Crc32C.compute(buffer, ProducerEntriesOffset, buffer.limit - ProducerEntriesOffset)
+    val crc = Crc32C.compute(buffer, ProducerEntriesOffset, buffer.limit() - ProducerEntriesOffset)
     ByteUtils.writeUnsignedInt(buffer, CrcOffset, crc)
 
     val fos = new FileOutputStream(file)
     try {
-      fos.write(buffer.array, buffer.arrayOffset, buffer.limit)
+      fos.write(buffer.array, buffer.arrayOffset, buffer.limit())
     } finally {
       fos.close()
     }
