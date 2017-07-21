@@ -103,6 +103,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
     public static final String REPARTITION_TOPIC_SUFFIX = "-repartition";
 
+    private final KeyValueMapper<K, V, String> defaultKeyValueMapper;
 
     private final boolean repartitionRequired;
 
@@ -110,6 +111,12 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                        boolean repartitionRequired) {
         super(topology, name, sourceNodes);
         this.repartitionRequired = repartitionRequired;
+        this.defaultKeyValueMapper = new KeyValueMapper<K, V, String>() {
+            @Override
+            public String apply(K key, V value) {
+                return String.format("%s, %s", key, value);
+            }
+        };
     }
 
     @Override
@@ -178,63 +185,98 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
     @Override
     public void print() {
-        print(null, null, null);
+        print(defaultKeyValueMapper, null, null, this.name);
     }
 
     @Override
-    public void print(String streamName) {
-        print(null, null, streamName);
+    public void print(final String label) {
+        print(defaultKeyValueMapper, null, null, label);
     }
 
     @Override
-    public void print(Serde<K> keySerde, Serde<V> valSerde) {
-        print(keySerde, valSerde, null);
+    public void print(final Serde<K> keySerde, final Serde<V> valSerde) {
+        print(defaultKeyValueMapper, keySerde, valSerde, this.name);
     }
 
     @Override
-    public void print(Serde<K> keySerde, Serde<V> valSerde, String streamName) {
+    public void print(final Serde<K> keySerde, final Serde<V> valSerde, final String label) {
+        print(defaultKeyValueMapper, keySerde, valSerde, label);
+    }
+
+    @Override
+    public void print(final KeyValueMapper<? super K, ? super V, String> mapper) {
+        print(mapper, null, null, this.name);
+    }
+
+    @Override
+    public void print(final KeyValueMapper<? super K, ? super V, String> mapper, final String label) {
+        print(mapper, null, null, label);
+    }
+
+    @Override
+    public void print(final KeyValueMapper<? super K, ? super V, String> mapper, final Serde<K> keySerde, final Serde<V> valSerde) {
+        print(mapper, keySerde, valSerde, this.name);
+    }
+
+    @Override
+    public void print(KeyValueMapper<? super K, ? super V, String> mapper, final Serde<K> keySerde, Serde<V> valSerde, final String label) {
+        Objects.requireNonNull(mapper, "mapper can't be null");
+        Objects.requireNonNull(label, "label can't be null");
         String name = topology.newName(PRINTING_NAME);
-        streamName = (streamName == null) ? this.name : streamName;
-        topology.addProcessor(name, new KStreamPrint<>(new PrintForeachAction(null, streamName), keySerde, valSerde), this.name);
-    }
-
-
-    @Override
-    public void writeAsText(String filePath) {
-        writeAsText(filePath, null, null, null);
+        topology.addProcessor(name, new KStreamPrint<>(new PrintForeachAction<>(null, mapper, label), keySerde, valSerde), this.name);
     }
 
     @Override
-    public void writeAsText(String filePath, String streamName) {
-        writeAsText(filePath, streamName, null, null);
+    public void writeAsText(final String filePath) {
+        writeAsText(filePath, this.name, null, null, defaultKeyValueMapper);
     }
 
-
     @Override
-    public void writeAsText(String filePath, Serde<K> keySerde, Serde<V> valSerde) {
-        writeAsText(filePath, null, keySerde, valSerde);
+    public void writeAsText(final String filePath, final String label) {
+        writeAsText(filePath, label, null, null, defaultKeyValueMapper);
     }
 
-    /**
-     * @throws TopologyBuilderException if file is not found
-     */
     @Override
-    public void writeAsText(String filePath, String streamName, Serde<K> keySerde, Serde<V> valSerde) {
+    public void writeAsText(final String filePath, final Serde<K> keySerde, final Serde<V> valSerde) {
+        writeAsText(filePath, this.name, keySerde, valSerde, defaultKeyValueMapper);
+    }
+
+    @Override
+    public void writeAsText(final String filePath, final String label, final Serde<K> keySerde, final Serde<V> valSerde) {
+        writeAsText(filePath, label, keySerde, valSerde, defaultKeyValueMapper);
+    }
+
+    @Override
+    public void writeAsText(final String filePath, final KeyValueMapper<? super K, ? super V, String> mapper) {
+        writeAsText(filePath, this.name, null, null, mapper);
+    }
+
+    @Override
+    public void writeAsText(final String filePath, final String label, final KeyValueMapper<? super K, ? super V, String> mapper) {
+        writeAsText(filePath, label, null, null, mapper);
+    }
+
+    @Override
+    public void writeAsText(final String filePath, final Serde<K> keySerde, final Serde<V> valSerde, final KeyValueMapper<? super K, ? super V, String> mapper) {
+        writeAsText(filePath, this.name, keySerde, valSerde, mapper);
+    }
+
+    @Override
+    public void writeAsText(final String filePath, final String label, final Serde<K> keySerde, final Serde<V> valSerde, KeyValueMapper<? super K, ? super V, String> mapper) {
         Objects.requireNonNull(filePath, "filePath can't be null");
+        Objects.requireNonNull(label, "label can't be null");
+        Objects.requireNonNull(mapper, "mapper can't be null");
         if (filePath.trim().isEmpty()) {
             throw new TopologyBuilderException("filePath can't be an empty string");
         }
-        String name = topology.newName(PRINTING_NAME);
-        streamName = (streamName == null) ? this.name : streamName;
+        final String name = topology.newName(PRINTING_NAME);
         try {
-            PrintWriter printWriter = null;
-            printWriter = new PrintWriter(filePath, StandardCharsets.UTF_8.name());
-            topology.addProcessor(name, new KStreamPrint<>(new PrintForeachAction(printWriter, streamName), keySerde, valSerde), this.name);
+            PrintWriter printWriter = new PrintWriter(filePath, StandardCharsets.UTF_8.name());
+            topology.addProcessor(name, new KStreamPrint<>(new PrintForeachAction<>(printWriter, mapper, label), keySerde, valSerde), this.name);
         } catch (FileNotFoundException | UnsupportedEncodingException e) {
             String message = "Unable to write stream to file at [" + filePath + "] " + e.getMessage();
             throw new TopologyBuilderException(message);
         }
-
     }
 
     @Override
@@ -677,9 +719,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                         valSerde,
                                         this.repartitionRequired);
     }
-
-
-
 
     private static <K, V> StateStoreSupplier createWindowedStateStore(final JoinWindows windows,
                                                                      final Serde<K> keySerde,

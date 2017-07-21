@@ -178,7 +178,6 @@ public class StandbyTaskTest {
 
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void testUpdate() throws IOException {
         StreamsConfig config = createConfig(baseDir);
@@ -225,7 +224,6 @@ public class StandbyTaskTest {
 
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void testUpdateKTable() throws IOException {
         consumer.assign(Utils.mkList(ktable));

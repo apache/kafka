@@ -112,7 +112,6 @@ public class RocksDBSessionStoreSupplierTest {
         assertThat(store, is(instanceOf(RocksDBSessionStore.class)));
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldHaveMeteredStoreWhenCached() {
         store = createStore(false, true);
@@ -121,7 +120,6 @@ public class RocksDBSessionStoreSupplierTest {
         assertFalse(metrics.metrics().isEmpty());
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldHaveMeteredStoreWhenLogged() {
         store = createStore(true, false);
@@ -130,7 +128,6 @@ public class RocksDBSessionStoreSupplierTest {
         assertFalse(metrics.metrics().isEmpty());
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldHaveMeteredStoreWhenNotLoggedOrCached() {
         store = createStore(false, false);

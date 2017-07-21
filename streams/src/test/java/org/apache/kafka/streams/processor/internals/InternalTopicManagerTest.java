@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.MetadataResponse;
@@ -120,7 +121,7 @@ public class InternalTopicManagerTest {
     private class MockStreamKafkaClient extends StreamsKafkaClient {
 
         MockStreamKafkaClient(final StreamsConfig streamsConfig) {
-            super(streamsConfig);
+            super(StreamsKafkaClient.Config.fromStreamsConfig(streamsConfig), new MockClient(new MockTime()), Collections.EMPTY_LIST);
         }
 
         @Override

@@ -47,7 +47,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-@SuppressWarnings("unchecked")
 public class KStreamSessionWindowAggregateProcessorTest {
 
     private static final long GAP_MS = 5 * 60 * 1000L;
@@ -84,7 +83,6 @@ public class KStreamSessionWindowAggregateProcessorTest {
     private MockProcessorContext context;
 
 
-    @SuppressWarnings("unchecked")
     @Before
     public void initializeStore() {
         final File stateDir = TestUtils.tempDirectory();

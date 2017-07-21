@@ -724,7 +724,6 @@ public class StreamTaskTest {
         });
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldThrowExceptionIfAnyExceptionsRaisedDuringCloseButStillCloseAllProcessorNodesTopology() {
         task.close(true);
