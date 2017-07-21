@@ -27,12 +27,12 @@ import kafka.log.LogConfig
 import kafka.server.{Defaults, KafkaConfig, KafkaServer}
 import org.apache.kafka.clients.admin._
 import kafka.utils.{Logging, TestUtils, ZkUtils}
+import kafka.utils.Implicits._
 import org.apache.kafka.clients.admin.NewTopic
 import org.apache.kafka.common.KafkaFuture
 import org.apache.kafka.common.acl.{AccessControlEntry, AclBinding, AclBindingFilter, AclOperation, AclPermissionType}
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors.{InvalidRequestException, SecurityDisabledException, TimeoutException, TopicExistsException, UnknownTopicOrPartitionException}
-import org.apache.kafka.common.protocol.ApiKeys
 import org.junit.{After, Before, Rule, Test}
 import org.apache.kafka.common.requests.MetadataResponse
 import org.apache.kafka.common.resource.{Resource, ResourceType}
@@ -378,7 +378,7 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
       if (!config.containsKey(KafkaConfig.SslTruststorePasswordProp))
         config.setProperty(KafkaConfig.SslTruststorePasswordProp, "some.invalid.pass")
     }
-    cfgs.foreach(_.putAll(serverConfig))
+    cfgs.foreach(_ ++= serverConfig)
     cfgs.map(KafkaConfig.fromProps)
   }
 

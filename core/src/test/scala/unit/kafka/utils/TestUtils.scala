@@ -38,7 +38,8 @@ import kafka.security.auth.{Acl, Authorizer, Resource}
 import kafka.serializer.{DefaultEncoder, Encoder, StringEncoder}
 import kafka.server._
 import kafka.server.checkpoints.OffsetCheckpointFile
-import kafka.utils.ZkUtils._
+import ZkUtils._
+import Implicits._
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.consumer.{ConsumerRecord, KafkaConsumer, OffsetAndMetadata, RangeAssignor}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
@@ -252,10 +253,10 @@ object TestUtils extends Logging {
     rack.foreach(props.put(KafkaConfig.RackProp, _))
 
     if (protocolAndPorts.exists { case (protocol, _) => usesSslTransportLayer(protocol) })
-      props.putAll(sslConfigs(Mode.SERVER, false, trustStoreFile, s"server$nodeId"))
+      props ++= sslConfigs(Mode.SERVER, false, trustStoreFile, s"server$nodeId")
 
     if (protocolAndPorts.exists { case (protocol, _) => usesSaslAuthentication(protocol) })
-      props.putAll(JaasTestUtils.saslConfigs(saslProperties))
+      props ++= JaasTestUtils.saslConfigs(saslProperties)
 
     interBrokerSecurityProtocol.foreach { protocol =>
       props.put(KafkaConfig.InterBrokerSecurityProtocolProp, protocol.name)
@@ -503,7 +504,7 @@ object TestUtils extends Logging {
 
     //override any explicitly specified properties
     if (producerProps != null)
-      props.putAll(producerProps)
+      props ++= producerProps
 
     props.put("serializer.class", encoder)
     props.put("key.serializer.class", keyEncoder)
@@ -518,10 +519,10 @@ object TestUtils extends Logging {
                               saslProperties: Option[Properties]): Properties = {
     val props = new Properties
     if (usesSslTransportLayer(securityProtocol))
-      props.putAll(sslConfigs(mode, securityProtocol == SecurityProtocol.SSL, trustStoreFile, certAlias))
+      props ++= sslConfigs(mode, securityProtocol == SecurityProtocol.SSL, trustStoreFile, certAlias)
 
     if (usesSaslAuthentication(securityProtocol))
-      props.putAll(JaasTestUtils.saslConfigs(saslProperties))
+      props ++= JaasTestUtils.saslConfigs(saslProperties)
     props.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, securityProtocol.name)
     props
   }
@@ -572,7 +573,7 @@ object TestUtils extends Logging {
      * SSL client auth fails.
      */
     if (!producerProps.containsKey(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG))
-      producerProps.putAll(producerSecurityConfigs(securityProtocol, trustStoreFile, saslProperties))
+      producerProps ++= producerSecurityConfigs(securityProtocol, trustStoreFile, saslProperties)
 
     new KafkaProducer[K, V](producerProps, keySerializer, valueSerializer)
   }
@@ -633,7 +634,7 @@ object TestUtils extends Logging {
      * SSL client auth fails.
      */
     if(!consumerProps.containsKey(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG))
-      consumerProps.putAll(consumerSecurityConfigs(securityProtocol, trustStoreFile, saslProperties))
+      consumerProps ++= consumerSecurityConfigs(securityProtocol, trustStoreFile, saslProperties)
 
     new KafkaConsumer[Array[Byte],Array[Byte]](consumerProps)
   }
@@ -1208,7 +1209,7 @@ object TestUtils extends Logging {
 
   def copyOf(props: Properties): Properties = {
     val copy = new Properties()
-    copy.putAll(props)
+    copy ++= props
     copy
   }
 

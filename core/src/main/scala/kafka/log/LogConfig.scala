@@ -23,6 +23,7 @@ import scala.collection.JavaConverters._
 import kafka.api.ApiVersion
 import kafka.message.{BrokerCompressionCodec, Message}
 import kafka.server.{KafkaConfig, ThrottledReplicaListValidator}
+import kafka.utils.Implicits._
 import org.apache.kafka.common.errors.InvalidConfigurationException
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, TopicConfig}
 import org.apache.kafka.common.record.TimestampType
@@ -269,8 +270,8 @@ object LogConfig {
    */
   def fromProps(defaults: java.util.Map[_ <: Object, _ <: Object], overrides: Properties): LogConfig = {
     val props = new Properties()
-    props.putAll(defaults)
-    props.putAll(overrides)
+    defaults.asScala.foreach { case (k, v) => props.put(k, v) }
+    props ++= overrides
     LogConfig(props)
   }
 
