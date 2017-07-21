@@ -197,9 +197,8 @@ public class ListOffsetResponse extends AbstractResponse {
         StringBuilder bld = new StringBuilder();
         bld.append("(type=ListOffsetResponse")
             .append(", throttleTimeMs=").append(throttleTimeMs)
-            .append(", responseData=").append(responseData);
-
-        bld.append(")");
+            .append(", responseData=").append(responseData)
+            .append(")");
         return bld.toString();
     }
 }
