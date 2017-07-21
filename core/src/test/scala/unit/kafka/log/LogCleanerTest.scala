@@ -89,6 +89,31 @@ class LogCleanerTest extends JUnitSuite {
   }
 
   @Test
+  def testSizeTrimmedForPreallocatedAndCompactedTopic(): Unit = {
+    val originalMaxFileSize = 1024;
+    val cleaner = makeCleaner(2)
+    val logProps = new Properties()
+    logProps.put(LogConfig.SegmentBytesProp, originalMaxFileSize: java.lang.Integer)
+    logProps.put(LogConfig.CleanupPolicyProp, "compact": java.lang.String)
+    logProps.put(LogConfig.PreAllocateEnableProp, "true": java.lang.String)
+    val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
+
+    log.appendAsLeader(record(0,0), leaderEpoch = 0) // offset 0
+    log.appendAsLeader(record(1,1), leaderEpoch = 0) // offset 1
+    log.appendAsLeader(record(0,0), leaderEpoch = 0) // offset 2
+    log.appendAsLeader(record(1,1), leaderEpoch = 0) // offset 3
+    log.appendAsLeader(record(0,0), leaderEpoch = 0) // offset 4
+    // roll the segment, so we can clean the messages already appended
+    log.roll()
+
+    // clean the log with only one message removed
+    cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 2, log.activeSegment.baseOffset))
+
+    assertTrue("Cleaned segment file should be trimmed to its real size.",
+      log.logSegments.iterator.next.log.channel().size() < originalMaxFileSize)
+  }
+
+  @Test
   def testDuplicateCheckAfterCleaning(): Unit = {
     val cleaner = makeCleaner(Int.MaxValue)
     val logProps = new Properties()
