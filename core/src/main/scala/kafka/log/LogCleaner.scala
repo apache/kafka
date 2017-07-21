@@ -224,8 +224,7 @@ class LogCleaner(val config: CleanerConfig,
                               dupBufferLoadFactor = config.dedupeBufferLoadFactor,
                               throttler = throttler,
                               time = time,
-                              checkDone = checkDone,
-                              logDirFailureChannel = logDirFailureChannel)
+                              checkDone = checkDone)
 
     @volatile var lastStats: CleanerStats = new CleanerStats()
     private val backOffWaitLatch = new CountDownLatch(1)
@@ -336,8 +335,7 @@ private[log] class Cleaner(val id: Int,
                            dupBufferLoadFactor: Double,
                            throttler: Throttler,
                            time: Time,
-                           checkDone: (TopicPartition) => Unit,
-                           logDirFailureChannel: LogDirFailureChannel) extends Logging {
+                           checkDone: (TopicPartition) => Unit) extends Logging {
 
   override val loggerName = classOf[LogCleaner].getName
 

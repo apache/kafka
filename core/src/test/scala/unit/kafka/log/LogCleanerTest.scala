@@ -1250,8 +1250,7 @@ class LogCleanerTest extends JUnitSuite {
                 dupBufferLoadFactor = 0.75,
                 throttler = throttler,
                 time = time,
-                checkDone = checkDone,
-                logDirFailureChannel = null)
+                checkDone = checkDone)
 
   private def writeToLog(log: Log, seq: Iterable[(Int, Int)]): Iterable[Long] = {
     for((key, value) <- seq)

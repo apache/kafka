@@ -185,12 +185,19 @@ class LogManager(logDirs: Array[File],
    * Lock all the given directories
    */
   private def lockLogDirs(dirs: Seq[File]): Seq[FileLock] = {
-    dirs.map { dir =>
-      val lock = new FileLock(new File(dir, LockFile))
-      if(!lock.tryLock())
-        throw new KafkaException("Failed to acquire lock on file .lock in " + lock.file.getParent +
-                               ". A Kafka instance in another process or thread is using this directory.")
-      lock
+    dirs.flatMap { dir =>
+      try {
+        val lock = new FileLock(new File(dir, LockFile))
+        if (!lock.tryLock())
+          throw new KafkaException("Failed to acquire lock on file .lock in " + lock.file.getParent +
+            ". A Kafka instance in another process or thread is using this directory.")
+        Some(lock)
+      } catch {
+        case e: IOException =>
+          error(s"Disk error while locking directory $dir", e)
+          logDirFailureChannel.maybeAddLogFailureEvent(dir.getAbsolutePath)
+          None
+      }
     }
   }
 
