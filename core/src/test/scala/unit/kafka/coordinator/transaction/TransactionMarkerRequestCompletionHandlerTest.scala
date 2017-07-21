@@ -144,7 +144,7 @@ class TransactionMarkerRequestCompletionHandlerTest {
 
   @Test
   def shouldThrowIllegalStateExceptionWhenUnknownError(): Unit = {
-    verifyThrowIllegalStateExceptionOnError(Errors.UNKNOWN)
+    verifyThrowIllegalStateExceptionOnError(Errors.UNKNOWN_SERVER_ERROR)
   }
 
   @Test

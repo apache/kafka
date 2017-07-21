@@ -326,10 +326,13 @@ public class FetchResponse extends AbstractResponse {
             List<Struct> partitionArray = new ArrayList<>();
             for (Map.Entry<Integer, PartitionData> partitionEntry : topicEntry.partitions.entrySet()) {
                 PartitionData fetchPartitionData = partitionEntry.getValue();
+                short errorCode = fetchPartitionData.error.code();
+                if (errorCode == Errors.KAFKA_STORAGE_ERROR.code() && version <= 5)
+                    errorCode = Errors.NOT_LEADER_FOR_PARTITION.code();
                 Struct partitionData = topicData.instance(PARTITIONS_KEY_NAME);
                 Struct partitionDataHeader = partitionData.instance(PARTITION_HEADER_KEY_NAME);
                 partitionDataHeader.set(PARTITION_KEY_NAME, partitionEntry.getKey());
-                partitionDataHeader.set(ERROR_CODE_KEY_NAME, fetchPartitionData.error.code());
+                partitionDataHeader.set(ERROR_CODE_KEY_NAME, errorCode);
                 partitionDataHeader.set(HIGH_WATERMARK_KEY_NAME, fetchPartitionData.highWatermark);
 
                 if (partitionDataHeader.hasField(LAST_STABLE_OFFSET_KEY_NAME)) {
