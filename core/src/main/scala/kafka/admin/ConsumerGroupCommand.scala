@@ -480,7 +480,7 @@ object ConsumerGroupCommand extends Logging {
       val consumer = getConsumer()
       consumer.assign(List(topicPartition).asJava)
       val offsetsForTimes = consumer.offsetsForTimes(Map(topicPartition -> timestamp).asJava)
-      if (offsetsForTimes != null && !offsetsForTimes.isEmpty)
+      if (offsetsForTimes != null && !offsetsForTimes.isEmpty && offsetsForTimes.get(topicPartition) != null)
         LogOffsetResult.LogOffset(offsetsForTimes.get(topicPartition).offset)
       else {
         getLogEndOffset(topicPartition)
