@@ -943,7 +943,12 @@ class ReplicaManager(val config: KafkaConfig,
           Set.empty[Partition]
 
         leaderAndISRRequest.partitionStates.asScala.keys.foreach( topicPartition =>
-          // Mark partition as offline in the cache if the local replica creation has failed due to offline log directory
+          /*
+           * If there is offline log directory, a Partition object may have been created by getOrCreatePartition()
+           * before getOrCreateReplica() failed to create local replica due to KafkaStorageException.
+           * In this case ReplicaManager.allPartitions will map this topic-partition to an empty Partition object.
+           * we need to map this topic-partition to OfflinePartition instead.
+           */
           if (getReplica(topicPartition).isEmpty && (allPartitions.get(topicPartition) ne ReplicaManager.OfflinePartition))
             allPartitions.put(topicPartition, ReplicaManager.OfflinePartition)
         )

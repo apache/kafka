@@ -581,7 +581,7 @@ class Log(@volatile var dir: File,
    * @return Information about the appended messages including the first and last offset.
    */
   private def append(records: MemoryRecords, isFromClient: Boolean, assignOffsets: Boolean, leaderEpoch: Int): LogAppendInfo = {
-    try {
+    maybeHandleIOException(s"Error while appending records to $topicPartition in dir ${dir.getParent}") {
       val appendInfo = analyzeAndValidateRecords(records, isFromClient = isFromClient)
 
       // return if we have no valid messages or if this is a duplicate of the last appended entry
@@ -710,10 +710,6 @@ class Log(@volatile var dir: File,
 
         appendInfo
       }
-    } catch {
-      case e: IOException =>
-        logDirFailureChannel.maybeAddLogFailureEvent(dir.getParent)
-        throw new KafkaStorageException(s"Error while appending records to $topicPartition in dir ${dir.getParent}", e)
     }
   }
 
@@ -747,7 +743,7 @@ class Log(@volatile var dir: File,
     // We don't have to write the log start offset to log-start-offset-checkpoint immediately.
     // The deleteRecordsOffset may be lost only if all in-sync replicas of this broker are shutdown
     // in an unclean manner within log.flush.start.offset.checkpoint.interval.ms. The chance of this happening is low.
-    try {
+    maybeHandleIOException(s"Exception while increasing log start offset for $topicPartition to $offset in dir ${dir.getParent}") {
       lock synchronized {
         if (offset > logStartOffset) {
           logStartOffset = offset
@@ -756,10 +752,6 @@ class Log(@volatile var dir: File,
           updateFirstUnstableOffset()
         }
       }
-    } catch {
-      case e: IOException =>
-        logDirFailureChannel.maybeAddLogFailureEvent(dir.getParent)
-        throw new KafkaStorageException(s"Exception while increasing log start offset for $topicPartition to $offset in dir ${dir.getParent}", e)
     }
   }
 
@@ -915,7 +907,7 @@ class Log(@volatile var dir: File,
    */
   def read(startOffset: Long, maxLength: Int, maxOffset: Option[Long] = None, minOneMessage: Boolean = false,
            isolationLevel: IsolationLevel): FetchDataInfo = {
-    try {
+    maybeHandleIOException(s"Exception while reading from $topicPartition in dir ${dir.getParent}") {
       trace("Reading %d bytes from offset %d in log %s of length %d bytes".format(maxLength, startOffset, name, size))
 
       // Because we don't use lock for reading, the synchronization is a little bit tricky.
@@ -974,10 +966,6 @@ class Log(@volatile var dir: File,
       // this can happen when all messages with offset larger than start offsets have been deleted.
       // In this case, we will return the empty set with log end offset metadata
       FetchDataInfo(nextOffsetMetadata, MemoryRecords.EMPTY)
-    } catch {
-      case e: IOException =>
-        logDirFailureChannel.maybeAddLogFailureEvent(dir.getParent)
-        throw new KafkaStorageException(s"Exception while reading from $topicPartition in dir ${dir.getParent}", e)
     }
   }
 
@@ -1040,7 +1028,7 @@ class Log(@volatile var dir: File,
    *         None if no such message is found.
    */
   def fetchOffsetsByTimestamp(targetTimestamp: Long): Option[TimestampOffset] = {
-    try {
+    maybeHandleIOException(s"Error while fetching offset by timestamp for $topicPartition in dir ${dir.getParent}") {
       debug(s"Searching offset for timestamp $targetTimestamp")
 
       if (config.messageFormatVersion < KAFKA_0_10_0_IV0 &&
@@ -1070,10 +1058,6 @@ class Log(@volatile var dir: File,
       }
 
       targetSeg.flatMap(_.findOffsetByTimestamp(targetTimestamp, logStartOffset))
-    } catch {
-      case e: IOException =>
-        logDirFailureChannel.maybeAddLogFailureEvent(dir.getParent)
-        throw new KafkaStorageException(s"Error while fetching offset by timestamp for $topicPartition in dir ${dir.getParent}", e)
     }
   }
 
@@ -1105,7 +1089,7 @@ class Log(@volatile var dir: File,
   }
 
   private def deleteSegments(deletable: Iterable[LogSegment]): Int = {
-    try {
+    maybeHandleIOException(s"Error while deleting segments for $topicPartition in dir ${dir.getParent}") {
       val numToDelete = deletable.size
       if (numToDelete > 0) {
         // we must always have at least one segment, so if we are going to delete all the segments, create a new one first
@@ -1118,10 +1102,6 @@ class Log(@volatile var dir: File,
         }
       }
       numToDelete
-    } catch {
-      case e: IOException =>
-        logDirFailureChannel.maybeAddLogFailureEvent(dir.getParent)
-        throw new KafkaStorageException(s"Error while deleting segments for $topicPartition in dir ${dir.getParent}", e)
     }
   }
 
@@ -1245,7 +1225,7 @@ class Log(@volatile var dir: File,
    * @return The newly rolled segment
    */
   def roll(expectedNextOffset: Long = 0): LogSegment = {
-    try {
+    maybeHandleIOException(s"Error while rolling log segment for $topicPartition in dir ${dir.getParent}") {
       val start = time.nanoseconds
       lock synchronized {
         val newOffset = math.max(expectedNextOffset, logEndOffset)
@@ -1299,10 +1279,6 @@ class Log(@volatile var dir: File,
 
         segment
       }
-    } catch {
-      case e: IOException =>
-        logDirFailureChannel.maybeAddLogFailureEvent(dir.getParent)
-        throw new KafkaStorageException(s"Error while rolling log segment for $topicPartition in dir ${dir.getParent}", e)
     }
   }
 
@@ -1322,7 +1298,7 @@ class Log(@volatile var dir: File,
    * @param offset The offset to flush up to (non-inclusive); the new recovery point
    */
   def flush(offset: Long) : Unit = {
-    try {
+    maybeHandleIOException(s"Error while flushing log for $topicPartition in dir ${dir.getParent} with offset $offset") {
       if (offset <= this.recoveryPoint)
         return
       debug("Flushing log '" + name + " up to offset " + offset + ", last flushed: " + lastFlushTime + " current time: " +
@@ -1341,10 +1317,6 @@ class Log(@volatile var dir: File,
           lastflushedTime.set(time.milliseconds)
         }
       }
-    } catch {
-      case e: IOException =>
-        logDirFailureChannel.maybeAddLogFailureEvent(dir.getParent)
-        throw new KafkaStorageException(s"Error while flushing log for $topicPartition in dir ${dir.getParent} with offset $offset", e)
     }
   }
 
@@ -1363,17 +1335,13 @@ class Log(@volatile var dir: File,
    * Completely delete this log directory and all contents from the file system with no delay
    */
   private[log] def delete() {
-    try {
+    maybeHandleIOException(s"Error while deleting log for $topicPartition in dir ${dir.getParent}") {
       lock synchronized {
         logSegments.foreach(_.delete())
         segments.clear()
         leaderEpochCache.clear()
         Utils.delete(dir)
       }
-    } catch {
-      case e: IOException =>
-        logDirFailureChannel.maybeAddLogFailureEvent(dir.getParent)
-        throw new KafkaStorageException(s"Error while deleting log for $topicPartition in dir ${dir.getParent}", e)
     }
   }
 
@@ -1403,7 +1371,7 @@ class Log(@volatile var dir: File,
    * @param targetOffset The offset to truncate to, an upper bound on all offsets in the log after truncation is complete.
    */
   private[log] def truncateTo(targetOffset: Long) {
-    try {
+    maybeHandleIOException(s"Error while truncating log to offset $targetOffset for $topicPartition in dir ${dir.getParent}") {
       if (targetOffset < 0)
         throw new IllegalArgumentException("Cannot truncate to a negative offset (%d).".format(targetOffset))
       if (targetOffset >= logEndOffset) {
@@ -1425,10 +1393,6 @@ class Log(@volatile var dir: File,
           loadProducerState(targetOffset, reloadFromCleanShutdown = false)
         }
       }
-    } catch {
-      case e: IOException =>
-        logDirFailureChannel.maybeAddLogFailureEvent(dir.getParent)
-        throw new KafkaStorageException(s"Error while truncating log to offset $targetOffset for $topicPartition in dir ${dir.getParent}", e)
     }
   }
 
@@ -1438,7 +1402,7 @@ class Log(@volatile var dir: File,
    *  @param newOffset The new offset to start the log with
    */
   private[log] def truncateFullyAndStartAt(newOffset: Long) {
-    try {
+    maybeHandleIOException(s"Error while truncating the entire log for $topicPartition in dir ${dir.getParent}") {
       debug(s"Truncate and start log '$name' at offset $newOffset")
       lock synchronized {
         val segmentsToDelete = logSegments.toList
@@ -1462,10 +1426,6 @@ class Log(@volatile var dir: File,
         this.recoveryPoint = math.min(newOffset, this.recoveryPoint)
         this.logStartOffset = newOffset
       }
-    } catch {
-      case e: IOException =>
-        logDirFailureChannel.maybeAddLogFailureEvent(dir.getParent)
-        throw new KafkaStorageException(s"Error while truncating the entire log for $topicPartition in dir ${dir.getParent}", e)
     }
   }
 
@@ -1535,12 +1495,8 @@ class Log(@volatile var dir: File,
     segment.changeFileSuffixes("", Log.DeletedFileSuffix)
     def deleteSeg() {
       info("Deleting segment %d from log %s.".format(segment.baseOffset, name))
-      try {
+      maybeHandleIOException(s"Error while deleting segments for $topicPartition in dir ${dir.getParent}") {
         segment.delete()
-      } catch {
-        case e: IOException =>
-          logDirFailureChannel.maybeAddLogFailureEvent(dir.getParent)
-          error(s"Error while deleting segments for $topicPartition in dir ${dir.getParent}", e)
       }
     }
     scheduler.schedule("delete-file", deleteSeg _, delay = config.fileDeleteDelayMs)
@@ -1609,6 +1565,16 @@ class Log(@volatile var dir: File,
    * @param segment The segment to add
    */
   def addSegment(segment: LogSegment) = this.segments.put(segment.baseOffset, segment)
+
+  private def maybeHandleIOException[T](msg: => String)(fun: => T): T = {
+    try {
+      fun
+    } catch {
+      case e: IOException =>
+        logDirFailureChannel.maybeAddLogFailureEvent(dir.getParent)
+        throw new KafkaStorageException(msg, e)
+    }
+  }
 
 }
 
