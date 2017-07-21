@@ -50,152 +50,6 @@ import java.util.regex.Pattern;
 @InterfaceStability.Evolving
 public class TopologyBuilder {
 
-    private static abstract class NodeFactory {
-        final String name;
-        final String[] parents;
-
-        NodeFactory(final String name, final String[] parents) {
-            this.name = name;
-            this.parents = parents;
-        }
-
-        public abstract ProcessorNode build();
-
-        abstract TopologyDescription.AbstractNode describe();
-    }
-
-    private static class ProcessorNodeFactory extends NodeFactory {
-        private final ProcessorSupplier<?, ?> supplier;
-        private final Set<String> stateStoreNames = new HashSet<>();
-
-        ProcessorNodeFactory(String name, String[] parents, ProcessorSupplier<?, ?> supplier) {
-            super(name, parents.clone());
-            this.supplier = supplier;
-        }
-
-        public void addStateStore(String stateStoreName) {
-            stateStoreNames.add(stateStoreName);
-        }
-
-        @Override
-        public ProcessorNode build() {
-            return new ProcessorNode<>(name, supplier.get(), stateStoreNames);
-        }
-
-        @Override
-        TopologyDescription.Processor describe() {
-            return new TopologyDescription.Processor(name, new HashSet<>(stateStoreNames));
-        }
-    }
-
-    private class SourceNodeFactory extends NodeFactory {
-        private final List<String> topics;
-        private final Pattern pattern;
-        private final Deserializer<?> keyDeserializer;
-        private final Deserializer<?> valDeserializer;
-        private final TimestampExtractor timestampExtractor;
-
-        private SourceNodeFactory(final String name,
-                                  final String[] topics,
-                                  final Pattern pattern,
-                                  final TimestampExtractor timestampExtractor,
-                                  final Deserializer<?> keyDeserializer,
-                                  final Deserializer<?> valDeserializer) {
-            super(name, new String[0]);
-            this.topics = topics != null ? Arrays.asList(topics) : new ArrayList<String>();
-            this.pattern = pattern;
-            this.keyDeserializer = keyDeserializer;
-            this.valDeserializer = valDeserializer;
-            this.timestampExtractor = timestampExtractor;
-        }
-
-        List<String> getTopics(Collection<String> subscribedTopics) {
-            // if it is subscribed via patterns, it is possible that the topic metadata has not been updated
-            // yet and hence the map from source node to topics is stale, in this case we put the pattern as a place holder;
-            // this should only happen for debugging since during runtime this function should always be called after the metadata has updated.
-            if (subscribedTopics.isEmpty())
-                return Collections.singletonList("" + pattern + "");
-
-            List<String> matchedTopics = new ArrayList<>();
-            for (String update : subscribedTopics) {
-                if (this.pattern == topicToPatterns.get(update)) {
-                    matchedTopics.add(update);
-                } else if (topicToPatterns.containsKey(update) && isMatch(update)) {
-                    // the same topic cannot be matched to more than one pattern
-                    // TODO: we should lift this requirement in the future
-                    throw new TopologyBuilderException("Topic " + update +
-                            " is already matched for another regex pattern " + topicToPatterns.get(update) +
-                            " and hence cannot be matched to this regex pattern " + pattern + " any more.");
-                } else if (isMatch(update)) {
-                    topicToPatterns.put(update, this.pattern);
-                    matchedTopics.add(update);
-                }
-            }
-            return matchedTopics;
-        }
-
-        @Override
-        public ProcessorNode build() {
-            final List<String> sourceTopics = nodeToSourceTopics.get(name);
-
-            // if it is subscribed via patterns, it is possible that the topic metadata has not been updated
-            // yet and hence the map from source node to topics is stale, in this case we put the pattern as a place holder;
-            // this should only happen for debugging since during runtime this function should always be called after the metadata has updated.
-            if (sourceTopics == null)
-                return new SourceNode<>(name, Collections.singletonList("" + pattern + ""), timestampExtractor, keyDeserializer, valDeserializer);
-            else
-                return new SourceNode<>(name, maybeDecorateInternalSourceTopics(sourceTopics), timestampExtractor, keyDeserializer, valDeserializer);
-        }
-
-        private boolean isMatch(String topic) {
-            return this.pattern.matcher(topic).matches();
-        }
-
-        @Override
-        TopologyDescription.Source describe() {
-            String sourceTopics;
-
-            if (pattern == null) {
-                sourceTopics = topics.toString();
-                sourceTopics = sourceTopics.substring(1, sourceTopics.length() - 1); // trim first and last, ie. []
-            } else {
-                sourceTopics = pattern.toString();
-            }
-
-            return new TopologyDescription.Source(name, sourceTopics);
-        }
-    }
-
-    private class SinkNodeFactory<K, V> extends NodeFactory {
-        private final String topic;
-        private final Serializer<K> keySerializer;
-        private final Serializer<V> valSerializer;
-        private final StreamPartitioner<? super K, ? super V> partitioner;
-
-        private SinkNodeFactory(String name, String[] parents, String topic, Serializer<K> keySerializer, Serializer<V> valSerializer, StreamPartitioner<? super K, ? super V> partitioner) {
-            super(name, parents.clone());
-            this.topic = topic;
-            this.keySerializer = keySerializer;
-            this.valSerializer = valSerializer;
-            this.partitioner = partitioner;
-        }
-
-        @Override
-        public ProcessorNode build() {
-            if (internalTopicNames.contains(topic)) {
-                // prefix the internal topic name with the application id
-                return new SinkNode<>(name, decorateTopic(topic), keySerializer, valSerializer, partitioner);
-            } else {
-                return new SinkNode<>(name, topic, keySerializer, valSerializer, partitioner);
-            }
-        }
-
-        @Override
-        TopologyDescription.Sink describe() {
-            return new TopologyDescription.Sink(name, topic);
-        }
-    }
-
     /**
      * NOTE this member would not needed by developers working with the processor APIs, but only used
      * for internal functionalities.
@@ -646,14 +500,14 @@ public class TopologyBuilder {
 
 
     /**
-     * Add a new sink that forwards records from upstream parent processor and/or source nodes to the named Kafka topic.
+     * Add a new sink that forwards records from predecessor nodes (processors and/or sources) to the named Kafka topic.
      * The sink will use the {@link org.apache.kafka.streams.StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG default key serializer} and
      * {@link org.apache.kafka.streams.StreamsConfig#DEFAULT_VALUE_SERDE_CLASS_CONFIG default value serializer} specified in the
      * {@link org.apache.kafka.streams.StreamsConfig stream configuration}.
      *
      * @param name the unique name of the sink
      * @param topic the name of the Kafka topic to which this sink should write its records
-     * @param parentNames the name of one or more source or processor nodes whose output records this sink should consume
+     * @param predecessorNames the name of one or more source or processor nodes whose output records this sink should consume
      * and write to its topic
      * @return this builder instance so methods can be chained together; never null
      * @see #addSink(String, String, StreamPartitioner, String...)
@@ -662,13 +516,13 @@ public class TopologyBuilder {
      */
     public synchronized final TopologyBuilder addSink(final String name,
                                                       final String topic,
-                                                      final String... parentNames) {
-        internalTopologyBuilder.addSink(name, topic, null, null, null, parentNames);
+                                                      final String... predecessorNames) {
+        internalTopologyBuilder.addSink(name, topic, null, null, null, predecessorNames);
         return this;
     }
 
     /**
-     * Add a new sink that forwards records from upstream parent processor and/or source nodes to the named Kafka topic, using
+     * Add a new sink that forwards records from predecessor nodes (processors and/or sources) to the named Kafka topic, using
      * the supplied partitioner.
      * The sink will use the {@link org.apache.kafka.streams.StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG default key serializer} and
      * {@link org.apache.kafka.streams.StreamsConfig#DEFAULT_VALUE_SERDE_CLASS_CONFIG default value serializer} specified in the
@@ -683,7 +537,7 @@ public class TopologyBuilder {
      * @param name the unique name of the sink
      * @param topic the name of the Kafka topic to which this sink should write its records
      * @param partitioner the function that should be used to determine the partition for each record processed by the sink
-     * @param parentNames the name of one or more source or processor nodes whose output records this sink should consume
+     * @param predecessorNames the name of one or more source or processor nodes whose output records this sink should consume
      * and write to its topic
      * @return this builder instance so methods can be chained together; never null
      * @see #addSink(String, String, String...)
@@ -693,13 +547,13 @@ public class TopologyBuilder {
     public synchronized final TopologyBuilder addSink(final String name,
                                                       final String topic,
                                                       final StreamPartitioner partitioner,
-                                                      final String... parentNames) {
-        internalTopologyBuilder.addSink(name, topic, null, null, partitioner, parentNames);
+                                                      final String... predecessorNames) {
+        internalTopologyBuilder.addSink(name, topic, null, null, partitioner, predecessorNames);
         return this;
     }
 
     /**
-     * Add a new sink that forwards records from upstream parent processor and/or source nodes to the named Kafka topic.
+     * Add a new sink that forwards records from predecessor nodes (processors and/or sources) to the named Kafka topic.
      * The sink will use the specified key and value serializers.
      *
      * @param name the unique name of the sink
@@ -710,7 +564,7 @@ public class TopologyBuilder {
      * @param valSerializer the {@link Serializer value serializer} used when consuming records; may be null if the sink
      * should use the {@link org.apache.kafka.streams.StreamsConfig#DEFAULT_VALUE_SERDE_CLASS_CONFIG default value serializer} specified in the
      * {@link org.apache.kafka.streams.StreamsConfig stream configuration}
-     * @param parentNames the name of one or more source or processor nodes whose output records this sink should consume
+     * @param predecessorNames the name of one or more source or processor nodes whose output records this sink should consume
      * and write to its topic
      * @return this builder instance so methods can be chained together; never null
      * @see #addSink(String, String, String...)
@@ -721,13 +575,13 @@ public class TopologyBuilder {
                                                       final String topic,
                                                       final Serializer keySerializer,
                                                       final Serializer valSerializer,
-                                                      final String... parentNames) {
-        internalTopologyBuilder.addSink(name, topic, keySerializer, valSerializer, null, parentNames);
+                                                      final String... predecessorNames) {
+        internalTopologyBuilder.addSink(name, topic, keySerializer, valSerializer, null, predecessorNames);
         return this;
     }
 
     /**
-     * Add a new sink that forwards records from upstream parent processor and/or source nodes to the named Kafka topic.
+     * Add a new sink that forwards records from predecessor nodes (processors and/or sources) to the named Kafka topic.
      * The sink will use the specified key and value serializers, and the supplied partitioner.
      *
      * @param name the unique name of the sink
@@ -739,38 +593,38 @@ public class TopologyBuilder {
      * should use the {@link org.apache.kafka.streams.StreamsConfig#DEFAULT_VALUE_SERDE_CLASS_CONFIG default value serializer} specified in the
      * {@link org.apache.kafka.streams.StreamsConfig stream configuration}
      * @param partitioner the function that should be used to determine the partition for each record processed by the sink
-     * @param parentNames the name of one or more source or processor nodes whose output records this sink should consume
+     * @param predecessorNames the name of one or more source or processor nodes whose output records this sink should consume
      * and write to its topic
      * @return this builder instance so methods can be chained together; never null
      * @see #addSink(String, String, String...)
      * @see #addSink(String, String, StreamPartitioner, String...)
      * @see #addSink(String, String, Serializer, Serializer, String...)
-     * @throws TopologyBuilderException if parent processor is not added yet, or if this processor's name is equal to the parent's name
+     * @throws TopologyBuilderException if predecessor is not added yet, or if this processor's name is equal to the predecessor's name
      */
     public synchronized final <K, V> TopologyBuilder addSink(final String name,
                                                              final String topic,
                                                              final Serializer<K> keySerializer,
                                                              final Serializer<V> valSerializer,
                                                              final StreamPartitioner<? super K, ? super V> partitioner,
-                                                             final String... parentNames) {
-        internalTopologyBuilder.addSink(name, topic, keySerializer, valSerializer, partitioner, parentNames);
+                                                             final String... predecessorNames) {
+        internalTopologyBuilder.addSink(name, topic, keySerializer, valSerializer, partitioner, predecessorNames);
         return this;
     }
 
     /**
-     * Add a new processor node that receives and processes records output by one or more parent source or processor node.
+     * Add a new processor node that receives and processes records output by one or more predecessor source or processor node.
      * Any new record output by this processor will be forwarded to its child processor or sink nodes.
      * @param name the unique name of the processor node
      * @param supplier the supplier used to obtain this node's {@link Processor} instance
-     * @param parentNames the name of one or more source or processor nodes whose output records this processor should receive
+     * @param predecessorNames the name of one or more source or processor nodes whose output records this processor should receive
      * and process
      * @return this builder instance so methods can be chained together; never null
-     * @throws TopologyBuilderException if parent processor is not added yet, or if this processor's name is equal to the parent's name
+     * @throws TopologyBuilderException if predecessor is not added yet, or if this processor's name is equal to the predecessor's name
      */
     public synchronized final TopologyBuilder addProcessor(final String name,
                                                            final ProcessorSupplier supplier,
-                                                           final String... parentNames) {
-        internalTopologyBuilder.addProcessor(name, supplier, parentNames);
+                                                           final String... predecessorNames) {
+        internalTopologyBuilder.addProcessor(name, supplier, predecessorNames);
         return this;
     }
 
@@ -1025,99 +879,6 @@ public class TopologyBuilder {
     public synchronized void updateSubscriptions(final SubscriptionUpdates subscriptionUpdates,
                                                  final String threadId) {
         internalTopologyBuilder.updateSubscriptions(subscriptionUpdates, threadId);
-    }
-
-    private boolean isGlobalSource(final String nodeName) {
-        final NodeFactory nodeFactory = nodeFactories.get(nodeName);
-
-        if (nodeFactory instanceof SourceNodeFactory) {
-            final List<String> topics = ((SourceNodeFactory) nodeFactory).topics;
-            if (topics != null && topics.size() == 1 && globalTopics.contains(topics.get(0))) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    TopologyDescription describe() {
-        final TopologyDescription description = new TopologyDescription();
-
-        describeSubtopologies(description);
-        describeGlobalStores(description);
-
-        return description;
-    }
-
-    private void describeSubtopologies(final TopologyDescription description) {
-        for (final Map.Entry<Integer, Set<String>> nodeGroup : makeNodeGroups().entrySet()) {
-
-            final Set<String> allNodesOfGroups = nodeGroup.getValue();
-            final boolean isNodeGroupOfGlobalStores = nodeGroupContainsGlobalSourceNode(allNodesOfGroups);
-
-            if (!isNodeGroupOfGlobalStores) {
-                describeSubtopology(description, nodeGroup.getKey(), allNodesOfGroups);
-            }
-        }
-    }
-
-    private boolean nodeGroupContainsGlobalSourceNode(final Set<String> allNodesOfGroups) {
-        for (final String node : allNodesOfGroups) {
-            if (isGlobalSource(node)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private void describeSubtopology(final TopologyDescription description,
-                                     final Integer subtopologyId,
-                                     final Set<String> nodeNames) {
-
-        final HashMap<String, TopologyDescription.AbstractNode> nodesByName = new HashMap<>();
-
-        // add all nodes
-        for (final String nodeName : nodeNames) {
-            nodesByName.put(nodeName, nodeFactories.get(nodeName).describe());
-        }
-
-        // connect each node to its predecessors and successors
-        for (final TopologyDescription.AbstractNode node : nodesByName.values()) {
-            for (final String predecessorName : nodeFactories.get(node.name()).parents) {
-                final TopologyDescription.AbstractNode predecessor = nodesByName.get(predecessorName);
-                node.addPredecessor(predecessor);
-                predecessor.addSuccessor(node);
-            }
-        }
-
-        description.addSubtopology(new TopologyDescription.Subtopology(
-            subtopologyId,
-            new HashSet<TopologyDescription.Node>(nodesByName.values())));
-    }
-
-    private void describeGlobalStores(final TopologyDescription description) {
-        for (final Map.Entry<Integer, Set<String>> nodeGroup : makeNodeGroups().entrySet()) {
-            final Set<String> nodes = nodeGroup.getValue();
-
-            final Iterator<String> it = nodes.iterator();
-            while (it.hasNext()) {
-                final String node = it.next();
-
-                if (isGlobalSource(node)) {
-                    // we found a GlobalStore node group; those contain exactly two node: {sourceNode,processorNode}
-                    it.remove(); // remove sourceNode from group
-                    final String processorNode = nodes.iterator().next(); // get remaining processorNode
-
-                    description.addGlobalStore(new TopologyDescription.GlobalStore(
-                        node,
-                        processorNode,
-                        ((ProcessorNodeFactory) nodeFactories.get(processorNode)).stateStoreNames.iterator().next(),
-                        nodeToSourceTopics.get(node).get(0)
-                    ));
-                    break;
-                }
-            }
-        }
     }
 
 }
