@@ -62,7 +62,7 @@ object ConsumerGroupCommand extends Logging {
         System.err.println("Note: This will only show information about consumers that use ZooKeeper (not those using the Java consumer API).\n")
         new ZkConsumerGroupService(opts)
       } else {
-        System.err.println("Note: This will only show information about consumers that use the Java consumer API (non-ZooKeeper-based consumers).\n")
+        System.err.println("Note: This will not show information about old Zookeeper-based consumers.\n")
         new KafkaConsumerGroupService(opts)
       }
     }
