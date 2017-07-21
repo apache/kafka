@@ -36,7 +36,7 @@ import java.util.Map;
  * Factory for creating state stores in Kafka Streams.
  */
 @InterfaceStability.Evolving
-public class  Stores {
+public class Stores {
 
     private static final Logger log = LoggerFactory.getLogger(Stores.class);
 

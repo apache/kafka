@@ -196,9 +196,19 @@ public class TopologyBuilder {
         }
     }
 
+    /**
+     * NOTE this member would not needed by developers working with the processor APIs, but only used
+     * for internal functionalities.
+     * @deprecated not part of public API and for internal usage only
+     */
     @Deprecated
     public final InternalTopologyBuilder internalTopologyBuilder = new InternalTopologyBuilder();
 
+    /**
+     * NOTE this class would not needed by developers working with the processor APIs, but only used
+     * for internal functionalities.
+     * @deprecated not part of public API and for internal usage only
+     */
     @Deprecated
     public static class TopicsInfo {
         public Set<String> sinkTopics;
@@ -255,15 +265,7 @@ public class TopologyBuilder {
      */
     public TopologyBuilder() {}
 
-    /**
-     * Set the applicationId to be used for auto-generated internal topics.
-     *
-     * This is required before calling {@link #topicGroups}, {@link #copartitionSources},
-     * {@link #stateStoreNameToSourceTopics} and {@link #build(Integer)}.
-     *
-     * @param applicationId the streams applicationId. Should be the same as set by
-     * {@link org.apache.kafka.streams.StreamsConfig#APPLICATION_ID_CONFIG}
-     */
+    /** @deprecated This class is not part of public API and should never be used by a developer. */
     @Deprecated
     public synchronized final TopologyBuilder setApplicationId(final String applicationId) {
         internalTopologyBuilder.setApplicationId(applicationId);
@@ -302,7 +304,8 @@ public class TopologyBuilder {
      * @return this builder instance so methods can be chained together; never null
      */
     public synchronized final TopologyBuilder addSource(final AutoOffsetReset offsetReset,
-                                                        final String name, final String... topics) {
+                                                        final String name,
+                                                        final String... topics) {
         internalTopologyBuilder.addSource(offsetReset, name, null, null, null, topics);
         return this;
     }
@@ -800,6 +803,11 @@ public class TopologyBuilder {
     /**
      * This is used only for KStreamBuilder: when adding a KTable from a source topic,
      * we need to add the topic as the KTable's materialized state store's changelog.
+     *
+     * NOTE this function would not needed by developers working with the processor APIs, but only used
+     * for the high-level DSL parsing functionalities.
+     *
+     * @deprecated not part of public API and for internal usage only
      */
     @Deprecated
     protected synchronized final TopologyBuilder connectSourceStoreAndTopic(final String sourceStoreName,
@@ -817,6 +825,7 @@ public class TopologyBuilder {
      * @param processorNames the name of the processors
      * @return this builder instance so methods can be chained together; never null
      * @throws TopologyBuilderException if less than two processors are specified, or if one of the processors is not added yet
+     * @deprecated not part of public API and for internal usage only
      */
     @Deprecated
     public synchronized final TopologyBuilder connectProcessors(final String... processorNames) {
@@ -827,8 +836,12 @@ public class TopologyBuilder {
     /**
      * Adds an internal topic
      *
+     * NOTE this function would not needed by developers working with the processor APIs, but only used
+     * for the high-level DSL parsing functionalities.
+     *
      * @param topicName the name of the topic
      * @return this builder instance so methods can be chained together; never null
+     * @deprecated not part of public API and for internal usage only
      */
     @Deprecated
     public synchronized final TopologyBuilder addInternalTopic(final String topicName) {
@@ -839,8 +852,12 @@ public class TopologyBuilder {
     /**
      * Asserts that the streams of the specified source nodes must be copartitioned.
      *
+     * NOTE this function would not needed by developers working with the processor APIs, but only used
+     * for the high-level DSL parsing functionalities.
+     *
      * @param sourceNodes a set of source node names
      * @return this builder instance so methods can be chained together; never null
+     * @deprecated not part of public API and for internal usage only
      */
     @Deprecated
     public synchronized final TopologyBuilder copartitionSources(final Collection<String> sourceNodes) {
@@ -851,7 +868,11 @@ public class TopologyBuilder {
     /**
      * Returns the map of node groups keyed by the topic group id.
      *
+     * NOTE this function would not needed by developers working with the processor APIs, but only used
+     * for the high-level DSL parsing functionalities.
+     *
      * @return groups of node names
+     * @deprecated not part of public API and for internal usage only
      */
     @Deprecated
     public synchronized Map<Integer, Set<String>> nodeGroups() {
@@ -862,7 +883,11 @@ public class TopologyBuilder {
      * Build the topology for the specified topic group. This is called automatically when passing this builder into the
      * {@link org.apache.kafka.streams.KafkaStreams#KafkaStreams(TopologyBuilder, org.apache.kafka.streams.StreamsConfig)} constructor.
      *
+     * NOTE this function would not needed by developers working with the processor APIs, but only used
+     * for the high-level DSL parsing functionalities.
+     *
      * @see org.apache.kafka.streams.KafkaStreams#KafkaStreams(TopologyBuilder, org.apache.kafka.streams.StreamsConfig)
+     * @deprecated not part of public API and for internal usage only
      */
     @Deprecated
     public synchronized ProcessorTopology build(final Integer topicGroupId) {
@@ -871,7 +896,12 @@ public class TopologyBuilder {
 
     /**
      * Builds the topology for any global state stores
+     *
+     * NOTE this function would not needed by developers working with the processor APIs, but only used
+     * for the high-level DSL parsing functionalities.
+     *
      * @return ProcessorTopology
+     * @deprecated not part of public API and for internal usage only
      */
     @Deprecated
     public synchronized ProcessorTopology buildGlobalStateTopology() {
@@ -881,7 +911,12 @@ public class TopologyBuilder {
     /**
      * Get any global {@link StateStore}s that are part of the
      * topology
+     *
+     * NOTE this function would not needed by developers working with the processor APIs, but only used
+     * for the high-level DSL parsing functionalities.
+     *
      * @return map containing all global {@link StateStore}s
+     * @deprecated not part of public API and for internal usage only
      */
     @Deprecated
     public Map<String, StateStore> globalStateStores() {
@@ -892,7 +927,11 @@ public class TopologyBuilder {
      * Returns the map of topic groups keyed by the group id.
      * A topic group is a group of topics in the same task.
      *
+     * NOTE this function would not needed by developers working with the processor APIs, but only used
+     * for the high-level DSL parsing functionalities.
+     *
      * @return groups of topic names
+     * @deprecated not part of public API and for internal usage only
      */
     @Deprecated
     public synchronized Map<Integer, TopicsInfo> topicGroups() {
@@ -901,7 +940,12 @@ public class TopologyBuilder {
 
     /**
      * Get the Pattern to match all topics requiring to start reading from earliest available offset
+     *
+     * NOTE this function would not needed by developers working with the processor APIs, but only used
+     * for the high-level DSL parsing functionalities.
+     *
      * @return the Pattern for matching all topics reading from earliest offset, never null
+     * @deprecated not part of public API and for internal usage only
      */
     @Deprecated
     public synchronized Pattern earliestResetTopicsPattern() {
@@ -910,7 +954,12 @@ public class TopologyBuilder {
 
     /**
      * Get the Pattern to match all topics requiring to start reading from latest available offset
+     *
+     * NOTE this function would not needed by developers working with the processor APIs, but only used
+     * for the high-level DSL parsing functionalities.
+     *
      * @return the Pattern for matching all topics reading from latest offset, never null
+     * @deprecated not part of public API and for internal usage only
      */
     @Deprecated
     public synchronized Pattern latestResetTopicsPattern() {
@@ -918,7 +967,11 @@ public class TopologyBuilder {
     }
 
     /**
+     * NOTE this function would not needed by developers working with the processor APIs, but only used
+     * for the high-level DSL parsing functionalities.
+     *
      * @return a mapping from state store name to a Set of source Topics.
+     * @deprecated not part of public API and for internal usage only
      */
     @Deprecated
     public Map<String, List<String>> stateStoreNameToSourceTopics() {
@@ -929,23 +982,45 @@ public class TopologyBuilder {
      * Returns the copartition groups.
      * A copartition group is a group of source topics that are required to be copartitioned.
      *
+     * NOTE this function would not needed by developers working with the processor APIs, but only used
+     * for the high-level DSL parsing functionalities.
+     *
      * @return groups of topic names
+     * @deprecated not part of public API and for internal usage only
      */
     @Deprecated
     public synchronized Collection<Set<String>> copartitionGroups() {
         return internalTopologyBuilder.copartitionGroups();
     }
 
+    /**
+     * NOTE this function would not needed by developers working with the processor APIs, but only used
+     * for the high-level DSL parsing functionalities.
+     *
+     * @deprecated not part of public API and for internal usage only
+     */
     @Deprecated
     public SubscriptionUpdates subscriptionUpdates() {
         return internalTopologyBuilder.subscriptionUpdates();
     }
 
+    /**
+     * NOTE this function would not needed by developers working with the processor APIs, but only used
+     * for the high-level DSL parsing functionalities.
+     *
+     * @deprecated not part of public API and for internal usage only
+     */
     @Deprecated
     public synchronized Pattern sourceTopicPattern() {
         return internalTopologyBuilder.sourceTopicPattern();
     }
 
+    /**
+     * NOTE this function would not needed by developers working with the processor APIs, but only used
+     * for the high-level DSL parsing functionalities.
+     *
+     * @deprecated not part of public API and for internal usage only
+     */
     @Deprecated
     public synchronized void updateSubscriptions(final SubscriptionUpdates subscriptionUpdates,
                                                  final String threadId) {
