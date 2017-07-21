@@ -99,7 +99,15 @@ public class StreamsConfig extends AbstractConfig {
      */
     public static final String CONSUMER_PREFIX = "consumer.";
 
-    // Prefix used to isolate producer configs from consumer configs.
+
+    /**
+     * Prefix used to provide default topic configs to be applied when creating internal topics.
+     * These should be valid properties from {@link org.apache.kafka.common.config.TopicConfig TopicConfig}.
+     * It is recommended to use {@link #topicPrefix(String)}.
+     */
+    public static final String TOPIC_PREFIX = "topic.";
+
+
     /**
      * Prefix used to isolate {@link KafkaProducer producer} configs from {@link KafkaConsumer consumer} configs.
      * It is recommended to use {@link #producerPrefix(String)} to add this prefix to {@link ProducerConfig producer
@@ -560,6 +568,17 @@ public class StreamsConfig extends AbstractConfig {
      */
     public static String producerPrefix(final String producerProp) {
         return PRODUCER_PREFIX + producerProp;
+    }
+
+    /**
+     * Prefix a property with {@link #TOPIC_PREFIX}
+     * used to provide default topic configs to be applied when creating internal topics.
+     *
+     * @param topicProp the topic property to be masked
+     * @return TOPIC_PREFIX + {@code topicProp}
+     */
+    public static String topicPrefix(final String topicProp) {
+        return TOPIC_PREFIX + topicProp;
     }
 
     /**
