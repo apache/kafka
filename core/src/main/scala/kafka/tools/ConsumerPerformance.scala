@@ -56,10 +56,7 @@ object ConsumerPerformance {
     var metrics: mutable.Map[MetricName, _ <: Metric] = null
 
     if (!config.hideHeader) {
-      if (!config.showDetailedStats)
-        println("start.time, end.time, data.consumed.in.MB, MB.sec, data.consumed.in.nMsg, nMsg.sec")
-      else
-        println("time, data.consumed.in.MB, MB.sec, data.consumed.in.nMsg, nMsg.sec")
+      printHeader(!config.showDetailedStats)
     }
 
     var startMs, endMs = 0L
@@ -110,7 +107,20 @@ object ConsumerPerformance {
 
   }
 
-  def consume(consumer: KafkaConsumer[Array[Byte], Array[Byte]], topics: List[String], count: Long, timeout: Long, config: ConsumerPerfConfig, totalMessagesRead: AtomicLong, totalBytesRead: AtomicLong) {
+  private[tools] def printHeader(showDetailedStats: Boolean): Unit = {
+    if (showDetailedStats)
+      println("start.time, end.time, data.consumed.in.MB, MB.sec, data.consumed.in.nMsg, nMsg.sec")
+    else
+      println("time, threadId, data.consumed.in.MB, MB.sec, data.consumed.in.nMsg, nMsg.sec")
+  }
+
+  def consume(consumer: KafkaConsumer[Array[Byte], Array[Byte]],
+              topics: List[String],
+              count: Long,
+              timeout: Long,
+              config: ConsumerPerfConfig,
+              totalMessagesRead: AtomicLong,
+              totalBytesRead: AtomicLong) {
     var bytesRead = 0L
     var messagesRead = 0L
     var lastBytesRead = 0L
@@ -167,8 +177,14 @@ object ConsumerPerformance {
     totalBytesRead.set(bytesRead)
   }
 
-  def printProgressMessage(id: Int, bytesRead: Long, lastBytesRead: Long, messagesRead: Long, lastMessagesRead: Long,
-    startMs: Long, endMs: Long, dateFormat: SimpleDateFormat) = {
+  def printProgressMessage(id: Int,
+                           bytesRead: Long,
+                           lastBytesRead: Long,
+                           messagesRead: Long,
+                           lastMessagesRead: Long,
+                           startMs: Long,
+                           endMs: Long,
+                           dateFormat: SimpleDateFormat) = {
     val elapsedMs: Double = endMs - startMs
     val totalMBRead = (bytesRead * 1.0) / (1024 * 1024)
     val mbRead = ((bytesRead - lastBytesRead) * 1.0) / (1024 * 1024)
@@ -271,8 +287,13 @@ object ConsumerPerformance {
     val hideHeader = options.has(hideHeaderOpt)
   }
 
-  class ConsumerPerfThread(threadId: Int, name: String, stream: KafkaStream[Array[Byte], Array[Byte]],
-    config: ConsumerPerfConfig, totalMessagesRead: AtomicLong, totalBytesRead: AtomicLong, consumerTimeout: AtomicBoolean)
+  class ConsumerPerfThread(threadId: Int,
+                           name: String,
+                           stream: KafkaStream[Array[Byte], Array[Byte]],
+                           config: ConsumerPerfConfig,
+                           totalMessagesRead: AtomicLong,
+                           totalBytesRead: AtomicLong,
+                           consumerTimeout: AtomicBoolean)
     extends Thread(name) {
 
     override def run() {

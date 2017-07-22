@@ -524,7 +524,7 @@ public class KafkaStreams {
      * @throws StreamsException if brokers have version 0.10.0.x
      */
     private void checkBrokerVersionCompatibility() throws StreamsException {
-        final StreamsKafkaClient client = new StreamsKafkaClient(config);
+        final StreamsKafkaClient client = StreamsKafkaClient.create(config);
 
         client.checkBrokerCompatibility(EXACTLY_ONCE.equals(config.getString(PROCESSING_GUARANTEE_CONFIG)));
 

@@ -152,7 +152,7 @@ public class KafkaChannel {
 
     public void setSend(Send send) {
         if (this.send != null)
-            throw new IllegalStateException("Attempt to begin a send operation with prior send operation still in progress.");
+            throw new IllegalStateException("Attempt to begin a send operation with prior send operation still in progress, connection id is " + id);
         this.send = send;
         this.transportLayer.addInterestOps(SelectionKey.OP_WRITE);
     }
