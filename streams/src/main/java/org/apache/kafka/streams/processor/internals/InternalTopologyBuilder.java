@@ -1342,12 +1342,12 @@ public class InternalTopologyBuilder {
         }
     }
 
-    public final static class Subtopology implements org.apache.kafka.streams.processor.TopologyDescription.Subtopology {
+    public final static class Subtopology implements org.apache.kafka.streams.TopologyDescription.Subtopology {
         private final int id;
-        private final Set<org.apache.kafka.streams.processor.TopologyDescription.Node> nodes;
+        private final Set<org.apache.kafka.streams.TopologyDescription.Node> nodes;
 
         public Subtopology(final int id,
-                    final Set<org.apache.kafka.streams.processor.TopologyDescription.Node> nodes) {
+                    final Set<org.apache.kafka.streams.TopologyDescription.Node> nodes) {
             this.id = id;
             this.nodes = nodes;
         }
@@ -1358,7 +1358,7 @@ public class InternalTopologyBuilder {
         }
 
         @Override
-        public Set<org.apache.kafka.streams.processor.TopologyDescription.Node> nodes() {
+        public Set<org.apache.kafka.streams.TopologyDescription.Node> nodes() {
             return Collections.unmodifiableSet(nodes);
         }
 
@@ -1369,7 +1369,7 @@ public class InternalTopologyBuilder {
 
         private String nodesAsString() {
             final StringBuilder sb = new StringBuilder();
-            for (final org.apache.kafka.streams.processor.TopologyDescription.Node node : nodes) {
+            for (final org.apache.kafka.streams.TopologyDescription.Node node : nodes) {
                 sb.append("    ");
                 sb.append(node);
                 sb.append('\n');
@@ -1397,25 +1397,25 @@ public class InternalTopologyBuilder {
         }
     }
 
-    public final static class TopologyDescription implements org.apache.kafka.streams.processor.TopologyDescription {
-        private final Set<org.apache.kafka.streams.processor.TopologyDescription.Subtopology> subtopologies = new HashSet<>();
-        private final Set<org.apache.kafka.streams.processor.TopologyDescription.GlobalStore> globalStores = new HashSet<>();
+    public final static class TopologyDescription implements org.apache.kafka.streams.TopologyDescription {
+        private final Set<org.apache.kafka.streams.TopologyDescription.Subtopology> subtopologies = new HashSet<>();
+        private final Set<org.apache.kafka.streams.TopologyDescription.GlobalStore> globalStores = new HashSet<>();
 
-        public void addSubtopology(final org.apache.kafka.streams.processor.TopologyDescription.Subtopology subtopology) {
+        public void addSubtopology(final org.apache.kafka.streams.TopologyDescription.Subtopology subtopology) {
             subtopologies.add(subtopology);
         }
 
-        public void addGlobalStore(final org.apache.kafka.streams.processor.TopologyDescription.GlobalStore globalStore) {
+        public void addGlobalStore(final org.apache.kafka.streams.TopologyDescription.GlobalStore globalStore) {
             globalStores.add(globalStore);
         }
 
         @Override
-        public Set<org.apache.kafka.streams.processor.TopologyDescription.Subtopology> subtopologies() {
+        public Set<org.apache.kafka.streams.TopologyDescription.Subtopology> subtopologies() {
             return Collections.unmodifiableSet(subtopologies);
         }
 
         @Override
-        public Set<org.apache.kafka.streams.processor.TopologyDescription.GlobalStore> globalStores() {
+        public Set<org.apache.kafka.streams.TopologyDescription.GlobalStore> globalStores() {
             return Collections.unmodifiableSet(globalStores);
         }
 
@@ -1430,7 +1430,7 @@ public class InternalTopologyBuilder {
             if (subtopologies.isEmpty()) {
                 sb.append("  none\n");
             } else {
-                for (final org.apache.kafka.streams.processor.TopologyDescription.Subtopology st : subtopologies) {
+                for (final org.apache.kafka.streams.TopologyDescription.Subtopology st : subtopologies) {
                     sb.append("  ");
                     sb.append(st);
                 }
@@ -1444,7 +1444,7 @@ public class InternalTopologyBuilder {
             if (globalStores.isEmpty()) {
                 sb.append("  none\n");
             } else {
-                for (final org.apache.kafka.streams.processor.TopologyDescription.GlobalStore gs : globalStores) {
+                for (final org.apache.kafka.streams.TopologyDescription.GlobalStore gs : globalStores) {
                     sb.append("  ");
                     sb.append(gs);
                 }
@@ -1482,6 +1482,8 @@ public class InternalTopologyBuilder {
             }
             sb.deleteCharAt(sb.length() - 1);
             sb.deleteCharAt(sb.length() - 1);
+        } else {
+            return "none";
         }
         return sb.toString();
     }
