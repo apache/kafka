@@ -24,6 +24,7 @@ import kafka.utils.CoreUtils.{inLock, inReadLock, inWriteLock}
 import org.apache.kafka.common.utils.Time
 import org.apache.zookeeper.AsyncCallback.{ACLCallback, Children2Callback, DataCallback, StatCallback, StringCallback, VoidCallback}
 import org.apache.zookeeper.Watcher.Event.{EventType, KeeperState}
+import org.apache.zookeeper.ZooKeeper.States
 import org.apache.zookeeper.data.{ACL, Stat}
 import org.apache.zookeeper.{CreateMode, WatchedEvent, Watcher, ZooKeeper}
 
@@ -34,7 +35,7 @@ class ZookeeperClient(connectString: String, sessionTimeoutMs: Int, connectionTi
   private val zNodeChangeHandlers = new ConcurrentHashMap[String, ZNodeChangeHandler]()
   private val zNodeChildChangeHandlers = new ConcurrentHashMap[String, ZNodeChildChangeHandler]()
   @volatile private var zooKeeper = new ZooKeeper(connectString, sessionTimeoutMs, ZookeeperClientWatcher)
-  waitUntilConnectedOrExpired(connectionTimeoutMs, TimeUnit.MILLISECONDS)
+  waitUntilConnected(connectionTimeoutMs, TimeUnit.MILLISECONDS)
 
   def handle(request: AsyncRequest): AsyncResponse = {
     handle(Seq(request)).head
@@ -90,22 +91,26 @@ class ZookeeperClient(connectString: String, sessionTimeoutMs: Int, connectionTi
     responseQueue.asScala.toSeq
   }
 
-  def waitUntilConnectedOrExpired: Boolean = inLock(isConnectedOrExpiredLock) {
-    waitUntilConnectedOrExpired(Long.MaxValue, TimeUnit.MILLISECONDS)
+  def waitUntilConnected(): Unit = inLock(isConnectedOrExpiredLock) {
+    waitUntilConnected(Long.MaxValue, TimeUnit.MILLISECONDS)
   }
 
-  private def waitUntilConnectedOrExpired(timeout: Long, timeUnit: TimeUnit): Boolean = {
+  private def waitUntilConnected(timeout: Long, timeUnit: TimeUnit): Unit = {
     var nanos = timeUnit.toNanos(timeout)
     inLock(isConnectedOrExpiredLock) {
       var state = zooKeeper.getState
       while (!state.isConnected && state.isAlive) {
         if (nanos <= 0) {
-          throw new ZookeeperClientTimeoutException
+          throw new ZookeeperClientTimeoutException(s"Timed out waiting for connection while in state: $state")
         }
         nanos = isConnectedOrExpiredCondition.awaitNanos(nanos)
         state = zooKeeper.getState
       }
-      state.isConnected
+      if (state == States.AUTH_FAILED) {
+        throw new ZookeeperClientAuthFailedException("Auth failed while waiting for connection")
+      } else if (state == States.CLOSED) {
+        throw new ZookeeperClientExpiredException("Session expired while waiting for connection")
+      }
     }
   }
 
@@ -151,9 +156,8 @@ class ZookeeperClient(connectString: String, sessionTimeoutMs: Int, connectionTi
         try {
           zooKeeper.close()
           zooKeeper = new ZooKeeper(connectString, sessionTimeoutMs, ZookeeperClientWatcher)
-          if (waitUntilConnectedOrExpired(threshold - now, TimeUnit.MILLISECONDS)) {
-            return
-          }
+          waitUntilConnected(threshold - now, TimeUnit.MILLISECONDS)
+          return
         } catch {
           case _: Exception =>
             now = time.milliseconds()
@@ -241,4 +245,7 @@ case class GetACLResponse(rc: Int, path: String, ctx: Any, acl: Seq[ACL], stat: 
 case class SetACLResponse(rc: Int, path: String, ctx: Any, stat: Stat) extends AsyncResponse
 case class GetChildrenResponse(rc: Int, path: String, ctx: Any, children: Seq[String], stat: Stat) extends AsyncResponse
 
-class ZookeeperClientTimeoutException extends RuntimeException
+class ZookeeperClientException(message: String) extends RuntimeException(message)
+class ZookeeperClientExpiredException(message: String) extends ZookeeperClientException(message)
+class ZookeeperClientAuthFailedException(message: String) extends ZookeeperClientException(message)
+class ZookeeperClientTimeoutException(message: String) extends ZookeeperClientException(message)
