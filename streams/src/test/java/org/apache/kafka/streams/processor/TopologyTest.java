@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.processor;
 
+import org.apache.kafka.streams.TopologyDescription;
+import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockStateStoreSupplier;
 import org.junit.Test;
@@ -29,11 +31,11 @@ import java.util.regex.Pattern;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 
-// TODO (remove this comment) Test name ok, we just use TopologyBuilder for now in this test until Topology gets added
+// TODO (remove this comment) Test name ok, we just use InternalTopologyBuilder for now in this test until Topology gets added
 public class TopologyTest {
-    // TODO change from TopologyBuilder to Topology
-    private final TopologyBuilder topology = new TopologyBuilder();
-    private final TopologyDescription expectedDescription = new TopologyDescription();
+    // TODO change from InternalTopologyBuilder to Topology
+    private final InternalTopologyBuilder topology = new InternalTopologyBuilder();
+    private final InternalTopologyBuilder.TopologyDescription expectedDescription = new InternalTopologyBuilder.TopologyDescription();
 
     @Test
     public void shouldDescribeEmptyTopology() {
@@ -45,7 +47,7 @@ public class TopologyTest {
         final TopologyDescription.Source expectedSourceNode = addSource("source", "topic");
 
         expectedDescription.addSubtopology(
-            new TopologyDescription.Subtopology(0,
+            new InternalTopologyBuilder.Subtopology(0,
                 Collections.<TopologyDescription.Node>singleton(expectedSourceNode)));
 
         assertThat(topology.describe(), equalTo(expectedDescription));
@@ -56,7 +58,7 @@ public class TopologyTest {
         final TopologyDescription.Source expectedSourceNode = addSource("source", "topic1", "topic2", "topic3");
 
         expectedDescription.addSubtopology(
-            new TopologyDescription.Subtopology(0,
+            new InternalTopologyBuilder.Subtopology(0,
                 Collections.<TopologyDescription.Node>singleton(expectedSourceNode)));
 
         assertThat(topology.describe(), equalTo(expectedDescription));
@@ -67,7 +69,7 @@ public class TopologyTest {
         final TopologyDescription.Source expectedSourceNode = addSource("source", Pattern.compile("topic[0-9]"));
 
         expectedDescription.addSubtopology(
-            new TopologyDescription.Subtopology(0,
+            new InternalTopologyBuilder.Subtopology(0,
                 Collections.<TopologyDescription.Node>singleton(expectedSourceNode)));
 
         assertThat(topology.describe(), equalTo(expectedDescription));
@@ -77,17 +79,17 @@ public class TopologyTest {
     public void multipleSourcesShouldHaveDistinctSubtopologies() {
         final TopologyDescription.Source expectedSourceNode1 = addSource("source1", "topic1");
         expectedDescription.addSubtopology(
-            new TopologyDescription.Subtopology(0,
+            new InternalTopologyBuilder.Subtopology(0,
                 Collections.<TopologyDescription.Node>singleton(expectedSourceNode1)));
 
         final TopologyDescription.Source expectedSourceNode2 = addSource("source2", "topic2");
         expectedDescription.addSubtopology(
-            new TopologyDescription.Subtopology(1,
+            new InternalTopologyBuilder.Subtopology(1,
                 Collections.<TopologyDescription.Node>singleton(expectedSourceNode2)));
 
         final TopologyDescription.Source expectedSourceNode3 = addSource("source3", "topic3");
         expectedDescription.addSubtopology(
-            new TopologyDescription.Subtopology(2,
+            new InternalTopologyBuilder.Subtopology(2,
                 Collections.<TopologyDescription.Node>singleton(expectedSourceNode3)));
 
         assertThat(topology.describe(), equalTo(expectedDescription));
@@ -101,7 +103,7 @@ public class TopologyTest {
         final Set<TopologyDescription.Node> allNodes = new HashSet<>();
         allNodes.add(expectedSourceNode);
         allNodes.add(expectedProcessorNode);
-        expectedDescription.addSubtopology(new TopologyDescription.Subtopology(0, allNodes));
+        expectedDescription.addSubtopology(new InternalTopologyBuilder.Subtopology(0, allNodes));
 
         assertThat(topology.describe(), equalTo(expectedDescription));
     }
@@ -116,7 +118,7 @@ public class TopologyTest {
         final Set<TopologyDescription.Node> allNodes = new HashSet<>();
         allNodes.add(expectedSourceNode);
         allNodes.add(expectedProcessorNode);
-        expectedDescription.addSubtopology(new TopologyDescription.Subtopology(0, allNodes));
+        expectedDescription.addSubtopology(new InternalTopologyBuilder.Subtopology(0, allNodes));
 
         assertThat(topology.describe(), equalTo(expectedDescription));
     }
@@ -132,7 +134,7 @@ public class TopologyTest {
         final Set<TopologyDescription.Node> allNodes = new HashSet<>();
         allNodes.add(expectedSourceNode);
         allNodes.add(expectedProcessorNode);
-        expectedDescription.addSubtopology(new TopologyDescription.Subtopology(0, allNodes));
+        expectedDescription.addSubtopology(new InternalTopologyBuilder.Subtopology(0, allNodes));
 
         assertThat(topology.describe(), equalTo(expectedDescription));
     }
@@ -147,7 +149,7 @@ public class TopologyTest {
         allNodes.add(expectedSourceNode);
         allNodes.add(expectedProcessorNode1);
         allNodes.add(expectedProcessorNode2);
-        expectedDescription.addSubtopology(new TopologyDescription.Subtopology(0, allNodes));
+        expectedDescription.addSubtopology(new InternalTopologyBuilder.Subtopology(0, allNodes));
 
         assertThat(topology.describe(), equalTo(expectedDescription));
     }
@@ -162,7 +164,7 @@ public class TopologyTest {
         allNodes.add(expectedSourceNode1);
         allNodes.add(expectedSourceNode2);
         allNodes.add(expectedProcessorNode);
-        expectedDescription.addSubtopology(new TopologyDescription.Subtopology(0, allNodes));
+        expectedDescription.addSubtopology(new InternalTopologyBuilder.Subtopology(0, allNodes));
 
         assertThat(topology.describe(), equalTo(expectedDescription));
     }
@@ -181,17 +183,17 @@ public class TopologyTest {
         final Set<TopologyDescription.Node> allNodes1 = new HashSet<>();
         allNodes1.add(expectedSourceNode1);
         allNodes1.add(expectedProcessorNode1);
-        expectedDescription.addSubtopology(new TopologyDescription.Subtopology(0, allNodes1));
+        expectedDescription.addSubtopology(new InternalTopologyBuilder.Subtopology(0, allNodes1));
 
         final Set<TopologyDescription.Node> allNodes2 = new HashSet<>();
         allNodes2.add(expectedSourceNode2);
         allNodes2.add(expectedProcessorNode2);
-        expectedDescription.addSubtopology(new TopologyDescription.Subtopology(1, allNodes2));
+        expectedDescription.addSubtopology(new InternalTopologyBuilder.Subtopology(1, allNodes2));
 
         final Set<TopologyDescription.Node> allNodes3 = new HashSet<>();
         allNodes3.add(expectedSourceNode3);
         allNodes3.add(expectedProcessorNode3);
-        expectedDescription.addSubtopology(new TopologyDescription.Subtopology(2, allNodes3));
+        expectedDescription.addSubtopology(new InternalTopologyBuilder.Subtopology(2, allNodes3));
 
         assertThat(topology.describe(), equalTo(expectedDescription));
     }
@@ -210,17 +212,17 @@ public class TopologyTest {
         final Set<TopologyDescription.Node> allNodes1 = new HashSet<>();
         allNodes1.add(expectedSourceNode1);
         allNodes1.add(expectedSinkNode1);
-        expectedDescription.addSubtopology(new TopologyDescription.Subtopology(0, allNodes1));
+        expectedDescription.addSubtopology(new InternalTopologyBuilder.Subtopology(0, allNodes1));
 
         final Set<TopologyDescription.Node> allNodes2 = new HashSet<>();
         allNodes2.add(expectedSourceNode2);
         allNodes2.add(expectedSinkNode2);
-        expectedDescription.addSubtopology(new TopologyDescription.Subtopology(1, allNodes2));
+        expectedDescription.addSubtopology(new InternalTopologyBuilder.Subtopology(1, allNodes2));
 
         final Set<TopologyDescription.Node> allNodes3 = new HashSet<>();
         allNodes3.add(expectedSourceNode3);
         allNodes3.add(expectedSinkNode3);
-        expectedDescription.addSubtopology(new TopologyDescription.Subtopology(2, allNodes3));
+        expectedDescription.addSubtopology(new InternalTopologyBuilder.Subtopology(2, allNodes3));
 
         assertThat(topology.describe(), equalTo(expectedDescription));
     }
@@ -251,7 +253,7 @@ public class TopologyTest {
         allNodes.add(expectedSourceNode3);
         allNodes.add(expectedProcessorNode3);
         allNodes.add(expectedSinkNode);
-        expectedDescription.addSubtopology(new TopologyDescription.Subtopology(0, allNodes));
+        expectedDescription.addSubtopology(new InternalTopologyBuilder.Subtopology(0, allNodes));
 
         assertThat(topology.describe(), equalTo(expectedDescription));
     }
@@ -281,7 +283,7 @@ public class TopologyTest {
         allNodes.add(expectedProcessorNode2);
         allNodes.add(expectedSourceNode3);
         allNodes.add(expectedProcessorNode3);
-        expectedDescription.addSubtopology(new TopologyDescription.Subtopology(0, allNodes));
+        expectedDescription.addSubtopology(new InternalTopologyBuilder.Subtopology(0, allNodes));
 
         assertThat(topology.describe(), equalTo(expectedDescription));
     }
@@ -301,41 +303,41 @@ public class TopologyTest {
 
     private TopologyDescription.Source addSource(final String sourceName,
                                                  final String... sourceTopic) {
-        topology.addSource(sourceName, sourceTopic);
+        topology.addSource(null, sourceName, null, null, null, sourceTopic);
         String allSourceTopics = sourceTopic[0];
         for (int i = 1; i < sourceTopic.length; ++i) {
             allSourceTopics += ", " + sourceTopic[i];
         }
-        return new TopologyDescription.Source(sourceName, allSourceTopics);
+        return new InternalTopologyBuilder.Source(sourceName, allSourceTopics);
     }
 
     private TopologyDescription.Source addSource(final String sourceName,
                                                  final Pattern sourcePattern) {
-        topology.addSource(sourceName, sourcePattern);
-        return new TopologyDescription.Source(sourceName, sourcePattern.toString());
+        topology.addSource(null, sourceName, null, null, null, sourcePattern);
+        return new InternalTopologyBuilder.Source(sourceName, sourcePattern.toString());
     }
 
     private TopologyDescription.Processor addProcessor(final String processorName,
-                                                       final TopologyDescription.AbstractNode... parents) {
+                                                       final TopologyDescription.Node... parents) {
         return addProcessorWithNewStore(processorName, new String[0], parents);
     }
 
     private TopologyDescription.Processor addProcessorWithNewStore(final String processorName,
                                                                    final String[] storeNames,
-                                                                   final TopologyDescription.AbstractNode... parents) {
+                                                                   final TopologyDescription.Node... parents) {
         return addProcessorWithStore(processorName, storeNames, true, parents);
     }
 
     private TopologyDescription.Processor addProcessorWithExistingStore(final String processorName,
                                                                         final String[] storeNames,
-                                                                        final TopologyDescription.AbstractNode... parents) {
+                                                                        final TopologyDescription.Node... parents) {
         return addProcessorWithStore(processorName, storeNames, false, parents);
     }
 
     private TopologyDescription.Processor addProcessorWithStore(final String processorName,
                                                                 final String[] storeNames,
                                                                 final boolean newStores,
-                                                                final TopologyDescription.AbstractNode... parents) {
+                                                                final TopologyDescription.Node... parents) {
         final String[] parentNames = new String[parents.length];
         for (int i = 0; i < parents.length; ++i) {
             parentNames[i] = parents[i].name();
@@ -350,11 +352,11 @@ public class TopologyTest {
             topology.connectProcessorAndStateStores(processorName, storeNames);
         }
         final TopologyDescription.Processor expectedProcessorNode
-            = new TopologyDescription.Processor(processorName, new HashSet<>(Arrays.asList(storeNames)));
+            = new InternalTopologyBuilder.Processor(processorName, new HashSet<>(Arrays.asList(storeNames)));
 
-        for (final TopologyDescription.AbstractNode parent : parents) {
-            parent.addSuccessor(expectedProcessorNode);
-            expectedProcessorNode.addPredecessor(parent);
+        for (final TopologyDescription.Node parent : parents) {
+            ((InternalTopologyBuilder.AbstractNode) parent).addSuccessor(expectedProcessorNode);
+            ((InternalTopologyBuilder.AbstractNode) expectedProcessorNode).addPredecessor(parent);
         }
 
         return expectedProcessorNode;
@@ -362,19 +364,19 @@ public class TopologyTest {
 
     private TopologyDescription.Sink addSink(final String sinkName,
                                              final String sinkTopic,
-                                             final TopologyDescription.AbstractNode... parents) {
+                                             final TopologyDescription.Node... parents) {
         final String[] parentNames = new String[parents.length];
         for (int i = 0; i < parents.length; ++i) {
             parentNames[i] = parents[i].name();
         }
 
-        topology.addSink(sinkName, sinkTopic, parentNames);
+        topology.addSink(sinkName, sinkTopic, null, null, null, parentNames);
         final TopologyDescription.Sink expectedSinkNode
-            = new TopologyDescription.Sink(sinkName, sinkTopic);
+            = new InternalTopologyBuilder.Sink(sinkName, sinkTopic);
 
-        for (final TopologyDescription.AbstractNode parent : parents) {
-            parent.addSuccessor(expectedSinkNode);
-            expectedSinkNode.addPredecessor(parent);
+        for (final TopologyDescription.Node parent : parents) {
+            ((InternalTopologyBuilder.AbstractNode) parent).addSuccessor(expectedSinkNode);
+            ((InternalTopologyBuilder.AbstractNode) expectedSinkNode).addPredecessor(parent);
         }
 
         return expectedSinkNode;
@@ -389,11 +391,12 @@ public class TopologyTest {
             sourceName,
             null,
             null,
+            null,
             globalTopicName,
             processorName,
             new MockProcessorSupplier());
 
-        final TopologyDescription.GlobalStore expectedGlobalStore = new TopologyDescription.GlobalStore(
+        final TopologyDescription.GlobalStore expectedGlobalStore = new InternalTopologyBuilder.GlobalStore(
             sourceName,
             processorName,
             globalStoreName,

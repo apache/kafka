@@ -14,19 +14,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.processor;
+package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TopologyBuilderException;
-import org.apache.kafka.streams.processor.TopologyBuilder.TopicsInfo;
-import org.apache.kafka.streams.processor.internals.InternalTopicConfig;
-import org.apache.kafka.streams.processor.internals.InternalTopicManager;
-import org.apache.kafka.streams.processor.internals.ProcessorNode;
-import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
-import org.apache.kafka.streams.processor.internals.ProcessorTopology;
+import org.apache.kafka.streams.processor.Processor;
+import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.StateStoreSupplier;
+import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.apache.kafka.streams.processor.internals.StreamPartitionAssignor.SubscriptionUpdates;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.internals.RocksDBWindowStoreSupplier;
@@ -57,33 +57,30 @@ import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
-public class TopologyBuilderTest {
+public class InternalTopologyBuilderTest {
 
+    private final InternalTopologyBuilder builder = new InternalTopologyBuilder();
+    private final Serde<String> stringSerde = Serdes.String();
 
     @Test
     public void shouldAddSourceWithOffsetReset() {
-        final TopologyBuilder builder = new TopologyBuilder();
-
         final String earliestTopic = "earliestTopic";
         final String latestTopic = "latestTopic";
 
-        builder.addSource(TopologyBuilder.AutoOffsetReset.EARLIEST, "source", earliestTopic);
-        builder.addSource(TopologyBuilder.AutoOffsetReset.LATEST, "source2", latestTopic);
+        builder.addSource(TopologyBuilder.AutoOffsetReset.EARLIEST, "source", null, null, null, earliestTopic);
+        builder.addSource(TopologyBuilder.AutoOffsetReset.LATEST, "source2", null, null, null, latestTopic);
 
         assertTrue(builder.earliestResetTopicsPattern().matcher(earliestTopic).matches());
         assertTrue(builder.latestResetTopicsPattern().matcher(latestTopic).matches());
-
     }
 
     @Test
     public void shouldAddSourcePatternWithOffsetReset() {
-        final TopologyBuilder builder = new TopologyBuilder();
-
         final String earliestTopicPattern = "earliest.*Topic";
         final String latestTopicPattern = "latest.*Topic";
 
-        builder.addSource(TopologyBuilder.AutoOffsetReset.EARLIEST, "source", Pattern.compile(earliestTopicPattern));
-        builder.addSource(TopologyBuilder.AutoOffsetReset.LATEST, "source2", Pattern.compile(latestTopicPattern));
+        builder.addSource(TopologyBuilder.AutoOffsetReset.EARLIEST, "source", null, null, null, Pattern.compile(earliestTopicPattern));
+        builder.addSource(TopologyBuilder.AutoOffsetReset.LATEST, "source2", null, null, null,  Pattern.compile(latestTopicPattern));
 
         assertTrue(builder.earliestResetTopicsPattern().matcher("earliestTestTopic").matches());
         assertTrue(builder.latestResetTopicsPattern().matcher("latestTestTopic").matches());
@@ -91,11 +88,9 @@ public class TopologyBuilderTest {
 
     @Test
     public void shouldAddSourceWithoutOffsetReset() {
-        final TopologyBuilder builder = new TopologyBuilder();
-        final Serde<String> stringSerde = Serdes.String();
         final Pattern expectedPattern = Pattern.compile("test-topic");
 
-        builder.addSource("source", stringSerde.deserializer(), stringSerde.deserializer(), "test-topic");
+        builder.addSource(null, "source", null, stringSerde.deserializer(), stringSerde.deserializer(), "test-topic");
 
         assertEquals(expectedPattern.pattern(), builder.sourceTopicPattern().pattern());
         assertEquals(builder.earliestResetTopicsPattern().pattern(), "");
@@ -104,254 +99,225 @@ public class TopologyBuilderTest {
 
     @Test
     public void shouldAddPatternSourceWithoutOffsetReset() {
-        final TopologyBuilder builder = new TopologyBuilder();
-        final Serde<String> stringSerde = Serdes.String();
         final Pattern expectedPattern = Pattern.compile("test-.*");
-
-        builder.addSource("source", stringSerde.deserializer(), stringSerde.deserializer(), Pattern.compile("test-.*"));
+        
+        builder.addSource(null, "source", null, stringSerde.deserializer(), stringSerde.deserializer(), Pattern.compile("test-.*"));
 
         assertEquals(expectedPattern.pattern(), builder.sourceTopicPattern().pattern());
         assertEquals(builder.earliestResetTopicsPattern().pattern(), "");
         assertEquals(builder.latestResetTopicsPattern().pattern(), "");
     }
 
-    @Test
+    @Test(expected = TopologyBuilderException.class)
     public void shouldNotAllowOffsetResetSourceWithoutTopics() {
-        final TopologyBuilder builder = new TopologyBuilder();
-        final Serde<String> stringSerde = Serdes.String();
-
-        try {
-            builder.addSource(TopologyBuilder.AutoOffsetReset.EARLIEST, "source", null, stringSerde.deserializer(), stringSerde.deserializer(), new String[]{});
-            fail("Should throw TopologyBuilderException with no topics");
-        } catch (TopologyBuilderException tpe) {
-            //no-op
-        }
+        builder.addSource(TopologyBuilder.AutoOffsetReset.EARLIEST, "source", null, stringSerde.deserializer(), stringSerde.deserializer());
     }
 
     @Test
     public void shouldNotAllowOffsetResetSourceWithDuplicateSourceName() {
-        final TopologyBuilder builder = new TopologyBuilder();
-        final Serde<String> stringSerde = Serdes.String();
-
         builder.addSource(TopologyBuilder.AutoOffsetReset.EARLIEST, "source", null, stringSerde.deserializer(), stringSerde.deserializer(), "topic-1");
         try {
             builder.addSource(TopologyBuilder.AutoOffsetReset.LATEST, "source", null, stringSerde.deserializer(), stringSerde.deserializer(), "topic-2");
             fail("Should throw TopologyBuilderException for duplicate source name");
-        } catch (TopologyBuilderException tpe) {
-            //no-op
-        }
+        } catch (final TopologyBuilderException expected) { /* ok */ }
     }
 
-
-
-    @Test(expected = TopologyBuilderException.class)
+    @Test
     public void testAddSourceWithSameName() {
-        final TopologyBuilder builder = new TopologyBuilder();
-
-        builder.addSource("source", "topic-1");
-        builder.addSource("source", "topic-2");
+        builder.addSource(null, "source", null, null, null, "topic-1");
+        try {
+            builder.addSource(null, "source", null, null, null, "topic-2");
+            fail("Should throw TopologyBuilderException with source name conflict");
+        } catch (final TopologyBuilderException expected) { /* ok */ }
     }
 
-    @Test(expected = TopologyBuilderException.class)
+    @Test
     public void testAddSourceWithSameTopic() {
-        final TopologyBuilder builder = new TopologyBuilder();
-
-        builder.addSource("source", "topic-1");
-        builder.addSource("source-2", "topic-1");
+        builder.addSource(null, "source", null, null, null, "topic-1");
+        try {
+            builder.addSource(null, "source-2", null, null, null, "topic-1");
+            fail("Should throw TopologyBuilderException with topic conflict");
+        } catch (final TopologyBuilderException expected) { /* ok */ }
     }
 
-    @Test(expected = TopologyBuilderException.class)
+    @Test
     public void testAddProcessorWithSameName() {
-        final TopologyBuilder builder = new TopologyBuilder();
-
-        builder.addSource("source", "topic-1");
+        builder.addSource(null, "source", null, null, null, "topic-1");
         builder.addProcessor("processor", new MockProcessorSupplier(), "source");
-        builder.addProcessor("processor", new MockProcessorSupplier(), "source");
+        try {
+            builder.addProcessor("processor", new MockProcessorSupplier(), "source");
+            fail("Should throw TopologyBuilderException with processor name conflict");
+        } catch (final TopologyBuilderException expected) { /* ok */ }
     }
 
     @Test(expected = TopologyBuilderException.class)
     public void testAddProcessorWithWrongParent() {
-        final TopologyBuilder builder = new TopologyBuilder();
-
         builder.addProcessor("processor", new MockProcessorSupplier(), "source");
     }
 
     @Test(expected = TopologyBuilderException.class)
     public void testAddProcessorWithSelfParent() {
-        final TopologyBuilder builder = new TopologyBuilder();
-
         builder.addProcessor("processor", new MockProcessorSupplier(), "processor");
     }
 
-    @Test(expected = TopologyBuilderException.class)
+    @Test
     public void testAddSinkWithSameName() {
-        final TopologyBuilder builder = new TopologyBuilder();
-
-        builder.addSource("source", "topic-1");
-        builder.addSink("sink", "topic-2", "source");
-        builder.addSink("sink", "topic-3", "source");
+        builder.addSource(null, "source", null, null, null, "topic-1");
+        builder.addSink("sink", "topic-2", null, null, null, "source");
+        try {
+            builder.addSink("sink", "topic-3", null, null, null, "source");
+            fail("Should throw TopologyBuilderException with sink name conflict");
+        } catch (final TopologyBuilderException expected) { /* ok */ }
     }
 
     @Test(expected = TopologyBuilderException.class)
     public void testAddSinkWithWrongParent() {
-        final TopologyBuilder builder = new TopologyBuilder();
-
-        builder.addSink("sink", "topic-2", "source");
+        builder.addSink("sink", "topic-2", null, null, null, "source");
     }
 
     @Test(expected = TopologyBuilderException.class)
     public void testAddSinkWithSelfParent() {
-        final TopologyBuilder builder = new TopologyBuilder();
-
-        builder.addSink("sink", "topic-2", "sink");
+        builder.addSink("sink", "topic-2", null, null, null, "sink");
     }
 
     @Test
     public void testAddSinkConnectedWithParent() {
-        final TopologyBuilder builder = new TopologyBuilder();
+        builder.addSource(null, "source", null, null, null, "source-topic");
+        builder.addSink("sink", "dest-topic", null, null, null, "source");
 
-        builder.addSource("source", "source-topic");
-        builder.addSink("sink", "dest-topic", "source");
-
-        Map<Integer, Set<String>> nodeGroups = builder.nodeGroups();
-        Set<String> nodeGroup = nodeGroups.get(0);
+        final Map<Integer, Set<String>> nodeGroups = builder.nodeGroups();
+        final Set<String> nodeGroup = nodeGroups.get(0);
 
         assertTrue(nodeGroup.contains("sink"));
         assertTrue(nodeGroup.contains("source"));
-
     }
 
     @Test
     public void testAddSinkConnectedWithMultipleParent() {
-        final TopologyBuilder builder = new TopologyBuilder();
+        builder.addSource(null, "source", null, null, null, "source-topic");
+        builder.addSource(null, "sourceII", null, null, null, "source-topicII");
+        builder.addSink("sink", "dest-topic", null, null, null, "source", "sourceII");
 
-        builder.addSource("source", "source-topic");
-        builder.addSource("sourceII", "source-topicII");
-        builder.addSink("sink", "dest-topic", "source", "sourceII");
-
-        Map<Integer, Set<String>> nodeGroups = builder.nodeGroups();
-        Set<String> nodeGroup = nodeGroups.get(0);
+        final Map<Integer, Set<String>> nodeGroups = builder.nodeGroups();
+        final Set<String> nodeGroup = nodeGroups.get(0);
 
         assertTrue(nodeGroup.contains("sink"));
         assertTrue(nodeGroup.contains("source"));
         assertTrue(nodeGroup.contains("sourceII"));
-
     }
 
     @Test
     public void testSourceTopics() {
-        final TopologyBuilder builder = new TopologyBuilder();
         builder.setApplicationId("X");
-        builder.addSource("source-1", "topic-1");
-        builder.addSource("source-2", "topic-2");
-        builder.addSource("source-3", "topic-3");
+        builder.addSource(null, "source-1", null, null, null, "topic-1");
+        builder.addSource(null, "source-2", null, null, null, "topic-2");
+        builder.addSource(null, "source-3", null, null, null, "topic-3");
         builder.addInternalTopic("topic-3");
 
-        Pattern expectedPattern = Pattern.compile("X-topic-3|topic-1|topic-2");
+        final Pattern expectedPattern = Pattern.compile("X-topic-3|topic-1|topic-2");
 
         assertEquals(expectedPattern.pattern(), builder.sourceTopicPattern().pattern());
     }
 
     @Test
     public void testPatternSourceTopic() {
-        final TopologyBuilder builder = new TopologyBuilder();
-        Pattern expectedPattern = Pattern.compile("topic-\\d");
-        builder.addSource("source-1", expectedPattern);
+        final Pattern expectedPattern = Pattern.compile("topic-\\d");
+        builder.addSource(null, "source-1", null, null, null, expectedPattern);
         assertEquals(expectedPattern.pattern(), builder.sourceTopicPattern().pattern());
     }
 
     @Test
     public void testAddMoreThanOnePatternSourceNode() {
-        final TopologyBuilder builder = new TopologyBuilder();
-        Pattern expectedPattern = Pattern.compile("topics[A-Z]|.*-\\d");
-        builder.addSource("source-1", Pattern.compile("topics[A-Z]"));
-        builder.addSource("source-2", Pattern.compile(".*-\\d"));
+        final Pattern expectedPattern = Pattern.compile("topics[A-Z]|.*-\\d");
+        builder.addSource(null, "source-1", null, null, null, Pattern.compile("topics[A-Z]"));
+        builder.addSource(null, "source-2", null, null, null, Pattern.compile(".*-\\d"));
         assertEquals(expectedPattern.pattern(), builder.sourceTopicPattern().pattern());
     }
 
     @Test
     public void testSubscribeTopicNameAndPattern() {
-        final TopologyBuilder builder = new TopologyBuilder();
-        Pattern expectedPattern = Pattern.compile("topic-bar|topic-foo|.*-\\d");
-        builder.addSource("source-1", "topic-foo", "topic-bar");
-        builder.addSource("source-2", Pattern.compile(".*-\\d"));
+        final Pattern expectedPattern = Pattern.compile("topic-bar|topic-foo|.*-\\d");
+        builder.addSource(null, "source-1", null, null, null, "topic-foo", "topic-bar");
+        builder.addSource(null, "source-2", null, null, null, Pattern.compile(".*-\\d"));
         assertEquals(expectedPattern.pattern(), builder.sourceTopicPattern().pattern());
     }
 
-    @Test(expected = TopologyBuilderException.class)
+    @Test
     public void testPatternMatchesAlreadyProvidedTopicSource() {
-        final TopologyBuilder builder = new TopologyBuilder();
-        builder.addSource("source-1", "foo");
-        builder.addSource("source-2", Pattern.compile("f.*"));
+        builder.addSource(null, "source-1", null, null, null, "foo");
+        try {
+            builder.addSource(null, "source-2", null, null, null, Pattern.compile("f.*"));
+            fail("Should throw TopologyBuilderException with topic name/pattern conflict");
+        } catch (final TopologyBuilderException expected) { /* ok */ }
     }
 
-    @Test(expected = TopologyBuilderException.class)
+    @Test
     public void testNamedTopicMatchesAlreadyProvidedPattern() {
-        final TopologyBuilder builder = new TopologyBuilder();
-        builder.addSource("source-1", Pattern.compile("f.*"));
-        builder.addSource("source-2", "foo");
+        builder.addSource(null, "source-1", null, null, null, Pattern.compile("f.*"));
+        try {
+            builder.addSource(null, "source-2", null, null, null, "foo");
+            fail("Should throw TopologyBuilderException with topic name/pattern conflict");
+        } catch (final TopologyBuilderException expected) { /* ok */ }
     }
 
     @Test(expected = TopologyBuilderException.class)
     public void testAddStateStoreWithNonExistingProcessor() {
-        final TopologyBuilder builder = new TopologyBuilder();
-
         builder.addStateStore(new MockStateStoreSupplier("store", false), "no-such-processsor");
     }
 
-    @Test(expected = TopologyBuilderException.class)
+    @Test
     public void testAddStateStoreWithSource() {
-        final TopologyBuilder builder = new TopologyBuilder();
-
-        builder.addSource("source-1", "topic-1");
-        builder.addStateStore(new MockStateStoreSupplier("store", false), "source-1");
+        builder.addSource(null, "source-1", null, null, null, "topic-1");
+        try {
+            builder.addStateStore(new MockStateStoreSupplier("store", false), "source-1");
+            fail("Should throw TopologyBuilderException with store cannot be added to source");
+        } catch (final TopologyBuilderException expected) { /* ok */ }
     }
 
-    @Test(expected = TopologyBuilderException.class)
+    @Test
     public void testAddStateStoreWithSink() {
-        final TopologyBuilder builder = new TopologyBuilder();
-
-        builder.addSink("sink-1", "topic-1");
-        builder.addStateStore(new MockStateStoreSupplier("store", false), "sink-1");
+        builder.addSink("sink-1", "topic-1", null, null, null);
+        try {
+            builder.addStateStore(new MockStateStoreSupplier("store", false), "sink-1");
+            fail("Should throw TopologyBuilderException with store cannot be added to sink");
+        } catch (final TopologyBuilderException expected) { /* ok */ }
     }
 
-    @Test(expected = TopologyBuilderException.class)
+    @Test
     public void testAddStateStoreWithDuplicates() {
-        final TopologyBuilder builder = new TopologyBuilder();
-
         builder.addStateStore(new MockStateStoreSupplier("store", false));
-        builder.addStateStore(new MockStateStoreSupplier("store", false));
+        try {
+            builder.addStateStore(new MockStateStoreSupplier("store", false));
+            fail("Should throw TopologyBuilderException with store name conflict");
+        } catch (final TopologyBuilderException expected) { /* ok */ }
     }
 
     @Test
     public void testAddStateStore() {
-        final TopologyBuilder builder = new TopologyBuilder();
-
-        StateStoreSupplier supplier = new MockStateStoreSupplier("store-1", false);
+        final StateStoreSupplier supplier = new MockStateStoreSupplier("store-1", false);
         builder.addStateStore(supplier);
         builder.setApplicationId("X");
-        builder.addSource("source-1", "topic-1");
+        builder.addSource(null, "source-1", null, null, null, "topic-1");
         builder.addProcessor("processor-1", new MockProcessorSupplier(), "source-1");
 
         assertEquals(0, builder.build(null).stateStores().size());
 
         builder.connectProcessorAndStateStores("processor-1", "store-1");
 
-        List<StateStore> suppliers = builder.build(null).stateStores();
+        final List<StateStore> suppliers = builder.build(null).stateStores();
         assertEquals(1, suppliers.size());
         assertEquals(supplier.name(), suppliers.get(0).name());
     }
 
     @Test
     public void testTopicGroups() {
-        final TopologyBuilder builder = new TopologyBuilder();
         builder.setApplicationId("X");
         builder.addInternalTopic("topic-1x");
-        builder.addSource("source-1", "topic-1", "topic-1x");
-        builder.addSource("source-2", "topic-2");
-        builder.addSource("source-3", "topic-3");
-        builder.addSource("source-4", "topic-4");
-        builder.addSource("source-5", "topic-5");
+        builder.addSource(null, "source-1", null, null, null, "topic-1", "topic-1x");
+        builder.addSource(null, "source-2", null, null, null, "topic-2");
+        builder.addSource(null, "source-3", null, null, null, "topic-3");
+        builder.addSource(null, "source-4", null, null, null, "topic-4");
+        builder.addSource(null, "source-5", null, null, null, "topic-5");
 
         builder.addProcessor("processor-1", new MockProcessorSupplier(), "source-1");
 
@@ -360,30 +326,29 @@ public class TopologyBuilderTest {
 
         builder.addProcessor("processor-3", new MockProcessorSupplier(), "source-3", "source-4");
 
-        Map<Integer, TopicsInfo> topicGroups = builder.topicGroups();
+        final Map<Integer, TopologyBuilder.TopicsInfo> topicGroups = builder.topicGroups();
 
-        Map<Integer, TopicsInfo> expectedTopicGroups = new HashMap<>();
-        expectedTopicGroups.put(0, new TopicsInfo(Collections.<String>emptySet(), mkSet("topic-1", "X-topic-1x", "topic-2"), Collections.<String, InternalTopicConfig>emptyMap(), Collections.<String, InternalTopicConfig>emptyMap()));
-        expectedTopicGroups.put(1, new TopicsInfo(Collections.<String>emptySet(), mkSet("topic-3", "topic-4"), Collections.<String, InternalTopicConfig>emptyMap(), Collections.<String, InternalTopicConfig>emptyMap()));
-        expectedTopicGroups.put(2, new TopicsInfo(Collections.<String>emptySet(), mkSet("topic-5"), Collections.<String, InternalTopicConfig>emptyMap(), Collections.<String, InternalTopicConfig>emptyMap()));
+        final Map<Integer, TopologyBuilder.TopicsInfo> expectedTopicGroups = new HashMap<>();
+        expectedTopicGroups.put(0, new TopologyBuilder.TopicsInfo(Collections.<String>emptySet(), mkSet("topic-1", "X-topic-1x", "topic-2"), Collections.<String, InternalTopicConfig>emptyMap(), Collections.<String, InternalTopicConfig>emptyMap()));
+        expectedTopicGroups.put(1, new TopologyBuilder.TopicsInfo(Collections.<String>emptySet(), mkSet("topic-3", "topic-4"), Collections.<String, InternalTopicConfig>emptyMap(), Collections.<String, InternalTopicConfig>emptyMap()));
+        expectedTopicGroups.put(2, new TopologyBuilder.TopicsInfo(Collections.<String>emptySet(), mkSet("topic-5"), Collections.<String, InternalTopicConfig>emptyMap(), Collections.<String, InternalTopicConfig>emptyMap()));
 
         assertEquals(3, topicGroups.size());
         assertEquals(expectedTopicGroups, topicGroups);
 
-        Collection<Set<String>> copartitionGroups = builder.copartitionGroups();
+        final Collection<Set<String>> copartitionGroups = builder.copartitionGroups();
 
         assertEquals(mkSet(mkSet("topic-1", "X-topic-1x", "topic-2")), new HashSet<>(copartitionGroups));
     }
 
     @Test
     public void testTopicGroupsByStateStore() {
-        final TopologyBuilder builder = new TopologyBuilder();
         builder.setApplicationId("X");
-        builder.addSource("source-1", "topic-1", "topic-1x");
-        builder.addSource("source-2", "topic-2");
-        builder.addSource("source-3", "topic-3");
-        builder.addSource("source-4", "topic-4");
-        builder.addSource("source-5", "topic-5");
+        builder.addSource(null, "source-1", null, null, null, "topic-1", "topic-1x");
+        builder.addSource(null, "source-2", null, null, null, "topic-2");
+        builder.addSource(null, "source-3", null, null, null, "topic-3");
+        builder.addSource(null, "source-4", null, null, null, "topic-4");
+        builder.addSource(null, "source-5", null, null, null, "topic-5");
 
         builder.addProcessor("processor-1", new MockProcessorSupplier(), "source-1");
         builder.addProcessor("processor-2", new MockProcessorSupplier(), "source-2");
@@ -394,39 +359,42 @@ public class TopologyBuilderTest {
         builder.addStateStore(new MockStateStoreSupplier("store-2", false), "processor-3", "processor-4");
 
         builder.addProcessor("processor-5", new MockProcessorSupplier(), "source-5");
-        StateStoreSupplier supplier = new MockStateStoreSupplier("store-3", false);
+        final StateStoreSupplier supplier = new MockStateStoreSupplier("store-3", false);
         builder.addStateStore(supplier);
         builder.connectProcessorAndStateStores("processor-5", "store-3");
 
-        Map<Integer, TopicsInfo> topicGroups = builder.topicGroups();
+        final Map<Integer, TopologyBuilder.TopicsInfo> topicGroups = builder.topicGroups();
 
-        Map<Integer, TopicsInfo> expectedTopicGroups = new HashMap<>();
+        final Map<Integer, TopologyBuilder.TopicsInfo> expectedTopicGroups = new HashMap<>();
         final String store1 = ProcessorStateManager.storeChangelogTopic("X", "store-1");
         final String store2 = ProcessorStateManager.storeChangelogTopic("X", "store-2");
         final String store3 = ProcessorStateManager.storeChangelogTopic("X", "store-3");
-        expectedTopicGroups.put(0, new TopicsInfo(Collections.<String>emptySet(), mkSet("topic-1", "topic-1x", "topic-2"),
-                                                  Collections.<String, InternalTopicConfig>emptyMap(),
-                                                  Collections.singletonMap(store1,
-                                                                           new InternalTopicConfig(
-                                                                                   store1,
-                                                                                   Collections.singleton(InternalTopicConfig.CleanupPolicy.compact),
-                                                                                   Collections.<String, String>emptyMap()))));
-        expectedTopicGroups.put(1, new TopicsInfo(Collections.<String>emptySet(), mkSet("topic-3", "topic-4"),
-                                                  Collections.<String, InternalTopicConfig>emptyMap(),
-                                                  Collections.singletonMap(store2,
-                                                                           new InternalTopicConfig(
-                                                                                   store2,
-                                                                                   Collections.singleton(InternalTopicConfig.CleanupPolicy.compact),
-                                                                                   Collections.<String, String>emptyMap()))));
-        expectedTopicGroups.put(2, new TopicsInfo(Collections.<String>emptySet(), mkSet("topic-5"),
-                                                  Collections.<String, InternalTopicConfig>emptyMap(),
-                                                  Collections.singletonMap(store3,
-                                                                           new InternalTopicConfig(
-                                                                                   store3,
-                                                                                   Collections.singleton(InternalTopicConfig.CleanupPolicy.compact),
-                                                                                   Collections.<String, String>emptyMap()))));
-
-
+        expectedTopicGroups.put(0, new TopologyBuilder.TopicsInfo(
+            Collections.<String>emptySet(), mkSet("topic-1", "topic-1x", "topic-2"),
+            Collections.<String, InternalTopicConfig>emptyMap(),
+            Collections.singletonMap(
+                store1,
+                new InternalTopicConfig(
+                    store1,
+                    Collections.singleton(InternalTopicConfig.CleanupPolicy.compact),
+                    Collections.<String, String>emptyMap()))));
+        expectedTopicGroups.put(1, new TopologyBuilder.TopicsInfo(
+            Collections.<String>emptySet(), mkSet("topic-3", "topic-4"),
+            Collections.<String, InternalTopicConfig>emptyMap(),
+            Collections.singletonMap(
+                store2,
+                new InternalTopicConfig(
+                    store2,
+                    Collections.singleton(InternalTopicConfig.CleanupPolicy.compact),
+                    Collections.<String, String>emptyMap()))));
+        expectedTopicGroups.put(2, new TopologyBuilder.TopicsInfo(
+            Collections.<String>emptySet(), mkSet("topic-5"),
+            Collections.<String, InternalTopicConfig>emptyMap(),
+            Collections.singletonMap(store3,
+                new InternalTopicConfig(
+                    store3,
+                    Collections.singleton(InternalTopicConfig.CleanupPolicy.compact),
+                    Collections.<String, String>emptyMap()))));
 
         assertEquals(3, topicGroups.size());
         assertEquals(expectedTopicGroups, topicGroups);
@@ -434,22 +402,20 @@ public class TopologyBuilderTest {
 
     @Test
     public void testBuild() {
-        final TopologyBuilder builder = new TopologyBuilder();
-
-        builder.addSource("source-1", "topic-1", "topic-1x");
-        builder.addSource("source-2", "topic-2");
-        builder.addSource("source-3", "topic-3");
-        builder.addSource("source-4", "topic-4");
-        builder.addSource("source-5", "topic-5");
+        builder.addSource(null, "source-1", null, null, null, "topic-1", "topic-1x");
+        builder.addSource(null, "source-2", null, null, null, "topic-2");
+        builder.addSource(null, "source-3", null, null, null, "topic-3");
+        builder.addSource(null, "source-4", null, null, null, "topic-4");
+        builder.addSource(null, "source-5", null, null, null, "topic-5");
 
         builder.addProcessor("processor-1", new MockProcessorSupplier(), "source-1");
         builder.addProcessor("processor-2", new MockProcessorSupplier(), "source-2", "processor-1");
         builder.addProcessor("processor-3", new MockProcessorSupplier(), "source-3", "source-4");
 
         builder.setApplicationId("X");
-        ProcessorTopology topology0 = builder.build(0);
-        ProcessorTopology topology1 = builder.build(1);
-        ProcessorTopology topology2 = builder.build(2);
+        final ProcessorTopology topology0 = builder.build(0);
+        final ProcessorTopology topology1 = builder.build(1);
+        final ProcessorTopology topology2 = builder.build(2);
 
         assertEquals(mkSet("source-1", "source-2", "processor-1", "processor-2"), nodeNames(topology0.processors()));
         assertEquals(mkSet("source-3", "source-4", "processor-3"), nodeNames(topology1.processors()));
@@ -458,19 +424,16 @@ public class TopologyBuilderTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullNameWhenAddingSink() throws Exception {
-        final TopologyBuilder builder = new TopologyBuilder();
-        builder.addSink(null, "topic");
+        builder.addSink(null, "topic", null, null, null);
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullTopicWhenAddingSink() throws Exception {
-        final TopologyBuilder builder = new TopologyBuilder();
-        builder.addSink("name", null);
+        builder.addSink("name", null, null, null, null);
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullNameWhenAddingProcessor() throws Exception {
-        final TopologyBuilder builder = new TopologyBuilder();
         builder.addProcessor(null, new ProcessorSupplier() {
             @Override
             public Processor get() {
@@ -481,43 +444,37 @@ public class TopologyBuilderTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullProcessorSupplier() throws Exception {
-        final TopologyBuilder builder = new TopologyBuilder();
         builder.addProcessor("name", null);
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullNameWhenAddingSource() throws Exception {
-        final TopologyBuilder builder = new TopologyBuilder();
-        builder.addSource(null, Pattern.compile(".*"));
+        builder.addSource(null, null, null, null, null, Pattern.compile(".*"));
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullProcessorNameWhenConnectingProcessorAndStateStores() throws Exception {
-        final TopologyBuilder builder = new TopologyBuilder();
         builder.connectProcessorAndStateStores(null, "store");
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAddNullInternalTopic() throws Exception {
-        final TopologyBuilder builder = new TopologyBuilder();
         builder.addInternalTopic(null);
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldNotSetApplicationIdToNull() throws Exception {
-        final TopologyBuilder builder = new TopologyBuilder();
         builder.setApplicationId(null);
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAddNullStateStoreSupplier() throws Exception {
-        final TopologyBuilder builder = new TopologyBuilder();
         builder.addStateStore(null);
     }
 
-    private Set<String> nodeNames(Collection<ProcessorNode> nodes) {
-        Set<String> nodeNames = new HashSet<>();
-        for (ProcessorNode node : nodes) {
+    private Set<String> nodeNames(final Collection<ProcessorNode> nodes) {
+        final Set<String> nodeNames = new HashSet<>();
+        for (final ProcessorNode node : nodes) {
             nodeNames.add(node.name());
         }
         return nodeNames;
@@ -525,8 +482,7 @@ public class TopologyBuilderTest {
 
     @Test
     public void shouldAssociateStateStoreNameWhenStateStoreSupplierIsInternal() throws Exception {
-        final TopologyBuilder builder = new TopologyBuilder();
-        builder.addSource("source", "topic");
+        builder.addSource(null, "source", null, null, null, "topic");
         builder.addProcessor("processor", new MockProcessorSupplier(), "source");
         builder.addStateStore(new MockStateStoreSupplier("store", false), "processor");
         final Map<String, List<String>> stateStoreNameToSourceTopic = builder.stateStoreNameToSourceTopics();
@@ -536,8 +492,7 @@ public class TopologyBuilderTest {
 
     @Test
     public void shouldAssociateStateStoreNameWhenStateStoreSupplierIsExternal() throws Exception {
-        final TopologyBuilder builder = new TopologyBuilder();
-        builder.addSource("source", "topic");
+        builder.addSource(null, "source", null, null, null, "topic");
         builder.addProcessor("processor", new MockProcessorSupplier(), "source");
         builder.addStateStore(new MockStateStoreSupplier("store", false), "processor");
         final Map<String, List<String>> stateStoreNameToSourceTopic = builder.stateStoreNameToSourceTopics();
@@ -547,10 +502,9 @@ public class TopologyBuilderTest {
 
     @Test
     public void shouldCorrectlyMapStateStoreToInternalTopics() throws Exception {
-        final TopologyBuilder builder = new TopologyBuilder();
         builder.setApplicationId("appId");
         builder.addInternalTopic("internal-topic");
-        builder.addSource("source", "internal-topic");
+        builder.addSource(null, "source", null, null, null, "internal-topic");
         builder.addProcessor("processor", new MockProcessorSupplier(), "source");
         builder.addStateStore(new MockStateStoreSupplier("store", false), "processor");
         final Map<String, List<String>> stateStoreNameToSourceTopic = builder.stateStoreNameToSourceTopics();
@@ -561,13 +515,12 @@ public class TopologyBuilderTest {
     @SuppressWarnings("unchecked")
     @Test
     public void shouldAddInternalTopicConfigWithCompactAndDeleteSetForWindowStores() throws Exception {
-        final TopologyBuilder builder = new TopologyBuilder();
         builder.setApplicationId("appId");
-        builder.addSource("source", "topic");
+        builder.addSource(null, "source", null, null, null, "topic");
         builder.addProcessor("processor", new MockProcessorSupplier(), "source");
         builder.addStateStore(new RocksDBWindowStoreSupplier("store", 30000, 3, false, null, null, 10000, true, Collections.<String, String>emptyMap(), false), "processor");
-        final Map<Integer, TopicsInfo> topicGroups = builder.topicGroups();
-        final TopicsInfo topicsInfo = topicGroups.values().iterator().next();
+        final Map<Integer, TopologyBuilder.TopicsInfo> topicGroups = builder.topicGroups();
+        final TopologyBuilder.TopicsInfo topicsInfo = topicGroups.values().iterator().next();
         final InternalTopicConfig topicConfig = topicsInfo.stateChangelogTopics.get("appId-store-changelog");
         final Properties properties = topicConfig.toProperties(0);
         final List<String> policies = Arrays.asList(properties.getProperty(InternalTopicManager.CLEANUP_POLICY_PROP).split(","));
@@ -579,15 +532,15 @@ public class TopologyBuilderTest {
         assertEquals(2, properties.size());
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     public void shouldAddInternalTopicConfigWithCompactForNonWindowStores() throws Exception {
-        final TopologyBuilder builder = new TopologyBuilder();
         builder.setApplicationId("appId");
-        builder.addSource("source", "topic");
+        builder.addSource(null, "source", null, null, null, "topic");
         builder.addProcessor("processor", new MockProcessorSupplier(), "source");
         builder.addStateStore(new MockStateStoreSupplier("name", true), "processor");
-        final Map<Integer, TopicsInfo> topicGroups = builder.topicGroups();
-        final TopicsInfo topicsInfo = topicGroups.values().iterator().next();
+        final Map<Integer, TopologyBuilder.TopicsInfo> topicGroups = builder.topicGroups();
+        final TopologyBuilder.TopicsInfo topicsInfo = topicGroups.values().iterator().next();
         final InternalTopicConfig topicConfig = topicsInfo.stateChangelogTopics.get("appId-name-changelog");
         final Properties properties = topicConfig.toProperties(0);
         assertEquals("appId-name-changelog", topicConfig.name());
@@ -595,13 +548,13 @@ public class TopologyBuilderTest {
         assertEquals(1, properties.size());
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     public void shouldAddInternalTopicConfigWithCleanupPolicyDeleteForInternalTopics() throws Exception {
-        final TopologyBuilder builder = new TopologyBuilder();
         builder.setApplicationId("appId");
         builder.addInternalTopic("foo");
-        builder.addSource("source", "foo");
-        final TopicsInfo topicsInfo = builder.topicGroups().values().iterator().next();
+        builder.addSource(null, "source", null, null, null, "foo");
+        final TopologyBuilder.TopicsInfo topicsInfo = builder.topicGroups().values().iterator().next();
         final InternalTopicConfig topicConfig = topicsInfo.repartitionSourceTopics.get("appId-foo");
         final Properties properties = topicConfig.toProperties(0);
         assertEquals("appId-foo", topicConfig.name());
@@ -609,9 +562,8 @@ public class TopologyBuilderTest {
         assertEquals(1, properties.size());
     }
 
-
     @Test(expected = TopologyBuilderException.class)
-    public void shouldThroughOnUnassignedStateStoreAccess() throws Exception {
+    public void shouldThroughOnUnassignedStateStoreAccess() {
         final String sourceNodeName = "source";
         final String goodNodeName = "goodGuy";
         final String badNodeName = "badGuy";
@@ -622,16 +574,14 @@ public class TopologyBuilderTest {
         final StreamsConfig streamsConfig = new StreamsConfig(config);
 
         try {
-            final TopologyBuilder builder = new TopologyBuilder();
-            builder
-                .addSource(sourceNodeName, "topic")
-                .addProcessor(goodNodeName, new LocalMockProcessorSupplier(), sourceNodeName)
-                .addStateStore(
+            builder.addSource(null, sourceNodeName, null, null, null, "topic");
+            builder.addProcessor(goodNodeName, new LocalMockProcessorSupplier(), sourceNodeName);
+            builder.addStateStore(
                     Stores.create(LocalMockProcessorSupplier.STORE_NAME).withStringKeys().withStringValues().inMemory().build(),
-                    goodNodeName)
-                .addProcessor(badNodeName, new LocalMockProcessorSupplier(), sourceNodeName);
+                    goodNodeName);
+            builder.addProcessor(badNodeName, new LocalMockProcessorSupplier(), sourceNodeName);
 
-            final ProcessorTopologyTestDriver driver = new ProcessorTopologyTestDriver(streamsConfig, builder.internalTopologyBuilder);
+            final ProcessorTopologyTestDriver driver = new ProcessorTopologyTestDriver(streamsConfig, builder);
             driver.process("topic", null, null);
         } catch (final StreamsException e) {
             final Throwable cause = e.getCause();
@@ -652,17 +602,15 @@ public class TopologyBuilderTest {
         public Processor get() {
             return new Processor() {
                 @Override
-                public void init(ProcessorContext context) {
+                public void init(final ProcessorContext context) {
                     context.getStateStore(STORE_NAME);
                 }
 
                 @Override
-                public void process(Object key, Object value) {
-                }
+                public void process(final Object key, final Object value) { }
 
                 @Override
-                public void punctuate(long timestamp) {
-                }
+                public void punctuate(final long timestamp) { }
 
                 @Override
                 public void close() {
@@ -674,16 +622,15 @@ public class TopologyBuilderTest {
     @SuppressWarnings("unchecked")
     @Test
     public void shouldSetCorrectSourceNodesWithRegexUpdatedTopics() throws Exception {
-        final TopologyBuilder builder = new TopologyBuilder();
-        builder.addSource("source-1", "topic-foo");
-        builder.addSource("source-2", Pattern.compile("topic-[A-C]"));
-        builder.addSource("source-3", Pattern.compile("topic-\\d"));
+        builder.addSource(null, "source-1", null, null, null, "topic-foo");
+        builder.addSource(null, "source-2", null, null, null, Pattern.compile("topic-[A-C]"));
+        builder.addSource(null, "source-3", null, null, null, Pattern.compile("topic-\\d"));
 
-        SubscriptionUpdates subscriptionUpdates = new SubscriptionUpdates();
-        Field updatedTopicsField  = subscriptionUpdates.getClass().getDeclaredField("updatedTopicSubscriptions");
+        final SubscriptionUpdates subscriptionUpdates = new SubscriptionUpdates();
+        final Field updatedTopicsField  = subscriptionUpdates.getClass().getDeclaredField("updatedTopicSubscriptions");
         updatedTopicsField.setAccessible(true);
 
-        Set<String> updatedTopics = (Set<String>) updatedTopicsField.get(subscriptionUpdates);
+        final Set<String> updatedTopics = (Set<String>) updatedTopicsField.get(subscriptionUpdates);
 
         updatedTopics.add("topic-B");
         updatedTopics.add("topic-3");
@@ -692,7 +639,7 @@ public class TopologyBuilderTest {
         builder.updateSubscriptions(subscriptionUpdates, null);
         builder.setApplicationId("test-id");
 
-        Map<Integer, TopicsInfo> topicGroups = builder.topicGroups();
+        final Map<Integer, TopologyBuilder.TopicsInfo> topicGroups = builder.topicGroups();
         assertTrue(topicGroups.get(0).sourceTopics.contains("topic-foo"));
         assertTrue(topicGroups.get(1).sourceTopics.contains("topic-A"));
         assertTrue(topicGroups.get(1).sourceTopics.contains("topic-B"));
@@ -700,63 +647,28 @@ public class TopologyBuilderTest {
 
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     public void shouldAddTimestampExtractorPerSource() throws Exception {
-        final TopologyBuilder builder = new TopologyBuilder();
-        builder.addSource(new MockTimestampExtractor(), "source", "topic");
-        final ProcessorTopology processorTopology = builder.build(null);
-        assertThat(processorTopology.source("topic").getTimestampExtractor(), instanceOf(MockTimestampExtractor.class));
-    }
-
-    @Test
-    public void shouldAddTimestampExtractorWithOffsetResetPerSource() throws Exception {
-        final TopologyBuilder builder = new TopologyBuilder();
-        builder.addSource(null, new MockTimestampExtractor(), "source", "topic");
-        final ProcessorTopology processorTopology = builder.build(null);
-        assertThat(processorTopology.source("topic").getTimestampExtractor(), instanceOf(MockTimestampExtractor.class));
-    }
-
-    @Test
-    public void shouldAddTimestampExtractorWithPatternPerSource() throws Exception {
-        final TopologyBuilder builder = new TopologyBuilder();
-        final Pattern pattern = Pattern.compile("t.*");
-        builder.addSource(new MockTimestampExtractor(), "source", pattern);
-        final ProcessorTopology processorTopology = builder.build(null);
-        assertThat(processorTopology.source(pattern.pattern()).getTimestampExtractor(), instanceOf(MockTimestampExtractor.class));
-    }
-
-    @Test
-    public void shouldAddTimestampExtractorWithOffsetResetAndPatternPerSource() throws Exception {
-        final TopologyBuilder builder = new TopologyBuilder();
-        final Pattern pattern = Pattern.compile("t.*");
-        builder.addSource(null, new MockTimestampExtractor(), "source", pattern);
-        final ProcessorTopology processorTopology = builder.build(null);
-        assertThat(processorTopology.source(pattern.pattern()).getTimestampExtractor(), instanceOf(MockTimestampExtractor.class));
-    }
-
-    @Test
-    public void shouldAddTimestampExtractorWithOffsetResetAndKeyValSerdesPerSource() throws Exception {
-        final TopologyBuilder builder = new TopologyBuilder();
         builder.addSource(null, "source", new MockTimestampExtractor(), null, null, "topic");
         final ProcessorTopology processorTopology = builder.build(null);
         assertThat(processorTopology.source("topic").getTimestampExtractor(), instanceOf(MockTimestampExtractor.class));
     }
 
+    @SuppressWarnings("unchecked")
     @Test
-    public void shouldAddTimestampExtractorWithOffsetResetAndKeyValSerdesAndPatternPerSource() throws Exception {
-        final TopologyBuilder builder = new TopologyBuilder();
+    public void shouldAddTimestampExtractorWithPatternPerSource() throws Exception {
         final Pattern pattern = Pattern.compile("t.*");
         builder.addSource(null, "source", new MockTimestampExtractor(), null, null, pattern);
         final ProcessorTopology processorTopology = builder.build(null);
         assertThat(processorTopology.source(pattern.pattern()).getTimestampExtractor(), instanceOf(MockTimestampExtractor.class));
     }
 
+    @Test
     public void shouldConnectRegexMatchedTopicsToStateStore() throws Exception {
-
-        final TopologyBuilder topologyBuilder = new TopologyBuilder()
-                .addSource("ingest", Pattern.compile("topic-\\d+"))
-                .addProcessor("my-processor", new MockProcessorSupplier(), "ingest")
-                .addStateStore(new MockStateStoreSupplier("testStateStore", false), "my-processor");
+        builder.addSource(null, "ingest", null, null, null, Pattern.compile("topic-\\d+"));
+        builder.addProcessor("my-processor", new MockProcessorSupplier(), "ingest");
+        builder.addStateStore(new MockStateStoreSupplier("testStateStore", false), "my-processor");
 
         final SubscriptionUpdates subscriptionUpdates = new SubscriptionUpdates();
         final Field updatedTopicsField  = subscriptionUpdates.getClass().getDeclaredField("updatedTopicSubscriptions");
@@ -768,11 +680,11 @@ public class TopologyBuilderTest {
         updatedTopics.add("topic-3");
         updatedTopics.add("topic-A");
 
-        topologyBuilder.updateSubscriptions(subscriptionUpdates, "test-thread");
-        topologyBuilder.setApplicationId("test-app");
+        builder.updateSubscriptions(subscriptionUpdates, "test-thread");
+        builder.setApplicationId("test-app");
 
-        Map<String, List<String>> stateStoreAndTopics = topologyBuilder.stateStoreNameToSourceTopics();
-        List<String> topics = stateStoreAndTopics.get("testStateStore");
+        final Map<String, List<String>> stateStoreAndTopics = builder.stateStoreNameToSourceTopics();
+        final List<String> topics = stateStoreAndTopics.get("testStateStore");
 
         assertTrue("Expected to contain two topics", topics.size() == 2);
 
@@ -784,13 +696,14 @@ public class TopologyBuilderTest {
     @Test(expected = TopologyBuilderException.class)
     public void shouldNotAllowToAddGlobalStoreWithSourceNameEqualsProcessorName() {
         final String sameNameForSourceAndProcessor = "sameName";
-        final TopologyBuilder topologyBuilder = new TopologyBuilder()
-            .addGlobalStore(new MockStateStoreSupplier("anyName", false, false),
-                sameNameForSourceAndProcessor,
-                null,
-                null,
-                "anyTopicName",
-                sameNameForSourceAndProcessor,
-                new MockProcessorSupplier());
+        builder.addGlobalStore(
+            new MockStateStoreSupplier("anyName", false, false),
+            sameNameForSourceAndProcessor,
+            null,
+            null,
+            null,
+            "anyTopicName",
+            sameNameForSourceAndProcessor,
+            new MockProcessorSupplier());
     }
 }
