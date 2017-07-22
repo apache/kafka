@@ -91,12 +91,7 @@ class ZookeeperClient(connectString: String, sessionTimeoutMs: Int, connectionTi
   }
 
   def waitUntilConnectedOrExpired: Boolean = inLock(isConnectedOrExpiredLock) {
-    var state = zooKeeper.getState
-    while (!state.isConnected && state.isAlive) {
-      isConnectedOrExpiredCondition.await()
-      state = zooKeeper.getState
-    }
-    state.isConnected
+    waitUntilConnectedOrExpired(Long.MaxValue, TimeUnit.MILLISECONDS)
   }
 
   private def waitUntilConnectedOrExpired(timeout: Long, timeUnit: TimeUnit): Boolean = {
