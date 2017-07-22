@@ -154,13 +154,13 @@ class ZookeeperClient(connectString: String, sessionTimeoutMs: Int, connectionTi
       val threshold = now + connectionTimeoutMs
       while (now < threshold) {
         try {
+          zooKeeper.close()
           zooKeeper = new ZooKeeper(connectString, sessionTimeoutMs, ZookeeperClientWatcher)
           if (waitUntilConnectedOrExpired(threshold - now, TimeUnit.MILLISECONDS)) {
             return
           }
         } catch {
           case _: Exception =>
-            zooKeeper.close()
             now = time.milliseconds()
             if (now < threshold) {
               time.sleep(1000)
