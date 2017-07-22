@@ -29,6 +29,15 @@ import org.apache.zookeeper.ZooKeeper.States
 import org.apache.zookeeper.data.{ACL, Stat}
 import org.apache.zookeeper.{CreateMode, WatchedEvent, Watcher, ZooKeeper}
 
+/**
+  * ZookeeperClient is a zookeeper client that encourages pipelined requests to zookeeper.
+  *
+  * @param connectString comma separated host:port pairs, each corresponding to a zk server
+  * @param sessionTimeoutMs session timeout in milliseconds
+  * @param connectionTimeoutMs connection timeout in milliseconds
+  * @param stateChangeHandler state change handler callbacks called by the underlying zookeeper client's EventThread.
+  * @param time
+  */
 class ZookeeperClient(connectString: String, sessionTimeoutMs: Int, connectionTimeoutMs: Int, stateChangeHandler: StateChangeHandler, time: Time) extends Logging {
   private val initializationLock = new ReentrantReadWriteLock()
   private val isConnectedOrExpiredLock = new ReentrantLock()
@@ -40,10 +49,20 @@ class ZookeeperClient(connectString: String, sessionTimeoutMs: Int, connectionTi
   @volatile private var zooKeeper = new ZooKeeper(connectString, sessionTimeoutMs, ZookeeperClientWatcher)
   waitUntilConnected(connectionTimeoutMs, TimeUnit.MILLISECONDS)
 
+  /**
+    * Take an AsyncRequest and wait for its AsyncResponse.
+    * @param request a single AsyncRequest to wait on.
+    * @return the request's AsyncReponse.
+    */
   def handle(request: AsyncRequest): AsyncResponse = {
     handle(Seq(request)).head
   }
 
+  /**
+    * Pipeline a sequence of AsyncRequests and wait for all of their AsyncResponses.
+    * @param requests a sequence of AsyncRequests to wait on.
+    * @return the AsyncResponses.
+    */
   def handle(requests: Seq[AsyncRequest]): Seq[AsyncResponse] = inReadLock(initializationLock) {
     import scala.collection.JavaConverters._
     val countDownLatch = new CountDownLatch(requests.size)
@@ -94,6 +113,11 @@ class ZookeeperClient(connectString: String, sessionTimeoutMs: Int, connectionTi
     responseQueue.asScala.toSeq
   }
 
+  /**
+    * Wait indefinitely until the underlying zookeeper client to reaches the CONNECTED state.
+    * @throws ZookeeperClientAuthFailedException if the authentication failed either before or while waiting for connection.
+    * @throws ZookeeperClientExpiredException if the session expired either before or while waiting for connection.
+    */
   def waitUntilConnected(): Unit = inLock(isConnectedOrExpiredLock) {
     waitUntilConnected(Long.MaxValue, TimeUnit.MILLISECONDS)
   }
@@ -111,9 +135,9 @@ class ZookeeperClient(connectString: String, sessionTimeoutMs: Int, connectionTi
         state = zooKeeper.getState
       }
       if (state == States.AUTH_FAILED) {
-        throw new ZookeeperClientAuthFailedException("Auth failed while waiting for connection")
+        throw new ZookeeperClientAuthFailedException("Auth failed either before or while waiting for connection")
       } else if (state == States.CLOSED) {
-        throw new ZookeeperClientExpiredException("Session expired while waiting for connection")
+        throw new ZookeeperClientExpiredException("Session expired either before or while waiting for connection")
       }
     }
     info("Connected.")
