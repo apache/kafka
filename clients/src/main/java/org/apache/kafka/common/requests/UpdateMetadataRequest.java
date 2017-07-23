@@ -76,12 +76,7 @@ public class UpdateMetadataRequest extends AbstractRequest {
     }
 
     public static final class PartitionState {
-        public final int controllerEpoch;
-        public final int leader;
-        public final int leaderEpoch;
-        public final List<Integer> isr;
-        public final int zkVersion;
-        public final List<Integer> replicas;
+        public final BasePartitionState basePartitionState;
         public final List<Integer> offlineReplicas;
 
         public PartitionState(int controllerEpoch,
@@ -91,24 +86,19 @@ public class UpdateMetadataRequest extends AbstractRequest {
                               int zkVersion,
                               List<Integer> replicas,
                               List<Integer> offlineReplicas) {
-            this.controllerEpoch = controllerEpoch;
-            this.leader = leader;
-            this.leaderEpoch = leaderEpoch;
-            this.isr = isr;
-            this.zkVersion = zkVersion;
-            this.replicas = replicas;
+            this.basePartitionState = new BasePartitionState(controllerEpoch, leader, leaderEpoch, isr, zkVersion, replicas);
             this.offlineReplicas = offlineReplicas;
         }
 
         @Override
         public String toString() {
-            return "PartitionState(controllerEpoch=" + controllerEpoch +
-                ", leader=" + leader +
-                ", leaderEpoch=" + leaderEpoch +
-                ", isr=" + Arrays.toString(isr.toArray()) +
-                ", zkVersion=" + zkVersion +
-                ", replicas=" + Arrays.toString(replicas.toArray()) +
-                ", offlineReplicas=" + Arrays.toString(replicas.toArray()) + ")";
+            return "PartitionState(controllerEpoch=" + basePartitionState.controllerEpoch +
+                ", leader=" + basePartitionState.leader +
+                ", leaderEpoch=" + basePartitionState.leaderEpoch +
+                ", isr=" + Arrays.toString(basePartitionState.isr.toArray()) +
+                ", zkVersion=" + basePartitionState.zkVersion +
+                ", replicas=" + Arrays.toString(basePartitionState.replicas.toArray()) +
+                ", offlineReplicas=" + Arrays.toString(offlineReplicas.toArray()) + ")";
         }
     }
 
@@ -285,12 +275,12 @@ public class UpdateMetadataRequest extends AbstractRequest {
             partitionStateData.set(TOPIC_KEY_NAME, topicPartition.topic());
             partitionStateData.set(PARTITION_KEY_NAME, topicPartition.partition());
             PartitionState partitionState = entry.getValue();
-            partitionStateData.set(CONTROLLER_EPOCH_KEY_NAME, partitionState.controllerEpoch);
-            partitionStateData.set(LEADER_KEY_NAME, partitionState.leader);
-            partitionStateData.set(LEADER_EPOCH_KEY_NAME, partitionState.leaderEpoch);
-            partitionStateData.set(ISR_KEY_NAME, partitionState.isr.toArray());
-            partitionStateData.set(ZK_VERSION_KEY_NAME, partitionState.zkVersion);
-            partitionStateData.set(REPLICAS_KEY_NAME, partitionState.replicas.toArray());
+            partitionStateData.set(CONTROLLER_EPOCH_KEY_NAME, partitionState.basePartitionState.controllerEpoch);
+            partitionStateData.set(LEADER_KEY_NAME, partitionState.basePartitionState.leader);
+            partitionStateData.set(LEADER_EPOCH_KEY_NAME, partitionState.basePartitionState.leaderEpoch);
+            partitionStateData.set(ISR_KEY_NAME, partitionState.basePartitionState.isr.toArray());
+            partitionStateData.set(ZK_VERSION_KEY_NAME, partitionState.basePartitionState.zkVersion);
+            partitionStateData.set(REPLICAS_KEY_NAME, partitionState.basePartitionState.replicas.toArray());
             if (partitionStateData.hasField(OFFLINE_REPLICAS_KEY_NAME))
               partitionStateData.set(OFFLINE_REPLICAS_KEY_NAME, partitionState.offlineReplicas.toArray());
             partitionStatesData.add(partitionStateData);
