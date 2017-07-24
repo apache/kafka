@@ -22,7 +22,7 @@ import kafka.message._
 import kafka.serializer._
 import kafka.utils.{CommandLineUtils, Exit, ToolsUtils}
 import kafka.producer.{NewShinyProducer, OldProducer}
-import java.util.{Properties, Random}
+import java.util.Properties
 import java.io._
 import java.nio.charset.StandardCharsets
 
