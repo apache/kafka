@@ -56,6 +56,7 @@ public class MockConsumerInterceptor implements ClusterResourceListener, Consume
     }
 
     @Override
+    @SuppressWarnings("deprecation")
     public ConsumerRecords<String, String> onConsume(ConsumerRecords<String, String> records) {
 
         // This will ensure that we get the cluster metadata when onConsume is called for the first time

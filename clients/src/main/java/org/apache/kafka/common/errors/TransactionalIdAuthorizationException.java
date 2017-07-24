@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.common.errors;
 
-public class TransactionalIdAuthorizationException extends ApiException {
+public class TransactionalIdAuthorizationException extends AuthorizationException {
     public TransactionalIdAuthorizationException(final String message) {
         super(message);
     }

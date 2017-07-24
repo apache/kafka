@@ -64,7 +64,7 @@ import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
  * @see GlobalKTable
  * @see KStreamBuilder#table(String, String)
  */
-@InterfaceStability.Unstable
+@InterfaceStability.Evolving
 public interface KTable<K, V> {
 
     /**

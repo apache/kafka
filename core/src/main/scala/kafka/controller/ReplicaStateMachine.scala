@@ -81,13 +81,13 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
    */
   def handleStateChanges(replicas: Set[PartitionAndReplica], targetState: ReplicaState,
                          callbacks: Callbacks = (new CallbackBuilder).build) {
-    if(replicas.nonEmpty) {
+    if (replicas.nonEmpty) {
       info("Invoking state change to %s for replicas %s".format(targetState, replicas.mkString(",")))
       try {
         brokerRequestBatch.newBatch()
         replicas.foreach(r => handleStateChange(r, targetState, callbacks))
         brokerRequestBatch.sendRequestsToBrokers(controller.epoch)
-      }catch {
+      } catch {
         case e: Throwable => error("Error while moving some replicas to %s state".format(targetState), e)
       }
     }

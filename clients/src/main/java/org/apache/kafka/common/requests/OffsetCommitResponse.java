@@ -30,7 +30,6 @@ import java.util.Map;
 
 public class OffsetCommitResponse extends AbstractResponse {
 
-    private static final String THROTTLE_TIME_KEY_NAME = "throttle_time_ms";
     private static final String RESPONSES_KEY_NAME = "responses";
 
     // topic level fields
@@ -45,6 +44,7 @@ public class OffsetCommitResponse extends AbstractResponse {
      * Possible error codes:
      *
      * UNKNOWN_TOPIC_OR_PARTITION (3)
+     * REQUEST_TIMED_OUT (7)
      * OFFSET_METADATA_TOO_LARGE (12)
      * COORDINATOR_LOAD_IN_PROGRESS (14)
      * GROUP_COORDINATOR_NOT_AVAILABLE (15)

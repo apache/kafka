@@ -228,13 +228,14 @@ public class ProduceRequest extends AbstractRequest {
     }
 
     @Override
-    public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
+    public ProduceResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         /* In case the producer doesn't actually want any response */
         if (acks == 0)
             return null;
 
+        Errors error = Errors.forException(e);
         Map<TopicPartition, ProduceResponse.PartitionResponse> responseMap = new HashMap<>();
-        ProduceResponse.PartitionResponse partitionResponse = new ProduceResponse.PartitionResponse(Errors.forException(e));
+        ProduceResponse.PartitionResponse partitionResponse = new ProduceResponse.PartitionResponse(error);
 
         for (TopicPartition tp : partitions())
             responseMap.put(tp, partitionResponse);

@@ -63,6 +63,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
 
     private boolean commitRequested = false;
     private boolean commitOffsetNeeded = false;
+    private boolean transactionInFlight = false;
     private final Time time;
     private final TaskMetrics metrics;
 
@@ -139,8 +140,9 @@ public class StreamTask extends AbstractTask implements Punctuator {
         initializeStateStores();
         stateMgr.registerGlobalStateStores(topology.globalStateStores());
         if (eosEnabled) {
-            producer.initTransactions();
-            producer.beginTransaction();
+            this.producer.initTransactions();
+            this.producer.beginTransaction();
+            transactionInFlight = true;
         }
         initTopology();
         processorContext.initialized();
@@ -157,6 +159,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
         log.debug("{} Resuming", logPrefix);
         if (eosEnabled) {
             producer.beginTransaction();
+            transactionInFlight = true;
         }
         initTopology();
     }
@@ -182,6 +185,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
             final TopicPartition partition = recordInfo.partition();
 
             log.trace("{} Start processing one record [{}]", logPrefix, record);
+
             updateProcessorContext(record, currNode);
             currNode.process(record.key(), record.value());
 
@@ -222,7 +226,9 @@ public class StreamTask extends AbstractTask implements Punctuator {
 
         updateProcessorContext(new StampedRecord(DUMMY_RECORD, timestamp), node);
 
-        log.trace("{} Punctuating processor {} with timestamp {}", logPrefix, node.name(), timestamp);
+        if (log.isTraceEnabled()) {
+            log.trace("{} Punctuating processor {} with timestamp {}", logPrefix, node.name(), timestamp);
+        }
 
         try {
             node.punctuate(timestamp);
@@ -248,11 +254,12 @@ public class StreamTask extends AbstractTask implements Punctuator {
     @Override
     public void commit() {
         commitImpl(true);
+
     }
 
     // visible for testing
     void commitImpl(final boolean startNewTransaction) {
-        log.trace("{} Committing", logPrefix);
+        log.debug("{} Committing", logPrefix);
         metrics.metrics.measureLatencyNs(
             time,
             new Runnable() {
@@ -266,6 +273,8 @@ public class StreamTask extends AbstractTask implements Punctuator {
                 }
             },
             metrics.taskCommitTimeSensor);
+
+        commitRequested = false;
     }
 
     @Override
@@ -282,7 +291,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
 
     private void commitOffsets(final boolean startNewTransaction) {
         if (commitOffsetNeeded) {
-            log.debug("{} Committing offsets", logPrefix);
+            log.trace("{} Committing offsets", logPrefix);
             final Map<TopicPartition, OffsetAndMetadata> consumedOffsetsAndMetadata = new HashMap<>(consumedOffsets.size());
             for (final Map.Entry<TopicPartition, Long> entry : consumedOffsets.entrySet()) {
                 final TopicPartition partition = entry.getKey();
@@ -294,26 +303,29 @@ public class StreamTask extends AbstractTask implements Punctuator {
             if (eosEnabled) {
                 producer.sendOffsetsToTransaction(consumedOffsetsAndMetadata, applicationId);
                 producer.commitTransaction();
+                transactionInFlight = false;
                 if (startNewTransaction) {
+                    transactionInFlight = true;
                     producer.beginTransaction();
                 }
             } else {
                 try {
                     consumer.commitSync(consumedOffsetsAndMetadata);
                 } catch (final CommitFailedException e) {
-                    log.warn("{} Failed offset commits {} due to {}", logPrefix, consumedOffsetsAndMetadata, e.getMessage());
+                    log.warn("{} Failed offset commits {}: ", logPrefix, consumedOffsetsAndMetadata, e);
                     throw e;
                 }
             }
             commitOffsetNeeded = false;
+        } else if (eosEnabled && !startNewTransaction && transactionInFlight) { // need to make sure to commit txn for suspend case
+            producer.commitTransaction();
+            transactionInFlight = false;
         }
-
-        commitRequested = false;
     }
 
     private void initTopology() {
         // initialize the task by initializing all its processor nodes in the topology
-        log.debug("{} Initializing processor nodes of the topology", logPrefix);
+        log.trace("{} Initializing processor nodes of the topology", logPrefix);
         for (final ProcessorNode node : topology.processors()) {
             processorContext.setCurrentNode(node);
             try {
@@ -335,6 +347,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
      */
     @Override
     public void suspend() {
+        log.debug("{} Suspending", logPrefix);
         suspend(true);
     }
 
@@ -348,7 +361,6 @@ public class StreamTask extends AbstractTask implements Punctuator {
      * </pre>
      */
     private void suspend(final boolean clean) {
-        log.debug("{} Suspending", logPrefix);
         closeTopology(); // should we call this only on clean suspend?
         if (clean) {
             commitImpl(false);
@@ -356,7 +368,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
     }
 
     private void closeTopology() {
-        log.debug("{} Closing processor topology", logPrefix);
+        log.trace("{} Closing processor topology", logPrefix);
 
         partitionGroup.clear();
 
@@ -403,7 +415,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
         } catch (final RuntimeException e) {
             clean = false;
             firstException = e;
-            log.error("{} Could not close task due to {}", logPrefix, e);
+            log.error("{} Could not close task: ", logPrefix, e);
         }
 
         try {
@@ -413,7 +425,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
             if (firstException == null) {
                 firstException = e;
             }
-            log.error("{} Could not close state manager due to {}", logPrefix, e);
+            log.error("{} Could not close state manager: ", logPrefix, e);
         }
 
         try {
@@ -424,6 +436,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
                 if (!clean) {
                     try {
                         producer.abortTransaction();
+                        transactionInFlight = false;
                     } catch (final ProducerFencedException e) {
                         // can be ignored: transaction got already aborted by brokers/transactional-coordinator if this happens
                     }
@@ -454,7 +467,9 @@ public class StreamTask extends AbstractTask implements Punctuator {
         final int oldQueueSize = partitionGroup.numBuffered(partition);
         final int newQueueSize = partitionGroup.addRawRecords(partition, records);
 
-        log.trace("{} Added records into the buffered queue of partition {}, new queue size is {}", logPrefix, partition, newQueueSize);
+        if (log.isTraceEnabled()) {
+            log.trace("{} Added records into the buffered queue of partition {}, new queue size is {}", logPrefix, partition, newQueueSize);
+        }
 
         // if after adding these records, its partition queue's buffered size has been
         // increased beyond the threshold, we can then pause the consumption for this partition

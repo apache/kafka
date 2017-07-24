@@ -28,7 +28,7 @@ import scala.collection.JavaConverters._
 
 class TransactionLogTest extends JUnitSuite {
 
-  val epoch: Short = 0
+  val producerEpoch: Short = 0
   val transactionTimeoutMs: Int = 1000
 
   val topicPartitions: Set[TopicPartition] = Set[TopicPartition](new TopicPartition("topic1", 0),
@@ -39,7 +39,10 @@ class TransactionLogTest extends JUnitSuite {
 
   @Test
   def shouldThrowExceptionWriteInvalidTxn() {
-    val txnMetadata = TransactionMetadata(0L, epoch, transactionTimeoutMs, 0)
+    val transactionalId = "transactionalId"
+    val producerId = 23423L
+
+    val txnMetadata = TransactionMetadata(transactionalId, producerId, producerEpoch, transactionTimeoutMs, 0)
     txnMetadata.addPartitions(topicPartitions)
 
     intercept[IllegalStateException] {
@@ -64,8 +67,9 @@ class TransactionLogTest extends JUnitSuite {
       5L -> CompleteAbort)
 
     // generate transaction log messages
-    val txnRecords = pidMappings.map { case (transactionalId, pid) =>
-      val txnMetadata = TransactionMetadata(pid, epoch, transactionTimeoutMs, transactionStates(pid), 0)
+    val txnRecords = pidMappings.map { case (transactionalId, producerId) =>
+      val txnMetadata = TransactionMetadata(transactionalId, producerId, producerEpoch, transactionTimeoutMs,
+        transactionStates(producerId), 0)
 
       if (!txnMetadata.state.equals(Empty))
         txnMetadata.addPartitions(topicPartitions)
@@ -80,27 +84,21 @@ class TransactionLogTest extends JUnitSuite {
 
     var count = 0
     for (record <- records.records.asScala) {
-      val key = TransactionLog.readMessageKey(record.key())
+      val txnKey = TransactionLog.readTxnRecordKey(record.key)
+      val transactionalId = txnKey.transactionalId
+      val txnMetadata = TransactionLog.readTxnRecordValue(transactionalId, record.value)
 
-      key match {
-        case pidKey: TxnKey =>
-          val transactionalId = pidKey.transactionalId
-          val txnMetadata = TransactionLog.readMessageValue(record.value())
+      assertEquals(pidMappings(transactionalId), txnMetadata.producerId)
+      assertEquals(producerEpoch, txnMetadata.producerEpoch)
+      assertEquals(transactionTimeoutMs, txnMetadata.txnTimeoutMs)
+      assertEquals(transactionStates(txnMetadata.producerId), txnMetadata.state)
 
-          assertEquals(pidMappings(transactionalId), txnMetadata.producerId)
-          assertEquals(epoch, txnMetadata.producerEpoch)
-          assertEquals(transactionTimeoutMs, txnMetadata.txnTimeoutMs)
-          assertEquals(transactionStates(txnMetadata.producerId), txnMetadata.state)
+      if (txnMetadata.state.equals(Empty))
+        assertEquals(Set.empty[TopicPartition], txnMetadata.topicPartitions)
+      else
+        assertEquals(topicPartitions, txnMetadata.topicPartitions)
 
-          if (txnMetadata.state.equals(Empty))
-            assertEquals(Set.empty[TopicPartition], txnMetadata.topicPartitions)
-          else
-            assertEquals(topicPartitions, txnMetadata.topicPartitions)
-
-          count = count + 1
-
-        case _ => fail(s"Unexpected transaction topic message key $key")
-      }
+      count = count + 1
     }
 
     assertEquals(pidMappings.size, count)

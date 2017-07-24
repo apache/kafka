@@ -16,12 +16,12 @@
  */
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.clients.admin.AccessControlEntryFilter;
-import org.apache.kafka.clients.admin.AclBinding;
-import org.apache.kafka.clients.admin.AclBindingFilter;
-import org.apache.kafka.clients.admin.ResourceFilter;
+import org.apache.kafka.common.acl.AccessControlEntryFilter;
+import org.apache.kafka.common.acl.AclBinding;
+import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.resource.ResourceFilter;
 
 import java.nio.ByteBuffer;
 import java.util.Collections;
@@ -73,7 +73,8 @@ public class DescribeAclsRequest extends AbstractRequest {
         short versionId = version();
         switch (versionId) {
             case 0:
-                return new DescribeAclsResponse(throttleTimeMs, throwable, Collections.<AclBinding>emptySet());
+                return new DescribeAclsResponse(throttleTimeMs, ApiError.fromThrowable(throwable),
+                        Collections.<AclBinding>emptySet());
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
                         versionId, this.getClass().getSimpleName(), ApiKeys.DESCRIBE_ACLS.latestVersion()));

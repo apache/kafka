@@ -33,6 +33,7 @@ public interface SessionStore<K, AGG> extends StateStore, ReadOnlySessionStore<K
      * @param key the key to return sessions for
      * @param earliestSessionEndTime
      * @return iterator of sessions with the matching key and aggregated values
+     * @throws NullPointerException If null is used for key.
      */
     KeyValueIterator<Windowed<K>, AGG> findSessions(final K key, long earliestSessionEndTime, final long latestSessionStartTime);
 
@@ -44,12 +45,14 @@ public interface SessionStore<K, AGG> extends StateStore, ReadOnlySessionStore<K
      * @param keyTo The last key that could be in the range
      * @param earliestSessionEndTime
      * @return iterator of sessions with the matching keys and aggregated values
+     * @throws NullPointerException If null is used for any key.
      */
     KeyValueIterator<Windowed<K>, AGG> findSessions(final K keyFrom, final K keyTo, long earliestSessionEndTime, final long latestSessionStartTime);
 
     /**
      * Remove the session aggregated with provided {@link Windowed} key from the store
      * @param sessionKey key of the session to remove
+     * @throws NullPointerException If null is used for sessionKey.
      */
     void remove(final Windowed<K> sessionKey);
 
@@ -57,6 +60,7 @@ public interface SessionStore<K, AGG> extends StateStore, ReadOnlySessionStore<K
      * Write the aggregated value for the provided key to the store
      * @param sessionKey key of the session to write
      * @param aggregate  the aggregated value for the session
+     * @throws NullPointerException If null is used for sessionKey.
      */
     void put(final Windowed<K> sessionKey, final AGG aggregate);
 }

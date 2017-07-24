@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.kstream;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
 
 /**
  * The {@code ValueJoiner} interface for joining two values into a new value of arbitrary type.
@@ -41,7 +40,6 @@ import org.apache.kafka.common.annotation.InterfaceStability;
  * @see KTable#leftJoin(KTable, ValueJoiner)
  * @see KTable#outerJoin(KTable, ValueJoiner)
  */
-@InterfaceStability.Unstable
 public interface ValueJoiner<V1, V2, VR> {
 
     /**

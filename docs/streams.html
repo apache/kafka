@@ -46,19 +46,22 @@
         <h2><a id="streams_overview" href="#streams_overview">Overview</a></h2>
 
         <p>
-        Kafka Streams is a client library for processing and analyzing data stored in Kafka and either write the resulting data back to Kafka or send the final output to an external system. It builds upon important stream processing concepts such as properly distinguishing between event time and processing time, windowing support, and simple yet efficient management of application state.
+            Kafka Streams is a client library for processing and analyzing data stored in Kafka.
+            It builds upon important stream processing concepts such as properly distinguishing between event time and processing time, windowing support, and simple yet efficient management of application state.
         </p>
         <p>
-        Kafka Streams has a <b>low barrier to entry</b>: You can quickly write and run a small-scale proof-of-concept on a single machine; and you only need to run additional instances of your application on multiple machines to scale up to high-volume production workloads. Kafka Streams transparently handles the load balancing of multiple instances of the same application by leveraging Kafka's parallelism model.
+            Kafka Streams has a <b>low barrier to entry</b>: You can quickly write and run a small-scale proof-of-concept on a single machine; and you only need to run additional instances of your application on multiple machines to scale up to high-volume production workloads.
+            Kafka Streams transparently handles the load balancing of multiple instances of the same application by leveraging Kafka's parallelism model.
         </p>
         <p>
-        Some highlights of Kafka Streams:
+            Some highlights of Kafka Streams:
         </p>
 
         <ul>
             <li>Designed as a <b>simple and lightweight client library</b>, which can be easily embedded in any Java application and integrated with any existing packaging, deployment and operational tools that users have for their streaming applications.</li>
             <li>Has <b>no external dependencies on systems other than Apache Kafka itself</b> as the internal messaging layer; notably, it uses Kafka's partitioning model to horizontally scale processing while maintaining strong ordering guarantees.</li>
             <li>Supports <b>fault-tolerant local state</b>, which enables very fast and efficient stateful operations like windowed joins and aggregations.</li>
+            <li>Supports <b>exactly-once</b> processing semantics to guarantee that each record will be processed once and only once even when there is a failure on either Streams clients or Kafka brokers in the middle of processing.</li>
             <li>Employs <b>one-record-at-a-time processing</b> to achieve millisecond processing latency, and supports <b>event-time based windowing operations</b> with late arrival of records.</li>
             <li>Offers necessary stream processing primitives, along with a <b>high-level Streams DSL</b> and a <b>low-level Processor API</b>.</li>
 
@@ -85,6 +88,8 @@
             <li><b>Source Processor</b>: A source processor is a special type of stream processor that does not have any upstream processors. It produces an input stream to its topology from one or multiple Kafka topics by consuming records from these topics and forward them to its down-stream processors.</li>
             <li><b>Sink Processor</b>: A sink processor is a special type of stream processor that does not have down-stream processors. It sends any received records from its up-stream processors to a specified Kafka topic.</li>
         </ul>
+
+        Note that in normal processor nodes other remote systems can also be accessed while processing the current record. Therefore the processed results can either be streamed back into Kafka or written to an external system.
 
         <img class="centered" src="/{{version}}/images/streams-architecture-topology.jpg" style="width:400px">
 
@@ -158,6 +163,27 @@
         </p>
         <br>
 
+        <h2><a id="streams_processing_guarantee" href="#streams_processing_guarantee">Processing Guarantees</a></h2>
+
+        <p>
+            In stream processing, one of the most frequently asked question is "does my stream processing system guarantee that each record is processed once and only once, even if some failures are encountered in the middle of processing?"
+            Failing to guarantee exactly-once stream processing is a deal-breaker for many applications that cannot tolerate any data-loss or data duplicates, and in that case a batch-oriented framework is usually used in addition
+            to the stream processing pipeline, known as the <a href="http://lambda-architecture.net/">Lambda Architecture</a>.
+            Prior to 0.11.0.0, Kafka only provides at-least-once delivery guarantees and hence any stream processing systems that leverage it as the backend storage could not guarantee end-to-end exactly-once semantics.
+            In fact, even for those stream processing systems that claim to support exactly-once processing, as long as they are reading from / writing to Kafka as the source / sink, their applications cannot actually guarantee that
+            no duplicates will be generated throughout the pipeline.
+
+            Since the 0.11.0.0 release, Kafka has added support to allow its producers to send messages to different topic partitions in a <a href="https://kafka.apache.org/documentation/#semantics">transactional and idempotent manner</a>,
+            and Kafka Streams has hence added the end-to-end exactly-once processing semantics by leveraging these features.
+            More specifically, it guarantees that for any record read from the source Kafka topics, its processing results will be reflected exactly once in the output Kafka topic as well as in the state stores for stateful operations.
+            Note the key difference between Kafka Streams end-to-end exactly-once guarantee with other stream processing frameworks' claimed guarantees is that Kafka Streams tightly integrates with the underlying Kafka storage system and ensure that
+            commits on the input topic offsets, updates on the state stores, and writes to the output topics will be completed atomically instead of treating Kafka as an external system that may have side-effects.
+            To read more details on how this is done inside Kafka Streams, readers are recommended to read <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-129%3A+Streams+Exactly-Once+Semantics">KIP-129</a>.
+
+            In order to achieve exactly-once semantics when running Kafka Streams applications, users can simply set the <code>processing.guarantee</code> config value to <b>exactly_once</b> (default value is <b>at_least_once</b>).
+            More details can be found in the <a href="#streamsconfigs">Kafka Streams Configs</a> section.
+        </p>
+
         <h2><a id="streams_architecture" href="#streams_architecture">Architecture</a></h2>
 
         Kafka Streams simplifies application development by building on the Kafka producer and consumer libraries and leveraging the native capabilities of
@@ -193,7 +219,7 @@
         </p>
 
         <p>
-        It is important to understand that Kafka Streams is not a resource manager, but a library that “runs” anywhere its stream processing application runs.
+        It is important to understand that Kafka Streams is not a resource manager, but a library that "runs" anywhere its stream processing application runs.
         Multiple instances of the application are executed either on the same machine, or spread across multiple machines and tasks can be distributed automatically
         by the library to those running application instances. The assignment of partitions to tasks never changes; if an application instance fails, all its assigned
         tasks will be automatically restarted on other instances and continue to consume from the same stream partitions.
@@ -266,7 +292,7 @@
         Note that the cost of task (re)initialization typically depends primarily on the time for restoring the state by replaying the state stores' associated changelog topics.
         To minimize this restoration time, users can configure their applications to have <b>standby replicas</b> of local states (i.e. fully replicated copies of the state).
         When a task migration happens, Kafka Streams then attempts to assign a task to an application instance where such a standby replica already exists in order to minimize
-        the task (re)initialization cost. See <code>num.standby.replicas</code> at the <a href="/{{version}}/documentation/#streamsconfigs">Kafka Streams Configs</a> Section.
+        the task (re)initialization cost. See <code>num.standby.replicas</code> in the <a href="/{{version}}/documentation/#streamsconfigs">Kafka Streams Configs</a> Section.
         </p>
         <br>
 
@@ -306,7 +332,7 @@
         The following example <code>Processor</code> implementation defines a simple word-count algorithm:
         </p>
 
-<pre>
+<pre class="brush: java;">
 public class MyProcessor implements Processor&lt;String, String&gt; {
     private ProcessorContext context;
     private KeyValueStore&lt;String, Long&gt; kvStore;
@@ -380,7 +406,7 @@ public class MyProcessor implements Processor&lt;String, String&gt; {
         by connecting these processors together:
         </p>
 
-<pre>
+<pre class="brush: java;">
 TopologyBuilder builder = new TopologyBuilder();
 
 builder.addSource("SOURCE", "src-topic")
@@ -421,10 +447,10 @@ builder.addSource("SOURCE", "src-topic")
         that keep recently arrived records to use in stateful processing operations such as windowed joins or aggregation.
         To take advantage of these states, users can define a state store by implementing the <code>StateStore</code> interface (the Kafka Streams library also has a few extended interfaces such as <code>KeyValueStore</code>);
         in practice, though, users usually do not need to customize such a state store from scratch but can simply use the <code>Stores</code> factory to define a state store by specifying whether it should be persistent, log-backed, etc.
-        In the following example, a persistent key-value store named “Counts” with key type <code>String</code> and value type <code>Long</code> is created.
+        In the following example, a persistent key-value store named "Counts" with key type <code>String</code> and value type <code>Long</code> is created.
         </p>
 
-<pre>
+<pre class="brush: java;">
 StateStoreSupplier countStore = Stores.create("Counts")
     .withKeys(Serdes.String())
     .withValues(Serdes.Long())
@@ -438,7 +464,7 @@ StateStoreSupplier countStore = Stores.create("Counts")
         state store with the existing processor nodes through <code>TopologyBuilder.connectProcessorAndStateStores</code>.
         </p>
 
-<pre>
+<pre class="brush: java;">
 TopologyBuilder builder = new TopologyBuilder();
 
 builder.addSource("SOURCE", "src-topic")
@@ -482,12 +508,12 @@ builder.addSource("SOURCE", "src-topic")
 
         The <b>stream-table duality</b> describes the close relationship between streams and tables.
         <ul>
-        <li><b>Stream as Table</b>: A stream can be considered a changelog of a table, where each data record in the stream captures a state change of the table. A stream is thus a table in disguise, and it can be easily turned into a “real” table by replaying the changelog from beginning to end to reconstruct the table. Similarly, in a more general analogy, aggregating data records in a stream – such as computing the total number of pageviews by user from a stream of pageview events – will return a table (here with the key and the value being the user and its corresponding pageview count, respectively).</li>
-        <li><b>Table as Stream</b>: A table can be considered a snapshot, at a point in time, of the latest value for each key in a stream (a stream's data records are key-value pairs). A table is thus a stream in disguise, and it can be easily turned into a “real” stream by iterating over each key-value entry in the table.</li>
+        <li><b>Stream as Table</b>: A stream can be considered a changelog of a table, where each data record in the stream captures a state change of the table. A stream is thus a table in disguise, and it can be easily turned into a "real" table by replaying the changelog from beginning to end to reconstruct the table. Similarly, in a more general analogy, aggregating data records in a stream - such as computing the total number of pageviews by user from a stream of pageview events - will return a table (here with the key and the value being the user and its corresponding pageview count, respectively).</li>
+        <li><b>Table as Stream</b>: A table can be considered a snapshot, at a point in time, of the latest value for each key in a stream (a stream's data records are key-value pairs). A table is thus a stream in disguise, and it can be easily turned into a "real" stream by iterating over each key-value entry in the table.</li>
         </ul>
 
         <p>
-        Let's illustrate this with an example. Imagine a table that tracks the total number of pageviews by user (first column of diagram below). Over time, whenever a new pageview event is processed, the state of the table is updated accordingly. Here, the state changes between different points in time – and different revisions of the table – can be represented as a changelog stream (second column).
+        Let's illustrate this with an example. Imagine a table that tracks the total number of pageviews by user (first column of diagram below). Over time, whenever a new pageview event is processed, the state of the table is updated accordingly. Here, the state changes between different points in time - and different revisions of the table - can be represented as a changelog stream (second column).
         </p>
         <img class="centered" src="/{{version}}/images/streams-table-duality-02.png" style="width:300px">
 
@@ -510,7 +536,7 @@ builder.addSource("SOURCE", "src-topic")
         <b>GlobalKTable</b> also provides the ability to look up current values of data records by keys.
         This table-lookup functionality is available through <a href="#streams_dsl_joins">join operations</a>.
 
-        To illustrate the difference between KStreams and KTables/GlobalKTables, let’s imagine the following two data records are being sent to the stream:
+        To illustrate the difference between KStreams and KTables/GlobalKTables, let's imagine the following two data records are being sent to the stream:
 
 <pre>
 ("alice", 1) --> ("alice", 3)
@@ -526,7 +552,7 @@ builder.addSource("SOURCE", "src-topic")
         from a single topic).
         </p>
 
-<pre>
+<pre class="brush: java;">
 KStreamBuilder builder = new KStreamBuilder();
 
 KStream&lt;String, GenericRecord&gt; source1 = builder.stream("topic1", "topic2");
@@ -555,8 +581,8 @@ GlobalKTable&lt;String, GenericRecord&gt; source2 = builder.globalTable("topic4"
         </p>
 
         <p>
-        Late-arriving records are always possible in real-time data streams. However, it depends on the effective <a href="#streams_time">time semantics</a> how late records are handled. Using processing-time, the semantics are “when the data is being processed”,
-        which means that the notion of late records is not applicable as, by definition, no record can be late. Hence, late-arriving records only really can be considered as such (i.e. as arriving “late”) for event-time or ingestion-time semantics. In both cases,
+        Late-arriving records are always possible in real-time data streams. However, it depends on the effective <a href="#streams_time">time semantics</a> how late records are handled. Using processing-time, the semantics are "when the data is being processed",
+        which means that the notion of late records is not applicable as, by definition, no record can be late. Hence, late-arriving records only really can be considered as such (i.e. as arriving "late") for event-time or ingestion-time semantics. In both cases,
         Kafka Streams is able to properly handle late-arriving records.
         </p>
 
@@ -606,7 +632,7 @@ GlobalKTable&lt;String, GenericRecord&gt; source2 = builder.globalTable("topic4"
 
         </p>
 
-<pre>
+<pre class="brush: java;">
 // written in Java 8+, using lambda expressions
 KStream&lt;String, GenericRecord&gt; mapped = source1.mapValue(record -> record.get("category"));
 </pre>
@@ -620,7 +646,7 @@ KStream&lt;String, GenericRecord&gt; mapped = source1.mapValue(record -> record.
         based on them.
         </p>
 
-<pre>
+<pre class="brush: java;">
 // written in Java 8+, using lambda expressions
 KTable&lt;Windowed&lt;String&gt;, Long&gt; counts = source1.groupByKey().aggregate(
     () -> 0L,  // initial value
@@ -641,7 +667,7 @@ KStream&lt;String, String&gt; joined = source1.leftJoin(source2,
         <code>KStream.to</code> and <code>KTable.to</code>.
         </p>
 
-<pre>
+<pre class="brush: java;">
 joined.to("topic4");
 </pre>
 
@@ -649,7 +675,7 @@ joined.to("topic4");
         to a topic via <code>to</code> above, one option is to construct a new stream that reads from the output topic;
         Kafka Streams provides a convenience method called <code>through</code>:
 
-<pre>
+<pre class="brush: java;">
 // equivalent to
 //
 // joined.to("topic4");
@@ -658,20 +684,26 @@ KStream&lt;String, String&gt; materialized = joined.through("topic4");
 </pre>
         <br>
 
-        <h3><a id="streams_execute" href="#streams_execute">Application Configuration and Execution</a></h3>
+        <h3><a id="streams_configure_execute" href="#streams_configure_execute">Application Configuration and Execution</a></h3>
 
         <p>
         Besides defining the topology, developers will also need to configure their applications
         in <code>StreamsConfig</code> before running it. A complete list of
         Kafka Streams configs can be found <a href="/{{version}}/documentation/#streamsconfigs"><b>here</b></a>.
+        Note, that different parameters do have different "levels of importance", with the following interpretation:
         </p>
+        <ul>
+          <li> HIGH: you would most likely change the default value if you go to production </li>
+          <li> MEDIUM: default value might be ok, but you should double-check it </li>
+          <li> LOW: default value is most likely ok; only consider to change it if you hit an issues when running in production </li>
+        </ul>
 
         <p>
         Specifying the configuration in Kafka Streams is similar to the Kafka Producer and Consumer clients. Typically, you create a <code>java.util.Properties</code> instance,
         set the necessary parameters, and construct a <code>StreamsConfig</code> instance from the <code>Properties</code> instance.
         </p>
 
-<pre>
+<pre class="brush: java;">
 import java.util.Properties;
 import org.apache.kafka.streams.StreamsConfig;
 
@@ -679,7 +711,11 @@ Properties settings = new Properties();
 // Set a few key parameters
 settings.put(StreamsConfig.APPLICATION_ID_CONFIG, "my-first-streams-application");
 settings.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "kafka-broker1:9092");
-settings.put(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG, "zookeeper1:2181");
+
+// Set a few user customized parameters
+settings.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
+settings.put(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, MyTimestampExtractor.class);
+
 // Any further settings
 settings.put(... , ...);
 
@@ -687,6 +723,7 @@ settings.put(... , ...);
 StreamsConfig config = new StreamsConfig(settings);
 </pre>
 
+        <h4><a id="streams_client_config" href="#streams_clients_config">Producer and Consumer Configuration</a></h4>
         <p>
         Apart from Kafka Streams' own configuration parameters you can also specify parameters for the Kafka consumers and producers that are used internally,
         depending on the needs of your application. Similar to the Streams settings you define any such consumer and/or producer settings via <code>StreamsConfig</code>.
@@ -695,7 +732,7 @@ StreamsConfig config = new StreamsConfig(settings);
         If you want to set different values for consumer and producer for such a parameter, you can prefix the parameter name with <code>consumer.</code> or <code>producer.</code>:
         </p>
 
-<pre>
+<pre class="brush: java;">
 Properties settings = new Properties();
 // Example of a "normal" setting for Kafka Streams
 settings.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "kafka-broker-01:9092");
@@ -711,9 +748,27 @@ settings.put("consumer." + ConsumerConfig.RECEIVE_BUFFER_CONFIG, 1024 * 1024);
 settings.put("producer." + ProducerConfig.RECEIVE_BUFFER_CONFIG, 64 * 1024);
 // Alternatively, you can use
 settings.put(StreamsConfig.consumerPrefix(ConsumerConfig.RECEIVE_BUFFER_CONFIG), 1024 * 1024);
-settings.put(StremasConfig.producerConfig(ProducerConfig.RECEIVE_BUFFER_CONFIG), 64 * 1024);
+settings.put(StreamsConfig.producerConfig(ProducerConfig.RECEIVE_BUFFER_CONFIG), 64 * 1024);
 </pre>
 
+        <h4><a id="streams_broker_config" href="#streams_broker_config">Broker Configuration</a></h4>
+        <p>
+            Introduced in 0.11.0 is a new broker config that is particularly relevant to Kafka Streams applications, <code>group.initial.rebalance.delay.ms</code>.
+            This config specifies the time, in milliseconds, that the <code>GroupCoordinator</code> will delay the initial consumer rebalance.
+            The rebalance will be further delayed by the value of <code>group.initial.rebalance.delay.ms</code> as each new member joins the consumer group, up to a maximum of the value set by <code>max.poll.interval.ms</code>.
+            The net benefit is that this should reduce the overall startup time for Kafka Streams applications with more than one thread.
+            The default value for <code>group.initial.rebalance.delay.ms</code> is 3 seconds.
+        </p>
+        <p>
+            In practice this means that if you are starting up your Kafka Streams app from a cold start, then when the first member joins the group there will be at least a 3 second delay before it is assigned any tasks.
+            If any other members join the group within the initial 3 seconds, then there will be a further 3 second delay.
+            Once no new members have joined the group within the 3 second delay, or <code>max.poll.interval.ms</code> is reached, then the group rebalance can complete and all current members will be assigned tasks.
+            The benefit of this approach, particularly for Kafka Streams applications, is that we can now delay the assignment and re-assignment of potentially expensive tasks as new members join.
+            So we can avoid the situation where one instance is assigned all tasks, begins restoring/processing, only to shortly after be rebalanced, and then have to start again with half of the tasks and so on.
+        </p>
+
+
+        <h4><a id="streams_execute" href="#streams_execute">Executing Your Kafka Streams Application</a></h4>
         <p>
         You can call Kafka Streams from anywhere in your application code.
         Very commonly though you would do so within the <code>main()</code> method of your application, or some variant thereof.
@@ -725,7 +780,7 @@ settings.put(StremasConfig.producerConfig(ProducerConfig.RECEIVE_BUFFER_CONFIG),
         that is used to define a topology; The second argument is an instance of <code>StreamsConfig</code> mentioned above.
         </p>
 
-<pre>
+<pre class="brush: java;">
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
@@ -753,7 +808,7 @@ KafkaStreams streams = new KafkaStreams(builder, config);
         At this point, internal structures have been initialized, but the processing is not started yet. You have to explicitly start the Kafka Streams thread by calling the <code>start()</code> method:
         </p>
 
-<pre>
+<pre class="brush: java;">
 // Start the Kafka Streams instance
 streams.start();
 </pre>
@@ -762,7 +817,7 @@ streams.start();
         To catch any unexpected exceptions, you may set an <code>java.lang.Thread.UncaughtExceptionHandler</code> before you start the application. This handler is called whenever a stream thread is terminated by an unexpected exception:
         </p>
 
-<pre>
+<pre class="brush: java;">
 streams.setUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
     public uncaughtException(Thread t, throwable e) {
         // here you should examine the exception and perform an appropriate action!
@@ -774,15 +829,15 @@ streams.setUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
         To stop the application instance call the <code>close()</code> method:
         </p>
 
-<pre>
+<pre class="brush: java;">
 // Stop the Kafka Streams instance
 streams.close();
 </pre>
 
-        Now it's time to execute your application that uses the Kafka Streams library, which can be run just like any other Java application – there is no special magic or requirement on the side of Kafka Streams.
+        Now it's time to execute your application that uses the Kafka Streams library, which can be run just like any other Java application - there is no special magic or requirement on the side of Kafka Streams.
         For example, you can package your Java application as a fat jar file and then start the application via:
 
-<pre>
+<pre class="brush: bash;">
 # Start the application in class `com.example.MyStreamsApp`
 # from the fat jar named `path-to-app-fatjar.jar`.
 $ java -cp path-to-app-fatjar.jar com.example.MyStreamsApp
@@ -802,6 +857,12 @@ $ java -cp path-to-app-fatjar.jar com.example.MyStreamsApp
         <h2><a id="streams_upgrade_and_api" href="#streams_upgrade_and_api">Upgrade Guide and API Changes</a></h2>
 
         <p>
+        If you want to upgrade from 0.10.2.x to 0.11.0 you don't need to do any code changes as the public API is fully backward compatible.
+        However, some configuration parameters were deprecated and thus it is recommend to update your code eventually to allow for future upgrades.
+        See <a href="#streams_api_changes_0110">below</a> a complete list of 0.11.0 API and semantical changes that allow you to advance your application and/or simplify your code base, including the usage of new features.
+        </p>
+
+        <p>
         If you want to upgrade from 0.10.1.x to 0.10.2, see the <a href="/{{version}}/documentation/#upgrade_1020_streams">Upgrade Section for 0.10.2</a>.
         It highlights incompatible changes you need to consider to upgrade your code and application.
         See <a href="#streams_api_changes_0102">below</a> a complete list of 0.10.2 API and semantical changes that allow you to advance your application and/or simplify your code base, including the usage of new features.
@@ -813,13 +874,79 @@ $ java -cp path-to-app-fatjar.jar com.example.MyStreamsApp
         See <a href="#streams_api_changes_0101">below</a> a complete list of 0.10.1 API changes that allow you to advance your application and/or simplify your code base, including the usage of new features.
         </p>
 
-         <h3><a id="streams_api_changes_01021" href="#streams_api_changes_0102">Notable changes in 0.10.2.1</a></h3>
-         <p>
-            Parameter updates in <code>StreamsConfig</code>:
+        <h3><a id="streams_api_changes_0110" href="#streams_api_changes_0110">Streams API changes in 0.11.0.0</a></h3>
+
+        <p> Updates in <code>StreamsConfig</code>: </p>
+        <ul>
+          <li> new configuration parameter <code>processing.guarantee</code> is added </li>
+          <li> configuration parameter <code>key.serde</code> was deprecated and replaced by <code>default.key.serde</code> </li>
+          <li> configuration parameter <code>value.serde</code> was deprecated and replaced by <code>default.value.serde</code> </li>
+          <li> configuration parameter <code>timestamp.extractor</code> was deprecated and replaced by <code>default.timestamp.extractor</code> </li>
+          <li> method <code>#keySerde()</code> was deprecated and replaced by <code>#defaultKeySerde()</code> </li>
+          <li> method <code>#valueSerde()</code> was deprecated and replaced by <code>#defaultValueSerde()</code> </li>
+          <li> new method <code>#defaultTimestampExtractor()</code> was added </li>
+        </ul>
+
+        <p> New methods in <code>TopologyBuilder</code>: </p>
+        <ul>
+            <li> added overloads for <code>#addSource()</code> that allow to define a <code>TimestampExtractor</code> per source node </li>
+            <li> added overloads for <code>#addGlobalStore()</code> that allow to define a <code>TimestampExtractor</code> per source node associated with the global store </li>
+        </ul>
+
+        <p> New methods in <code>KStreamBuilder</code>: </p>
+        <ul>
+            <li> added overloads for <code>#stream()</code> that allow to define a <code>TimestampExtractor</code> per input stream </li>
+            <li> added overloads for <code>#table()</code> that allow to define a <code>TimestampExtractor</code> per input table </li>
+            <li> added overloads for <code>#globalKTable()</code> that allow to define a <code>TimestampExtractor</code> per global table </li>
+        </ul>
+
+        <p> Deprecated methods in <code>KTable</code>: </p>
+        <ul>
+            <li> <code>void foreach(final ForeachAction&lt;? super K, ? super V&gt; action)</code> </li>
+            <li> <code>void print()</code> </li>
+            <li> <code>void print(final String streamName)</code> </li>
+            <li> <code>void print(final Serde&lt;K&gt; keySerde, final Serde&lt;V&gt; valSerde)</code> </li>
+            <li> <code>void print(final Serde&lt;K&gt; keySerde, final Serde&lt;V&gt; valSerde, final String streamName)</code> </li>
+            <li> <code>void writeAsText(final String filePath)</code> </li>
+            <li> <code>void writeAsText(final String filePath, final String streamName)</code> </li>
+            <li> <code>void writeAsText(final String filePath, final Serde&lt;K&gt; keySerde, final Serde&lt;V&gt; valSerde)</code> </li>
+            <li> <code>void writeAsText(final String filePath, final String streamName, final Serde&lt;K&gt; keySerde, final Serde&lt;V&gt; valSerde)</code> </li>
+        </ul>
+
+        <p>
+           The above methods have been deprecated in favor of using the Interactive Queries API.
+           If you want to query the current content of the state store backing the KTable, use the following approach:
         </p>
-          <ul>
-            <li> of particular importance to improve the resiliency of a Kafka Streams application are two changes to default parameters of producer <code>retries</code> and consumer <code>max.poll.interval.ms</code> </li>
-          </ul>
+        <ul>
+            <li> Make a call to <code>KafkaStreams.store(final String storeName, final QueryableStoreType&lt;T&gt; queryableStoreType)</code> </li>
+            <li> Then make a call to <code>ReadOnlyKeyValueStore.all()</code> to iterate over the keys of a <code>KTable</code>. </li>
+        </ul>
+        <p>
+           If you want to view the changelog stream of the  <code>KTable</code> then you could call <code>KTable.toStream().print()</code>.
+        </p>
+
+        <p> Metrics using exactly-once semantics: </p>
+        <p>
+            If exactly-once processing is enabled via the <code>processing.guarantees</code> parameter, internally Streams switches from a producer per thread to a producer per task runtime model.
+            In order to distinguish the different producers, the producer's <code>client.id</code> additionally encodes the task-ID for this case.
+            Because the producer's <code>client.id</code> is used to report JMX metrics, it might be required to update tools that receive those metrics.
+        </p>
+        <p> Producer's <code>client.id</code> naming schema: </p>
+        <ul>
+            <li> at-least-once (default): <code>[client.Id]-StreamThread-[sequence-number]</code> </li>
+            <li> exactly-once: <code>[client.Id]-StreamThread-[sequence-number]-[taskId]</code> </li>
+        </ul>
+        <p> <code>[client.Id]</code> is either set via Streams configuration parameter <code>client.id<code> or defaults to <code>[application.id]-[processId]</code> (<code>[processId]</code> is a random UUID). </p>
+
+        <h3><a id="streams_api_changes_01021" href="#streams_api_changes_01021">Notable changes in 0.10.2.1</a></h3>
+
+        <p>
+        Parameter updates in <code>StreamsConfig</code>:
+        </p>
+        <ul>
+          <li> The default config values of embedded producer's <code>retries</code> and consumer's <code>max.poll.interval.ms</code> have been changed to improve the resiliency of a Kafka Streams application </li>
+        </ul>
+
         <h3><a id="streams_api_changes_0102" href="#streams_api_changes_0102">Streams API changes in 0.10.2.0</a></h3>
 
         <p>

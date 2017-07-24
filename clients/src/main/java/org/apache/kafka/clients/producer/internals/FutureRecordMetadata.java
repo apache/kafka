@@ -31,13 +31,13 @@ public final class FutureRecordMetadata implements Future<RecordMetadata> {
     private final ProduceRequestResult result;
     private final long relativeOffset;
     private final long createTimestamp;
-    private final long checksum;
+    private final Long checksum;
     private final int serializedKeySize;
     private final int serializedValueSize;
     private volatile FutureRecordMetadata nextRecordMetadata = null;
 
     public FutureRecordMetadata(ProduceRequestResult result, long relativeOffset, long createTimestamp,
-                                long checksum, int serializedKeySize, int serializedValueSize) {
+                                Long checksum, int serializedKeySize, int serializedValueSize) {
         this.result = result;
         this.relativeOffset = relativeOffset;
         this.createTimestamp = createTimestamp;
@@ -96,12 +96,8 @@ public final class FutureRecordMetadata implements Future<RecordMetadata> {
             return value();
     }
 
-    long checksum() {
+    Long checksumOrNull() {
         return this.checksum;
-    }
-
-    long relativeOffset() {
-        return this.relativeOffset;
     }
 
     RecordMetadata value() {

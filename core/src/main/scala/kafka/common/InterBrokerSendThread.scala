@@ -19,6 +19,7 @@ package kafka.common
 import kafka.utils.ShutdownableThread
 import org.apache.kafka.clients.{ClientResponse, NetworkClient, RequestCompletionHandler}
 import org.apache.kafka.common.Node
+import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.requests.AbstractRequest
 import org.apache.kafka.common.utils.Time
 
@@ -26,48 +27,65 @@ import org.apache.kafka.common.utils.Time
 /**
  *  Class for inter-broker send thread that utilize a non-blocking network client.
  */
-class InterBrokerSendThread(name: String,
-                            networkClient: NetworkClient,
-                            requestGenerator: () => Iterable[RequestAndCompletionHandler],
-                            time: Time,
-                            isInterruptible: Boolean = true)
+abstract class InterBrokerSendThread(name: String,
+                                     networkClient: NetworkClient,
+                                     time: Time,
+                                     isInterruptible: Boolean = true)
   extends ShutdownableThread(name, isInterruptible) {
 
-  // visible for testing
-  def generateRequests(): Iterable[RequestAndCompletionHandler] = requestGenerator()
+  def generateRequests(): Iterable[RequestAndCompletionHandler]
+
+  override def shutdown(): Unit = {
+    initiateShutdown()
+    // wake up the thread in case it is blocked inside poll
+    networkClient.wakeup()
+    awaitShutdown()
+  }
 
   override def doWork() {
     val now = time.milliseconds()
     var pollTimeout = Long.MaxValue
 
-    val requestsToSend: Iterable[RequestAndCompletionHandler] = requestGenerator()
+    try {
+      for (request: RequestAndCompletionHandler <- generateRequests()) {
+        val destination = Integer.toString(request.destination.id())
+        val completionHandler = request.handler
+        val clientRequest = networkClient.newClientRequest(destination,
+          request.request,
+          now,
+          true,
+          completionHandler)
 
-    for (request: RequestAndCompletionHandler <- requestsToSend) {
-      val destination = Integer.toString(request.destination.id())
-      val completionHandler = request.handler
-      // TODO: Need to check inter broker protocol and error if new request is not supported
-      val clientRequest = networkClient.newClientRequest(destination,
-        request.request,
-        now,
-        true,
-        completionHandler)
+        if (networkClient.ready(request.destination, now)) {
+          networkClient.send(clientRequest, now)
+        } else {
+          val disConnectedResponse: ClientResponse = new ClientResponse(clientRequest.makeHeader(request.request.desiredOrLatestVersion()),
+            completionHandler, destination,
+            now /* createdTimeMs */ , now /* receivedTimeMs */ , true /* disconnected */ , null /* versionMismatch */ , null /* responseBody */)
 
-      if (networkClient.ready(request.destination, now)) {
-        networkClient.send(clientRequest, now)
-      } else {
-        val disConnectedResponse: ClientResponse = new ClientResponse(clientRequest.makeHeader(request.request.desiredOrLatestVersion()),
-          completionHandler, destination,
-          now /* createdTimeMs */, now /* receivedTimeMs */, true /* disconnected */, null /* versionMismatch */, null /* responseBody */)
+          // poll timeout would be the minimum of connection delay if there are any dest yet to be reached;
+          // otherwise it is infinity
+          pollTimeout = Math.min(pollTimeout, networkClient.connectionDelay(request.destination, now))
 
-        // poll timeout would be the minimum of connection delay if there are any dest yet to be reached;
-        // otherwise it is infinity
-        pollTimeout = Math.min(pollTimeout, networkClient.connectionDelay(request.destination, now))
-
-        completionHandler.onComplete(disConnectedResponse)
+          completionHandler.onComplete(disConnectedResponse)
+        }
       }
+      networkClient.poll(pollTimeout, now)
+    } catch {
+      case e: FatalExitError => throw e
+      case t: Throwable =>
+        error(s"unhandled exception caught in InterBrokerSendThread", t)
+        // rethrow any unhandled exceptions as FatalExitError so the JVM will be terminated
+        // as we will be in an unknown state with potentially some requests dropped and not
+        // being able to make progress. Known and expected Errors should have been appropriately
+        // dealt with already.
+        throw new FatalExitError()
     }
-    networkClient.poll(pollTimeout, now)
   }
+
+  def wakeup(): Unit = networkClient.wakeup()
+
 }
 
-case class RequestAndCompletionHandler(destination: Node, request: AbstractRequest.Builder[_ <: AbstractRequest], handler: RequestCompletionHandler)
+case class RequestAndCompletionHandler(destination: Node, request: AbstractRequest.Builder[_ <: AbstractRequest],
+                                       handler: RequestCompletionHandler)

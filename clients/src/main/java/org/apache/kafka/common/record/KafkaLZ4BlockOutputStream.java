@@ -30,7 +30,9 @@ import net.jpountz.xxhash.XXHashFactory;
 /**
  * A partial implementation of the v1.5.1 LZ4 Frame format.
  *
- * @see <a href="http://cyan4973.github.io/lz4/lz4_Frame_format.html">LZ4 Frame Format</a>
+ * @see <a href="https://github.com/lz4/lz4/wiki/lz4_Frame_format.md">LZ4 Frame Format</a>
+ *
+ * This class is not thread-safe.
  */
 public final class KafkaLZ4BlockOutputStream extends FilterOutputStream {
 

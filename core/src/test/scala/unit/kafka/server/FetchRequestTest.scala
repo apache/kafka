@@ -19,13 +19,14 @@ package kafka.server
 import java.util
 import java.util.Properties
 
+import kafka.api.KAFKA_0_11_0_IV2
 import kafka.log.LogConfig
 import kafka.utils.TestUtils
 import kafka.utils.TestUtils._
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.record.Record
+import org.apache.kafka.common.record.{Record, RecordBatch}
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, IsolationLevel}
 import org.apache.kafka.common.serialization.StringSerializer
 import org.junit.Assert._
@@ -41,12 +42,6 @@ import scala.util.Random
 class FetchRequestTest extends BaseRequestTest {
 
   private var producer: KafkaProducer[String, String] = null
-
-  override def setUp() {
-    super.setUp()
-    producer = TestUtils.createNewProducer(TestUtils.getBrokerListStrFromServers(servers),
-      retries = 5, keySerializer = new StringSerializer, valueSerializer = new StringSerializer)
-  }
 
   override def tearDown() {
     producer.close()
@@ -67,14 +62,20 @@ class FetchRequestTest extends BaseRequestTest {
     partitionMap
   }
 
-  private def sendFetchRequest(leaderId: Int, request: FetchRequest,
-                               version: Short = ApiKeys.FETCH.latestVersion): FetchResponse = {
+  private def sendFetchRequest(leaderId: Int, request: FetchRequest): FetchResponse = {
     val response = connectAndSend(request, ApiKeys.FETCH, destination = brokerSocketServer(leaderId))
-    FetchResponse.parse(response, version)
+    FetchResponse.parse(response, request.version)
+  }
+
+  private def initProducer(): Unit = {
+    producer = TestUtils.createNewProducer(TestUtils.getBrokerListStrFromServers(servers),
+      retries = 5, keySerializer = new StringSerializer, valueSerializer = new StringSerializer)
   }
 
   @Test
   def testBrokerRespectsPartitionsOrderAndSizeLimits(): Unit = {
+    initProducer()
+
     val messagesPerPartition = 9
     val maxResponseBytes = 800
     val maxPartitionBytes = 190
@@ -152,18 +153,81 @@ class FetchRequestTest extends BaseRequestTest {
 
   @Test
   def testFetchRequestV2WithOversizedMessage(): Unit = {
+    initProducer()
     val maxPartitionBytes = 200
     val (topicPartition, leaderId) = createTopics(numTopics = 1, numPartitions = 1).head
     producer.send(new ProducerRecord(topicPartition.topic, topicPartition.partition,
       "key", new String(new Array[Byte](maxPartitionBytes + 1)))).get
     val fetchRequest = FetchRequest.Builder.forConsumer(Int.MaxValue, 0, createPartitionMap(maxPartitionBytes,
       Seq(topicPartition))).build(2)
-    val fetchResponse = sendFetchRequest(leaderId, fetchRequest, version = 2)
+    val fetchResponse = sendFetchRequest(leaderId, fetchRequest)
     val partitionData = fetchResponse.responseData.get(topicPartition)
     assertEquals(Errors.NONE, partitionData.error)
     assertTrue(partitionData.highWatermark > 0)
     assertEquals(maxPartitionBytes, partitionData.records.sizeInBytes)
     assertEquals(0, records(partitionData).map(_.sizeInBytes).sum)
+  }
+
+  /**
+    * Ensure that we respect the fetch offset when returning records that were converted from an uncompressed v2
+    * record batch to multiple v0/v1 record batches with size 1. If the fetch offset points to inside the record batch,
+    * some records have to be dropped during the conversion.
+    */
+  @Test
+  def testDownConversionFromBatchedToUnbatchedRespectsOffset(): Unit = {
+    // Increase linger so that we have control over the batches created
+    producer = TestUtils.createNewProducer(TestUtils.getBrokerListStrFromServers(servers),
+      retries = 5, keySerializer = new StringSerializer, valueSerializer = new StringSerializer,
+      lingerMs = 300 * 1000)
+
+    val topicConfig = Map(LogConfig.MessageFormatVersionProp -> KAFKA_0_11_0_IV2.version)
+    val (topicPartition, leaderId) = createTopics(numTopics = 1, numPartitions = 1, topicConfig).head
+    val topic = topicPartition.topic
+
+    val firstBatchFutures = (0 until 10).map(i => producer.send(new ProducerRecord(topic, s"key-$i", s"value-$i")))
+    producer.flush()
+    val secondBatchFutures = (10 until 25).map(i => producer.send(new ProducerRecord(topic, s"key-$i", s"value-$i")))
+    producer.flush()
+
+    firstBatchFutures.foreach(_.get)
+    secondBatchFutures.foreach(_.get)
+
+    def check(fetchOffset: Long, requestVersion: Short, expectedOffset: Long, expectedNumBatches: Int, expectedMagic: Byte): Unit = {
+      val fetchRequest = FetchRequest.Builder.forConsumer(Int.MaxValue, 0, createPartitionMap(Int.MaxValue,
+        Seq(topicPartition), Map(topicPartition -> fetchOffset))).build(requestVersion)
+      val fetchResponse = sendFetchRequest(leaderId, fetchRequest)
+      val partitionData = fetchResponse.responseData.get(topicPartition)
+      assertEquals(Errors.NONE, partitionData.error)
+      assertTrue(partitionData.highWatermark > 0)
+      val batches = partitionData.records.batches.asScala.toBuffer
+      assertEquals(expectedNumBatches, batches.size)
+      val batch = batches.head
+      assertEquals(expectedMagic, batch.magic)
+      assertEquals(expectedOffset, batch.baseOffset)
+    }
+
+    // down conversion to message format 0, batches of 1 message are returned so we receive the exact offset we requested
+    check(fetchOffset = 3, expectedOffset = 3, requestVersion = 1, expectedNumBatches = 22,
+      expectedMagic = RecordBatch.MAGIC_VALUE_V0)
+    check(fetchOffset = 15, expectedOffset = 15, requestVersion = 1, expectedNumBatches = 10,
+      expectedMagic = RecordBatch.MAGIC_VALUE_V0)
+
+    // down conversion to message format 1, batches of 1 message are returned so we receive the exact offset we requested
+    check(fetchOffset = 3, expectedOffset = 3, requestVersion = 3, expectedNumBatches = 22,
+      expectedMagic = RecordBatch.MAGIC_VALUE_V1)
+    check(fetchOffset = 15, expectedOffset = 15, requestVersion = 3, expectedNumBatches = 10,
+      expectedMagic = RecordBatch.MAGIC_VALUE_V1)
+
+    // no down conversion, we receive a single batch so the received offset won't necessarily be the same
+    check(fetchOffset = 3, expectedOffset = 0, requestVersion = 4, expectedNumBatches = 2,
+      expectedMagic = RecordBatch.MAGIC_VALUE_V2)
+    check(fetchOffset = 15, expectedOffset = 10, requestVersion = 4, expectedNumBatches = 1,
+      expectedMagic = RecordBatch.MAGIC_VALUE_V2)
+
+    // no down conversion, we receive a single batch and the exact offset we requested because it happens to be the
+    // offset of the first record in the batch
+    check(fetchOffset = 10, expectedOffset = 10, requestVersion = 4, expectedNumBatches = 1,
+      expectedMagic = RecordBatch.MAGIC_VALUE_V2)
   }
 
   private def records(partitionData: FetchResponse.PartitionData): Seq[Record] = {
@@ -207,10 +271,11 @@ class FetchRequestTest extends BaseRequestTest {
     assertTrue(responseSize <= maxResponseBytes)
   }
 
-  private def createTopics(numTopics: Int, numPartitions: Int): Map[TopicPartition, Int] = {
+  private def createTopics(numTopics: Int, numPartitions: Int, configs: Map[String, String] = Map.empty): Map[TopicPartition, Int] = {
     val topics = (0 until numPartitions).map(t => s"topic$t")
     val topicConfig = new Properties
     topicConfig.setProperty(LogConfig.MinInSyncReplicasProp, 2.toString)
+    configs.foreach { case (k, v) => topicConfig.setProperty(k, v) }
     topics.flatMap { topic =>
       val partitionToLeader = createTopic(zkUtils, topic, numPartitions = numPartitions, replicationFactor = 2,
         servers = servers, topicConfig = topicConfig)

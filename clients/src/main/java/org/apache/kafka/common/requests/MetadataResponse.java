@@ -23,6 +23,7 @@ import org.apache.kafka.common.errors.InvalidMetadataException;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -35,7 +36,6 @@ import java.util.Set;
 
 public class MetadataResponse extends AbstractResponse {
 
-    private static final String THROTTLE_TIME_KEY_NAME = "throttle_time_ms";
     private static final String BROKERS_KEY_NAME = "brokers";
     private static final String TOPIC_METADATA_KEY_NAME = "topic_metadata";
 
@@ -373,6 +373,15 @@ public class MetadataResponse extends AbstractResponse {
             return isr;
         }
 
+        @Override
+        public String toString() {
+            return "(type=PartitionMetadata," +
+                    ", error=" + error +
+                    ", partition=" + partition +
+                    ", leader=" + leader +
+                    ", replicas=" + Utils.join(replicas, ",") +
+                    ", isr=" + Utils.join(isr, ",") + ')';
+        }
     }
 
     @Override

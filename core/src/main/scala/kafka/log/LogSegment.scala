@@ -242,19 +242,16 @@ class LogSegment(val log: FileRecords,
      index.fetchUpperBoundOffset(startOffsetPosition, fetchSize).map(_.offset)
 
   /**
-   * Run recovery on the given segment. This will rebuild the index from the log file and lop off any invalid bytes from the end of the log and index.
+   * Run recovery on the given segment. This will rebuild the index from the log file and lop off any invalid bytes
+   * from the end of the log and index.
    *
-   * @param maxMessageSize A bound the memory allocation in the case of a corrupt message size--we will assume any message larger than this
-   * is corrupt.
    * @param producerStateManager Producer state corresponding to the segment's base offset. This is needed to recover
    *                             the transaction index.
    * @param leaderEpochCache Optionally a cache for updating the leader epoch during recovery.
    * @return The number of bytes truncated from the log
    */
   @nonthreadsafe
-  def recover(maxMessageSize: Int,
-              producerStateManager: ProducerStateManager,
-              leaderEpochCache: Option[LeaderEpochCache] = None): Int = {
+  def recover(producerStateManager: ProducerStateManager, leaderEpochCache: Option[LeaderEpochCache] = None): Int = {
     index.truncate()
     index.resize(index.maxIndexSize)
     timeIndex.truncate()
@@ -264,7 +261,7 @@ class LogSegment(val log: FileRecords,
     var lastIndexEntry = 0
     maxTimestampSoFar = RecordBatch.NO_TIMESTAMP
     try {
-      for (batch <- log.batches(maxMessageSize).asScala) {
+      for (batch <- log.batches.asScala) {
         batch.ensureValid()
 
         // The max timestamp is exposed at the batch level, so no need to iterate the records
@@ -296,6 +293,9 @@ class LogSegment(val log: FileRecords,
           .format(log.file.getAbsolutePath, validBytes, e.getMessage))
     }
     val truncated = log.sizeInBytes - validBytes
+    if (truncated > 0)
+      logger.debug(s"Truncated $truncated invalid bytes at the end of segment ${log.file.getAbsoluteFile} during recovery")
+
     log.truncateTo(validBytes)
     index.trimToValidSize()
     // A normally closed segment always appends the biggest timestamp ever seen into log segment, we do this as well.

@@ -20,6 +20,7 @@ import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.record.RecordBatch;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -31,7 +32,7 @@ import java.util.Map;
 
 public class ApiVersionsResponse extends AbstractResponse {
 
-    public static final ApiVersionsResponse API_VERSIONS_RESPONSE = createApiVersionsResponse(DEFAULT_THROTTLE_TIME);
+    public static final ApiVersionsResponse API_VERSIONS_RESPONSE = createApiVersionsResponse(DEFAULT_THROTTLE_TIME, RecordBatch.CURRENT_MAGIC_VALUE);
     private static final String THROTTLE_TIME_KEY_NAME = "throttle_time_ms";
     public static final String ERROR_CODE_KEY_NAME = "error_code";
     public static final String API_VERSIONS_KEY_NAME = "api_versions";
@@ -115,11 +116,11 @@ public class ApiVersionsResponse extends AbstractResponse {
         return struct;
     }
 
-    public static ApiVersionsResponse apiVersionsResponse(short version, int throttleTimeMs) {
-        if (throttleTimeMs == 0 || version == 0)
+    public static ApiVersionsResponse apiVersionsResponse(int throttleTimeMs, byte maxMagic) {
+        if (maxMagic == RecordBatch.CURRENT_MAGIC_VALUE && throttleTimeMs == DEFAULT_THROTTLE_TIME) {
             return API_VERSIONS_RESPONSE;
-        else
-            return createApiVersionsResponse(throttleTimeMs);
+        }
+        return createApiVersionsResponse(throttleTimeMs, maxMagic);
     }
 
     /**
@@ -151,10 +152,12 @@ public class ApiVersionsResponse extends AbstractResponse {
         return new ApiVersionsResponse(ApiKeys.API_VERSIONS.parseResponse(version, buffer));
     }
 
-    public static ApiVersionsResponse createApiVersionsResponse(int throttleTimeMs) {
+    public static ApiVersionsResponse createApiVersionsResponse(int throttleTimeMs, final byte minMagic) {
         List<ApiVersion> versionList = new ArrayList<>();
         for (ApiKeys apiKey : ApiKeys.values()) {
-            versionList.add(new ApiVersion(apiKey));
+            if (apiKey.minRequiredInterBrokerMagic <= minMagic) {
+                versionList.add(new ApiVersion(apiKey));
+            }
         }
         return new ApiVersionsResponse(throttleTimeMs, Errors.NONE, versionList);
     }

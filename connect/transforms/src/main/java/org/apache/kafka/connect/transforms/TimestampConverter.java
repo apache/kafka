@@ -60,7 +60,7 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
     public static final String FIELD_CONFIG = "field";
     private static final String FIELD_DEFAULT = "";
 
-    public static final String TYPE_CONFIG = "type";
+    public static final String TARGET_TYPE_CONFIG = "target.type";
 
     public static final String FORMAT_CONFIG = "format";
     private static final String FORMAT_DEFAULT = "";
@@ -68,7 +68,7 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
     public static final ConfigDef CONFIG_DEF = new ConfigDef()
             .define(FIELD_CONFIG, ConfigDef.Type.STRING, FIELD_DEFAULT, ConfigDef.Importance.HIGH,
                     "The field containing the timestamp, or empty if the entire value is a timestamp")
-            .define(TYPE_CONFIG, ConfigDef.Type.STRING, ConfigDef.Importance.HIGH,
+            .define(TARGET_TYPE_CONFIG, ConfigDef.Type.STRING, ConfigDef.Importance.HIGH,
                     "The desired timestamp representation: string, unix, Date, Time, or Timestamp")
             .define(FORMAT_CONFIG, ConfigDef.Type.STRING, FORMAT_DEFAULT, ConfigDef.Importance.MEDIUM,
                     "A SimpleDateFormat-compatible format for the timestamp. Used to generate the output when type=string "
@@ -243,7 +243,7 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
     public void configure(Map<String, ?> configs) {
         final SimpleConfig simpleConfig = new SimpleConfig(CONFIG_DEF, configs);
         final String field = simpleConfig.getString(FIELD_CONFIG);
-        final String type = simpleConfig.getString(TYPE_CONFIG);
+        final String type = simpleConfig.getString(TARGET_TYPE_CONFIG);
         String formatPattern = simpleConfig.getString(FORMAT_CONFIG);
         schemaUpdateCache = new SynchronizedCache<>(new LRUCache<Schema, Schema>(16));
 

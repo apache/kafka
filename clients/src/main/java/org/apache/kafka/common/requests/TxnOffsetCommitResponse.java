@@ -27,7 +27,6 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class TxnOffsetCommitResponse extends AbstractResponse {
-    private static final String THROTTLE_TIME_KEY_NAME = "throttle_time_ms";
     private static final String TOPIC_PARTITIONS_KEY_NAME = "topics";
     private static final String PARTITIONS_KEY_NAME = "partitions";
     private static final String TOPIC_KEY_NAME = "topic";
@@ -42,6 +41,8 @@ public class TxnOffsetCommitResponse extends AbstractResponse {
     //   OffsetMetadataTooLarge
     //   GroupAuthorizationFailed
     //   InvalidCommitOffsetSize
+    //   TransactionalIdAuthorizationFailed
+    //   RequestTimedOut
 
     private final Map<TopicPartition, Errors> errors;
     private final int throttleTimeMs;
@@ -106,6 +107,14 @@ public class TxnOffsetCommitResponse extends AbstractResponse {
 
     public static TxnOffsetCommitResponse parse(ByteBuffer buffer, short version) {
         return new TxnOffsetCommitResponse(ApiKeys.TXN_OFFSET_COMMIT.parseResponse(version, buffer));
+    }
+
+    @Override
+    public String toString() {
+        return "TxnOffsetCommitResponse(" +
+                "errors=" + errors +
+                ", throttleTimeMs=" + throttleTimeMs +
+                ')';
     }
 
 }

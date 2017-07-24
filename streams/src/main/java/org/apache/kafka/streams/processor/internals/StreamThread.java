@@ -34,6 +34,7 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Count;
+import org.apache.kafka.common.metrics.stats.Sum;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.utils.Time;
@@ -81,35 +82,40 @@ public class StreamThread extends Thread {
      *
      * <pre>
      *                +-------------+
-     *                | Not Running | <-------+
-     *                +-----+-------+         |
-     *                      |                 |
-     *                      v                 |
-     *                +-----+-------+         |
-     *          +<--- | Running     | <----+  |
-     *          |     +-----+-------+      |  |
-     *          |           |              |  |
-     *          |           v              |  |
-     *          |     +-----+-------+      |  |
-     *          +<--- | Partitions  |      |  |
-     *          |     | Revoked     |      |  |
-     *          |     +-----+-------+      |  |
-     *          |           |              |  |
-     *          |           v              |  |
-     *          |     +-----+-------+      |  |
-     *          |     | Assigning   |      |  |
-     *          |     | Partitions  | ---->+  |
-     *          |     +-----+-------+         |
-     *          |           |                 |
-     *          |           v                 |
-     *          |     +-----+-------+         |
-     *          +---> | Pending     | ------->+
+     *                | Created     |
+     *                +-----+-------+
+     *                      |
+     *                      v
+     *                +-----+-------+
+     *          +<--- | Running     | <----+
+     *          |     +-----+-------+      |
+     *          |           |              |
+     *          |           v              |
+     *          |     +-----+-------+      |
+     *          +<--- | Partitions  |      |
+     *          |     | Revoked     |      |
+     *          |     +-----+-------+      |
+     *          |           |              |
+     *          |           v              |
+     *          |     +-----+-------+      |
+     *          |     | Assigning   |      |
+     *          |     | Partitions  | ---->+
+     *          |     +-----+-------+
+     *          |           |
+     *          |           v
+     *          |     +-----+-------+
+     *          +---> | Pending     |
      *                | Shutdown    |
+     *                +-----+-------+
+     *                      |
+     *                      v
+     *                +-----+-------+
+     *                | Dead        |
      *                +-------------+
      * </pre>
      */
     public enum State {
-        NOT_RUNNING(1), RUNNING(1, 2, 4), PARTITIONS_REVOKED(3, 4), ASSIGNING_PARTITIONS(1, 4), PENDING_SHUTDOWN(0);
+        CREATED(1), RUNNING(1, 2, 4), PARTITIONS_REVOKED(3, 4), ASSIGNING_PARTITIONS(1, 4), PENDING_SHUTDOWN(5), DEAD;
 
         private final Set<Integer> validTransitions = new HashSet<>();
 
@@ -118,7 +124,7 @@ public class StreamThread extends Thread {
         }
 
         public boolean isRunning() {
-            return !equals(PENDING_SHUTDOWN) && !equals(NOT_RUNNING);
+            return !equals(PENDING_SHUTDOWN) && !equals(CREATED) && !equals(DEAD);
         }
 
         public boolean isValidTransition(final State newState) {
@@ -151,7 +157,7 @@ public class StreamThread extends Thread {
 
         @Override
         public void onPartitionsAssigned(final Collection<TopicPartition> assignment) {
-            log.info("{} at state {}: new partitions {} assigned at the end of consumer rebalance.\n" +
+            log.debug("{} at state {}: new partitions {} assigned at the end of consumer rebalance.\n" +
                     "\tassigned active tasks: {}\n" +
                     "\tassigned standby tasks: {}\n" +
                     "\tcurrent suspended active tasks: {}\n" +
@@ -186,17 +192,19 @@ public class StreamThread extends Thread {
             } finally {
                 log.info("{} partition assignment took {} ms.\n" +
                         "\tcurrent active tasks: {}\n" +
-                        "\tcurrent standby tasks: {}",
+                        "\tcurrent standby tasks: {}\n" +
+                        "\tprevious active tasks: {}\n",
                     logPrefix,
                     time.milliseconds() - start,
                     activeTasks.keySet(),
-                    standbyTasks.keySet());
+                    standbyTasks.keySet(),
+                    prevActiveTasks);
             }
         }
 
         @Override
         public void onPartitionsRevoked(final Collection<TopicPartition> assignment) {
-            log.info("{} at state {}: partitions {} revoked at the beginning of consumer rebalance.\n" +
+            log.debug("{} at state {}: partitions {} revoked at the beginning of consumer rebalance.\n" +
                     "\tcurrent assigned active tasks: {}\n" +
                     "\tcurrent assigned standby tasks: {}\n",
                 logPrefix,
@@ -220,22 +228,20 @@ public class StreamThread extends Thread {
 
                 log.info("{} partition revocation took {} ms.\n" +
                         "\tsuspended active tasks: {}\n" +
-                        "\tsuspended standby tasks: {}\n" +
-                        "\tprevious active tasks: {}\n",
+                        "\tsuspended standby tasks: {}",
                     logPrefix,
                     time.milliseconds() - start,
                     suspendedTasks.keySet(),
-                    suspendedStandbyTasks.keySet(),
-                    prevActiveTasks);
+                    suspendedStandbyTasks.keySet());
             }
         }
     }
 
     abstract class AbstractTaskCreator {
+        final static long MAX_BACKOFF_TIME_MS = 1000L;
         void retryWithBackoff(final Map<TaskId, Set<TopicPartition>> tasksToBeCreated, final long start) {
             long backoffTimeMs = 50L;
             final Set<TaskId> retryingTasks = new HashSet<>();
-            long nextLoggingTime = System.currentTimeMillis() + 10000;
             while (true) {
                 final Iterator<Map.Entry<TaskId, Set<TopicPartition>>> it = tasksToBeCreated.entrySet().iterator();
                 while (it.hasNext()) {
@@ -247,13 +253,11 @@ public class StreamThread extends Thread {
                         createTask(taskId, partitions);
                         it.remove();
                         backoffTimeMs = 50L;
-                        if (retryingTasks.remove(taskId) && log.isWarnEnabled()) {
-                            log.info("{} Created task {}", logPrefix, taskId);
-                        }
+                        retryingTasks.remove(taskId);
                     } catch (final LockException e) {
                         // ignore and retry
                         if (!retryingTasks.contains(taskId)) {
-                            log.warn("{} Could not create task {}. Will retry. {}", logPrefix, taskId, e);
+                            log.warn("{} Could not create task {}. Will retry: ", logPrefix, taskId, e);
                             retryingTasks.add(taskId);
                         }
                     }
@@ -266,13 +270,9 @@ public class StreamThread extends Thread {
                 try {
                     Thread.sleep(backoffTimeMs);
                     backoffTimeMs <<= 1;
+                    backoffTimeMs = Math.min(backoffTimeMs, MAX_BACKOFF_TIME_MS);
                 } catch (final InterruptedException e) {
                     // ignore
-                }
-
-                if (System.currentTimeMillis() > nextLoggingTime) {
-                    nextLoggingTime += 10000;
-                    log.warn("{} Still retrying to create tasks: {}", logPrefix, retryingTasks);
                 }
             }
         }
@@ -354,7 +354,7 @@ public class StreamThread extends Thread {
             tasksClosedSensor.add(metrics.metricName("task-closed-rate", this.groupName, "The average per-second number of closed tasks", this.tags), new Rate(new Count()));
 
             skippedRecordsSensor = metrics.sensor(prefix + ".skipped-records");
-            skippedRecordsSensor.add(metrics.metricName("skipped-records-rate", this.groupName, "The average per-second number of skipped records.", this.tags), new Rate(new Count()));
+            skippedRecordsSensor.add(metrics.metricName("skipped-records-rate", this.groupName, "The average per-second number of skipped records.", this.tags), new Rate(new Sum()));
 
         }
 
@@ -377,7 +377,7 @@ public class StreamThread extends Thread {
     }
 
 
-    private volatile State state = State.NOT_RUNNING;
+    private volatile State state = State.CREATED;
     private StreamThread.StateListener stateListener = null;
     final PartitionGrouper partitionGrouper;
     private final StreamsMetadataState streamsMetadataState;
@@ -485,7 +485,7 @@ public class StreamThread extends Thread {
         suspendedTasks = new HashMap<>();
         suspendedStandbyTasks = new HashMap<>();
 
-        // standby ktables
+        // standby KTables
         standbyRecords = new HashMap<>();
 
         stateDirectory = new StateDirectory(applicationId, threadClientId, config.getString(StreamsConfig.STATE_DIR_CONFIG), time);
@@ -524,7 +524,7 @@ public class StreamThread extends Thread {
         } catch (final Exception e) {
             // we have caught all Kafka related exceptions, and other runtime exceptions
             // should be due to user application errors
-            log.error("{} Streams application error during processing: {}", logPrefix, e);
+            log.error("{} Streams application error during processing: ", logPrefix, e);
             throw e;
         } finally {
             shutdown(cleanRun);
@@ -542,7 +542,7 @@ public class StreamThread extends Thread {
             timerStartedMs = time.milliseconds();
 
             // try to fetch some records if necessary
-            final ConsumerRecords<byte[], byte[]> records = pollRequests(pollTimeMs);
+            final ConsumerRecords<byte[], byte[]> records = pollRequests();
             if (records != null && !records.isEmpty() && !activeTasks.isEmpty()) {
                 streamsMetrics.pollTimeSensor.record(computeLatency(), timerStartedMs);
                 addRecordsToTasks(records);
@@ -557,7 +557,7 @@ public class StreamThread extends Thread {
             }
 
             maybeCommit(timerStartedMs);
-            maybeUpdateStandbyTasks();
+            maybeUpdateStandbyTasks(timerStartedMs);
             maybeClean(timerStartedMs);
         }
         log.info("{} Shutting down at user request", logPrefix);
@@ -567,7 +567,7 @@ public class StreamThread extends Thread {
      * Get the next batch of records by polling.
      * @return Next batch of records or null if no records available.
      */
-    private ConsumerRecords<byte[], byte[]> pollRequests(final long pollTimeMs) {
+    private ConsumerRecords<byte[], byte[]> pollRequests() {
         ConsumerRecords<byte[], byte[]> records = null;
 
         try {
@@ -702,7 +702,15 @@ public class StreamThread extends Thread {
                 maybePunctuate(task);
                 if (task.commitNeeded()) {
                     name = "commit";
+
+                    long beforeCommitMs = time.milliseconds();
+
                     commitOne(task);
+
+                    if (log.isDebugEnabled()) {
+                        log.debug("{} Committed active task {} per user request in {}ms",
+                                logPrefix, task.id(), timerStartedMs - beforeCommitMs);
+                    }
                 }
             }
         });
@@ -721,7 +729,7 @@ public class StreamThread extends Thread {
                 streamsMetrics.punctuateTimeSensor.record(computeLatency(), timerStartedMs);
             }
         } catch (final KafkaException e) {
-            log.error("{} Failed to punctuate active task {}: {}", logPrefix, task.id(), e);
+            log.error("{} Failed to punctuate active task {}: ", logPrefix, task.id(), e);
             throw e;
         }
     }
@@ -742,7 +750,7 @@ public class StreamThread extends Thread {
         // note that once we set recordsProcessedBeforeCommit, it will never be UNLIMITED_RECORDS again, so
         // we will never process all records again. This might be an issue if the initial measurement
         // was off due to a slow start.
-        if (processLatency > commitTime) {
+        if (processLatency > 0 && processLatency > commitTime) {
             // push down
             recordsProcessedBeforeCommit = Math.max(1, (commitTime * totalProcessed) / processLatency);
             log.debug("{} processing latency {} > commit time {} for {} records. Adjusting down recordsProcessedBeforeCommit={}",
@@ -750,7 +758,7 @@ public class StreamThread extends Thread {
         } else if (prevRecordsProcessedBeforeCommit != UNLIMITED_RECORDS && processLatency > 0) {
             // push up
             recordsProcessedBeforeCommit = Math.max(1, (commitTime * totalProcessed) / processLatency);
-            log.debug("{} processing latency {} > commit time {} for {} records. Adjusting up recordsProcessedBeforeCommit={}",
+            log.debug("{} processing latency {} < commit time {} for {} records. Adjusting up recordsProcessedBeforeCommit={}",
                 logPrefix, processLatency, commitTime, totalProcessed, recordsProcessedBeforeCommit);
         }
 
@@ -761,13 +769,19 @@ public class StreamThread extends Thread {
      * Commit all tasks owned by this thread if specified interval time has elapsed
      */
     protected void maybeCommit(final long now) {
-
         if (commitTimeMs >= 0 && lastCommitMs + commitTimeMs < now) {
-
-            log.info("{} Committing all active tasks {} and standby tasks {} because the commit interval {}ms has elapsed by {}ms",
-                logPrefix, activeTasks.keySet(), standbyTasks.keySet(), commitTimeMs, now - lastCommitMs);
+            if (log.isTraceEnabled()) {
+                log.trace("{} Committing all active tasks {} and standby tasks {} since {}ms has elapsed (commit interval is {}ms)",
+                        logPrefix, activeTasks.keySet(), standbyTasks.keySet(), now - lastCommitMs, commitTimeMs);
+            }
 
             commitAll();
+
+            if (log.isDebugEnabled()) {
+                log.info("{} Committed all active tasks {} and standby tasks {} in {}ms",
+                        logPrefix, activeTasks.keySet(), standbyTasks.keySet(), timerStartedMs - now);
+            }
+
             lastCommitMs = now;
 
             processStandbyRecords = true;
@@ -802,7 +816,6 @@ public class StreamThread extends Thread {
      * Commit the state of a task
      */
     private void commitOne(final AbstractTask task) {
-        log.info("{} Committing task {} {}", logPrefix, task.getClass().getSimpleName(), task.id());
         try {
             task.commit();
         } catch (final CommitFailedException e) {
@@ -817,7 +830,7 @@ public class StreamThread extends Thread {
         streamsMetrics.commitTimeSensor.record(computeLatency(), timerStartedMs);
     }
 
-    private void maybeUpdateStandbyTasks() {
+    private void maybeUpdateStandbyTasks(final long now) {
         if (!standbyTasks.isEmpty()) {
             if (processStandbyRecords) {
                 if (!standbyRecords.isEmpty()) {
@@ -838,6 +851,8 @@ public class StreamThread extends Thread {
                     }
 
                     standbyRecords = remainingStandbyRecords;
+
+                    log.debug("{} Updated standby tasks {} in {}ms", logPrefix, standbyTasks.keySet(), time.milliseconds() - now);
                 }
                 processStandbyRecords = false;
             }
@@ -1037,23 +1052,23 @@ public class StreamThread extends Thread {
             try {
                 threadProducer.close();
             } catch (final Throwable e) {
-                log.error("{} Failed to close producer: {}", logPrefix, e);
+                log.error("{} Failed to close producer: ", logPrefix, e);
             }
         }
         try {
             consumer.close();
         } catch (final Throwable e) {
-            log.error("{} Failed to close consumer: {}", logPrefix, e);
+            log.error("{} Failed to close consumer: ", logPrefix, e);
         }
         try {
             restoreConsumer.close();
         } catch (final Throwable e) {
-            log.error("{} Failed to close restore consumer: {}", logPrefix, e);
+            log.error("{} Failed to close restore consumer: ", logPrefix, e);
         }
         try {
             partitionAssignor.close();
         } catch (final Throwable e) {
-            log.error("{} Failed to close KafkaStreamClient: {}", logPrefix, e);
+            log.error("{} Failed to close KafkaStreamClient: ", logPrefix, e);
         }
 
         removeStreamTasks();
@@ -1062,14 +1077,13 @@ public class StreamThread extends Thread {
         // clean up global tasks
 
         log.info("{} Stream thread shutdown complete", logPrefix);
-        setState(State.NOT_RUNNING);
+        setState(State.DEAD);
         streamsMetrics.removeAllSensors();
     }
 
     @SuppressWarnings("ThrowableNotThrown")
     private void shutdownTasksAndState(final boolean cleanRun) {
-        log.debug("{} shutdownTasksAndState: shutting down" +
-                "active tasks {}, standby tasks {}, suspended tasks {}, and suspended standby tasks {}",
+        log.debug("{} Shutting down all active tasks {}, standby tasks {}, suspended tasks {}, and suspended standby tasks {}",
             logPrefix, activeTasks.keySet(), standbyTasks.keySet(),
             suspendedTasks.keySet(), suspendedStandbyTasks.keySet());
 
@@ -1077,7 +1091,7 @@ public class StreamThread extends Thread {
             try {
                 task.close(cleanRun);
             } catch (final RuntimeException e) {
-                log.error("{} Failed while closing {} {} due to {}: ",
+                log.error("{} Failed while closing {} {}: ",
                     logPrefix,
                     task.getClass().getSimpleName(),
                     task.id(),
@@ -1094,7 +1108,7 @@ public class StreamThread extends Thread {
      * soon the tasks will be assigned again
      */
     private void suspendTasksAndState()  {
-        log.debug("{} suspendTasksAndState: suspending all active tasks {} and standby tasks {}",
+        log.debug("{} Suspending all active tasks {} and standby tasks {}",
             logPrefix, activeTasks.keySet(), standbyTasks.keySet());
 
         final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
@@ -1134,7 +1148,7 @@ public class StreamThread extends Thread {
             // un-assign the change log partitions
             restoreConsumer.assign(Collections.<TopicPartition>emptyList());
         } catch (final RuntimeException e) {
-            log.error("{} Failed to un-assign change log partitions: {}", logPrefix, e);
+            log.error("{} Failed to un-assign change log partitions: ", logPrefix, e);
             return e;
         }
         return null;
@@ -1190,7 +1204,7 @@ public class StreamThread extends Thread {
                 try {
                     task.close(true);
                 } catch (final Exception e) {
-                    log.error("{} Failed to remove suspended task {}: {}", logPrefix, next.getKey(), e);
+                    log.error("{} Failed to remove suspended task {}: ", logPrefix, next.getKey(), e);
                 } finally {
                     suspendedTaskIterator.remove();
                 }
@@ -1209,7 +1223,7 @@ public class StreamThread extends Thread {
                 try {
                     task.close(true);
                 } catch (final Exception e) {
-                    log.error("{} Failed to remove suspended standby task {}: {}", logPrefix, task.id(), e);
+                    log.error("{} Failed to remove suspended standby task {}: ", logPrefix, task.id(), e);
                 } finally {
                     standByTaskIterator.remove();
                 }
@@ -1218,8 +1232,6 @@ public class StreamThread extends Thread {
     }
 
     protected StreamTask createStreamTask(final TaskId id, final Collection<TopicPartition> partitions) {
-        log.info("{} Creating active task {} with assigned partitions [{}]", logPrefix, id, partitions);
-
         streamsMetrics.taskCreatedSensor.record();
 
         try {
@@ -1237,20 +1249,21 @@ public class StreamThread extends Thread {
                 time,
                 createProducer(id));
         } finally {
-            log.info("{} Created active task {} with assigned partitions {}", logPrefix, id, partitions);
+            log.trace("{} Created active task {} with assigned partitions {}", logPrefix, id, partitions);
         }
     }
 
     private Producer<byte[], byte[]> createProducer(final TaskId id) {
-        final Map<String, Object> producerConfigs = config.getProducerConfigs(threadClientId);
 
         final Producer<byte[], byte[]> producer;
         if (eosEnabled) {
+            final Map<String, Object> producerConfigs = config.getProducerConfigs(threadClientId + "-" + id);
             log.info("{} Creating producer client for task {}", logPrefix, id);
             producerConfigs.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, applicationId + "-" + id);
             producer = clientSupplier.getProducer(producerConfigs);
         } else {
             if (threadProducer == null) {
+                final Map<String, Object> producerConfigs = config.getProducerConfigs(threadClientId);
                 log.info("{} Creating shared producer client", logPrefix);
                 threadProducer = clientSupplier.getProducer(producerConfigs);
             }
@@ -1268,7 +1281,7 @@ public class StreamThread extends Thread {
         final Map<TaskId, Set<TopicPartition>> newTasks = new HashMap<>();
 
         // collect newly assigned tasks and reopen re-assigned tasks
-        log.info("{} Adding assigned tasks as active {}", logPrefix, partitionAssignor.activeTasks());
+        log.debug("{} Adding assigned tasks as active: {}", logPrefix, partitionAssignor.activeTasks());
         for (final Map.Entry<TaskId, Set<TopicPartition>> entry : partitionAssignor.activeTasks().entrySet()) {
             final TaskId taskId = entry.getKey();
             final Set<TopicPartition> partitions = entry.getValue();
@@ -1289,7 +1302,7 @@ public class StreamThread extends Thread {
                         newTasks.put(taskId, partitions);
                     }
                 } catch (final StreamsException e) {
-                    log.error("{} Failed to create an active task {}: {}", logPrefix, taskId, e);
+                    log.error("{} Failed to create an active task {}: ", logPrefix, taskId, e);
                     throw e;
                 }
             } else {
@@ -1299,14 +1312,12 @@ public class StreamThread extends Thread {
 
         // create all newly assigned tasks (guard against race condition with other thread via backoff and retry)
         // -> other thread will call removeSuspendedTasks(); eventually
-        log.debug("{} New active tasks to be created: {}", logPrefix, newTasks);
+        log.trace("{} New active tasks to be created: {}", logPrefix, newTasks);
 
         taskCreator.retryWithBackoff(newTasks, start);
     }
 
     private StandbyTask createStandbyTask(final TaskId id, final Collection<TopicPartition> partitions) {
-        log.debug("{} Creating new standby task {} with assigned partitions {}", logPrefix, id, partitions);
-
         streamsMetrics.taskCreatedSensor.record();
 
         final ProcessorTopology topology = builder.build(id.topicGroupId);
@@ -1315,10 +1326,10 @@ public class StreamThread extends Thread {
             try {
                 return new StandbyTask(id, applicationId, partitions, topology, consumer, storeChangelogReader, config, streamsMetrics, stateDirectory);
             } finally {
-                log.info("{} Created standby task {} with assigned partitions {}", logPrefix, id, partitions);
+                log.trace("{} Created standby task {} with assigned partitions {}", logPrefix, id, partitions);
             }
         } else {
-            log.info("{} Skipped standby task {} with assigned partitions {} since it does not have any state stores to materialize", logPrefix, id, partitions);
+            log.trace("{} Skipped standby task {} with assigned partitions {} since it does not have any state stores to materialize", logPrefix, id, partitions);
 
             return null;
         }
@@ -1333,7 +1344,7 @@ public class StreamThread extends Thread {
 
         final Map<TaskId, Set<TopicPartition>> newStandbyTasks = new HashMap<>();
 
-        log.info("{} Adding assigned standby tasks {}", logPrefix, partitionAssignor.activeTasks());
+        log.debug("{} Adding assigned standby tasks {}", logPrefix, partitionAssignor.standbyTasks());
         // collect newly assigned standby tasks and reopen re-assigned standby tasks
         for (final Map.Entry<TaskId, Set<TopicPartition>> entry : partitionAssignor.standbyTasks().entrySet()) {
             final TaskId taskId = entry.getKey();
@@ -1352,7 +1363,7 @@ public class StreamThread extends Thread {
 
         // create all newly assigned standby tasks (guard against race condition with other thread via backoff and retry)
         // -> other thread will call removeSuspendedStandbyTasks(); eventually
-        log.debug("{} New standby tasks to be created: {}", logPrefix, newStandbyTasks);
+        log.trace("{} New standby tasks to be created: {}", logPrefix, newStandbyTasks);
 
         new StandbyTaskCreator(checkpointedOffsets).retryWithBackoff(newStandbyTasks, start);
 
@@ -1388,14 +1399,13 @@ public class StreamThread extends Thread {
     }
 
     private void updateSuspendedTasks() {
-        log.info("{} Updating suspended tasks to contain active tasks {}", logPrefix, activeTasks.keySet());
         suspendedTasks.clear();
         suspendedTasks.putAll(activeTasks);
         suspendedStandbyTasks.putAll(standbyTasks);
     }
 
     private void removeStreamTasks() {
-        log.info("{} Removing all active tasks {}", logPrefix, activeTasks.keySet());
+        log.debug("{} Removing all active tasks {}", logPrefix, activeTasks.keySet());
 
         try {
             prevActiveTasks.clear();
@@ -1404,12 +1414,12 @@ public class StreamThread extends Thread {
             activeTasks.clear();
             activeTasksByPartition.clear();
         } catch (final Exception e) {
-            log.error("{} Failed to remove stream tasks: {}", logPrefix, e);
+            log.error("{} Failed to remove stream tasks: ", logPrefix, e);
         }
     }
 
     private void removeStandbyTasks() {
-        log.info("{} Removing all standby tasks {}", logPrefix, standbyTasks.keySet());
+        log.debug("{} Removing all standby tasks {}", logPrefix, standbyTasks.keySet());
 
         standbyTasks.clear();
         standbyTasksByPartition.clear();
@@ -1421,7 +1431,10 @@ public class StreamThread extends Thread {
         try {
             task.close(false);
         } catch (final Exception f) {
-            log.warn("{} Failed to close zombie task: ", logPrefix, f);
+            if (!log.isDebugEnabled() && !log.isTraceEnabled()) {
+                log.warn("{} Failed to close zombie task: {}", logPrefix, f.getMessage());
+            }
+            log.debug("{} Failed to close zombie task: ", logPrefix, f);
         }
         activeTasks.remove(task.id);
     }
@@ -1438,7 +1451,7 @@ public class StreamThread extends Thread {
                 closeZombieTask(task);
                 it.remove();
             } catch (final RuntimeException t) {
-                log.error("{} Failed to {} stream task {} due to: {}",
+                log.error("{} Failed to {} stream task {}: ",
                     logPrefix,
                     action.name(),
                     task.id(),
@@ -1451,5 +1464,4 @@ public class StreamThread extends Thread {
 
         return firstException;
     }
-
 }

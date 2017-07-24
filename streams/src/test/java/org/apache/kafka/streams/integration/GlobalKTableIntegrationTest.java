@@ -222,8 +222,7 @@ public class GlobalKTableIntegrationTest {
         inputStream = "input-stream-" + testNo;
         inputTable = "input-table-" + testNo;
         globalOne = "globalOne-" + testNo;
-        CLUSTER.createTopic(inputStream);
-        CLUSTER.createTopic(inputTable);
+        CLUSTER.createTopics(inputStream, inputTable);
         CLUSTER.createTopic(globalOne, 2, 1);
     }
 

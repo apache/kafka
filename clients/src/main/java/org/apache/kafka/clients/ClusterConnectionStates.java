@@ -145,6 +145,18 @@ final class ClusterConnectionStates {
     }
 
     /**
+     * Return true if there is at least one node with connection in ready state and false otherwise.
+     */
+    public boolean hasReadyNodes() {
+        for (Map.Entry<String, NodeConnectionState> entry : nodeState.entrySet()) {
+            NodeConnectionState state = entry.getValue();
+            if (state != null && state.state == ConnectionState.READY)
+                return true;
+        }
+        return false;
+    }
+
+    /**
      * Return true if the connection has been disconnected
      * @param id The id of the node to check
      */

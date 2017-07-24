@@ -21,7 +21,7 @@ from ducktape.cluster.remoteaccount import RemoteCommandError
 
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
 from kafkatest.services.monitor.jmx import JmxMixin
-from kafkatest.version import DEV_BRANCH, LATEST_0_8_2, LATEST_0_9, LATEST_0_10_0, V_0_10_0_0
+from kafkatest.version import DEV_BRANCH, LATEST_0_8_2, LATEST_0_9, LATEST_0_10_0, V_0_10_0_0, V_0_11_0_0
 
 """
 0.8.2.1 ConsoleConsumer options
@@ -97,7 +97,8 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
     def __init__(self, context, num_nodes, kafka, topic, group_id="test-consumer-group", new_consumer=True,
                  message_validator=None, from_beginning=True, consumer_timeout_ms=None, version=DEV_BRANCH,
                  client_id="console-consumer", print_key=False, jmx_object_names=None, jmx_attributes=None,
-                 enable_systest_events=False, stop_timeout_sec=15, print_timestamp=False):
+                 enable_systest_events=False, stop_timeout_sec=15, print_timestamp=False,
+                 isolation_level="read_uncommitted"):
         """
         Args:
             context:                    standard context
@@ -117,6 +118,7 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
             stop_timeout_sec            After stopping a node, wait up to stop_timeout_sec for the node to stop,
                                         and the corresponding background thread to finish successfully.
             print_timestamp             if True, print each message's timestamp as well
+            isolation_level             How to handle transactional messages.
         """
         JmxMixin.__init__(self, num_nodes, jmx_object_names, jmx_attributes or [])
         BackgroundThreadService.__init__(self, context, num_nodes)
@@ -140,6 +142,7 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
         self.log_level = "TRACE"
         self.stop_timeout_sec = stop_timeout_sec
 
+        self.isolation_level = isolation_level
         self.enable_systest_events = enable_systest_events
         if self.enable_systest_events:
             # Only available in 0.10.0 and up
@@ -190,6 +193,8 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
             if node.version <= LATEST_0_10_0:
                 cmd += " --new-consumer"
             cmd += " --bootstrap-server %(broker_list)s" % args
+            if node.version >= V_0_11_0_0:
+                cmd += " --isolation-level %s" % self.isolation_level
         else:
             cmd += " --zookeeper %(zk_connect)s" % args
         if self.from_beginning:

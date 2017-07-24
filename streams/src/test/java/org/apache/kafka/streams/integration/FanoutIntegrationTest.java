@@ -79,9 +79,7 @@ public class FanoutIntegrationTest {
 
     @BeforeClass
     public static void startKafkaCluster() throws Exception {
-        CLUSTER.createTopic(INPUT_TOPIC_A);
-        CLUSTER.createTopic(OUTPUT_TOPIC_B);
-        CLUSTER.createTopic(OUTPUT_TOPIC_C);
+        CLUSTER.createTopics(INPUT_TOPIC_A, OUTPUT_TOPIC_B, OUTPUT_TOPIC_C);
     }
 
     @Test

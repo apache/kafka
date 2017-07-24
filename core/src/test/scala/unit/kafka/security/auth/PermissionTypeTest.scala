@@ -17,7 +17,9 @@
 package kafka.security.auth
 
 import kafka.common.KafkaException
-import org.junit.{Test, Assert}
+import org.apache.kafka.common.acl.AclPermissionType
+import org.junit.Assert.assertEquals
+import org.junit.Test
 import org.scalatest.junit.JUnitSuite
 
 class PermissionTypeTest extends JUnitSuite {
@@ -25,7 +27,7 @@ class PermissionTypeTest extends JUnitSuite {
   @Test
   def testFromString(): Unit = {
     val permissionType = PermissionType.fromString("Allow")
-    Assert.assertEquals(Allow, permissionType)
+    assertEquals(Allow, permissionType)
 
     try {
       PermissionType.fromString("badName")
@@ -35,4 +37,18 @@ class PermissionTypeTest extends JUnitSuite {
     }
   }
 
+  /**
+    * Test round trip conversions between org.apache.kafka.common.acl.AclPermissionType and
+    * kafka.security.auth.PermissionType.
+    */
+  @Test
+  def testJavaConversions(): Unit = {
+    AclPermissionType.values().foreach {
+      case AclPermissionType.UNKNOWN | AclPermissionType.ANY =>
+      case aclPerm =>
+        val perm = PermissionType.fromJava(aclPerm)
+        val aclPerm2 = perm.toJava
+        assertEquals(aclPerm, aclPerm2)
+    }
+  }
 }

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common;
 
+import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 
 import java.util.concurrent.ExecutionException;
@@ -24,8 +25,12 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 /**
- * A flexible future which supports call chaining and other asynchronous programming patterns.
+ * A flexible future which supports call chaining and other asynchronous programming patterns. This will
+ * eventually become a thin shim on top of Java 8's CompletableFuture.
+ *
+ * The API for this class is still evolving and we may break compatibility in minor releases, if necessary.
  */
+@InterfaceStability.Evolving
 public abstract class KafkaFuture<T> implements Future<T> {
     /**
      * A function which takes objects of type A and returns objects of type B.
@@ -85,7 +90,7 @@ public abstract class KafkaFuture<T> implements Future<T> {
      * an exception, which one gets returned is arbitrarily chosen.
      */
     public static KafkaFuture<Void> allOf(KafkaFuture<?>... futures) {
-        KafkaFuture<Void> allOfFuture = new KafkaFutureImpl<Void>();
+        KafkaFuture<Void> allOfFuture = new KafkaFutureImpl<>();
         AllOfAdapter allOfWaiter = new AllOfAdapter(futures.length, allOfFuture);
         for (KafkaFuture<?> future : futures) {
             future.addWaiter(allOfWaiter);

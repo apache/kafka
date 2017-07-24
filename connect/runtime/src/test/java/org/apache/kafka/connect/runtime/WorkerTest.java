@@ -173,6 +173,8 @@ public class WorkerTest extends ThreadedTest {
         expectConverters();
         expectStartStorage();
 
+        ConnectorContext ctx = PowerMock.createMock(ConnectorContext.class);
+
         Map<String, String> props = new HashMap<>();
         props.put(SinkConnectorConfig.TOPICS_CONFIG, "foo,bar");
         props.put(ConnectorConfig.TASKS_MAX_CONFIG, "1");
@@ -197,11 +199,13 @@ public class WorkerTest extends ThreadedTest {
         worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore);
         worker.start();
 
-        assertFalse(worker.startConnector(CONNECTOR_ID, props, PowerMock.createMock(ConnectorContext.class), connectorStatusListener, TargetState.STARTED));
+        assertFalse(worker.startConnector(CONNECTOR_ID, props, ctx, connectorStatusListener, TargetState.STARTED));
 
         assertEquals(Collections.emptySet(), worker.connectorNames());
 
         assertFalse(worker.stopConnector(CONNECTOR_ID));
+
+        PowerMock.verifyAll();
     }
 
     @Test
@@ -335,6 +339,8 @@ public class WorkerTest extends ThreadedTest {
         worker.start();
 
         worker.stopConnector(CONNECTOR_ID);
+
+        PowerMock.verifyAll();
     }
 
     @Test
@@ -427,7 +433,6 @@ public class WorkerTest extends ThreadedTest {
         TestSourceTask task = PowerMock.createMock(TestSourceTask.class);
         WorkerSourceTask workerTask = PowerMock.createMock(WorkerSourceTask.class);
         EasyMock.expect(workerTask.id()).andStubReturn(TASK_ID);
-        EasyMock.expect(task.version()).andReturn("1.0");
 
         EasyMock.expect(plugins.currentThreadLoader()).andReturn(delegatingLoader).times(2);
         PowerMock.expectNew(
@@ -448,9 +453,21 @@ public class WorkerTest extends ThreadedTest {
         Map<String, String> origProps = new HashMap<>();
         origProps.put(TaskConfig.TASK_CLASS_CONFIG, TestSourceTask.class.getName());
 
+        TaskConfig taskConfig = new TaskConfig(origProps);
+        // We should expect this call, but the pluginLoader being swapped in is only mocked.
+        // EasyMock.expect(pluginLoader.loadClass(TestSourceTask.class.getName()))
+        //        .andReturn((Class) TestSourceTask.class);
         EasyMock.expect(plugins.newTask(TestSourceTask.class)).andReturn(task);
-        workerTask.initialize(new TaskConfig(origProps));
+        EasyMock.expect(task.version()).andReturn("1.0");
+
+        workerTask.initialize(taskConfig);
         EasyMock.expectLastCall();
+        // We should expect this call, but the pluginLoader being swapped in is only mocked.
+        // Serializers for the Producer that the task generates. These are loaded while the PluginClassLoader is active
+        // and then delegated to the system classloader. This is only called once due to caching
+        // EasyMock.expect(pluginLoader.loadClass(ByteArraySerializer.class.getName()))
+        //        .andReturn((Class) ByteArraySerializer.class);
+
         workerTask.run();
         EasyMock.expectLastCall();
 
@@ -462,6 +479,7 @@ public class WorkerTest extends ThreadedTest {
                 .times(2);
 
         EasyMock.expect(workerTask.loader()).andReturn(pluginLoader);
+
         EasyMock.expect(Plugins.compareAndSwapLoaders(delegatingLoader)).andReturn(pluginLoader)
                 .times(2);
 
@@ -501,8 +519,14 @@ public class WorkerTest extends ThreadedTest {
         EasyMock.expect(delegatingLoader.connectorLoader(WorkerTestConnector.class.getName()))
                 .andReturn(pluginLoader);
 
-        EasyMock.expect(pluginLoader.loadClass(origProps.get(TaskConfig.TASK_CLASS_CONFIG)))
-                .andThrow(new ClassNotFoundException());
+        // We would normally expect this since the plugin loader would have been swapped in. However, since we mock out
+        // all classloader changes, the call actually goes to the normal default classloader. However, this works out
+        // fine since we just wanted a ClassNotFoundException anyway.
+        // EasyMock.expect(pluginLoader.loadClass(origProps.get(TaskConfig.TASK_CLASS_CONFIG)))
+        //        .andThrow(new ClassNotFoundException());
+
+        EasyMock.expect(Plugins.compareAndSwapLoaders(pluginLoader))
+                .andReturn(delegatingLoader);
 
         EasyMock.expect(Plugins.compareAndSwapLoaders(delegatingLoader))
                 .andReturn(pluginLoader);
@@ -518,6 +542,8 @@ public class WorkerTest extends ThreadedTest {
         assertFalse(worker.startTask(TASK_ID, anyConnectorConfigMap(), origProps, taskStatusListener, TargetState.STARTED));
 
         assertEquals(Collections.emptySet(), worker.taskIds());
+
+        PowerMock.verifyAll();
     }
 
     @Test
@@ -529,9 +555,6 @@ public class WorkerTest extends ThreadedTest {
         TestSourceTask task = PowerMock.createMock(TestSourceTask.class);
         WorkerSourceTask workerTask = PowerMock.createMock(WorkerSourceTask.class);
         EasyMock.expect(workerTask.id()).andStubReturn(TASK_ID);
-
-        EasyMock.expect(plugins.newTask(TestSourceTask.class)).andReturn(task);
-        EasyMock.expect(task.version()).andReturn("1.0");
 
         EasyMock.expect(plugins.currentThreadLoader()).andReturn(delegatingLoader).times(2);
         PowerMock.expectNew(
@@ -551,8 +574,22 @@ public class WorkerTest extends ThreadedTest {
                 .andReturn(workerTask);
         Map<String, String> origProps = new HashMap<>();
         origProps.put(TaskConfig.TASK_CLASS_CONFIG, TestSourceTask.class.getName());
-        workerTask.initialize(new TaskConfig(origProps));
+
+        TaskConfig taskConfig = new TaskConfig(origProps);
+        // We should expect this call, but the pluginLoader being swapped in is only mocked.
+        // EasyMock.expect(pluginLoader.loadClass(TestSourceTask.class.getName()))
+        //        .andReturn((Class) TestSourceTask.class);
+        EasyMock.expect(plugins.newTask(TestSourceTask.class)).andReturn(task);
+        EasyMock.expect(task.version()).andReturn("1.0");
+
+        workerTask.initialize(taskConfig);
         EasyMock.expectLastCall();
+        // We should expect this call, but the pluginLoader being swapped in is only mocked.
+        // Serializers for the Producer that the task generates. These are loaded while the PluginClassLoader is active
+        // and then delegated to the system classloader. This is only called once due to caching
+        // EasyMock.expect(pluginLoader.loadClass(ByteArraySerializer.class.getName()))
+        //        .andReturn((Class) ByteArraySerializer.class);
+
         workerTask.run();
         EasyMock.expectLastCall();
 
@@ -564,6 +601,7 @@ public class WorkerTest extends ThreadedTest {
                 .times(2);
 
         EasyMock.expect(workerTask.loader()).andReturn(pluginLoader);
+
         EasyMock.expect(Plugins.compareAndSwapLoaders(delegatingLoader)).andReturn(pluginLoader)
                 .times(2);
 
@@ -596,9 +634,6 @@ public class WorkerTest extends ThreadedTest {
         WorkerSourceTask workerTask = PowerMock.createMock(WorkerSourceTask.class);
         EasyMock.expect(workerTask.id()).andStubReturn(TASK_ID);
 
-        EasyMock.expect(plugins.newTask(TestSourceTask.class)).andReturn(task);
-        EasyMock.expect(task.version()).andReturn("1.0");
-
         Capture<TestConverter> keyConverter = EasyMock.newCapture();
         Capture<TestConverter> valueConverter = EasyMock.newCapture();
 
@@ -621,8 +656,21 @@ public class WorkerTest extends ThreadedTest {
         Map<String, String> origProps = new HashMap<>();
         origProps.put(TaskConfig.TASK_CLASS_CONFIG, TestSourceTask.class.getName());
 
-        workerTask.initialize(new TaskConfig(origProps));
+        TaskConfig taskConfig = new TaskConfig(origProps);
+        // We should expect this call, but the pluginLoader being swapped in is only mocked.
+        // EasyMock.expect(pluginLoader.loadClass(TestSourceTask.class.getName()))
+        //        .andReturn((Class) TestSourceTask.class);
+        EasyMock.expect(plugins.newTask(TestSourceTask.class)).andReturn(task);
+        EasyMock.expect(task.version()).andReturn("1.0");
+
+        workerTask.initialize(taskConfig);
         EasyMock.expectLastCall();
+        // We should expect this call, but the pluginLoader being swapped in is only mocked.
+        // Serializers for the Producer that the task generates. These are loaded while the PluginClassLoader is active
+        // and then delegated to the system classloader. This is only called once due to caching
+        // EasyMock.expect(pluginLoader.loadClass(ByteArraySerializer.class.getName()))
+        //        .andReturn((Class) ByteArraySerializer.class);
+
         workerTask.run();
         EasyMock.expectLastCall();
 
@@ -634,8 +682,10 @@ public class WorkerTest extends ThreadedTest {
                 .times(2);
 
         EasyMock.expect(workerTask.loader()).andReturn(pluginLoader);
+
         EasyMock.expect(Plugins.compareAndSwapLoaders(delegatingLoader)).andReturn(pluginLoader)
                 .times(2);
+
         // Remove
         workerTask.stop();
         EasyMock.expectLastCall();

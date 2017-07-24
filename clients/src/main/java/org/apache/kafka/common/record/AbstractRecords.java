@@ -50,7 +50,16 @@ public abstract class AbstractRecords implements Records {
         return true;
     }
 
-    protected MemoryRecords downConvert(Iterable<? extends RecordBatch> batches, byte toMagic) {
+    /**
+     * Down convert batches to the provided message format version. The first offset parameter is only relevant in the
+     * conversion from uncompressed v2 or higher to v1 or lower. The reason is that uncompressed records in v0 and v1
+     * are not batched (put another way, each batch always has 1 record).
+     *
+     * If a client requests records in v1 format starting from the middle of an uncompressed batch in v2 format, we
+     * need to drop records from the batch during the conversion. Some versions of librdkafka rely on this for
+     * correctness.
+     */
+    protected MemoryRecords downConvert(Iterable<? extends RecordBatch> batches, byte toMagic, long firstOffset) {
         // maintain the batch along with the decompressed records to avoid the need to decompress again
         List<RecordBatchAndRecords> recordBatchAndRecordsList = new ArrayList<>();
         int totalSizeEstimate = 0;
@@ -63,9 +72,16 @@ public abstract class AbstractRecords implements Records {
                 totalSizeEstimate += batch.sizeInBytes();
                 recordBatchAndRecordsList.add(new RecordBatchAndRecords(batch, null, null));
             } else {
-                List<Record> records = Utils.toList(batch.iterator());
+                List<Record> records = new ArrayList<>();
+                for (Record record : batch) {
+                    // See the method javadoc for an explanation
+                    if (toMagic > RecordBatch.MAGIC_VALUE_V1 || batch.isCompressed() || record.offset() >= firstOffset)
+                        records.add(record);
+                }
+                if (records.isEmpty())
+                    continue;
                 final long baseOffset;
-                if (batch.magic() >= RecordBatch.MAGIC_VALUE_V2)
+                if (batch.magic() >= RecordBatch.MAGIC_VALUE_V2 && toMagic >= RecordBatch.MAGIC_VALUE_V2)
                     baseOffset = batch.baseOffset();
                 else
                     baseOffset = records.get(0).offset();
@@ -164,13 +180,23 @@ public abstract class AbstractRecords implements Records {
         return compressionType == CompressionType.NONE ? size : Math.min(Math.max(size / 2, 1024), 1 << 16);
     }
 
-    public static int sizeInBytesUpperBound(byte magic, byte[] key, byte[] value, Header[] headers) {
-        return sizeInBytesUpperBound(magic, Utils.wrapNullable(key), Utils.wrapNullable(value), headers);
+    /**
+     * Get an upper bound estimate on the batch size needed to hold a record with the given fields. This is only
+     * an estimate because it does not take into account overhead from the compression algorithm.
+     */
+    public static int estimateSizeInBytesUpperBound(byte magic, CompressionType compressionType, byte[] key, byte[] value, Header[] headers) {
+        return estimateSizeInBytesUpperBound(magic, compressionType, Utils.wrapNullable(key), Utils.wrapNullable(value), headers);
     }
 
-    public static int sizeInBytesUpperBound(byte magic, ByteBuffer key, ByteBuffer value, Header[] headers) {
+    /**
+     * Get an upper bound estimate on the batch size needed to hold a record with the given fields. This is only
+     * an estimate because it does not take into account overhead from the compression algorithm.
+     */
+    public static int estimateSizeInBytesUpperBound(byte magic, CompressionType compressionType, ByteBuffer key, ByteBuffer value, Header[] headers) {
         if (magic >= RecordBatch.MAGIC_VALUE_V2)
-            return DefaultRecordBatch.batchSizeUpperBound(key, value, headers);
+            return DefaultRecordBatch.estimateBatchSizeUpperBound(key, value, headers);
+        else if (compressionType != CompressionType.NONE)
+            return Records.LOG_OVERHEAD + LegacyRecord.recordOverhead(magic) + LegacyRecord.recordSize(magic, key, value);
         else
             return Records.LOG_OVERHEAD + LegacyRecord.recordSize(magic, key, value);
     }

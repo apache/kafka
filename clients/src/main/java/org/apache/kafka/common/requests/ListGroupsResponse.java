@@ -27,7 +27,6 @@ import java.util.List;
 
 public class ListGroupsResponse extends AbstractResponse {
 
-    public static final String THROTTLE_TIME_KEY_NAME = "throttle_time_ms";
     public static final String ERROR_CODE_KEY_NAME = "error_code";
     public static final String GROUPS_KEY_NAME = "groups";
     public static final String GROUP_ID_KEY_NAME = "group_id";

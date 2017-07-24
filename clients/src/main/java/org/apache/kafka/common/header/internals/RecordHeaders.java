@@ -30,7 +30,7 @@ import org.apache.kafka.common.utils.AbstractIterator;
 public class RecordHeaders implements Headers {
     
     private final List<Header> headers;
-    private volatile boolean isReadOnly = false;
+    private volatile boolean isReadOnly;
 
     public RecordHeaders() {
         this((Iterable<Header>) null);
@@ -54,10 +54,8 @@ public class RecordHeaders implements Headers {
             this.headers = new ArrayList<>((Collection<Header>) headers);
         } else {
             this.headers = new ArrayList<>();
-            Iterator<Header> iterator = headers.iterator();
-            while (iterator.hasNext()) {
-                this.headers.add(iterator.next());
-            }
+            for (Header header : headers)
+                this.headers.add(header);
         }
     }
 

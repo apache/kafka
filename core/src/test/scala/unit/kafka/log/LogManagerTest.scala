@@ -21,10 +21,12 @@ import java.io._
 import java.util.Properties
 
 import kafka.common._
+import kafka.server.FetchDataInfo
 import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.OffsetOutOfRangeException
+import org.apache.kafka.common.requests.IsolationLevel
 import org.apache.kafka.common.utils.Utils
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
@@ -33,7 +35,7 @@ class LogManagerTest {
 
   val time: MockTime = new MockTime()
   val maxRollInterval = 100
-  val maxLogAgeMs = 10*60*60*1000
+  val maxLogAgeMs = 10*60*1000
   val logProps = new Properties()
   logProps.put(LogConfig.SegmentBytesProp, 1024: java.lang.Integer)
   logProps.put(LogConfig.SegmentIndexBytesProp, 4096: java.lang.Integer)
@@ -49,7 +51,7 @@ class LogManagerTest {
   def setUp() {
     logDir = TestUtils.tempDir()
     logManager = createLogManager()
-    logManager.startup
+    logManager.startup()
     logDir = logManager.logDirs(0)
   }
 
@@ -103,12 +105,12 @@ class LogManagerTest {
     assertEquals("Now there should only be only one segment in the index.", 1, log.numberOfSegments)
     time.sleep(log.config.fileDeleteDelayMs + 1)
 
-    // there should be a log file, two indexes, and the leader epoch checkpoint
-    assertEquals("Files should have been deleted", log.numberOfSegments * 3 + 1, log.dir.list.length)
-    assertEquals("Should get empty fetch off new log.", 0, log.read(offset+1, 1024).records.sizeInBytes)
+    // there should be a log file, two indexes, one producer snapshot, and the leader epoch checkpoint
+    assertEquals("Files should have been deleted", log.numberOfSegments * 4 + 1, log.dir.list.length)
+    assertEquals("Should get empty fetch off new log.", 0, log.readUncommitted(offset+1, 1024).records.sizeInBytes)
 
     try {
-      log.read(0, 1024)
+      log.readUncommitted(0, 1024)
       fail("Should get exception from fetching earlier.")
     } catch {
       case _: OffsetOutOfRangeException => // This is good.
@@ -130,7 +132,7 @@ class LogManagerTest {
     val config = LogConfig.fromProps(logConfig.originals, logProps)
 
     logManager = createLogManager()
-    logManager.startup
+    logManager.startup()
 
     // create a log
     val log = logManager.createLog(new TopicPartition(name, 0), config)
@@ -154,9 +156,9 @@ class LogManagerTest {
     // there should be a log file, two indexes (the txn index is created lazily),
     // the leader epoch checkpoint and two pid mapping files (one for the active and previous segments)
     assertEquals("Files should have been deleted", log.numberOfSegments * 3 + 3, log.dir.list.length)
-    assertEquals("Should get empty fetch off new log.", 0, log.read(offset + 1, 1024).records.sizeInBytes)
+    assertEquals("Should get empty fetch off new log.", 0, log.readUncommitted(offset + 1, 1024).records.sizeInBytes)
     try {
-      log.read(0, 1024)
+      log.readUncommitted(0, 1024)
       fail("Should get exception from fetching earlier.")
     } catch {
       case _: OffsetOutOfRangeException => // This is good.
@@ -201,7 +203,7 @@ class LogManagerTest {
     val config = LogConfig.fromProps(logConfig.originals, logProps)
 
     logManager = createLogManager()
-    logManager.startup
+    logManager.startup()
     val log = logManager.createLog(new TopicPartition(name, 0), config)
     val lastFlush = log.lastFlushTime
     for (_ <- 0 until 200) {
@@ -263,7 +265,7 @@ class LogManagerTest {
     logDir = TestUtils.tempDir()
     logManager = TestUtils.createLogManager(
       logDirs = Array(new File(logDir.getAbsolutePath + File.separator)))
-    logManager.startup
+    logManager.startup()
     verifyCheckpointRecovery(Seq(new TopicPartition("test-a", 1)), logManager)
   }
 
@@ -277,7 +279,7 @@ class LogManagerTest {
     logDir.mkdirs()
     logDir.deleteOnExit()
     logManager = createLogManager()
-    logManager.startup
+    logManager.startup()
     verifyCheckpointRecovery(Seq(new TopicPartition("test-a", 1)), logManager)
   }
 
@@ -301,7 +303,6 @@ class LogManagerTest {
       }
     }
   }
-
 
   private def createLogManager(logDirs: Array[File] = Array(this.logDir)): LogManager = {
     TestUtils.createLogManager(

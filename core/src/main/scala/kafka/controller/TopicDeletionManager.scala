@@ -57,7 +57,7 @@ import scala.collection.{Set, mutable}
  *    it marks the topic for deletion retry.
  * @param controller
  */
-class TopicDeletionManager(controller: KafkaController) extends Logging {
+class TopicDeletionManager(controller: KafkaController, eventManager: ControllerEventManager) extends Logging {
   this.logIdent = "[Topic Deletion Manager " + controller.config.brokerId + "], "
   val controllerContext = controller.controllerContext
   val partitionStateMachine = controller.partitionStateMachine
@@ -78,7 +78,7 @@ class TopicDeletionManager(controller: KafkaController) extends Logging {
       for (topic <- initialTopicsToBeDeleted) {
         val deleteTopicPath = getDeleteTopicPath(topic)
         info("Removing " + deleteTopicPath + " since delete topic is disabled")
-        zkUtils.zkClient.delete(deleteTopicPath)
+        zkUtils.deletePath(deleteTopicPath)
       }
     }
   }
@@ -246,9 +246,9 @@ class TopicDeletionManager(controller: KafkaController) extends Logging {
     topicsToBeDeleted -= topic
     partitionsToBeDeleted.retain(_.topic != topic)
     val zkUtils = controllerContext.zkUtils
-    zkUtils.zkClient.deleteRecursive(getTopicPath(topic))
-    zkUtils.zkClient.deleteRecursive(getEntityConfigPath(ConfigType.Topic, topic))
-    zkUtils.zkClient.delete(getDeleteTopicPath(topic))
+    zkUtils.deletePathRecursive(getTopicPath(topic))
+    zkUtils.deletePathRecursive(getEntityConfigPath(ConfigType.Topic, topic))
+    zkUtils.deletePath(getDeleteTopicPath(topic))
     controllerContext.removeTopic(topic)
   }
 
@@ -298,8 +298,9 @@ class TopicDeletionManager(controller: KafkaController) extends Logging {
       replicaStateMachine.handleStateChanges(replicasForDeletionRetry, OfflineReplica)
       debug("Deletion started for replicas %s".format(replicasForDeletionRetry.mkString(",")))
       controller.replicaStateMachine.handleStateChanges(replicasForDeletionRetry, ReplicaDeletionStarted,
-        new Callbacks.CallbackBuilder().stopReplicaCallback((stopReplicaResponseObj, replicaId) => controller.addToControllerEventQueue(controller.TopicDeletionStopReplicaResult(stopReplicaResponseObj, replicaId))).build)
-      if(deadReplicasForTopic.nonEmpty) {
+        new Callbacks.CallbackBuilder().stopReplicaCallback((stopReplicaResponseObj, replicaId) =>
+          eventManager.put(controller.TopicDeletionStopReplicaResult(stopReplicaResponseObj, replicaId))).build)
+      if (deadReplicasForTopic.nonEmpty) {
         debug("Dead Replicas (%s) found for topic %s".format(deadReplicasForTopic.mkString(","), topic))
         markTopicIneligibleForDeletion(Set(topic))
       }

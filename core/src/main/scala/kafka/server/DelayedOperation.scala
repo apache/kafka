@@ -119,9 +119,10 @@ object DelayedOperationPurgatory {
   def apply[T <: DelayedOperation](purgatoryName: String,
                                    brokerId: Int = 0,
                                    purgeInterval: Int = 1000,
-                                   reaperEnabled: Boolean = true): DelayedOperationPurgatory[T] = {
+                                   reaperEnabled: Boolean = true,
+                                   timerEnabled: Boolean = true): DelayedOperationPurgatory[T] = {
     val timer = new SystemTimer(purgatoryName)
-    new DelayedOperationPurgatory[T](purgatoryName, timer, brokerId, purgeInterval, reaperEnabled)
+    new DelayedOperationPurgatory[T](purgatoryName, timer, brokerId, purgeInterval, reaperEnabled, timerEnabled)
   }
 
 }
@@ -133,7 +134,8 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
                                                              timeoutTimer: Timer,
                                                              brokerId: Int = 0,
                                                              purgeInterval: Int = 1000,
-                                                             reaperEnabled: Boolean = true)
+                                                             reaperEnabled: Boolean = true,
+                                                             timerEnabled: Boolean = true)
         extends Logging with KafkaMetricsGroup {
 
   /* a list of operation watching keys */
@@ -217,7 +219,8 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
 
     // if it cannot be completed by now and hence is watched, add to the expire queue also
     if (!operation.isCompleted) {
-      timeoutTimer.add(operation)
+      if (timerEnabled)
+        timeoutTimer.add(operation)
       if (operation.isCompleted) {
         // cancel the timer task
         operation.cancel()
@@ -253,6 +256,9 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
    */
   def delayed: Int = timeoutTimer.size
 
+  /**
+    * Cancel watching on any delayed operations for the given key. Note the operation will not be completed
+    */
   def cancelForKey(key: Any): List[T] = {
     inWriteLock(removeWatchersLock) {
       val watchers = watchersForKey.remove(key)

@@ -107,10 +107,12 @@ public class ConsumerNetworkClient implements Closeable {
         return completionHandler.future;
     }
 
-    public Node leastLoadedNode() {
-        synchronized (this) {
-            return client.leastLoadedNode(time.milliseconds());
-        }
+    public synchronized Node leastLoadedNode() {
+        return client.leastLoadedNode(time.milliseconds());
+    }
+
+    public synchronized boolean hasReadyNodes() {
+        return client.hasReadyNodes();
     }
 
     /**
