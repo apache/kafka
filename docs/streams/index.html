@@ -18,55 +18,191 @@
 <script><!--#include virtual="../js/templateData.js" --></script>
 
 <script id="streams-template" type="text/x-handlebars-template">
-    <h1>Streams</h1>
+    <h1>Kafka Streams API</h1>
 
-    <ol class="toc">
-        <li>
-            <a href="/{{version}}/documentation/streams/quickstart">Play with a Streams Application</a>
-        </li>
-        <li>
-            <a href="/{{version}}/documentation/streams/core-concepts">Core Concepts</a>
-        </li>
-        <li>
-            <a href="/{{version}}/documentation/streams/architecture">Architecture</a>
-        </li>
-        <li>
-            <a href="/{{version}}/documentation/streams/developer-guide">Developer Guide</a>
-            <ul>
-                <li><a href="/{{version}}/documentation/streams/developer-guide#streams_processor">Low-level Processor API</a></li>
-                <li><a href="/{{version}}/documentation/streams/developer-guide#streams_dsl">High-level Streams DSL</a></li>
-                <li><a href="/{{version}}/documentation/streams/developer-guide#streams_interactive_querie">Interactive Queries</a></li>
-                <li><a href="/{{version}}/documentation/streams/developer-guide#streams_execute">Application Configuration and Execution</a></li>
-            </ul>
-        </li>
-        <li>
-            <a href="/{{version}}/documentation/streams/upgrade-guide">Upgrade Guide and API Changes</a>
-        </li>
-    </ol>
+    <h3 style="max-width: 75rem;">The easiest way to write mission-critical real-time applications and microservices with all the benefits of Kafka's server-side cluster technology.</h3>
 
-    <h2>Overview</h2>
+    <div class="hero">
+        <div class="hero__diagram">
+            <img src="/{{version}}/images/streams-welcome.png" />
+        </div>
+        <div class="hero__cta">
+            <a style="display: none;" href="/{{version}}/documentation/streams/tutorial" class="btn">Write your first app</a>
+            <a href="/{{version}}/documentation/streams/quickstart" class="btn">Play with demo app</a>
+        </div>
+    </div>
 
-    <p>
-        Kafka Streams is a client library for processing and analyzing data stored in Kafka.
-        It builds upon important stream processing concepts such as properly distinguishing between event time and processing time, windowing support, and simple yet efficient management of application state.
-    </p>
-    <p>
-        Kafka Streams has a <b>low barrier to entry</b>: You can quickly write and run a small-scale proof-of-concept on a single machine; and you only need to run additional instances of your application on multiple machines to scale up to high-volume production workloads.
-        Kafka Streams transparently handles the load balancing of multiple instances of the same application by leveraging Kafka's parallelism model.
-    </p>
-    <p>
-        Some highlights of Kafka Streams:
-    </p>
-
-    <ul>
-        <li>Designed as a <b>simple and lightweight client library</b>, which can be easily embedded in any Java application and integrated with any existing packaging, deployment and operational tools that users have for their streaming applications.</li>
-        <li>Has <b>no external dependencies on systems other than Apache Kafka itself</b> as the internal messaging layer; notably, it uses Kafka's partitioning model to horizontally scale processing while maintaining strong ordering guarantees.</li>
-        <li>Supports <b>fault-tolerant local state</b>, which enables very fast and efficient stateful operations like windowed joins and aggregations.</li>
-        <li>Supports <b>exactly-once</b> processing semantics to guarantee that each record will be processed once and only once even when there is a failure on either Streams clients or Kafka brokers in the middle of processing.</li>
-        <li>Employs <b>one-record-at-a-time processing</b> to achieve millisecond processing latency, and supports <b>event-time based windowing operations</b> with late arrival of records.</li>
-        <li>Offers necessary stream processing primitives, along with a <b>high-level Streams DSL</b> and a <b>low-level Processor API</b>.</li>
-
+    <ul class="feature-list">
+        <li>Write standard Java applications</li>
+        <li>Exactly-once processing semantics</li>
+        <li>No seperate processing cluster required</li>
+        <li>Develop on Mac, Linux, Windows</li>
+        <li>Elastic, highly scalable, fault-tolerant</li>
+        <li>Deploy to containers, VMs, bare metal, cloud</li>
+        <li>Equally viable for small, medium, &amp; large use cases</li>
+        <li>Fully integrated with Kafka security</li>
     </ul>
+
+    <div class="cards">
+        <a class="card" href="/{{version}}/documentation/streams/developer-guide">
+            <img class="card__icon" src="/{{version}}/images/icons/documentation.png" />
+            <img class="card__icon card__icon--hover" src="/{{version}}/images/icons/documentation--white.png" />
+            <span class="card__label">Developer manual</span>
+        </a>
+        <a style="display: none;" class="card" href="/{{version}}/documentation/streams/tutorial">
+            <img class="card__icon" src="/{{version}}/images/icons/tutorials.png" />
+            <img class="card__icon card__icon--hover" src="/{{version}}/images/icons/tutorials--white.png" />
+            <span class="card__label">Tutorials</span>
+        </a>
+        <a class="card" href="/{{version}}/documentation/streams/core-concepts">
+            <img class="card__icon" src="/{{version}}/images/icons/architecture.png" />
+            <img class="card__icon card__icon--hover" src="/{{version}}/images/icons/architecture--white.png" />
+            <span class="card__label">Concepts</span>
+        </a>
+    </div>
+
+    <h3>Hello Kafka Streams</h3>
+    <p>The code example below implements a WordCount application that is elastic, highly scalable, fault-tolerant, stateful, and ready to run in production at large scale</p>
+
+    <div class="code-example">
+        <div class="btn-group">
+            <a class="selected b-java-8" data-section="java-8">Java 8+</a>
+            <a class="b-java-7" data-section="java-7">Java 7</a>
+            <a class="b-scala" data-section="scala">Scala</a>
+        </div>
+
+        <div class="code-example__snippet b-java-8 selected">
+            <pre class="brush: java;">
+                import org.apache.kafka.common.serialization.Serdes;
+                import org.apache.kafka.streams.KafkaStreams;
+                import org.apache.kafka.streams.StreamsConfig;
+                import org.apache.kafka.streams.kstream.KStream;
+                import org.apache.kafka.streams.kstream.KStreamBuilder;
+                import org.apache.kafka.streams.kstream.KTable;
+
+                import java.util.Arrays;
+                import java.util.Properties;
+
+                public class WordCountApplication {
+
+                    public static void main(final String[] args) throws Exception {
+                        Properties config = new Properties();
+                        config.put(StreamsConfig.APPLICATION_ID_CONFIG, "wordcount-application");
+                        config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "kafka-broker1:9092");
+                        config.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+                        config.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+
+                        KStreamBuilder builder = new KStreamBuilder();
+                        KStream&lt;String, String&gt; textLines = builder.stream("TextLinesTopic");
+                        KTable&lt;String, Long&gt; wordCounts = textLines
+                            .flatMapValues(textLine -> Arrays.asList(textLine.toLowerCase().split("\\W+")))
+                            .groupBy((key, word) -> word)
+                            .count("Counts");
+                        wordCounts.to(Serdes.String(), Serdes.Long(), "WordsWithCountsTopic");
+
+                        KafkaStreams streams = new KafkaStreams(builder, config);
+                        streams.start();
+                    }
+
+                }
+            </pre>
+        </div>
+
+        <div class="code-example__snippet b-java-7">
+            <pre class="brush: java;">
+                import org.apache.kafka.common.serialization.Serdes;
+                import org.apache.kafka.streams.KafkaStreams;
+                import org.apache.kafka.streams.StreamsConfig;
+                import org.apache.kafka.streams.kstream.KStream;
+                import org.apache.kafka.streams.kstream.KStreamBuilder;
+                import org.apache.kafka.streams.kstream.KTable;
+                import org.apache.kafka.streams.kstream.KeyValueMapper;
+                import org.apache.kafka.streams.kstream.ValueMapper;
+
+                import java.util.Arrays;
+                import java.util.Properties;
+
+                public class WordCountApplication {
+
+                    public static void main(final String[] args) throws Exception {
+                        Properties config = new Properties();
+                        config.put(StreamsConfig.APPLICATION_ID_CONFIG, "wordcount-application");
+                        config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "kafka-broker1:9092");
+                        config.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+                        config.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+
+                        KStreamBuilder builder = new KStreamBuilder();
+                        KStream&lt;String, String&gt; textLines = builder.stream("TextLinesTopic");
+                        KTable&lt;String, Long&gt; wordCounts = textLines
+                            .flatMapValues(new ValueMapper&lt;String, Iterable&lt;String&gt;&gt;() {
+                                @Override
+                                public Iterable&lt;String&gt; apply(String textLine) {
+                                    return Arrays.asList(textLine.toLowerCase().split("\\W+"));
+                                }
+                            })
+                            .groupBy(new KeyValueMapper&lt;String, String, String&gt;() {
+                                @Override
+                                public String apply(String key, String word) {
+                                    return word;
+                                }
+                            })
+                            .count("Counts");
+                        wordCounts.to(Serdes.String(), Serdes.Long(), "WordsWithCountsTopic");
+
+                        KafkaStreams streams = new KafkaStreams(builder, config);
+                        streams.start();
+                    }
+
+                }
+            </pre>
+        </div>
+
+        <div class="code-example__snippet b-scala">
+            <pre class="brush: scala;">
+                import java.lang.Long
+                import java.util.Properties
+                import java.util.concurrent.TimeUnit
+
+                import org.apache.kafka.common.serialization._
+                import org.apache.kafka.streams._
+                import org.apache.kafka.streams.kstream.{KStream, KStreamBuilder, KTable}
+
+                import scala.collection.JavaConverters.asJavaIterableConverter
+
+                object WordCountApplication {
+
+                    def main(args: Array[String]) {
+                        val config: Properties = {
+                            val p = new Properties()
+                            p.put(StreamsConfig.APPLICATION_ID_CONFIG, "wordcount-application")
+                            p.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "kafka-broker1:9092")
+                            p.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass)
+                            p.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass)
+                            p
+                        }
+
+                        val builder: KStreamBuilder = new KStreamBuilder()
+                        val textLines: KStream[String, String] = builder.stream("TextLinesTopic")
+                        val wordCounts: KTable[String, Long] = textLines
+                            .flatMapValues(textLine => textLine.toLowerCase.split("\\W+").toIterable.asJava)
+                            .groupBy((_, word) => word)
+                            .count("Counts")
+                        wordCounts.to(Serdes.String(), Serdes.Long(), "WordsWithCountsTopic")
+
+                        val streams: KafkaStreams = new KafkaStreams(builder, config)
+                        streams.start()
+
+                        Runtime.getRuntime.addShutdownHook(new Thread(() => {
+                            streams.close(10, TimeUnit.SECONDS)
+                        }))
+                    }
+
+                }
+            </pre>
+        </div>
+    </div>
+
+    
 
     <div class="pagination">
         <a href="#" class="pagination__btn pagination__btn__prev pagination__btn--disabled">Previous</a>
@@ -87,6 +223,7 @@
     </div>
 </div>
 <!--#include virtual="../../includes/_footer.htm" -->
+
 <script>
 $(function() {
   // Show selected style on nav item
@@ -94,5 +231,12 @@ $(function() {
 
   // Display docs subnav items
   $('.b-nav__docs').parent().toggleClass('nav__item__with__subs--expanded');
+
+  // Show selected code example
+  $('.btn-group a').click(function(){
+      var targetClass = '.b-' + $(this).data().section;
+      $('.code-example__snippet, .btn-group a').removeClass('selected');
+      $(targetClass).addClass('selected');
+  });
 });
 </script>

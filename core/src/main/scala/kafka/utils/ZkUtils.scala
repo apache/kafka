@@ -51,6 +51,7 @@ object ZkUtils {
   val ControllerPath = "/controller"
   val ControllerEpochPath = "/controller_epoch"
   val IsrChangeNotificationPath = "/isr_change_notification"
+  val LogDirEventNotificationPath = "/log_dir_event_notification"
   val KafkaAclPath = "/kafka-acl"
   val KafkaAclChangesPath = "/kafka-acl-changes"
 
@@ -75,7 +76,8 @@ object ZkUtils {
                               IsrChangeNotificationPath,
                               KafkaAclPath,
                               KafkaAclChangesPath,
-                              ProducerIdBlockPath)
+                              ProducerIdBlockPath,
+                              LogDirEventNotificationPath)
 
   // Important: it is necessary to add any new top level Zookeeper path that contains
   //            sensitive information that should not be world readable to the Seq
@@ -187,18 +189,14 @@ object ZkUtils {
 
   def parseTopicsData(jsonData: String): Seq[String] = {
     var topics = List.empty[String]
-    Json.parseFull(jsonData) match {
-      case Some(m) =>
-        m.asInstanceOf[Map[String, Any]].get("topics") match {
-          case Some(partitionsSeq) =>
-            val mapPartitionSeq = partitionsSeq.asInstanceOf[Seq[Map[String, Any]]]
-            mapPartitionSeq.foreach(p => {
-              val topic = p.get("topic").get.asInstanceOf[String]
-              topics ++= List(topic)
-            })
-          case None =>
-        }
-      case None =>
+    Json.parseFull(jsonData).foreach { m =>
+      m.asInstanceOf[Map[String, Any]].get("topics").foreach { partitionsSeq =>
+          val mapPartitionSeq = partitionsSeq.asInstanceOf[Seq[Map[String, Any]]]
+          mapPartitionSeq.foreach(p => {
+            val topic = p.get("topic").get.asInstanceOf[String]
+            topics ++= List(topic)
+          })
+      }
     }
     topics
   }
@@ -239,7 +237,8 @@ class ZkUtils(val zkClient: ZkClient,
                               DeleteTopicsPath,
                               BrokerSequenceIdPath,
                               IsrChangeNotificationPath,
-                              ProducerIdBlockPath)
+                              ProducerIdBlockPath,
+                              LogDirEventNotificationPath)
 
   // Visible for testing
   val zkPath = new ZkPath(zkClient)
@@ -696,9 +695,8 @@ class ZkUtils(val zkClient: ZkClient,
   def getPartitionLeaderAndIsrForTopics(topicAndPartitions: Set[TopicAndPartition]): mutable.Map[TopicAndPartition, LeaderIsrAndControllerEpoch] = {
     val ret = new mutable.HashMap[TopicAndPartition, LeaderIsrAndControllerEpoch]
     for(topicAndPartition <- topicAndPartitions) {
-      ReplicationUtils.getLeaderIsrAndEpochForPartition(this, topicAndPartition.topic, topicAndPartition.partition) match {
-        case Some(leaderIsrAndControllerEpoch) => ret.put(topicAndPartition, leaderIsrAndControllerEpoch)
-        case None =>
+      ReplicationUtils.getLeaderIsrAndEpochForPartition(this, topicAndPartition.topic, topicAndPartition.partition).foreach { leaderIsrAndControllerEpoch =>
+        ret.put(topicAndPartition, leaderIsrAndControllerEpoch)
       }
     }
     ret
@@ -708,21 +706,16 @@ class ZkUtils(val zkClient: ZkClient,
     val ret = new mutable.HashMap[TopicAndPartition, Seq[Int]]
     topics.foreach { topic =>
       val jsonPartitionMapOpt = readDataMaybeNull(getTopicPath(topic))._1
-      jsonPartitionMapOpt match {
-        case Some(jsonPartitionMap) =>
-          Json.parseFull(jsonPartitionMap) match {
-            case Some(m) => m.asInstanceOf[Map[String, Any]].get("partitions") match {
-              case Some(repl)  =>
-                val replicaMap = repl.asInstanceOf[Map[String, Seq[Int]]]
-                for((partition, replicas) <- replicaMap){
-                  ret.put(TopicAndPartition(topic, partition.toInt), replicas)
-                  debug("Replicas assigned to topic [%s], partition [%s] are [%s]".format(topic, partition, replicas))
-                }
-              case None =>
-            }
-            case None =>
+      jsonPartitionMapOpt.foreach { jsonPartitionMap =>
+        Json.parseFull(jsonPartitionMap).foreach { m =>
+          m.asInstanceOf[Map[String, Any]].get("partitions").foreach { repl =>
+              val replicaMap = repl.asInstanceOf[Map[String, Seq[Int]]]
+              for((partition, replicas) <- replicaMap){
+                ret.put(TopicAndPartition(topic, partition.toInt), replicas)
+                debug("Replicas assigned to topic [%s], partition [%s] are [%s]".format(topic, partition, replicas))
+              }
           }
-        case None =>
+        }
       }
     }
     ret

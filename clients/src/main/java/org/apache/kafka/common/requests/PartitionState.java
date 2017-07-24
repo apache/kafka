@@ -20,6 +20,7 @@ import org.apache.kafka.common.utils.Utils;
 
 import java.util.List;
 
+// This is used to describe per-partition state in the LeaderAndIsrRequest
 public class PartitionState {
     public final int controllerEpoch;
     public final int leader;
@@ -27,14 +28,16 @@ public class PartitionState {
     public final List<Integer> isr;
     public final int zkVersion;
     public final List<Integer> replicas;
+    public final boolean isNew;
 
-    public PartitionState(int controllerEpoch, int leader, int leaderEpoch, List<Integer> isr, int zkVersion, List<Integer> replicas) {
+    public PartitionState(int controllerEpoch, int leader, int leaderEpoch, List<Integer> isr, int zkVersion, List<Integer> replicas, boolean isNew) {
         this.controllerEpoch = controllerEpoch;
         this.leader = leader;
         this.leaderEpoch = leaderEpoch;
         this.isr = isr;
         this.zkVersion = zkVersion;
         this.replicas = replicas;
+        this.isNew = isNew;
     }
 
     @Override
@@ -44,6 +47,7 @@ public class PartitionState {
                 ", leaderEpoch=" + leaderEpoch +
                 ", isr=" + Utils.join(isr, ",") +
                 ", zkVersion=" + zkVersion +
-                ", replicas=" + Utils.join(replicas, ",") + ")";
+                ", replicas=" + Utils.join(replicas, ",") +
+                ", isNew=" + isNew + ")";
     }
 }

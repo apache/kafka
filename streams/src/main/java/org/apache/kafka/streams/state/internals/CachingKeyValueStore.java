@@ -53,7 +53,6 @@ class CachingKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore im
         this.valueSerde = valueSerde;
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public void init(final ProcessorContext context, final StateStore root) {
         underlying.init(context, root);

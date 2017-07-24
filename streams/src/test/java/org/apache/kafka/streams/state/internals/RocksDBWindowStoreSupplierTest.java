@@ -135,7 +135,6 @@ public class RocksDBWindowStoreSupplierTest {
         assertThat(store, is(instanceOf(RocksDBWindowStore.class)));
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldHaveMeteredStoreWhenCached() throws Exception {
         store = createStore(false, true, 3);
@@ -144,7 +143,6 @@ public class RocksDBWindowStoreSupplierTest {
         assertFalse(metrics.metrics().isEmpty());
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldHaveMeteredStoreWhenLogged() throws Exception {
         store = createStore(true, false, 3);
@@ -153,7 +151,6 @@ public class RocksDBWindowStoreSupplierTest {
         assertFalse(metrics.metrics().isEmpty());
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldHaveMeteredStoreWhenNotLoggedOrCached() throws Exception {
         store = createStore(false, false, 3);

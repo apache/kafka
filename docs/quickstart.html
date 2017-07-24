@@ -224,6 +224,11 @@ Kafka topic to a file.</p>
 <pre class="brush: bash;">
 &gt; echo -e "foo\nbar" > test.txt
 </pre>
+Or on Windows:
+<pre class="brush: bash;">
+&gt; echo foo> test.txt
+&gt; echo bar>> test.txt
+</pre>
 
 <p>Next, we'll start two connectors running in <i>standalone</i> mode, which means they run in a single, local, dedicated
 process. We provide three configuration files as parameters. The first is always the configuration for the Kafka Connect
@@ -251,7 +256,7 @@ by examining the contents of the output file:
 
 
 <pre class="brush: bash;">
-&gt; cat test.sink.txt
+&gt; more test.sink.txt
 foo
 bar
 </pre>
@@ -272,7 +277,7 @@ data in the topic (or use custom consumer code to process it):
 <p>The connectors continue to process data, so we can add data to the file and see it move through the pipeline:</p>
 
 <pre class="brush: bash;">
-&gt; echo "Another line" >> test.txt
+&gt; echo Another line>> test.txt
 </pre>
 
 <p>You should see the line appear in the console consumer output and in the sink file.</p>

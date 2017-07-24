@@ -15,7 +15,7 @@
 
 from ducktape.cluster.remoteaccount import RemoteCommandError
 from ducktape.utils.util import wait_until
-
+from kafkatest.version import get_version, V_0_11_0_0, DEV_BRANCH
 
 class JmxMixin(object):
     """This mixin helps existing service subclasses start JmxTool on their worker nodes and collect jmx stats.
@@ -23,6 +23,7 @@ class JmxMixin(object):
     A couple things worth noting:
     - this is not a service in its own right.
     - we assume the service using JmxMixin also uses KafkaPathResolverMixin
+    - this uses the --wait option for JmxTool, so the list of object names must be explicit; no patterns are permitted
     """
     def __init__(self, num_nodes, jmx_object_names=None, jmx_attributes=None):
         self.jmx_object_names = jmx_object_names
@@ -59,8 +60,14 @@ class JmxMixin(object):
         wait_until(check_jmx_port_listening, timeout_sec=30, backoff_sec=.1,
                    err_msg="%s: Never saw JMX port for %s start listening" % (node.account, self))
 
-        cmd = "%s kafka.tools.JmxTool " % self.path.script("kafka-run-class.sh", node)
+        # To correctly wait for requested JMX metrics to be added we need the --wait option for JmxTool. This option was
+        # not added until 0.11.0.1, so any earlier versions need to use JmxTool from a newer version.
+        use_jmxtool_version = get_version(node)
+        if use_jmxtool_version <= V_0_11_0_0:
+            use_jmxtool_version = DEV_BRANCH
+        cmd = "%s kafka.tools.JmxTool " % self.path.script("kafka-run-class.sh", use_jmxtool_version)
         cmd += "--reporting-interval 1000 --jmx-url service:jmx:rmi:///jndi/rmi://127.0.0.1:%d/jmxrmi" % self.jmx_port
+        cmd += " --wait"
         for jmx_object_name in self.jmx_object_names:
             cmd += " --object-name %s" % jmx_object_name
         for jmx_attribute in self.jmx_attributes:

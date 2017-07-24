@@ -172,6 +172,13 @@ public class FileRecords extends AbstractRecords implements Closeable {
     }
 
     /**
+     * Close file handlers used by the FileChannel but don't write to disk. This is used when the disk may have failed
+     */
+    public void closeHandlers() throws IOException {
+        channel.close();
+    }
+
+    /**
      * Delete this message set from the filesystem
      * @return True iff this message set was deleted.
      */

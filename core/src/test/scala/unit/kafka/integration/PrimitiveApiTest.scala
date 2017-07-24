@@ -42,7 +42,7 @@ import org.apache.kafka.common.TopicPartition
 class PrimitiveApiTest extends ProducerConsumerTestHarness {
   val requestHandlerLogger = Logger.getLogger(classOf[KafkaRequestHandler])
 
-  def generateConfigs() = List(KafkaConfig.fromProps(TestUtils.createBrokerConfig(0, zkConnect)))
+  def generateConfigs = List(KafkaConfig.fromProps(TestUtils.createBrokerConfig(0, zkConnect)))
 
   @Test
   def testFetchRequestCanProperlySerialize() {

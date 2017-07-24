@@ -53,7 +53,7 @@ abstract class SaslEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
     * the second one connects ok, but fails to consume messages due to the ACL.
     */
   @Test(timeout = 15000)
-  def testTwoConsumersWithDifferentSaslCredentials {
+  def testTwoConsumersWithDifferentSaslCredentials(): Unit = {
     setAclsAndProduce()
     val consumer1 = consumers.head
 
