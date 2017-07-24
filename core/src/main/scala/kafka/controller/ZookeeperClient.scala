@@ -22,7 +22,6 @@ import java.util.concurrent.{ArrayBlockingQueue, ConcurrentHashMap, CountDownLat
 
 import kafka.utils.CoreUtils.{inLock, inReadLock, inWriteLock}
 import kafka.utils.Logging
-import org.apache.kafka.common.utils.Time
 import org.apache.zookeeper.AsyncCallback.{ACLCallback, Children2Callback, DataCallback, StatCallback, StringCallback, VoidCallback}
 import org.apache.zookeeper.Watcher.Event.{EventType, KeeperState}
 import org.apache.zookeeper.ZooKeeper.States
@@ -36,9 +35,8 @@ import org.apache.zookeeper.{CreateMode, WatchedEvent, Watcher, ZooKeeper}
   * @param sessionTimeoutMs session timeout in milliseconds
   * @param connectionTimeoutMs connection timeout in milliseconds
   * @param stateChangeHandler state change handler callbacks called by the underlying zookeeper client's EventThread.
-  * @param time
   */
-class ZookeeperClient(connectString: String, sessionTimeoutMs: Int, connectionTimeoutMs: Int, stateChangeHandler: StateChangeHandler, time: Time) extends Logging {
+class ZookeeperClient(connectString: String, sessionTimeoutMs: Int, connectionTimeoutMs: Int, stateChangeHandler: StateChangeHandler) extends Logging {
   private val initializationLock = new ReentrantReadWriteLock()
   private val isConnectedOrExpiredLock = new ReentrantLock()
   private val isConnectedOrExpiredCondition = isConnectedOrExpiredLock.newCondition()
@@ -182,7 +180,7 @@ class ZookeeperClient(connectString: String, sessionTimeoutMs: Int, connectionTi
   private def initialize(): Unit = {
     if (!zooKeeper.getState.isAlive) {
       info(s"Initializing a new session to $connectString.")
-      var now = time.milliseconds()
+      var now = System.currentTimeMillis()
       val threshold = now + connectionTimeoutMs
       while (now < threshold) {
         try {
@@ -192,10 +190,10 @@ class ZookeeperClient(connectString: String, sessionTimeoutMs: Int, connectionTi
           return
         } catch {
           case _: Exception =>
-            now = time.milliseconds()
+            now = System.currentTimeMillis()
             if (now < threshold) {
-              time.sleep(1000)
-              now = time.milliseconds()
+              Thread.sleep(1000)
+              now = System.currentTimeMillis()
             }
         }
       }
