@@ -428,6 +428,68 @@ public class StreamsConfigTest {
         assertTrue(config.defaultTimestampExtractor() instanceof FailOnInvalidTimestamp);
     }
 
+    @Test(expected = StreamsException.class)
+    public void shouldSpecifyCorrectKeySerdeClassOnErrorUsingDeprecatedConfigs() {
+        final Properties props = minimalStreamsConfig();
+        props.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG, MisconfiguredSerde.class);
+        try {
+            final StreamsConfig config = new StreamsConfig(props);
+            config.keySerde();
+        } catch (StreamsException e) {
+            assertEquals(
+                "Failed to configure key serde class org.apache.kafka.streams.StreamsConfigTest$MisconfiguredSerde",
+                e.getMessage());
+            throw e;
+        }
+    }
+
+    @Test(expected = StreamsException.class)
+    public void shouldSpecifyCorrectKeySerdeClassOnError() {
+        final Properties props = minimalStreamsConfig();
+        props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, MisconfiguredSerde.class);
+        try {
+            final StreamsConfig config = new StreamsConfig(props);
+            config.keySerde();
+        } catch (StreamsException e) {
+            assertEquals(
+                "Failed to configure key serde class org.apache.kafka.streams.StreamsConfigTest$MisconfiguredSerde",
+                e.getMessage());
+            throw e;
+        }
+    }
+
+    @Test(expected = StreamsException.class)
+    public void shouldSpecifyCorrectValueSerdeClassOnErrorUsingDeprecatedConfigs() {
+        final Properties props = minimalStreamsConfig();
+        props.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, MisconfiguredSerde.class);
+        try {
+            final StreamsConfig config = new StreamsConfig(props);
+            config.valueSerde();
+        } catch (StreamsException e) {
+            assertEquals(
+                "Failed to configure value serde class org.apache.kafka.streams.StreamsConfigTest$MisconfiguredSerde",
+                e.getMessage());
+            throw e;
+        }
+    }
+
+    @Test(expected = StreamsException.class)
+    public void shouldSpecifyCorrectValueSerdeClassOnError() {
+        final Properties props = minimalStreamsConfig();
+        props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, MisconfiguredSerde.class);
+        try {
+            final StreamsConfig config = new StreamsConfig(props);
+            config.valueSerde();
+        } catch (StreamsException e) {
+            assertEquals(
+                "Failed to configure value serde class org.apache.kafka.streams.StreamsConfigTest$MisconfiguredSerde",
+                e.getMessage());
+            throw e;
+        }
+    }
+
+
+
     static class MisconfiguredSerde implements Serde {
         @Override
         public void configure(final Map configs, final boolean isKey) {
