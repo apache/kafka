@@ -48,16 +48,14 @@ object Json {
       case b: Boolean => b.toString
       case s: String => "\"" + s + "\""
       case n: Number => n.toString
-      case m: Map[_, _] => 
-        "{" + 
-          m.map {
-            case (k, v) => encode(k) + ":" + encode(v)
-            case elem => throw new IllegalArgumentException("Invalid map element (" + elem + ") in " + obj)
-          }.mkString(",") +
-        "}"
+      case m: Map[_, _] => "{" +
+        m.map {
+          case (k, v) => encode(k) + ":" + encode(v)
+          case elem => throw new IllegalArgumentException(s"Invalid map element '$elem' in $obj")
+        }.mkString(",") + "}"
       case a: Array[_] => encode(a.toSeq)
       case i: Iterable[_] => "[" + i.map(encode).mkString(",") + "]"
-      case other: AnyRef => throw new IllegalArgumentException("Unknown argument of type " + other.getClass + ": " + other)
+      case other: AnyRef => throw new IllegalArgumentException(s"Unknown argument of type ${other.getClass}: $other")
     }
   }
 

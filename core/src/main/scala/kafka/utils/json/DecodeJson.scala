@@ -39,29 +39,29 @@ object DecodeJson {
 
   implicit object DecodeBoolean extends DecodeJson[Boolean] {
     def decodeEither(node: JsonNode): Either[String, Boolean] =
-      if (node.isBoolean) Right(node.booleanValue) else Left("Expected `Boolean` value, received " + node)
+      if (node.isBoolean) Right(node.booleanValue) else Left(s"Expected `Boolean` value, received $node")
   }
 
   implicit object DecodeDouble extends DecodeJson[Double] {
     def decodeEither(node: JsonNode): Either[String, Double] =
       if (node.isDouble || node.isLong || node.isInt)
         Right(node.doubleValue)
-      else Left("Expected `Double` value, received " + node)
+      else Left(s"Expected `Double` value, received $node")
   }
 
   implicit object DecodeInt extends DecodeJson[Int] {
     def decodeEither(node: JsonNode): Either[String, Int] =
-      if (node.isInt) Right(node.intValue) else Left("Expected `Int` value, received " + node)
+      if (node.isInt) Right(node.intValue) else Left(s"Expected `Int` value, received $node")
   }
 
   implicit object DecodeLong extends DecodeJson[Long] {
     def decodeEither(node: JsonNode): Either[String, Long] =
-      if (node.isLong || node.isInt) Right(node.longValue) else Left("Expected `Long` value, received " + node)
+      if (node.isLong || node.isInt) Right(node.longValue) else Left(s"Expected `Long` value, received $node")
   }
 
   implicit object DecodeString extends DecodeJson[String] {
     def decodeEither(node: JsonNode): Either[String, String] =
-      if (node.isTextual) Right(node.textValue) else Left("Expected `String` value, received " + node)
+      if (node.isTextual) Right(node.textValue) else Left(s"Expected `String` value, received $node")
   }
 
   implicit def decodeOption[E](implicit decodeJson: DecodeJson[E]): DecodeJson[Option[E]] = new DecodeJson[Option[E]] {
@@ -75,7 +75,7 @@ object DecodeJson {
     def decodeEither(node: JsonNode): Either[String, S[E]] = {
       if (node.isArray)
         decodeIterator(node.elements.asScala)(decodeJson.decodeEither)
-      else Left("Expected JSON array, received " + node)
+      else Left(s"Expected JSON array, received $node")
     }
   }
 
@@ -83,7 +83,7 @@ object DecodeJson {
     def decodeEither(node: JsonNode): Either[String, M[String, V]] = {
       if (node.isObject)
         decodeIterator(node.fields.asScala)(e => decodeJson.decodeEither(e.getValue).right.map(v => (e.getKey, v)))(cbf)
-      else Left("Expected JSON object, received " + node)
+      else Left(s"Expected JSON object, received $node")
     }
   }
 

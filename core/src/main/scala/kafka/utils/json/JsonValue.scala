@@ -33,7 +33,7 @@ trait JsonValue {
   def toOption[T](implicit decodeJson: DecodeJson[T]): Option[T] = toEither[T].right.toOption
 
   def asJsonObject: JsonObject =
-    asJsonObjectOption.getOrElse(throw new JsonMappingException("Expected JSON object, received " + node))
+    asJsonObjectOption.getOrElse(throw new JsonMappingException(s"Expected JSON object, received $node"))
 
   def asJsonObjectOption: Option[JsonObject] = this match {
     case j: JsonObject => Some(j)
@@ -44,7 +44,7 @@ trait JsonValue {
   }
 
   def asJsonArray: JsonArray =
-    asJsonArrayOption.getOrElse(throw new JsonMappingException("Expected JSON array, received " + node))
+    asJsonArrayOption.getOrElse(throw new JsonMappingException(s"Expected JSON array, received $node"))
 
   def asJsonArrayOption: Option[JsonArray] = this match {
     case j: JsonArray => Some(j)
