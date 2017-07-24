@@ -36,7 +36,6 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.apache.kafka.streams.processor.internals.assignment.AssignmentInfo;
 import org.apache.kafka.streams.state.HostInfo;
 import org.apache.kafka.streams.state.Stores;
@@ -98,6 +97,7 @@ public class StreamThreadTest {
     @Before
     public void setUp() throws Exception {
         processId = UUID.randomUUID();
+        builder.setApplicationId(applicationId);
     }
 
     private final TopicPartition t1p1 = new TopicPartition("topic1", 1);
@@ -442,7 +442,7 @@ public class StreamThreadTest {
     public void testStateChangeStartClose() throws InterruptedException {
 
         final StreamThread thread = new StreamThread(
-            builder,
+            builder.internalTopologyBuilder,
             config,
             clientSupplier,
             applicationId,
@@ -450,7 +450,7 @@ public class StreamThreadTest {
             processId,
             metrics,
             Time.SYSTEM,
-            new StreamsMetadataState(builder, StreamsMetadataState.UNKNOWN_HOST),
+            new StreamsMetadataState(builder.internalTopologyBuilder, StreamsMetadataState.UNKNOWN_HOST),
             0);
 
         final StateListenerStub stateListener = new StateListenerStub();
@@ -494,7 +494,7 @@ public class StreamThreadTest {
         //clientSupplier.consumer.assign(Arrays.asList(new TopicPartition(TOPIC, 0), new TopicPartition(TOPIC, 1)));
 
         final StreamThread thread1 = new StreamThread(
-            builder,
+            builder.internalTopologyBuilder,
             config,
             clientSupplier,
             applicationId,
@@ -502,10 +502,10 @@ public class StreamThreadTest {
             processId,
             metrics,
             Time.SYSTEM,
-            new StreamsMetadataState(builder, StreamsMetadataState.UNKNOWN_HOST),
+            new StreamsMetadataState(builder.internalTopologyBuilder, StreamsMetadataState.UNKNOWN_HOST),
             0);
         final StreamThread thread2 = new StreamThread(
-            builder,
+            builder.internalTopologyBuilder,
             config,
             clientSupplier,
             applicationId,
@@ -513,7 +513,7 @@ public class StreamThreadTest {
             processId,
             metrics,
             Time.SYSTEM,
-            new StreamsMetadataState(builder, StreamsMetadataState.UNKNOWN_HOST),
+            new StreamsMetadataState(builder.internalTopologyBuilder, StreamsMetadataState.UNKNOWN_HOST),
             0);
 
         final Map<TaskId, Set<TopicPartition>> task0 = Collections.singletonMap(new TaskId(0, 0), task0Assignment);
@@ -617,7 +617,7 @@ public class StreamThreadTest {
     @Test
     public void testMetrics() {
         final StreamThread thread = new StreamThread(
-            builder,
+            builder.internalTopologyBuilder,
             config,
             clientSupplier,
             applicationId,
@@ -625,7 +625,7 @@ public class StreamThreadTest {
             processId,
             metrics,
             mockTime,
-            new StreamsMetadataState(builder, StreamsMetadataState.UNKNOWN_HOST),
+            new StreamsMetadataState(builder.internalTopologyBuilder, StreamsMetadataState.UNKNOWN_HOST),
             0);
         final String defaultGroupName = "stream-metrics";
         final String defaultPrefix = "thread." + thread.threadClientId();
@@ -678,7 +678,7 @@ public class StreamThreadTest {
             extraDir.mkdir();
             builder.addSource("source1", "topic1");
             final StreamThread thread = new StreamThread(
-                builder,
+                builder.internalTopologyBuilder,
                 config,
                 clientSupplier,
                 applicationId,
@@ -686,7 +686,7 @@ public class StreamThreadTest {
                 processId,
                 metrics,
                 mockTime,
-                new StreamsMetadataState(builder, StreamsMetadataState.UNKNOWN_HOST),
+                new StreamsMetadataState(builder.internalTopologyBuilder, StreamsMetadataState.UNKNOWN_HOST),
                 0) {
                 @Override
                 public void maybeClean(final long now) {
@@ -815,7 +815,7 @@ public class StreamThreadTest {
             builder.addSource("source1", "topic1");
 
             final StreamThread thread = new StreamThread(
-                builder,
+                builder.internalTopologyBuilder,
                 config,
                 clientSupplier,
                 applicationId,
@@ -823,7 +823,7 @@ public class StreamThreadTest {
                 processId,
                 metrics,
                 mockTime,
-                new StreamsMetadataState(builder, StreamsMetadataState.UNKNOWN_HOST),
+                new StreamsMetadataState(builder.internalTopologyBuilder, StreamsMetadataState.UNKNOWN_HOST),
                 0) {
 
                 @Override
@@ -907,7 +907,7 @@ public class StreamThreadTest {
         builder.addSource("source1", "someTopic");
 
         final StreamThread thread = new StreamThread(
-            builder,
+            builder.internalTopologyBuilder,
             config,
             clientSupplier,
             applicationId,
@@ -915,7 +915,7 @@ public class StreamThreadTest {
             processId,
             metrics,
             mockTime,
-            new StreamsMetadataState(builder, StreamsMetadataState.UNKNOWN_HOST),
+            new StreamsMetadataState(builder.internalTopologyBuilder, StreamsMetadataState.UNKNOWN_HOST),
             0);
 
         final Map<TaskId, Set<TopicPartition>> assignment = new HashMap<>();
@@ -943,7 +943,7 @@ public class StreamThreadTest {
 
         final MockClientSupplier clientSupplier = new MockClientSupplier(applicationId);
         final StreamThread thread = new StreamThread(
-            builder,
+            builder.internalTopologyBuilder,
             new StreamsConfig(configProps(true)),
             clientSupplier,
             applicationId,
@@ -951,7 +951,7 @@ public class StreamThreadTest {
             processId,
             metrics,
             mockTime,
-            new StreamsMetadataState(builder, StreamsMetadataState.UNKNOWN_HOST),
+            new StreamsMetadataState(builder.internalTopologyBuilder, StreamsMetadataState.UNKNOWN_HOST),
             0);
 
         final Map<TaskId, Set<TopicPartition>> assignment = new HashMap<>();
@@ -982,7 +982,7 @@ public class StreamThreadTest {
 
         final MockClientSupplier clientSupplier = new MockClientSupplier(applicationId);
         final StreamThread thread = new StreamThread(
-            builder,
+            builder.internalTopologyBuilder,
             new StreamsConfig(configProps(true)),
             clientSupplier,
             applicationId,
@@ -990,7 +990,7 @@ public class StreamThreadTest {
             processId,
             metrics,
             mockTime,
-            new StreamsMetadataState(builder, StreamsMetadataState.UNKNOWN_HOST),
+            new StreamsMetadataState(builder.internalTopologyBuilder, StreamsMetadataState.UNKNOWN_HOST),
             0);
 
         final Map<TaskId, Set<TopicPartition>> assignment = new HashMap<>();
@@ -1015,7 +1015,7 @@ public class StreamThreadTest {
         builder.addSource("source1", "someTopic");
 
         final StreamThread thread = new StreamThread(
-            builder,
+            builder.internalTopologyBuilder,
             config,
             clientSupplier,
             applicationId,
@@ -1023,7 +1023,7 @@ public class StreamThreadTest {
             processId,
             metrics,
             mockTime,
-            new StreamsMetadataState(builder, StreamsMetadataState.UNKNOWN_HOST),
+            new StreamsMetadataState(builder.internalTopologyBuilder, StreamsMetadataState.UNKNOWN_HOST),
             0);
 
         final Map<TaskId, Set<TopicPartition>> assignment = new HashMap<>();
@@ -1046,7 +1046,7 @@ public class StreamThreadTest {
         builder.addSource("name", "topic").addSink("out", "output");
 
         final StreamThread thread = new StreamThread(
-            builder,
+            builder.internalTopologyBuilder,
             config,
             clientSupplier,
             applicationId,
@@ -1054,7 +1054,7 @@ public class StreamThreadTest {
             processId,
             metrics,
             mockTime,
-            new StreamsMetadataState(builder, StreamsMetadataState.UNKNOWN_HOST),
+            new StreamsMetadataState(builder.internalTopologyBuilder, StreamsMetadataState.UNKNOWN_HOST),
             0);
 
         thread.setPartitionAssignor(new StreamPartitionAssignor() {
@@ -1086,7 +1086,7 @@ public class StreamThreadTest {
                 new StateDirectory(applicationId, config.getString(StreamsConfig.STATE_DIR_CONFIG), mockTime));
 
         final StreamThread thread = new StreamThread(
-                builder,
+                builder.internalTopologyBuilder,
                 config,
                 clientSupplier,
                 applicationId,
@@ -1094,7 +1094,7 @@ public class StreamThreadTest {
                 processId,
                 metrics,
                 mockTime,
-                new StreamsMetadataState(builder, StreamsMetadataState.UNKNOWN_HOST),
+                new StreamsMetadataState(builder.internalTopologyBuilder, StreamsMetadataState.UNKNOWN_HOST),
                 0) {
 
             @Override
@@ -1133,13 +1133,11 @@ public class StreamThreadTest {
 
     @Test
     public void shouldInitializeRestoreConsumerWithOffsetsFromStandbyTasks()  {
-        final KStreamBuilder builder = new KStreamBuilder();
-        builder.setApplicationId(applicationId);
         builder.stream("t1").groupByKey().count("count-one");
         builder.stream("t2").groupByKey().count("count-two");
 
         final StreamThread thread = new StreamThread(
-                builder,
+                builder.internalTopologyBuilder,
                 config,
                 clientSupplier,
                 applicationId,
@@ -1147,7 +1145,7 @@ public class StreamThreadTest {
                 processId,
                 metrics,
                 mockTime,
-                new StreamsMetadataState(builder, StreamsMetadataState.UNKNOWN_HOST),
+                new StreamsMetadataState(builder.internalTopologyBuilder, StreamsMetadataState.UNKNOWN_HOST),
                 0);
 
         final MockConsumer<byte[], byte[]> restoreConsumer = clientSupplier.restoreConsumer;
@@ -1190,18 +1188,13 @@ public class StreamThreadTest {
                 new TopicPartition("stream-thread-test-count-two-changelog", 0))));
     }
 
-
-
-
     @Test
     public void shouldCloseSuspendedTasksThatAreNoLongerAssignedToThisStreamThreadBeforeCreatingNewTasks() throws Exception {
-        final KStreamBuilder builder = new KStreamBuilder();
-        builder.setApplicationId(applicationId);
         builder.stream("t1").groupByKey().count("count-one");
         builder.stream("t2").groupByKey().count("count-two");
 
         final StreamThread thread = new StreamThread(
-            builder,
+            builder.internalTopologyBuilder,
             config,
             clientSupplier,
             applicationId,
@@ -1209,7 +1202,7 @@ public class StreamThreadTest {
             processId,
             metrics,
             mockTime,
-            new StreamsMetadataState(builder, StreamsMetadataState.UNKNOWN_HOST),
+            new StreamsMetadataState(builder.internalTopologyBuilder, StreamsMetadataState.UNKNOWN_HOST),
             0);
         final MockConsumer<byte[], byte[]> restoreConsumer = clientSupplier.restoreConsumer;
         restoreConsumer.updatePartitions("stream-thread-test-count-one-changelog",
@@ -1268,14 +1261,12 @@ public class StreamThreadTest {
 
     @Test
     public void shouldCloseActiveTasksThatAreAssignedToThisStreamThreadButAssignmentHasChangedBeforeCreatingNewTasks() throws Exception {
-        final KStreamBuilder builder = new KStreamBuilder();
-        builder.setApplicationId(applicationId);
         builder.stream(Pattern.compile("t.*")).to("out");
 
         final Map<Collection<TopicPartition>, TestStreamTask> createdTasks = new HashMap<>();
 
         final StreamThread thread = new StreamThread(
-            builder,
+            builder.internalTopologyBuilder,
             config,
             clientSupplier,
             applicationId,
@@ -1283,7 +1274,7 @@ public class StreamThreadTest {
             processId,
             metrics,
             mockTime,
-            new StreamsMetadataState(builder, StreamsMetadataState.UNKNOWN_HOST),
+            new StreamsMetadataState(builder.internalTopologyBuilder, StreamsMetadataState.UNKNOWN_HOST),
             0) {
 
             @Override
@@ -1355,7 +1346,7 @@ public class StreamThreadTest {
 
         final MockClientSupplier clientSupplier = new MockClientSupplier(applicationId);
         final StreamThread thread = new StreamThread(
-            builder,
+            builder.internalTopologyBuilder,
             new StreamsConfig(configProps(true)),
             clientSupplier,
             applicationId,
@@ -1363,7 +1354,7 @@ public class StreamThreadTest {
             processId,
             metrics,
             mockTime,
-            new StreamsMetadataState(builder, StreamsMetadataState.UNKNOWN_HOST),
+            new StreamsMetadataState(builder.internalTopologyBuilder, StreamsMetadataState.UNKNOWN_HOST),
             0);
 
         final MockConsumer consumer = clientSupplier.consumer;
@@ -1451,7 +1442,7 @@ public class StreamThreadTest {
 
         final MockClientSupplier clientSupplier = new MockClientSupplier(applicationId);
         final StreamThread thread = new StreamThread(
-            builder,
+            builder.internalTopologyBuilder,
             new StreamsConfig(configProps(true)),
             clientSupplier,
             applicationId,
@@ -1459,7 +1450,7 @@ public class StreamThreadTest {
             processId,
             new Metrics(),
             new MockTime(),
-            new StreamsMetadataState(builder, StreamsMetadataState.UNKNOWN_HOST),
+            new StreamsMetadataState(builder.internalTopologyBuilder, StreamsMetadataState.UNKNOWN_HOST),
             0);
 
         final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
@@ -1484,8 +1475,6 @@ public class StreamThreadTest {
 
     @Test
     public void shouldNotViolateAtLeastOnceWhenAnExceptionOccursOnTaskCloseDuringShutdown() throws Exception {
-        final KStreamBuilder builder = new KStreamBuilder();
-        builder.setApplicationId(applicationId);
         builder.stream("t1").groupByKey();
 
         final TestStreamTask testStreamTask = new TestStreamTask(
@@ -1507,7 +1496,7 @@ public class StreamThreadTest {
         };
 
         final StreamThread thread = new StreamThread(
-            builder,
+            builder.internalTopologyBuilder,
             config,
             clientSupplier,
             applicationId,
@@ -1515,7 +1504,7 @@ public class StreamThreadTest {
             processId,
             metrics,
             mockTime,
-            new StreamsMetadataState(builder, StreamsMetadataState.UNKNOWN_HOST),
+            new StreamsMetadataState(builder.internalTopologyBuilder, StreamsMetadataState.UNKNOWN_HOST),
             0) {
 
             @Override
@@ -1561,7 +1550,7 @@ public class StreamThreadTest {
         };
 
         final StreamThread thread = new StreamThread(
-            builder,
+            builder.internalTopologyBuilder,
             config,
             clientSupplier,
             applicationId,
@@ -1569,7 +1558,7 @@ public class StreamThreadTest {
             processId,
             metrics,
             mockTime,
-            new StreamsMetadataState(builder, StreamsMetadataState.UNKNOWN_HOST),
+            new StreamsMetadataState(builder.internalTopologyBuilder, StreamsMetadataState.UNKNOWN_HOST),
             0) {
 
             @Override
@@ -1606,8 +1595,6 @@ public class StreamThreadTest {
 
     @Test
     public void shouldNotViolateAtLeastOnceWhenExceptionOccursDuringTaskSuspension() throws Exception {
-        final KStreamBuilder builder = new KStreamBuilder();
-        builder.setApplicationId(applicationId);
         builder.stream("t1").groupByKey();
 
         final TestStreamTask testStreamTask = new TestStreamTask(
@@ -1629,7 +1616,7 @@ public class StreamThreadTest {
         };
 
         final StreamThread thread = new StreamThread(
-            builder,
+            builder.internalTopologyBuilder,
             config,
             clientSupplier,
             applicationId,
@@ -1637,7 +1624,7 @@ public class StreamThreadTest {
             processId,
             metrics,
             mockTime,
-            new StreamsMetadataState(builder, StreamsMetadataState.UNKNOWN_HOST),
+            new StreamsMetadataState(builder.internalTopologyBuilder, StreamsMetadataState.UNKNOWN_HOST),
             0) {
 
             @Override
@@ -1667,8 +1654,6 @@ public class StreamThreadTest {
 
     @Test
     public void shouldNotViolateAtLeastOnceWhenExceptionOccursDuringFlushStateWhileSuspendingState() throws Exception {
-        final KStreamBuilder builder = new KStreamBuilder();
-        builder.setApplicationId(applicationId);
         builder.stream("t1").groupByKey();
 
         final TestStreamTask testStreamTask = new TestStreamTask(
@@ -1690,7 +1675,7 @@ public class StreamThreadTest {
         };
 
         final StreamThread thread = new StreamThread(
-            builder,
+            builder.internalTopologyBuilder,
             config,
             clientSupplier,
             applicationId,
@@ -1698,7 +1683,7 @@ public class StreamThreadTest {
             processId,
             metrics,
             mockTime,
-            new StreamsMetadataState(builder, StreamsMetadataState.UNKNOWN_HOST), 0) {
+            new StreamsMetadataState(builder.internalTopologyBuilder, StreamsMetadataState.UNKNOWN_HOST), 0) {
 
             @Override
             protected StreamTask createStreamTask(final TaskId id, final Collection<TopicPartition> partitions) {
@@ -1729,12 +1714,11 @@ public class StreamThreadTest {
     @Test
     @SuppressWarnings("unchecked")
     public void shouldAlwaysUpdateWithLatestTopicsFromStreamPartitionAssignor() throws Exception {
-        final TopologyBuilder topologyBuilder = new TopologyBuilder();
-        topologyBuilder.addSource("source", Pattern.compile("t.*"));
-        topologyBuilder.addProcessor("processor", new MockProcessorSupplier(), "source");
+        builder.addSource("source", Pattern.compile("t.*"));
+        builder.addProcessor("processor", new MockProcessorSupplier(), "source");
 
         final StreamThread thread = new StreamThread(
-            topologyBuilder,
+            builder.internalTopologyBuilder,
             config,
             clientSupplier,
             applicationId,
@@ -1742,7 +1726,7 @@ public class StreamThreadTest {
             processId,
             metrics,
             mockTime,
-            new StreamsMetadataState(topologyBuilder, StreamsMetadataState.UNKNOWN_HOST),
+            new StreamsMetadataState(builder.internalTopologyBuilder, StreamsMetadataState.UNKNOWN_HOST),
             0);
 
         final StreamPartitionAssignor partitionAssignor = new StreamPartitionAssignor();
@@ -1756,11 +1740,11 @@ public class StreamThreadTest {
 
         final Field
             nodeToSourceTopicsField =
-            topologyBuilder.getClass().getDeclaredField("nodeToSourceTopics");
+            builder.internalTopologyBuilder.getClass().getDeclaredField("nodeToSourceTopics");
         nodeToSourceTopicsField.setAccessible(true);
         final Map<String, List<String>>
             nodeToSourceTopics =
-            (Map<String, List<String>>) nodeToSourceTopicsField.get(topologyBuilder);
+            (Map<String, List<String>>) nodeToSourceTopicsField.get(builder.internalTopologyBuilder);
         final List<TopicPartition> topicPartitions = new ArrayList<>();
 
         final TopicPartition topicPartition1 = new TopicPartition("topic-1", 0);
@@ -1856,8 +1840,6 @@ public class StreamThreadTest {
     }
 
     private StreamThread setupTest(final TaskId taskId) throws InterruptedException {
-        final TopologyBuilder builder = new TopologyBuilder();
-        builder.setApplicationId(applicationId);
         builder.addSource("source", "topic");
 
         final MockClientSupplier clientSupplier = new MockClientSupplier();
@@ -1883,9 +1865,18 @@ public class StreamThreadTest {
             }
         };
 
-        final StreamThread thread = new StreamThread(builder, config, clientSupplier, applicationId,
-            clientId, processId, new Metrics(), new MockTime(),
-            new StreamsMetadataState(builder, StreamsMetadataState.UNKNOWN_HOST), 0) {
+        final StreamThread thread = new StreamThread(
+            builder.internalTopologyBuilder,
+            config,
+            clientSupplier,
+            applicationId,
+            clientId,
+            processId,
+            new Metrics(),
+            new MockTime(),
+            new StreamsMetadataState(builder.internalTopologyBuilder, StreamsMetadataState.UNKNOWN_HOST),
+            0) {
+
             @Override
             protected StreamTask createStreamTask(final TaskId id, final Collection<TopicPartition> partitions) {
                 return testStreamTask;
@@ -1968,8 +1959,6 @@ public class StreamThreadTest {
         final String storeName = "store";
         final String changelogTopic = applicationId + "-" + storeName + "-changelog";
 
-        final KStreamBuilder builder = new KStreamBuilder();
-        builder.setApplicationId(applicationId);
         builder.stream("topic1").groupByKey().count(storeName);
 
         final MockClientSupplier clientSupplier = new MockClientSupplier();
@@ -1986,9 +1975,17 @@ public class StreamThreadTest {
             }
         });
 
-        final StreamThread thread = new StreamThread(builder, config, clientSupplier, applicationId,
-            clientId, processId, new Metrics(), new MockTime(),
-            new StreamsMetadataState(builder, StreamsMetadataState.UNKNOWN_HOST), 0) {
+        final StreamThread thread = new StreamThread(
+            builder.internalTopologyBuilder,
+            config,
+            clientSupplier,
+            applicationId,
+            clientId,
+            processId,
+            new Metrics(),
+            new MockTime(),
+            new StreamsMetadataState(builder.internalTopologyBuilder, StreamsMetadataState.UNKNOWN_HOST),
+            0) {
 
             @Override
             protected StandbyTask createStandbyTask(final TaskId id, final Collection<TopicPartition> partitions) {
@@ -2060,7 +2057,7 @@ public class StreamThreadTest {
 
     private StreamThread getStreamThread() {
         return new StreamThread(
-            builder,
+            builder.internalTopologyBuilder,
             config,
             clientSupplier,
             applicationId,
@@ -2068,7 +2065,7 @@ public class StreamThreadTest {
             processId,
             metrics,
             Time.SYSTEM,
-            new StreamsMetadataState(builder, StreamsMetadataState.UNKNOWN_HOST),
+            new StreamsMetadataState(builder.internalTopologyBuilder, StreamsMetadataState.UNKNOWN_HOST),
             0) {
 
             @Override

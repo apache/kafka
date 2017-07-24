@@ -81,7 +81,7 @@ public class KafkaStreamsTest {
         final KStreamBuilder builder = new KStreamBuilder();
         final KafkaStreams streams = new KafkaStreams(builder, props);
 
-        StateListenerStub stateListener = new StateListenerStub();
+        final StateListenerStub stateListener = new StateListenerStub();
         streams.setStateListener(stateListener);
         Assert.assertEquals(streams.state(), KafkaStreams.State.CREATED);
         Assert.assertEquals(stateListener.numChanges, 0);
@@ -102,7 +102,7 @@ public class KafkaStreamsTest {
         final KStreamBuilder builder = new KStreamBuilder();
         final KafkaStreams streams = new KafkaStreams(builder, props);
 
-        StateListenerStub stateListener = new StateListenerStub();
+        final StateListenerStub stateListener = new StateListenerStub();
         streams.setStateListener(stateListener);
         streams.close();
         Assert.assertEquals(streams.state(), KafkaStreams.State.NOT_RUNNING);
@@ -161,7 +161,7 @@ public class KafkaStreamsTest {
 
         final java.lang.reflect.Field globalThreadField = streams.getClass().getDeclaredField("globalStreamThread");
         globalThreadField.setAccessible(true);
-        GlobalStreamThread globalStreamThread = (GlobalStreamThread) globalThreadField.get(streams);
+        final GlobalStreamThread globalStreamThread = (GlobalStreamThread) globalThreadField.get(streams);
         assertEquals(globalStreamThread, null);
     }
 
@@ -269,8 +269,7 @@ public class KafkaStreamsTest {
         props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         props.setProperty(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, "illegalConfig");
         final KStreamBuilder builder = new KStreamBuilder();
-        final KafkaStreams streams = new KafkaStreams(builder, props);
-
+        new KafkaStreams(builder, props);
     }
 
     @Test
@@ -285,8 +284,7 @@ public class KafkaStreamsTest {
 
         props.setProperty(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, Sensor.RecordingLevel.DEBUG.toString());
         final KStreamBuilder builder2 = new KStreamBuilder();
-        final KafkaStreams streams2 = new KafkaStreams(builder2, props);
-
+        new KafkaStreams(builder2, props);
     }
 
     @Test(expected = IllegalStateException.class)
@@ -337,7 +335,7 @@ public class KafkaStreamsTest {
                                 while (keepRunning.get()) {
                                     Thread.sleep(10);
                                 }
-                            } catch (InterruptedException e) {
+                            } catch (final InterruptedException e) {
                                 // no-op
                             }
                         }
@@ -415,29 +413,28 @@ public class KafkaStreamsTest {
     @Test
     public void testToString() {
         streams.start();
-        String streamString = streams.toString();
+        final String streamString = streams.toString();
         streams.close();
-        String appId = streamString.split("\\n")[1].split(":")[1].trim();
+        final String appId = streamString.split("\\n")[1].split(":")[1].trim();
         Assert.assertNotEquals("streamString should not be empty", "", streamString);
         Assert.assertNotNull("streamString should not be null", streamString);
         Assert.assertNotEquals("streamString contains non-empty appId", "", appId);
         Assert.assertNotNull("streamString contains non-null appId", appId);
     }
 
-
     public static class StateListenerStub implements KafkaStreams.StateListener {
-        public int numChanges = 0;
-        public KafkaStreams.State oldState;
-        public KafkaStreams.State newState;
+        int numChanges = 0;
+        KafkaStreams.State oldState;
+        KafkaStreams.State newState;
         public Map<KafkaStreams.State, Long> mapStates = new HashMap<>();
 
         @Override
         public void onChange(final KafkaStreams.State newState, final KafkaStreams.State oldState) {
-            long prevCount = this.mapStates.containsKey(newState) ? this.mapStates.get(newState) : 0;
-            this.numChanges++;
+            final long prevCount = mapStates.containsKey(newState) ? mapStates.get(newState) : 0;
+            numChanges++;
             this.oldState = oldState;
             this.newState = newState;
-            this.mapStates.put(newState, prevCount + 1);
+            mapStates.put(newState, prevCount + 1);
         }
     }
 }
