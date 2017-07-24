@@ -17,37 +17,29 @@
 
 package org.apache.kafka.streams.processor.internals;
 
-
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.BatchingStateRestoreCallback;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 
 import java.util.Collection;
-import java.util.Objects;
 
-public class InternalStateRestoreAdapter implements BatchingStateRestoreCallback {
+public class WrappedBatchingStateRestoreCallback implements BatchingStateRestoreCallback {
 
     private final StateRestoreCallback stateRestoreCallback;
 
-    InternalStateRestoreAdapter(final StateRestoreCallback stateRestoreCallback) {
-        Objects.requireNonNull(stateRestoreCallback, "StateRestoreCallback can't be null");
+    WrappedBatchingStateRestoreCallback(StateRestoreCallback stateRestoreCallback) {
         this.stateRestoreCallback = stateRestoreCallback;
     }
 
     @Override
-    public void restoreAll(final Collection<KeyValue<byte[], byte[]>> records) {
-        if (stateRestoreCallback instanceof BatchingStateRestoreCallback) {
-            ((BatchingStateRestoreCallback) stateRestoreCallback).restoreAll(records);
-        } else {
-            for (KeyValue<byte[], byte[]> record : records) {
-                restore(record.key, record.value);
-            }
+    public void restoreAll(Collection<KeyValue<byte[], byte[]>> records) {
+        for (KeyValue<byte[], byte[]> record : records) {
+            restore(record.key, record.value);
         }
     }
 
     @Override
-    public void restore(final byte[] key, final byte[] value) {
+    public void restore(byte[] key, byte[] value) {
         stateRestoreCallback.restore(key, value);
     }
-
 }

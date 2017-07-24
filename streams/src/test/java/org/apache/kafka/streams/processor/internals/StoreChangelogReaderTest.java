@@ -59,7 +59,7 @@ public class StoreChangelogReaderTest {
 
     @Before
     public void setUp() {
-        restoreListener.setReportingStoreListener(stateRestoreListener);
+        restoreListener.setGlobalRestoreListener(stateRestoreListener);
     }
 
     @SuppressWarnings("unchecked")

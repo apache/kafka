@@ -185,7 +185,9 @@ public class StreamThread extends Thread {
 
             final long start = time.milliseconds();
             try {
-                storeChangelogReader = new StoreChangelogReader(getName(), restoreConsumer, time, requestTimeOut, stateRestoreListener);
+                storeChangelogReader =
+                    new StoreChangelogReader(getName(), restoreConsumer, time, requestTimeOut,
+                                             globalStateRestoreListener);
                 setState(State.ASSIGNING_PARTITIONS);
                 // do this first as we may have suspended standby tasks that
                 // will become active or vice versa
@@ -440,7 +442,7 @@ public class StreamThread extends Thread {
     private final TaskCreator taskCreator = new TaskCreator();
 
     final ConsumerRebalanceListener rebalanceListener;
-    private StateRestoreListener stateRestoreListener;
+    private StateRestoreListener globalStateRestoreListener;
     private final static int UNLIMITED_RECORDS = -1;
 
     public StreamThread(final InternalTopologyBuilder builder,
@@ -1002,10 +1004,10 @@ public class StreamThread extends Thread {
      * Set the listener invoked at the beginning, end of batch updates and the conclusion of
      * restoring a {@link StateStore}.
      *
-     * @param stateRestoreListener  listener for capturing state store restoration status.
+     * @param globalStateRestoreListener  listener for capturing state store restoration status.
      */
-    public void setStateRestoreListener(final StateRestoreListener stateRestoreListener) {
-        this.stateRestoreListener = stateRestoreListener;
+    public void setGlobalStateRestoreListener(final StateRestoreListener globalStateRestoreListener) {
+        this.globalStateRestoreListener = globalStateRestoreListener;
     }
 
     /**

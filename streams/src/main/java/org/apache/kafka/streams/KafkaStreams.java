@@ -783,11 +783,17 @@ public class KafkaStreams {
      * Set the listener which is triggered whenever a {@link StateStore} is being restored in order to resume
      * processing.
      *
-     * @param stateRestoreListener The listener triggered when {@link StateStore} is being restored.
+     * @param globalStateRestoreListener The listener triggered when {@link StateStore} is being restored.
      */
-    public void setStateRestoreListener(final StateRestoreListener stateRestoreListener) {
-        for (StreamThread thread : threads) {
-            thread.setStateRestoreListener(stateRestoreListener);
+    public void setGlobalStateRestoreListener(final StateRestoreListener globalStateRestoreListener) {
+        synchronized (stateLock) {
+            if (state == State.CREATED) {
+                for (StreamThread thread : threads) {
+                    thread.setGlobalStateRestoreListener(globalStateRestoreListener);
+                }
+            } else {
+                throw new IllegalStateException("Can only set the GlobalRestoreListener in the CREATED state");
+            }
         }
     }
 

@@ -22,7 +22,7 @@ import org.apache.kafka.common.TopicPartition;
 /**
  * Class for listening to various states of the restoration process of a StateStore.
  *
- * When calling {@code KafkaStreams#setStateRestoreListener(final StateRestoreListener stateRestoreListener)},
+ * When calling {@link org.apache.kafka.streams.KafkaStreams#setGlobalStateRestoreListener(StateRestoreListener)}
  * the passed instance is expected to be stateless since the {@code StateRestoreListener} is shared
  * across all {@link org.apache.kafka.streams.processor.internals.StreamThread} instances.
  *
@@ -38,7 +38,7 @@ import org.apache.kafka.common.TopicPartition;
 public interface StateRestoreListener {
 
     /**
-     * Method called at the very beginning of {@link StateStore} restoration
+     * Method called at the very beginning of {@link StateStore} restoration.
      *
      * @param topicPartition the TopicPartition containing the values to restore.
      * @param storeName      the name of the store undergoing restoration.
@@ -49,7 +49,7 @@ public interface StateRestoreListener {
                         long endingOffset);
 
     /**
-     * Method called after restoring a batch of records .  In this case the maximum size of the batch is whatever
+     * Method called after restoring a batch of records.  In this case the maximum size of the batch is whatever
      * the value of the MAX_POLL_RECORDS is set to.
      *
      * This method is called after restoring each batch and it is advised to keep processing to a minimum.

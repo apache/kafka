@@ -99,7 +99,7 @@ public class StoreChangelogReader implements ChangelogReader {
     @Override
     public void register(final StateRestorer restorer) {
         if (restorer.offsetLimit() > 0) {
-            restorer.setStateRestoreListener(stateRestoreListener);
+            restorer.setGlobalRestoreListener(stateRestoreListener);
             stateRestorers.put(restorer.partition(), restorer);
         }
     }
@@ -122,6 +122,8 @@ public class StoreChangelogReader implements ChangelogReader {
                     restorer.setRestoredOffset(restorer.checkpoint());
                 } else {
                     needsRestoring.put(topicPartition, restorer);
+                    final Long endOffset = endOffsets.get(topicPartition);
+                    restorer.notifyRestoreStarted(restorer.startingOffset(), endOffset);
                 }
             }
 
@@ -190,7 +192,6 @@ public class StoreChangelogReader implements ChangelogReader {
         final TopicPartition topicPartition = partitionIterator.next();
         final StateRestorer restorer = stateRestorers.get(topicPartition);
         final Long endOffset = endOffsets.get(topicPartition);
-        restorer.maybeNotifyRestoreStarted(restorer.startingOffset(), endOffset);
         final long pos = processNext(allRecords.records(topicPartition), restorer, endOffset);
         if (restorer.hasCompleted(pos, endOffset)) {
             if (pos > endOffset + 1) {
@@ -219,24 +220,30 @@ public class StoreChangelogReader implements ChangelogReader {
     private long processNext(final List<ConsumerRecord<byte[], byte[]>> records,
                              final StateRestorer restorer, final Long endOffset) {
         final List<KeyValue<byte[], byte[]>> restoreRecords = new ArrayList<>();
+        long nextPosition = -1;
 
         for (final ConsumerRecord<byte[], byte[]> record : records) {
             final long offset = record.offset();
             if (restorer.hasCompleted(offset, endOffset)) {
-                if (!restoreRecords.isEmpty()) {
-                    restorer.restore(restoreRecords);
-                }
-                return offset;
+                nextPosition = record.offset();
+                break;
             }
             if (record.key() != null) {
                 restoreRecords.add(KeyValue.pair(record.key(), record.value()));
             }
         }
-        restorer.restore(restoreRecords);
 
-        long currentPosition = consumer.position(restorer.partition());
-        restorer.restoreBatchCompleted(currentPosition, records.size());
-        return currentPosition;
+        if (nextPosition == -1) {
+            nextPosition = consumer.position(restorer.partition());
+        }
+
+        if (!restoreRecords.isEmpty()) {
+            restorer.restore(restoreRecords);
+            restorer.restoreBatchCompleted(nextPosition, records.size());
+
+        }
+
+        return nextPosition;
     }
 
     private boolean hasPartition(final TopicPartition topicPartition) {

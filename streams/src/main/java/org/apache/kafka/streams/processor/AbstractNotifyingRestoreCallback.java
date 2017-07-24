@@ -31,14 +31,8 @@ public abstract class AbstractNotifyingRestoreCallback implements StateRestoreCa
     /**
      * @see StateRestoreListener#onRestoreStart(TopicPartition, String, long, long)
      *
-     * <p>
      * This method does nothing by default; if desired, subclasses should override it with custom functionality.
-     * </p>
      *
-     * @param topicPartition the TopicPartition containing the values to restore.
-     * @param storeName      the name of the store undergoing restoration.
-     * @param startingOffset the starting offset of the entire restoration process for this TopicPartition.
-     * @param endingOffset   the ending offset of the entire restoration process for this TopicPartition.
      */
     @Override
     public void onRestoreStart(TopicPartition topicPartition, String storeName, long startingOffset,
@@ -50,14 +44,8 @@ public abstract class AbstractNotifyingRestoreCallback implements StateRestoreCa
     /**
      * @see StateRestoreListener#onBatchRestored(TopicPartition, String, long, long)
      *
-     * <p>
      * This method does nothing by default; if desired, subclasses should override it with custom functionality.
-     * </p>
      *
-     * @param topicPartition the TopicPartition containing the values to restore.
-     * @param storeName the name of the store undergoing restoration.
-     * @param batchEndOffset the ending offset for the current restored batch for this TopicPartition.
-     * @param numRestored the total number of records restored in this batch for this TopicPartition.
      */
     @Override
     public void onBatchRestored(TopicPartition topicPartition, String storeName, long batchEndOffset,
@@ -68,14 +56,8 @@ public abstract class AbstractNotifyingRestoreCallback implements StateRestoreCa
     /**
      * @see StateRestoreListener#onRestoreEnd(TopicPartition, String, long)
      *
-     * <p>
      * This method does nothing by default; if desired, subclasses should override it with custom functionality.
-     * </p>
      *
-     *
-     * @param topicPartition the TopicPartition containing the values to restore.
-     * @param storeName the name of the store just restored.
-     * @param totalRestored the total number of records restored for this TopicPartition.
      */
     @Override
     public void onRestoreEnd(TopicPartition topicPartition, String storeName, long totalRestored) {

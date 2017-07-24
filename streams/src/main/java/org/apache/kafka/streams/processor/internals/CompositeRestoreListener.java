@@ -28,9 +28,10 @@ import java.util.Collection;
 
 class CompositeRestoreListener implements BatchingStateRestoreCallback, StateRestoreListener {
 
-    private final InternalStateRestoreAdapter stateRestoreAdapter;
+    private static final NoOpStateRestoreListener NO_OP_STATE_RESTORE_LISTENER = new NoOpStateRestoreListener();
+    private final BatchingStateRestoreCallback internalBatchingRestoreCallback;
     private final StateRestoreListener storeRestoreListener;
-    private StateRestoreListener reportingStoreListener = new NoOpStateRestoreListener();
+    private StateRestoreListener globalRestoreListener = NO_OP_STATE_RESTORE_LISTENER;
 
     CompositeRestoreListener(StateRestoreCallback stateRestoreCallback) {
 
@@ -40,43 +41,42 @@ class CompositeRestoreListener implements BatchingStateRestoreCallback, StateRes
             storeRestoreListener = new NoOpStateRestoreListener();
         }
 
-        if (stateRestoreCallback == null) {
-            stateRestoreCallback = new NoOpStateRestoreCallback();
-        }
-
-        this.stateRestoreAdapter = new InternalStateRestoreAdapter(stateRestoreCallback);
+        internalBatchingRestoreCallback =
+            (BatchingStateRestoreCallback) ((stateRestoreCallback instanceof BatchingStateRestoreCallback)
+                                            ? stateRestoreCallback
+                                            : new WrappedBatchingStateRestoreCallback(stateRestoreCallback));
     }
 
     @Override
     public void onRestoreStart(TopicPartition topicPartition, String storeName,
                                long startingOffset, long endingOffset) {
-        reportingStoreListener.onRestoreStart(topicPartition, storeName, startingOffset, endingOffset);
+        globalRestoreListener.onRestoreStart(topicPartition, storeName, startingOffset, endingOffset);
         storeRestoreListener.onRestoreStart(topicPartition, storeName, startingOffset, endingOffset);
     }
 
     @Override
     public void onBatchRestored(TopicPartition topicPartition, String storeName,
                                 long batchEndOffset, long numRestored) {
-        reportingStoreListener.onBatchRestored(topicPartition, storeName, batchEndOffset, numRestored);
+        globalRestoreListener.onBatchRestored(topicPartition, storeName, batchEndOffset, numRestored);
         storeRestoreListener.onBatchRestored(topicPartition, storeName, batchEndOffset, numRestored);
     }
 
     @Override
     public void onRestoreEnd(TopicPartition topicPartition, String storeName,
                              long totalRestored) {
-        reportingStoreListener.onRestoreEnd(topicPartition, storeName, totalRestored);
+        globalRestoreListener.onRestoreEnd(topicPartition, storeName, totalRestored);
         storeRestoreListener.onRestoreEnd(topicPartition, storeName, totalRestored);
 
     }
 
     @Override
     public void restoreAll(final Collection<KeyValue<byte[], byte[]>> records) {
-        stateRestoreAdapter.restoreAll(records);
+        internalBatchingRestoreCallback.restoreAll(records);
     }
 
-    void setReportingStoreListener(StateRestoreListener reportingStoreListener) {
-        if (reportingStoreListener != null) {
-            this.reportingStoreListener = reportingStoreListener;
+    void setGlobalRestoreListener(StateRestoreListener globalRestoreListener) {
+        if (globalRestoreListener != null) {
+            this.globalRestoreListener = globalRestoreListener;
         }
     }
 

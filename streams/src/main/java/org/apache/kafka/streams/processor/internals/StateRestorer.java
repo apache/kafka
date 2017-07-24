@@ -34,7 +34,6 @@ public class StateRestorer {
     private final CompositeRestoreListener compositeRestoreListener;
     private long restoredOffset;
     private long startingOffset;
-    private boolean restoreStarted;
 
     StateRestorer(final TopicPartition partition,
                   final CompositeRestoreListener compositeRestoreListener,
@@ -58,16 +57,12 @@ public class StateRestorer {
         return checkpoint == null ? NO_CHECKPOINT : checkpoint;
     }
 
-    void maybeNotifyRestoreStarted(long startingOffset, long endingOffset) {
-        if (!restoreStarted) {
-            compositeRestoreListener.onRestoreStart(partition, storeName, startingOffset, endingOffset);
-            restoreStarted = true;
-        }
+    void notifyRestoreStarted(long startingOffset, long endingOffset) {
+        compositeRestoreListener.onRestoreStart(partition, storeName, startingOffset, endingOffset);
     }
 
     void restoreDone() {
         compositeRestoreListener.onRestoreEnd(partition, storeName, restoredNumRecords());
-        restoreStarted = false;
     }
 
     void restoreBatchCompleted(long currentRestoredOffset, int numRestored) {
@@ -82,8 +77,8 @@ public class StateRestorer {
         return persistent;
     }
 
-    void setStateRestoreListener(StateRestoreListener stateRestoreListener) {
-        this.compositeRestoreListener.setReportingStoreListener(stateRestoreListener);
+    void setGlobalRestoreListener(StateRestoreListener globalStateRestoreListener) {
+        this.compositeRestoreListener.setGlobalRestoreListener(globalStateRestoreListener);
     }
 
     void setRestoredOffset(final long restoredOffset) {
