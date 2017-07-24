@@ -149,7 +149,8 @@ class DynamicConfigManager(private val zkUtils: ZkUtils,
     }
   }
 
-  private val configChangeListener = new ZkNodeChangeNotificationListener(zkUtils, ZkUtils.ConfigChangesPath, AdminUtils.EntityConfigChangeZnodePrefix, ConfigChangedNotificationHandler)
+  private val configChangeListener = new ZkNodeChangeNotificationListener(zkUtils, ZkUtils.ConfigChangesPath,
+    AdminUtils.EntityConfigChangeZnodePrefix, ConfigChangedNotificationHandler)
 
   /**
    * Begin watching for config changes
@@ -160,16 +161,16 @@ class DynamicConfigManager(private val zkUtils: ZkUtils,
     // Apply all existing client/user configs to the ClientIdConfigHandler/UserConfigHandler to bootstrap the overrides
     configHandlers.foreach {
       case (ConfigType.User, handler) =>
-          AdminUtils.fetchAllEntityConfigs(zkUtils, ConfigType.User).foreach {
-            case (sanitizedUser, properties) => handler.processConfigChanges(sanitizedUser, properties)
-          }
-          AdminUtils.fetchAllChildEntityConfigs(zkUtils, ConfigType.User, ConfigType.Client).foreach {
-            case (sanitizedUserClientId, properties) => handler.processConfigChanges(sanitizedUserClientId, properties)
-          }
+        AdminUtils.fetchAllEntityConfigs(zkUtils, ConfigType.User).foreach {
+          case (sanitizedUser, properties) => handler.processConfigChanges(sanitizedUser, properties)
+        }
+        AdminUtils.fetchAllChildEntityConfigs(zkUtils, ConfigType.User, ConfigType.Client).foreach {
+          case (sanitizedUserClientId, properties) => handler.processConfigChanges(sanitizedUserClientId, properties)
+        }
       case (configType, handler) =>
-          AdminUtils.fetchAllEntityConfigs(zkUtils, configType).foreach {
-            case (entityName, properties) => handler.processConfigChanges(entityName, properties)
-          }
+        AdminUtils.fetchAllEntityConfigs(zkUtils, configType).foreach {
+          case (entityName, properties) => handler.processConfigChanges(entityName, properties)
+        }
     }
   }
 }
