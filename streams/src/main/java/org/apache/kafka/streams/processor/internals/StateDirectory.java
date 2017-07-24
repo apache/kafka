@@ -54,19 +54,15 @@ public class StateDirectory {
 
     private static class LockAndOwner {
         final FileLock lock;
-        final long owningThreadId;
+        final String owningThread;
 
-        LockAndOwner(long owningThreadId, FileLock lock) {
-            this.owningThreadId = owningThreadId;
+        LockAndOwner(final String owningThread, final FileLock lock) {
+            this.owningThread = owningThread;
             this.lock = lock;
         }
     }
 
     public StateDirectory(final String applicationId, final String stateDirConfig, final Time time) {
-        this(applicationId, "", stateDirConfig, time);
-    }
-
-    public StateDirectory(final String applicationId, final String threadId, final String stateDirConfig, final Time time) {
         this.time = time;
         final File baseDir = new File(stateDirConfig);
         if (!baseDir.exists() && !baseDir.mkdirs()) {
@@ -118,7 +114,7 @@ public class StateDirectory {
         final File lockFile;
         // we already have the lock so bail out here
         final LockAndOwner lockAndOwner = locks.get(taskId);
-        if (lockAndOwner != null && lockAndOwner.owningThreadId == Thread.currentThread().getId()) {
+        if (lockAndOwner != null && lockAndOwner.owningThread.equals(Thread.currentThread().getName())) {
             log.trace("{} Found cached state dir lock for task {}", logPrefix(), taskId);
             return true;
         } else if (lockAndOwner != null) {
@@ -147,7 +143,7 @@ public class StateDirectory {
 
         final FileLock lock = tryLock(retry, channel);
         if (lock != null) {
-            locks.put(taskId, new LockAndOwner(Thread.currentThread().getId(), lock));
+            locks.put(taskId, new LockAndOwner(Thread.currentThread().getName(), lock));
 
             log.debug("{} Acquired state dir lock for task {}", logPrefix(), taskId);
         }
@@ -202,7 +198,7 @@ public class StateDirectory {
      */
     synchronized void unlock(final TaskId taskId) throws IOException {
         final LockAndOwner lockAndOwner = locks.get(taskId);
-        if (lockAndOwner != null && lockAndOwner.owningThreadId == Thread.currentThread().getId()) {
+        if (lockAndOwner != null && lockAndOwner.owningThread.equals(Thread.currentThread().getName())) {
             locks.remove(taskId);
             lockAndOwner.lock.release();
             log.debug("{} Released state dir lock for task {}", logPrefix(), taskId);

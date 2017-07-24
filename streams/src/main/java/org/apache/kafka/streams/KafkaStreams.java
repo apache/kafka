@@ -129,14 +129,7 @@ public class KafkaStreams {
     private static final int DEFAULT_CLOSE_TIMEOUT = 0;
     private GlobalStreamThread globalStreamThread;
 
-    private final ScheduledExecutorService stateDirCleaner = Executors.newSingleThreadScheduledExecutor(new ThreadFactory() {
-        @Override
-        public Thread newThread(final Runnable r) {
-            final Thread thread = new Thread(r, "kafka-streams-cleanup-thread");
-            thread.setDaemon(true);
-            return thread;
-        }
-    });
+    private final ScheduledExecutorService stateDirCleaner;
     private final StreamThread[] threads;
     private final Metrics metrics;
     private final QueryableStoreProvider queryableStoreProvider;
@@ -474,7 +467,7 @@ public class KafkaStreams {
         final long cacheSizeBytes = Math.max(0, config.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG) /
                 (config.getInt(StreamsConfig.NUM_STREAM_THREADS_CONFIG) + (globalTaskTopology == null ? 0 : 1)));
 
-        stateDirectory = new StateDirectory(applicationId, "main", config.getString(StreamsConfig.STATE_DIR_CONFIG), time);
+        stateDirectory = new StateDirectory(applicationId, config.getString(StreamsConfig.STATE_DIR_CONFIG), time);
         if (globalTaskTopology != null) {
             final String globalThreadId = clientId + "-GlobalStreamThread";
             globalStreamThread = new GlobalStreamThread(globalTaskTopology,
@@ -512,6 +505,15 @@ public class KafkaStreams {
 
         final GlobalStateStoreProvider globalStateStoreProvider = new GlobalStateStoreProvider(builder.globalStateStores());
         queryableStoreProvider = new QueryableStoreProvider(storeProviders, globalStateStoreProvider);
+        final String cleanupThreadName = clientId + "-CleanupThread";
+        stateDirCleaner = Executors.newSingleThreadScheduledExecutor(new ThreadFactory() {
+            @Override
+            public Thread newThread(final Runnable r) {
+                final Thread thread = new Thread(r, cleanupThreadName);
+                thread.setDaemon(true);
+                return thread;
+            }
+        });
     }
 
     private static HostInfo parseHostInfo(final String endPoint) {
