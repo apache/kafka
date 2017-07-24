@@ -71,7 +71,7 @@ public class MemoryRecordsBuilder {
     private long maxTimestamp = RecordBatch.NO_TIMESTAMP;
     private long offsetOfMaxTimestamp = -1;
     private Long lastOffset = null;
-    private Long baseTimestamp = null;
+    private Long firstTimestamp = null;
 
     private MemoryRecords builtRecords;
     private boolean aborted = false;
@@ -342,7 +342,7 @@ public class MemoryRecordsBuilder {
             maxTimestamp = this.maxTimestamp;
 
         DefaultRecordBatch.writeHeader(buffer, baseOffset, offsetDelta, size, magic, compressionType, timestampType,
-                baseTimestamp, maxTimestamp, producerId, producerEpoch, baseSequence, isTransactional, isControlBatch,
+                firstTimestamp, maxTimestamp, producerId, producerEpoch, baseSequence, isTransactional, isControlBatch,
                 partitionLeaderEpoch, numRecords);
 
         buffer.position(pos);
@@ -389,8 +389,8 @@ public class MemoryRecordsBuilder {
             if (magic < RecordBatch.MAGIC_VALUE_V2 && headers != null && headers.length > 0)
                 throw new IllegalArgumentException("Magic v" + magic + " does not support record headers");
 
-            if (baseTimestamp == null)
-                baseTimestamp = timestamp;
+            if (firstTimestamp == null)
+                firstTimestamp = timestamp;
 
             if (magic > RecordBatch.MAGIC_VALUE_V1) {
                 appendDefaultRecord(offset, timestamp, key, value, headers);
@@ -605,7 +605,7 @@ public class MemoryRecordsBuilder {
                                      Header[] headers) throws IOException {
         ensureOpenForRecordAppend();
         int offsetDelta = (int) (offset - baseOffset);
-        long timestampDelta = timestamp - baseTimestamp;
+        long timestampDelta = timestamp - firstTimestamp;
         int sizeInBytes = DefaultRecord.writeTo(appendStream, offsetDelta, timestampDelta, key, value, headers);
         recordWritten(offset, timestamp, sizeInBytes);
     }
@@ -710,7 +710,7 @@ public class MemoryRecordsBuilder {
             recordSize = Records.LOG_OVERHEAD + LegacyRecord.recordSize(magic, key, value);
         } else {
             int nextOffsetDelta = lastOffset == null ? 0 : (int) (lastOffset - baseOffset + 1);
-            long timestampDelta = baseTimestamp == null ? 0 : timestamp - baseTimestamp;
+            long timestampDelta = firstTimestamp == null ? 0 : timestamp - firstTimestamp;
             recordSize = DefaultRecord.sizeInBytes(nextOffsetDelta, timestampDelta, key, value, headers);
         }
 

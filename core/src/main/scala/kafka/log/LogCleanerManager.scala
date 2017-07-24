@@ -24,11 +24,13 @@ import java.util.concurrent.locks.ReentrantLock
 import com.yammer.metrics.core.Gauge
 import kafka.common.LogCleaningAbortedException
 import kafka.metrics.KafkaMetricsGroup
-import kafka.server.checkpoints.{OffsetCheckpoint, OffsetCheckpointFile}
+import kafka.server.LogDirFailureChannel
+import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.utils.CoreUtils._
 import kafka.utils.{Logging, Pool}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.errors.KafkaStorageException
 
 import scala.collection.{immutable, mutable}
 
@@ -45,7 +47,9 @@ private[log] case object LogCleaningPaused extends LogCleaningState
  *  While a partition is in the LogCleaningPaused state, it won't be scheduled for cleaning again, until cleaning is
  *  requested to be resumed.
  */
-private[log] class LogCleanerManager(val logDirs: Array[File], val logs: Pool[TopicPartition, Log]) extends Logging with KafkaMetricsGroup {
+private[log] class LogCleanerManager(val logDirs: Array[File],
+                                     val logs: Pool[TopicPartition, Log],
+                                     val logDirFailureChannel: LogDirFailureChannel) extends Logging with KafkaMetricsGroup {
 
   import LogCleanerManager._
 
@@ -53,19 +57,19 @@ private[log] class LogCleanerManager(val logDirs: Array[File], val logs: Pool[To
 
   // package-private for testing
   private[log] val offsetCheckpointFile = "cleaner-offset-checkpoint"
-  
+
   /* the offset checkpoints holding the last cleaned point for each log */
-  private val checkpoints = logDirs.map(dir => (dir, new OffsetCheckpointFile(new File(dir, offsetCheckpointFile)))).toMap
+  @volatile private var checkpoints = logDirs.map(dir => (dir, new OffsetCheckpointFile(new File(dir, offsetCheckpointFile), logDirFailureChannel))).toMap
 
   /* the set of logs currently being cleaned */
   private val inProgress = mutable.HashMap[TopicPartition, LogCleaningState]()
 
   /* a global lock used to control all access to the in-progress set and the offset checkpoints */
   private val lock = new ReentrantLock
-  
+
   /* for coordinating the pausing and the cleaning of a partition */
   private val pausedCleaningCond = lock.newCondition()
-  
+
   /* a gauge for tracking the cleanable ratio of the dirtiest log */
   @volatile private var dirtiestLogCleanableRatio = 0.0
   newGauge("max-dirty-percent", new Gauge[Int] { def value = (100 * dirtiestLogCleanableRatio).toInt })
@@ -77,8 +81,20 @@ private[log] class LogCleanerManager(val logDirs: Array[File], val logs: Pool[To
   /**
    * @return the position processed for all logs.
    */
-  def allCleanerCheckpoints: Map[TopicPartition, Long] =
-    checkpoints.values.flatMap(_.read()).toMap
+  def allCleanerCheckpoints: Map[TopicPartition, Long] = {
+    inLock(lock) {
+      checkpoints.values.flatMap(checkpoint => {
+        try {
+          checkpoint.read()
+        } catch {
+          case e: KafkaStorageException =>
+            error(s"Failed to access checkpoint file ${checkpoint.f.getName} in dir ${checkpoint.f.getParentFile.getAbsolutePath}", e)
+            Map.empty[TopicPartition, Long]
+        }
+      }).toMap
+    }
+  }
+
 
    /**
     * Choose the log to clean next and add it to the in-progress set. We recompute this
@@ -217,8 +233,22 @@ private[log] class LogCleanerManager(val logDirs: Array[File], val logs: Pool[To
   def updateCheckpoints(dataDir: File, update: Option[(TopicPartition,Long)]) {
     inLock(lock) {
       val checkpoint = checkpoints(dataDir)
-      val existing = checkpoint.read().filterKeys(logs.keys) ++ update
-      checkpoint.write(existing)
+      if (checkpoint != null) {
+        try {
+          val existing = checkpoint.read().filterKeys(logs.keys) ++ update
+          checkpoint.write(existing)
+        } catch {
+          case e: KafkaStorageException =>
+            error(s"Failed to access checkpoint file ${checkpoint.f.getName} in dir ${checkpoint.f.getParentFile.getAbsolutePath}", e)
+        }
+      }
+    }
+  }
+
+  def handleLogDirFailure(dir: String) {
+    info(s"Stopping cleaning logs in dir $dir")
+    inLock(lock) {
+      checkpoints = checkpoints.filterKeys(_.getAbsolutePath != dir)
     }
   }
 
@@ -226,10 +256,11 @@ private[log] class LogCleanerManager(val logDirs: Array[File], val logs: Pool[To
     inLock(lock) {
       if (logs.get(topicPartition).config.compact) {
         val checkpoint = checkpoints(dataDir)
-        val existing = checkpoint.read()
-
-        if (existing.getOrElse(topicPartition, 0L) > offset)
-          checkpoint.write(existing + (topicPartition -> offset))
+        if (checkpoint != null) {
+          val existing = checkpoint.read()
+          if (existing.getOrElse(topicPartition, 0L) > offset)
+            checkpoint.write(existing + (topicPartition -> offset))
+        }
       }
     }
   }
@@ -241,7 +272,7 @@ private[log] class LogCleanerManager(val logDirs: Array[File], val logs: Pool[To
     inLock(lock) {
       inProgress(topicPartition) match {
         case LogCleaningInProgress =>
-          updateCheckpoints(dataDir,Option(topicPartition, endOffset))
+          updateCheckpoints(dataDir, Option(topicPartition, endOffset))
           inProgress.remove(topicPartition)
         case LogCleaningAborted =>
           inProgress.put(topicPartition, LogCleaningPaused)
@@ -287,7 +318,7 @@ private[log] object LogCleanerManager extends Logging {
       if (offset < logStartOffset) {
         // don't bother with the warning if compact and delete are enabled.
         if (!isCompactAndDelete(log))
-          warn(s"Resetting first dirty offset to log start offset $logStartOffset since the checkpointed offset $offset is invalid.")
+          warn(s"Resetting first dirty offset of ${log.name} to log start offset $logStartOffset since the checkpointed offset $offset is invalid.")
         logStartOffset
       } else {
         offset
@@ -302,7 +333,7 @@ private[log] object LogCleanerManager extends Logging {
     // find first segment that cannot be cleaned
     // neither the active segment, nor segments with any messages closer to the head of the log than the minimum compaction lag time
     // may be cleaned
-    val firstUncleanableDirtyOffset: Long = Seq (
+    val firstUncleanableDirtyOffset: Long = Seq(
 
       // we do not clean beyond the first unstable offset
       log.firstUnstableOffset.map(_.messageOffset),
@@ -312,12 +343,11 @@ private[log] object LogCleanerManager extends Logging {
 
       // the first segment whose largest message timestamp is within a minimum time lag from now
       if (compactionLagMs > 0) {
-        dirtyNonActiveSegments.find {
-          s =>
-            val isUncleanable = s.largestTimestamp > now - compactionLagMs
-            debug(s"Checking if log segment may be cleaned: log='${log.name}' segment.baseOffset=${s.baseOffset} segment.largestTimestamp=${s.largestTimestamp}; now - compactionLag=${now - compactionLagMs}; is uncleanable=$isUncleanable")
-            isUncleanable
-        } map(_.baseOffset)
+        dirtyNonActiveSegments.find { s =>
+          val isUncleanable = s.largestTimestamp > now - compactionLagMs
+          debug(s"Checking if log segment may be cleaned: log='${log.name}' segment.baseOffset=${s.baseOffset} segment.largestTimestamp=${s.largestTimestamp}; now - compactionLag=${now - compactionLagMs}; is uncleanable=$isUncleanable")
+          isUncleanable
+        }.map(_.baseOffset)
       } else None
     ).flatten.min
 

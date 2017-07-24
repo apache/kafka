@@ -133,7 +133,7 @@ class ReassignPartitionsCommandTest extends Logging {
           case "topic2" =>
             assertEquals("0:101,0:102", configChange.get(LeaderReplicationThrottledReplicasProp))
             assertEquals("0:100", configChange.get(FollowerReplicationThrottledReplicasProp))
-          case _ => fail("Unexpected topic $topic")
+          case _ => fail(s"Unexpected topic $topic")
         }
         calls += 1
       }

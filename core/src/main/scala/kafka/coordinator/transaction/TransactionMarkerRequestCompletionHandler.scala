@@ -24,7 +24,7 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.WriteTxnMarkersResponse
 
 import scala.collection.mutable
-import collection.JavaConversions._
+import scala.collection.JavaConverters._
 
 class TransactionMarkerRequestCompletionHandler(brokerId: Int,
                                                 txnStateManager: TransactionStateManager,
@@ -41,7 +41,7 @@ class TransactionMarkerRequestCompletionHandler(brokerId: Int,
       val correlation = requestHeader.correlationId
       trace(s"Cancelled $api request $requestHeader with correlation id $correlation due to node ${response.destination} being disconnected")
 
-      for (txnIdAndMarker: TxnIdAndMarkerEntry <- txnIdAndMarkerEntries) {
+      for (txnIdAndMarker <- txnIdAndMarkerEntries.asScala) {
         val transactionalId = txnIdAndMarker.txnId
         val txnMarker = txnIdAndMarker.txnMarkerEntry
 
@@ -82,7 +82,7 @@ class TransactionMarkerRequestCompletionHandler(brokerId: Int,
                 txnMarker.producerEpoch,
                 txnMarker.transactionResult,
                 txnMarker.coordinatorEpoch,
-                txnMarker.partitions.toSet)
+                txnMarker.partitions.asScala.toSet)
             }
         }
       }
@@ -91,7 +91,7 @@ class TransactionMarkerRequestCompletionHandler(brokerId: Int,
 
       val writeTxnMarkerResponse = response.responseBody.asInstanceOf[WriteTxnMarkersResponse]
 
-      for (txnIdAndMarker: TxnIdAndMarkerEntry <- txnIdAndMarkerEntries) {
+      for (txnIdAndMarker <- txnIdAndMarkerEntries.asScala) {
         val transactionalId = txnIdAndMarker.txnId
         val txnMarker = txnIdAndMarker.txnMarkerEntry
         val errors = writeTxnMarkerResponse.errors(txnMarker.producerId)
@@ -132,7 +132,7 @@ class TransactionMarkerRequestCompletionHandler(brokerId: Int,
               abortSending = true
             } else {
               txnMetadata synchronized {
-                for ((topicPartition: TopicPartition, error: Errors) <- errors) {
+                for ((topicPartition, error) <- errors.asScala) {
                   error match {
                     case Errors.NONE =>
                       txnMetadata.removePartition(topicPartition)

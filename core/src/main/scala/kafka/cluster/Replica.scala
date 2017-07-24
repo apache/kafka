@@ -22,8 +22,6 @@ import kafka.utils.Logging
 import kafka.server.{LogOffsetMetadata, LogReadResult}
 import kafka.common.KafkaException
 import org.apache.kafka.common.errors.OffsetOutOfRangeException
-import kafka.server.checkpoints.{LeaderEpochCheckpointFile, LeaderEpochFile}
-import kafka.server.epoch.{LeaderEpochCache, LeaderEpochFileCache}
 import org.apache.kafka.common.utils.Time
 
 class Replica(val brokerId: Int,
@@ -142,7 +140,7 @@ class Replica(val brokerId: Int,
     }
   }
 
-  def highWatermark = highWatermarkMetadata
+  def highWatermark: LogOffsetMetadata = highWatermarkMetadata
 
   /**
    * The last stable offset (LSO) is defined as the first offset such that all lower offsets have been "decided."

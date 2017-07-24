@@ -309,7 +309,7 @@ class TransactionStateManagerTest {
     transactionManager.addLoadedTransactionsToCache(partitionId, coordinatorEpoch, new Pool[String, TransactionMetadata]())
     transactionManager.putTransactionStateIfNotExists(transactionalId1, txnMetadata1)
 
-    expectedError = Errors.UNKNOWN
+    expectedError = Errors.UNKNOWN_SERVER_ERROR
     var failedMetadata = txnMetadata1.prepareAddPartitions(Set[TopicPartition](new TopicPartition("topic2", 0)), time.milliseconds())
 
     prepareForTxnMessageAppend(Errors.MESSAGE_TOO_LARGE)

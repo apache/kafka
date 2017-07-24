@@ -147,7 +147,7 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
     consumer.subscribe(Collections.singleton(topic1))
     val endTimeMs = System.currentTimeMillis + 10000
     var throttled = false
-    while (!throttled && System.currentTimeMillis < endTimeMs) {
+    while ((!throttled || exemptRequestMetric == null) && System.currentTimeMillis < endTimeMs) {
       consumer.poll(100)
       val throttleMetric = consumerRequestThrottleMetric
       throttled = throttleMetric != null && throttleMetric.value > 0

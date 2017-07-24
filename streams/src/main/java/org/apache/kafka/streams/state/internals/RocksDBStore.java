@@ -239,7 +239,6 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         }
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public synchronized void put(K key, V value) {
         Objects.requireNonNull(key, "key cannot be null");

@@ -327,14 +327,16 @@ public class Selector implements Selectable, AutoCloseable {
             pollSelectionKeys(immediatelyConnectedKeys, true, endSelect);
         }
 
-        addToCompletedReceives();
-
         long endIo = time.nanoseconds();
         this.sensors.ioTime.record(endIo - endSelect, time.milliseconds());
 
         // we use the time at the end of select to ensure that we don't close any connections that
         // have just been processed in pollSelectionKeys
         maybeCloseOldestConnection(endSelect);
+
+        // Add to completedReceives after closing expired connections to avoid removing
+        // channels with completed receives until all staged receives are completed.
+        addToCompletedReceives();
     }
 
     private void pollSelectionKeys(Iterable<SelectionKey> selectionKeys,
@@ -563,11 +565,7 @@ public class Selector implements Selectable, AutoCloseable {
         // are tracked to ensure that requests are processed one-by-one by the broker to preserve ordering.
         Deque<NetworkReceive> deque = this.stagedReceives.get(channel);
         if (processOutstanding && deque != null && !deque.isEmpty()) {
-            if (!channel.isMute()) {
-                addToCompletedReceives(channel, deque);
-                if (deque.isEmpty())
-                    this.stagedReceives.remove(channel);
-            }
+            // stagedReceives will be moved to completedReceives later along with receives from other channels
             closingChannels.put(channel.id(), channel);
         } else
             doClose(channel, processOutstanding);
@@ -695,6 +693,12 @@ public class Selector implements Selectable, AutoCloseable {
     // only for testing
     public Set<SelectionKey> keys() {
         return new HashSet<>(nioSelector.keys());
+    }
+
+    // only for testing
+    int numStagedReceives(KafkaChannel channel) {
+        Deque<NetworkReceive> deque = stagedReceives.get(channel);
+        return deque == null ? 0 : deque.size();
     }
 
     private class SelectorMetrics {

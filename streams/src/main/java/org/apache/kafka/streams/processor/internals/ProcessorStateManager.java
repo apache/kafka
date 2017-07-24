@@ -58,7 +58,6 @@ public class ProcessorStateManager implements StateManager {
     private final Map<TopicPartition, Long> checkpointedOffsets;
     private final Map<String, StateRestoreCallback> restoreCallbacks; // used for standby tasks, keyed by state topic name
     private final Map<String, String> storeToChangelogTopic;
-    private final boolean eosEnabled;
 
     // TODO: this map does not work with customized grouper where multiple partitions
     // of the same topic can be assigned to the same topic.
@@ -93,7 +92,6 @@ public class ProcessorStateManager implements StateManager {
         this.isStandby = isStandby;
         restoreCallbacks = isStandby ? new HashMap<String, StateRestoreCallback>() : null;
         this.storeToChangelogTopic = storeToChangelogTopic;
-        this.eosEnabled = eosEnabled;
 
         if (!stateDirectory.lock(taskId, 5)) {
             throw new LockException(String.format("%s Failed to lock the state directory for task %s",

@@ -24,6 +24,9 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsMetrics;
+import org.apache.kafka.streams.processor.Cancellable;
+import org.apache.kafka.streams.processor.PunctuationType;
+import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
@@ -165,6 +168,10 @@ public class MockProcessorContext implements InternalProcessorContext, RecordCol
     @Override
     public StateStore getStateStore(final String name) {
         return storeMap.get(name);
+    }
+
+    @Override public Cancellable schedule(long interval, PunctuationType type, Punctuator callback) {
+        throw new UnsupportedOperationException("schedule() not supported.");
     }
 
     @Override

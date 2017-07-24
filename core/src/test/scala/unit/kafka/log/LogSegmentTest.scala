@@ -30,7 +30,7 @@ import scala.collection.JavaConverters._
 import scala.collection._
 
 class LogSegmentTest {
-  
+
   val topicPartition = new TopicPartition("topic", 0)
   val segments = mutable.ArrayBuffer[LogSegment]()
   var logDir: File = _
@@ -52,7 +52,7 @@ class LogSegmentTest {
     segments += seg
     seg
   }
-  
+
   /* create a ByteBufferMessageSet for the given messages starting from the given offset */
   def records(offset: Long, records: String*): MemoryRecords = {
     MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V1, offset, CompressionType.NONE, TimestampType.CREATE_TIME,

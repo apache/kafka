@@ -24,7 +24,6 @@ import kafka.utils.CommandLineUtils
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.clients.CommonClientConfigs
 import joptsimple._
-import org.apache.kafka.common.Node
 
 import scala.util.{Failure, Success}
 
@@ -41,7 +40,7 @@ object BrokerApiVersionsCommand {
     val opts = new BrokerVersionCommandOptions(args)
     val adminClient = createAdminClient(opts)
     adminClient.awaitBrokers()
-    var brokerMap = adminClient.listAllBrokerVersionInfo()
+    val brokerMap = adminClient.listAllBrokerVersionInfo()
     brokerMap.foreach { case (broker, versionInfoOrError) =>
       versionInfoOrError match {
         case Success(v) => out.print(s"${broker} -> ${v.toString(true)}\n")
