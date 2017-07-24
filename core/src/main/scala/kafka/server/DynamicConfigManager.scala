@@ -90,7 +90,6 @@ class DynamicConfigManager(private val zkUtils: ZkUtils,
 
   object ConfigChangedNotificationHandler extends NotificationHandler {
     override def processNotification(json: String) = {
-      // There are no config overrides.
       // Ignore non-json notifications because they can be from the deprecated TopicConfigManager
       Json.parseFull(json).foreach { js =>
         val jsObject = js.asJsonObjectOption.getOrElse {
