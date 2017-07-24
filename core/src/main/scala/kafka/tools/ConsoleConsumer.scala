@@ -173,7 +173,7 @@ object ConsoleConsumer extends Logging {
 
     props.putAll(config.consumerProps)
     props.putAll(config.extraConsumerProps)
-    props.put("auto.offset.reset", if (config.fromBeginning) "smallest" else "largest")
+    setAutoOffsetResetValue(config, props)
     props.put("zookeeper.connect", config.zkConnectionStr)
 
     if (!config.options.has(config.deleteConsumerOffsetsOpt) && config.options.has(config.resetBeginningOpt) &&
@@ -196,12 +196,40 @@ object ConsoleConsumer extends Logging {
 
     props.putAll(config.consumerProps)
     props.putAll(config.extraConsumerProps)
-    props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, if (config.options.has(config.resetBeginningOpt)) "earliest" else "latest")
+    setAutoOffsetResetValue(config, props)
     props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, config.bootstrapServer)
     props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer")
     props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer")
     props.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, config.isolationLevel)
     props
+  }
+
+  /**
+    * Used by both getNewConsumerProps and getOldConsumerProps to retrieve the correct value for the
+    * consumer parameter 'auto.offset.reset'.
+    * Order of priority is:
+    *   1. Explicitly set parameter via --consumer.property command line parameter
+    *   2. Explicit --from-beginning given -> 'earliest'
+    *   3. Default value of 'latest'
+    *
+    * In case both --from-beginning and an explicit value are specified an error is thrown if these
+    * are conflicting.
+    */
+  def setAutoOffsetResetValue(config: ConsumerConfig, props: Properties) {
+    if (props.containsKey(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG)) {
+      // auto.offset.reset parameter was specified on the command line
+      if (config.options.has(config.resetBeginningOpt) && "latest".equals(props.getProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG))) {
+        // conflicting options - latest und earliest, throw an error
+        System.err.println("Can't simultaneously specify --from-beginning and 'auto.offset.reset=latest', please remove one option")
+        Exit.exit(1)
+      }
+      // nothing to do, checking for valid parameter values happens later and the specified
+      // value was already copied during .putall operation
+    } else {
+      // no explicit value for auto.offset.reset was specified
+      // if --from-beginning was specified use "earliest", otherwise default to "latest"
+      props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, if (config.options.has(config.resetBeginningOpt)) "earliest" else "latest")
+    }
   }
 
   class ConsumerConfig(args: Array[String]) {
