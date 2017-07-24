@@ -29,6 +29,7 @@ import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.requests.IsolationLevel;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
@@ -58,11 +59,19 @@ public class EosTestDriver extends SmokeTestUtil {
 
     private static boolean isRunning = true;
 
+    static int numRecordsProduced = 0;
+
+    static synchronized void updateNumRecordsProduces(final int delta) {
+        numRecordsProduced += delta;
+    }
+
     static void generate(final String kafka) {
 
         Runtime.getRuntime().addShutdownHook(new Thread() {
             @Override
             public void run() {
+                System.out.println("Terminating");
+                System.out.flush();
                 isRunning = false;
             }
         });
@@ -78,7 +87,6 @@ public class EosTestDriver extends SmokeTestUtil {
 
         final Random rand = new Random(System.currentTimeMillis());
 
-        int numRecordsProduced = 0;
         while (isRunning) {
             final String key = "" + rand.nextInt(MAX_NUMBER_OF_KEYS);
             final int value = rand.nextInt(10000);
@@ -91,18 +99,45 @@ public class EosTestDriver extends SmokeTestUtil {
                     if (exception != null) {
                         exception.printStackTrace(System.err);
                         System.err.flush();
+                        if (exception instanceof TimeoutException) {
+                            try {
+                                // message == org.apache.kafka.common.errors.TimeoutException: Expiring 4 record(s) for data-0: 30004 ms has passed since last attempt plus backoff time
+                                final int expired = Integer.parseInt(exception.getMessage().split(" ")[2]);
+                                updateNumRecordsProduces(-expired);
+                            } catch (Exception ignore) {}
+                        }
                     }
                 }
             });
 
-            numRecordsProduced++;
+            updateNumRecordsProduces(1);
             if (numRecordsProduced % 1000 == 0) {
                 System.out.println(numRecordsProduced + " records produced");
+                System.out.flush();
             }
             Utils.sleep(rand.nextInt(10));
         }
         producer.close();
-        System.out.println(numRecordsProduced + " records produced");
+        System.out.println("Producer closed: " + numRecordsProduced + " records produced");
+
+        final Properties props = new Properties();
+        props.put(ConsumerConfig.CLIENT_ID_CONFIG, "verifier");
+        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);
+        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
+        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
+        props.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.toString().toLowerCase(Locale.ROOT));
+
+        try (final KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(props)) {
+            final List<TopicPartition> partitions = getAllPartitions(consumer, "data");
+            System.out.println("Partitions: " + partitions);
+            consumer.assign(partitions);
+            consumer.seekToEnd(partitions);
+
+            for (final TopicPartition tp : partitions) {
+                System.out.println("End-offset for " + tp + " is " + consumer.position(tp));
+            }
+        }
+        System.out.flush();
     }
 
     public static void verify(final String kafka, final boolean withRepartitioning) {
