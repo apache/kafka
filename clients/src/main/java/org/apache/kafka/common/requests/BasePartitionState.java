@@ -18,6 +18,7 @@ package org.apache.kafka.common.requests;
 
 import java.util.List;
 
+// This class contains the common fields shared between LeaderAndIsrRequest.PartitionState and UpdateMetadataRequest.PartitionState
 public class BasePartitionState {
 
     public final int controllerEpoch;
