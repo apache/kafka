@@ -161,7 +161,7 @@ public class KafkaChannel {
         NetworkReceive result = null;
 
         if (receive == null) {
-            receive = new NetworkReceive(maxReceiveSize, id);
+            receive = new NetworkReceive(id, new NetworkReceive.RequestStartHeaderReceiver(maxReceiveSize));
         }
 
         receive(receive);
