@@ -254,6 +254,32 @@ public class KafkaStreamsTest {
         }
     }
 
+    @Test(expected = IllegalStateException.class)
+    public void shouldThrowExceptionSettingUncaughtExceptionHandlerNotInCreateState() {
+        streams.start();
+        try {
+            streams.setUncaughtExceptionHandler(null);
+        } catch (final IllegalStateException e) {
+            Assert.assertEquals("Can only set UncaughtExceptionHandler in CREATE state.", e.getMessage());
+            throw e;
+        } finally {
+            streams.close();
+        }
+    }
+
+    @Test(expected = IllegalStateException.class)
+    public void shouldThrowExceptionSettingStateListenerNotInCreateState() {
+        streams.start();
+        try {
+            streams.setStateListener(null);
+        } catch (final IllegalStateException e) {
+            Assert.assertEquals("Can only set StateListener in state CREATED.", e.getMessage());
+            throw e;
+        } finally {
+            streams.close();
+        }
+    }
+
     @Test
     public void testNumberDefaultMetrics() {
         final KafkaStreams streams = createKafkaStreams();
