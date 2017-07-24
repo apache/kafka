@@ -22,6 +22,7 @@ import kafka.utils.{ZkUtils, Logging}
 import org.I0Itec.zkclient.{IZkStateListener, IZkChildListener}
 import org.apache.zookeeper.Watcher.Event.KeeperState
 
+@deprecated("This class has been deprecated and will be removed in a future release.", "0.11.0.0")
 class ZookeeperTopicEventWatcher(val zkUtils: ZkUtils,
     val eventHandler: TopicEventHandler[String]) extends Logging {
 
@@ -64,7 +65,7 @@ class ZookeeperTopicEventWatcher(val zkUtils: ZkUtils,
       lock.synchronized {
         try {
           if (zkUtils != null) {
-            val latestTopics = zkUtils.zkClient.getChildren(ZkUtils.BrokerTopicsPath).asScala
+            val latestTopics = zkUtils.getChildren(ZkUtils.BrokerTopicsPath)
             debug("all topics: %s".format(latestTopics))
             eventHandler.handleTopicEvent(latestTopics)
           }

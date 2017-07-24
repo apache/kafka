@@ -44,10 +44,16 @@ public class WorkerTaskTest {
         ConnectorTaskId taskId = new ConnectorTaskId("foo", 0);
 
         TaskStatus.Listener statusListener = EasyMock.createMock(TaskStatus.Listener.class);
+        ClassLoader loader = EasyMock.createMock(ClassLoader.class);
 
         WorkerTask workerTask = partialMockBuilder(WorkerTask.class)
-                .withConstructor(ConnectorTaskId.class, TaskStatus.Listener.class, TargetState.class)
-                .withArgs(taskId, statusListener, TargetState.STARTED)
+                .withConstructor(
+                        ConnectorTaskId.class,
+                        TaskStatus.Listener.class,
+                        TargetState.class,
+                        ClassLoader.class
+                )
+                .withArgs(taskId, statusListener, TargetState.STARTED, loader)
                 .addMockedMethod("initialize")
                 .addMockedMethod("execute")
                 .addMockedMethod("close")
@@ -83,10 +89,16 @@ public class WorkerTaskTest {
         ConnectorTaskId taskId = new ConnectorTaskId("foo", 0);
 
         TaskStatus.Listener statusListener = EasyMock.createMock(TaskStatus.Listener.class);
+        ClassLoader loader = EasyMock.createMock(ClassLoader.class);
 
         WorkerTask workerTask = partialMockBuilder(WorkerTask.class)
-                .withConstructor(ConnectorTaskId.class, TaskStatus.Listener.class, TargetState.class)
-                .withArgs(taskId, statusListener, TargetState.STARTED)
+                .withConstructor(
+                        ConnectorTaskId.class,
+                        TaskStatus.Listener.class,
+                        TargetState.class,
+                        ClassLoader.class
+                )
+                .withArgs(taskId, statusListener, TargetState.STARTED, loader)
                 .addMockedMethod("initialize")
                 .addMockedMethod("execute")
                 .addMockedMethod("close")
@@ -115,10 +127,16 @@ public class WorkerTaskTest {
         ConnectorTaskId taskId = new ConnectorTaskId("foo", 0);
 
         TaskStatus.Listener statusListener = EasyMock.createMock(TaskStatus.Listener.class);
+        ClassLoader loader = EasyMock.createMock(ClassLoader.class);
 
         WorkerTask workerTask = partialMockBuilder(WorkerTask.class)
-                .withConstructor(ConnectorTaskId.class, TaskStatus.Listener.class, TargetState.class)
-                .withArgs(taskId, statusListener, TargetState.STARTED)
+                .withConstructor(
+                        ConnectorTaskId.class,
+                        TaskStatus.Listener.class,
+                        TargetState.class,
+                        ClassLoader.class
+                )
+                .withArgs(taskId, statusListener, TargetState.STARTED, loader)
                 .addMockedMethod("initialize")
                 .addMockedMethod("execute")
                 .addMockedMethod("close")

@@ -47,7 +47,7 @@ case class TopicMetadataRequest(versionId: Short,
     topics.foreach(topic => writeShortString(buffer, topic))
   }
 
-  def sizeInBytes(): Int = {
+  def sizeInBytes: Int = {
     2 +  /* version id */
     4 + /* correlation id */
     shortStringLength(clientId)  + /* client id */
@@ -64,7 +64,7 @@ case class TopicMetadataRequest(versionId: Short,
       topic => TopicMetadata(topic, Nil, Errors.forException(e))
     }
     val errorResponse = TopicMetadataResponse(Seq(), topicMetadata, correlationId)
-    requestChannel.sendResponse(new Response(request, new RequestOrResponseSend(request.connectionId, errorResponse)))
+    requestChannel.sendResponse(Response(request, new RequestOrResponseSend(request.connectionId, errorResponse)))
   }
 
   override def describe(details: Boolean): String = {

@@ -16,6 +16,8 @@
  */
 package kafka.coordinator.transaction
 
+import java.util.concurrent.TimeUnit
+
 import kafka.server.DelayedOperation
 import org.apache.kafka.common.protocol.Errors
 
@@ -24,7 +26,7 @@ import org.apache.kafka.common.protocol.Errors
   */
 private[transaction] class DelayedTxnMarker(txnMetadata: TransactionMetadata,
                                            completionCallback: Errors => Unit)
-  extends DelayedOperation(Long.MaxValue) {
+  extends DelayedOperation(TimeUnit.DAYS.toMillis(100 * 365)) {
 
   // overridden since tryComplete already synchronizes on the existing txn metadata. This makes it safe to
   // call purgatory operations while holding the group lock.
@@ -43,6 +45,7 @@ private[transaction] class DelayedTxnMarker(txnMetadata: TransactionMetadata,
     throw new IllegalStateException(s"Delayed write txn marker operation for metadata $txnMetadata has timed out, this should never happen.")
   }
 
+  // TODO: if we will always return NONE upon completion, we can remove the error code in the param
   override def onComplete(): Unit = completionCallback(Errors.NONE)
 
 }

@@ -31,7 +31,7 @@ def _kafka_jar_versions(proc_string):
     return set(versions)
 
 
-def is_version(node, version_list, proc_grep_string="kafka"):
+def is_version(node, version_list, proc_grep_string="kafka", logger=None):
     """Heuristic to check that only the specified version appears in the classpath of the process
     A useful tool to aid in checking that service version apis are working correctly.
     """
@@ -39,7 +39,11 @@ def is_version(node, version_list, proc_grep_string="kafka"):
     assert len(lines) == 1
 
     versions = _kafka_jar_versions(lines[0])
-    return versions == {str(v) for v in version_list}
+    r = versions == {str(v) for v in version_list}
+    if not r and logger is not None:
+        logger.warning("%s: %s version mismatch: expected %s: actual %s" % \
+                       (str(node), proc_grep_string, version_list, versions))
+    return r
 
 
 def is_int(msg):

@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.common.header.internals.RecordHeaders;
+import org.apache.kafka.common.record.DefaultRecord;
 import org.apache.kafka.common.record.TimestampType;
 import org.junit.Test;
 
@@ -25,6 +26,7 @@ import static org.junit.Assert.assertEquals;
 public class ConsumerRecordTest {
 
     @Test
+    @SuppressWarnings("deprecation")
     public void testOldConstructor() {
         String topic = "topic";
         int partition = 0;
@@ -46,5 +48,15 @@ public class ConsumerRecordTest {
         assertEquals(new RecordHeaders(), record.headers());
     }
 
+    @Test
+    @SuppressWarnings("deprecation")
+    public void testNullChecksumInConstructor() {
+        String key = "key";
+        String value = "value";
+        long timestamp = 242341324L;
+        ConsumerRecord<String, String> record = new ConsumerRecord<>("topic", 0, 23L, timestamp,
+                TimestampType.CREATE_TIME, null, key.length(), value.length(), key, value, new RecordHeaders());
+        assertEquals(DefaultRecord.computePartialChecksum(timestamp, key.length(), value.length()), record.checksum());
+    }
 
 }

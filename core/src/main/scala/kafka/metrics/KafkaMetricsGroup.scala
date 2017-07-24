@@ -40,7 +40,7 @@ trait KafkaMetricsGroup extends Logging {
    * @param tags Additional attributes which mBean will have.
    * @return Sanitized metric name object.
    */
-  private def metricName(name: String, tags: scala.collection.Map[String, String] = Map.empty) = {
+  private def metricName(name: String, tags: scala.collection.Map[String, String]) = {
     val klass = this.getClass
     val pkg = if (klass.getPackage == null) "" else klass.getPackage.getName
     val simpleName = klass.getSimpleName.replaceAll("\\$$", "")
@@ -52,7 +52,7 @@ trait KafkaMetricsGroup extends Logging {
   }
 
 
-  private def explicitMetricName(group: String, typeName: String, name: String, tags: scala.collection.Map[String, String] = Map.empty) = {
+  private def explicitMetricName(group: String, typeName: String, name: String, tags: scala.collection.Map[String, String]) = {
     val nameBuilder: StringBuilder = new StringBuilder
 
     nameBuilder.append(group)
@@ -68,11 +68,7 @@ trait KafkaMetricsGroup extends Logging {
 
     val scope: String = KafkaMetricsGroup.toScope(tags).getOrElse(null)
     val tagsName = KafkaMetricsGroup.toMBeanName(tags)
-    tagsName match {
-      case Some(tn) =>
-        nameBuilder.append(",").append(tn)
-      case None =>
-    }
+    tagsName.foreach(nameBuilder.append(",").append(_))
 
     new MetricName(group, typeName, name, scope, nameBuilder.toString())
   }
@@ -181,6 +177,7 @@ object KafkaMetricsGroup extends KafkaMetricsGroup with Logging {
     else None
   }
 
+  @deprecated("This method has been deprecated and will be removed in a future release.", "0.11.0.0")
   def removeAllConsumerMetrics(clientId: String) {
     FetchRequestAndResponseStatsRegistry.removeConsumerFetchRequestAndResponseStats(clientId)
     ConsumerTopicStatsRegistry.removeConsumerTopicStat(clientId)

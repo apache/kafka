@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state;
 
+import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
@@ -34,6 +35,7 @@ import java.util.Map;
 /**
  * Factory for creating state stores in Kafka Streams.
  */
+@InterfaceStability.Evolving
 public class Stores {
 
     private static final Logger log = LoggerFactory.getLogger(Stores.class);
@@ -100,7 +102,7 @@ public class Stores {
                             @Override
                             public PersistentKeyValueFactory<K, V> persistent() {
                                 return new PersistentKeyValueFactory<K, V>() {
-                                    public boolean cachingEnabled;
+                                    boolean cachingEnabled;
                                     private long windowSize;
                                     private final Map<String, String> logConfig = new HashMap<>();
                                     private int numSegments = 0;
@@ -111,6 +113,9 @@ public class Stores {
 
                                     @Override
                                     public PersistentKeyValueFactory<K, V> windowed(final long windowSize, final long retentionPeriod, final int numSegments, final boolean retainDuplicates) {
+                                        if (numSegments < RocksDBWindowStoreSupplier.MIN_SEGMENTS) {
+                                            throw new IllegalArgumentException("numSegments must be >= " + RocksDBWindowStoreSupplier.MIN_SEGMENTS);
+                                        }
                                         this.windowSize = windowSize;
                                         this.numSegments = numSegments;
                                         this.retentionPeriod = retentionPeriod;

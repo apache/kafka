@@ -22,12 +22,11 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
-import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StreamPartitioner;
+import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
-import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
+import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.RecordCollectorImpl;
 import org.apache.kafka.streams.state.internals.ThreadCache;
@@ -109,23 +108,27 @@ public class KStreamTestDriver {
 
     public void process(final String topicName, final Object key, final Object value) {
         final ProcessorNode prevNode = context.currentNode();
-        ProcessorNode currNode = topology.source(topicName);
-        if (currNode == null && globalTopology != null) {
-            currNode = globalTopology.source(topicName);
+        final ProcessorNode currNode = sourceNodeByTopicName(topicName);
+
+        if (currNode != null) {
+            context.setRecordContext(createRecordContext(context.timestamp()));
+            context.setCurrentNode(currNode);
+            try {
+                context.forward(key, value);
+            } finally {
+                context.setCurrentNode(prevNode);
+            }
+        }
+    }
+
+    private ProcessorNode sourceNodeByTopicName(final String topicName) {
+        ProcessorNode topicNode = topology.source(topicName);
+
+        if (topicNode == null && globalTopology != null) {
+            topicNode = globalTopology.source(topicName);
         }
 
-        // if currNode is null, check if this topic is a changelog topic;
-        // if yes, skip
-        if (topicName.endsWith(ProcessorStateManager.STATE_CHANGELOG_TOPIC_SUFFIX)) {
-            return;
-        }
-        context.setRecordContext(createRecordContext(context.timestamp()));
-        context.setCurrentNode(currNode);
-        try {
-            context.forward(key, value);
-        } finally {
-            context.setCurrentNode(prevNode);
-        }
+        return topicNode;
     }
 
     public void punctuate(final long timestamp) {
@@ -224,7 +227,9 @@ public class KStreamTestDriver {
                                 final Serializer<V> valueSerializer,
                                 final StreamPartitioner<? super K, ? super V> partitioner) {
             // The serialization is skipped.
-            process(topic, key, value);
+            if (sourceNodeByTopicName(topic) != null) {
+                process(topic, key, value);
+            }
         }
 
         @Override
@@ -236,7 +241,9 @@ public class KStreamTestDriver {
                                 final Serializer<K> keySerializer,
                                 final Serializer<V> valueSerializer) {
         // The serialization is skipped.
-            process(topic, key, value);
+            if (sourceNodeByTopicName(topic) != null) {
+                process(topic, key, value);
+            }
         }
 
         @Override

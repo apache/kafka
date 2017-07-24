@@ -133,7 +133,7 @@ object ConsoleProducer {
   }
 
   class ProducerConfig(args: Array[String]) {
-    val parser = new OptionParser
+    val parser = new OptionParser(false)
     val topicOpt = parser.accepts("topic", "REQUIRED: The topic id to produce messages to.")
       .withRequiredArg
       .describedAs("topic")

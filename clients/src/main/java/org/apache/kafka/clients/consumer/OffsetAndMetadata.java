@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.clients.consumer;
 
+import org.apache.kafka.common.requests.OffsetFetchResponse;
+
 import java.io.Serializable;
 
 /**
@@ -34,7 +36,12 @@ public class OffsetAndMetadata implements Serializable {
      */
     public OffsetAndMetadata(long offset, String metadata) {
         this.offset = offset;
-        this.metadata = metadata;
+        // The server converts null metadata to an empty string. So we store it as an empty string as well on the client
+        // to be consistent.
+        if (metadata == null)
+            this.metadata = OffsetFetchResponse.NO_METADATA;
+        else
+            this.metadata = metadata;
     }
 
     /**
@@ -62,14 +69,13 @@ public class OffsetAndMetadata implements Serializable {
         OffsetAndMetadata that = (OffsetAndMetadata) o;
 
         if (offset != that.offset) return false;
-        return metadata == null ? that.metadata == null : metadata.equals(that.metadata);
-
+        return metadata.equals(that.metadata);
     }
 
     @Override
     public int hashCode() {
         int result = (int) (offset ^ (offset >>> 32));
-        result = 31 * result + (metadata != null ? metadata.hashCode() : 0);
+        result = 31 * result + metadata.hashCode();
         return result;
     }
 

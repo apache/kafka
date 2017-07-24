@@ -187,13 +187,13 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
     try {
       TestUtils.createTopic(zkUtils, topic, 1, 2, servers)
 
-      val recordAndFutures = for (i <- 1 to numRecords) yield {
+      val futures = for (i <- 1 to numRecords) yield {
         val record = new ProducerRecord(topic, partition, s"key$i".getBytes(StandardCharsets.UTF_8),
           s"value$i".getBytes(StandardCharsets.UTF_8))
-        (record, producer.send(record))
+        producer.send(record)
       }
       producer.close(timeoutMs, TimeUnit.MILLISECONDS)
-      val lastOffset = recordAndFutures.foldLeft(0) { case (offset, (record, future)) =>
+      val lastOffset = futures.foldLeft(0) { (offset, future) =>
         val recordMetadata = future.get
         assertEquals(topic, recordMetadata.topic)
         assertEquals(partition, recordMetadata.partition)

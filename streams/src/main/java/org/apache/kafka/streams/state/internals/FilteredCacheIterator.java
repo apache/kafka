@@ -24,11 +24,48 @@ import java.util.NoSuchElementException;
 class FilteredCacheIterator implements PeekingKeyValueIterator<Bytes, LRUCacheEntry> {
     private final PeekingKeyValueIterator<Bytes, LRUCacheEntry> cacheIterator;
     private final HasNextCondition hasNextCondition;
+    private final PeekingKeyValueIterator<Bytes, LRUCacheEntry> wrappedIterator;
 
     FilteredCacheIterator(final PeekingKeyValueIterator<Bytes, LRUCacheEntry> cacheIterator,
-                          final HasNextCondition hasNextCondition) {
+                          final HasNextCondition hasNextCondition,
+                          final CacheFunction cacheFunction) {
         this.cacheIterator = cacheIterator;
         this.hasNextCondition = hasNextCondition;
+        this.wrappedIterator = new PeekingKeyValueIterator<Bytes, LRUCacheEntry>() {
+            @Override
+            public KeyValue<Bytes, LRUCacheEntry> peekNext() {
+                return cachedPair(cacheIterator.peekNext());
+            }
+
+            @Override
+            public void close() {
+                cacheIterator.close();
+            }
+
+            @Override
+            public Bytes peekNextKey() {
+                return cacheFunction.key(cacheIterator.peekNextKey());
+            }
+
+            @Override
+            public boolean hasNext() {
+                return cacheIterator.hasNext();
+            }
+
+            @Override
+            public KeyValue<Bytes, LRUCacheEntry> next() {
+                return cachedPair(cacheIterator.next());
+            }
+
+            private KeyValue<Bytes, LRUCacheEntry> cachedPair(KeyValue<Bytes, LRUCacheEntry> next) {
+                return KeyValue.pair(cacheFunction.key(next.key), next.value);
+            }
+
+            @Override
+            public void remove() {
+                cacheIterator.remove();
+            }
+        };
     }
 
     @Override
@@ -46,7 +83,7 @@ class FilteredCacheIterator implements PeekingKeyValueIterator<Bytes, LRUCacheEn
 
     @Override
     public boolean hasNext() {
-        return hasNextCondition.hasNext(cacheIterator);
+        return hasNextCondition.hasNext(wrappedIterator);
     }
 
     @Override

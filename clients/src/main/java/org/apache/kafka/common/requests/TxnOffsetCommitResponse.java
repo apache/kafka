@@ -41,14 +41,19 @@ public class TxnOffsetCommitResponse extends AbstractResponse {
     //   OffsetMetadataTooLarge
     //   GroupAuthorizationFailed
     //   InvalidCommitOffsetSize
+    //   TransactionalIdAuthorizationFailed
+    //   RequestTimedOut
 
     private final Map<TopicPartition, Errors> errors;
+    private final int throttleTimeMs;
 
-    public TxnOffsetCommitResponse(Map<TopicPartition, Errors> errors) {
+    public TxnOffsetCommitResponse(int throttleTimeMs, Map<TopicPartition, Errors> errors) {
+        this.throttleTimeMs = throttleTimeMs;
         this.errors = errors;
     }
 
     public TxnOffsetCommitResponse(Struct struct) {
+        this.throttleTimeMs = struct.getInt(THROTTLE_TIME_KEY_NAME);
         Map<TopicPartition, Errors> errors = new HashMap<>();
         Object[] topicPartitionsArray = struct.getArray(TOPIC_PARTITIONS_KEY_NAME);
         for (Object topicPartitionObj : topicPartitionsArray) {
@@ -67,6 +72,7 @@ public class TxnOffsetCommitResponse extends AbstractResponse {
     @Override
     protected Struct toStruct(short version) {
         Struct struct = new Struct(ApiKeys.TXN_OFFSET_COMMIT.responseSchema(version));
+        struct.set(THROTTLE_TIME_KEY_NAME, throttleTimeMs);
         Map<String, Map<Integer, Errors>> mappedPartitions = CollectionUtils.groupDataByTopic(errors);
         Object[] partitionsArray = new Object[mappedPartitions.size()];
         int i = 0;
@@ -91,12 +97,24 @@ public class TxnOffsetCommitResponse extends AbstractResponse {
         return struct;
     }
 
+    public int throttleTimeMs() {
+        return throttleTimeMs;
+    }
+
     public Map<TopicPartition, Errors> errors() {
         return errors;
     }
 
     public static TxnOffsetCommitResponse parse(ByteBuffer buffer, short version) {
         return new TxnOffsetCommitResponse(ApiKeys.TXN_OFFSET_COMMIT.parseResponse(version, buffer));
+    }
+
+    @Override
+    public String toString() {
+        return "TxnOffsetCommitResponse(" +
+                "errors=" + errors +
+                ", throttleTimeMs=" + throttleTimeMs +
+                ')';
     }
 
 }

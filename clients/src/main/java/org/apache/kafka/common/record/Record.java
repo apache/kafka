@@ -38,7 +38,7 @@ public interface Record {
      * Get the sequence number assigned by the producer.
      * @return the sequence number
      */
-    long sequence();
+    int sequence();
 
     /**
      * Get the size in bytes of this record.
@@ -54,9 +54,10 @@ public interface Record {
 
     /**
      * Get a checksum of the record contents.
-     * @return a 4-byte unsigned checksum represented as a long
+     * @return A 4-byte unsigned checksum represented as a long or null if the message format does not
+     *         include a checksum (i.e. for v2 and above)
      */
-    long checksum();
+    Long checksumOrNull();
 
     /**
      * Check whether the record has a valid checksum.
@@ -131,15 +132,6 @@ public interface Record {
      * @return true if the version is lower than 2 and the timestamp type matches
      */
     boolean hasTimestampType(TimestampType timestampType);
-
-    /**
-     * Check whether this is a control record (i.e. whether the control bit is set in the record attributes).
-     * For magic versions prior to 2, this is always false.
-     *
-     * @return Whether this is a control record
-     */
-    boolean isControlRecord();
-
 
     /**
      * Get the headers. For magic versions 1 and below, this always returns an empty array.

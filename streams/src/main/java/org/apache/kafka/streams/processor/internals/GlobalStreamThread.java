@@ -31,8 +31,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.Collections;
 import java.util.Map;
+import java.util.Set;
+import java.util.HashSet;
+import java.util.Arrays;
+import java.util.Collections;
+
+import static org.apache.kafka.streams.processor.internals.GlobalStreamThread.State.DEAD;
+import static org.apache.kafka.streams.processor.internals.GlobalStreamThread.State.PENDING_SHUTDOWN;
 
 /**
  * This is the thread responsible for keeping all Global State Stores updated.
@@ -49,8 +55,113 @@ public class GlobalStreamThread extends Thread {
     private final ThreadCache cache;
     private final StreamsMetrics streamsMetrics;
     private final ProcessorTopology topology;
-    private volatile boolean running = false;
     private volatile StreamsException startupException;
+
+    /**
+     * The states that the global stream thread can be in
+     *
+     * <pre>
+     *                +-------------+
+     *          +<--- | Created     |
+     *          |     +-----+-------+
+     *          |           |
+     *          |           v
+     *          |     +-----+-------+
+     *          +<--- | Running     |
+     *          |     +-----+-------+
+     *          |           |
+     *          |           v
+     *          |     +-----+-------+
+     *          +---> | Pending     |
+     *          |     | Shutdown    |
+     *          |     +-----+-------+
+     *          |           |
+     *          |           v
+     *          |     +-----+-------+
+     *          +---> | Dead        |
+     *                +-------------+
+     * </pre>
+     *
+     * Note the following:
+     * - Any state can go to PENDING_SHUTDOWN. That is because streams can be closed at any time.
+     * - Any state can go to DEAD. That is because exceptions can happen at any other state,
+     *   leading to the stream thread terminating.
+     *
+     */
+    public enum State implements ThreadStateTransitionValidator {
+        CREATED(1, 2, 3), RUNNING(2, 3), PENDING_SHUTDOWN(3), DEAD;
+
+        private final Set<Integer> validTransitions = new HashSet<>();
+
+        State(final Integer... validTransitions) {
+            this.validTransitions.addAll(Arrays.asList(validTransitions));
+        }
+
+        public boolean isRunning() {
+            return !equals(PENDING_SHUTDOWN) && !equals(CREATED) && !equals(DEAD);
+        }
+
+        public boolean isValidTransition(final ThreadStateTransitionValidator newState) {
+            State tmpState = (State) newState;
+            return validTransitions.contains(tmpState.ordinal());
+        }
+    }
+
+    private volatile State state = State.CREATED;
+    private final Object stateLock = new Object();
+    private StreamThread.StateListener stateListener = null;
+    private final String logPrefix;
+
+
+    /**
+     * Set the {@link StreamThread.StateListener} to be notified when state changes. Note this API is internal to
+     * Kafka Streams and is not intended to be used by an external application.
+     */
+    public void setStateListener(final StreamThread.StateListener listener) {
+        stateListener = listener;
+    }
+
+    /**
+     * @return The state this instance is in
+     */
+    public State state() {
+        synchronized (stateLock) {
+            return state;
+        }
+    }
+
+    /**
+     * Sets the state
+     * @param newState New state
+     * @param ignoreWhenShuttingDownOrDead,       if true, then we'll first check if the state is
+     *                                            PENDING_SHUTDOWN or DEAD, and if it is,
+     *                                            we immediately return. Effectively this enables
+     *                                            a conditional set, under the stateLock lock.
+     */
+    void setState(final State newState, boolean ignoreWhenShuttingDownOrDead) {
+        synchronized (stateLock) {
+            final State oldState = state;
+
+            if (ignoreWhenShuttingDownOrDead) {
+                if (state == PENDING_SHUTDOWN || state == DEAD) {
+                    return;
+                }
+            }
+
+            if (!state.isValidTransition(newState)) {
+                log.warn("{} Unexpected state transition from {} to {}.", logPrefix, oldState, newState);
+                throw new StreamsException(logPrefix + " Unexpected state transition from " + oldState + " to " + newState);
+            } else {
+                log.info("{} State transition from {} to {}.", logPrefix, oldState, newState);
+            }
+
+            state = newState;
+            if (stateListener != null) {
+                stateListener.onChange(this, state, oldState);
+            }
+        }
+    }
+
 
     public GlobalStreamThread(final ProcessorTopology topology,
                               final StreamsConfig config,
@@ -69,6 +180,7 @@ public class GlobalStreamThread extends Thread {
                 (config.getInt(StreamsConfig.NUM_STREAM_THREADS_CONFIG) + 1));
         this.streamsMetrics = new StreamsMetricsImpl(metrics, threadClientId, Collections.singletonMap("client-id", threadClientId));
         this.cache = new ThreadCache(threadClientId, cacheSizeBytes, streamsMetrics);
+        this.logPrefix = String.format("global-stream-thread [%s]", threadClientId);
     }
 
     static class StateConsumer {
@@ -114,6 +226,7 @@ public class GlobalStreamThread extends Thread {
         }
 
         public void close() throws IOException {
+
             // just log an error if the consumer throws an exception during close
             // so we can always attempt to close the state stores.
             try {
@@ -127,20 +240,25 @@ public class GlobalStreamThread extends Thread {
         }
     }
 
+
     @Override
     public void run() {
         final StateConsumer stateConsumer = initialize();
+
         if (stateConsumer == null) {
             return;
         }
+        // one could kill the thread before it had a chance to actually start
+        setState(State.RUNNING, true);
 
         try {
-            while (running) {
+            while (stillRunning()) {
                 stateConsumer.pollAndUpdate();
             }
             log.debug("Shutting down GlobalStreamThread at user request");
         } finally {
             try {
+                setState(DEAD, false);
                 stateConsumer.close();
             } catch (IOException e) {
                 log.error("Failed to cleanly shutdown GlobalStreamThread", e);
@@ -159,12 +277,12 @@ public class GlobalStreamThread extends Thread {
                                                                           stateMgr,
                                                                           streamsMetrics,
                                                                           cache),
-                                                                  stateMgr),
+                                                                  stateMgr,
+                                                                  config.defaultDeserializationExceptionHandler()),
                                         time,
                                         config.getLong(StreamsConfig.POLL_MS_CONFIG),
                                         config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG));
             stateConsumer.initialize();
-            running = true;
             return stateConsumer;
         } catch (StreamsException e) {
             startupException = e;
@@ -177,7 +295,7 @@ public class GlobalStreamThread extends Thread {
     @Override
     public synchronized void start() {
         super.start();
-        while (!running) {
+        while (!stillRunning()) {
             Utils.sleep(1);
             if (startupException != null) {
                 throw startupException;
@@ -187,11 +305,15 @@ public class GlobalStreamThread extends Thread {
 
 
     public void close() {
-        running = false;
+        // one could call close() multiple times, so ignore subsequent calls
+        // if already shutting down or dead
+        setState(PENDING_SHUTDOWN, true);
     }
 
     public boolean stillRunning() {
-        return running;
+        synchronized (stateLock) {
+            return state.isRunning();
+        }
     }
 
 

@@ -36,6 +36,13 @@ import static org.junit.Assert.assertTrue;
 
 public class MergedSortedCacheWrappedSessionStoreIteratorTest {
 
+    private static final SegmentedCacheFunction SINGLE_SEGMENT_CACHE_FUNCTION = new SegmentedCacheFunction(null, -1) {
+        @Override
+        public long segmentId(Bytes key) {
+            return 0;
+        }
+    };
+
     private final String storeKey = "a";
     private final String cacheKey = "b";
 
@@ -43,10 +50,13 @@ public class MergedSortedCacheWrappedSessionStoreIteratorTest {
     private final Iterator<KeyValue<Windowed<Bytes>, byte[]>> storeKvs = Collections.singleton(
             KeyValue.pair(new Windowed<>(Bytes.wrap(storeKey.getBytes()), storeWindow), storeKey.getBytes())).iterator();
     private final SessionWindow cacheWindow = new SessionWindow(10, 20);
-    private final Iterator<KeyValue<Bytes, LRUCacheEntry>> cacheKvs = Collections.singleton(KeyValue.pair(
-            SessionKeySerde.toBinary(
-                    new Windowed<>(cacheKey, cacheWindow), Serdes.String().serializer(), "dummy"), new LRUCacheEntry(cacheKey.getBytes())))
-            .iterator();
+    private final Iterator<KeyValue<Bytes, LRUCacheEntry>> cacheKvs = Collections.singleton(
+        KeyValue.pair(
+            SINGLE_SEGMENT_CACHE_FUNCTION.cacheKey(
+                SessionKeySerde.toBinary(new Windowed<>(cacheKey, cacheWindow), Serdes.String().serializer(), "dummy")
+            ),
+            new LRUCacheEntry(cacheKey.getBytes())
+        )).iterator();
 
     @Test
     public void shouldHaveNextFromStore() throws Exception {
@@ -106,7 +116,10 @@ public class MergedSortedCacheWrappedSessionStoreIteratorTest {
 
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> cacheIterator
                 = new DelegatingPeekingKeyValueIterator<>("cache", new KeyValueIteratorStub<>(cacheKvs));
-        return new MergedSortedCacheSessionStoreIterator<>(cacheIterator, storeIterator, new StateSerdes<>("name", Serdes.String(), Serdes.String()));
+        return new MergedSortedCacheSessionStoreIterator<>(
+            cacheIterator, storeIterator, new StateSerdes<>("name", Serdes.String(), Serdes.String()),
+            SINGLE_SEGMENT_CACHE_FUNCTION
+        );
     }
 
 }

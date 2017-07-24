@@ -62,7 +62,7 @@ public class ProcessorStateManager implements StateManager {
     // TODO: this map does not work with customized grouper where multiple partitions
     // of the same topic can be assigned to the same topic.
     private final Map<String, TopicPartition> partitionForTopic;
-    private final OffsetCheckpoint checkpoint;
+    private OffsetCheckpoint checkpoint;
 
     /**
      * @throws LockException if the state directory cannot be locked because another thread holds the lock
@@ -74,7 +74,8 @@ public class ProcessorStateManager implements StateManager {
                                  final boolean isStandby,
                                  final StateDirectory stateDirectory,
                                  final Map<String, String> storeToChangelogTopic,
-                                 final ChangelogReader changelogReader) throws LockException, IOException {
+                                 final ChangelogReader changelogReader,
+                                 final boolean eosEnabled) throws LockException, IOException {
         this.taskId = taskId;
         this.stateDirectory = stateDirectory;
         this.changelogReader = changelogReader;
@@ -110,7 +111,13 @@ public class ProcessorStateManager implements StateManager {
         checkpoint = new OffsetCheckpoint(new File(baseDir, CHECKPOINT_FILE_NAME));
         checkpointedOffsets = new HashMap<>(checkpoint.read());
 
-        log.info("{} Created state store manager for task {} with the acquired state dir lock", logPrefix, taskId);
+        if (eosEnabled) {
+            // delete the checkpoint file after finish loading its stored offsets
+            checkpoint.delete();
+            checkpoint = null;
+        }
+
+        log.debug("{} Created state store manager for task {} with the acquired state dir lock", logPrefix, taskId);
     }
 
 
@@ -277,7 +284,7 @@ public class ProcessorStateManager implements StateManager {
                         if (firstException == null) {
                             firstException = new ProcessorStateException(String.format("%s Failed to close state store %s", logPrefix, entry.getKey()), e);
                         }
-                        log.error("{} Failed to close state store {} due to {}", logPrefix, entry.getKey(), e);
+                        log.error("{} Failed to close state store {}: ", logPrefix, entry.getKey(), e);
                     }
                 }
 
@@ -294,7 +301,7 @@ public class ProcessorStateManager implements StateManager {
                 if (firstException == null) {
                     firstException = new ProcessorStateException(String.format("%s Failed to release state dir lock", logPrefix), e);
                 }
-                log.error("{} Failed to release state dir lock due to {}", logPrefix, e);
+                log.error("{} Failed to release state dir lock: ", logPrefix, e);
             }
         }
 
@@ -325,20 +332,22 @@ public class ProcessorStateManager implements StateManager {
         }
         // write the checkpoint file before closing, to indicate clean shutdown
         try {
+            if (checkpoint == null) {
+                checkpoint = new OffsetCheckpoint(new File(baseDir, CHECKPOINT_FILE_NAME));
+            }
             checkpoint.write(checkpointedOffsets);
         } catch (final IOException e) {
-            log.warn("Failed to write checkpoint file to {}", new File(baseDir, CHECKPOINT_FILE_NAME), e);
+            log.warn("Failed to write checkpoint file to {}:", new File(baseDir, CHECKPOINT_FILE_NAME), e);
         }
     }
 
     private int getPartition(final String topic) {
         final TopicPartition partition = partitionForTopic.get(topic);
-
         return partition == null ? taskId.partition : partition.partition();
     }
 
     void registerGlobalStateStores(final List<StateStore> stateStores) {
-        log.info("{} Register global stores {}", logPrefix, stateStores);
+        log.debug("{} Register global stores {}", logPrefix, stateStores);
         for (final StateStore stateStore : stateStores) {
             globalStores.put(stateStore.name(), stateStore);
         }

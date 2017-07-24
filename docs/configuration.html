@@ -27,39 +27,40 @@
       <li><code>zookeeper.connect</code>
   </ul>
 
-  Topic-level configurations and defaults are discussed in more detail <a href="#topic-config">below</a>.
+  Topic-level configurations and defaults are discussed in more detail <a href="#topicconfigs">below</a>.
 
   <!--#include virtual="generated/kafka_config.html" -->
 
   <p>More details about broker configuration can be found in the scala class <code>kafka.server.KafkaConfig</code>.</p>
 
-  <a id="topic-config" href="#topic-config">Topic-level configuration</a>
+  <h3><a id="topicconfigs" href="#topicconfigs">3.2 Topic-Level Configs</a></h3>
 
   Configurations pertinent to topics have both a server default as well an optional per-topic override. If no per-topic configuration is given the server default is used. The override can be set at topic creation time by giving one or more <code>--config</code> options. This example creates a topic named <i>my-topic</i> with a custom max message size and flush rate:
-  <pre>
-  <b> &gt; bin/kafka-topics.sh --zookeeper localhost:2181 --create --topic my-topic --partitions 1
-          --replication-factor 1 --config max.message.bytes=64000 --config flush.messages=1</b>
+  <pre class="brush: bash;">
+  &gt; bin/kafka-topics.sh --zookeeper localhost:2181 --create --topic my-topic --partitions 1
+      --replication-factor 1 --config max.message.bytes=64000 --config flush.messages=1
   </pre>
   Overrides can also be changed or set later using the alter configs command. This example updates the max message size for <i>my-topic</i>:
-  <pre>
-  <b> &gt; bin/kafka-configs.sh --zookeeper localhost:2181 --entity-type topics --entity-name my-topic --alter --add-config max.message.bytes=128000</b>
+  <pre class="brush: bash;">
+  &gt; bin/kafka-configs.sh --zookeeper localhost:2181 --entity-type topics --entity-name my-topic
+      --alter --add-config max.message.bytes=128000
   </pre>
 
   To check overrides set on the topic you can do
-  <pre>
-  <b> &gt; bin/kafka-configs.sh --zookeeper localhost:2181 --entity-type topics --entity-name my-topic --describe</b>
+  <pre class="brush: bash;">
+  &gt; bin/kafka-configs.sh --zookeeper localhost:2181 --entity-type topics --entity-name my-topic --describe
   </pre>
 
   To remove an override you can do
-  <pre>
-  <b> &gt; bin/kafka-configs.sh --zookeeper localhost:2181  --entity-type topics --entity-name my-topic --alter --delete-config max.message.bytes</b>
+  <pre class="brush: bash;">
+  &gt; bin/kafka-configs.sh --zookeeper localhost:2181  --entity-type topics --entity-name my-topic --alter --delete-config max.message.bytes
   </pre>
 
   The following are the topic-level configurations. The server's default configuration for this property is given under the Server Default Property heading. A given server default config value only applies to a topic if it does not have an explicit topic config override.
 
   <!--#include virtual="generated/topic_config.html" -->
 
-  <h3><a id="producerconfigs" href="#producerconfigs">3.2 Producer Configs</a></h3>
+  <h3><a id="producerconfigs" href="#producerconfigs">3.3 Producer Configs</a></h3>
 
   Below is the configuration of the Java producer:
   <!--#include virtual="generated/producer_config.html" -->
@@ -69,16 +70,16 @@
       here</a>.
   </p>
 
-  <h3><a id="consumerconfigs" href="#consumerconfigs">3.3 Consumer Configs</a></h3>
+  <h3><a id="consumerconfigs" href="#consumerconfigs">3.4 Consumer Configs</a></h3>
 
   In 0.9.0.0 we introduced the new Java consumer as a replacement for the older Scala-based simple and high-level consumers.
   The configs for both new and old consumers are described below.
 
-  <h4><a id="newconsumerconfigs" href="#newconsumerconfigs">3.3.1 New Consumer Configs</a></h4>
+  <h4><a id="newconsumerconfigs" href="#newconsumerconfigs">3.4.1 New Consumer Configs</a></h4>
   Below is the configuration for the new consumer:
   <!--#include virtual="generated/consumer_config.html" -->
 
-  <h4><a id="oldconsumerconfigs" href="#oldconsumerconfigs">3.3.2 Old Consumer Configs</a></h4>
+  <h4><a id="oldconsumerconfigs" href="#oldconsumerconfigs">3.4.2 Old Consumer Configs</a></h4>
 
   The essential old consumer configurations are the following:
   <ul>
@@ -245,13 +246,17 @@
 
   <p>More details about consumer configuration can be found in the scala class <code>kafka.consumer.ConsumerConfig</code>.</p>
 
-  <h3><a id="connectconfigs" href="#connectconfigs">3.4 Kafka Connect Configs</a></h3>
+  <h3><a id="connectconfigs" href="#connectconfigs">3.5 Kafka Connect Configs</a></h3>
   Below is the configuration of the Kafka Connect framework.
   <!--#include virtual="generated/connect_config.html" -->
 
-  <h3><a id="streamsconfigs" href="#streamsconfigs">3.5 Kafka Streams Configs</a></h3>
+  <h3><a id="streamsconfigs" href="#streamsconfigs">3.6 Kafka Streams Configs</a></h3>
   Below is the configuration of the Kafka Streams client library.
   <!--#include virtual="generated/streams_config.html" -->
+
+  <h3><a id="adminclientconfigs" href="#adminclientconfigs">3.7 AdminClient Configs</a></h3>
+  Below is the configuration of the Kafka Admin client library.
+  <!--#include virtual="generated/admin_client_config.html" -->
 </script>
 
 <div class="p-configuration"></div>

@@ -33,6 +33,8 @@ import org.junit.Test
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable.Buffer
+import kafka.server.QuotaType
+import kafka.server.KafkaServer
 
 /* We have some tests in this class instead of `BaseConsumerTest` in order to keep the build time under control. */
 class PlaintextConsumerTest extends BaseConsumerTest {
@@ -40,9 +42,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   @Test
   def testHeaders() {
     val numRecords = 1
-    val record = new ProducerRecord(tp.topic(), tp.partition(), null, s"key".getBytes, s"value".getBytes)
+    val record = new ProducerRecord(tp.topic, tp.partition, null, "key".getBytes, "value".getBytes)
     
-    record.headers().add(s"headerKey", s"headerValue".getBytes)
+    record.headers().add("headerKey", "headerValue".getBytes)
     
     this.producers.head.send(record)
     
@@ -57,22 +59,22 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     for (i <- 0 until numRecords) {
       val record = records(i)
-      val header = record.headers().lastHeader(s"headerKey")
-      assertEquals(s"headerValue", if (header == null) null else new String(header.value()))
+      val header = record.headers().lastHeader("headerKey")
+      assertEquals("headerValue", if (header == null) null else new String(header.value()))
     }
   }
   
   @Test
   def testHeadersExtendedSerializerDeserializer() {
     val numRecords = 1
-    val record = new ProducerRecord(tp.topic(), tp.partition(), null, s"key".getBytes, s"value".getBytes)
+    val record = new ProducerRecord(tp.topic, tp.partition, null, "key".getBytes, "value".getBytes)
 
     val extendedSerializer = new ExtendedSerializer[Array[Byte]] {
       
       var serializer = new ByteArraySerializer()
       
       override def serialize(topic: String, headers: Headers, data: Array[Byte]): Array[Byte] = {
-        headers.add(s"content-type", s"application/octet-stream".getBytes)
+        headers.add("content-type", "application/octet-stream".getBytes)
         serializer.serialize(topic, data)
       }
 
@@ -92,8 +94,8 @@ class PlaintextConsumerTest extends BaseConsumerTest {
       var deserializer = new ByteArrayDeserializer()
       
       override def deserialize(topic: String, headers: Headers, data: Array[Byte]): Array[Byte] = {
-        var header = headers.lastHeader(s"content-type")
-        assertEquals(s"application/octet-stream", if (header == null) null else new String(header.value()))
+        val header = headers.lastHeader("content-type")
+        assertEquals("application/octet-stream", if (header == null) null else new String(header.value()))
         deserializer.deserialize(topic, data)
       }
 
@@ -399,7 +401,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     assertEquals(0, consumer0.assignment().size)
 
-    val pattern1 = Pattern.compile(".*o.*") // only 'topic' and 'foo' match this 
+    val pattern1 = Pattern.compile(".*o.*") // only 'topic' and 'foo' match this
     consumer0.subscribe(pattern1, new TestConsumerReassignmentListener)
     consumer0.poll(50)
 
@@ -881,6 +883,58 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     } finally {
       consumerPollers.foreach(_.shutdown())
     }
+  }
+
+  def reverse(m: Map[Long, Set[TopicPartition]]) =
+    m.values.toSet.flatten.map(v => (v, m.keys.filter(m(_).contains(v)).head)).toMap
+
+  /**
+   * This test runs the following scenario to verify sticky assignor behavior.
+   * Topics: single-topic, with random number of partitions, where #par is 10, 20, 30, 40, 50, 60, 70, 80, 90, or 100
+   * Consumers: 9 consumers subscribed to the single topic
+   * Expected initial assignment: partitions are assigned to consumers in a round robin fashion.
+   *  - (#par mod 9) consumers will get (#par / 9 + 1) partitions, and the rest get (#par / 9) partitions
+   * Then consumer #10 is added to the list (subscribing to the same single topic)
+   * Expected new assignment:
+   *  - (#par / 10) partition per consumer, where one partition from each of the early (#par mod 9) consumers
+   *    will move to consumer #10, leading to a total of (#par mod 9) partition movement
+   */
+  @Test
+  def testMultiConsumerStickyAssignment() {
+    this.consumers.clear()
+    this.consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "sticky-group")
+    this.consumerConfig.setProperty(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, classOf[StickyAssignor].getName)
+
+    // create one new topic
+    val topic = "single-topic"
+    val rand = 1 + scala.util.Random.nextInt(10)
+    val partitions = createTopicAndSendRecords(topic, rand * 10, 100)
+
+    // create a group of consumers, subscribe the consumers to the single topic and start polling
+    // for the topic partition assignment
+    val (_, consumerPollers) = createConsumerGroupAndWaitForAssignment(9, List(topic), partitions)
+    validateGroupAssignment(consumerPollers, partitions, s"Did not get valid initial assignment for partitions ${partitions.asJava}")
+    val prePartition2PollerId = reverse(consumerPollers.map(poller => (poller.getId, poller.consumerAssignment())).toMap)
+
+    // add one more consumer and validate re-assignment
+    addConsumersToGroupAndWaitForGroupAssignment(1, consumers, consumerPollers, List(topic), partitions)
+
+    val postPartition2PollerId = reverse(consumerPollers.map(poller => (poller.getId, poller.consumerAssignment())).toMap)
+    val keys = prePartition2PollerId.keySet.union(postPartition2PollerId.keySet)
+    var changes = 0
+    keys.foreach { key =>
+      val preVal = prePartition2PollerId.get(key)
+      val postVal = postPartition2PollerId.get(key)
+      if (preVal.nonEmpty && postVal.nonEmpty) {
+        if (preVal.get != postVal.get)
+          changes += 1
+      } else
+        changes += 1
+    }
+
+    consumerPollers.foreach(_.shutdown())
+
+    assertEquals("Expected only two topic partitions that have switched to other consumers.", rand, changes)
   }
 
   /**
@@ -1420,6 +1474,40 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     }
   }
 
+  @Test
+  def testQuotaMetricsNotCreatedIfNoQuotasConfigured() {
+    val numRecords = 1000
+    sendRecords(numRecords)
+
+    this.consumers.head.assign(List(tp).asJava)
+    this.consumers.head.seek(tp, 0)
+    consumeAndVerifyRecords(consumer = this.consumers.head, numRecords = numRecords, startingOffset = 0)
+
+    def assertNoMetric(broker: KafkaServer, name: String, quotaType: QuotaType, clientId: String) {
+        val metricName = broker.metrics.metricName("throttle-time",
+                                  quotaType.toString,
+                                  "",
+                                  "user", "",
+                                  "client-id", clientId)
+        assertNull("Metric should not hanve been created " + metricName, broker.metrics.metric(metricName))
+    }
+    servers.foreach(assertNoMetric(_, "byte-rate", QuotaType.Produce, producerClientId))
+    servers.foreach(assertNoMetric(_, "throttle-time", QuotaType.Produce, producerClientId))
+    servers.foreach(assertNoMetric(_, "byte-rate", QuotaType.Fetch, consumerClientId))
+    servers.foreach(assertNoMetric(_, "throttle-time", QuotaType.Fetch, consumerClientId))
+
+    servers.foreach(assertNoMetric(_, "request-time", QuotaType.Request, producerClientId))
+    servers.foreach(assertNoMetric(_, "throttle-time", QuotaType.Request, producerClientId))
+    servers.foreach(assertNoMetric(_, "request-time", QuotaType.Request, consumerClientId))
+    servers.foreach(assertNoMetric(_, "throttle-time", QuotaType.Request, consumerClientId))
+
+    def assertNoExemptRequestMetric(broker: KafkaServer) {
+        val metricName = broker.metrics.metricName("exempt-request-time", QuotaType.Request.toString, "")
+        assertNull("Metric should not hanve been created " + metricName, broker.metrics.metric(metricName))
+    }
+    servers.foreach(assertNoExemptRequestMetric(_))
+  }
+
   def runMultiConsumerSessionTimeoutTest(closeConsumer: Boolean): Unit = {
     // use consumers defined in this class plus one additional consumer
     // Use topic defined in this class + one additional topic
@@ -1477,8 +1565,8 @@ class PlaintextConsumerTest extends BaseConsumerTest {
    * Subscribes consumer 'consumer' to a given list of topics 'topicsToSubscribe', creates
    * consumer poller and starts polling.
    * Assumes that the consumer is not subscribed to any topics yet
-    *
-    * @param consumer consumer
+   *
+   * @param consumer consumer
    * @param topicsToSubscribe topics that this consumer will subscribe to
    * @return consumer poller for the given consumer
    */

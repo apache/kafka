@@ -28,8 +28,11 @@ import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.processor.StreamPartitioner;
+import org.apache.kafka.streams.processor.internals.GlobalStreamThread;
+import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.MockMetricsReporter;
+import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Assert;
 import org.junit.Before;
@@ -53,6 +56,7 @@ import static org.junit.Assert.assertTrue;
 public class KafkaStreamsTest {
 
     private static final int NUM_BROKERS = 1;
+    private static final int NUM_THREADS = 2;
     // We need this to avoid the KafkaConsumer hanging on poll (this may occur if the test doesn't complete
     // quick enough)
     @ClassRule
@@ -68,8 +72,134 @@ public class KafkaStreamsTest {
         props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         props.setProperty(StreamsConfig.METRIC_REPORTER_CLASSES_CONFIG, MockMetricsReporter.class.getName());
         props.setProperty(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
+        props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, NUM_THREADS);
         streams = new KafkaStreams(builder, props);
     }
+
+    @Test
+    public void testStateChanges() throws Exception {
+        final KStreamBuilder builder = new KStreamBuilder();
+        final KafkaStreams streams = new KafkaStreams(builder, props);
+
+        final StateListenerStub stateListener = new StateListenerStub();
+        streams.setStateListener(stateListener);
+        Assert.assertEquals(streams.state(), KafkaStreams.State.CREATED);
+        Assert.assertEquals(stateListener.numChanges, 0);
+
+        streams.start();
+        TestUtils.waitForCondition(new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                return streams.state() == KafkaStreams.State.RUNNING;
+            }
+        }, 10 * 1000, "Streams never started.");
+        streams.close();
+        Assert.assertEquals(streams.state(), KafkaStreams.State.NOT_RUNNING);
+    }
+
+    @Test
+    public void testStateCloseAfterCreate() throws Exception {
+        final KStreamBuilder builder = new KStreamBuilder();
+        final KafkaStreams streams = new KafkaStreams(builder, props);
+
+        final StateListenerStub stateListener = new StateListenerStub();
+        streams.setStateListener(stateListener);
+        streams.close();
+        Assert.assertEquals(streams.state(), KafkaStreams.State.NOT_RUNNING);
+    }
+
+    @Test
+    public void testStateThreadClose() throws Exception {
+        final int numThreads = 2;
+        final KStreamBuilder builder = new KStreamBuilder();
+        // make sure we have the global state thread running too
+        builder.globalTable("anyTopic");
+        props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, numThreads);
+        final KafkaStreams streams = new KafkaStreams(builder, props);
+
+
+
+        final java.lang.reflect.Field threadsField = streams.getClass().getDeclaredField("threads");
+        threadsField.setAccessible(true);
+        final StreamThread[] threads = (StreamThread[]) threadsField.get(streams);
+
+        assertEquals(numThreads, threads.length);
+        assertEquals(streams.state(), KafkaStreams.State.CREATED);
+
+        streams.start();
+        TestUtils.waitForCondition(new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                return streams.state() == KafkaStreams.State.RUNNING;
+            }
+        }, 10 * 1000, "Streams never started.");
+
+        for (int i = 0; i < numThreads; i++) {
+            final StreamThread tmpThread = threads[i];
+            tmpThread.close();
+            TestUtils.waitForCondition(new TestCondition() {
+                @Override
+                public boolean conditionMet() {
+                    return tmpThread.state() == StreamThread.State.DEAD;
+                }
+            }, 10 * 1000, "Thread never stopped.");
+            threads[i].join();
+        }
+        TestUtils.waitForCondition(new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                return streams.state() == KafkaStreams.State.ERROR;
+            }
+        }, 10 * 1000, "Streams never stopped.");
+        streams.close();
+        TestUtils.waitForCondition(new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                return streams.state() == KafkaStreams.State.NOT_RUNNING;
+            }
+        }, 10 * 1000, "Streams never stopped.");
+
+        final java.lang.reflect.Field globalThreadField = streams.getClass().getDeclaredField("globalStreamThread");
+        globalThreadField.setAccessible(true);
+        final GlobalStreamThread globalStreamThread = (GlobalStreamThread) globalThreadField.get(streams);
+        assertEquals(globalStreamThread, null);
+    }
+
+    @Test
+    public void testStateGlobalThreadClose() throws Exception {
+        final int numThreads = 2;
+        final KStreamBuilder builder = new KStreamBuilder();
+        // make sure we have the global state thread running too
+        builder.globalTable("anyTopic");
+        props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, numThreads);
+        final KafkaStreams streams = new KafkaStreams(builder, props);
+
+
+        streams.start();
+        TestUtils.waitForCondition(new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                return streams.state() == KafkaStreams.State.RUNNING;
+            }
+        }, 10 * 1000, "Streams never started.");
+        final java.lang.reflect.Field globalThreadField = streams.getClass().getDeclaredField("globalStreamThread");
+        globalThreadField.setAccessible(true);
+        final GlobalStreamThread globalStreamThread = (GlobalStreamThread) globalThreadField.get(streams);
+        globalStreamThread.close();
+        TestUtils.waitForCondition(new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                return globalStreamThread.state() == GlobalStreamThread.State.DEAD;
+            }
+        }, 10 * 1000, "Thread never stopped.");
+        globalStreamThread.join();
+        assertEquals(streams.state(), KafkaStreams.State.ERROR);
+
+        streams.close();
+        assertEquals(streams.state(), KafkaStreams.State.NOT_RUNNING);
+
+    }
+
 
     @Test
     public void testInitializesAndDestroysMetricsReporters() throws Exception {
@@ -80,23 +210,10 @@ public class KafkaStreamsTest {
         final int initDiff = newInitCount - oldInitCount;
         assertTrue("some reporters should be initialized by calling on construction", initDiff > 0);
 
-        StateListenerStub stateListener = new StateListenerStub();
-        streams.setStateListener(stateListener);
-        Assert.assertEquals(streams.state(), KafkaStreams.State.CREATED);
-        Assert.assertEquals(stateListener.numChanges, 0);
-
         streams.start();
-        Assert.assertEquals(streams.state(), KafkaStreams.State.RUNNING);
-        Assert.assertEquals(stateListener.numChanges, 1);
-        Assert.assertEquals(stateListener.oldState, KafkaStreams.State.CREATED);
-        Assert.assertEquals(stateListener.newState, KafkaStreams.State.RUNNING);
-        Assert.assertEquals(stateListener.mapStates.get(KafkaStreams.State.RUNNING).longValue(), 1L);
         final int oldCloseCount = MockMetricsReporter.CLOSE_COUNT.get();
         streams.close();
         assertEquals(oldCloseCount + initDiff, MockMetricsReporter.CLOSE_COUNT.get());
-        Assert.assertEquals(streams.state(), KafkaStreams.State.NOT_RUNNING);
-        Assert.assertEquals(stateListener.mapStates.get(KafkaStreams.State.RUNNING).longValue(), 1L);
-        Assert.assertEquals(stateListener.mapStates.get(KafkaStreams.State.NOT_RUNNING).longValue(), 1L);
     }
 
     @Test
@@ -152,8 +269,7 @@ public class KafkaStreamsTest {
         props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         props.setProperty(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, "illegalConfig");
         final KStreamBuilder builder = new KStreamBuilder();
-        final KafkaStreams streams = new KafkaStreams(builder, props);
-
+        new KafkaStreams(builder, props);
     }
 
     @Test
@@ -168,8 +284,7 @@ public class KafkaStreamsTest {
 
         props.setProperty(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, Sensor.RecordingLevel.DEBUG.toString());
         final KStreamBuilder builder2 = new KStreamBuilder();
-        final KafkaStreams streams2 = new KafkaStreams(builder2, props);
-
+        new KafkaStreams(builder2, props);
     }
 
     @Test(expected = IllegalStateException.class)
@@ -220,7 +335,7 @@ public class KafkaStreamsTest {
                                 while (keepRunning.get()) {
                                     Thread.sleep(10);
                                 }
-                            } catch (InterruptedException e) {
+                            } catch (final InterruptedException e) {
                                 // no-op
                             }
                         }
@@ -279,6 +394,12 @@ public class KafkaStreamsTest {
         final KafkaStreams streams = new KafkaStreams(builder, props);
 
         streams.start();
+        TestUtils.waitForCondition(new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                return streams.state() == KafkaStreams.State.RUNNING;
+            }
+        }, 10 * 1000, "Streams never started.");
         try {
             streams.cleanUp();
         } catch (final IllegalStateException e) {
@@ -289,20 +410,31 @@ public class KafkaStreamsTest {
         }
     }
 
+    @Test
+    public void testToString() {
+        streams.start();
+        final String streamString = streams.toString();
+        streams.close();
+        final String appId = streamString.split("\\n")[1].split(":")[1].trim();
+        Assert.assertNotEquals("streamString should not be empty", "", streamString);
+        Assert.assertNotNull("streamString should not be null", streamString);
+        Assert.assertNotEquals("streamString contains non-empty appId", "", appId);
+        Assert.assertNotNull("streamString contains non-null appId", appId);
+    }
 
     public static class StateListenerStub implements KafkaStreams.StateListener {
-        public int numChanges = 0;
-        public KafkaStreams.State oldState;
-        public KafkaStreams.State newState;
+        int numChanges = 0;
+        KafkaStreams.State oldState;
+        KafkaStreams.State newState;
         public Map<KafkaStreams.State, Long> mapStates = new HashMap<>();
 
         @Override
         public void onChange(final KafkaStreams.State newState, final KafkaStreams.State oldState) {
-            long prevCount = this.mapStates.containsKey(newState) ? this.mapStates.get(newState) : 0;
-            this.numChanges++;
+            final long prevCount = mapStates.containsKey(newState) ? mapStates.get(newState) : 0;
+            numChanges++;
             this.oldState = oldState;
             this.newState = newState;
-            this.mapStates.put(newState, prevCount + 1);
+            mapStates.put(newState, prevCount + 1);
         }
     }
 }

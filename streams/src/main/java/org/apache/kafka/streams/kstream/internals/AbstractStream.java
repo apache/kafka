@@ -37,6 +37,14 @@ public abstract class AbstractStream<K> {
     protected final String name;
     protected final Set<String> sourceNodes;
 
+    // This copy-constructor will allow to extend KStream
+    // and KTable APIs with new methods without impacting the public interface.
+    public AbstractStream(AbstractStream<K> stream) {
+        this.topology = stream.topology;
+        this.name = stream.name;
+        this.sourceNodes = stream.sourceNodes;
+    }
+
     AbstractStream(final KStreamBuilder topology, String name, final Set<String> sourceNodes) {
         if (sourceNodes == null || sourceNodes.isEmpty()) {
             throw new IllegalArgumentException("parameter <sourceNodes> must not be null or empty");
@@ -47,6 +55,7 @@ public abstract class AbstractStream<K> {
         this.sourceNodes = sourceNodes;
     }
 
+
     Set<String> ensureJoinableWith(final AbstractStream<K> other) {
         Set<String> allSourceNodes = new HashSet<>();
         allSourceNodes.addAll(sourceNodes);
@@ -55,6 +64,12 @@ public abstract class AbstractStream<K> {
         topology.copartitionSources(allSourceNodes);
 
         return allSourceNodes;
+    }
+
+    String getOrCreateName(final String queryableStoreName, final String prefix) {
+        final String returnName = queryableStoreName != null ? queryableStoreName : topology.newStoreName(prefix);
+        Topic.validate(returnName);
+        return returnName;
     }
 
     static <T2, T1, R> ValueJoiner<T2, T1, R> reverseJoiner(final ValueJoiner<T1, T2, R> joiner) {

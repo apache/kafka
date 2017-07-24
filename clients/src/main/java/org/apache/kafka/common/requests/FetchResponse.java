@@ -43,7 +43,6 @@ public class FetchResponse extends AbstractResponse {
     // topic level field names
     private static final String TOPIC_KEY_NAME = "topic";
     private static final String PARTITIONS_KEY_NAME = "partition_responses";
-    private static final String THROTTLE_TIME_KEY_NAME = "throttle_time_ms";
 
     // partition level field names
     private static final String PARTITION_HEADER_KEY_NAME = "partition_header";
@@ -56,7 +55,7 @@ public class FetchResponse extends AbstractResponse {
     private static final String RECORD_SET_KEY_NAME = "record_set";
 
     // aborted transaction field names
-    private static final String PID_KEY_NAME = "producer_id";
+    private static final String PRODUCER_ID_KEY_NAME = "producer_id";
     private static final String FIRST_OFFSET_KEY_NAME = "first_offset";
 
     private static final int DEFAULT_THROTTLE_TIME = 0;
@@ -163,11 +162,14 @@ public class FetchResponse extends AbstractResponse {
 
         @Override
         public String toString() {
-            return "(error=" + error + ", highWaterMark=" + highWatermark +
+            return "(error=" + error +
+                    ", highWaterMark=" + highWatermark +
                     ", lastStableOffset = " + lastStableOffset +
                     ", logStartOffset = " + logStartOffset +
-                    ", abortedTransactions = " + abortedTransactions + ", records=" + records + ")";
+                    ", abortedTransactions = " + abortedTransactions +
+                    ", recordsSizeInBytes=" + records.sizeInBytes() + ")";
         }
+
     }
 
     /**
@@ -201,7 +203,7 @@ public class FetchResponse extends AbstractResponse {
                 long logStartOffset = INVALID_LOG_START_OFFSET;
                 if (partitionResponseHeader.hasField(LOG_START_OFFSET_KEY_NAME))
                     logStartOffset = partitionResponseHeader.getLong(LOG_START_OFFSET_KEY_NAME);
-                
+
                 Records records = partitionResponse.getRecords(RECORD_SET_KEY_NAME);
 
                 List<AbortedTransaction> abortedTransactions = null;
@@ -211,7 +213,7 @@ public class FetchResponse extends AbstractResponse {
                         abortedTransactions = new ArrayList<>(abortedTransactionsArray.length);
                         for (Object abortedTransactionObj : abortedTransactionsArray) {
                             Struct abortedTransactionStruct = (Struct) abortedTransactionObj;
-                            long producerId = abortedTransactionStruct.getLong(PID_KEY_NAME);
+                            long producerId = abortedTransactionStruct.getLong(PRODUCER_ID_KEY_NAME);
                             long firstOffset = abortedTransactionStruct.getLong(FIRST_OFFSET_KEY_NAME);
                             abortedTransactions.add(new AbortedTransaction(producerId, firstOffset));
                         }
@@ -324,10 +326,17 @@ public class FetchResponse extends AbstractResponse {
             List<Struct> partitionArray = new ArrayList<>();
             for (Map.Entry<Integer, PartitionData> partitionEntry : topicEntry.partitions.entrySet()) {
                 PartitionData fetchPartitionData = partitionEntry.getValue();
+                short errorCode = fetchPartitionData.error.code();
+                // If consumer sends FetchRequest V5 or earlier, the client library is not guaranteed to recognize the error code
+                // for KafkaStorageException. In this case the client library will translate KafkaStorageException to
+                // UnknownServerException which is not retriable. We can ensure that consumer will update metadata and retry
+                // by converting the KafkaStorageException to NotLeaderForPartitionException in the response if FetchRequest version <= 5
+                if (errorCode == Errors.KAFKA_STORAGE_ERROR.code() && version <= 5)
+                    errorCode = Errors.NOT_LEADER_FOR_PARTITION.code();
                 Struct partitionData = topicData.instance(PARTITIONS_KEY_NAME);
                 Struct partitionDataHeader = partitionData.instance(PARTITION_HEADER_KEY_NAME);
                 partitionDataHeader.set(PARTITION_KEY_NAME, partitionEntry.getKey());
-                partitionDataHeader.set(ERROR_CODE_KEY_NAME, fetchPartitionData.error.code());
+                partitionDataHeader.set(ERROR_CODE_KEY_NAME, errorCode);
                 partitionDataHeader.set(HIGH_WATERMARK_KEY_NAME, fetchPartitionData.highWatermark);
 
                 if (partitionDataHeader.hasField(LAST_STABLE_OFFSET_KEY_NAME)) {
@@ -339,7 +348,7 @@ public class FetchResponse extends AbstractResponse {
                         List<Struct> abortedTransactionStructs = new ArrayList<>(fetchPartitionData.abortedTransactions.size());
                         for (AbortedTransaction abortedTransaction : fetchPartitionData.abortedTransactions) {
                             Struct abortedTransactionStruct = partitionDataHeader.instance(ABORTED_TRANSACTIONS_KEY_NAME);
-                            abortedTransactionStruct.set(PID_KEY_NAME, abortedTransaction.producerId);
+                            abortedTransactionStruct.set(PRODUCER_ID_KEY_NAME, abortedTransaction.producerId);
                             abortedTransactionStruct.set(FIRST_OFFSET_KEY_NAME, abortedTransaction.firstOffset);
                             abortedTransactionStructs.add(abortedTransactionStruct);
                         }

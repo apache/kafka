@@ -24,7 +24,7 @@ import java.nio.ByteBuffer;
 
 public class AddOffsetsToTxnRequest extends AbstractRequest {
     private static final String TRANSACTIONAL_ID_KEY_NAME = "transactional_id";
-    private static final String PID_KEY_NAME = "producer_id";
+    private static final String PRODUCER_ID_KEY_NAME = "producer_id";
     private static final String EPOCH_KEY_NAME = "producer_epoch";
     private static final String CONSUMER_GROUP_ID_KEY_NAME = "consumer_group_id";
 
@@ -42,9 +42,25 @@ public class AddOffsetsToTxnRequest extends AbstractRequest {
             this.consumerGroupId = consumerGroupId;
         }
 
+        public String consumerGroupId() {
+            return consumerGroupId;
+        }
+
         @Override
         public AddOffsetsToTxnRequest build(short version) {
             return new AddOffsetsToTxnRequest(version, transactionalId, producerId, producerEpoch, consumerGroupId);
+        }
+
+        @Override
+        public String toString() {
+            StringBuilder bld = new StringBuilder();
+            bld.append("(type=AddOffsetsToTxnRequest").
+                    append(", transactionalId=").append(transactionalId).
+                    append(", producerId=").append(producerId).
+                    append(", producerEpoch=").append(producerEpoch).
+                    append(", consumerGroupId=").append(consumerGroupId).
+                    append(")");
+            return bld.toString();
         }
     }
 
@@ -64,7 +80,7 @@ public class AddOffsetsToTxnRequest extends AbstractRequest {
     public AddOffsetsToTxnRequest(Struct struct, short version) {
         super(version);
         this.transactionalId = struct.getString(TRANSACTIONAL_ID_KEY_NAME);
-        this.producerId = struct.getLong(PID_KEY_NAME);
+        this.producerId = struct.getLong(PRODUCER_ID_KEY_NAME);
         this.producerEpoch = struct.getShort(EPOCH_KEY_NAME);
         this.consumerGroupId = struct.getString(CONSUMER_GROUP_ID_KEY_NAME);
     }
@@ -89,15 +105,15 @@ public class AddOffsetsToTxnRequest extends AbstractRequest {
     protected Struct toStruct() {
         Struct struct = new Struct(ApiKeys.ADD_OFFSETS_TO_TXN.requestSchema(version()));
         struct.set(TRANSACTIONAL_ID_KEY_NAME, transactionalId);
-        struct.set(PID_KEY_NAME, producerId);
+        struct.set(PRODUCER_ID_KEY_NAME, producerId);
         struct.set(EPOCH_KEY_NAME, producerEpoch);
         struct.set(CONSUMER_GROUP_ID_KEY_NAME, consumerGroupId);
         return struct;
     }
 
     @Override
-    public AddOffsetsToTxnResponse getErrorResponse(Throwable e) {
-        return new AddOffsetsToTxnResponse(Errors.forException(e));
+    public AddOffsetsToTxnResponse getErrorResponse(int throttleTimeMs, Throwable e) {
+        return new AddOffsetsToTxnResponse(throttleTimeMs, Errors.forException(e));
     }
 
     public static AddOffsetsToTxnRequest parse(ByteBuffer buffer, short version) {

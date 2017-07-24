@@ -172,6 +172,13 @@ public class FileRecords extends AbstractRecords implements Closeable {
     }
 
     /**
+     * Close file handlers used by the FileChannel but don't write to disk. This is used when the disk may have failed
+     */
+    public void closeHandlers() throws IOException {
+        channel.close();
+    }
+
+    /**
      * Delete this message set from the filesystem
      * @return True iff this message set was deleted.
      */
@@ -202,7 +209,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
     public void renameTo(File f) throws IOException {
         try {
             Utils.atomicMoveWithFallback(file.toPath(), f.toPath());
-        }  finally {
+        } finally {
             this.file = f;
         }
     }
@@ -224,14 +231,13 @@ public class FileRecords extends AbstractRecords implements Closeable {
                     " size of this log segment is " + originalSize + " bytes.");
         if (targetSize < (int) channel.size()) {
             channel.truncate(targetSize);
-            channel.position(targetSize);
             size.set(targetSize);
         }
         return originalSize - targetSize;
     }
 
     @Override
-    public Records downConvert(byte toMagic) {
+    public Records downConvert(byte toMagic, long firstOffset) {
         List<? extends RecordBatch> batches = Utils.toList(batches().iterator());
         if (batches.isEmpty()) {
             // This indicates that the message is too large, which means that the buffer is not large
@@ -243,7 +249,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
             // one full message, even if it requires exceeding the max fetch size requested by the client.
             return this;
         } else {
-            return downConvert(batches, toMagic);
+            return downConvert(batches, toMagic, firstOffset);
         }
     }
 
@@ -276,11 +282,11 @@ public class FileRecords extends AbstractRecords implements Closeable {
      * @param targetOffset The offset to search for.
      * @param startingPosition The starting position in the file to begin searching from.
      */
-    public LogEntryPosition searchForOffsetWithSize(long targetOffset, int startingPosition) {
+    public LogOffsetPosition searchForOffsetWithSize(long targetOffset, int startingPosition) {
         for (FileChannelRecordBatch batch : batchesFrom(startingPosition)) {
             long offset = batch.lastOffset();
             if (offset >= targetOffset)
-                return new LogEntryPosition(offset, batch.position(), batch.sizeInBytes());
+                return new LogOffsetPosition(offset, batch.position(), batch.sizeInBytes());
         }
         return null;
     }
@@ -340,35 +346,22 @@ public class FileRecords extends AbstractRecords implements Closeable {
         return batches;
     }
 
-    /**
-     * Get an iterator over the record batches, enforcing a maximum record size
-     * @param maxRecordSize The maximum allowable size of individual records (including compressed record sets)
-     * @return An iterator over the batches
-     */
-    public Iterable<FileChannelRecordBatch> batches(int maxRecordSize) {
-        return batches(maxRecordSize, start);
-    }
-
-    private Iterable<FileChannelRecordBatch> batchesFrom(int start) {
-        return batches(Integer.MAX_VALUE, start);
-    }
-
-    private Iterable<FileChannelRecordBatch> batches(final int maxRecordSize, final int start) {
+    private Iterable<FileChannelRecordBatch> batchesFrom(final int start) {
         return new Iterable<FileChannelRecordBatch>() {
             @Override
             public Iterator<FileChannelRecordBatch> iterator() {
-                return batchIterator(maxRecordSize, start);
+                return batchIterator(start);
             }
         };
     }
 
-    private Iterator<FileChannelRecordBatch> batchIterator(int maxRecordSize, int start) {
+    private Iterator<FileChannelRecordBatch> batchIterator(int start) {
         final int end;
         if (isSlice)
             end = this.end;
         else
             end = this.sizeInBytes();
-        FileLogInputStream inputStream = new FileLogInputStream(channel, maxRecordSize, start, end);
+        FileLogInputStream inputStream = new FileLogInputStream(channel, start, end);
         return new RecordBatchIterator<>(inputStream);
     }
 
@@ -405,7 +398,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
      * @param mutable mutable
      * @param fileAlreadyExists File already exists or not
      * @param initFileSize The size used for pre allocate file, for example 512 * 1025 *1024
-     * @param preallocate Pre allocate file or not, gotten from configuration.
+     * @param preallocate Pre-allocate file or not, gotten from configuration.
      */
     private static FileChannel openChannel(File file,
                                            boolean mutable,
@@ -429,12 +422,12 @@ public class FileRecords extends AbstractRecords implements Closeable {
         }
     }
 
-    public static class LogEntryPosition {
+    public static class LogOffsetPosition {
         public final long offset;
         public final int position;
         public final int size;
 
-        public LogEntryPosition(long offset, int position, int size) {
+        public LogOffsetPosition(long offset, int position, int size) {
             this.offset = offset;
             this.position = position;
             this.size = size;
@@ -447,7 +440,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
             if (o == null || getClass() != o.getClass())
                 return false;
 
-            LogEntryPosition that = (LogEntryPosition) o;
+            LogOffsetPosition that = (LogOffsetPosition) o;
 
             return offset == that.offset &&
                     position == that.position &&
@@ -465,7 +458,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
 
         @Override
         public String toString() {
-            return "LogEntryPosition(" +
+            return "LogOffsetPosition(" +
                     "offset=" + offset +
                     ", position=" + position +
                     ", size=" + size +

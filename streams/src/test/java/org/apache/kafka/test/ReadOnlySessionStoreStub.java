@@ -26,12 +26,13 @@ import org.apache.kafka.streams.state.ReadOnlySessionStore;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
+import java.util.NavigableMap;
+import java.util.TreeMap;
 
 public class ReadOnlySessionStoreStub<K, V> implements ReadOnlySessionStore<K, V>, StateStore {
-    private Map<K, List<KeyValue<Windowed<K>, V>>> sessions = new HashMap<>();
+    private NavigableMap<K, List<KeyValue<Windowed<K>, V>>> sessions = new TreeMap<>();
     private boolean open = true;
 
     public void put(final Windowed<K> sessionKey, final V value) {
@@ -50,6 +51,44 @@ public class ReadOnlySessionStoreStub<K, V> implements ReadOnlySessionStore<K, V
             return new KeyValueIteratorStub<>(Collections.<KeyValue<Windowed<K>, V>>emptyIterator());
         }
         return new KeyValueIteratorStub<>(sessions.get(key).iterator());
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<K>, V> fetch(K from, K to) {
+        if (!open) {
+            throw new InvalidStateStoreException("not open");
+        }
+        if (!sessions.subMap(from, to).isEmpty()) {
+            return new KeyValueIteratorStub<>(Collections.<KeyValue<Windowed<K>, V>>emptyIterator());
+        }
+        final Iterator<List<KeyValue<Windowed<K>, V>>> keysIterator = sessions.subMap(from, to).values().iterator();
+        return new KeyValueIteratorStub<>(
+            new Iterator<KeyValue<Windowed<K>, V>>() {
+
+                Iterator<KeyValue<Windowed<K>, V>> it;
+
+                @Override
+                public boolean hasNext() {
+                    while (it == null || !it.hasNext()) {
+                        if (!keysIterator.hasNext()) {
+                            return false;
+                        }
+                        it = keysIterator.next().iterator();
+                    }
+                    return true;
+                }
+
+                @Override
+                public KeyValue<Windowed<K>, V> next() {
+                    return it.next();
+                }
+
+                @Override
+                public void remove() {
+                    throw new UnsupportedOperationException();
+                }
+            }
+        );
     }
 
     @Override

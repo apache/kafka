@@ -71,9 +71,10 @@ public class OffsetFetchRequest extends AbstractRequest {
         @Override
         public String toString() {
             StringBuilder bld = new StringBuilder();
+            String partitionsString = partitions == null ? "<ALL>" : Utils.join(partitions, ",");
             bld.append("(type=OffsetFetchRequest, ").
                     append("groupId=").append(groupId).
-                    append(", partitions=").append(Utils.join(partitions, ",")).
+                    append(", partitions=").append(partitionsString).
                     append(")");
             return bld.toString();
         }
@@ -116,6 +117,10 @@ public class OffsetFetchRequest extends AbstractRequest {
     }
 
     public OffsetFetchResponse getErrorResponse(Errors error) {
+        return getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, error);
+    }
+
+    public OffsetFetchResponse getErrorResponse(int throttleTimeMs, Errors error) {
         short versionId = version();
 
         Map<TopicPartition, OffsetFetchResponse.PartitionData> responsePartitions = new HashMap<>();
@@ -133,6 +138,8 @@ public class OffsetFetchRequest extends AbstractRequest {
             case 1:
             case 2:
                 return new OffsetFetchResponse(error, responsePartitions);
+            case 3:
+                return new OffsetFetchResponse(throttleTimeMs, error, responsePartitions);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
                         versionId, this.getClass().getSimpleName(), ApiKeys.OFFSET_FETCH.latestVersion()));
@@ -140,8 +147,8 @@ public class OffsetFetchRequest extends AbstractRequest {
     }
 
     @Override
-    public OffsetFetchResponse getErrorResponse(Throwable e) {
-        return getErrorResponse(Errors.forException(e));
+    public OffsetFetchResponse getErrorResponse(int throttleTimeMs, Throwable e) {
+        return getErrorResponse(throttleTimeMs, Errors.forException(e));
     }
 
     public String groupId() {

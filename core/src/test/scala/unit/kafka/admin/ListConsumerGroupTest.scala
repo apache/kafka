@@ -40,7 +40,8 @@ class ListConsumerGroupTest extends KafkaServerTestHarness {
   val props = new Properties
 
   // configure the servers and clients
-  override def generateConfigs() = TestUtils.createBrokerConfigs(1, zkConnect, enableControlledShutdown = false).map(KafkaConfig.fromProps(_, overridingProps))
+  override def generateConfigs =
+    TestUtils.createBrokerConfigs(1, zkConnect, enableControlledShutdown = false).map(KafkaConfig.fromProps(_, overridingProps))
 
   @Before
   override def setUp() {
@@ -55,7 +56,11 @@ class ListConsumerGroupTest extends KafkaServerTestHarness {
   def testListGroupWithNoExistingGroup() {
     val opts = new ConsumerGroupCommandOptions(Array("--zookeeper", zkConnect))
     val consumerGroupCommand = new ZkConsumerGroupService(opts)
-    assert(consumerGroupCommand.listGroups().isEmpty)
+    try {
+      assert(consumerGroupCommand.listGroups().isEmpty)
+    } finally {
+      consumerGroupCommand.close()
+    }
   }
 
   @Test

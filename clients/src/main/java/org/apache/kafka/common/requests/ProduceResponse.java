@@ -39,14 +39,12 @@ public class ProduceResponse extends AbstractResponse {
     // topic level field names
     private static final String TOPIC_KEY_NAME = "topic";
     private static final String PARTITION_RESPONSES_KEY_NAME = "partition_responses";
-    private static final String THROTTLE_TIME_KEY_NAME = "throttle_time_ms";
 
     // partition level field names
     private static final String PARTITION_KEY_NAME = "partition";
     private static final String ERROR_CODE_KEY_NAME = "error_code";
 
     public static final long INVALID_OFFSET = -1L;
-    public static final int DEFAULT_THROTTLE_TIME = 0;
 
     /**
      * Possible error code:
@@ -61,6 +59,10 @@ public class ProduceResponse extends AbstractResponse {
      * NOT_ENOUGH_REPLICAS_AFTER_APPEND (20)
      * INVALID_REQUIRED_ACKS (21)
      * TOPIC_AUTHORIZATION_FAILED (29)
+     * UNSUPPORTED_FOR_MESSAGE_FORMAT (43)
+     * INVALID_PRODUCER_EPOCH (47)
+     * CLUSTER_AUTHORIZATION_FAILED (31)
+     * TRANSACTIONAL_ID_AUTHORIZATION_FAILED (53)
      */
 
     private static final String BASE_OFFSET_KEY_NAME = "base_offset";
@@ -120,9 +122,16 @@ public class ProduceResponse extends AbstractResponse {
             List<Struct> partitionArray = new ArrayList<>();
             for (Map.Entry<Integer, PartitionResponse> partitionEntry : entry.getValue().entrySet()) {
                 PartitionResponse part = partitionEntry.getValue();
+                short errorCode = part.error.code();
+                // If producer sends ProduceRequest V3 or earlier, the client library is not guaranteed to recognize the error code
+                // for KafkaStorageException. In this case the client library will translate KafkaStorageException to
+                // UnknownServerException which is not retriable. We can ensure that producer will update metadata and retry
+                // by converting the KafkaStorageException to NotLeaderForPartitionException in the response if ProduceRequest version <= 3
+                if (errorCode == Errors.KAFKA_STORAGE_ERROR.code() && version <= 3)
+                    errorCode = Errors.NOT_LEADER_FOR_PARTITION.code();
                 Struct partStruct = topicData.instance(PARTITION_RESPONSES_KEY_NAME)
                         .set(PARTITION_KEY_NAME, partitionEntry.getKey())
-                        .set(ERROR_CODE_KEY_NAME, part.error.code())
+                        .set(ERROR_CODE_KEY_NAME, errorCode)
                         .set(BASE_OFFSET_KEY_NAME, part.baseOffset);
                 if (partStruct.hasField(LOG_APPEND_TIME_KEY_NAME))
                     partStruct.set(LOG_APPEND_TIME_KEY_NAME, part.logAppendTime);

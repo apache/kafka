@@ -160,6 +160,7 @@ public class PlainSaslServer implements SaslServer {
 
         @Override
         public String[] getMechanismNames(Map<String, ?> props) {
+            if (props == null) return new String[]{PLAIN_MECHANISM};
             String noPlainText = (String) props.get(Sasl.POLICY_NOPLAINTEXT);
             if ("true".equals(noPlainText))
                 return new String[]{};

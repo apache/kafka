@@ -22,7 +22,6 @@ import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import kafka.utils.TestUtils
 import java.util.Properties
 
-import kafka.common.Topic
 import org.apache.kafka.clients.producer.KafkaProducer
 import kafka.server.KafkaConfig
 import kafka.integration.KafkaServerTestHarness
@@ -38,6 +37,7 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
   val producerCount: Int
   val consumerCount: Int
   val serverCount: Int
+  var logDirCount: Int = 1
   lazy val producerConfig = new Properties
   lazy val consumerConfig = new Properties
   lazy val serverConfig = new Properties
@@ -47,7 +47,7 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
 
   override def generateConfigs = {
     val cfgs = TestUtils.createBrokerConfigs(serverCount, zkConnect, interBrokerSecurityProtocol = Some(securityProtocol),
-      trustStoreFile = trustStoreFile, saslProperties = serverSaslProperties)
+      trustStoreFile = trustStoreFile, saslProperties = serverSaslProperties, logDirCount = logDirCount)
     cfgs.foreach { config =>
       config.setProperty(KafkaConfig.ListenersProp, s"${listenerName.value}://localhost:${TestUtils.RandomPort}")
       config.remove(KafkaConfig.InterBrokerSecurityProtocolProp)
@@ -85,7 +85,7 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
                                   saslProperties = this.clientSaslProperties,
                                   props = Some(producerConfig))
   }
-  
+
   def createNewConsumer: KafkaConsumer[Array[Byte], Array[Byte]] = {
       TestUtils.createNewConsumer(brokerList,
                                   securityProtocol = this.securityProtocol,

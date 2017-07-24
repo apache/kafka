@@ -20,49 +20,49 @@ import kafka.common.KafkaException
 import kafka.utils.{Json, Logging, ZkUtils}
 
 /**
- * ProducerIdManager is the part of the transaction coordinator that provides ProducerIds (PIDs) in a unique way
- * such that the same PID will not be assigned twice across multiple transaction coordinators.
+ * ProducerIdManager is the part of the transaction coordinator that provides ProducerIds in a unique way
+ * such that the same producerId will not be assigned twice across multiple transaction coordinators.
  *
- * PIDs are managed via ZooKeeper, where the latest pid block is written on the corresponding ZK path by the manager who
- * claims the block, where the written block_start_pid and block_end_pid are both inclusive.
+ * ProducerIds are managed via ZooKeeper, where the latest producerId block is written on the corresponding ZK
+ * path by the manager who claims the block, where the written block_start and block_end are both inclusive.
  */
 object ProducerIdManager extends Logging {
   val CurrentVersion: Long = 1L
   val PidBlockSize: Long = 1000L
 
-  def generatePidBlockJson(pidBlock: ProducerIdBlock): String = {
+  def generateProducerIdBlockJson(producerIdBlock: ProducerIdBlock): String = {
     Json.encode(Map("version" -> CurrentVersion,
-      "broker" -> pidBlock.brokerId,
-      "block_start" -> pidBlock.blockStartPid.toString,
-      "block_end" -> pidBlock.blockEndPid.toString)
+      "broker" -> producerIdBlock.brokerId,
+      "block_start" -> producerIdBlock.blockStartId.toString,
+      "block_end" -> producerIdBlock.blockEndId.toString)
     )
   }
 
-  def parsePidBlockData(jsonData: String): ProducerIdBlock = {
+  def parseProducerIdBlockData(jsonData: String): ProducerIdBlock = {
     try {
       Json.parseFull(jsonData).flatMap { m =>
-        val pidBlockInfo = m.asInstanceOf[Map[String, Any]]
-        val brokerId = pidBlockInfo("broker").asInstanceOf[Int]
-        val blockStartPID = pidBlockInfo("block_start").asInstanceOf[String].toLong
-        val blockEndPID = pidBlockInfo("block_end").asInstanceOf[String].toLong
-        Some(ProducerIdBlock(brokerId, blockStartPID, blockEndPID))
-      }.getOrElse(throw new KafkaException(s"Failed to parse the pid block json $jsonData"))
+        val producerIdBlockInfo = m.asInstanceOf[Map[String, Any]]
+        val brokerId = producerIdBlockInfo("broker").asInstanceOf[Int]
+        val blockStart = producerIdBlockInfo("block_start").asInstanceOf[String].toLong
+        val blockEnd = producerIdBlockInfo("block_end").asInstanceOf[String].toLong
+        Some(ProducerIdBlock(brokerId, blockStart, blockEnd))
+      }.getOrElse(throw new KafkaException(s"Failed to parse the producerId block json $jsonData"))
     } catch {
       case e: java.lang.NumberFormatException =>
         // this should never happen: the written data has exceeded long type limit
-        fatal(s"Read jason data $jsonData contains pids that have exceeded long type limit")
+        fatal(s"Read jason data $jsonData contains producerIds that have exceeded long type limit")
         throw e
     }
   }
 }
 
-case class ProducerIdBlock(brokerId: Int, blockStartPid: Long, blockEndPid: Long) {
+case class ProducerIdBlock(brokerId: Int, blockStartId: Long, blockEndId: Long) {
   override def toString: String = {
-    val pidBlockInfo = new StringBuilder
-    pidBlockInfo.append("(brokerId:" + brokerId)
-    pidBlockInfo.append(",blockStartPID:" + blockStartPid)
-    pidBlockInfo.append(",blockEndPID:" + blockEndPid + ")")
-    pidBlockInfo.toString()
+    val producerIdBlockInfo = new StringBuilder
+    producerIdBlockInfo.append("(brokerId:" + brokerId)
+    producerIdBlockInfo.append(",blockStartProducerId:" + blockStartId)
+    producerIdBlockInfo.append(",blockEndProducerId:" + blockEndId + ")")
+    producerIdBlockInfo.toString()
   }
 }
 
@@ -70,84 +70,85 @@ class ProducerIdManager(val brokerId: Int, val zkUtils: ZkUtils) extends Logging
 
   this.logIdent = "[ProducerId Manager " + brokerId + "]: "
 
-  private var currentPIDBlock: ProducerIdBlock = null
-  private var nextPID: Long = -1L
+  private var currentProducerIdBlock: ProducerIdBlock = null
+  private var nextProducerId: Long = -1L
 
-  // grab the first block of PIDs
+  // grab the first block of producerIds
   this synchronized {
-    getNewPidBlock()
-    nextPID = currentPIDBlock.blockStartPid
+    getNewProducerIdBlock()
+    nextProducerId = currentProducerIdBlock.blockStartId
   }
 
-  private def getNewPidBlock(): Unit = {
+  private def getNewProducerIdBlock(): Unit = {
     var zkWriteComplete = false
     while (!zkWriteComplete) {
-      // refresh current pid block from zookeeper again
-      val (dataOpt, zkVersion) = zkUtils.readDataAndVersionMaybeNull(ZkUtils.PidBlockPath)
+      // refresh current producerId block from zookeeper again
+      val (dataOpt, zkVersion) = zkUtils.readDataAndVersionMaybeNull(ZkUtils.ProducerIdBlockPath)
 
-      // generate the new pid block
-      currentPIDBlock = dataOpt match {
+      // generate the new producerId block
+      currentProducerIdBlock = dataOpt match {
         case Some(data) =>
-          val currPIDBlock = ProducerIdManager.parsePidBlockData(data)
-          debug(s"Read current pid block $currPIDBlock, Zk path version $zkVersion")
+          val currProducerIdBlock = ProducerIdManager.parseProducerIdBlockData(data)
+          debug(s"Read current producerId block $currProducerIdBlock, Zk path version $zkVersion")
 
-          if (currPIDBlock.blockEndPid > Long.MaxValue - ProducerIdManager.PidBlockSize) {
-            // we have exhausted all pids (wow!), treat it as a fatal error
-            fatal(s"Exhausted all pids as the next block's end pid is will has exceeded long type limit (current block end pid is ${currPIDBlock.blockEndPid})")
-            throw new KafkaException("Have exhausted all pids.")
+          if (currProducerIdBlock.blockEndId > Long.MaxValue - ProducerIdManager.PidBlockSize) {
+            // we have exhausted all producerIds (wow!), treat it as a fatal error
+            fatal(s"Exhausted all producerIds as the next block's end producerId is will has exceeded long type limit (current block end producerId is ${currProducerIdBlock.blockEndId})")
+            throw new KafkaException("Have exhausted all producerIds.")
           }
 
-          ProducerIdBlock(brokerId, currPIDBlock.blockEndPid + 1L, currPIDBlock.blockEndPid + ProducerIdManager.PidBlockSize)
+          ProducerIdBlock(brokerId, currProducerIdBlock.blockEndId + 1L, currProducerIdBlock.blockEndId + ProducerIdManager.PidBlockSize)
         case None =>
-          debug(s"There is no pid block yet (Zk path version $zkVersion), creating the first block")
+          debug(s"There is no producerId block yet (Zk path version $zkVersion), creating the first block")
           ProducerIdBlock(brokerId, 0L, ProducerIdManager.PidBlockSize - 1)
       }
 
-      val newPIDBlockData = ProducerIdManager.generatePidBlockJson(currentPIDBlock)
+      val newProducerIdBlockData = ProducerIdManager.generateProducerIdBlockJson(currentProducerIdBlock)
 
-      // try to write the new pid block into zookeeper
-      val (succeeded, version) = zkUtils.conditionalUpdatePersistentPath(ZkUtils.PidBlockPath, newPIDBlockData, zkVersion, Some(checkPidBlockZkData))
+      // try to write the new producerId block into zookeeper
+      val (succeeded, version) = zkUtils.conditionalUpdatePersistentPath(ZkUtils.ProducerIdBlockPath,
+        newProducerIdBlockData, zkVersion, Some(checkProducerIdBlockZkData))
       zkWriteComplete = succeeded
 
       if (zkWriteComplete)
-        info(s"Acquired new pid block $currentPIDBlock by writing to Zk with path version $version")
+        info(s"Acquired new producerId block $currentProducerIdBlock by writing to Zk with path version $version")
     }
   }
 
-  private def checkPidBlockZkData(zkUtils: ZkUtils, path: String, expectedData: String): (Boolean, Int) = {
+  private def checkProducerIdBlockZkData(zkUtils: ZkUtils, path: String, expectedData: String): (Boolean, Int) = {
     try {
-      val expectedPidBlock = ProducerIdManager.parsePidBlockData(expectedData)
-      val (dataOpt, zkVersion) = zkUtils.readDataAndVersionMaybeNull(ZkUtils.PidBlockPath)
+      val expectedPidBlock = ProducerIdManager.parseProducerIdBlockData(expectedData)
+      val (dataOpt, zkVersion) = zkUtils.readDataAndVersionMaybeNull(ZkUtils.ProducerIdBlockPath)
       dataOpt match {
         case Some(data) =>
-          val currPIDBlock = ProducerIdManager.parsePidBlockData(data)
-          (currPIDBlock.equals(expectedPidBlock), zkVersion)
+          val currProducerIdBLock = ProducerIdManager.parseProducerIdBlockData(data)
+          (currProducerIdBLock == expectedPidBlock, zkVersion)
         case None =>
           (false, -1)
       }
     } catch {
       case e: Exception =>
-        warn(s"Error while checking for pid block Zk data on path $path: expected data $expectedData", e)
-        
+        warn(s"Error while checking for producerId block Zk data on path $path: expected data $expectedData", e)
+
         (false, -1)
     }
   }
 
-  def nextPid(): Long = {
+  def generateProducerId(): Long = {
     this synchronized {
-      // grab a new block of PIDs if this block has been exhausted
-      if (nextPID > currentPIDBlock.blockEndPid) {
-        getNewPidBlock()
-        nextPID = currentPIDBlock.blockStartPid + 1
+      // grab a new block of producerIds if this block has been exhausted
+      if (nextProducerId > currentProducerIdBlock.blockEndId) {
+        getNewProducerIdBlock()
+        nextProducerId = currentProducerIdBlock.blockStartId + 1
       } else {
-        nextPID += 1
+        nextProducerId += 1
       }
 
-      nextPID - 1
+      nextProducerId - 1
     }
   }
 
   def shutdown() {
-    info(s"Shutdown complete: last PID assigned $nextPID")
+    info(s"Shutdown complete: last producerId assigned $nextProducerId")
   }
 }

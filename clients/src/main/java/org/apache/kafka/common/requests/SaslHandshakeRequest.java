@@ -40,6 +40,29 @@ public class SaslHandshakeRequest extends AbstractRequest {
 
     private final String mechanism;
 
+    public static class Builder extends AbstractRequest.Builder<SaslHandshakeRequest> {
+        private final String mechanism;
+
+        public Builder(String mechanism) {
+            super(ApiKeys.SASL_HANDSHAKE);
+            this.mechanism = mechanism;
+        }
+
+        @Override
+        public SaslHandshakeRequest build(short version) {
+            return new SaslHandshakeRequest(mechanism);
+        }
+
+        @Override
+        public String toString() {
+            StringBuilder bld = new StringBuilder();
+            bld.append("(type=SaslHandshakeRequest").
+                append(", mechanism=").append(mechanism).
+                append(")");
+            return bld.toString();
+        }
+    }
+
     public SaslHandshakeRequest(String mechanism) {
         super(ApiKeys.SASL_HANDSHAKE.latestVersion());
         this.mechanism = mechanism;
@@ -55,7 +78,7 @@ public class SaslHandshakeRequest extends AbstractRequest {
     }
 
     @Override
-    public AbstractResponse getErrorResponse(Throwable e) {
+    public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         short versionId = version();
         switch (versionId) {
             case 0:

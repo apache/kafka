@@ -37,9 +37,13 @@ class ChangeLoggingSegmentedBytesStore extends WrappedStateStore.AbstractStateSt
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     public KeyValueIterator<Bytes, byte[]> fetch(final Bytes key, final long from, final long to) {
         return bytesStore.fetch(key, from, to);
+    }
+
+    @Override
+    public KeyValueIterator<Bytes, byte[]> fetch(Bytes keyFrom, Bytes keyTo, long from, long to) {
+        return bytesStore.fetch(keyFrom, keyTo, from, to);
     }
 
     @Override
@@ -63,7 +67,6 @@ class ChangeLoggingSegmentedBytesStore extends WrappedStateStore.AbstractStateSt
 
 
     @Override
-    @SuppressWarnings("unchecked")
     public void init(final ProcessorContext context, final StateStore root) {
         bytesStore.init(context, root);
         changeLogger = new StoreChangeLogger<>(

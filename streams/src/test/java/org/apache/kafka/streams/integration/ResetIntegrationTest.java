@@ -23,7 +23,6 @@ import kafka.utils.MockTime;
 import kafka.utils.ZkUtils;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.errors.TimeoutException;
-import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.security.JaasUtils;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
@@ -74,7 +73,10 @@ public class ResetIntegrationTest {
         // expiration of connections by the brokers to avoid errors when `AdminClient` sends requests after potentially
         // very long sleep times
         props.put(KafkaConfig$.MODULE$.ConnectionsMaxIdleMsProp(), -1L);
-        CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS, props);
+        // we align time to seconds to get clean window boundaries and thus ensure the same result for each run
+        // otherwise, input records could fall into different windows for different runs depending on the initial mock time
+        final long alignedTime = (System.currentTimeMillis() / 1000) * 1000;
+        CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS, props, alignedTime);
     }
 
     private static final String APP_ID = "cleanup-integration-test";
@@ -143,21 +145,20 @@ public class ResetIntegrationTest {
         final List<KeyValue<Long, Long>> result = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
             resultTopicConsumerConfig,
             OUTPUT_TOPIC,
-            10,
-            60000);
+            10);
         // receive only first values to make sure intermediate user topic is not consumed completely
         // => required to test "seekToEnd" for intermediate topics
         final List<KeyValue<Long, Long>> result2 = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
             resultTopicConsumerConfig,
             OUTPUT_TOPIC_2,
-            10
+            40
         );
 
         streams.close();
         TestUtils.waitForCondition(consumerGroupInactive, TIMEOUT_MULTIPLIER * STREAMS_CONSUMER_TIMEOUT,
             "Streams Application consumer group did not time out after " + (TIMEOUT_MULTIPLIER * STREAMS_CONSUMER_TIMEOUT) + " ms.");
 
-        // insert bad record to maks sure intermediate user topic gets seekToEnd()
+        // insert bad record to make sure intermediate user topic gets seekToEnd()
         mockTime.sleep(1);
         IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
                 INTERMEDIATE_USER_TOPIC,
@@ -177,12 +178,11 @@ public class ResetIntegrationTest {
         final List<KeyValue<Long, Long>> resultRerun = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
             resultTopicConsumerConfig,
             OUTPUT_TOPIC,
-            10,
-            60000);
+            10);
         final List<KeyValue<Long, Long>> resultRerun2 = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
             resultTopicConsumerConfig,
             OUTPUT_TOPIC_2_RERUN,
-            10
+            40
         );
         streams.close();
 
@@ -193,25 +193,7 @@ public class ResetIntegrationTest {
                 "Reset Tool consumer group did not time out after " + (TIMEOUT_MULTIPLIER * CLEANUP_CONSUMER_TIMEOUT) + " ms.");
         cleanGlobal(INTERMEDIATE_USER_TOPIC);
 
-        CLUSTER.deleteTopic(INTERMEDIATE_USER_TOPIC);
-        Set<String> allTopics;
-        ZkUtils zkUtils = null;
-        try {
-            zkUtils = ZkUtils.apply(CLUSTER.zKConnectString(),
-                    30000,
-                    30000,
-                    JaasUtils.isZkSecurityEnabled());
-
-            do {
-                Utils.sleep(100);
-                allTopics = new HashSet<>();
-                allTopics.addAll(scala.collection.JavaConversions.seqAsJavaList(zkUtils.getAllTopics()));
-            } while (allTopics.contains(INTERMEDIATE_USER_TOPIC));
-        } finally {
-            if (zkUtils != null) {
-                zkUtils.close();
-            }
-        }
+        CLUSTER.deleteTopicAndWait(INTERMEDIATE_USER_TOPIC);
     }
 
     @Test
@@ -229,8 +211,7 @@ public class ResetIntegrationTest {
         final List<KeyValue<Long, Long>> result = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
                 resultTopicConsumerConfig,
                 OUTPUT_TOPIC,
-                10,
-                60000);
+                10);
 
         streams.close();
         TestUtils.waitForCondition(consumerGroupInactive, TIMEOUT_MULTIPLIER * STREAMS_CONSUMER_TIMEOUT,
@@ -250,8 +231,7 @@ public class ResetIntegrationTest {
         final List<KeyValue<Long, Long>> resultRerun = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
                 resultTopicConsumerConfig,
                 OUTPUT_TOPIC,
-                10,
-                60000);
+                10);
         streams.close();
 
         assertThat(resultRerun, equalTo(result));
@@ -266,8 +246,8 @@ public class ResetIntegrationTest {
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + testNo);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
-        streamsConfiguration.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG, Serdes.Long().getClass());
-        streamsConfiguration.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+        streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Long().getClass());
+        streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         streamsConfiguration.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 4);
         streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
@@ -282,33 +262,7 @@ public class ResetIntegrationTest {
     }
 
     private void prepareInputData() throws Exception {
-        try {
-            CLUSTER.deleteTopic(INPUT_TOPIC);
-        } catch (final UnknownTopicOrPartitionException e) {
-            // ignore
-        }
-        try {
-            CLUSTER.deleteTopic(OUTPUT_TOPIC);
-        } catch (final UnknownTopicOrPartitionException e) {
-            // ignore
-        }
-        try {
-            CLUSTER.deleteTopic(OUTPUT_TOPIC_2);
-        } catch (final UnknownTopicOrPartitionException e) {
-            // ignore
-        }
-        try {
-            CLUSTER.deleteTopic(OUTPUT_TOPIC_2_RERUN);
-        } catch (final UnknownTopicOrPartitionException e) {
-            // ignore
-        }
-
-        waitUntilUserTopicsAreDeleted();
-
-        CLUSTER.createTopic(INPUT_TOPIC);
-        CLUSTER.createTopic(OUTPUT_TOPIC);
-        CLUSTER.createTopic(OUTPUT_TOPIC_2);
-        CLUSTER.createTopic(OUTPUT_TOPIC_2_RERUN);
+        CLUSTER.deleteAndRecreateTopics(INPUT_TOPIC, OUTPUT_TOPIC, OUTPUT_TOPIC_2, OUTPUT_TOPIC_2_RERUN);
 
         final Properties producerConfig = TestUtils.producerConfig(CLUSTER.bootstrapServers(), LongSerializer.class, StringSerializer.class);
 
@@ -386,7 +340,7 @@ public class ResetIntegrationTest {
         if (intermediateUserTopic != null) {
             parameters = new String[]{
                 "--application-id", APP_ID + testNo,
-                "--bootstrap-server", CLUSTER.bootstrapServers(),
+                "--bootstrap-servers", CLUSTER.bootstrapServers(),
                 "--zookeeper", CLUSTER.zKConnectString(),
                 "--input-topics", INPUT_TOPIC,
                 "--intermediate-topics", INTERMEDIATE_USER_TOPIC
@@ -394,7 +348,7 @@ public class ResetIntegrationTest {
         } else {
             parameters = new String[]{
                 "--application-id", APP_ID + testNo,
-                "--bootstrap-server", CLUSTER.bootstrapServers(),
+                "--bootstrap-servers", CLUSTER.bootstrapServers(),
                 "--zookeeper", CLUSTER.zKConnectString(),
                 "--input-topics", INPUT_TOPIC
             };
@@ -405,34 +359,6 @@ public class ResetIntegrationTest {
 
         final int exitCode = new StreamsResetter().run(parameters, cleanUpConfig);
         Assert.assertEquals(0, exitCode);
-    }
-
-    private void waitUntilUserTopicsAreDeleted() {
-        ZkUtils zkUtils = null;
-        try {
-            zkUtils = ZkUtils.apply(CLUSTER.zKConnectString(),
-                30000,
-                30000,
-                JaasUtils.isZkSecurityEnabled());
-
-            while (userTopicExists(new HashSet<>(scala.collection.JavaConversions.seqAsJavaList(zkUtils.getAllTopics())))) {
-                Utils.sleep(100);
-            }
-        } finally {
-            if (zkUtils != null) {
-                zkUtils.close();
-            }
-        }
-    }
-
-    private boolean userTopicExists(final Set<String> allTopics) {
-        final Set<String> expectedMissingTopics = new HashSet<>();
-        expectedMissingTopics.add(INPUT_TOPIC);
-        expectedMissingTopics.add(OUTPUT_TOPIC);
-        expectedMissingTopics.add(OUTPUT_TOPIC_2);
-        expectedMissingTopics.add(OUTPUT_TOPIC_2_RERUN);
-
-        return expectedMissingTopics.removeAll(allTopics);
     }
 
     private void assertInternalTopicsGotDeleted(final String intermediateUserTopic) {

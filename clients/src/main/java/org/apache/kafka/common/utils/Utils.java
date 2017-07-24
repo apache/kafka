@@ -137,8 +137,8 @@ public class Utils {
     /**
      * Get the minimum of some long values.
      * @param first Used to ensure at least one value
-     * @param rest The rest of longs to compare
-     * @return The minimum of all passed argument.
+     * @param rest The remaining values to compare
+     * @return The minimum of all passed values
      */
     public static long min(long first, long ... rest) {
         long min = first;
@@ -148,6 +148,22 @@ public class Utils {
         }
         return min;
     }
+
+    /**
+     * Get the maximum of some long values.
+     * @param first Used to ensure at least one value
+     * @param rest The remaining values to compare
+     * @return The maximum of all passed values
+     */
+    public static long max(long first, long ... rest) {
+        long max = first;
+        for (long r : rest) {
+            if (r > max)
+                max = r;
+        }
+        return max;
+    }
+
 
     public static short min(short first, short second) {
         return (short) Math.min(first, second);
@@ -437,34 +453,6 @@ public class Utils {
     }
 
     /**
-     * Create a new thread
-     * @param name The name of the thread
-     * @param runnable The work for the thread to do
-     * @param daemon Should the thread block JVM shutdown?
-     * @return The unstarted thread
-     */
-    public static Thread newThread(String name, Runnable runnable, boolean daemon) {
-        Thread thread = new Thread(runnable, name);
-        thread.setDaemon(daemon);
-        thread.setUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
-            public void uncaughtException(Thread t, Throwable e) {
-                log.error("Uncaught exception in thread '{}':", t.getName(), e);
-            }
-        });
-        return thread;
-    }
-
-    /**
-     * Create a daemon thread
-     * @param name The name of the thread
-     * @param runnable The runnable to execute in the background
-     * @return The unstarted thread
-     */
-    public static Thread daemonThread(String name, Runnable runnable) {
-        return newThread(name, runnable, true);
-    }
-
-    /**
      * Print an error message and shutdown the JVM
      * @param message The error message
      */
@@ -659,7 +647,7 @@ public class Utils {
     /**
      * Closes {@code closeable} and if an exception is thrown, it is logged at the WARN level.
      */
-    public static void closeQuietly(Closeable closeable, String name) {
+    public static void closeQuietly(AutoCloseable closeable, String name) {
         if (closeable != null) {
             try {
                 closeable.close();
@@ -760,6 +748,36 @@ public class Utils {
             bytesRead = channel.read(destinationBuffer, currentPosition);
             currentPosition += bytesRead;
         } while (bytesRead != -1 && destinationBuffer.hasRemaining());
+    }
+
+    /**
+     * Read data from the input stream to the given byte buffer until there are no bytes remaining in the buffer or the
+     * end of the stream has been reached.
+     *
+     * @param inputStream Input stream to read from
+     * @param destinationBuffer The buffer into which bytes are to be transferred (it must be backed by an array)
+     *
+     * @throws IOException If an I/O error occurs
+     */
+    public static final void readFully(InputStream inputStream, ByteBuffer destinationBuffer) throws IOException {
+        if (!destinationBuffer.hasArray())
+            throw new IllegalArgumentException("destinationBuffer must be backed by an array");
+        int initialOffset = destinationBuffer.arrayOffset() + destinationBuffer.position();
+        byte[] array = destinationBuffer.array();
+        int length = destinationBuffer.remaining();
+        int totalBytesRead = 0;
+        do {
+            int bytesRead = inputStream.read(array, initialOffset + totalBytesRead, length - totalBytesRead);
+            if (bytesRead == -1)
+                break;
+            totalBytesRead += bytesRead;
+        } while (length > totalBytesRead);
+        destinationBuffer.position(destinationBuffer.position() + totalBytesRead);
+    }
+
+    public static void writeFully(FileChannel channel, ByteBuffer sourceBuffer) throws IOException {
+        while (sourceBuffer.hasRemaining())
+            channel.write(sourceBuffer);
     }
 
     /**

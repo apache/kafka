@@ -27,7 +27,6 @@ import kafka.server.checkpoints.{OffsetCheckpoint, OffsetCheckpointFile}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.serialization.{IntegerSerializer, StringSerializer}
-import org.apache.kafka.common.utils.Utils
 import org.junit.{After, Before, Test}
 import org.junit.Assert._
 
@@ -95,15 +94,12 @@ class LogRecoveryTest extends ZooKeeperTestHarness {
   @After
   override def tearDown() {
     producer.close()
-    for (server <- servers) {
-      server.shutdown()
-      Utils.delete(new File(server.config.logDirs.head))
-    }
+    TestUtils.shutdownServers(servers)
     super.tearDown()
   }
 
   @Test
-  def testHWCheckpointNoFailuresSingleLogSegment {
+  def testHWCheckpointNoFailuresSingleLogSegment(): Unit = {
     val numMessages = 2L
     sendMessages(numMessages.toInt)
 
@@ -120,7 +116,7 @@ class LogRecoveryTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testHWCheckpointWithFailuresSingleLogSegment {
+  def testHWCheckpointWithFailuresSingleLogSegment(): Unit = {
     var leader = waitUntilLeaderIsElectedOrChanged(zkUtils, topic, partitionId)
 
     assertEquals(0L, hwFile1.read.getOrElse(topicPartition, 0L))
@@ -134,8 +130,8 @@ class LogRecoveryTest extends ZooKeeperTestHarness {
     assertEquals(hw, hwFile1.read.getOrElse(topicPartition, 0L))
 
     // check if leader moves to the other server
-    leader = waitUntilLeaderIsElectedOrChanged(zkUtils, topic, partitionId, oldLeaderOpt = leader)
-    assertEquals("Leader must move to broker 1", 1, leader.getOrElse(-1))
+    leader = waitUntilLeaderIsElectedOrChanged(zkUtils, topic, partitionId, oldLeaderOpt = Some(leader))
+    assertEquals("Leader must move to broker 1", 1, leader)
 
     // bring the preferred replica back
     server1.startup()
@@ -144,7 +140,7 @@ class LogRecoveryTest extends ZooKeeperTestHarness {
 
     leader = waitUntilLeaderIsElectedOrChanged(zkUtils, topic, partitionId)
     assertTrue("Leader must remain on broker 1, in case of zookeeper session expiration it can move to broker 0",
-      leader.isDefined && (leader.get == 0 || leader.get == 1))
+      leader == 0 || leader == 1)
 
     assertEquals(hw, hwFile1.read.getOrElse(topicPartition, 0L))
     // since server 2 was never shut down, the hw value of 30 is probably not checkpointed to disk yet
@@ -153,9 +149,9 @@ class LogRecoveryTest extends ZooKeeperTestHarness {
 
     server2.startup()
     updateProducer()
-    leader = waitUntilLeaderIsElectedOrChanged(zkUtils, topic, partitionId, oldLeaderOpt = leader)
+    leader = waitUntilLeaderIsElectedOrChanged(zkUtils, topic, partitionId, oldLeaderOpt = Some(leader))
     assertTrue("Leader must remain on broker 0, in case of zookeeper session expiration it can move to broker 1",
-      leader.isDefined && (leader.get == 0 || leader.get == 1))
+      leader == 0 || leader == 1)
 
     sendMessages(1)
     hw += 1
@@ -171,7 +167,7 @@ class LogRecoveryTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testHWCheckpointNoFailuresMultipleLogSegments {
+  def testHWCheckpointNoFailuresMultipleLogSegments(): Unit = {
     sendMessages(20)
     val hw = 20L
     // give some time for follower 1 to record leader HW of 600
@@ -187,7 +183,7 @@ class LogRecoveryTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testHWCheckpointWithFailuresMultipleLogSegments {
+  def testHWCheckpointWithFailuresMultipleLogSegments(): Unit = {
     var leader = waitUntilLeaderIsElectedOrChanged(zkUtils, topic, partitionId)
 
     sendMessages(2)
@@ -206,8 +202,8 @@ class LogRecoveryTest extends ZooKeeperTestHarness {
     server2.startup()
     updateProducer()
     // check if leader moves to the other server
-    leader = waitUntilLeaderIsElectedOrChanged(zkUtils, topic, partitionId, oldLeaderOpt = leader)
-    assertEquals("Leader must move to broker 1", 1, leader.getOrElse(-1))
+    leader = waitUntilLeaderIsElectedOrChanged(zkUtils, topic, partitionId, oldLeaderOpt = Some(leader))
+    assertEquals("Leader must move to broker 1", 1, leader)
 
     assertEquals(hw, hwFile1.read.getOrElse(topicPartition, 0L))
 

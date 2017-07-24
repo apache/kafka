@@ -17,7 +17,7 @@
 package kafka.security.auth
 
 import java.net.InetAddress
-import java.util.{UUID}
+import java.util.UUID
 
 import kafka.network.RequestChannel.Session
 import kafka.security.auth.Acl.WildCardHost
@@ -61,6 +61,7 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
   override def tearDown(): Unit = {
     simpleAclAuthorizer.close()
     simpleAclAuthorizer2.close()
+    super.tearDown()
   }
 
   @Test
@@ -189,9 +190,13 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
     props.put(SimpleAclAuthorizer.AllowEveryoneIfNoAclIsFoundProp, "true")
 
     val cfg = KafkaConfig.fromProps(props)
-    val testAuthoizer: SimpleAclAuthorizer = new SimpleAclAuthorizer
-    testAuthoizer.configure(cfg.originals)
-    assertTrue("when acls = null or [],  authorizer should fail open with allow.everyone = true.", testAuthoizer.authorize(session, Read, resource))
+    val testAuthorizer = new SimpleAclAuthorizer
+    try {
+      testAuthorizer.configure(cfg.originals)
+      assertTrue("when acls = null or [],  authorizer should fail open with allow.everyone = true.", testAuthorizer.authorize(session, Read, resource))
+    } finally {
+      testAuthorizer.close()
+    }
   }
 
   @Test
@@ -255,10 +260,14 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
 
     zkUtils.deletePathRecursive(SimpleAclAuthorizer.AclChangedZkPath)
     val authorizer = new SimpleAclAuthorizer
-    authorizer.configure(config.originals)
+    try {
+      authorizer.configure(config.originals)
 
-    assertEquals(acls, authorizer.getAcls(resource))
-    assertEquals(acls1, authorizer.getAcls(resource1))
+      assertEquals(acls, authorizer.getAcls(resource))
+      assertEquals(acls1, authorizer.getAcls(resource1))
+    } finally {
+      authorizer.close()
+    }
   }
 
   @Test
@@ -340,6 +349,56 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
 
     TestUtils.waitAndVerifyAcls(expectedAcls, simpleAclAuthorizer, commonResource)
     TestUtils.waitAndVerifyAcls(expectedAcls, simpleAclAuthorizer2, commonResource)
+  }
+
+  /**
+    * Test ACL inheritance, as described in #{org.apache.kafka.common.acl.AclOperation}
+    */
+  @Test
+  def testAclInheritance(): Unit = {
+    testImplicationsOfAllow(All, Set(Read, Write, Create, Delete, Alter, Describe,
+      ClusterAction, DescribeConfigs, AlterConfigs, IdempotentWrite))
+    testImplicationsOfDeny(All, Set(Read, Write, Create, Delete, Alter, Describe,
+      ClusterAction, DescribeConfigs, AlterConfigs, IdempotentWrite))
+    testImplicationsOfAllow(Read, Set(Describe))
+    testImplicationsOfAllow(Write, Set(Describe))
+    testImplicationsOfAllow(Delete, Set(Describe))
+    testImplicationsOfAllow(Alter, Set(Describe))
+    testImplicationsOfDeny(Describe, Set())
+    testImplicationsOfAllow(AlterConfigs, Set(DescribeConfigs))
+    testImplicationsOfDeny(DescribeConfigs, Set())
+  }
+
+  private def testImplicationsOfAllow(parentOp: Operation, allowedOps: Set[Operation]): Unit = {
+    val user = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, username)
+    val host = InetAddress.getByName("192.168.3.1")
+    val hostSession = Session(user, host)
+    val acl = Acl(user, Allow, WildCardHost, parentOp)
+    simpleAclAuthorizer.addAcls(Set(acl), Resource.ClusterResource)
+    Operation.values.foreach { op =>
+      val authorized = simpleAclAuthorizer.authorize(hostSession, op, Resource.ClusterResource)
+      if (allowedOps.contains(op) || op == parentOp)
+        assertTrue(s"ALLOW $parentOp should imply ALLOW $op", authorized)
+      else
+        assertFalse(s"ALLOW $parentOp should not imply ALLOW $op", authorized)
+    }
+    simpleAclAuthorizer.removeAcls(Set(acl), Resource.ClusterResource)
+  }
+
+  private def testImplicationsOfDeny(parentOp: Operation, deniedOps: Set[Operation]): Unit = {
+    val user1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, username)
+    val host1 = InetAddress.getByName("192.168.3.1")
+    val host1Session = Session(user1, host1)
+    val acls = Set(Acl(user1, Deny, WildCardHost, parentOp), Acl(user1, Allow, WildCardHost, All))
+    simpleAclAuthorizer.addAcls(acls, Resource.ClusterResource)
+    Operation.values.foreach { op =>
+      val authorized = simpleAclAuthorizer.authorize(host1Session, op, Resource.ClusterResource)
+      if (deniedOps.contains(op) || op == parentOp)
+        assertFalse(s"DENY $parentOp should imply DENY $op", authorized)
+      else
+        assertTrue(s"DENY $parentOp should not imply DENY $op", authorized)
+    }
+    simpleAclAuthorizer.removeAcls(acls, Resource.ClusterResource)
   }
 
   @Test

@@ -16,25 +16,28 @@
  */
 package org.apache.kafka.common.requests;
 
-import java.util.Arrays;
-import java.util.List;
-import java.util.Set;
+import org.apache.kafka.common.utils.Utils;
 
+import java.util.List;
+
+// This is used to describe per-partition state in the LeaderAndIsrRequest
 public class PartitionState {
     public final int controllerEpoch;
     public final int leader;
     public final int leaderEpoch;
     public final List<Integer> isr;
     public final int zkVersion;
-    public final Set<Integer> replicas;
+    public final List<Integer> replicas;
+    public final boolean isNew;
 
-    public PartitionState(int controllerEpoch, int leader, int leaderEpoch, List<Integer> isr, int zkVersion, Set<Integer> replicas) {
+    public PartitionState(int controllerEpoch, int leader, int leaderEpoch, List<Integer> isr, int zkVersion, List<Integer> replicas, boolean isNew) {
         this.controllerEpoch = controllerEpoch;
         this.leader = leader;
         this.leaderEpoch = leaderEpoch;
         this.isr = isr;
         this.zkVersion = zkVersion;
         this.replicas = replicas;
+        this.isNew = isNew;
     }
 
     @Override
@@ -42,8 +45,9 @@ public class PartitionState {
         return "PartitionState(controllerEpoch=" + controllerEpoch +
                 ", leader=" + leader +
                 ", leaderEpoch=" + leaderEpoch +
-                ", isr=" + Arrays.toString(isr.toArray()) +
+                ", isr=" + Utils.join(isr, ",") +
                 ", zkVersion=" + zkVersion +
-                ", replicas=" + Arrays.toString(replicas.toArray()) + ")";
+                ", replicas=" + Utils.join(replicas, ",") +
+                ", isNew=" + isNew + ")";
     }
 }

@@ -198,14 +198,14 @@ object ConsoleConsumer extends Logging {
     props.putAll(config.extraConsumerProps)
     props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, if (config.options.has(config.resetBeginningOpt)) "earliest" else "latest")
     props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, config.bootstrapServer)
-    props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, if (config.keyDeserializer != null) config.keyDeserializer else "org.apache.kafka.common.serialization.ByteArrayDeserializer")
-    props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, if (config.valueDeserializer != null) config.valueDeserializer else "org.apache.kafka.common.serialization.ByteArrayDeserializer")
-
+    props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer")
+    props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer")
+    props.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, config.isolationLevel)
     props
   }
 
   class ConsumerConfig(args: Array[String]) {
-    val parser = new OptionParser
+    val parser = new OptionParser(false)
     val topicIdOpt = parser.accepts("topic", "The topic id to consume on.")
       .withRequiredArg
       .describedAs("topic")
@@ -218,7 +218,8 @@ object ConsoleConsumer extends Logging {
       .withRequiredArg
       .describedAs("blacklist")
       .ofType(classOf[String])
-    val partitionIdOpt = parser.accepts("partition", "The partition to consume from.")
+    val partitionIdOpt = parser.accepts("partition", "The partition to consume from. Consumption " +
+      "starts from the end of the partition unless '--offset' is specified.")
       .withRequiredArg
       .describedAs("partition")
       .ofType(classOf[java.lang.Integer])
@@ -264,7 +265,7 @@ object ConsoleConsumer extends Logging {
       "skip it instead of halt.")
     val csvMetricsReporterEnabledOpt = parser.accepts("csv-reporter-enabled", "If set, the CSV metrics reporter will be enabled")
     val metricsDirectoryOpt = parser.accepts("metrics-dir", "If csv-reporter-enable is set, and this parameter is" +
-      "set, the csv metrics will be outputed here")
+      "set, the csv metrics will be output here")
       .withRequiredArg
       .describedAs("metrics directory")
       .ofType(classOf[java.lang.String])
@@ -284,6 +285,13 @@ object ConsoleConsumer extends Logging {
     val enableSystestEventsLoggingOpt = parser.accepts("enable-systest-events",
                                                        "Log lifecycle events of the consumer in addition to logging consumed " +
                                                        "messages. (This is specific for system tests.)")
+    val isolationLevelOpt = parser.accepts("isolation-level",
+        "Set to read_committed in order to filter out transactional messages which are not committed. Set to read_uncommitted" +
+        "to read all messages.")
+      .withRequiredArg()
+      .ofType(classOf[String])
+      .defaultsTo("read_uncommitted")
+
 
     if (args.length == 0)
       CommandLineUtils.printUsageAndDie(parser, "The console consumer is a tool that reads data from Kafka and outputs it to standard output.")
@@ -314,7 +322,15 @@ object ConsoleConsumer extends Logging {
     val bootstrapServer = options.valueOf(bootstrapServerOpt)
     val keyDeserializer = options.valueOf(keyDeserializerOpt)
     val valueDeserializer = options.valueOf(valueDeserializerOpt)
+    val isolationLevel = options.valueOf(isolationLevelOpt).toString
     val formatter: MessageFormatter = messageFormatterClass.newInstance().asInstanceOf[MessageFormatter]
+
+    if (keyDeserializer != null && !keyDeserializer.isEmpty) {
+      formatterArgs.setProperty(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializer)
+    }
+    if (valueDeserializer != null && !valueDeserializer.isEmpty) {
+      formatterArgs.setProperty(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializer)
+    }
     formatter.init(formatterArgs)
 
     if (useOldConsumer) {

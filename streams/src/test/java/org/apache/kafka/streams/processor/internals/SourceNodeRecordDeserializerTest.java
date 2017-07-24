@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.junit.Test;
@@ -42,21 +43,21 @@ public class SourceNodeRecordDeserializerTest {
     @Test(expected = StreamsException.class)
     public void shouldThrowStreamsExceptionIfKeyFailsToDeserialize() throws Exception {
         final SourceNodeRecordDeserializer recordDeserializer = new SourceNodeRecordDeserializer(
-                new TheSourceNode(true, false));
+                new TheSourceNode(true, false), null);
         recordDeserializer.deserialize(rawRecord);
     }
 
     @Test(expected = StreamsException.class)
     public void shouldThrowStreamsExceptionIfKeyValueFailsToDeserialize() throws Exception {
         final SourceNodeRecordDeserializer recordDeserializer = new SourceNodeRecordDeserializer(
-                new TheSourceNode(false, true));
+                new TheSourceNode(false, true), null);
         recordDeserializer.deserialize(rawRecord);
     }
 
     @Test
     public void shouldReturnNewConsumerRecordWithDeserializedValueWhenNoExceptions() throws Exception {
         final SourceNodeRecordDeserializer recordDeserializer = new SourceNodeRecordDeserializer(
-                new TheSourceNode(false, false, "key", "value"));
+                new TheSourceNode(false, false, "key", "value"), null);
         final ConsumerRecord<Object, Object> record = recordDeserializer.deserialize(rawRecord);
         assertEquals(rawRecord.topic(), record.topic());
         assertEquals(rawRecord.partition(), record.partition());
@@ -91,7 +92,7 @@ public class SourceNodeRecordDeserializerTest {
         }
 
         @Override
-        public Object deserializeKey(final String topic, final byte[] data) {
+        public Object deserializeKey(final String topic, final Headers headers, final byte[] data) {
             if (keyThrowsException) {
                 throw new RuntimeException();
             }
@@ -99,7 +100,7 @@ public class SourceNodeRecordDeserializerTest {
         }
 
         @Override
-        public Object deserializeValue(final String topic, final byte[] data) {
+        public Object deserializeValue(final String topic, final Headers headers, final byte[] data) {
             if (valueThrowsException) {
                 throw new RuntimeException();
             }

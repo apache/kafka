@@ -24,6 +24,8 @@ import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.PunctuationType;
+import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -56,9 +58,24 @@ public class WordCountProcessorDemo {
 
                 @Override
                 @SuppressWarnings("unchecked")
-                public void init(ProcessorContext context) {
+                public void init(final ProcessorContext context) {
                     this.context = context;
-                    this.context.schedule(1000);
+                    this.context.schedule(1000, PunctuationType.STREAM_TIME, new Punctuator() {
+                        @Override
+                        public void punctuate(long timestamp) {
+                            try (KeyValueIterator<String, Integer> iter = kvStore.all()) {
+                                System.out.println("----------- " + timestamp + " ----------- ");
+
+                                while (iter.hasNext()) {
+                                    KeyValue<String, Integer> entry = iter.next();
+
+                                    System.out.println("[" + entry.key + ", " + entry.value + "]");
+
+                                    context.forward(entry.key, entry.value.toString());
+                                }
+                            }
+                        }
+                    });
                     this.kvStore = (KeyValueStore<String, Integer>) context.getStateStore("Counts");
                 }
 
@@ -80,19 +97,8 @@ public class WordCountProcessorDemo {
                 }
 
                 @Override
-                public void punctuate(long timestamp) {
-                    try (KeyValueIterator<String, Integer> iter = this.kvStore.all()) {
-                        System.out.println("----------- " + timestamp + " ----------- ");
-
-                        while (iter.hasNext()) {
-                            KeyValue<String, Integer> entry = iter.next();
-
-                            System.out.println("[" + entry.key + ", " + entry.value + "]");
-
-                            context.forward(entry.key, entry.value.toString());
-                        }
-                    }
-                }
+                @Deprecated
+                public void punctuate(long timestamp) {}
 
                 @Override
                 public void close() {}
@@ -104,8 +110,9 @@ public class WordCountProcessorDemo {
         Properties props = new Properties();
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "streams-wordcount-processor");
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
-        props.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
-        props.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+        props.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
+        props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+        props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
 
         // setting offset reset to earliest so that we can re-run the demo code with the same pre-loaded data
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");

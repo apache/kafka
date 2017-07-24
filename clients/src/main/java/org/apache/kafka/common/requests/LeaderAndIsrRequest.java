@@ -45,6 +45,7 @@ public class LeaderAndIsrRequest extends AbstractRequest {
     private static final String ISR_KEY_NAME = "isr";
     private static final String ZK_VERSION_KEY_NAME = "zk_version";
     private static final String REPLICAS_KEY_NAME = "replicas";
+    private static final String IS_NEW_KEY_NAME = "is_new";
 
     // live_leaders key names
     private static final String END_POINT_ID_KEY_NAME = "id";
@@ -57,9 +58,9 @@ public class LeaderAndIsrRequest extends AbstractRequest {
         private final Map<TopicPartition, PartitionState> partitionStates;
         private final Set<Node> liveLeaders;
 
-        public Builder(int controllerId, int controllerEpoch,
+        public Builder(short version, int controllerId, int controllerEpoch,
                        Map<TopicPartition, PartitionState> partitionStates, Set<Node> liveLeaders) {
-            super(ApiKeys.LEADER_AND_ISR);
+            super(ApiKeys.LEADER_AND_ISR, version);
             this.controllerId = controllerId;
             this.controllerEpoch = controllerEpoch;
             this.partitionStates = partitionStates;
@@ -118,13 +119,13 @@ public class LeaderAndIsrRequest extends AbstractRequest {
             int zkVersion = partitionStateData.getInt(ZK_VERSION_KEY_NAME);
 
             Object[] replicasArray = partitionStateData.getArray(REPLICAS_KEY_NAME);
-            Set<Integer> replicas = new HashSet<>(replicasArray.length);
+            List<Integer> replicas = new ArrayList<>(replicasArray.length);
             for (Object r : replicasArray)
                 replicas.add((Integer) r);
+            boolean isNew = partitionStateData.hasField(IS_NEW_KEY_NAME) ? partitionStateData.getBoolean(IS_NEW_KEY_NAME) : false;
 
-            PartitionState partitionState = new PartitionState(controllerEpoch, leader, leaderEpoch, isr, zkVersion, replicas);
+            PartitionState partitionState = new PartitionState(controllerEpoch, leader, leaderEpoch, isr, zkVersion, replicas, isNew);
             partitionStates.put(new TopicPartition(topic, partition), partitionState);
-
         }
 
         Set<Node> leaders = new HashSet<>();
@@ -162,6 +163,8 @@ public class LeaderAndIsrRequest extends AbstractRequest {
             partitionStateData.set(ISR_KEY_NAME, partitionState.isr.toArray());
             partitionStateData.set(ZK_VERSION_KEY_NAME, partitionState.zkVersion);
             partitionStateData.set(REPLICAS_KEY_NAME, partitionState.replicas.toArray());
+            if (partitionStateData.hasField(IS_NEW_KEY_NAME))
+                partitionStateData.set(IS_NEW_KEY_NAME, partitionState.isNew);
             partitionStatesData.add(partitionStateData);
         }
         struct.set(PARTITION_STATES_KEY_NAME, partitionStatesData.toArray());
@@ -179,7 +182,7 @@ public class LeaderAndIsrRequest extends AbstractRequest {
     }
 
     @Override
-    public AbstractResponse getErrorResponse(Throwable e) {
+    public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         Map<TopicPartition, Errors> responses = new HashMap<>(partitionStates.size());
         for (TopicPartition partition : partitionStates.keySet()) {
             responses.put(partition, Errors.forException(e));
@@ -188,6 +191,7 @@ public class LeaderAndIsrRequest extends AbstractRequest {
         short versionId = version();
         switch (versionId) {
             case 0:
+            case 1:
                 return new LeaderAndIsrResponse(Errors.NONE, responses);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",

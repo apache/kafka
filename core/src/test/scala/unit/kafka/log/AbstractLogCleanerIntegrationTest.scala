@@ -20,6 +20,7 @@ import java.io.File
 import java.nio.file.Files
 import java.util.Properties
 
+import kafka.server.{BrokerTopicStats, LogDirFailureChannel}
 import kafka.utils.{MockTime, Pool, TestUtils}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.utils.Utils
@@ -90,12 +91,13 @@ abstract class AbstractLogCleanerIntegrationTest {
         compactionLag = compactionLag,
         deleteDelay = deleteDelay,
         segmentSize = segmentSize))
-      val log = new Log(dir,
+      val log = Log(dir,
         logConfig,
         logStartOffset = 0L,
         recoveryPoint = 0L,
         scheduler = time.scheduler,
-        time = time)
+        time = time,
+        brokerTopicStats = new BrokerTopicStats)
       logMap.put(partition, log)
       this.logs += log
     }
@@ -108,6 +110,7 @@ abstract class AbstractLogCleanerIntegrationTest {
     new LogCleaner(cleanerConfig,
       logDirs = Array(logDir),
       logs = logMap,
+      logDirFailureChannel = new LogDirFailureChannel(1),
       time = time)
   }
 }

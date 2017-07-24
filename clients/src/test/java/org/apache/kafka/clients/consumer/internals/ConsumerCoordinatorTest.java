@@ -119,7 +119,7 @@ public class ConsumerCoordinatorTest {
     public void setup() {
         this.time = new MockTime();
         this.subscriptions = new SubscriptionState(OffsetResetStrategy.EARLIEST);
-        this.metadata = new Metadata(0, Long.MAX_VALUE);
+        this.metadata = new Metadata(0, Long.MAX_VALUE, true);
         this.metadata.update(cluster, Collections.<String>emptySet(), time.milliseconds());
         this.client = new MockClient(time, metadata);
         this.consumerClient = new ConsumerNetworkClient(client, metadata, time, 100, 1000);
@@ -170,7 +170,7 @@ public class ConsumerCoordinatorTest {
 
         client.prepareResponse(joinGroupLeaderResponse(0, "memberId", Collections.<String, List<String>>emptyMap(),
                 Errors.GROUP_AUTHORIZATION_FAILED));
-        coordinator.poll(time.milliseconds());
+        coordinator.poll(time.milliseconds(), Long.MAX_VALUE);
     }
 
     @Test
@@ -299,7 +299,7 @@ public class ConsumerCoordinatorTest {
 
         client.prepareResponse(joinGroupLeaderResponse(0, consumerId, Collections.<String, List<String>>emptyMap(),
                 Errors.INVALID_GROUP_ID));
-        coordinator.poll(time.milliseconds());
+        coordinator.poll(time.milliseconds(), Long.MAX_VALUE);
     }
 
     @Test
@@ -329,7 +329,7 @@ public class ConsumerCoordinatorTest {
                         sync.groupAssignment().containsKey(consumerId);
             }
         }, syncGroupResponse(singletonList(t1p), Errors.NONE));
-        coordinator.poll(time.milliseconds());
+        coordinator.poll(time.milliseconds(), Long.MAX_VALUE);
 
         assertFalse(coordinator.needRejoin());
         assertEquals(singleton(t1p), subscriptions.assignedPartitions());
@@ -371,7 +371,7 @@ public class ConsumerCoordinatorTest {
         // expect client to force updating the metadata, if yes gives it both topics
         client.prepareMetadataUpdate(cluster, Collections.<String>emptySet());
 
-        coordinator.poll(time.milliseconds());
+        coordinator.poll(time.milliseconds(), Long.MAX_VALUE);
 
         assertFalse(coordinator.needRejoin());
         assertEquals(2, subscriptions.assignedPartitions().size());
@@ -434,7 +434,7 @@ public class ConsumerCoordinatorTest {
         }, joinGroupLeaderResponse(2, consumerId, updatedSubscriptions, Errors.NONE));
         client.prepareResponse(syncGroupResponse(newAssignment, Errors.NONE));
 
-        coordinator.poll(time.milliseconds());
+        coordinator.poll(time.milliseconds(), Long.MAX_VALUE);
 
         assertFalse(coordinator.needRejoin());
         assertEquals(updatedSubscriptionSet, subscriptions.subscription());
@@ -466,14 +466,14 @@ public class ConsumerCoordinatorTest {
         consumerClient.wakeup();
 
         try {
-            coordinator.poll(time.milliseconds());
+            coordinator.poll(time.milliseconds(), Long.MAX_VALUE);
         } catch (WakeupException e) {
             // ignore
         }
 
         // now complete the second half
         client.prepareResponse(syncGroupResponse(singletonList(t1p), Errors.NONE));
-        coordinator.poll(time.milliseconds());
+        coordinator.poll(time.milliseconds(), Long.MAX_VALUE);
 
         assertFalse(coordinator.needRejoin());
         assertEquals(singleton(t1p), subscriptions.assignedPartitions());
@@ -621,7 +621,7 @@ public class ConsumerCoordinatorTest {
 
         // join initially, but let coordinator rebalance on sync
         client.prepareResponse(joinGroupFollowerResponse(1, consumerId, "leader", Errors.NONE));
-        client.prepareResponse(syncGroupResponse(Collections.<TopicPartition>emptyList(), Errors.UNKNOWN));
+        client.prepareResponse(syncGroupResponse(Collections.<TopicPartition>emptyList(), Errors.UNKNOWN_SERVER_ERROR));
         coordinator.joinGroupIfNeeded();
     }
 
@@ -726,7 +726,7 @@ public class ConsumerCoordinatorTest {
         client.prepareResponse(joinGroupLeaderResponse(1, consumerId, memberSubscriptions, Errors.NONE));
         client.prepareResponse(syncGroupResponse(singletonList(t1p), Errors.NONE));
 
-        coordinator.poll(time.milliseconds());
+        coordinator.poll(time.milliseconds(), Long.MAX_VALUE);
 
         assertFalse(coordinator.needRejoin());
 
@@ -783,7 +783,7 @@ public class ConsumerCoordinatorTest {
         client.prepareResponse(joinGroupLeaderResponse(2, consumerId, memberSubscriptions, Errors.NONE));
         client.prepareResponse(syncGroupResponse(Arrays.asList(tp1, tp2), Errors.NONE));
 
-        coordinator.poll(time.milliseconds());
+        coordinator.poll(time.milliseconds(), Long.MAX_VALUE);
 
         assertFalse(coordinator.needRejoin());
         assertEquals(new HashSet<>(Arrays.asList(tp1, tp2)), subscriptions.assignedPartitions());
@@ -830,7 +830,7 @@ public class ConsumerCoordinatorTest {
 
         client.prepareResponse(joinGroupLeaderResponse(1, consumerId, memberSubscriptions, Errors.NONE));
         client.prepareResponse(syncGroupResponse(Collections.<TopicPartition>emptyList(), Errors.NONE));
-        coordinator.poll(time.milliseconds());
+        coordinator.poll(time.milliseconds(), Long.MAX_VALUE);
         if (!assign) {
             assertFalse(coordinator.needRejoin());
             assertEquals(Collections.<TopicPartition>emptySet(), rebalanceListener.assigned);
@@ -841,7 +841,7 @@ public class ConsumerCoordinatorTest {
         client.poll(0, time.milliseconds());
         client.prepareResponse(joinGroupLeaderResponse(2, consumerId, memberSubscriptions, Errors.NONE));
         client.prepareResponse(syncGroupResponse(singletonList(t1p), Errors.NONE));
-        coordinator.poll(time.milliseconds());
+        coordinator.poll(time.milliseconds(), Long.MAX_VALUE);
 
         assertFalse("Metadata refresh requested unnecessarily", metadata.updateRequested());
         if (!assign) {
@@ -970,7 +970,7 @@ public class ConsumerCoordinatorTest {
 
         client.prepareResponse(offsetCommitResponse(Collections.singletonMap(t1p, Errors.NONE)));
         time.sleep(autoCommitIntervalMs);
-        coordinator.poll(time.milliseconds());
+        coordinator.poll(time.milliseconds(), Long.MAX_VALUE);
 
         assertEquals(100L, subscriptions.committed(t1p).offset());
     }
@@ -999,7 +999,7 @@ public class ConsumerCoordinatorTest {
 
         client.prepareResponse(offsetCommitResponse(Collections.singletonMap(t1p, Errors.NONE)));
         time.sleep(autoCommitIntervalMs);
-        coordinator.poll(time.milliseconds());
+        coordinator.poll(time.milliseconds(), Long.MAX_VALUE);
 
         assertEquals(100L, subscriptions.committed(t1p).offset());
     }
@@ -1017,7 +1017,7 @@ public class ConsumerCoordinatorTest {
 
         client.prepareResponse(offsetCommitResponse(Collections.singletonMap(t1p, Errors.NONE)));
         time.sleep(autoCommitIntervalMs);
-        coordinator.poll(time.milliseconds());
+        coordinator.poll(time.milliseconds(), Long.MAX_VALUE);
 
         assertEquals(100L, subscriptions.committed(t1p).offset());
     }
@@ -1044,7 +1044,7 @@ public class ConsumerCoordinatorTest {
         // sleep only for the retry backoff
         time.sleep(retryBackoffMs);
         client.prepareResponse(offsetCommitResponse(Collections.singletonMap(t1p, Errors.NONE)));
-        coordinator.poll(time.milliseconds());
+        coordinator.poll(time.milliseconds(), Long.MAX_VALUE);
 
         assertEquals(100L, subscriptions.committed(t1p).offset());
     }
@@ -1267,7 +1267,7 @@ public class ConsumerCoordinatorTest {
         coordinator.ensureCoordinatorReady();
 
         // sync commit with invalid partitions should throw if we have no callback
-        client.prepareResponse(offsetCommitResponse(Collections.singletonMap(t1p, Errors.UNKNOWN)), false);
+        client.prepareResponse(offsetCommitResponse(Collections.singletonMap(t1p, Errors.UNKNOWN_SERVER_ERROR)), false);
         coordinator.commitOffsetsSync(Collections.singletonMap(t1p, new OffsetAndMetadata(100L)), Long.MAX_VALUE);
     }
 
@@ -1285,6 +1285,13 @@ public class ConsumerCoordinatorTest {
         coordinator.invokeCompletedOffsetCommitCallbacks();
         assertEquals(invokedBeforeTest + 1, mockOffsetCommitCallback.invoked);
         assertTrue(mockOffsetCommitCallback.exception instanceof IllegalArgumentException);
+    }
+
+    @Test
+    public void testCommitOffsetSyncWithoutFutureGetsCompleted() {
+        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        coordinator.ensureCoordinatorReady();
+        assertFalse(coordinator.commitOffsetsSync(Collections.singletonMap(t1p, new OffsetAndMetadata(100L)), 0));
     }
 
     @Test
@@ -1508,7 +1515,7 @@ public class ConsumerCoordinatorTest {
             subscriptions.assignFromUser(singleton(t1p));
 
         subscriptions.seek(t1p, 100);
-        coordinator.poll(time.milliseconds());
+        coordinator.poll(time.milliseconds(), Long.MAX_VALUE);
 
         return coordinator;
     }

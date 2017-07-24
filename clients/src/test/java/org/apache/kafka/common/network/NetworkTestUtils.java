@@ -36,7 +36,7 @@ public class NetworkTestUtils {
 
     public static NioEchoServer createEchoServer(ListenerName listenerName, SecurityProtocol securityProtocol,
                                                  AbstractConfig serverConfig) throws Exception {
-        NioEchoServer server = new NioEchoServer(listenerName, securityProtocol, serverConfig, "localhost");
+        NioEchoServer server = new NioEchoServer(listenerName, securityProtocol, serverConfig, "localhost", null);
         server.start();
         return server;
     }
@@ -77,7 +77,7 @@ public class NetworkTestUtils {
         assertTrue(selector.isChannelReady(node));
     }
 
-    public static void waitForChannelClose(Selector selector, String node) throws IOException {
+    public static void waitForChannelClose(Selector selector, String node, ChannelState channelState) throws IOException {
         boolean closed = false;
         for (int i = 0; i < 30; i++) {
             selector.poll(1000L);
@@ -87,5 +87,6 @@ public class NetworkTestUtils {
             }
         }
         assertTrue("Channel was not closed by timeout", closed);
+        assertEquals(channelState, selector.disconnected().get(node));
     }
 }
