@@ -73,7 +73,8 @@ import java.util.Set;
 
 public class SaslServerAuthenticator implements Authenticator {
 
-    private static final int MAX_RECEIVE_SIZE = 131072; // Chosen as twice the max receive size for GSSAPI
+    // GSSAPI limits requests to 64K, but we allow a bit extra for custom SASL mechanisms
+    private static final int MAX_RECEIVE_SIZE = 524288;
     private static final Logger LOG = LoggerFactory.getLogger(SaslServerAuthenticator.class);
 
     public enum SaslState {
