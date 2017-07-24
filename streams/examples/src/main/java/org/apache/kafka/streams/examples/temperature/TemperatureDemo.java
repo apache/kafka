@@ -57,8 +57,8 @@ import java.util.concurrent.TimeUnit;
  *
  * bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic iot-temperature-max --from-beginning
  *
- * On the other side, a console producer can be used for sending temperature values to "iot-temperature" typing them
- * on the console :
+ * On the other side, a console producer can be used for sending temperature values (which needs to be integers)
+ * to "iot-temperature" typing them on the console :
  *
  * bin/kafka-console-producer.sh --broker-list localhost:9092 --topic iot-temperature
  * > 10
