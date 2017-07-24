@@ -21,7 +21,6 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.streams.KafkaStreams;
-import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
@@ -35,21 +34,43 @@ import org.apache.kafka.streams.kstream.internals.WindowedSerializer;
 
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Demonstrates, using the high-level KStream DSL, how to implement an IoT demo application
- * which ingests temperature value processing the maximum value in the latest 5 seconds sending
- * a new message if it exceeds 20
+ * which ingests temperature value processing the maximum value in the latest TEMPERATURE_WINDOW_SIZE seconds (which
+ * is 5 seconds) sending a new message if it exceeds the TEMPERATURE_THRESHOLD (which is 20)
  *
- * In this example, the input stream reads from a topic named "temperature", where the values of messages
- * represent temperature values; using a 5 seconds "tumbling" window, the maximum value is processed and
- * sent to a topic named "max" if it exceeds 20
+ * In this example, the input stream reads from a topic named "iot-temperature", where the values of messages
+ * represent temperature values; using a TEMPERATURE_WINDOW_SIZE seconds "tumbling" window, the maximum value is processed and
+ * sent to a topic named "iot-temperature-max" if it exceeds the TEMPERATURE_THRESHOLD.
  *
- * Before running this example you must create the input topic and the output topic (e.g. via
- * bin/kafka-topics.sh --create ...), and write some data to the input topic (e.g. via
- * bin/kafka-console-producer.sh). Otherwise you won't see any data arriving in the output topic.
+ * Before running this example you must create the input topic for temperature values in the following way :
+ *
+ * bin/kafka-topics.sh --create --zookeeper localhost:2181 --replication-factor 1 --partitions 1 --topic iot-temperature
+ *
+ * and at same time the output topic for filtered values :
+ *
+ * bin/kaftopics.sh --create --zookeeper localhost:2181 --replication-factor 1 --partitions 1 --topic iot-temperature-max
+ *
+ * After that, a console consumer can be started in order to read filtered values from the "iot-temperature-max" topic :
+ *
+ * bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic iot-temperature-max --from-beginning
+ *
+ * On the other side, a console producer can be used for sending temperature values to "iot-temperature" typing them
+ * on the console :
+ *
+ * bin/kafka-console-producer.sh --broker-list localhost:9092 --topic iot-temperature
+ * > 10
+ * > 15
+ * > 22
  */
 public class TemperatureDemo {
+
+    // threshold used for filtering max temperature values
+    private static final int TEMPERATURE_THRESHOLD = 20;
+    // window size within which the filtering is applied
+    private static final int TEMPERATURE_WINDOW_SIZE = 5;
 
     public static void main(String[] args) throws Exception {
 
@@ -64,13 +85,15 @@ public class TemperatureDemo {
 
         KStreamBuilder builder = new KStreamBuilder();
 
-        KStream<String, String> source = builder.stream("temperature");
+        KStream<String, String> source = builder.stream("iot-temperature");
 
         KStream<Windowed<String>, String> max = source
-                .map(new KeyValueMapper<String, String, KeyValue<String, String>>() {
+                // temperature values are sent without a key (null), so in order
+                // to group and reduce them, a key is needed ("temp" has been chosen)
+                .selectKey(new KeyValueMapper<String, String, String>() {
                     @Override
-                    public KeyValue<String, String> apply(String key, String value) {
-                        return new KeyValue<>("temp", value);
+                    public String apply(String key, String value) {
+                        return "temp";
                     }
                 })
                 .groupByKey()
@@ -82,12 +105,12 @@ public class TemperatureDemo {
                         else
                             return value2;
                     }
-                }, TimeWindows.of(5000))
+                }, TimeWindows.of(TimeUnit.SECONDS.toMillis(TEMPERATURE_WINDOW_SIZE)))
                 .toStream()
                 .filter(new Predicate<Windowed<String>, String>() {
                     @Override
                     public boolean test(Windowed<String> key, String value) {
-                        return Integer.parseInt(value) > 20;
+                        return Integer.parseInt(value) > TEMPERATURE_THRESHOLD;
                     }
                 });
 
@@ -96,7 +119,7 @@ public class TemperatureDemo {
         Serde<Windowed<String>> windowedSerde = Serdes.serdeFrom(windowedSerializer, windowedDeserializer);
 
         // need to override key serde to Windowed<String> type
-        max.to(windowedSerde, Serdes.String(), "max");
+        max.to(windowedSerde, Serdes.String(), "iot-temperature-max");
 
         final KafkaStreams streams = new KafkaStreams(builder, props);
         final CountDownLatch latch = new CountDownLatch(1);
