@@ -258,7 +258,12 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     public void print(Serde<K> keySerde, final Serde<V> valSerde, String label) {
         Objects.requireNonNull(label, "label can't be null");
         String name = topology.newName(PRINTING_NAME);
+<<<<<<< b2c8e0030d1be0c1ce647e59f6545c87659e3f47
         topology.addProcessor(name, new KStreamPrint<>(new PrintForeachAction(null, defaultKeyValueMapper, label), keySerde, valSerde), this.name);
+=======
+        streamName = (streamName == null) ? this.name : streamName;
+        topology.addProcessor(name, new KStreamPeek<>(keySerde, valSerde, streamName), this.name);
+>>>>>>> replace KeyValuePrinter and KStreamForeach with KStreamPeek
     }
 
     @Override
@@ -289,7 +294,11 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         String name = topology.newName(PRINTING_NAME);
         try {
             PrintWriter printWriter = new PrintWriter(filePath, StandardCharsets.UTF_8.name());
+<<<<<<< b2c8e0030d1be0c1ce647e59f6545c87659e3f47
             topology.addProcessor(name, new KStreamPrint<>(new PrintForeachAction(printWriter, defaultKeyValueMapper, label), keySerde, valSerde), this.name);
+=======
+            topology.addProcessor(name, new KStreamPeek<>(printWriter, keySerde, valSerde, streamName), this.name);
+>>>>>>> replace KeyValuePrinter and KStreamForeach with KStreamPeek
         } catch (FileNotFoundException | UnsupportedEncodingException e) {
             String message = "Unable to write stream to file at [" + filePath + "] " + e.getMessage();
             throw new TopologyBuilderException(message);
