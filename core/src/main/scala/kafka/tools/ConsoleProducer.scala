@@ -282,9 +282,9 @@ object ConsoleProducer {
     val metadataExpiryMs = options.valueOf(metadataExpiryMsOpt)
     val maxBlockMs = options.valueOf(maxBlockMsOpt)
 
-    // if no client.id specified through the producer property options, a random one is generated
-    if (!extraProducerProps.containsKey(ProducerConfig.CLIENT_ID_CONFIG)) {
-      extraProducerProps.put(ProducerConfig.CLIENT_ID_CONFIG, s"console-producer-${new Random().nextInt(100000)}");
+    // if no client.id is specified, the fixed one is used
+    if (!producerProps.containsKey(ProducerConfig.CLIENT_ID_CONFIG)) {
+      producerProps.put(ProducerConfig.CLIENT_ID_CONFIG, "console-producer")
     }
   }
 
