@@ -755,7 +755,7 @@ public class KafkaStreams {
                     globalStreamThread.setUncaughtExceptionHandler(eh);
                 }
             } else {
-                throw new IllegalStateException("Can only set UncaughtExceptionHandler in CREATE state.");
+                throw new IllegalStateException("Can only set UncaughtExceptionHandler in CREATED state.");
             }
         }
     }
