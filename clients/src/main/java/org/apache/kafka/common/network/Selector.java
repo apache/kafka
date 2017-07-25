@@ -108,6 +108,8 @@ public class Selector implements Selectable, AutoCloseable {
     private final IdleExpiryManager idleExpiryManager;
     private final MemoryPool memoryPool;
     private final long lowMemThreshold;
+    //indicates if the previous call to poll was able to make progress in reading already-buffered data.
+    //this is used to prevent tight loops when memory is not available to read any more data
     private boolean madeReadProgressLastPoll = true;
 
     /**
@@ -413,7 +415,6 @@ public class Selector implements Selectable, AutoCloseable {
                                 socketChannel.socket().getSendBufferSize(),
                                 socketChannel.socket().getSoTimeout(),
                                 channel.id());
-                        madeReadProgressLastPoll = true;
                     } else
                         continue;
                 }
@@ -421,7 +422,6 @@ public class Selector implements Selectable, AutoCloseable {
                 /* if channel is not ready finish prepare */
                 if (channel.isConnected() && !channel.ready()) {
                     channel.prepare();
-                    madeReadProgressLastPoll = true;
                 }
 
                 attemptRead(key, channel);
