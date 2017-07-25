@@ -50,6 +50,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 public class StreamsConfigTest {
 
@@ -428,63 +429,55 @@ public class StreamsConfigTest {
         assertTrue(config.defaultTimestampExtractor() instanceof FailOnInvalidTimestamp);
     }
 
-    @Test(expected = StreamsException.class)
+    @Test
     public void shouldSpecifyCorrectKeySerdeClassOnErrorUsingDeprecatedConfigs() {
         final Properties props = minimalStreamsConfig();
         props.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG, MisconfiguredSerde.class);
+        final StreamsConfig config = new StreamsConfig(props);
         try {
-            final StreamsConfig config = new StreamsConfig(props);
             config.keySerde();
+            fail("Test should throw a StreamsException");
         } catch (StreamsException e) {
-            assertEquals(
-                "Failed to configure key serde class org.apache.kafka.streams.StreamsConfigTest$MisconfiguredSerde",
-                e.getMessage());
-            throw e;
+            assertEquals("Failed to configure key serde class org.apache.kafka.streams.StreamsConfigTest$MisconfiguredSerde", e.getMessage());
         }
     }
 
-    @Test(expected = StreamsException.class)
+    @Test
     public void shouldSpecifyCorrectKeySerdeClassOnError() {
         final Properties props = minimalStreamsConfig();
         props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, MisconfiguredSerde.class);
+        final StreamsConfig config = new StreamsConfig(props);
         try {
-            final StreamsConfig config = new StreamsConfig(props);
             config.keySerde();
+            fail("Test should throw a StreamsException");
         } catch (StreamsException e) {
-            assertEquals(
-                "Failed to configure key serde class org.apache.kafka.streams.StreamsConfigTest$MisconfiguredSerde",
-                e.getMessage());
-            throw e;
+            assertEquals("Failed to configure key serde class org.apache.kafka.streams.StreamsConfigTest$MisconfiguredSerde", e.getMessage());
         }
     }
 
-    @Test(expected = StreamsException.class)
+    @Test
     public void shouldSpecifyCorrectValueSerdeClassOnErrorUsingDeprecatedConfigs() {
         final Properties props = minimalStreamsConfig();
         props.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, MisconfiguredSerde.class);
+        final StreamsConfig config = new StreamsConfig(props);
         try {
-            final StreamsConfig config = new StreamsConfig(props);
             config.valueSerde();
+            fail("Test should throw a StreamsException");
         } catch (StreamsException e) {
-            assertEquals(
-                "Failed to configure value serde class org.apache.kafka.streams.StreamsConfigTest$MisconfiguredSerde",
-                e.getMessage());
-            throw e;
+            assertEquals("Failed to configure value serde class org.apache.kafka.streams.StreamsConfigTest$MisconfiguredSerde", e.getMessage());
         }
     }
 
-    @Test(expected = StreamsException.class)
+    @Test
     public void shouldSpecifyCorrectValueSerdeClassOnError() {
         final Properties props = minimalStreamsConfig();
         props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, MisconfiguredSerde.class);
+        final StreamsConfig config = new StreamsConfig(props);
         try {
-            final StreamsConfig config = new StreamsConfig(props);
             config.valueSerde();
+            fail("Test should throw a StreamsException");
         } catch (StreamsException e) {
-            assertEquals(
-                "Failed to configure value serde class org.apache.kafka.streams.StreamsConfigTest$MisconfiguredSerde",
-                e.getMessage());
-            throw e;
+            assertEquals("Failed to configure value serde class org.apache.kafka.streams.StreamsConfigTest$MisconfiguredSerde", e.getMessage());
         }
     }
 
