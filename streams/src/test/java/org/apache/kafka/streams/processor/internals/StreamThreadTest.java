@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -1592,6 +1593,62 @@ public class StreamThreadTest {
         // store should be closed even if we had an exception
         assertFalse(stateStore.isOpen());
     }
+
+    @Test
+    public void shouldCaptureCommitFailedExceptionOnTaskSuspension() throws Exception {
+        final KStreamBuilder builder = new KStreamBuilder();
+        builder.stream("t1");
+
+        final TestStreamTask testStreamTask = new TestStreamTask(
+                new TaskId(0, 0),
+                applicationId,
+                Utils.mkSet(new TopicPartition("t1", 0)),
+                builder.build(0),
+                clientSupplier.consumer,
+                clientSupplier.getProducer(new HashMap<String, Object>()),
+                clientSupplier.restoreConsumer,
+                config,
+                new MockStreamsMetrics(new Metrics()),
+                new StateDirectory(applicationId, config.getString(StreamsConfig.STATE_DIR_CONFIG), mockTime)) {
+
+            @Override
+            public void suspend() {
+                throw new CommitFailedException();
+            }
+        };
+
+        final StreamThread thread = new StreamThread(
+                builder,
+                config,
+                clientSupplier,
+                applicationId,
+                clientId,
+                processId,
+                metrics,
+                mockTime,
+                new StreamsMetadataState(builder, StreamsMetadataState.UNKNOWN_HOST),
+                0) {
+
+            @Override
+            protected StreamTask createStreamTask(final TaskId id, final Collection<TopicPartition> partitions) {
+                return testStreamTask;
+            }
+        };
+
+
+        final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
+        activeTasks.put(testStreamTask.id(), testStreamTask.partitions);
+
+        thread.setPartitionAssignor(new MockStreamsPartitionAssignor(activeTasks));
+
+        thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
+        thread.rebalanceListener.onPartitionsAssigned(testStreamTask.partitions);
+
+        thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
+
+        assertFalse(testStreamTask.committed);
+    }
+
 
     @Test
     public void shouldNotViolateAtLeastOnceWhenExceptionOccursDuringTaskSuspension() throws Exception {

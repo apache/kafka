@@ -262,7 +262,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     @Override
     public void commit() {
         commit(true);
-
     }
 
     // visible for testing
@@ -344,6 +343,30 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         }
     }
 
+    private void closeTopology() {
+        log.trace("{} Closing processor topology", logPrefix);
+
+        partitionGroup.clear();
+
+        // close the processors
+        // make sure close() is called for each node even when there is a RuntimeException
+        RuntimeException exception = null;
+        for (final ProcessorNode node : topology.processors()) {
+            processorContext.setCurrentNode(node);
+            try {
+                node.close();
+            } catch (final RuntimeException e) {
+                exception = e;
+            } finally {
+                processorContext.setCurrentNode(null);
+            }
+        }
+
+        if (exception != null) {
+            throw exception;
+        }
+    }
+
     /**
      * <pre>
      * - close topology
@@ -373,30 +396,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         closeTopology(); // should we call this only on clean suspend?
         if (clean) {
             commit(false);
-        }
-    }
-
-    private void closeTopology() {
-        log.trace("{} Closing processor topology", logPrefix);
-
-        partitionGroup.clear();
-
-        // close the processors
-        // make sure close() is called for each node even when there is a RuntimeException
-        RuntimeException exception = null;
-        for (final ProcessorNode node : topology.processors()) {
-            processorContext.setCurrentNode(node);
-            try {
-                node.close();
-            } catch (final RuntimeException e) {
-                exception = e;
-            } finally {
-                processorContext.setCurrentNode(null);
-            }
-        }
-
-        if (exception != null) {
-            throw exception;
         }
     }
 
@@ -438,20 +437,20 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         }
     }
 
-        /**
-         * <pre>
-         * - {@link #suspend(boolean) suspend(clean)}
-         *   - close topology
-         *   - if (clean) {@link #commit()}
-         *     - flush state and producer
-         *     - commit offsets
-         * - close state
-         *   - if (clean) write checkpoint
-         * - if (eos) close producer
-         * </pre>
-         * @param clean shut down cleanly (ie, incl. flush and commit) if {@code true} --
-         *              otherwise, just close open resources
-         */
+    /**
+     * <pre>
+     * - {@link #suspend(boolean) suspend(clean)}
+     *   - close topology
+     *   - if (clean) {@link #commit()}
+     *     - flush state and producer
+     *     - commit offsets
+     * - close state
+     *   - if (clean) write checkpoint
+     * - if (eos) close producer
+     * </pre>
+     * @param clean shut down cleanly (ie, incl. flush and commit) if {@code true} --
+     *              otherwise, just close open resources
+     */
     @Override
     public void close(boolean clean) {
         log.debug("{} Closing", logPrefix);
