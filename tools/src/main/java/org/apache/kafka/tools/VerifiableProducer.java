@@ -28,7 +28,10 @@ import org.apache.kafka.clients.producer.RecordMetadata;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.Properties;
 
 import static net.sourceforge.argparse4j.impl.Arguments.store;
@@ -39,7 +42,6 @@ import net.sourceforge.argparse4j.inf.ArgumentParserException;
 import net.sourceforge.argparse4j.inf.Namespace;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Exit;
-import org.apache.kafka.common.utils.Utils;
 
 /**
  * Primarily intended for use with system testing, this producer prints metadata
@@ -153,6 +155,23 @@ public class VerifiableProducer {
         return parser;
     }
     
+    /**
+     * Read a properties file from the given path
+     * @param filename The path of the file to read
+     *
+     * Note: this duplication of org.apache.kafka.common.utils.Utils.loadProps is unfortunate
+     * but *intentional*. In order to use VerifiableProducer in compatibility and upgrade tests,
+     * we use VerifiableProducer from the development tools package, and run it against 0.8.X.X kafka jars.
+     * Since this method is not in Utils in the 0.8.X.X jars, we have to cheat a bit and duplicate.
+     */
+    public static Properties loadProps(String filename) throws IOException, FileNotFoundException {
+        Properties props = new Properties();
+        try (InputStream propStream = new FileInputStream(filename)) {
+            props.load(propStream);
+        }
+        return props;
+    }
+
     /** Construct a VerifiableProducer object from command-line arguments. */
     public static VerifiableProducer createFromArgs(ArgumentParser parser, String[] args) throws ArgumentParserException {
         Namespace res = parser.parseArgs(args);
@@ -166,7 +185,7 @@ public class VerifiableProducer {
         Properties producerProps = new Properties();
         if (configFile != null) {
             try {
-                producerProps.putAll(Utils.loadProps(configFile));
+                producerProps.putAll(loadProps(configFile));
             } catch (IOException e) {
                 throw new ArgumentParserException(e.getMessage(), parser);
             }
