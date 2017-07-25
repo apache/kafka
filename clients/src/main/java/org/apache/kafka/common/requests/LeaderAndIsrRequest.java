@@ -224,12 +224,12 @@ public class LeaderAndIsrRequest extends AbstractRequest {
         public final boolean isNew;
 
         public PartitionState(int controllerEpoch,
-                                          int leader,
-                                          int leaderEpoch,
-                                          List<Integer> isr,
-                                          int zkVersion,
-                                          List<Integer> replicas,
-                                          boolean isNew) {
+                              int leader,
+                              int leaderEpoch,
+                              List<Integer> isr,
+                              int zkVersion,
+                              List<Integer> replicas,
+                              boolean isNew) {
             this.basePartitionState = new BasePartitionState(controllerEpoch, leader, leaderEpoch, isr, zkVersion, replicas);
             this.isNew = isNew;
         }
