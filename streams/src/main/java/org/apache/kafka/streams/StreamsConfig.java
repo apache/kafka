@@ -789,9 +789,8 @@ public class StreamsConfig extends AbstractConfig {
      * @return an configured instance of value Serde class
      */
     public Serde defaultValueSerde() {
-        Object valueSerdeConfigSetting = null;
+        Object valueSerdeConfigSetting = get(VALUE_SERDE_CLASS_CONFIG);
         try {
-            valueSerdeConfigSetting = get(VALUE_SERDE_CLASS_CONFIG);
             Serde<?> serde = getConfiguredInstance(VALUE_SERDE_CLASS_CONFIG, Serde.class);
             if (serde == null) {
                 valueSerdeConfigSetting = get(DEFAULT_VALUE_SERDE_CLASS_CONFIG);
