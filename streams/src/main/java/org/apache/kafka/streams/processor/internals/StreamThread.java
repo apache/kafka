@@ -34,9 +34,9 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Count;
-import org.apache.kafka.common.metrics.stats.Sum;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Rate;
+import org.apache.kafka.common.metrics.stats.Sum;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.StreamsConfig;
@@ -45,7 +45,6 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskIdFormatException;
 import org.apache.kafka.streams.processor.PartitionGrouper;
 import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.apache.kafka.streams.state.HostInfo;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.slf4j.Logger;
@@ -398,7 +397,7 @@ public class StreamThread extends Thread {
     public final UUID processId;
 
     protected final StreamsConfig config;
-    protected final TopologyBuilder builder;
+    protected final InternalTopologyBuilder builder;
     Producer<byte[], byte[]> threadProducer;
     private final KafkaClientSupplier clientSupplier;
     protected final Consumer<byte[], byte[]> consumer;
@@ -441,7 +440,7 @@ public class StreamThread extends Thread {
     final ConsumerRebalanceListener rebalanceListener;
     private final static int UNLIMITED_RECORDS = -1;
 
-    public StreamThread(final TopologyBuilder builder,
+    public StreamThread(final InternalTopologyBuilder builder,
                         final StreamsConfig config,
                         final KafkaClientSupplier clientSupplier,
                         final String applicationId,
@@ -1135,7 +1134,6 @@ public class StreamThread extends Thread {
         streamsMetrics.removeAllSensors();
     }
 
-    @SuppressWarnings("ThrowableNotThrown")
     private void shutdownTasksAndState(final boolean cleanRun) {
         log.debug("{} Shutting down all active tasks {}, standby tasks {}, suspended tasks {}, and suspended standby tasks {}",
             logPrefix, activeTasks.keySet(), standbyTasks.keySet(),

@@ -416,13 +416,8 @@ class ZookeeperConsumerConnectorTest extends KafkaServerTestHarness with Logging
   }
 
   def getZKChildrenValues(path : String) : Seq[Tuple2[String,String]] = {
-    val children = zkUtils.zkClient.getChildren(path)
-    Collections.sort(children)
-    val childrenAsSeq : Seq[java.lang.String] = {
-      import scala.collection.JavaConversions._
-      children.toSeq
-    }
-    childrenAsSeq.map(partition =>
+    val children = zkUtils.getChildren(path).sorted
+    children.map(partition =>
       (partition, zkUtils.zkClient.readData(path + "/" + partition).asInstanceOf[String]))
   }
 

@@ -370,108 +370,109 @@ public class ClientCompatibilityTest {
         consumerProps.put(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, 512);
         ClientCompatibilityTestDeserializer deserializer =
             new ClientCompatibilityTestDeserializer(testConfig.expectClusterId);
-        final KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(consumerProps, deserializer, deserializer);
-        final List<PartitionInfo> partitionInfos = consumer.partitionsFor(testConfig.topic);
-        if (partitionInfos.size() < 1)
-            throw new RuntimeException("Expected at least one partition for topic " + testConfig.topic);
-        final Map<TopicPartition, Long> timestampsToSearch = new HashMap<>();
-        final LinkedList<TopicPartition> topicPartitions = new LinkedList<>();
-        for (PartitionInfo partitionInfo : partitionInfos) {
-            TopicPartition topicPartition = new TopicPartition(partitionInfo.topic(), partitionInfo.partition());
-            timestampsToSearch.put(topicPartition, prodTimeMs);
-            topicPartitions.add(topicPartition);
-        }
-        final OffsetsForTime offsetsForTime = new OffsetsForTime();
-        tryFeature("offsetsForTimes", testConfig.offsetsForTimesSupported,
-                new Invoker() {
-                    @Override
-                    public void invoke() {
-                        offsetsForTime.result = consumer.offsetsForTimes(timestampsToSearch);
-                    }
-                },
-                new ResultTester() {
-                    @Override
-                    public void test() {
-                        log.info("offsetsForTime = {}", offsetsForTime.result);
-                    }
-                });
-        // Whether or not offsetsForTimes works, beginningOffsets and endOffsets
-        // should work.
-        consumer.beginningOffsets(timestampsToSearch.keySet());
-        consumer.endOffsets(timestampsToSearch.keySet());
+        try (final KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(consumerProps, deserializer, deserializer)) {
+            final List<PartitionInfo> partitionInfos = consumer.partitionsFor(testConfig.topic);
+            if (partitionInfos.size() < 1)
+                throw new RuntimeException("Expected at least one partition for topic " + testConfig.topic);
+            final Map<TopicPartition, Long> timestampsToSearch = new HashMap<>();
+            final LinkedList<TopicPartition> topicPartitions = new LinkedList<>();
+            for (PartitionInfo partitionInfo : partitionInfos) {
+                TopicPartition topicPartition = new TopicPartition(partitionInfo.topic(), partitionInfo.partition());
+                timestampsToSearch.put(topicPartition, prodTimeMs);
+                topicPartitions.add(topicPartition);
+            }
+            final OffsetsForTime offsetsForTime = new OffsetsForTime();
+            tryFeature("offsetsForTimes", testConfig.offsetsForTimesSupported,
+                    new Invoker() {
+                        @Override
+                        public void invoke() {
+                            offsetsForTime.result = consumer.offsetsForTimes(timestampsToSearch);
+                        }
+                    },
+                    new ResultTester() {
+                        @Override
+                        public void test() {
+                            log.info("offsetsForTime = {}", offsetsForTime.result);
+                        }
+                    });
+            // Whether or not offsetsForTimes works, beginningOffsets and endOffsets
+            // should work.
+            consumer.beginningOffsets(timestampsToSearch.keySet());
+            consumer.endOffsets(timestampsToSearch.keySet());
 
-        consumer.assign(topicPartitions);
-        consumer.seekToBeginning(topicPartitions);
-        final Iterator<byte[]> iter = new Iterator<byte[]>() {
-            private static final int TIMEOUT_MS = 10000;
-            private Iterator<ConsumerRecord<byte[], byte[]>> recordIter = null;
-            private byte[] next = null;
+            consumer.assign(topicPartitions);
+            consumer.seekToBeginning(topicPartitions);
+            final Iterator<byte[]> iter = new Iterator<byte[]>() {
+                private static final int TIMEOUT_MS = 10000;
+                private Iterator<ConsumerRecord<byte[], byte[]>> recordIter = null;
+                private byte[] next = null;
 
-            private byte[] fetchNext() {
-                while (true) {
-                    long curTime = Time.SYSTEM.milliseconds();
-                    if (curTime - prodTimeMs > TIMEOUT_MS)
-                        throw new RuntimeException("Timed out after " + TIMEOUT_MS + " ms.");
-                    if (recordIter == null) {
-                        ConsumerRecords<byte[], byte[]> records = consumer.poll(100);
-                        recordIter = records.iterator();
+                private byte[] fetchNext() {
+                    while (true) {
+                        long curTime = Time.SYSTEM.milliseconds();
+                        if (curTime - prodTimeMs > TIMEOUT_MS)
+                            throw new RuntimeException("Timed out after " + TIMEOUT_MS + " ms.");
+                        if (recordIter == null) {
+                            ConsumerRecords<byte[], byte[]> records = consumer.poll(100);
+                            recordIter = records.iterator();
+                        }
+                        if (recordIter.hasNext())
+                            return recordIter.next().value();
+                        recordIter = null;
                     }
-                    if (recordIter.hasNext())
-                        return recordIter.next().value();
-                    recordIter = null;
                 }
-            }
 
-            @Override
-            public boolean hasNext() {
-                if (next != null)
-                    return true;
-                next = fetchNext();
-                return next != null;
-            }
+                @Override
+                public boolean hasNext() {
+                    if (next != null)
+                        return true;
+                    next = fetchNext();
+                    return next != null;
+                }
 
-            @Override
-            public byte[] next() {
-                if (!hasNext())
-                    throw new NoSuchElementException();
-                byte[] cur = next;
-                next = null;
-                return cur;
-            }
+                @Override
+                public byte[] next() {
+                    if (!hasNext())
+                        throw new NoSuchElementException();
+                    byte[] cur = next;
+                    next = null;
+                    return cur;
+                }
 
-            @Override
-            public void remove() {
-                throw new UnsupportedOperationException();
-            }
-        };
-        byte[] next = iter.next();
-        try {
-            compareArrays(message1, next);
-            log.debug("Found first message...");
-        } catch (RuntimeException e) {
-            throw new RuntimeException("The first message in this topic was not ours. Please use a new topic when " +
-                    "running this program.");
-        }
-        try {
-            next = iter.next();
-            if (testConfig.expectRecordTooLargeException)
-                throw new RuntimeException("Expected to get a RecordTooLargeException when reading a record " +
-                        "bigger than " + ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG);
+                @Override
+                public void remove() {
+                    throw new UnsupportedOperationException();
+                }
+            };
+            byte[] next = iter.next();
             try {
-                compareArrays(message2, next);
+                compareArrays(message1, next);
+                log.debug("Found first message...");
             } catch (RuntimeException e) {
-                System.out.println("The second message in this topic was not ours. Please use a new " +
-                    "topic when running this program.");
-                Exit.exit(1);
+                throw new RuntimeException("The first message in this topic was not ours. Please use a new topic when " +
+                        "running this program.");
             }
-        } catch (RecordTooLargeException e) {
-            log.debug("Got RecordTooLargeException", e);
-            if (!testConfig.expectRecordTooLargeException)
-                throw new RuntimeException("Got an unexpected RecordTooLargeException when reading a record " +
-                    "bigger than " + ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG);
+            try {
+                next = iter.next();
+                if (testConfig.expectRecordTooLargeException) {
+                    throw new RuntimeException("Expected to get a RecordTooLargeException when reading a record " +
+                            "bigger than " + ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG);
+                }
+                try {
+                    compareArrays(message2, next);
+                } catch (RuntimeException e) {
+                    System.out.println("The second message in this topic was not ours. Please use a new " +
+                        "topic when running this program.");
+                    Exit.exit(1);
+                }
+            } catch (RecordTooLargeException e) {
+                log.debug("Got RecordTooLargeException", e);
+                if (!testConfig.expectRecordTooLargeException)
+                    throw new RuntimeException("Got an unexpected RecordTooLargeException when reading a record " +
+                        "bigger than " + ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG);
+            }
+            log.debug("Closing consumer.");
         }
-        log.debug("Closing consumer.");
-        consumer.close();
         log.info("Closed consumer.");
     }
 

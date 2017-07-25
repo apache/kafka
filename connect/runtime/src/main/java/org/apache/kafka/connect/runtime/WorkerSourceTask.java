@@ -281,7 +281,7 @@ class WorkerSourceTask extends WorkerTask {
     public boolean commitOffsets() {
         long commitTimeoutMs = workerConfig.getLong(WorkerConfig.OFFSET_COMMIT_TIMEOUT_MS_CONFIG);
 
-        log.debug("{} Committing offsets", this);
+        log.info("{} Committing offsets", this);
 
         long started = time.milliseconds();
         long timeout = started + commitTimeoutMs;
@@ -298,7 +298,7 @@ class WorkerSourceTask extends WorkerTask {
             // to persistent storage
 
             // Next we need to wait for all outstanding messages to finish sending
-            log.debug("{} flushing {} outstanding messages for offset commit", this, outstandingMessages.size());
+            log.info("{} flushing {} outstanding messages for offset commit", this, outstandingMessages.size());
             while (!outstandingMessages.isEmpty()) {
                 try {
                     long timeoutMs = timeout - time.milliseconds();
