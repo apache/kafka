@@ -78,6 +78,9 @@ public class Protocol {
                                                                           "topics that don't exist will be created by the broker. " +
                                                                           "Otherwise, no topics will be created by the broker."));
 
+    /* The v5 metadata request is the same as v4. An additional field for offline_replicas has been added to the v5 metadata response */
+    public static final Schema METADATA_REQUEST_V5 = METADATA_REQUEST_V4;
+
     public static final Schema METADATA_BROKER_V0 = new Schema(new Field("node_id", INT32, "The broker id."),
                                                    new Field("host", STRING, "The hostname of the broker."),
                                                    new Field("port", INT32,
@@ -121,12 +124,40 @@ public class Protocol {
 
     public static final Schema PARTITION_METADATA_V1 = PARTITION_METADATA_V0;
 
+    // PARTITION_METADATA_V2 added a per-partition offline_replicas field. This field specifies the list of replicas that are offline.
+    public static final Schema PARTITION_METADATA_V2 = new Schema(new Field("partition_error_code",
+                                                                            INT16,
+                                                                            "The error code for the partition, if any."),
+                                                                  new Field("partition_id",
+                                                                            INT32,
+                                                                            "The id of the partition."),
+                                                                  new Field("leader",
+                                                                            INT32,
+                                                                            "The id of the broker acting as leader for this partition."),
+                                                                  new Field("replicas",
+                                                                            new ArrayOf(INT32),
+                                                                            "The set of all nodes that host this partition."),
+                                                                  new Field("isr",
+                                                                            new ArrayOf(INT32),
+                                                                            "The set of nodes that are in sync with the leader for this partition."),
+                                                                  new Field("offline_replicas",
+                                                                            new ArrayOf(INT32),
+                                                                            "The set of offline replicas of this partition."));
+
     public static final Schema TOPIC_METADATA_V1 = new Schema(new Field("topic_error_code", INT16, "The error code for the given topic."),
                                                               new Field("topic", STRING, "The name of the topic"),
                                                               new Field("is_internal", BOOLEAN,
                                                                   "Indicates if the topic is considered a Kafka internal topic"),
                                                               new Field("partition_metadata", new ArrayOf(PARTITION_METADATA_V1),
-                                                                "Metadata for each partition of the topic."));
+                                                                  "Metadata for each partition of the topic."));
+
+    // TOPIC_METADATA_V2 added a per-partition offline_replicas field. This field specifies the list of replicas that are offline.
+    public static final Schema TOPIC_METADATA_V2 = new Schema(new Field("topic_error_code", INT16, "The error code for the given topic."),
+                                                              new Field("topic", STRING, "The name of the topic"),
+                                                              new Field("is_internal", BOOLEAN,
+                                                                  "Indicates if the topic is considered a Kafka internal topic"),
+                                                              new Field("partition_metadata", new ArrayOf(PARTITION_METADATA_V2),
+                                                                  "Metadata for each partition of the topic."));
 
     public static final Schema METADATA_RESPONSE_V1 = new Schema(new Field("brokers", new ArrayOf(METADATA_BROKER_V1),
                                                                     "Host and port information for all brokers."),
@@ -154,8 +185,19 @@ public class Protocol {
 
     public static final Schema METADATA_RESPONSE_V4 = METADATA_RESPONSE_V3;
 
-    public static final Schema[] METADATA_REQUEST = {METADATA_REQUEST_V0, METADATA_REQUEST_V1, METADATA_REQUEST_V2, METADATA_REQUEST_V3, METADATA_REQUEST_V4};
-    public static final Schema[] METADATA_RESPONSE = {METADATA_RESPONSE_V0, METADATA_RESPONSE_V1, METADATA_RESPONSE_V2, METADATA_RESPONSE_V3, METADATA_RESPONSE_V4};
+    // METADATA_RESPONSE_V5 added a per-partition offline_replicas field. This field specifies the list of replicas that are offline.
+    public static final Schema METADATA_RESPONSE_V5 = new Schema(
+        newThrottleTimeField(),
+        new Field("brokers", new ArrayOf(METADATA_BROKER_V1),
+            "Host and port information for all brokers."),
+        new Field("cluster_id", NULLABLE_STRING,
+            "The cluster id that this broker belongs to."),
+        new Field("controller_id", INT32,
+            "The broker id of the controller broker."),
+        new Field("topic_metadata", new ArrayOf(TOPIC_METADATA_V2)));
+
+    public static final Schema[] METADATA_REQUEST = {METADATA_REQUEST_V0, METADATA_REQUEST_V1, METADATA_REQUEST_V2, METADATA_REQUEST_V3, METADATA_REQUEST_V4, METADATA_REQUEST_V5};
+    public static final Schema[] METADATA_RESPONSE = {METADATA_RESPONSE_V0, METADATA_RESPONSE_V1, METADATA_RESPONSE_V2, METADATA_RESPONSE_V3, METADATA_RESPONSE_V4, METADATA_RESPONSE_V5};
 
     /* Produce api */
 
@@ -205,6 +247,13 @@ public class Protocol {
             new Field("timeout", INT32, "The time to await a response in ms."),
             new Field("topic_data", new ArrayOf(TOPIC_PRODUCE_DATA_V0)));
 
+    /**
+     * The body of PRODUCE_REQUEST_V4 is the same as PRODUCE_REQUEST_V3.
+     * The version number is bumped up to indicate that the client supports KafkaStorageException.
+     * The KafkaStorageException will be translated to NotLeaderForPartitionException in the response if version <= 3
+     */
+    public static final Schema PRODUCE_REQUEST_V4 = PRODUCE_REQUEST_V3;
+
     public static final Schema PRODUCE_RESPONSE_V1 = new Schema(new Field("responses",
                                                                           new ArrayOf(new Schema(new Field("topic", STRING),
                                                                                                  new Field("partition_responses",
@@ -236,10 +285,18 @@ public class Protocol {
                                                                                                                             "If LogAppendTime is used for the topic, the timestamp will be " +
                                                                                                                             "the broker local time when the messages are appended."))))))),
                                                                 newThrottleTimeField());
+
     public static final Schema PRODUCE_RESPONSE_V3 = PRODUCE_RESPONSE_V2;
 
-    public static final Schema[] PRODUCE_REQUEST = {PRODUCE_REQUEST_V0, PRODUCE_REQUEST_V1, PRODUCE_REQUEST_V2, PRODUCE_REQUEST_V3};
-    public static final Schema[] PRODUCE_RESPONSE = {PRODUCE_RESPONSE_V0, PRODUCE_RESPONSE_V1, PRODUCE_RESPONSE_V2, PRODUCE_RESPONSE_V3};
+    /**
+     * The body of PRODUCE_RESPONSE_V4 is the same as PRODUCE_RESPONSE_V3.
+     * The version number is bumped up to indicate that the client supports KafkaStorageException.
+     * The KafkaStorageException will be translated to NotLeaderForPartitionException in the response if version <= 3
+     */
+    public static final Schema PRODUCE_RESPONSE_V4 = PRODUCE_RESPONSE_V3;
+
+    public static final Schema[] PRODUCE_REQUEST = {PRODUCE_REQUEST_V0, PRODUCE_REQUEST_V1, PRODUCE_REQUEST_V2, PRODUCE_REQUEST_V3, PRODUCE_REQUEST_V4};
+    public static final Schema[] PRODUCE_RESPONSE = {PRODUCE_RESPONSE_V0, PRODUCE_RESPONSE_V1, PRODUCE_RESPONSE_V2, PRODUCE_RESPONSE_V3, PRODUCE_RESPONSE_V4};
 
     /* Offset commit api */
     public static final Schema OFFSET_COMMIT_REQUEST_PARTITION_V0 = new Schema(new Field("partition",
@@ -666,6 +723,13 @@ public class Protocol {
                     new ArrayOf(FETCH_REQUEST_TOPIC_V5),
                     "Topics to fetch in the order provided."));
 
+    /**
+     * The body of FETCH_REQUEST_V6 is the same as FETCH_REQUEST_V5.
+     * The version number is bumped up to indicate that the client supports KafkaStorageException.
+     * The KafkaStorageException will be translated to NotLeaderForPartitionException in the response if version <= 5
+     */
+    public static final Schema FETCH_REQUEST_V6 = FETCH_REQUEST_V5;
+
     public static final Schema FETCH_RESPONSE_PARTITION_HEADER_V0 = new Schema(new Field("partition",
                                                                                          INT32,
                                                                                          "Topic partition id."),
@@ -691,7 +755,6 @@ public class Protocol {
     // (magic byte 0 and 1). For details, see ByteBufferMessageSet.
     public static final Schema FETCH_RESPONSE_V2 = FETCH_RESPONSE_V1;
     public static final Schema FETCH_RESPONSE_V3 = FETCH_RESPONSE_V2;
-
 
     // The v4 Fetch Response adds features for transactional consumption (the aborted transaction list and the
     // last stable offset). It also exposes messages with magic v2 (along with older formats).
@@ -759,8 +822,15 @@ public class Protocol {
             newThrottleTimeField(),
             new Field("responses", new ArrayOf(FETCH_RESPONSE_TOPIC_V5)));
 
-    public static final Schema[] FETCH_REQUEST = {FETCH_REQUEST_V0, FETCH_REQUEST_V1, FETCH_REQUEST_V2, FETCH_REQUEST_V3, FETCH_REQUEST_V4, FETCH_REQUEST_V5};
-    public static final Schema[] FETCH_RESPONSE = {FETCH_RESPONSE_V0, FETCH_RESPONSE_V1, FETCH_RESPONSE_V2, FETCH_RESPONSE_V3, FETCH_RESPONSE_V4, FETCH_RESPONSE_V5};
+    /**
+     * The body of FETCH_RESPONSE_V6 is the same as FETCH_RESPONSE_V5.
+     * The version number is bumped up to indicate that the client supports KafkaStorageException.
+     * The KafkaStorageException will be translated to NotLeaderForPartitionException in the response if version <= 5
+     */
+    public static final Schema FETCH_RESPONSE_V6 = FETCH_RESPONSE_V5;
+
+    public static final Schema[] FETCH_REQUEST = {FETCH_REQUEST_V0, FETCH_REQUEST_V1, FETCH_REQUEST_V2, FETCH_REQUEST_V3, FETCH_REQUEST_V4, FETCH_REQUEST_V5, FETCH_REQUEST_V6};
+    public static final Schema[] FETCH_RESPONSE = {FETCH_RESPONSE_V0, FETCH_RESPONSE_V1, FETCH_RESPONSE_V2, FETCH_RESPONSE_V3, FETCH_RESPONSE_V4, FETCH_RESPONSE_V5, FETCH_RESPONSE_V6};
 
     /* List groups api */
     public static final Schema LIST_GROUPS_REQUEST_V0 = new Schema();
@@ -1039,6 +1109,19 @@ public class Protocol {
                        new Field("zk_version", INT32, "The ZK version."),
                        new Field("replicas", new ArrayOf(INT32), "The replica ids."));
 
+    // LEADER_AND_ISR_REQUEST_PARTITION_STATE_V1 added a per-partition is_new field.
+    // This field specifies whether the replica should have existed on the broker or not.
+    public static final Schema LEADER_AND_ISR_REQUEST_PARTITION_STATE_V1 =
+            new Schema(new Field("topic", STRING, "Topic name."),
+                       new Field("partition", INT32, "Topic partition id."),
+                       new Field("controller_epoch", INT32, "The controller epoch."),
+                       new Field("leader", INT32, "The broker id for the leader."),
+                       new Field("leader_epoch", INT32, "The leader epoch."),
+                       new Field("isr", new ArrayOf(INT32), "The in sync replica ids."),
+                       new Field("zk_version", INT32, "The ZK version."),
+                       new Field("replicas", new ArrayOf(INT32), "The replica ids."),
+                       new Field("is_new", BOOLEAN, "Whether the replica should have existed on the broker or not"));
+
     public static final Schema LEADER_AND_ISR_REQUEST_LIVE_LEADER_V0 =
             new Schema(new Field("id", INT32, "The broker id."),
                        new Field("host", STRING, "The hostname of the broker."),
@@ -1050,6 +1133,13 @@ public class Protocol {
                                                                                 new ArrayOf(LEADER_AND_ISR_REQUEST_PARTITION_STATE_V0)),
                                                                       new Field("live_leaders", new ArrayOf(LEADER_AND_ISR_REQUEST_LIVE_LEADER_V0)));
 
+    // LEADER_AND_ISR_REQUEST_V1 added a per-partition is_new field. This field specifies whether the replica should have existed on the broker or not.
+    public static final Schema LEADER_AND_ISR_REQUEST_V1 = new Schema(new Field("controller_id", INT32, "The controller id."),
+                                                                      new Field("controller_epoch", INT32, "The controller epoch."),
+                                                                      new Field("partition_states",
+                                                                                new ArrayOf(LEADER_AND_ISR_REQUEST_PARTITION_STATE_V1)),
+                                                                      new Field("live_leaders", new ArrayOf(LEADER_AND_ISR_REQUEST_LIVE_LEADER_V0)));
+
     public static final Schema LEADER_AND_ISR_RESPONSE_PARTITION_V0 = new Schema(new Field("topic", STRING, "Topic name."),
                                                                                  new Field("partition", INT32, "Topic partition id."),
                                                                                  new Field("error_code", INT16, "Error code."));
@@ -1058,8 +1148,11 @@ public class Protocol {
                                                                        new Field("partitions",
                                                                                  new ArrayOf(LEADER_AND_ISR_RESPONSE_PARTITION_V0)));
 
-    public static final Schema[] LEADER_AND_ISR_REQUEST = {LEADER_AND_ISR_REQUEST_V0};
-    public static final Schema[] LEADER_AND_ISR_RESPONSE = {LEADER_AND_ISR_RESPONSE_V0};
+    // LeaderAndIsrResponse V1 may receive KAFKA_STORAGE_ERROR in the response
+    public static final Schema LEADER_AND_ISR_RESPONSE_V1 = LEADER_AND_ISR_RESPONSE_V0;
+
+    public static final Schema[] LEADER_AND_ISR_REQUEST = {LEADER_AND_ISR_REQUEST_V0, LEADER_AND_ISR_REQUEST_V1};
+    public static final Schema[] LEADER_AND_ISR_RESPONSE = {LEADER_AND_ISR_RESPONSE_V0, LEADER_AND_ISR_RESPONSE_V1};
 
     /* Replica api */
     public static final Schema STOP_REPLICA_REQUEST_PARTITION_V0 = new Schema(new Field("topic", STRING, "Topic name."),
@@ -1141,6 +1234,18 @@ public class Protocol {
 
     public static final Schema UPDATE_METADATA_REQUEST_PARTITION_STATE_V3 = UPDATE_METADATA_REQUEST_PARTITION_STATE_V2;
 
+    // UPDATE_METADATA_REQUEST_PARTITION_STATE_V4 added a per-partition offline_replicas field. This field specifies the list of replicas that are offline.
+    public static final Schema UPDATE_METADATA_REQUEST_PARTITION_STATE_V4 =
+            new Schema(new Field("topic", STRING, "Topic name."),
+                       new Field("partition", INT32, "Topic partition id."),
+                       new Field("controller_epoch", INT32, "The controller epoch."),
+                       new Field("leader", INT32, "The broker id for the leader."),
+                       new Field("leader_epoch", INT32, "The leader epoch."),
+                       new Field("isr", new ArrayOf(INT32), "The in sync replica ids."),
+                       new Field("zk_version", INT32, "The ZK version."),
+                       new Field("replicas", new ArrayOf(INT32), "The replica ids."),
+                       new Field("offline_replicas", new ArrayOf(INT32), "The offline replica ids"));
+
     public static final Schema UPDATE_METADATA_REQUEST_END_POINT_V3 =
             new Schema(new Field("port", INT32, "The port on which the broker accepts requests."),
                     new Field("host", STRING, "The hostname of the broker."),
@@ -1158,12 +1263,21 @@ public class Protocol {
                     new Field("partition_states", new ArrayOf(UPDATE_METADATA_REQUEST_PARTITION_STATE_V3)),
                     new Field("live_brokers", new ArrayOf(UPDATE_METADATA_REQUEST_BROKER_V3)));
 
+    // UPDATE_METADATA_REQUEST_V4 added a per-partition offline_replicas field. This field specifies the list of replicas that are offline.
+    public static final Schema UPDATE_METADATA_REQUEST_V4 =
+            new Schema(new Field("controller_id", INT32, "The controller id."),
+                    new Field("controller_epoch", INT32, "The controller epoch."),
+                    new Field("partition_states", new ArrayOf(UPDATE_METADATA_REQUEST_PARTITION_STATE_V4)),
+                    new Field("live_brokers", new ArrayOf(UPDATE_METADATA_REQUEST_BROKER_V3)));
+
     public static final Schema UPDATE_METADATA_RESPONSE_V3 = UPDATE_METADATA_RESPONSE_V2;
 
+    public static final Schema UPDATE_METADATA_RESPONSE_V4 = UPDATE_METADATA_RESPONSE_V3;
+
     public static final Schema[] UPDATE_METADATA_REQUEST = {UPDATE_METADATA_REQUEST_V0, UPDATE_METADATA_REQUEST_V1,
-        UPDATE_METADATA_REQUEST_V2, UPDATE_METADATA_REQUEST_V3};
+        UPDATE_METADATA_REQUEST_V2, UPDATE_METADATA_REQUEST_V3, UPDATE_METADATA_REQUEST_V4};
     public static final Schema[] UPDATE_METADATA_RESPONSE = {UPDATE_METADATA_RESPONSE_V0, UPDATE_METADATA_RESPONSE_V1,
-        UPDATE_METADATA_RESPONSE_V2, UPDATE_METADATA_RESPONSE_V3};
+        UPDATE_METADATA_RESPONSE_V2, UPDATE_METADATA_RESPONSE_V3, UPDATE_METADATA_RESPONSE_V4};
 
     /* SASL handshake api */
     public static final Schema SASL_HANDSHAKE_REQUEST_V0 = new Schema(

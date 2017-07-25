@@ -64,6 +64,7 @@ public class MergedSortedCacheKeyValueStoreIteratorTest {
             values[index++] = value;
             assertArrayEquals(bytes[bytesIndex++], value);
         }
+        iterator.close();
     }
 
 
@@ -171,6 +172,7 @@ public class MergedSortedCacheKeyValueStoreIteratorTest {
             assertArrayEquals(bytes[bytesIndex++], keys);
             iterator.next();
         }
+        iterator.close();
     }
 
     private MergedSortedCacheKeyValueStoreIterator<byte[], byte[]> createIterator() {

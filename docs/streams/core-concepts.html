@@ -21,6 +21,28 @@
     <h1>Core Concepts</h1>
 
     <p>
+        Kafka Streams is a client library for processing and analyzing data stored in Kafka.
+        It builds upon important stream processing concepts such as properly distinguishing between event time and processing time, windowing support, and simple yet efficient management of application state.
+    </p>
+    <p>
+        Kafka Streams has a <b>low barrier to entry</b>: You can quickly write and run a small-scale proof-of-concept on a single machine; and you only need to run additional instances of your application on multiple machines to scale up to high-volume production workloads.
+        Kafka Streams transparently handles the load balancing of multiple instances of the same application by leveraging Kafka's parallelism model.
+    </p>
+    <p>
+        Some highlights of Kafka Streams:
+    </p>
+
+    <ul>
+        <li>Designed as a <b>simple and lightweight client library</b>, which can be easily embedded in any Java application and integrated with any existing packaging, deployment and operational tools that users have for their streaming applications.</li>
+        <li>Has <b>no external dependencies on systems other than Apache Kafka itself</b> as the internal messaging layer; notably, it uses Kafka's partitioning model to horizontally scale processing while maintaining strong ordering guarantees.</li>
+        <li>Supports <b>fault-tolerant local state</b>, which enables very fast and efficient stateful operations like windowed joins and aggregations.</li>
+        <li>Supports <b>exactly-once</b> processing semantics to guarantee that each record will be processed once and only once even when there is a failure on either Streams clients or Kafka brokers in the middle of processing.</li>
+        <li>Employs <b>one-record-at-a-time processing</b> to achieve millisecond processing latency, and supports <b>event-time based windowing operations</b> with late arrival of records.</li>
+        <li>Offers necessary stream processing primitives, along with a <b>high-level Streams DSL</b> and a <b>low-level Processor API</b>.</li>
+
+    </ul>
+
+    <p>
         We first summarize the key concepts of Kafka Streams.
     </p>
 
@@ -131,11 +153,11 @@
         To read more details on how this is done inside Kafka Streams, readers are recommended to read <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-129%3A+Streams+Exactly-Once+Semantics">KIP-129</a>.
 
         In order to achieve exactly-once semantics when running Kafka Streams applications, users can simply set the <code>processing.guarantee</code> config value to <b>exactly_once</b> (default value is <b>at_least_once</b>).
-        More details can be found in the <a href="/{{version}}/documentation#streamsconfigs">Kafka Streams Configs</a> section.
+        More details can be found in the <a href="/{{version}}/documentation#streamsconfigs"><b>Kafka Streams Configs</b></a> section.
     </p>
 
     <div class="pagination">
-        <a href="/{{version}}/documentation/streams" class="pagination__btn pagination__btn__prev">Previous</a>
+        <a href="/{{version}}/documentation/streams/developer-guide" class="pagination__btn pagination__btn__prev">Previous</a>
         <a href="/{{version}}/documentation/streams/architecture" class="pagination__btn pagination__btn__next">Next</a>
     </div>
 </script>
@@ -148,7 +170,7 @@
         <!--#include virtual="../../includes/_docs_banner.htm" -->
         <ul class="breadcrumbs">
             <li><a href="/documentation">Documentation</a></li>
-            <li><a href="/documentation/streams">Streams</a></li>
+            <li><a href="/documentation/streams">Kafka Streams API</a></li>
         </ul>
         <div class="p-content"></div>
     </div>

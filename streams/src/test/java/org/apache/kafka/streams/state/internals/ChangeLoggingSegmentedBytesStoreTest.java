@@ -61,7 +61,6 @@ public class ChangeLoggingSegmentedBytesStoreTest {
     private final ChangeLoggingSegmentedBytesStore store = new ChangeLoggingSegmentedBytesStore(bytesStore);
     private final Map sent = new HashMap<>();
 
-    @SuppressWarnings("unchecked")
     @Before
     public void setUp() throws Exception {
         context.setTime(0);
@@ -74,7 +73,6 @@ public class ChangeLoggingSegmentedBytesStoreTest {
         store.close();
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldLogPuts() throws Exception {
         final byte[] value1 = {0};
@@ -88,7 +86,6 @@ public class ChangeLoggingSegmentedBytesStoreTest {
         assertArrayEquals(value2, (byte[]) sent.get(key2));
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldLogRemoves() throws Exception {
         final Bytes key1 = Bytes.wrap(new byte[]{0});

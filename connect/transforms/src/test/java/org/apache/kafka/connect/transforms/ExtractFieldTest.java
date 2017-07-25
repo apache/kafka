@@ -20,6 +20,7 @@ import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.sink.SinkRecord;
+import org.junit.After;
 import org.junit.Test;
 
 import java.util.Collections;
@@ -28,10 +29,15 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 
 public class ExtractFieldTest {
+    private final ExtractField<SinkRecord> xform = new ExtractField.Key<>();
+
+    @After
+    public void teardown() {
+        xform.close();
+    }
 
     @Test
     public void schemaless() {
-        final ExtractField<SinkRecord> xform = new ExtractField.Key<>();
         xform.configure(Collections.singletonMap("field", "magic"));
 
         final SinkRecord record = new SinkRecord("test", 0, null, Collections.singletonMap("magic", 42), null, null, 0);
@@ -43,7 +49,6 @@ public class ExtractFieldTest {
 
     @Test
     public void withSchema() {
-        final ExtractField<SinkRecord> xform = new ExtractField.Key<>();
         xform.configure(Collections.singletonMap("field", "magic"));
 
         final Schema keySchema = SchemaBuilder.struct().field("magic", Schema.INT32_SCHEMA).build();

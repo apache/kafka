@@ -37,8 +37,8 @@ import scala.math.ceil
  * @param baseOffset the base offset of the segment that this index is corresponding to.
  * @param maxIndexSize The maximum index size in bytes.
  */
-abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Long, val maxIndexSize: Int = -1, val writable: Boolean)
-    extends Logging {
+abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Long,
+                                   val maxIndexSize: Int = -1, val writable: Boolean) extends Logging {
 
   protected def entrySize: Int
 
@@ -109,7 +109,7 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
 
       /* Windows won't let us modify the file length while the file is mmapped :-( */
       if (OperatingSystem.IS_WINDOWS)
-        forceUnmap(mmap);
+        forceUnmap(mmap)
       try {
         raf.setLength(roundedNewSize)
         mmap = raf.getChannel().map(FileChannel.MapMode.READ_WRITE, 0, roundedNewSize)
@@ -176,6 +176,12 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
   /** Close the index */
   def close() {
     trimToValidSize()
+  }
+
+  def closeHandler() = {
+    // File handler of the index field will be closed after the mmap is garbage collected
+    CoreUtils.swallow(forceUnmap(mmap))
+    mmap = null
   }
 
   /**

@@ -64,7 +64,7 @@ class AddPartitionsTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testTopicDoesNotExist {
+  def testTopicDoesNotExist(): Unit = {
     try {
       AdminUtils.addPartitions(zkUtils, "Blah", 1)
       fail("Topic should not exist")
@@ -74,7 +74,7 @@ class AddPartitionsTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testWrongReplicaCount {
+  def testWrongReplicaCount(): Unit = {
     try {
       AdminUtils.addPartitions(zkUtils, topic1, 2, "0:1,0:1:2")
       fail("Add partitions should fail")
@@ -84,7 +84,7 @@ class AddPartitionsTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testIncrementPartitions {
+  def testIncrementPartitions(): Unit = {
     AdminUtils.addPartitions(zkUtils, topic1, 3)
     // wait until leader is elected
     val leader1 = waitUntilLeaderIsElectedOrChanged(zkUtils, topic1, 1)
@@ -111,7 +111,7 @@ class AddPartitionsTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testManualAssignmentOfReplicas {
+  def testManualAssignmentOfReplicas(): Unit = {
     AdminUtils.addPartitions(zkUtils, topic2, 3, "1:2,0:1,2:3")
     // wait until leader is elected
     val leader1 = waitUntilLeaderIsElectedOrChanged(zkUtils, topic2, 1)
@@ -139,7 +139,7 @@ class AddPartitionsTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testReplicaPlacementAllServers {
+  def testReplicaPlacementAllServers(): Unit = {
     AdminUtils.addPartitions(zkUtils, topic3, 7)
 
     // read metadata from a broker and verify the new topic partitions exist
@@ -166,7 +166,7 @@ class AddPartitionsTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testReplicaPlacementPartialServers {
+  def testReplicaPlacementPartialServers(): Unit = {
     AdminUtils.addPartitions(zkUtils, topic2, 3)
 
     // read metadata from a broker and verify the new topic partitions exist

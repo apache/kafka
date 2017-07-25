@@ -35,7 +35,7 @@ class RackAwareAutoTopicCreationTest extends KafkaServerTestHarness with RackAwa
   overridingProps.put(KafkaConfig.NumPartitionsProp, numPartitions.toString)
   overridingProps.put(KafkaConfig.DefaultReplicationFactorProp, replicationFactor.toString)
 
-  def generateConfigs() =
+  def generateConfigs =
     (0 until numServers) map { node =>
       TestUtils.createBrokerConfig(node, zkConnect, enableControlledShutdown = false, rack = Some((node / 2).toString))
     } map (KafkaConfig.fromProps(_, overridingProps))

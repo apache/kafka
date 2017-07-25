@@ -43,21 +43,21 @@ public class SourceNodeRecordDeserializerTest {
     @Test(expected = StreamsException.class)
     public void shouldThrowStreamsExceptionIfKeyFailsToDeserialize() throws Exception {
         final SourceNodeRecordDeserializer recordDeserializer = new SourceNodeRecordDeserializer(
-                new TheSourceNode(true, false));
+                new TheSourceNode(true, false), null);
         recordDeserializer.deserialize(rawRecord);
     }
 
     @Test(expected = StreamsException.class)
     public void shouldThrowStreamsExceptionIfKeyValueFailsToDeserialize() throws Exception {
         final SourceNodeRecordDeserializer recordDeserializer = new SourceNodeRecordDeserializer(
-                new TheSourceNode(false, true));
+                new TheSourceNode(false, true), null);
         recordDeserializer.deserialize(rawRecord);
     }
 
     @Test
     public void shouldReturnNewConsumerRecordWithDeserializedValueWhenNoExceptions() throws Exception {
         final SourceNodeRecordDeserializer recordDeserializer = new SourceNodeRecordDeserializer(
-                new TheSourceNode(false, false, "key", "value"));
+                new TheSourceNode(false, false, "key", "value"), null);
         final ConsumerRecord<Object, Object> record = recordDeserializer.deserialize(rawRecord);
         assertEquals(rawRecord.topic(), record.topic());
         assertEquals(rawRecord.partition(), record.partition());

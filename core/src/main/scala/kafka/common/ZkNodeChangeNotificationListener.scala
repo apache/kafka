@@ -77,8 +77,8 @@ class ZkNodeChangeNotificationListener(private val zkUtils: ZkUtils,
    * Process all changes
    */
   def processAllNotifications() {
-    val changes = zkUtils.zkClient.getChildren(seqNodeRoot)
-    processNotifications(changes.asScala.sorted)
+    val changes = zkUtils.getChildren(seqNodeRoot)
+    processNotifications(changes.sorted)
   }
 
   /**

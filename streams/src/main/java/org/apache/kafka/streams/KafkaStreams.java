@@ -456,7 +456,7 @@ public class KafkaStreams {
         GlobalStreamThread.State globalThreadState = null;
 
         final ArrayList<StateStoreProvider> storeProviders = new ArrayList<>();
-        streamsMetadataState = new StreamsMetadataState(builder, parseHostInfo(config.getString(StreamsConfig.APPLICATION_SERVER_CONFIG)));
+        streamsMetadataState = new StreamsMetadataState(builder.internalTopologyBuilder, parseHostInfo(config.getString(StreamsConfig.APPLICATION_SERVER_CONFIG)));
 
         final ProcessorTopology globalTaskTopology = builder.buildGlobalStateTopology();
 
@@ -481,7 +481,7 @@ public class KafkaStreams {
         }
 
         for (int i = 0; i < threads.length; i++) {
-            threads[i] = new StreamThread(builder,
+            threads[i] = new StreamThread(builder.internalTopologyBuilder,
                                           config,
                                           clientSupplier,
                                           applicationId,
@@ -539,7 +539,7 @@ public class KafkaStreams {
      * @throws StreamsException if brokers have version 0.10.0.x
      */
     private void checkBrokerVersionCompatibility() throws StreamsException {
-        final StreamsKafkaClient client = new StreamsKafkaClient(config);
+        final StreamsKafkaClient client = StreamsKafkaClient.create(config);
 
         client.checkBrokerCompatibility(EXACTLY_ONCE.equals(config.getString(PROCESSING_GUARANTEE_CONFIG)));
 

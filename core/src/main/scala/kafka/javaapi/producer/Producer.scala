@@ -48,5 +48,5 @@ class Producer[K,V](private val underlying: kafka.producer.Producer[K,V]) // for
    * Close API to close the producer pool connections to all Kafka brokers. Also closes
    * the zookeeper client connection if one exists
    */
-  def close = underlying.close
+  def close() = underlying.close()
 }

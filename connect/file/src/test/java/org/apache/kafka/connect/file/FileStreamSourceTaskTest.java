@@ -123,6 +123,7 @@ public class FileStreamSourceTaskTest {
         assertEquals(Collections.singletonMap(FileStreamSourceTask.FILENAME_FIELD, tempFile.getAbsolutePath()), records.get(0).sourcePartition());
         assertEquals(Collections.singletonMap(FileStreamSourceTask.POSITION_FIELD, 48L), records.get(0).sourceOffset());
 
+        os.close();
         task.stop();
     }
 
