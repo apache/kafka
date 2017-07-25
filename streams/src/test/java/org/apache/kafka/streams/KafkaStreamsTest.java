@@ -51,6 +51,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 @Category({IntegrationTest.class})
 public class KafkaStreamsTest {
@@ -254,27 +255,27 @@ public class KafkaStreamsTest {
         }
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void shouldThrowExceptionSettingUncaughtExceptionHandlerNotInCreateState() {
         streams.start();
         try {
             streams.setUncaughtExceptionHandler(null);
+            fail("Should throw IllegalStateException");
         } catch (final IllegalStateException e) {
             Assert.assertEquals("Can only set UncaughtExceptionHandler in CREATED state.", e.getMessage());
-            throw e;
         } finally {
             streams.close();
         }
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void shouldThrowExceptionSettingStateListenerNotInCreateState() {
         streams.start();
         try {
             streams.setStateListener(null);
+            fail("Should throw IllegalStateException");
         } catch (final IllegalStateException e) {
-            Assert.assertEquals("Can only set StateListener in state CREATED.", e.getMessage());
-            throw e;
+            Assert.assertEquals("Can only set StateListener in CREATED state.", e.getMessage());
         } finally {
             streams.close();
         }

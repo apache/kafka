@@ -237,7 +237,7 @@ public class KafkaStreams {
             if (state == CREATED) {
                 stateListener = listener;
             } else {
-                throw new IllegalStateException("Can only set StateListener in state CREATED.");
+                throw new IllegalStateException("Can only set StateListener in CREATED state.");
             }
         }
     }
