@@ -16,38 +16,25 @@
  */
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.common.utils.Utils;
-
 import java.util.List;
 
-// This is used to describe per-partition state in the LeaderAndIsrRequest
-public class PartitionState {
+// This class contains the common fields shared between LeaderAndIsrRequest.PartitionState and UpdateMetadataRequest.PartitionState
+public class BasePartitionState {
+
     public final int controllerEpoch;
     public final int leader;
     public final int leaderEpoch;
     public final List<Integer> isr;
     public final int zkVersion;
     public final List<Integer> replicas;
-    public final boolean isNew;
 
-    public PartitionState(int controllerEpoch, int leader, int leaderEpoch, List<Integer> isr, int zkVersion, List<Integer> replicas, boolean isNew) {
+    BasePartitionState(int controllerEpoch, int leader, int leaderEpoch, List<Integer> isr, int zkVersion, List<Integer> replicas) {
         this.controllerEpoch = controllerEpoch;
         this.leader = leader;
         this.leaderEpoch = leaderEpoch;
         this.isr = isr;
         this.zkVersion = zkVersion;
         this.replicas = replicas;
-        this.isNew = isNew;
     }
 
-    @Override
-    public String toString() {
-        return "PartitionState(controllerEpoch=" + controllerEpoch +
-                ", leader=" + leader +
-                ", leaderEpoch=" + leaderEpoch +
-                ", isr=" + Utils.join(isr, ",") +
-                ", zkVersion=" + zkVersion +
-                ", replicas=" + Utils.join(replicas, ",") +
-                ", isNew=" + isNew + ")";
-    }
 }

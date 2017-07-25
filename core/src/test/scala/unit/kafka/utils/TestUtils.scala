@@ -925,7 +925,7 @@ object TestUtils extends Logging {
           partitionStateOpt match {
             case None => false
             case Some(partitionState) =>
-              leader = partitionState.leaderIsrAndControllerEpoch.leaderAndIsr.leader
+              leader = partitionState.basePartitionState.leader
               result && Request.isValidBrokerId(leader)
           }
       },

@@ -20,7 +20,7 @@ import java.util.{Map => JMap}
 
 import kafka.admin.AdminUtils
 import kafka.server.KafkaConfig._
-import kafka.server.{BlockingSend, KafkaConfig, KafkaServer, ReplicaFetcherBlockingSend}
+import kafka.server.{BlockingSend, KafkaServer, ReplicaFetcherBlockingSend}
 import kafka.utils.TestUtils._
 import kafka.utils.{Logging, TestUtils}
 import kafka.zk.ZooKeeperTestHarness
@@ -222,7 +222,7 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
   private def waitForEpochChangeTo(topic: String, partition: Int, epoch: Int): Unit = {
     TestUtils.waitUntilTrue(() => {
       brokers(0).metadataCache.getPartitionInfo(topic, partition) match {
-        case Some(m) => m.leaderIsrAndControllerEpoch.leaderAndIsr.leaderEpoch == epoch
+        case Some(m) => m.basePartitionState.leaderEpoch == epoch
         case None => false
       }
     }, "Epoch didn't change")
