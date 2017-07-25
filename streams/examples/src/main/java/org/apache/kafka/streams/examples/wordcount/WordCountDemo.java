@@ -18,6 +18,7 @@ package org.apache.kafka.streams.examples.wordcount;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
@@ -30,6 +31,7 @@ import org.apache.kafka.streams.kstream.ValueMapper;
 import java.util.Arrays;
 import java.util.Locale;
 import java.util.Properties;
+import java.util.concurrent.CountDownLatch;
 
 /**
  * Demonstrates, using the high-level KStream DSL, how to implement the WordCount program
@@ -60,7 +62,7 @@ public class WordCountDemo {
 
         KStreamBuilder builder = new KStreamBuilder();
 
-        KStream<String, String> source = builder.stream("streams-file-input");
+        KStream<String, String> source = builder.stream("streams-wordcount-input");
 
         KTable<String, Long> counts = source
                 .flatMapValues(new ValueMapper<String, Iterable<String>>() {
@@ -80,13 +82,24 @@ public class WordCountDemo {
         // need to override value serde to Long type
         counts.to(Serdes.String(), Serdes.Long(), "streams-wordcount-output");
 
-        KafkaStreams streams = new KafkaStreams(builder, props);
-        streams.start();
+        final KafkaStreams streams = new KafkaStreams(builder, props);
+        final CountDownLatch latch = new CountDownLatch(1);
 
-        // usually the stream application would be running forever,
-        // in this example we just let it run for some time and stop since the input data is finite.
-        Thread.sleep(5000L);
+        // attach shutdown handler to catch control-c
+        Runtime.getRuntime().addShutdownHook(new Thread("streams-wordcount-shutdown-hook") {
+            @Override
+            public void run() {
+                streams.close();
+                latch.countDown();
+            }
+        });
 
-        streams.close();
+        try {
+            streams.start();
+            latch.await();
+        } catch (Throwable e) {
+            Exit.exit(1);
+        }
+        Exit.exit(0);
     }
 }
