@@ -260,7 +260,7 @@ public class KafkaStreamsTest {
         try {
             streams.setUncaughtExceptionHandler(null);
         } catch (final IllegalStateException e) {
-            Assert.assertEquals("Can only set UncaughtExceptionHandler in CREATE state.", e.getMessage());
+            Assert.assertEquals("Can only set UncaughtExceptionHandler in CREATED state.", e.getMessage());
             throw e;
         } finally {
             streams.close();
