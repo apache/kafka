@@ -20,15 +20,24 @@ import java.net.UnknownHostException
 import java.nio.charset.StandardCharsets
 import java.util.UUID
 import java.util.concurrent.{CountDownLatch, TimeUnit}
+import javax.security.auth.login.Configuration
 
 import kafka.zk.ZooKeeperTestHarness
+import org.apache.kafka.common.security.JaasUtils
 import org.apache.zookeeper.KeeperException.Code
 import org.apache.zookeeper.{CreateMode, ZooDefs}
 import org.junit.Assert.{assertArrayEquals, assertEquals, assertTrue}
-import org.junit.Test
+import org.junit.{After, Test}
 
 class ZookeeperClientTest extends ZooKeeperTestHarness {
   private val mockPath = "/foo"
+
+  @After
+  override def tearDown() {
+    super.tearDown()
+    System.clearProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)
+    Configuration.setConfiguration(null)
+  }
 
   @Test(expected = classOf[UnknownHostException])
   def testUnresolvableConnectString(): Unit = {
@@ -215,14 +224,34 @@ class ZookeeperClientTest extends ZooKeeperTestHarness {
   }
 
   @Test
+  def testZNodeChangeHandlerForCreation(): Unit = {
+    import scala.collection.JavaConverters._
+    val zookeeperClient = new ZookeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, null)
+    val znodeChangeHandlerCountDownLatch = new CountDownLatch(1)
+    val zNodeChangeHandler = new ZNodeChangeHandler {
+      override def handleCreation = {
+        znodeChangeHandlerCountDownLatch.countDown()
+      }
+      override def handleDeletion = {}
+      override def handleDataChange = {}
+      override val path: String = mockPath
+    }
+
+    zookeeperClient.registerZNodeChangeHandler(zNodeChangeHandler)
+    val createResponse = zookeeperClient.handle(CreateRequest(mockPath, Array.empty[Byte], ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala, CreateMode.PERSISTENT, null))
+    assertEquals("Response code for create should be OK", Code.OK, Code.get(createResponse.rc))
+    assertTrue("Failed to receive create notification", znodeChangeHandlerCountDownLatch.await(5, TimeUnit.SECONDS))
+  }
+
+  @Test
   def testZNodeChangeHandlerForDeletion(): Unit = {
     import scala.collection.JavaConverters._
     val zookeeperClient = new ZookeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, null)
-    val dataChangeHandlerCountDownLatch = new CountDownLatch(1)
+    val znodeChangeHandlerCountDownLatch = new CountDownLatch(1)
     val zNodeChangeHandler = new ZNodeChangeHandler {
       override def handleCreation = {}
       override def handleDeletion = {
-        dataChangeHandlerCountDownLatch.countDown()
+        znodeChangeHandlerCountDownLatch.countDown()
       }
       override def handleDataChange = {}
       override val path: String = mockPath
@@ -233,7 +262,7 @@ class ZookeeperClientTest extends ZooKeeperTestHarness {
     zookeeperClient.registerZNodeChangeHandler(zNodeChangeHandler)
     val deleteResponse = zookeeperClient.handle(DeleteRequest(mockPath, -1, null)).asInstanceOf[DeleteResponse]
     assertEquals("Response code for delete should be OK", Code.OK, Code.get(deleteResponse.rc))
-    assertTrue("Failed to receive delete notification", dataChangeHandlerCountDownLatch.await(5, TimeUnit.SECONDS))
+    assertTrue("Failed to receive delete notification", znodeChangeHandlerCountDownLatch.await(5, TimeUnit.SECONDS))
   }
 
   @Test
@@ -278,6 +307,22 @@ class ZookeeperClientTest extends ZooKeeperTestHarness {
     val createResponseChild1 = zookeeperClient.handle(CreateRequest(child1Path, Array.empty[Byte], ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala, CreateMode.PERSISTENT, null))
     assertEquals("Response code for create child1 should be OK", Code.OK, Code.get(createResponseChild1.rc))
     assertTrue("Failed to receive child change notification", zNodeChildChangeHandlerCountDownLatch.await(5, TimeUnit.SECONDS))
+  }
+
+  @Test
+  def testStateChangeHandlerForAuthFailure(): Unit = {
+    System.setProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM, "no-such-file-exists.conf")
+    val stateChangeHandlerCountDownLatch = new CountDownLatch(1)
+    val stateChangeHandler = new StateChangeHandler {
+      override def beforeInitializingSession = {}
+      override def afterInitializingSession = {}
+      override def onAuthFailure = {
+        stateChangeHandlerCountDownLatch.countDown()
+      }
+      override def onConnectionTimeout = {}
+    }
+    new ZookeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, stateChangeHandler)
+    assertTrue("Failed to receive auth failed notification", stateChangeHandlerCountDownLatch.await(5, TimeUnit.SECONDS))
   }
 
   private def bytes = UUID.randomUUID().toString.getBytes(StandardCharsets.UTF_8)
