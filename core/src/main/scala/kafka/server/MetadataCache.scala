@@ -50,7 +50,7 @@ class MetadataCache(brokerId: Int) extends Logging {
   // This method is the main hotspot when it comes to the performance of metadata requests,
   // we should be careful about adding additional logic here.
   // filterUnavailableEndpoints exists to support v0 MetadataResponses
-  private def getEndpoints(brokers: Seq[Int], listenerName: ListenerName, filterUnavailableEndpoints: Boolean): Seq[Node] = {
+  private def getEndpoints(brokers: Iterable[Int], listenerName: ListenerName, filterUnavailableEndpoints: Boolean): Seq[Node] = {
     val result = new mutable.ArrayBuffer[Node](math.min(aliveBrokers.size, brokers.size))
     brokers.foreach { brokerId =>
       val endpoint = getAliveEndpoint(brokerId, listenerName) match {

@@ -422,9 +422,8 @@ class ControllerBrokerRequestBatch(controller: KafkaController) extends  Logging
         "to brokers %s for partition %s").format(controllerId, controllerEpoch, p._2,
         updateMetadataRequestBrokerSet.toString(), p._1)))
       // Copy the updateMetadataRequestPartitionInfoMap
-      val partitionStates = updateMetadataRequestPartitionInfoMap.map { case (topicPartition, partitionStateInfo) =>
-        topicPartition -> partitionStateInfo
-      }
+
+      val partitionStates = Map(updateMetadataRequestPartitionInfoMap.toArray:_*)
       val updateMetadataRequestVersion: Short =
         if (controller.config.interBrokerProtocolVersion >= KAFKA_0_11_1_IV0) 4
         else if (controller.config.interBrokerProtocolVersion >= KAFKA_0_10_2_IV0) 3
