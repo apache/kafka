@@ -57,6 +57,9 @@ class Replica(val brokerId: Int,
 
   val epochs = log.map(_.leaderEpochCache)
 
+  info(s"Replica loaded for partition $topicPartition with initial high watermark $initialHighWatermarkValue")
+  log.foreach(_.onHighWatermarkIncremented(initialHighWatermarkValue))
+
   /*
    * If the FetchRequest reads up to the log end offset of the leader when the current fetch request is received,
    * set `lastCaughtUpTimeMs` to the time when the current fetch request was received.

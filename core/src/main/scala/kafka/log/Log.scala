@@ -1120,11 +1120,12 @@ class Log(@volatile var dir: File,
    * Find segments starting from the oldest until the user-supplied predicate is false or the segment
    * containing the current high watermark is reached. We do not delete segments with offsets at or beyond
    * the high watermark to ensure that the log start offset can never exceed it. If the high watermark
-   * is unavailable, no segments are eligible for deletion.
+   * has not yet been initialized, no segments are eligible for deletion.
    *
    * A final segment that is empty will never be returned (since we would just end up re-creating it).
    *
-   * @param predicate A function that takes in a single log segment and returns true iff it is deletable
+   * @param predicate A function that takes in a candidate log segment and the next higher segment
+   *                  (if there is one) and returns true iff it is deletable
    * @return the segments ready to be deleted
    */
   private def deletableSegments(predicate: (LogSegment, Option[LogSegment]) => Boolean): Iterable[LogSegment] = {

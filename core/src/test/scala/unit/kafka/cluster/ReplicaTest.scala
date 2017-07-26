@@ -65,6 +65,29 @@ class ReplicaTest {
   }
 
   @Test
+  def testSegmentDeletionWithHighWatermarkInitialization(): Unit = {
+    val initialHighWatermark = 25L
+    replica = new Replica(brokerId = 0,
+      topicPartition = new TopicPartition("foo", 0),
+      time = time,
+      initialHighWatermarkValue = initialHighWatermark,
+      log = Some(log))
+
+    assertEquals(initialHighWatermark, replica.highWatermark.messageOffset)
+
+    val expiredTimestamp = time.milliseconds() - 1000
+    for (i <- 0 until 100) {
+      val records = TestUtils.singletonRecords(value = s"test$i".getBytes, timestamp = expiredTimestamp)
+      log.appendAsLeader(records, leaderEpoch = 0)
+    }
+
+    val initialNumSegments = log.numberOfSegments
+    log.deleteOldSegments()
+    assertTrue(log.numberOfSegments < initialNumSegments)
+    assertTrue(replica.logStartOffset <= initialHighWatermark)
+  }
+
+  @Test
   def testCannotDeleteSegmentsAtOrAboveHighWatermark(): Unit = {
     val expiredTimestamp = time.milliseconds() - 1000
     for (i <- 0 until 100) {
@@ -72,6 +95,8 @@ class ReplicaTest {
       log.appendAsLeader(records, leaderEpoch = 0)
     }
 
+    // ensure we have at least a few segments so the test case is not trivial
+    assertTrue(log.numberOfSegments > 5)
     assertEquals(0L, replica.highWatermark.messageOffset)
     assertEquals(0L, replica.logStartOffset)
     assertEquals(100L, replica.logEndOffset.messageOffset)
