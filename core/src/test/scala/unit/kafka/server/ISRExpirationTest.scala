@@ -221,6 +221,7 @@ class IsrExpirationTest {
     val cache = EasyMock.createNiceMock(classOf[LeaderEpochCache])
     EasyMock.expect(log.dir).andReturn(TestUtils.tempDir()).anyTimes()
     EasyMock.expect(log.leaderEpochCache).andReturn(cache).anyTimes()
+    EasyMock.expect(log.onHighWatermarkIncremented(0L))
     EasyMock.replay(log)
     log
   }
