@@ -30,6 +30,7 @@ import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.MockMetricsReporter;
+import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Assert;
 import org.junit.Before;
@@ -37,6 +38,7 @@ import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
+import java.io.File;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -299,6 +301,59 @@ public class KafkaStreamsTest {
         Assert.assertNotNull("streamString should not be null", streamString);
         Assert.assertNotEquals("streamString contains non-empty appId", "", appId);
         Assert.assertNotNull("streamString contains non-null appId", appId);
+    }
+
+
+    @Test
+    public void shouldCleanupOldStateDirs() throws InterruptedException {
+        final Properties props = new Properties();
+        final String appId = "cleanupOldStateDirs";
+        final String stateDir = TestUtils.tempDirectory().getPath();
+        props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, appId);
+        props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
+        props.setProperty(StreamsConfig.STATE_CLEANUP_DELAY_MS_CONFIG, "1");
+        props.setProperty(StreamsConfig.STATE_DIR_CONFIG, stateDir);
+
+
+        final String topic = "topic";
+        CLUSTER.createTopic(topic);
+        final KStreamBuilder builder = new KStreamBuilder();
+
+        builder.stream(Serdes.String(), Serdes.String(), topic);
+
+        final KafkaStreams streams = new KafkaStreams(builder, props);
+        final CountDownLatch latch = new CountDownLatch(1);
+        streams.setStateListener(new KafkaStreams.StateListener() {
+            @Override
+            public void onChange(final KafkaStreams.State newState, final KafkaStreams.State oldState) {
+                if (newState == KafkaStreams.State.RUNNING && oldState == KafkaStreams.State.REBALANCING) {
+                    latch.countDown();
+                }
+            }
+        });
+        final String appDir = stateDir + File.separator + appId;
+        final File oldTaskDir = new File(appDir, "10_1");
+        assertTrue(oldTaskDir.mkdirs());
+        try {
+            streams.start();
+            latch.await(30, TimeUnit.SECONDS);
+            verifyCleanupStateDir(appDir, oldTaskDir);
+            assertTrue(oldTaskDir.mkdirs());
+            verifyCleanupStateDir(appDir, oldTaskDir);
+        } finally {
+            streams.close();
+        }
+    }
+
+    private void verifyCleanupStateDir(final String appDir, final File oldTaskDir) throws InterruptedException {
+        final File taskDir = new File(appDir, "0_0");
+        TestUtils.waitForCondition(new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                return !oldTaskDir.exists() && taskDir.exists();
+            }
+        }, 30000, "cleanup has not successfully run");
+        assertTrue(taskDir.exists());
     }
 
 

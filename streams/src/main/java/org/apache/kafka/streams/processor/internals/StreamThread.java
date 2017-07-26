@@ -438,7 +438,8 @@ public class StreamThread extends Thread {
                         final Metrics metrics,
                         final Time time,
                         final StreamsMetadataState streamsMetadataState,
-                        final long cacheSizeBytes) {
+                        final long cacheSizeBytes,
+                        final StateDirectory stateDirectory) {
         super(clientId + "-StreamThread-" + STREAM_THREAD_ID_SEQUENCE.getAndIncrement());
         this.applicationId = applicationId;
         this.config = config;
@@ -488,7 +489,7 @@ public class StreamThread extends Thread {
         // standby KTables
         standbyRecords = new HashMap<>();
 
-        stateDirectory = new StateDirectory(applicationId, threadClientId, config.getString(StreamsConfig.STATE_DIR_CONFIG), time);
+        this.stateDirectory = stateDirectory;
         final Object maxPollInterval = consumerConfigs.get(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG);
         rebalanceTimeoutMs =  (Integer) ConfigDef.parseType(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, maxPollInterval, Type.INT);
         pollTimeMs = config.getLong(StreamsConfig.POLL_MS_CONFIG);
@@ -557,7 +558,6 @@ public class StreamThread extends Thread {
 
             maybeCommit(timerStartedMs);
             maybeUpdateStandbyTasks(timerStartedMs);
-            maybeClean(timerStartedMs);
         }
         log.info("{} Shutting down at user request", logPrefix);
     }
@@ -877,16 +877,6 @@ public class StreamThread extends Thread {
                     }
                 }
             }
-        }
-    }
-
-    /**
-     * Cleanup any states of the tasks that have been removed from this thread
-     */
-    protected void maybeClean(final long now) {
-        if (now > lastCleanMs + cleanTimeMs) {
-            stateDirectory.cleanRemovedTasks(cleanTimeMs);
-            lastCleanMs = now;
         }
     }
 
