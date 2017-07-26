@@ -1801,13 +1801,13 @@ public interface KTable<K, V> {
      * @param joiner
      * @return
      */
-    <K0,V0,KO,VO> KTable<K0,V0> oneToManyJoin (final KTable<KO,VO> other,
-    		 							  		final ValueMapper<VO, K> keyExtractor,
-    		 							  		final ValueMapper<K, K0> joinPrefixFaker,
-    		 							  		final ValueMapper<K0, K> leftKeyExtractor,
-    		 							  		final ValueJoiner<V, VO, V0> joiner);
-    
-    
+    <K0, V0, KO, VO> KTable<K0, V0> oneToManyJoin(KTable<KO, VO> other,
+			ValueMapper<VO, K> keyExtractor,
+			ValueMapper<K, K0> joinPrefixFaker,
+			ValueMapper<K0, K> leftKeyExtractor, 
+			ValueJoiner<V, VO, V0> joiner,
+			Serde<KO> keyOtherSerde, Serde<VO> valueOtherSerde,
+			Serde<K0> joinKeySerde, Serde<V0> joinValueSerde);
     
     
     /**
@@ -1816,4 +1816,6 @@ public interface KTable<K, V> {
      * @return the underlying state store name, or {@code null} if this {@code KTable} cannot be queried.
      */
     String queryableStoreName();
+
+	
 }

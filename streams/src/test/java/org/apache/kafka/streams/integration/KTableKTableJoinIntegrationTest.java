@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.integration;
 
 import kafka.utils.MockTime;
+
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.Serdes;
@@ -30,6 +31,7 @@ import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.ValueJoiner;
+import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
@@ -286,6 +288,35 @@ public class KTableKTableJoinIntegrationTest {
             new KeyValue<>("b", "B1-null-B3"),
             new KeyValue<>("b", "B1-B2-B3"),
             new KeyValue<>("c", "null-C2-C3")), true);
+    }
+    
+    @Test
+    public void testOneToManyKTableKTable() throws Exception {
+    	streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, "onetomanyjoin");
+    	
+    	final KStreamBuilder builder = new KStreamBuilder();
+        final KTable<String, String> table1 = builder.table(TABLE_1, TABLE_1);
+        final KTable<String, String> table3 = builder.table(TABLE_3, TABLE_3);
+        
+        ValueMapper<String,String> keyExtractor = new ValueMapper<String,String>() { public String apply(String value) { return "a" + value; };};
+        ValueMapper<String,String> joinPrefixFaker = new ValueMapper<String,String>() { public String apply(String value) { return "a"; };};
+        ValueJoiner<String, String, String> joiner = new ValueJoiner<String, String, String>() {
+
+        	 @Override
+             public String apply(final String value1, final String value2) {
+                 return value1 + "-" + value2;
+             }
+		};
+        
+        KTable<String,String> result = table1.oneToManyJoin(table3, 
+        						keyExtractor, 
+        						joinPrefixFaker, 
+        						keyExtractor, 
+        						joiner, 
+        						Serdes.String(), 
+        						Serdes.String(), 
+        						Serdes.String(), 
+        						Serdes.String());
     }
 
 

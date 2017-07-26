@@ -29,6 +29,8 @@ import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
+import org.apache.kafka.streams.kstream.internals.onetomany.KTableRepartitionerProcessorSupplier;
+import org.apache.kafka.streams.kstream.internals.onetomany.RangeKeyValueGetterProviderAndProcessorSupplier;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
@@ -39,6 +41,7 @@ import java.io.FileNotFoundException;
 import java.io.PrintWriter;
 import java.io.UnsupportedEncodingException;
 import java.nio.charset.StandardCharsets;
+import java.util.LinkedList;
 import java.util.Objects;
 import java.util.Set;
 
@@ -622,11 +625,15 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
 	public <K0, V0, KO, VO> KTable<K0, V0> oneToManyJoin(KTable<KO, VO> other,
 			ValueMapper<VO, K> keyExtractor,
 			ValueMapper<K, K0> joinPrefixFaker,
-			ValueMapper<K0, K> leftKeyExtractor, ValueJoiner<V, VO, V0> joiner) {
+			ValueMapper<K0, K> leftKeyExtractor, ValueJoiner<V, VO, V0> joiner,
+			Serde<KO> keyOtherSerde,
+			Serde<VO> valueOtherSerde,
+			Serde<K0> joinKeySerde,
+			Serde<V0> joinValueSerde) {
 	
-		((KTableImpl) other).enableSendingOldValues();
+		((KTableImpl<?,?,?>) other).enableSendingOldValues();
 		enableSendingOldValues();
-		
+	
         String repartitionerName = topology.newName(name + REPARTITON_RIGHT);
         final String repartitionTopicName = name + "-joiner-repartition";
 
@@ -637,41 +644,22 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         final String repartitionReceiverName = repartitionerName + "-table";
 
         // repartition original => intermediate topic
-        KTableRepartitionerProcessorSupplier<K, KR, VR> repartitionProcessor =
+        KTableRepartitionerProcessorSupplier<K, KO, VO> repartitionProcessor =
                 new KTableRepartitionerProcessorSupplier<>(keyExtractor);
-        topology.addProcessor(repartitionProcessorName, repartitionProcessor, this.extractSourceName((AbstractStream<?>) right));
+        
+        topology.addProcessor(repartitionProcessorName, repartitionProcessor, ((AbstractStream<?>)other).sourceNodes.toArray(new String[0]));
 
-        this.forceSendingOldValues(right);
-        this.forceSendingOldValues(left);
-
-
-        PartialKeyPartitioner<K, VR, KL> partitioner = new PartialKeyPartitioner<>(leftKeyExtractor, keyLeftSerde, repartitionTopicName);
+        PartialKeyPartitioner<K0, V, KO> partitioner = new PartialKeyPartitioner<>(leftKeyExtractor, keySerde, repartitionTopicName);
         topology.addSink(repartitionSinkName, repartitionTopicName,
-                joinKeySerde.serializer(), valueRightSerde.serializer(),
+                joinKeySerde.serializer(), valueOtherSerde.serializer(),
                 partitioner, repartitionProcessorName);
 
 
         // Re read partitioned topic and copartition with left
-        topology.addSource(repartitionSourceName, joinKeySerde.deserializer(), valueRightSerde.deserializer(), repartitionTopicName);
+        topology.addSource(repartitionSourceName, joinKeySerde.deserializer(), valueOtherSerde.deserializer(), repartitionTopicName);
         LinkedList<String> sourcesNeedCopartitioning = new LinkedList<>();
-        sourcesNeedCopartitioning.add(repartitionSourceName);;
-        sourcesNeedCopartitioning.addAll(extractSourceNodes(left));
-        if (numOutPutPartitions > 0) { // this part is shit, as it will enforce higher copartitonbound than needed if many
-            // joins use the same outputpartitionnum topic
-            String partitionNumTopicName = "numpartitions_" + numOutPutPartitions;
-            String partitionNumProcessorName = "numpartitions_source_" + numOutPutPartitions;
-
-            try {
-                topology.addSource(partitionNumProcessorName, partitionNumTopicName);
-            } catch (TopologyBuilderException e) {
-                if (e.getMessage().equals("Invalid topology building: Processor " + partitionNumProcessorName + " is already added.")) {
-                } else {
-                    throw new StreamsException(e);
-                }
-            }
-
-            sourcesNeedCopartitioning.add(partitionNumProcessorName);
-        }
+        sourcesNeedCopartitioning.add(repartitionSourceName);
+        sourcesNeedCopartitioning.addAll(sourceNodes);
         
         topology.copartitionSources(sourcesNeedCopartitioning);
 
@@ -679,8 +667,8 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         String joinByRangeProcessor = joinName + "-BY_RANGE";
 
 
-        final RangeKeyValueGetterProviderAndProcessorSupplier<K, V, KL, VL, VR> joinThis =
-                new RangeKeyValueGetterProviderAndProcessorSupplier(repartitionTopicName, extractValueGetterSupplier(left), leftKeyExtractor, joiner);
+        final RangeKeyValueGetterProviderAndProcessorSupplier<K0, V0, K, V, VO> joinThis =
+                new RangeKeyValueGetterProviderAndProcessorSupplier(repartitionTopicName, ((KTableImpl<?, ?, ?>) other).valueGetterSupplier(), leftKeyExtractor, joiner);
         topology.addProcessor(repartitionReceiverName, joinThis, repartitionSourceName);
 
         StateStoreSupplier aggregateStore = Stores.create(repartitionTopicName)
