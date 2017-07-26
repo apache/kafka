@@ -74,6 +74,7 @@ import java.util.concurrent.TimeUnit;
 
 import static org.apache.kafka.common.utils.Utils.getHost;
 import static org.apache.kafka.common.utils.Utils.getPort;
+import static org.apache.kafka.streams.KafkaStreams.State.CREATED;
 import static org.apache.kafka.streams.KafkaStreams.State.ERROR;
 import static org.apache.kafka.streams.KafkaStreams.State.NOT_RUNNING;
 import static org.apache.kafka.streams.KafkaStreams.State.PENDING_SHUTDOWN;
@@ -228,10 +229,17 @@ public class KafkaStreams {
 
     /**
      * An app can set a single {@link KafkaStreams.StateListener} so that the app is notified when state changes.
+     *
      * @param listener a new state listener
      */
     public void setStateListener(final KafkaStreams.StateListener listener) {
-        stateListener = listener;
+        synchronized (stateLock) {
+            if (state == CREATED) {
+                stateListener = listener;
+            } else {
+                throw new IllegalStateException("Can only set StateListener in CREATED state.");
+            }
+        }
     }
 
     /**
@@ -737,12 +745,18 @@ public class KafkaStreams {
      * @param eh the uncaught exception handler for all internal threads; {@code null} deletes the current handler
      */
     public void setUncaughtExceptionHandler(final Thread.UncaughtExceptionHandler eh) {
-        for (final StreamThread thread : threads) {
-            thread.setUncaughtExceptionHandler(eh);
-        }
+        synchronized (stateLock) {
+            if (state == CREATED) {
+                for (final StreamThread thread : threads) {
+                    thread.setUncaughtExceptionHandler(eh);
+                }
 
-        if (globalStreamThread != null) {
-            globalStreamThread.setUncaughtExceptionHandler(eh);
+                if (globalStreamThread != null) {
+                    globalStreamThread.setUncaughtExceptionHandler(eh);
+                }
+            } else {
+                throw new IllegalStateException("Can only set UncaughtExceptionHandler in CREATED state.");
+            }
         }
     }
 
