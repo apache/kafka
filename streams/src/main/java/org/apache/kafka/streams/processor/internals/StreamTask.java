@@ -123,7 +123,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         // to corresponding source nodes in the processor topology
         final Map<TopicPartition, RecordQueue> partitionQueues = new HashMap<>();
 
-
         // initialize the consumed offset cache
         consumedOffsets = new HashMap<>();
 
