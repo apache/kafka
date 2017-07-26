@@ -113,16 +113,16 @@ public class StreamThreadStateStoreProviderTest {
         storesAvailable = true;
         provider = new StreamThreadStateStoreProvider(
             new StreamThread(
-                builder.internalTopologyBuilder,
-                streamsConfig,
-                clientSupplier,
-                applicationId,
-                "clientId",
-                UUID.randomUUID(),
-                new Metrics(),
-                Time.SYSTEM,
-                new StreamsMetadataState(builder.internalTopologyBuilder, StreamsMetadataState.UNKNOWN_HOST),
-                0) {
+                    builder.internalTopologyBuilder,
+                    streamsConfig,
+                    clientSupplier,
+                    applicationId,
+                    "clientId",
+                    UUID.randomUUID(),
+                    new Metrics(),
+                    Time.SYSTEM,
+                    new StreamsMetadataState(builder.internalTopologyBuilder, StreamsMetadataState.UNKNOWN_HOST),
+                    0, stateDirectory) {
 
                 @Override
                 public Map<TaskId, StreamTask> tasks() {
