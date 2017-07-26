@@ -20,6 +20,7 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.processor.AbstractNotifyingBatchingRestoreCallback;
 import org.apache.kafka.streams.processor.BatchingStateRestoreCallback;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateRestoreListener;
@@ -33,7 +34,7 @@ class CompositeRestoreListener implements BatchingStateRestoreCallback, StateRes
     private final StateRestoreListener storeRestoreListener;
     private StateRestoreListener globalRestoreListener = NO_OP_STATE_RESTORE_LISTENER;
 
-    CompositeRestoreListener(StateRestoreCallback stateRestoreCallback) {
+    CompositeRestoreListener(final StateRestoreCallback stateRestoreCallback) {
 
         if (stateRestoreCallback instanceof StateRestoreListener) {
             storeRestoreListener = (StateRestoreListener) stateRestoreCallback;
@@ -48,22 +49,27 @@ class CompositeRestoreListener implements BatchingStateRestoreCallback, StateRes
     }
 
     @Override
-    public void onRestoreStart(TopicPartition topicPartition, String storeName,
-                               long startingOffset, long endingOffset) {
+    public void onRestoreStart(final TopicPartition topicPartition,
+                               final String storeName,
+                               final long startingOffset,
+                               final long endingOffset) {
         globalRestoreListener.onRestoreStart(topicPartition, storeName, startingOffset, endingOffset);
         storeRestoreListener.onRestoreStart(topicPartition, storeName, startingOffset, endingOffset);
     }
 
     @Override
-    public void onBatchRestored(TopicPartition topicPartition, String storeName,
-                                long batchEndOffset, long numRestored) {
+    public void onBatchRestored(final TopicPartition topicPartition,
+                                final String storeName,
+                                final long batchEndOffset,
+                                final long numRestored) {
         globalRestoreListener.onBatchRestored(topicPartition, storeName, batchEndOffset, numRestored);
         storeRestoreListener.onBatchRestored(topicPartition, storeName, batchEndOffset, numRestored);
     }
 
     @Override
-    public void onRestoreEnd(TopicPartition topicPartition, String storeName,
-                             long totalRestored) {
+    public void onRestoreEnd(final TopicPartition topicPartition,
+                             final String storeName,
+                             final long totalRestored) {
         globalRestoreListener.onRestoreEnd(topicPartition, storeName, totalRestored);
         storeRestoreListener.onRestoreEnd(topicPartition, storeName, totalRestored);
 
@@ -74,44 +80,24 @@ class CompositeRestoreListener implements BatchingStateRestoreCallback, StateRes
         internalBatchingRestoreCallback.restoreAll(records);
     }
 
-    void setGlobalRestoreListener(StateRestoreListener globalRestoreListener) {
+    void setGlobalRestoreListener(final StateRestoreListener globalRestoreListener) {
         if (globalRestoreListener != null) {
             this.globalRestoreListener = globalRestoreListener;
         }
     }
 
     @Override
-    public void restore(final byte[] key, final byte[] value) {
+    public void restore(final byte[] key,
+                        final byte[] value) {
         throw new UnsupportedOperationException("Single restore functionality shouldn't be called directly but "
                                                 + "through the delegated StateRestoreCallback instance");
     }
 
 
-    private static final class NoOpStateRestoreListener implements StateRestoreListener {
+    private static final class NoOpStateRestoreListener extends AbstractNotifyingBatchingRestoreCallback  {
 
         @Override
-        public void onRestoreStart(final TopicPartition topicPartition, final String storeName,
-                                   final long startingOffset, final long endingOffset) {
-
-        }
-
-        @Override
-        public void onBatchRestored(final TopicPartition topicPartition, final String storeName,
-                                    final long batchEndOffset, final long numRestored) {
-
-        }
-
-        @Override
-        public void onRestoreEnd(final TopicPartition topicPartition, final String storeName,
-                                 final long totalRestored) {
-
-        }
-    }
-
-    private static final class NoOpStateRestoreCallback implements StateRestoreCallback {
-
-        @Override
-        public void restore(final byte[] key, final byte[] value) {
+        public void restoreAll(final Collection<KeyValue<byte[], byte[]>> records) {
 
         }
     }

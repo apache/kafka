@@ -34,7 +34,8 @@ public abstract class AbstractNotifyingBatchingRestoreCallback
      * or {@link StateRestoreCallback} instead for single action restores.
      */
     @Override
-    public void restore(byte[] key, byte[] value) {
+    public void restore(final byte[] key,
+                        final byte[] value) {
         throw new UnsupportedOperationException("Single restore not supported");
     }
 
@@ -46,8 +47,10 @@ public abstract class AbstractNotifyingBatchingRestoreCallback
      *
      */
     @Override
-    public void onRestoreStart(TopicPartition topicPartition, String storeName, long startingOffset,
-                               long endingOffset) {
+    public void onRestoreStart(final TopicPartition topicPartition,
+                               final String storeName,
+                               final long startingOffset,
+                               final long endingOffset) {
 
     }
 
@@ -59,8 +62,10 @@ public abstract class AbstractNotifyingBatchingRestoreCallback
      *
      */
     @Override
-    public void onBatchRestored(TopicPartition topicPartition, String storeName, long batchEndOffset,
-                                long numRestored) {
+    public void onBatchRestored(final TopicPartition topicPartition,
+                                final String storeName,
+                                final long batchEndOffset,
+                                final long numRestored) {
 
     }
 
@@ -71,7 +76,9 @@ public abstract class AbstractNotifyingBatchingRestoreCallback
      *
      */
     @Override
-    public void onRestoreEnd(TopicPartition topicPartition, String storeName, long totalRestored) {
+    public void onRestoreEnd(final TopicPartition topicPartition,
+                             final String storeName,
+                             final long totalRestored) {
 
     }
 }

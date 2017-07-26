@@ -257,14 +257,14 @@ public class KafkaStreamsTest {
         }
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void shouldNotSetGlobalRestoreListenerAfterStarting() {
         streams.start();
         try {
             streams.setGlobalStateRestoreListener(new MockStateRestoreListener());
+            fail("Should throw an IllegalStateException");
         } catch (final IllegalStateException e) {
             Assert.assertEquals("Can only set the GlobalRestoreListener in the CREATED state", e.getMessage());
-            throw e;
         } finally {
             streams.close();
         }

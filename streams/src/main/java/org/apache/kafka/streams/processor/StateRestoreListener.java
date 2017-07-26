@@ -27,7 +27,7 @@ import org.apache.kafka.common.TopicPartition;
  * across all {@link org.apache.kafka.streams.processor.internals.StreamThread} instances.
  *
  * Users desiring stateful operations will need to provide synchronization internally in
- * the StateRestorerListener implementation.
+ * the {@code StateRestorerListener} implementation.
  *
  * When used for monitoring a single {@link StateStore} using either {@link AbstractNotifyingRestoreCallback} or
  * {@link AbstractNotifyingBatchingRestoreCallback} no synchronization is necessary
@@ -40,12 +40,14 @@ public interface StateRestoreListener {
     /**
      * Method called at the very beginning of {@link StateStore} restoration.
      *
-     * @param topicPartition the TopicPartition containing the values to restore.
-     * @param storeName      the name of the store undergoing restoration.
-     * @param startingOffset the starting offset of the entire restoration process for this TopicPartition.
-     * @param endingOffset   the ending offset of the entire restoration process for this TopicPartition.
+     * @param topicPartition the TopicPartition containing the values to restore
+     * @param storeName      the name of the store undergoing restoration
+     * @param startingOffset the starting offset of the entire restoration process for this TopicPartition
+     * @param endingOffset   the ending offset of the entire restoration process for this TopicPartition
      */
-    void onRestoreStart(TopicPartition topicPartition, String storeName, long startingOffset,
+    void onRestoreStart(TopicPartition topicPartition,
+                        String storeName,
+                        long startingOffset,
                         long endingOffset);
 
     /**
@@ -58,21 +60,25 @@ public interface StateRestoreListener {
      *
      * If you need to do any extended processing or connecting to an external service consider doing so asynchronously.
      *
-     * @param topicPartition the TopicPartition containing the values to restore.
-     * @param storeName the name of the store undergoing restoration.
-     * @param batchEndOffset the ending offset for the current restored batch for this TopicPartition.
-     * @param numRestored the total number of records restored in this batch for this TopicPartition.
+     * @param topicPartition the TopicPartition containing the values to restore
+     * @param storeName the name of the store undergoing restoration
+     * @param batchEndOffset the ending offset for the current restored batch for this TopicPartition
+     * @param numRestored the total number of records restored in this batch for this TopicPartition
      */
-    void onBatchRestored(TopicPartition topicPartition, String storeName, long batchEndOffset,
+    void onBatchRestored(TopicPartition topicPartition,
+                         String storeName,
+                         long batchEndOffset,
                          long numRestored);
 
     /**
      * Method called when restoring the {@link StateStore} is complete.
      *
-     * @param topicPartition the TopicPartition containing the values to restore.
-     * @param storeName the name of the store just restored.
-     * @param totalRestored the total number of records restored for this TopicPartition.
+     * @param topicPartition the TopicPartition containing the values to restore
+     * @param storeName the name of the store just restored
+     * @param totalRestored the total number of records restored for this TopicPartition
      */
-    void onRestoreEnd(TopicPartition topicPartition, String storeName, long totalRestored);
+    void onRestoreEnd(TopicPartition topicPartition,
+                      String storeName,
+                      long totalRestored);
 
 }

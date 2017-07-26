@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.test;
 
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
@@ -25,6 +24,7 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsMetrics;
+import org.apache.kafka.streams.processor.AbstractNotifyingBatchingRestoreCallback;
 import org.apache.kafka.streams.processor.BatchingStateRestoreCallback;
 import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.PunctuationType;
@@ -44,6 +44,7 @@ import org.apache.kafka.streams.state.internals.ThreadCache;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -328,22 +329,10 @@ public class MockProcessorContext implements InternalProcessorContext, RecordCol
         metrics.close();
     }
 
-    private static final class NoOpRestoreListener implements StateRestoreListener {
+    private static final class NoOpRestoreListener extends AbstractNotifyingBatchingRestoreCallback {
 
         @Override
-        public void onRestoreStart(TopicPartition topicPartition, String storeName, long startingOffset,
-                                   long endingOffset) {
-
-        }
-
-        @Override
-        public void onBatchRestored(TopicPartition topicPartition, String storeName, long batchEndOffset,
-                                    long numRestored) {
-
-        }
-
-        @Override
-        public void onRestoreEnd(TopicPartition topicPartition, String storeName, long totalRestored) {
+        public void restoreAll(Collection<KeyValue<byte[], byte[]>> records) {
 
         }
     }

@@ -27,19 +27,20 @@ public class WrappedBatchingStateRestoreCallback implements BatchingStateRestore
 
     private final StateRestoreCallback stateRestoreCallback;
 
-    WrappedBatchingStateRestoreCallback(StateRestoreCallback stateRestoreCallback) {
+    WrappedBatchingStateRestoreCallback(final StateRestoreCallback stateRestoreCallback) {
         this.stateRestoreCallback = stateRestoreCallback;
     }
 
     @Override
-    public void restoreAll(Collection<KeyValue<byte[], byte[]>> records) {
+    public void restoreAll(final Collection<KeyValue<byte[], byte[]>> records) {
         for (KeyValue<byte[], byte[]> record : records) {
             restore(record.key, record.value);
         }
     }
 
     @Override
-    public void restore(byte[] key, byte[] value) {
+    public void restore(final byte[] key,
+                        final byte[] value) {
         stateRestoreCallback.restore(key, value);
     }
 }
