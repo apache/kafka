@@ -183,6 +183,14 @@ public class VerifiableProducer {
         Integer valuePrefix = res.getInt("valuePrefix");
 
         Properties producerProps = new Properties();
+        producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, res.getString("brokerList"));
+        producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
+                "org.apache.kafka.common.serialization.StringSerializer");
+        producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
+                "org.apache.kafka.common.serialization.StringSerializer");
+        producerProps.put(ProducerConfig.ACKS_CONFIG, Integer.toString(res.getInt("acks")));
+        // No producer retries
+        producerProps.put(ProducerConfig.RETRIES_CONFIG, "0");
         if (configFile != null) {
             try {
                 producerProps.putAll(loadProps(configFile));
@@ -190,10 +198,6 @@ public class VerifiableProducer {
                 throw new ArgumentParserException(e.getMessage(), parser);
             }
         }
-
-        producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, res.getString("brokerList"));
-        producerProps.put(ProducerConfig.ACKS_CONFIG, Integer.toString(res.getInt("acks")));
-        producerProps.put(ProducerConfig.RETRIES_CONFIG, "0");
 
         StringSerializer serializer = new StringSerializer();
         KafkaProducer<String, String> producer = new KafkaProducer<>(producerProps, serializer, serializer);
