@@ -70,7 +70,7 @@ public class FindCoordinatorResponse extends AbstractResponse {
         int nodeId = broker.getInt(NODE_ID_KEY_NAME);
         String host = broker.getString(HOST_KEY_NAME);
         int port = broker.getInt(PORT_KEY_NAME);
-        node = new Node(nodeId, host, port);
+        node = new Node(nodeId, host, port, true);
     }
 
     public int throttleTimeMs() {

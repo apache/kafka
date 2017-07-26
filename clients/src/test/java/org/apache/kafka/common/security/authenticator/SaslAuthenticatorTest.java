@@ -172,7 +172,7 @@ public class SaslAuthenticatorTest {
         createSelector(securityProtocol, saslClientConfigs);
         InetSocketAddress addr = new InetSocketAddress("127.0.0.1", server.port());
         try {
-            selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
+            selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE, false);
             fail("SASL/PLAIN channel created without username");
         } catch (IOException e) {
             // Expected exception
@@ -196,7 +196,7 @@ public class SaslAuthenticatorTest {
         createSelector(securityProtocol, saslClientConfigs);
         InetSocketAddress addr = new InetSocketAddress("127.0.0.1", server.port());
         try {
-            selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
+            selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE, false);
             fail("SASL/PLAIN channel created without password");
         } catch (IOException e) {
             // Expected exception
@@ -236,13 +236,13 @@ public class SaslAuthenticatorTest {
         saslClientConfigs.put(SaslConfigs.SASL_MECHANISM, "DIGEST-MD5");
         createSelector(securityProtocol, saslClientConfigs);
         InetSocketAddress addr = new InetSocketAddress("127.0.0.1", server.port());
-        selector.connect(node2, addr, BUFFER_SIZE, BUFFER_SIZE);
+        selector.connect(node2, addr, BUFFER_SIZE, BUFFER_SIZE, false);
         NetworkTestUtils.checkClientConnection(selector, node2, 100, 10);
 
         String node3 = "3";
         saslClientConfigs.put(SaslConfigs.SASL_MECHANISM, "SCRAM-SHA-256");
         createSelector(securityProtocol, saslClientConfigs);
-        selector.connect(node3, new InetSocketAddress("127.0.0.1", server.port()), BUFFER_SIZE, BUFFER_SIZE);
+        selector.connect(node3, new InetSocketAddress("127.0.0.1", server.port()), BUFFER_SIZE, BUFFER_SIZE, false);
         NetworkTestUtils.checkClientConnection(selector, node3, 100, 10);
     }
 
@@ -811,7 +811,7 @@ public class SaslAuthenticatorTest {
     private void createClientConnection(SecurityProtocol securityProtocol, String node) throws Exception {
         createSelector(securityProtocol, saslClientConfigs);
         InetSocketAddress addr = new InetSocketAddress("127.0.0.1", server.port());
-        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
+        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE, false);
     }
 
     private void createAndCheckClientConnection(SecurityProtocol securityProtocol, String node) throws Exception {

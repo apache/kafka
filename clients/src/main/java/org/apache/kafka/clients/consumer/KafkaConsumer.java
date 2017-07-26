@@ -38,11 +38,14 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
+import org.apache.kafka.common.memory.MemoryPool;
+import org.apache.kafka.common.memory.SimpleMemoryPool;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.network.ChannelBuilder;
 import org.apache.kafka.common.network.Selector;
 import org.apache.kafka.common.requests.IsolationLevel;
@@ -698,8 +701,21 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     config.getString(ConsumerConfig.ISOLATION_LEVEL_CONFIG).toUpperCase(Locale.ROOT));
             Sensor throttleTimeSensor = Fetcher.throttleTimeSensor(metrics, metricsRegistry.fetcherMetrics);
 
+            Sensor memoryPoolSensor = metrics.sensor("MemoryPoolUtilization");
+            MetricName memoryPoolDepletedPercentMetricName = metrics.metricName("memorypool-avg-depleted-percent",
+                    "consumer", "Percent of the time requests were not being read out of socket due to lack of memory");
+            memoryPoolSensor.add(memoryPoolDepletedPercentMetricName, new Rate(TimeUnit.MILLISECONDS));
+            long memoryPoolSize = config.getLong(ConsumerConfig.BUFFER_MEMORY_CONFIG);
+            int maxFetchBytes = config.getInt(ConsumerConfig.FETCH_MAX_BYTES_CONFIG);
+            if (memoryPoolSize <= maxFetchBytes) {
+                throw new ConfigException(ConsumerConfig.BUFFER_MEMORY_CONFIG + " should be greater than " + ConsumerConfig.FETCH_MAX_BYTES_CONFIG);
+            }
+            MemoryPool memoryPool = (memoryPoolSize > 0L)
+                    ? new SimpleMemoryPool(memoryPoolSize, maxFetchBytes, false, memoryPoolSensor)
+                    : MemoryPool.NONE;
+
             NetworkClient netClient = new NetworkClient(
-                    new Selector(config.getLong(ConsumerConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG), metrics, time, metricGrpPrefix, channelBuilder),
+                    new Selector(config.getLong(ConsumerConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG), metrics, time, metricGrpPrefix, channelBuilder, memoryPool),
                     this.metadata,
                     clientId,
                     100, // a fixed large enough value will suffice for max in-flight requests
@@ -738,7 +754,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                                                        config.getBoolean(ConsumerConfig.LEAVE_GROUP_ON_CLOSE_CONFIG));
             this.fetcher = new Fetcher<>(this.client,
                     config.getInt(ConsumerConfig.FETCH_MIN_BYTES_CONFIG),
-                    config.getInt(ConsumerConfig.FETCH_MAX_BYTES_CONFIG),
+                    maxFetchBytes,
                     config.getInt(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG),
                     config.getInt(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG),
                     config.getInt(ConsumerConfig.MAX_POLL_RECORDS_CONFIG),

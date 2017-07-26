@@ -231,6 +231,12 @@ public class ConsumerConfig extends AbstractConfig {
                                                             + "If set to <code>true</code> the only way to receive records from an internal topic is subscribing to it.";
     public static final boolean DEFAULT_EXCLUDE_INTERNAL_TOPICS = true;
 
+    /** <code>buffer.memory</code> */
+    public static final String BUFFER_MEMORY_CONFIG = "buffer.memory";
+    private static final String BUFFER_MEMORY_DOC = "The total bytes of memory the consumer can use to buffer records received from the server and waiting to be processed (decompressed and deserialized)."
+                                                    + "This setting slightly differs from the total memory the consumer will use because some additional memory will be used for decompression (if compression is enabled), deserialization as well as for maintaining in-flight requests."
+                                                    + "Note that this setting must be at least as big as max.fetch.bytes.";
+
     /**
      * <code>internal.leave.group.on.close</code>
      * Whether or not the consumer should leave the group on close. If set to <code>false</code> then a rebalance
@@ -301,7 +307,7 @@ public class ConsumerConfig extends AbstractConfig {
                                         Type.INT,
                                         DEFAULT_MAX_PARTITION_FETCH_BYTES,
                                         atLeast(0),
-                                        Importance.HIGH,
+                                        Importance.LOW,
                                         MAX_PARTITION_FETCH_BYTES_DOC)
                                 .define(SEND_BUFFER_CONFIG,
                                         Type.INT,
@@ -437,6 +443,12 @@ public class ConsumerConfig extends AbstractConfig {
                                         in(IsolationLevel.READ_COMMITTED.toString().toLowerCase(Locale.ROOT), IsolationLevel.READ_UNCOMMITTED.toString().toLowerCase(Locale.ROOT)),
                                         Importance.MEDIUM,
                                         ISOLATION_LEVEL_DOC)
+                                .define(BUFFER_MEMORY_CONFIG,
+                                        Type.LONG,
+                                        100 * 1024 * 1024L,
+                                        atLeast(1L),
+                                        Importance.HIGH,
+                                        BUFFER_MEMORY_DOC)
                                 // security support
                                 .define(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
                                         Type.STRING,

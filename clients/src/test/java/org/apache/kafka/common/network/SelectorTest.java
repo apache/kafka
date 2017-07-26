@@ -26,6 +26,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -70,7 +71,7 @@ public class SelectorTest {
         this.channelBuilder = new PlaintextChannelBuilder();
         this.channelBuilder.configure(configs);
         this.metrics = new Metrics();
-        this.selector = new Selector(5000, this.metrics, time, "MetricGroup", channelBuilder);
+        this.selector = new Selector(5000L, this.metrics, time, "MetricGroup", channelBuilder);
     }
 
     @After
@@ -127,7 +128,7 @@ public class SelectorTest {
      */
     @Test(expected = IOException.class)
     public void testNoRouteToHost() throws Exception {
-        selector.connect("0", new InetSocketAddress("some.invalid.hostname.foo.bar.local", server.port), BUFFER_SIZE, BUFFER_SIZE);
+        selector.connect("0", new InetSocketAddress("some.invalid.hostname.foo.bar.local", server.port), BUFFER_SIZE, BUFFER_SIZE, false);
     }
 
     /**
@@ -138,7 +139,7 @@ public class SelectorTest {
         String node = "0";
         ServerSocket nonListeningSocket = new ServerSocket(0);
         int nonListeningPort = nonListeningSocket.getLocalPort();
-        selector.connect(node, new InetSocketAddress("localhost", nonListeningPort), BUFFER_SIZE, BUFFER_SIZE);
+        selector.connect(node, new InetSocketAddress("localhost", nonListeningPort), BUFFER_SIZE, BUFFER_SIZE, false);
         while (selector.disconnected().containsKey(node)) {
             assertEquals(ChannelState.NOT_CONNECTED, selector.disconnected().get(node));
             selector.poll(1000L);
@@ -335,7 +336,7 @@ public class SelectorTest {
     public void testMuteOnOOM() throws Exception {
         //clean up default selector, replace it with one that uses a finite mem pool
         selector.close();
-        MemoryPool pool = new SimpleMemoryPool(900, 900, false, null);
+        MemoryPool pool = new SimpleMemoryPool(900L, 900, false, null);
         selector = new Selector(NetworkReceive.UNLIMITED, 5000, metrics, time, "MetricGroup",
             new HashMap<String, String>(), true, false, channelBuilder, pool);
 
@@ -351,8 +352,8 @@ public class SelectorTest {
 
             //wait until everything has been flushed out to network (assuming payload size is smaller than OS buffer size)
             //this is important because we assume both requests' prefixes (1st 4 bytes) have made it.
-            sender1.join(5000);
-            sender2.join(5000);
+            sender1.join(5000L);
+            sender2.join(5000L);
 
             SocketChannel channelX = ss.accept(); //not defined if its 1 or 2
             channelX.configureBlocking(false);
@@ -362,9 +363,9 @@ public class SelectorTest {
             selector.register("clientY", channelY);
 
             List<NetworkReceive> completed = Collections.emptyList();
-            long deadline = System.currentTimeMillis() + 5000;
+            long deadline = System.currentTimeMillis() + 5000L;
             while (System.currentTimeMillis() < deadline && completed.isEmpty()) {
-                selector.poll(1000);
+                selector.poll(1000L);
                 completed = selector.completedReceives();
             }
             assertEquals("could not read a single request within timeout", 1, completed.size());
@@ -372,18 +373,18 @@ public class SelectorTest {
             assertEquals(0, pool.availableMemory());
             assertTrue(selector.isOutOfMemory());
 
-            selector.poll(10);
+            selector.poll(10L);
             assertTrue(selector.completedReceives().isEmpty());
             assertEquals(0, pool.availableMemory());
             assertTrue(selector.isOutOfMemory());
 
             firstReceive.close();
-            assertEquals(900, pool.availableMemory()); //memory has been released back to pool
+            assertEquals(900L, pool.availableMemory()); //memory has been released back to pool
 
             completed = Collections.emptyList();
-            deadline = System.currentTimeMillis() + 5000;
+            deadline = System.currentTimeMillis() + 5000L;
             while (System.currentTimeMillis() < deadline && completed.isEmpty()) {
-                selector.poll(1000);
+                selector.poll(1000L);
                 completed = selector.completedReceives();
             }
             assertEquals("could not read a single request within timeout", 1, selector.completedReceives().size());
@@ -394,6 +395,70 @@ public class SelectorTest {
 
     private Thread createSender(InetSocketAddress serverAddress, byte[] payload) {
         return new PlaintextSender(serverAddress, payload);
+    }
+
+    @Test
+    public void testPriorityNodes() throws Exception {
+        //clean up default selector, replace it with one that uses a finite memory pool
+        selector.close();
+        MemoryPool pool = new SimpleMemoryPool(14, 14, false, null);
+        selector = new Selector(NetworkReceive.UNLIMITED, 5000, metrics, time, "MetricGroup",
+            new HashMap<String, String>(), true, false, channelBuilder, pool);
+
+        List<String> nodes = Arrays.asList("0", "1", "2");
+        // create connections
+        InetSocketAddress serverAddr = new InetSocketAddress("localhost", server.port);
+        for (String node : nodes) {
+            if (node == "1") // node 1 has priority
+                connectWithPriority(node, serverAddr);
+            else
+                connect(node, serverAddr);
+        }
+
+        // send a payload that fills the pool
+        selector.send(createSend(nodes.get(0), randomPayload(10)));
+        List<NetworkReceive> completed = Collections.emptyList();
+        long deadline = System.currentTimeMillis() + 5000L;
+        while (System.currentTimeMillis() < deadline && completed.isEmpty()) {
+            selector.poll(1000L);
+            completed = selector.completedReceives();
+        }
+        assertEquals(1, completed.size());
+        NetworkReceive firstReceive = completed.get(0);
+        assertEquals(0L, pool.availableMemory());
+        assertTrue(pool.isOutOfMemory());
+
+        // send 2 extra payloads, only the payload sent by the priority node (1) should be received
+        selector.send(createSend(nodes.get(1), randomPayload(5)));
+        selector.send(createSend(nodes.get(2), randomPayload(4)));
+        completed = Collections.emptyList();
+        deadline = System.currentTimeMillis() + 5000L;
+        while (System.currentTimeMillis() < deadline && completed.isEmpty()) {
+            selector.poll(1000L);
+            completed = selector.completedReceives();
+        }
+        // the pool is still out of memory but we have received a new payload
+        assertEquals(0L, pool.availableMemory());
+        assertTrue(pool.isOutOfMemory());
+        assertEquals(1, completed.size());
+        assertEquals(nodes.get(1), completed.get(0).source());
+
+        // Free up the 1st receive so the payload sent by node 2 can be received
+        firstReceive.close();
+        assertEquals(14L, pool.availableMemory());
+
+        selector.send(createSend(nodes.get(0), randomPayload(1)));
+        completed = Collections.emptyList();
+        deadline = System.currentTimeMillis() + 5000L;
+        while (System.currentTimeMillis() < deadline && completed.isEmpty()) {
+            selector.poll(1000L);
+            completed = selector.completedReceives();
+        }
+        // the pool is not out of memory and we have received the last payload
+        assertEquals(6L, pool.availableMemory()); // 14 - (4 + 4) = 6
+        assertFalse(pool.isOutOfMemory());
+        assertEquals(1, completed.size());
+        assertEquals(nodes.get(2), completed.get(0).source());
     }
 
     protected byte[] randomPayload(int sizeBytes) throws Exception {
@@ -424,7 +489,11 @@ public class SelectorTest {
     }
 
     protected void connect(String node, InetSocketAddress serverAddr) throws IOException {
-        selector.connect(node, serverAddr, BUFFER_SIZE, BUFFER_SIZE);
+        selector.connect(node, serverAddr, BUFFER_SIZE, BUFFER_SIZE, false);
+    }
+
+    private void connectWithPriority(String node, InetSocketAddress serverAddr) throws IOException {
+        selector.connect(node, serverAddr, BUFFER_SIZE, BUFFER_SIZE, true);
     }
 
     /* connect and wait for the connection to complete */
@@ -432,7 +501,7 @@ public class SelectorTest {
         blockingConnect(node, new InetSocketAddress("localhost", server.port));
     }
     protected void blockingConnect(String node, InetSocketAddress serverAddr) throws IOException {
-        selector.connect(node, serverAddr, BUFFER_SIZE, BUFFER_SIZE);
+        selector.connect(node, serverAddr, BUFFER_SIZE, BUFFER_SIZE, false);
         while (!selector.connected().contains(node))
             selector.poll(10000L);
         while (!selector.isChannelReady(node))
@@ -441,6 +510,10 @@ public class SelectorTest {
 
     protected NetworkSend createSend(String node, String s) {
         return new NetworkSend(node, ByteBuffer.wrap(s.getBytes()));
+    }
+
+    protected NetworkSend createSend(String node, byte[] buf) {
+        return new NetworkSend(node, ByteBuffer.wrap(buf));
     }
 
     protected String asString(NetworkReceive receive) {

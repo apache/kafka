@@ -84,7 +84,7 @@ public class AbstractCoordinatorTest {
         this.node = cluster.nodes().get(0);
         mockClient.setNode(node);
 
-        this.coordinatorNode = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
+        this.coordinatorNode = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port(), true);
         this.coordinator = new DummyCoordinator(consumerClient, metrics, mockTime);
     }
 

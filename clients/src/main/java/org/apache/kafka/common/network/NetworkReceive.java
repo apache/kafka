@@ -41,6 +41,7 @@ public class NetworkReceive implements Receive {
     private final MemoryPool memoryPool;
     private int requestedBufferSize = -1;
     private ByteBuffer buffer;
+    private boolean hasPriority = false;
 
 
     public NetworkReceive(String source, ByteBuffer buffer) {
@@ -67,12 +68,13 @@ public class NetworkReceive implements Receive {
         this.memoryPool = MemoryPool.NONE;
     }
 
-    public NetworkReceive(int maxSize, String source, MemoryPool memoryPool) {
+    public NetworkReceive(int maxSize, String source, MemoryPool memoryPool, boolean hasPriority) {
         this.source = source;
         this.size = ByteBuffer.allocate(4);
         this.buffer = null;
         this.maxSize = maxSize;
         this.memoryPool = memoryPool;
+        this.hasPriority = hasPriority;
     }
 
     public NetworkReceive() {
@@ -136,10 +138,16 @@ public class NetworkReceive implements Receive {
                 }
             }
         }
-        if (buffer == null && requestedBufferSize != -1) { //we know the size we want but havent been able to allocate it yet
+        if (buffer == null && requestedBufferSize != -1) { //we know the size we want but haven't been able to allocate it yet
             buffer = memoryPool.tryAllocate(requestedBufferSize);
-            if (buffer == null)
-                log.trace("Broker low on memory - could not allocate buffer of size {} for source {}", requestedBufferSize, source);
+            if (buffer == null) {
+                if (hasPriority) {
+                    // If the channel has priority, we allocate directly on the heap if the memory pool is full
+                    buffer = ByteBuffer.allocate(requestedBufferSize);
+                } else {
+                    log.trace("Low on memory - could not allocate buffer of size {} for source {}", requestedBufferSize, source);
+                }
+            }
         }
         if (buffer != null) {
             int bytesRead = channel.read(buffer);
