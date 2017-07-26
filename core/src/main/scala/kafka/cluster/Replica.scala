@@ -21,11 +21,12 @@ import kafka.log.Log
 import kafka.utils.Logging
 import kafka.server.{LogOffsetMetadata, LogReadResult}
 import kafka.common.KafkaException
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.OffsetOutOfRangeException
 import org.apache.kafka.common.utils.Time
 
 class Replica(val brokerId: Int,
-              val partition: Partition,
+              val topicPartition: TopicPartition,
               time: Time = Time.SYSTEM,
               initialHighWatermarkValue: Long = 0L,
               val log: Option[Log] = None) extends Logging {
@@ -49,8 +50,6 @@ class Replica(val brokerId: Int,
   // lastCaughtUpTimeMs is the largest time t such that the offset of most recent FetchRequest from this follower >=
   // the LEO of leader at time t. This is used to determine the lag of this follower and ISR of this partition.
   @volatile private[this] var _lastCaughtUpTimeMs = 0L
-
-  val topicPartition = partition.topicPartition
 
   def isLocal: Boolean = log.isDefined
 
@@ -97,7 +96,7 @@ class Replica(val brokerId: Int,
     }
   }
 
-  def logEndOffset =
+  def logEndOffset: LogOffsetMetadata =
     if (isLocal)
       log.get.logEndOffsetMetadata
     else
@@ -106,8 +105,8 @@ class Replica(val brokerId: Int,
   def maybeIncrementLogStartOffset(offset: Long) {
     if (isLocal) {
       if (highWatermark.messageOffset < offset)
-        throw new OffsetOutOfRangeException(s"The specified offset $offset is higher than the high watermark" +
-                                            s" ${highWatermark.messageOffset} of the partition $topicPartition")
+        throw new OffsetOutOfRangeException(s"Cannot increment the log start offset to $offset of partition $topicPartition " +
+          s"since it is higher than the high watermark ${highWatermark.messageOffset}")
       log.get.maybeIncrementLogStartOffset(offset)
     } else {
       throw new KafkaException(s"Should not try to delete records on partition $topicPartition's non-local replica $brokerId")
@@ -124,7 +123,7 @@ class Replica(val brokerId: Int,
     }
   }
 
-  def logStartOffset =
+  def logStartOffset: Long =
     if (isLocal)
       log.get.logStartOffset
     else
@@ -177,8 +176,8 @@ class Replica(val brokerId: Int,
   override def toString: String = {
     val replicaString = new StringBuilder
     replicaString.append("ReplicaId: " + brokerId)
-    replicaString.append("; Topic: " + partition.topic)
-    replicaString.append("; Partition: " + partition.partitionId)
+    replicaString.append("; Topic: " + topicPartition.topic)
+    replicaString.append("; Partition: " + topicPartition.partition)
     replicaString.append("; isLocal: " + isLocal)
     replicaString.append("; lastCaughtUpTimeMs: " + lastCaughtUpTimeMs)
     if (isLocal) {
