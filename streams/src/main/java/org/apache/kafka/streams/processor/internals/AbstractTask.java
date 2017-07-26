@@ -44,13 +44,13 @@ public abstract class AbstractTask {
     final TaskId id;
     final String applicationId;
     final ProcessorTopology topology;
-    final Consumer consumer;
     final ProcessorStateManager stateMgr;
     final Set<TopicPartition> partitions;
-    InternalProcessorContext processorContext;
-    private final ThreadCache cache;
+    final Consumer consumer;
     final String logPrefix;
     final boolean eosEnabled;
+
+    InternalProcessorContext processorContext;
 
     /**
      * @throws ProcessorStateException if the state manager cannot be created
@@ -63,15 +63,13 @@ public abstract class AbstractTask {
                  final ChangelogReader changelogReader,
                  final boolean isStandby,
                  final StateDirectory stateDirectory,
-                 final ThreadCache cache,
                  final StreamsConfig config) {
         this.id = id;
         this.applicationId = applicationId;
         this.partitions = new HashSet<>(partitions);
         this.topology = topology;
         this.consumer = consumer;
-        this.cache = cache;
-        eosEnabled = StreamsConfig.EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
+        this.eosEnabled = StreamsConfig.EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
 
         logPrefix = String.format("%s [%s]", isStandby ? "standby-task" : "task", id());
 
@@ -114,10 +112,6 @@ public abstract class AbstractTask {
 
     public final ProcessorContext context() {
         return processorContext;
-    }
-
-    public final ThreadCache cache() {
-        return cache;
     }
 
     public StateStore getStore(final String name) {

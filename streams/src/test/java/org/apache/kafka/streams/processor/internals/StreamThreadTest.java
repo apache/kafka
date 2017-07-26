@@ -93,8 +93,6 @@ public class StreamThreadTest {
     final KStreamBuilder builder = new KStreamBuilder();
     private final StreamsConfig config = new StreamsConfig(configProps(false));
 
-
-
     @Before
     public void setUp() throws Exception {
         processId = UUID.randomUUID();
@@ -1618,7 +1616,7 @@ public class StreamThreadTest {
         };
 
         final StreamThread thread = new StreamThread(
-                builder,
+                builder.internalTopologyBuilder,
                 config,
                 clientSupplier,
                 applicationId,
@@ -1626,7 +1624,7 @@ public class StreamThreadTest {
                 processId,
                 metrics,
                 mockTime,
-                new StreamsMetadataState(builder, StreamsMetadataState.UNKNOWN_HOST),
+                new StreamsMetadataState(builder.internalTopologyBuilder, StreamsMetadataState.UNKNOWN_HOST),
                 0) {
 
             @Override
@@ -1640,6 +1638,7 @@ public class StreamThreadTest {
         activeTasks.put(testStreamTask.id(), testStreamTask.partitions);
 
         thread.setPartitionAssignor(new MockStreamsPartitionAssignor(activeTasks));
+        thread.setState(StreamThread.State.RUNNING);
 
         thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
         thread.rebalanceListener.onPartitionsAssigned(testStreamTask.partitions);

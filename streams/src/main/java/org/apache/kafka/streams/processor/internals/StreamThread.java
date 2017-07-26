@@ -1250,7 +1250,7 @@ public class StreamThread extends Thread {
     private StreamTask findMatchingSuspendedTask(final TaskId taskId, final Set<TopicPartition> partitions) {
         if (suspendedTasks.containsKey(taskId)) {
             final StreamTask task = suspendedTasks.get(taskId);
-            if (task.partitions.equals(partitions)) {
+            if (task.partitions().equals(partitions)) {
                 return task;
             }
         }
@@ -1260,7 +1260,7 @@ public class StreamThread extends Thread {
     private StandbyTask findMatchingSuspendedStandbyTask(final TaskId taskId, final Set<TopicPartition> partitions) {
         if (suspendedStandbyTasks.containsKey(taskId)) {
             final StandbyTask task = suspendedStandbyTasks.get(taskId);
-            if (task.partitions.equals(partitions)) {
+            if (task.partitions().equals(partitions)) {
                 return task;
             }
         }
