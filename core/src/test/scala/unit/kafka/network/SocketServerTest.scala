@@ -29,6 +29,7 @@ import kafka.security.CredentialProvider
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.{ListenerName, NetworkSend, Send}
 import org.apache.kafka.common.protocol.{ApiKeys, SecurityProtocol}
@@ -328,9 +329,9 @@ class SocketServerTest extends JUnitSuite {
     var conn: Socket = null
     val overrideServer = new SocketServer(KafkaConfig.fromProps(props), serverMetrics, Time.SYSTEM, credentialProvider) {
       override def newProcessor(id: Int, connectionQuotas: ConnectionQuotas, listenerName: ListenerName,
-                                protocol: SecurityProtocol): Processor = {
+                                protocol: SecurityProtocol, memoryPool: MemoryPool): Processor = {
         new Processor(id, time, config.socketRequestMaxBytes, requestChannel, connectionQuotas,
-          config.connectionsMaxIdleMs, listenerName, protocol, config, metrics, credentialProvider) {
+          config.connectionsMaxIdleMs, listenerName, protocol, config, metrics, credentialProvider, MemoryPool.NONE) {
           override protected[network] def sendResponse(response: RequestChannel.Response, responseSend: Send) {
             conn.close()
             super.sendResponse(response, responseSend)
