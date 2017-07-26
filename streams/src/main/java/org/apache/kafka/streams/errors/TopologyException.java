@@ -18,25 +18,22 @@ package org.apache.kafka.streams.errors;
 
 
 /**
- * Indicates a pre-run time error incurred while parsing the {@link org.apache.kafka.streams.processor.TopologyBuilder
- * builder} to construct the {@link org.apache.kafka.streams.processor.internals.ProcessorTopology processor topology}.
- *
- * @deprecated use {@link org.apache.kafka.streams.Topology} instead of {@link org.apache.kafka.streams.processor.TopologyBuilder}
+ * Indicates a pre run time error incurred while parsing the {@link org.apache.kafka.streams.Topology logical topology}
+ * to construct the {@link org.apache.kafka.streams.processor.internals.ProcessorTopology physical processor topology}.
  */
-@Deprecated
-public class TopologyBuilderException extends StreamsException {
+public class TopologyException extends StreamsException {
 
     private static final long serialVersionUID = 1L;
 
-    public TopologyBuilderException(final String message) {
-        super("Invalid topology building" + (message == null ? "" : ": " + message));
+    public TopologyException(final String message) {
+        super("Invalid topology" + (message == null ? "" : ": " + message));
     }
 
-    public TopologyBuilderException(final String message, final Throwable throwable) {
-        super("Invalid topology building" + (message == null ? "" : ": " + message), throwable);
+    public TopologyException(final String message, final Throwable throwable) {
+        super("Invalid topology" + (message == null ? "" : ": " + message), throwable);
     }
 
-    public TopologyBuilderException(final Throwable throwable) {
+    public TopologyException(final Throwable throwable) {
         super(throwable);
     }
 }

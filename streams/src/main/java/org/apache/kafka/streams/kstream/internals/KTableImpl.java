@@ -238,22 +238,25 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         return doMapValues(mapper, valueSerde, storeSupplier);
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public void print() {
         print(null, null, this.name);
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public void print(String label) {
         print(null, null, label);
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public void print(Serde<K> keySerde, Serde<V> valSerde) {
         print(keySerde, valSerde, this.name);
     }
 
-
+    @SuppressWarnings("deprecation")
     @Override
     public void print(Serde<K> keySerde, final Serde<V> valSerde, String label) {
         Objects.requireNonNull(label, "label can't be null");
@@ -261,16 +264,19 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         topology.addProcessor(name, new KStreamPrint<>(new PrintForeachAction(null, defaultKeyValueMapper, label), keySerde, valSerde), this.name);
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public void writeAsText(String filePath) {
         writeAsText(filePath, this.name, null, null);
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public void writeAsText(String filePath, String label) {
         writeAsText(filePath, label, null, null);
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public void writeAsText(String filePath, Serde<K> keySerde, Serde<V> valSerde) {
         writeAsText(filePath, this.name, keySerde, valSerde);
@@ -279,6 +285,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     /**
      * @throws TopologyBuilderException if file is not found
      */
+    @SuppressWarnings("deprecation")
     @Override
     public void writeAsText(String filePath, String label, Serde<K> keySerde, Serde<V> valSerde) {
         Objects.requireNonNull(filePath, "filePath can't be null");
@@ -296,6 +303,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         }
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public void foreach(final ForeachAction<? super K, ? super V> action) {
         Objects.requireNonNull(action, "action can't be null");

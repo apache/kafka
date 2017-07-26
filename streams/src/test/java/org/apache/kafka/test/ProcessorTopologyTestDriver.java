@@ -176,7 +176,7 @@ public class ProcessorTopologyTestDriver {
         };
 
         // Identify internal topics for forwarding in process ...
-        for (final TopologyBuilder.TopicsInfo topicsInfo : builder.topicGroups().values()) {
+        for (final InternalTopologyBuilder.TopicsInfo topicsInfo : builder.topicGroups().values()) {
             internalTopics.addAll(topicsInfo.repartitionSourceTopics.keySet());
         }
 
