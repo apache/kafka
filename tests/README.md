@@ -25,6 +25,19 @@ _DUCKTAPE_OPTIONS="--debug" bash tests/docker/run_tests.sh | tee debug_logs.txt
 ```
 TC_PATHS="tests/kafkatest/tests/streams tests/kafkatest/tests/tools" bash tests/docker/run_tests.sh
 ```
+* Run a specific tests file
+```
+TC_PATHS="tests/kafkatest/tests/core/transactions_test.py" bash tests/docker/run_tests.sh
+```
+* Run a specific test class
+```
+TC_PATHS="tests/kafkatest/tests/core/transactions_test.py::TransactionsTest" bash tests/docker/run_tests.sh
+```
+* Run a specific test method
+```
+TC_PATHS="tests/kafkatest/tests/core/transactions_test.py::TransactionsTest.test_transactions" bash tests/docker/run_tests.sh
+```
+
 * Notes
   - The scripts to run tests creates and destroys docker network named *knw*.
    This network can't be used for any other purpose.
