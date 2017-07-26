@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.admin.DeleteAclsResult.FilterResults;
 import org.apache.kafka.common.Cluster;
@@ -29,6 +30,7 @@ import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
 import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.errors.PolicyViolationException;
 import org.apache.kafka.common.errors.SecurityDisabledException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.protocol.Errors;
@@ -57,6 +59,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -65,6 +68,7 @@ import java.util.concurrent.Future;
 
 import static java.util.Arrays.asList;
 import static org.apache.kafka.common.requests.ResourceType.TOPIC;
+import static org.apache.kafka.common.requests.ResourceType.BROKER;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
@@ -354,6 +358,51 @@ public class KafkaAdminClientTest {
                 new ConfigResource(ConfigResource.Type.TOPIC, "foo")));
             time.sleep(5000);
             result2.values().get(new ConfigResource(ConfigResource.Type.TOPIC, "foo")).get();
+        }
+    }
+
+    @Test
+    public void testDescribeConfigs() throws Exception {
+        try (MockKafkaAdminClientEnv env = mockClientEnv()) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            env.kafkaClient().prepareMetadataUpdate(env.cluster(), Collections.<String>emptySet());
+            env.kafkaClient().setNode(env.cluster().controller());
+            env.kafkaClient().prepareResponse(new DescribeConfigsResponse(0,
+                Collections.singletonMap(new org.apache.kafka.common.requests.Resource(BROKER, "0"),
+                    new DescribeConfigsResponse.Config(ApiError.NONE,
+                        Collections.<DescribeConfigsResponse.ConfigEntry>emptySet()))));
+            DescribeConfigsResult result2 = env.adminClient().describeConfigs(Collections.singleton(
+                new ConfigResource(ConfigResource.Type.BROKER, "0")));
+            result2.all().get();
+        }
+    }
+
+    @Test
+    public void testDescribeConfigsWithError() throws Exception {
+        try (MockKafkaAdminClientEnv env = mockClientEnv()) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            env.kafkaClient().prepareMetadataUpdate(env.cluster(), Collections.<String>emptySet());
+            env.kafkaClient().setNode(env.cluster().controller());
+            env.kafkaClient().prepareResponseFrom(new DescribeConfigsResponse(0, Collections.singletonMap(
+                new org.apache.kafka.common.requests.Resource(BROKER, "0"),
+                new DescribeConfigsResponse.Config(ApiError.NONE,
+                    Collections.<DescribeConfigsResponse.ConfigEntry>emptySet()))),
+                env.cluster().nodeById(0));
+            env.kafkaClient().prepareResponseFrom(new DescribeConfigsResponse(0, Collections.singletonMap(
+                new org.apache.kafka.common.requests.Resource(BROKER, "1"),
+                new DescribeConfigsResponse.Config(
+                    ApiError.fromThrowable(new PolicyViolationException("nope")),
+                    Collections.<DescribeConfigsResponse.ConfigEntry>emptySet()))),
+                env.cluster().nodeById(1));
+            List<ConfigResource> requested = new LinkedList<>();
+            ConfigResource broker0Resource = new ConfigResource(ConfigResource.Type.BROKER, "0");
+            requested.add(broker0Resource);
+            ConfigResource broker1Resource = new ConfigResource(ConfigResource.Type.BROKER, "1");
+            requested.add(broker1Resource);
+            Map<ConfigResource, KafkaFuture<Config>> values = env.adminClient().describeConfigs(requested).values();
+            assertEquals(0, values.get(broker0Resource).get().entries().size());
+            assertFutureError(values.get(broker1Resource), PolicyViolationException.class);
+            assertEquals(2, values.size());
         }
     }
 
