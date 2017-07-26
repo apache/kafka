@@ -452,7 +452,7 @@ public class AbstractCoordinatorTest {
     }
 
     @Test
-    public void testWakeupInOnJoinComplete() throws Exception {
+    public void testWakeupAfterSyncGroupReceivedExternalCompletion() throws Exception {
         setupCoordinator(RETRY_BACKOFF_MS);
 
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
@@ -488,7 +488,7 @@ public class AbstractCoordinatorTest {
     }
 
     @Test
-    public void testWakeupAfterSyncGroupReceivedExternalCompletion() throws Exception {
+    public void testWakeupInOnJoinComplete() throws Exception {
         setupCoordinator(RETRY_BACKOFF_MS);
 
         coordinator.wakeupOnJoinComplete = true;
