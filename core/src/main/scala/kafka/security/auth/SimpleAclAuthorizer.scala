@@ -335,7 +335,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
   }
 
   private def getAclsFromZk(resource: Resource): VersionedAcls = {
-    val (aclJson, stat) = zkUtils.readDataMaybeNull(toResourcePath(resource))
+    val (aclJson, stat) = zkUtils.readDataAndStat(toResourcePath(resource))
     VersionedAcls(aclJson.map(Acl.fromJson).getOrElse(Set()), stat.getVersion)
   }
 

@@ -83,7 +83,7 @@ class ProducerIdManager(val brokerId: Int, val zkUtils: ZkUtils) extends Logging
     var zkWriteComplete = false
     while (!zkWriteComplete) {
       // refresh current producerId block from zookeeper again
-      val (dataOpt, zkVersion) = zkUtils.readDataAndVersionMaybeNull(ZkUtils.ProducerIdBlockPath)
+      val (dataOpt, zkVersion) = zkUtils.readDataAndVersion(ZkUtils.ProducerIdBlockPath)
 
       // generate the new producerId block
       currentProducerIdBlock = dataOpt match {
@@ -118,7 +118,7 @@ class ProducerIdManager(val brokerId: Int, val zkUtils: ZkUtils) extends Logging
   private def checkProducerIdBlockZkData(zkUtils: ZkUtils, path: String, expectedData: String): (Boolean, Int) = {
     try {
       val expectedPidBlock = ProducerIdManager.parseProducerIdBlockData(expectedData)
-      val (dataOpt, zkVersion) = zkUtils.readDataAndVersionMaybeNull(ZkUtils.ProducerIdBlockPath)
+      val (dataOpt, zkVersion) = zkUtils.readDataAndVersion(ZkUtils.ProducerIdBlockPath)
       dataOpt match {
         case Some(data) =>
           val currProducerIdBLock = ProducerIdManager.parseProducerIdBlockData(data)

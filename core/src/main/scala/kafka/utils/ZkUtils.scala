@@ -251,7 +251,7 @@ class ZkUtils(val zkClient: ZkClient,
   def defaultAcls(path: String): java.util.List[ACL] = ZkUtils.defaultAcls(isSecure, path)
 
   def getController(): Int = {
-    readDataMaybeNull(ControllerPath)._1 match {
+    readData(ControllerPath) match {
       case Some(controller) => KafkaController.parseControllerId(controller)
       case None => throw new KafkaException("Controller doesn't exist")
     }
@@ -274,7 +274,7 @@ class ZkUtils(val zkClient: ZkClient,
   }
 
   def getClusterId: Option[String] =
-    readDataMaybeNull(ClusterIdPath)._1.map(ClusterId.fromJson)
+    readData(ClusterIdPath).map(ClusterId.fromJson)
 
   def createOrGetClusterId(proposedClusterId: String): String = {
     try {
@@ -304,7 +304,7 @@ class ZkUtils(val zkClient: ZkClient,
   }
 
   def getLeaderForPartition(topic: String, partition: Int): Option[Int] = {
-    readDataMaybeNull(getTopicPartitionLeaderAndIsrPath(topic, partition))._1.flatMap { leaderAndIsr =>
+    readData(getTopicPartitionLeaderAndIsrPath(topic, partition)).flatMap { leaderAndIsr =>
       Json.parseFull(leaderAndIsr).map(_.asInstanceOf[Map[String, Any]]("leader").asInstanceOf[Int])
     }
   }
@@ -315,12 +315,12 @@ class ZkUtils(val zkClient: ZkClient,
    * other broker will retry becoming leader with the same new epoch value.
    */
   def getEpochForPartition(topic: String, partition: Int): Int = {
-    val leaderAndIsrOpt = readDataMaybeNull(getTopicPartitionLeaderAndIsrPath(topic, partition))._1
+    val leaderAndIsrOpt = readData(getTopicPartitionLeaderAndIsrPath(topic, partition))
     leaderAndIsrOpt match {
       case Some(leaderAndIsr) =>
         Json.parseFull(leaderAndIsr) match {
           case None => throw new NoEpochForPartitionException("No epoch, leaderAndISR data for partition [%s,%d] is invalid".format(topic, partition))
-          case Some(m) => m.asInstanceOf[Map[String, Any]].get("leader_epoch").get.asInstanceOf[Int]
+          case Some(m) => m.asInstanceOf[Map[String, Any]]("leader_epoch").asInstanceOf[Int]
         }
       case None => throw new NoEpochForPartitionException("No epoch, ISR path for partition [%s,%d] is empty"
         .format(topic, partition))
@@ -339,11 +339,11 @@ class ZkUtils(val zkClient: ZkClient,
    * Gets the in-sync replicas (ISR) for a specific topic and partition
    */
   def getInSyncReplicasForPartition(topic: String, partition: Int): Seq[Int] = {
-    val leaderAndIsrOpt = readDataMaybeNull(getTopicPartitionLeaderAndIsrPath(topic, partition))._1
+    val leaderAndIsrOpt = readData(getTopicPartitionLeaderAndIsrPath(topic, partition))
     leaderAndIsrOpt match {
       case Some(leaderAndIsr) =>
         Json.parseFull(leaderAndIsr) match {
-          case Some(m) => m.asInstanceOf[Map[String, Any]].get("isr").get.asInstanceOf[Seq[Int]]
+          case Some(m) => m.asInstanceOf[Map[String, Any]]("isr").asInstanceOf[Seq[Int]]
           case None => Seq.empty[Int]
         }
       case None => Seq.empty[Int]
@@ -354,7 +354,7 @@ class ZkUtils(val zkClient: ZkClient,
    * Gets the assigned replicas (AR) for a specific topic and partition
    */
   def getReplicasForPartition(topic: String, partition: Int): Seq[Int] = {
-    val jsonPartitionMapOpt = readDataMaybeNull(getTopicPath(topic))._1
+    val jsonPartitionMapOpt = readData(getTopicPath(topic))
     jsonPartitionMapOpt match {
       case Some(jsonPartitionMap) =>
         Json.parseFull(jsonPartitionMap) match {
@@ -491,18 +491,16 @@ class ZkUtils(val zkClient: ZkClient,
     } catch {
       case e: ZkNodeExistsException =>
         // this can happen when there is connection loss; make sure the data is what we intend to write
-        var storedData: String = null
-        try {
-          storedData = readData(path)._1
-        } catch {
-          case _: ZkNoNodeException => // the node disappeared; treat as if node existed and let caller handles this
-        }
-        if (storedData == null || storedData != data) {
-          info("conflict in " + path + " data: " + data + " stored data: " + storedData)
-          throw e
-        } else {
-          // otherwise, the creation succeeded, return normally
-          info(path + " exists with value " + data + " during connection loss; this is ok")
+        readData(path) match {
+          case Some(storedData) if storedData != data =>
+            info(s"conflict in $path data: $data stored data: $storedData")
+            throw e
+          case None =>
+            info(s"conflict in $path data: $data stored data: $None")
+            throw e
+          case _ =>
+            // otherwise, the creation succeeded, return normally
+            info(s"$path exists with value $data during connection loss; this is ok")
         }
     }
   }
@@ -634,24 +632,25 @@ class ZkUtils(val zkClient: ZkClient,
     zkClient.deleteRecursive(path)
   }
 
-  def readData(path: String): (String, Stat) = {
+  def readDataAndStat(path: String): (Option[String], Stat) = {
     val stat: Stat = new Stat()
-    val dataStr: String = zkClient.readData(path, stat)
-    (dataStr, stat)
+    try {
+      val dataStr: String = zkClient.readData(path, stat)
+      (Option(dataStr), stat)
+    } catch {
+      case _: ZkNoNodeException => (None, stat)
+    }
   }
 
-  def readDataMaybeNull(path: String): (Option[String], Stat) = {
-    val stat = new Stat()
-    val dataAndStat = try {
-                        (Some(zkClient.readData(path, stat)), stat)
-                      } catch {
-                        case _: ZkNoNodeException =>
-                          (None, stat)
-                      }
-    dataAndStat
+  def readData(path: String): Option[String] = {
+    try {
+      Option(zkClient.readData(path, null))
+    } catch {
+      case _: ZkNoNodeException => None
+    }
   }
 
-  def readDataAndVersionMaybeNull(path: String): (Option[String], Int) = {
+  def readDataAndVersion(path: String): (Option[String], Int) = {
     val stat = new Stat()
     try {
       val data: String = zkClient.readData(path, stat)
@@ -686,8 +685,9 @@ class ZkUtils(val zkClient: ZkClient,
     val cluster = new Cluster
     val nodes = getChildrenParentMayNotExist(BrokerIdsPath)
     for (node <- nodes) {
-      val brokerZKString = readData(BrokerIdsPath + "/" + node)._1
-      cluster.add(Broker.createBroker(node.toInt, brokerZKString))
+      readData(BrokerIdsPath + "/" + node).foreach { brokerZKString =>
+        cluster.add(Broker.createBroker(node.toInt, brokerZKString))
+      }
     }
     cluster
   }
@@ -705,15 +705,15 @@ class ZkUtils(val zkClient: ZkClient,
   def getReplicaAssignmentForTopics(topics: Seq[String]): mutable.Map[TopicAndPartition, Seq[Int]] = {
     val ret = new mutable.HashMap[TopicAndPartition, Seq[Int]]
     topics.foreach { topic =>
-      val jsonPartitionMapOpt = readDataMaybeNull(getTopicPath(topic))._1
+      val jsonPartitionMapOpt = readData(getTopicPath(topic))
       jsonPartitionMapOpt.foreach { jsonPartitionMap =>
         Json.parseFull(jsonPartitionMap).foreach { m =>
           m.asInstanceOf[Map[String, Any]].get("partitions").foreach { repl =>
-              val replicaMap = repl.asInstanceOf[Map[String, Seq[Int]]]
-              for((partition, replicas) <- replicaMap){
-                ret.put(TopicAndPartition(topic, partition.toInt), replicas)
-                debug("Replicas assigned to topic [%s], partition [%s] are [%s]".format(topic, partition, replicas))
-              }
+            val replicaMap = repl.asInstanceOf[Map[String, Seq[Int]]]
+            for((partition, replicas) <- replicaMap){
+              ret.put(TopicAndPartition(topic, partition.toInt), replicas)
+              debug("Replicas assigned to topic [%s], partition [%s] are [%s]".format(topic, partition, replicas))
+            }
           }
         }
       }
@@ -724,7 +724,7 @@ class ZkUtils(val zkClient: ZkClient,
   def getPartitionAssignmentForTopics(topics: Seq[String]): mutable.Map[String, collection.Map[Int, Seq[Int]]] = {
     val ret = new mutable.HashMap[String, Map[Int, Seq[Int]]]()
     topics.foreach{ topic =>
-      val jsonPartitionMapOpt = readDataMaybeNull(getTopicPath(topic))._1
+      val jsonPartitionMapOpt = readData(getTopicPath(topic))
       val partitionMap = jsonPartitionMapOpt match {
         case Some(jsonPartitionMap) =>
           Json.parseFull(jsonPartitionMap) match {
@@ -763,7 +763,7 @@ class ZkUtils(val zkClient: ZkClient,
 
   def getPartitionsBeingReassigned(): Map[TopicAndPartition, ReassignedPartitionsContext] = {
     // read the partitions and their new replica list
-    val jsonPartitionMapOpt = readDataMaybeNull(ReassignPartitionsPath)._1
+    val jsonPartitionMapOpt = readData(ReassignPartitionsPath)
     jsonPartitionMapOpt match {
       case Some(jsonPartitionMap) =>
         val reassignedPartitions = parsePartitionReassignmentData(jsonPartitionMap)
@@ -794,7 +794,7 @@ class ZkUtils(val zkClient: ZkClient,
 
   def getPartitionsUndergoingPreferredReplicaElection(): Set[TopicAndPartition] = {
     // read the partitions and their new replica list
-    val jsonPartitionListOpt = readDataMaybeNull(PreferredReplicaLeaderElectionPath)._1
+    val jsonPartitionListOpt = readData(PreferredReplicaLeaderElectionPath)
     jsonPartitionListOpt match {
       case Some(jsonPartitionList) => PreferredReplicaLeaderElectionCommand.parsePreferredReplicaElectionData(jsonPartitionList)
       case None => Set.empty[TopicAndPartition]
@@ -852,7 +852,7 @@ class ZkUtils(val zkClient: ZkClient,
    * @return An optional Broker object encapsulating the broker metadata
    */
   def getBrokerInfo(brokerId: Int): Option[Broker] = {
-    readDataMaybeNull(BrokerIdsPath + "/" + brokerId)._1 match {
+    readData(BrokerIdsPath + "/" + brokerId) match {
       case Some(brokerInfo) => Some(Broker.createBroker(brokerId, brokerInfo))
       case None => None
     }

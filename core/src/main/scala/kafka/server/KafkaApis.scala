@@ -1014,7 +1014,7 @@ class KafkaApis(val requestChannel: RequestChannel,
                 if (!metadataCache.contains(topicPartition.topic))
                   (topicPartition, OffsetFetchResponse.UNKNOWN_PARTITION)
                 else {
-                  val payloadOpt = zkUtils.readDataMaybeNull(s"${topicDirs.consumerOffsetDir}/${topicPartition.partition}")._1
+                  val payloadOpt = zkUtils.readData(s"${topicDirs.consumerOffsetDir}/${topicPartition.partition}")
                   payloadOpt match {
                     case Some(payload) =>
                       (topicPartition, new OffsetFetchResponse.PartitionData(

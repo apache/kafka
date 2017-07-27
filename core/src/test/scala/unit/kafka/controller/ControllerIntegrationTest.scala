@@ -292,7 +292,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
   }
 
   private def waitUntilControllerEpoch(epoch: Int, message: String): Unit = {
-    TestUtils.waitUntilTrue(() => zkUtils.readDataMaybeNull(ZkUtils.ControllerEpochPath)._1.map(_.toInt) == Some(epoch), message)
+    TestUtils.waitUntilTrue(() => zkUtils.readData(ZkUtils.ControllerEpochPath).map(_.toInt) == Some(epoch), message)
   }
 
   private def waitForPartitionState(tp: TopicAndPartition,

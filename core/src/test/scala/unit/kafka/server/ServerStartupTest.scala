@@ -74,7 +74,7 @@ class ServerStartupTest extends ZooKeeperTestHarness {
     val brokerId = 0
     val props1 = TestUtils.createBrokerConfig(brokerId, zkConnect)
     server = TestUtils.createServer(KafkaConfig.fromProps(props1))
-    val brokerRegistration = zkUtils.readData(ZkUtils.BrokerIdsPath + "/" + brokerId)._1
+    val brokerRegistration = zkUtils.readData(ZkUtils.BrokerIdsPath + "/" + brokerId).getOrElse("ERROR")
 
     val props2 = TestUtils.createBrokerConfig(brokerId, zkConnect)
     try {
@@ -86,7 +86,7 @@ class ServerStartupTest extends ZooKeeperTestHarness {
     }
 
     // broker registration shouldn't change
-    assertEquals(brokerRegistration, zkUtils.readData(ZkUtils.BrokerIdsPath + "/" + brokerId)._1)
+    assertEquals(brokerRegistration, zkUtils.readData(ZkUtils.BrokerIdsPath + "/" + brokerId).getOrElse("THISSHOULDNTMATCHWITHERROR"))
   }
 
   @Test

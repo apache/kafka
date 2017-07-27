@@ -959,8 +959,8 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, time: Time, met
   private def readControllerEpochFromZookeeper() {
     // initialize the controller epoch and zk version by reading from zookeeper
     if(controllerContext.zkUtils.pathExists(ZkUtils.ControllerEpochPath)) {
-      val epochData = controllerContext.zkUtils.readData(ZkUtils.ControllerEpochPath)
-      controllerContext.epoch = epochData._1.toInt
+      val epochData = controllerContext.zkUtils.readDataAndStat(ZkUtils.ControllerEpochPath)
+      epochData._1.foreach { data => controllerContext.epoch = data.toInt }
       controllerContext.epochZkVersion = epochData._2.getVersion
       info("Initialized controller epoch to %d and zk version %d".format(controllerContext.epoch, controllerContext.epochZkVersion))
     }
@@ -1178,7 +1178,7 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, time: Time, met
   }
 
   def getControllerID(): Int = {
-    controllerContext.zkUtils.readDataMaybeNull(ZkUtils.ControllerPath)._1 match {
+    controllerContext.zkUtils.readData(ZkUtils.ControllerPath) match {
       case Some(controller) => KafkaController.parseControllerId(controller)
       case None => -1
     }
@@ -1371,32 +1371,28 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, time: Time, met
 
     private def getTopicAndPartition(child: String): Set[TopicAndPartition] = {
       val changeZnode: String = ZkUtils.IsrChangeNotificationPath + "/" + child
-      val (jsonOpt, _) = controllerContext.zkUtils.readDataMaybeNull(changeZnode)
-      if (jsonOpt.isDefined) {
-        val json = Json.parseFull(jsonOpt.get)
-
-        json match {
-          case Some(m) =>
-            val topicAndPartitions: mutable.Set[TopicAndPartition] = new mutable.HashSet[TopicAndPartition]()
-            val isrChanges = m.asInstanceOf[Map[String, Any]]
-            val topicAndPartitionList = isrChanges("partitions").asInstanceOf[List[Any]]
-            topicAndPartitionList.foreach {
-              case tp =>
+      controllerContext.zkUtils.readData(changeZnode) match {
+        case Some(jsonOpt) =>
+          val json = Json.parseFull(jsonOpt)
+          json match {
+            case Some(m) =>
+              val topicAndPartitions: mutable.Set[TopicAndPartition] = new mutable.HashSet[TopicAndPartition]()
+              val isrChanges = m.asInstanceOf[Map[String, Any]]
+              val topicAndPartitionList = isrChanges("partitions").asInstanceOf[List[Any]]
+              topicAndPartitionList.foreach { tp =>
                 val topicAndPartition = tp.asInstanceOf[Map[String, Any]]
                 val topic = topicAndPartition("topic").asInstanceOf[String]
                 val partition = topicAndPartition("partition").asInstanceOf[Int]
                 topicAndPartitions += TopicAndPartition(topic, partition)
-            }
-            topicAndPartitions
-          case None =>
-            error("Invalid topic and partition JSON: " + jsonOpt.get + " in ZK: " + changeZnode)
-            Set.empty
-        }
-      } else {
-        Set.empty
+              }
+              topicAndPartitions
+            case None =>
+              error("Invalid topic and partition JSON: " + jsonOpt + " in ZK: " + changeZnode)
+              Set.empty
+          }
+        case None => Set.empty
       }
     }
-
   }
 
   case class LogDirEventNotification(sequenceNumbers: Seq[String]) extends ControllerEvent {

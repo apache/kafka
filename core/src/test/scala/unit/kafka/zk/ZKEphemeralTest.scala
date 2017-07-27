@@ -83,7 +83,7 @@ class ZKEphemeralTest(val secure: Boolean) extends ZooKeeperTestHarness {
     }
 
     var testData: String = null
-    testData = zkUtils.readData("/tmp/zktest")._1
+    testData = zkUtils.readData("/tmp/zktest").orNull
     Assert.assertNotNull(testData)
     zkUtils.close
     zkUtils = ZkUtils(zkConnect, zkSessionTimeoutMs, config.zkConnectionTimeoutMs, JaasUtils.isZkSecurityEnabled())

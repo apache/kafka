@@ -612,10 +612,8 @@ object AdminUtils extends Logging with AdminUtilities {
    */
   def fetchEntityConfig(zkUtils: ZkUtils, rootEntityType: String, sanitizedEntityName: String): Properties = {
     val entityConfigPath = getEntityConfigPath(rootEntityType, sanitizedEntityName)
-    // readDataMaybeNull returns Some(null) if the path exists, but there is no data
-    val str: String = zkUtils.readDataMaybeNull(entityConfigPath)._1.orNull
     val props = new Properties()
-    if (str != null) {
+    zkUtils.readData(entityConfigPath).foreach { str =>
       Json.parseFull(str) match {
         case None => // there are no config overrides
         case Some(mapAnon: Map[_, _]) =>
@@ -631,7 +629,6 @@ object AdminUtils extends Logging with AdminUtilities {
                 }
             case _ => throw new IllegalArgumentException(s"Invalid ${entityConfigPath} config: ${str}")
           }
-
         case _ => throw new IllegalArgumentException(s"Unexpected value in config:(${str}), entity_config_path: ${entityConfigPath}")
       }
     }

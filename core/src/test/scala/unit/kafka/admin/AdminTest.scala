@@ -328,11 +328,12 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
     val partitionsForPreferredReplicaElection = Set(TopicAndPartition("test", 1), TopicAndPartition("test2", 1))
     PreferredReplicaLeaderElectionCommand.writePreferredReplicaElectionData(zkUtils, partitionsForPreferredReplicaElection)
     // try to read it back and compare with what was written
-    val preferredReplicaElectionZkData = zkUtils.readData(ZkUtils.PreferredReplicaLeaderElectionPath)._1
-    val partitionsUndergoingPreferredReplicaElection =
-      PreferredReplicaLeaderElectionCommand.parsePreferredReplicaElectionData(preferredReplicaElectionZkData)
-    assertEquals("Preferred replica election ser-de failed", partitionsForPreferredReplicaElection,
-      partitionsUndergoingPreferredReplicaElection)
+    zkUtils.readData(ZkUtils.PreferredReplicaLeaderElectionPath).foreach { preferredReplicaElectionZkData =>
+      val partitionsUndergoingPreferredReplicaElection =
+        PreferredReplicaLeaderElectionCommand.parsePreferredReplicaElectionData(preferredReplicaElectionZkData)
+      assertEquals("Preferred replica election ser-de failed", partitionsForPreferredReplicaElection,
+        partitionsUndergoingPreferredReplicaElection)
+    }
   }
 
   @Test

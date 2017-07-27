@@ -106,7 +106,7 @@ object ExportZkOffsets extends Logging {
           for (bidPid <- bidPidList) {
             val zkGrpTpDir = new ZKGroupTopicDirs(consumerGrp,topic)
             val offsetPath = zkGrpTpDir.consumerOffsetDir + "/" + bidPid
-            zkUtils.readDataMaybeNull(offsetPath)._1 match {
+            zkUtils.readData(offsetPath) match {
               case Some(offsetVal) =>
                 fileWriter.write(offsetPath + ":" + offsetVal + "\n")
                 debug(offsetPath + " => " + offsetVal)
