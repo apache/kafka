@@ -17,14 +17,12 @@
 
 package kafka.integration
 
-import java.io.File
-
 import kafka.admin.AdminUtils
 import kafka.api.TopicMetadataResponse
 import kafka.client.ClientUtils
 import kafka.cluster.BrokerEndPoint
 import kafka.server.{KafkaConfig, KafkaServer, NotRunning}
-import kafka.utils.{CoreUtils, TestUtils}
+import kafka.utils.TestUtils
 import kafka.utils.TestUtils._
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.protocol.Errors
@@ -59,7 +57,7 @@ class TopicMetadataTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testBasicTopicMetadata {
+  def testBasicTopicMetadata(): Unit = {
     // create topic
     val topic = "test"
     createTopic(zkUtils, topic, numPartitions = 1, replicationFactor = 1, servers = Seq(server1))
@@ -77,7 +75,7 @@ class TopicMetadataTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testGetAllTopicMetadata {
+  def testGetAllTopicMetadata(): Unit = {
     // create topic
     val topic1 = "testGetAllTopicMetadata1"
     val topic2 = "testGetAllTopicMetadata2"
@@ -102,7 +100,7 @@ class TopicMetadataTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testAutoCreateTopic {
+  def testAutoCreateTopic(): Unit = {
     // auto create topic
     val topic = "testAutoCreateTopic"
     var topicsMetadata = ClientUtils.fetchTopicMetadata(Set(topic), brokerEndPoints, "TopicMetadataTest-testAutoCreateTopic",
@@ -129,7 +127,7 @@ class TopicMetadataTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testAutoCreateTopicWithInvalidReplication {
+  def testAutoCreateTopicWithInvalidReplication(): Unit = {
     val adHocProps = createBrokerConfig(2, zkConnect)
     // Set default replication higher than the number of live brokers
     adHocProps.setProperty(KafkaConfig.DefaultReplicationFactorProp, "3")
@@ -152,7 +150,7 @@ class TopicMetadataTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testAutoCreateTopicWithCollision {
+  def testAutoCreateTopicWithCollision(): Unit = {
     // auto create topic
     val topic1 = "testAutoCreate_Topic"
     val topic2 = "testAutoCreate.Topic"
@@ -212,7 +210,7 @@ class TopicMetadataTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testIsrAfterBrokerShutDownAndJoinsBack {
+  def testIsrAfterBrokerShutDownAndJoinsBack(): Unit = {
     val numBrokers = 2 //just 2 brokers are enough for the test
 
     // start adHoc brokers
@@ -260,12 +258,12 @@ class TopicMetadataTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testAliveBrokerListWithNoTopics {
+  def testAliveBrokerListWithNoTopics(): Unit = {
     checkMetadata(Seq(server1), 1)
   }
 
   @Test
-  def testAliveBrokersListWithNoTopicsAfterNewBrokerStartup {
+  def testAliveBrokersListWithNoTopicsAfterNewBrokerStartup(): Unit = {
     adHocServers = adHocConfigs.takeRight(adHocConfigs.size - 1).map(p => createServer(p))
 
     checkMetadata(adHocServers, numConfigs - 1)
@@ -278,7 +276,7 @@ class TopicMetadataTest extends ZooKeeperTestHarness {
 
 
   @Test
-  def testAliveBrokersListWithNoTopicsAfterABrokerShutdown {
+  def testAliveBrokersListWithNoTopicsAfterABrokerShutdown(): Unit = {
     adHocServers = adHocConfigs.map(p => createServer(p))
 
     checkMetadata(adHocServers, numConfigs)

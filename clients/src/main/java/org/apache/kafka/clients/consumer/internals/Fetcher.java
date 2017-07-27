@@ -429,14 +429,17 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
     public Map<TopicPartition, OffsetAndTimestamp> getOffsetsByTimes(Map<TopicPartition, Long> timestampsToSearch,
                                                                      long timeout) {
         Map<TopicPartition, OffsetData> offsetData = retrieveOffsetsByTimes(timestampsToSearch, timeout, true);
-        HashMap<TopicPartition, OffsetAndTimestamp> offsetsByTimes = new HashMap<>(offsetData.size());
+
+        HashMap<TopicPartition, OffsetAndTimestamp> offsetsByTimes = new HashMap<>(timestampsToSearch.size());
+        for (Map.Entry<TopicPartition, Long> entry : timestampsToSearch.entrySet())
+            offsetsByTimes.put(entry.getKey(), null);
+
         for (Map.Entry<TopicPartition, OffsetData> entry : offsetData.entrySet()) {
-            OffsetData data = entry.getValue();
-            if (data == null)
-                offsetsByTimes.put(entry.getKey(), null);
-            else
-                offsetsByTimes.put(entry.getKey(), new OffsetAndTimestamp(data.offset, data.timestamp));
+            // 'entry.getValue().timestamp' will not be null since we are guaranteed
+            // to work with a v1 (or later) ListOffset request
+            offsetsByTimes.put(entry.getKey(), new OffsetAndTimestamp(entry.getValue().offset, entry.getValue().timestamp));
         }
+
         return offsetsByTimes;
     }
 
@@ -683,8 +686,10 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
      * @param listOffsetResponse The response from the server.
      * @param future The future to be completed when the response returns. Note that any partition-level errors will
      *               generally fail the entire future result. The one exception is UNSUPPORTED_FOR_MESSAGE_FORMAT,
-     *               which indicates that the broker does not support the v1 message format and results in a null
-     *               being inserted into the resulting map.
+     *               which indicates that the broker does not support the v1 message format. Partitions with this
+     *               particular error are simply left out of the future map. Note that the corresponding timestamp
+     *               value of each partition may be null only for v0. In v1 and later the ListOffset API would not
+     *               return a null timestamp (-1 is returned instead when necessary).
      */
     @SuppressWarnings("deprecation")
     private void handleListOffsetResponse(Map<TopicPartition, Long> timestampsToSearch,
@@ -727,7 +732,6 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                 // The message format on the broker side is before 0.10.0, we simply put null in the response.
                 log.debug("Cannot search by timestamp for partition {} because the message format version " +
                         "is before 0.10.0", topicPartition);
-                timestampOffsetMap.put(topicPartition, null);
             } else if (error == Errors.NOT_LEADER_FOR_PARTITION) {
                 log.debug("Attempt to fetch offsets for partition {} failed due to obsolete leadership information, retrying.",
                         topicPartition);
@@ -860,7 +864,8 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                     log.trace("Updating last stable offset for partition {} to {}", tp, partition.lastStableOffset);
                     subscriptions.updateLastStableOffset(tp, partition.lastStableOffset);
                 }
-            } else if (error == Errors.NOT_LEADER_FOR_PARTITION) {
+            } else if (error == Errors.NOT_LEADER_FOR_PARTITION ||
+                       error == Errors.KAFKA_STORAGE_ERROR) {
                 log.debug("Error in fetch for partition {}: {}", tp, error.exceptionName());
                 this.metadata.requestUpdate();
             } else if (error == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
@@ -880,7 +885,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             } else if (error == Errors.TOPIC_AUTHORIZATION_FAILED) {
                 log.warn("Not authorized to read from topic {}.", tp.topic());
                 throw new TopicAuthorizationException(Collections.singleton(tp.topic()));
-            } else if (error == Errors.UNKNOWN) {
+            } else if (error == Errors.UNKNOWN_SERVER_ERROR) {
                 log.warn("Unknown error fetching data for topic-partition {}", tp);
             } else {
                 throw new IllegalStateException("Unexpected error code " + error.code() + " while fetching data");

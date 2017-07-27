@@ -46,7 +46,6 @@ public class CompositeReadOnlyKeyValueStoreTest {
     private KeyValueStore<String, String>
         otherUnderlyingStore;
 
-    @SuppressWarnings("unchecked")
     @Before
     public void before() {
         final StateStoreProviderStub stubProviderOne = new StateStoreProviderStub(false);
@@ -141,8 +140,6 @@ public class CompositeReadOnlyKeyValueStoreTest {
         } catch (UnsupportedOperationException e) { }
     }
 
-
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldFindValueForKeyWhenMultiStores() throws Exception {
         final KeyValueStore<String, String> cache = newStoreInstance();
@@ -167,7 +164,6 @@ public class CompositeReadOnlyKeyValueStoreTest {
         assertEquals(2, results.size());
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldSupportRangeAcrossMultipleKVStores() throws Exception {
         final KeyValueStore<String, String> cache = newStoreInstance();

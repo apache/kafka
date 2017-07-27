@@ -63,7 +63,6 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
         this.cacheFunction = new SegmentedCacheFunction(keySchema, segmentInterval);
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public void init(final ProcessorContext context, final StateStore root) {
         underlying.init(context, root);
