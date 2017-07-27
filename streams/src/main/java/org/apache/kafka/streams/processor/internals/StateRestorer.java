@@ -57,7 +57,7 @@ public class StateRestorer {
         return checkpoint == null ? NO_CHECKPOINT : checkpoint;
     }
 
-    void notifyRestoreStarted(long startingOffset, long endingOffset) {
+    void restoreStarted(long startingOffset, long endingOffset) {
         compositeRestoreListener.onRestoreStart(partition, storeName, startingOffset, endingOffset);
     }
 

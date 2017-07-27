@@ -220,7 +220,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         }
     }
 
-    //Visible for testing
+    // visible for testing
     boolean isPrepareForBulkload() {
         return prepareForBulkload;
     }

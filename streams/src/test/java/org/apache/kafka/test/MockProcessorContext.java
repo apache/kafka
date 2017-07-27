@@ -24,7 +24,6 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsMetrics;
-import org.apache.kafka.streams.processor.AbstractNotifyingBatchingRestoreCallback;
 import org.apache.kafka.streams.processor.BatchingStateRestoreCallback;
 import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.PunctuationType;
@@ -33,18 +32,19 @@ import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.CompositeRestoreListener;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.processor.internals.RecordContext;
+import org.apache.kafka.streams.processor.internals.WrappedBatchingStateRestoreCallback;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
 import java.io.File;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -287,25 +287,17 @@ public class MockProcessorContext implements InternalProcessorContext, RecordCol
 
     public void restore(final String storeName, final Iterable<KeyValue<byte[], byte[]>> changeLog) {
 
-        final StateRestoreCallback restoreCallback = restoreFuncs.get(storeName);
-        final StateRestoreListener restoreListener = (restoreCallback instanceof StateRestoreListener) ?
-                                                     (StateRestoreListener) restoreCallback : new NoOpRestoreListener();
+        final BatchingStateRestoreCallback restoreCallback = getBatchingRestoreCallback(restoreFuncs.get(storeName));
+        final StateRestoreListener restoreListener = getStateRestoreListener(restoreCallback);
 
         restoreListener.onRestoreStart(null, storeName, 0L, 0L);
 
-        if (restoreCallback instanceof BatchingStateRestoreCallback) {
-            List<KeyValue<byte[], byte[]>> records = new ArrayList<>();
-            for (KeyValue<byte[], byte[]> keyValue : changeLog) {
-                records.add(keyValue);
-            }
-            ((BatchingStateRestoreCallback) restoreCallback).restoreAll(records);
-
-        } else {
-
-            for (final KeyValue<byte[], byte[]> entry : changeLog) {
-                restoreCallback.restore(entry.key, entry.value);
-            }
+        List<KeyValue<byte[], byte[]>> records = new ArrayList<>();
+        for (KeyValue<byte[], byte[]> keyValue : changeLog) {
+            records.add(keyValue);
         }
+
+        restoreCallback.restoreAll(records);
 
         restoreListener.onRestoreEnd(null, storeName, 0L);
     }
@@ -329,11 +321,20 @@ public class MockProcessorContext implements InternalProcessorContext, RecordCol
         metrics.close();
     }
 
-    private static final class NoOpRestoreListener extends AbstractNotifyingBatchingRestoreCallback {
-
-        @Override
-        public void restoreAll(Collection<KeyValue<byte[], byte[]>> records) {
-
+    private StateRestoreListener getStateRestoreListener(StateRestoreCallback restoreCallback) {
+        if (restoreCallback instanceof StateRestoreListener) {
+            return (StateRestoreListener) restoreCallback;
         }
+
+        return CompositeRestoreListener.NO_OP_STATE_RESTORE_LISTENER;
     }
+
+    private BatchingStateRestoreCallback getBatchingRestoreCallback(StateRestoreCallback restoreCallback) {
+        if (restoreCallback instanceof BatchingStateRestoreCallback) {
+            return (BatchingStateRestoreCallback) restoreCallback;
+        }
+
+        return new WrappedBatchingStateRestoreCallback(restoreCallback);
+    }
+
 }

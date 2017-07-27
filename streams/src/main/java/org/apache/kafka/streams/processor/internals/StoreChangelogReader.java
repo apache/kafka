@@ -123,7 +123,7 @@ public class StoreChangelogReader implements ChangelogReader {
                 } else {
                     needsRestoring.put(topicPartition, restorer);
                     final Long endOffset = endOffsets.get(topicPartition);
-                    restorer.notifyRestoreStarted(restorer.startingOffset(), endOffset);
+                    restorer.restoreStarted(restorer.startingOffset(), endOffset);
                 }
             }
 

@@ -45,10 +45,10 @@ public interface StateRestoreListener {
      * @param startingOffset the starting offset of the entire restoration process for this TopicPartition
      * @param endingOffset   the ending offset of the entire restoration process for this TopicPartition
      */
-    void onRestoreStart(TopicPartition topicPartition,
-                        String storeName,
-                        long startingOffset,
-                        long endingOffset);
+    void onRestoreStart(final TopicPartition topicPartition,
+                        final String storeName,
+                        final long startingOffset,
+                        final long endingOffset);
 
     /**
      * Method called after restoring a batch of records.  In this case the maximum size of the batch is whatever
@@ -65,10 +65,10 @@ public interface StateRestoreListener {
      * @param batchEndOffset the ending offset for the current restored batch for this TopicPartition
      * @param numRestored the total number of records restored in this batch for this TopicPartition
      */
-    void onBatchRestored(TopicPartition topicPartition,
-                         String storeName,
-                         long batchEndOffset,
-                         long numRestored);
+    void onBatchRestored(final TopicPartition topicPartition,
+                         final String storeName,
+                         final long batchEndOffset,
+                         final long numRestored);
 
     /**
      * Method called when restoring the {@link StateStore} is complete.
@@ -77,8 +77,8 @@ public interface StateRestoreListener {
      * @param storeName the name of the store just restored
      * @param totalRestored the total number of records restored for this TopicPartition
      */
-    void onRestoreEnd(TopicPartition topicPartition,
-                      String storeName,
-                      long totalRestored);
+    void onRestoreEnd(final TopicPartition topicPartition,
+                      final String storeName,
+                      final long totalRestored);
 
 }

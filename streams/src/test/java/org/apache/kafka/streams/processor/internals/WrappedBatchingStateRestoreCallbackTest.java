@@ -36,8 +36,7 @@ public class WrappedBatchingStateRestoreCallbackTest {
     private final byte[] key = "key".getBytes(Charset.forName("UTF-8"));
     private final byte[] value = "value".getBytes(Charset.forName("UTF-8"));
     private final Collection<KeyValue<byte[], byte[]>> records = Collections.singletonList(KeyValue.pair(key, value));
-    private final BatchingStateRestoreCallback wrappedBatchingStateRestoreCallback = new
-        WrappedBatchingStateRestoreCallback(mockRestoreCallback);
+    private final BatchingStateRestoreCallback wrappedBatchingStateRestoreCallback = new WrappedBatchingStateRestoreCallback(mockRestoreCallback);
 
     @Test
     public void shouldRestoreSinglePutsFromArray() {

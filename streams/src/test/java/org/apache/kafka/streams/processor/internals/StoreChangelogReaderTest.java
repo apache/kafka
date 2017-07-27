@@ -51,9 +51,7 @@ public class StoreChangelogReaderTest {
     private final CompositeRestoreListener restoreListener = new CompositeRestoreListener(callback);
     private final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
     private final StateRestoreListener stateRestoreListener = new MockStateRestoreListener();
-    private final StoreChangelogReader
-        changelogReader =
-        new StoreChangelogReader(consumer, new MockTime(), 0, stateRestoreListener);
+    private final StoreChangelogReader changelogReader = new StoreChangelogReader(consumer, new MockTime(), 0, stateRestoreListener);
     private final TopicPartition topicPartition = new TopicPartition("topic", 0);
     private final PartitionInfo partitionInfo = new PartitionInfo(topicPartition.topic(), 0, null, null, null);
 
@@ -71,8 +69,7 @@ public class StoreChangelogReaderTest {
                 throw new TimeoutException("KABOOM!");
             }
         };
-        final StoreChangelogReader changelogReader = new StoreChangelogReader(consumer, new
-            MockTime(), 0, stateRestoreListener);
+        final StoreChangelogReader changelogReader = new StoreChangelogReader(consumer, new MockTime(), 0, stateRestoreListener);
         try {
             changelogReader.validatePartitionExists(topicPartition, "store");
             fail("Should have thrown streams exception");

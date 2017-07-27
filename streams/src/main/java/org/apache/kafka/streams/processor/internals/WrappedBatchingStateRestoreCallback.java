@@ -27,7 +27,7 @@ public class WrappedBatchingStateRestoreCallback implements BatchingStateRestore
 
     private final StateRestoreCallback stateRestoreCallback;
 
-    WrappedBatchingStateRestoreCallback(final StateRestoreCallback stateRestoreCallback) {
+    public WrappedBatchingStateRestoreCallback(final StateRestoreCallback stateRestoreCallback) {
         this.stateRestoreCallback = stateRestoreCallback;
     }
 

@@ -27,9 +27,9 @@ import org.apache.kafka.streams.processor.StateRestoreListener;
 
 import java.util.Collection;
 
-class CompositeRestoreListener implements BatchingStateRestoreCallback, StateRestoreListener {
+public class CompositeRestoreListener implements BatchingStateRestoreCallback, StateRestoreListener {
 
-    private static final NoOpStateRestoreListener NO_OP_STATE_RESTORE_LISTENER = new NoOpStateRestoreListener();
+    public static final NoOpStateRestoreListener NO_OP_STATE_RESTORE_LISTENER = new NoOpStateRestoreListener();
     private final BatchingStateRestoreCallback internalBatchingRestoreCallback;
     private final StateRestoreListener storeRestoreListener;
     private StateRestoreListener globalRestoreListener = NO_OP_STATE_RESTORE_LISTENER;
@@ -39,13 +39,10 @@ class CompositeRestoreListener implements BatchingStateRestoreCallback, StateRes
         if (stateRestoreCallback instanceof StateRestoreListener) {
             storeRestoreListener = (StateRestoreListener) stateRestoreCallback;
         } else {
-            storeRestoreListener = new NoOpStateRestoreListener();
+            storeRestoreListener = NO_OP_STATE_RESTORE_LISTENER;
         }
 
-        internalBatchingRestoreCallback =
-            (BatchingStateRestoreCallback) ((stateRestoreCallback instanceof BatchingStateRestoreCallback)
-                                            ? stateRestoreCallback
-                                            : new WrappedBatchingStateRestoreCallback(stateRestoreCallback));
+        internalBatchingRestoreCallback = getBatchingRestoreCallback(stateRestoreCallback);
     }
 
     @Override
@@ -93,8 +90,16 @@ class CompositeRestoreListener implements BatchingStateRestoreCallback, StateRes
                                                 + "through the delegated StateRestoreCallback instance");
     }
 
+    private BatchingStateRestoreCallback getBatchingRestoreCallback(StateRestoreCallback restoreCallback) {
+        if (restoreCallback instanceof  BatchingStateRestoreCallback) {
+            return (BatchingStateRestoreCallback) restoreCallback;
+        }
 
-    private static final class NoOpStateRestoreListener extends AbstractNotifyingBatchingRestoreCallback  {
+        return new WrappedBatchingStateRestoreCallback(restoreCallback);
+    }
+
+
+    private static final class NoOpStateRestoreListener extends AbstractNotifyingBatchingRestoreCallback {
 
         @Override
         public void restoreAll(final Collection<KeyValue<byte[], byte[]>> records) {

@@ -28,7 +28,7 @@ import java.util.Map;
 
 public class MockStateRestoreListener extends AbstractNotifyingRestoreCallback {
 
-    //Verifies store name called for each state
+    // verifies store name called for each state
     public final Map<String, String> storeNameCalledStates = new HashMap<>();
     public final List<KeyValue<byte[], byte[]>> restored = new ArrayList<>();
     public long restoreStartOffset;
