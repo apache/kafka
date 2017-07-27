@@ -109,12 +109,12 @@ class DynamicConfigManager(private val zkUtils: ZkUtils,
 
     private def processEntityConfigChangeVersion1(json: String, js: JsonObject) {
       val validConfigTypes = Set(ConfigType.Topic, ConfigType.Client)
-      val entityType = js.get("entity_type").flatMap(_.toOption[String]).filter(validConfigTypes).getOrElse {
+      val entityType = js.get("entity_type").flatMap(_.to[Option[String]]).filter(validConfigTypes).getOrElse {
         throw new IllegalArgumentException("Version 1 config change notification must have 'entity_type' set to " +
           s"'clients' or 'topics'. Received: $json")
       }
 
-      val entity = js.get("entity_name").flatMap(_.toOption[String]).getOrElse {
+      val entity = js.get("entity_name").flatMap(_.to[Option[String]]).getOrElse {
         throw new IllegalArgumentException("Version 1 config change notification does not specify 'entity_name'. Received: " + json)
       }
 
@@ -126,7 +126,7 @@ class DynamicConfigManager(private val zkUtils: ZkUtils,
 
     private def processEntityConfigChangeVersion2(json: String, js: JsonObject) {
 
-      val entityPath = js.get("entity_path").flatMap(_.toOption[String]).getOrElse {
+      val entityPath = js.get("entity_path").flatMap(_.to[Option[String]]).getOrElse {
         throw new IllegalArgumentException(s"Version 2 config change notification must specify 'entity_path'. Received: $json")
       }
 

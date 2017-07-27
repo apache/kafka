@@ -30,8 +30,6 @@ trait JsonValue {
 
   def toEither[T](implicit decodeJson: DecodeJson[T]): Either[String, T] = decodeJson.decodeEither(node)
 
-  def toOption[T](implicit decodeJson: DecodeJson[T]): Option[T] = toEither[T].right.toOption
-
   def asJsonObject: JsonObject =
     asJsonObjectOption.getOrElse(throw new JsonMappingException(s"Expected JSON object, received $node"))
 
