@@ -105,10 +105,23 @@ class ReplicaTest {
       replica.highWatermark = new LogOffsetMetadata(hw)
       assertEquals(hw, replica.highWatermark.messageOffset)
       log.deleteOldSegments()
-      assertTrue(replica.logStartOffset <= replica.highWatermark.messageOffset)
+      assertTrue(replica.logStartOffset <= hw)
+
+      // verify that all segments up to the high watermark have been deleted
+      
+      log.logSegments.headOption.foreach { segment =>
+        assertTrue(segment.baseOffset <= hw)
+        assertTrue(segment.baseOffset >= replica.logStartOffset)
+      }
+      log.logSegments.tail.foreach { segment =>
+        assertTrue(segment.baseOffset > hw)
+        assertTrue(segment.baseOffset >= replica.logStartOffset)
+      }
     }
 
     assertEquals(100L, log.logStartOffset)
+    assertEquals(1, log.numberOfSegments)
+    assertEquals(0, log.activeSegment.size)
   }
 
   @Test(expected = classOf[OffsetOutOfRangeException])
@@ -119,7 +132,7 @@ class ReplicaTest {
     }
 
     replica.highWatermark = new LogOffsetMetadata(25L)
-    replica.maybeIncrementLogStartOffset(50L)
+    replica.maybeIncrementLogStartOffset(26L)
   }
 
 }

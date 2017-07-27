@@ -170,8 +170,9 @@ class Log(@volatile var dir: File,
   @volatile var firstUnstableOffset: Option[LogOffsetMetadata] = None
 
   /* Keep track of the current high watermark in order to ensure that segments containing offsets at or above it are
-   * not eligible for deletion. This is needed to prevent the log start offset (which is exposed in fetch responses)
-   * from getting ahead of the high watermark.
+   * not eligible for deletion. This means that the active segment is only eligible for deletion if the high watermark
+   * equals the log end offset (which may never happen for a partition under consistent load). This is needed to
+   * prevent the log start offset (which is exposed in fetch responses) from getting ahead of the high watermark.
    */
   @volatile private var replicaHighWatermark: Option[Long] = None
 
@@ -746,15 +747,15 @@ class Log(@volatile var dir: File,
   /**
    * Increment the log start offset if the provided offset is larger.
    */
-  def maybeIncrementLogStartOffset(offset: Long) {
+  def maybeIncrementLogStartOffset(newLogStartOffset: Long) {
     // We don't have to write the log start offset to log-start-offset-checkpoint immediately.
     // The deleteRecordsOffset may be lost only if all in-sync replicas of this broker are shutdown
     // in an unclean manner within log.flush.start.offset.checkpoint.interval.ms. The chance of this happening is low.
-    maybeHandleIOException(s"Exception while increasing log start offset for $topicPartition to $offset in dir ${dir.getParent}") {
+    maybeHandleIOException(s"Exception while increasing log start offset for $topicPartition to $newLogStartOffset in dir ${dir.getParent}") {
       lock synchronized {
-        if (offset > logStartOffset) {
-          info(s"Incrementing log start offset of partition $topicPartition to $offset in dir ${dir.getParent}")
-          logStartOffset = offset
+        if (newLogStartOffset > logStartOffset) {
+          info(s"Incrementing log start offset of partition $topicPartition to $newLogStartOffset in dir ${dir.getParent}")
+          logStartOffset = newLogStartOffset
           leaderEpochCache.clearAndFlushEarliest(logStartOffset)
           producerStateManager.truncateHead(logStartOffset)
           updateFirstUnstableOffset()
@@ -1129,8 +1130,7 @@ class Log(@volatile var dir: File,
    * @return the segments ready to be deleted
    */
   private def deletableSegments(predicate: (LogSegment, Option[LogSegment]) => Boolean): Iterable[LogSegment] = {
-    val lastEntry = segments.lastEntry
-    if (lastEntry == null || replicaHighWatermark.isEmpty) {
+    if (segments.isEmpty || replicaHighWatermark.isEmpty) {
       Seq.empty
     } else {
       val highWatermark = replicaHighWatermark.get
@@ -1139,11 +1139,12 @@ class Log(@volatile var dir: File,
       while (segmentEntry != null) {
         val segment = segmentEntry.getValue
         val nextSegmentEntry = segments.higherEntry(segmentEntry.getKey)
-        val nextSegmentOpt = Option(nextSegmentEntry).map(_.getValue)
-        val upperBoundOffset = nextSegmentOpt.map(_.baseOffset).getOrElse(logEndOffset)
+        val (nextSegment, upperBoundOffset, isLastSegmentAndEmpty) = if (nextSegmentEntry != null)
+          (nextSegmentEntry.getValue, nextSegmentEntry.getValue.baseOffset, false)
+        else
+          (null, logEndOffset, segment.size == 0)
 
-        if (highWatermark >= upperBoundOffset && predicate(segment, nextSegmentOpt) &&
-          (segment.baseOffset != lastEntry.getValue.baseOffset || segment.size > 0)) {
+        if (highWatermark >= upperBoundOffset && predicate(segment, Option(nextSegment)) && !isLastSegmentAndEmpty) {
           deletable += segment
           segmentEntry = nextSegmentEntry
         } else {
@@ -1181,7 +1182,7 @@ class Log(@volatile var dir: File,
         false
       }
     }
-    deleteOldSegments(shouldDelete, reason = s"retention size ${config.retentionSize} breach")
+    deleteOldSegments(shouldDelete, reason = s"retention size in bytes ${config.retentionSize} breach")
   }
 
   private def deleteLogStartOffsetBreachedSegments(): Int = {
