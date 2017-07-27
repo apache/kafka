@@ -29,7 +29,6 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.errors.{KafkaStorageException, NotLeaderForPartitionException}
 import org.junit.{Before, Test}
 import org.junit.Assert.assertTrue
-import org.junit.Assert.assertEquals
 
 /**
   * Test whether clients can producer and consume when there is log directory failure
