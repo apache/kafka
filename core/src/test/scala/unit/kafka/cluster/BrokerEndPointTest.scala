@@ -17,39 +17,33 @@
 
 package kafka.cluster
 
-import java.nio.ByteBuffer
-
-import kafka.utils.{Logging, TestUtils}
+import kafka.utils.TestUtils
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.junit.Assert.{assertEquals, assertNotEquals, assertNull}
 import org.junit.Test
 
-import scala.collection.mutable
-
-class BrokerEndPointTest extends Logging {
+class BrokerEndPointTest {
 
   @Test
-  def testHashAndEquals() {
+  def testHashAndEquals(): Unit = {
     val broker1 = TestUtils.createBroker(1, "myhost", 9092)
     val broker2 = TestUtils.createBroker(1, "myhost", 9092)
     val broker3 = TestUtils.createBroker(2, "myhost", 1111)
     val broker4 = TestUtils.createBroker(1, "other", 1111)
 
-    assert(broker1 == broker2)
-    assert(broker1 != broker3)
-    assert(broker1 != broker4)
-    assert(broker1.hashCode() == broker2.hashCode())
-    assert(broker1.hashCode() != broker3.hashCode())
-    assert(broker1.hashCode() != broker4.hashCode())
+    assertEquals(broker1, broker2)
+    assertNotEquals(broker1, broker3)
+    assertNotEquals(broker1, broker4)
+    assertEquals(broker1.hashCode, broker2.hashCode)
+    assertNotEquals(broker1.hashCode, broker3.hashCode)
+    assertNotEquals(broker1.hashCode, broker4.hashCode)
 
-    val hashmap = new mutable.HashMap[Broker, Int]()
-    hashmap.put(broker1, 1)
-    assert(hashmap.getOrElse(broker1, -1) == 1)
+    assertEquals(Some(1), Map(broker1 -> 1).get(broker1))
   }
 
   @Test
-  def testFromJsonFutureVersion() {
+  def testFromJsonFutureVersion(): Unit = {
     // `createBroker` should support future compatible versions, we use a hypothetical future version here
     val brokerInfoStr = """{
       "foo":"bar",
@@ -61,10 +55,10 @@ class BrokerEndPointTest extends Logging {
       "endpoints":["SSL://localhost:9093"]
     }"""
     val broker = Broker.createBroker(1, brokerInfoStr)
-    assert(broker.id == 1)
+    assertEquals(1, broker.id)
     val brokerEndPoint = broker.getBrokerEndPoint(ListenerName.forSecurityProtocol(SecurityProtocol.SSL))
-    assert(brokerEndPoint.host == "localhost")
-    assert(brokerEndPoint.port == 9093)
+    assertEquals("localhost", brokerEndPoint.host)
+    assertEquals(9093, brokerEndPoint.port)
   }
 
   @Test
@@ -78,20 +72,20 @@ class BrokerEndPointTest extends Logging {
       "endpoints":["PLAINTEXT://localhost:9092"]
     }"""
     val broker = Broker.createBroker(1, brokerInfoStr)
-    assert(broker.id == 1)
+    assertEquals(1, broker.id)
     val brokerEndPoint = broker.getBrokerEndPoint(ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT))
-    assert(brokerEndPoint.host == "localhost")
-    assert(brokerEndPoint.port == 9092)
+    assertEquals("localhost", brokerEndPoint.host)
+    assertEquals(9092, brokerEndPoint.port)
   }
 
   @Test
-  def testFromJsonV1() = {
+  def testFromJsonV1(): Unit = {
     val brokerInfoStr = """{"jmx_port":-1,"timestamp":"1420485325400","host":"172.16.8.243","version":1,"port":9091}"""
     val broker = Broker.createBroker(1, brokerInfoStr)
-    assert(broker.id == 1)
+    assertEquals(1, broker.id)
     val brokerEndPoint = broker.getBrokerEndPoint(ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT))
-    assert(brokerEndPoint.host == "172.16.8.243")
-    assert(brokerEndPoint.port == 9091)
+    assertEquals("172.16.8.243", brokerEndPoint.host)
+    assertEquals(9091, brokerEndPoint.port)
   }
 
   @Test
@@ -153,69 +147,69 @@ class BrokerEndPointTest extends Logging {
   }
 
   @Test
-  def testBrokerEndpointFromUri() {
+  def testBrokerEndpointFromUri(): Unit = {
     var connectionString = "localhost:9092"
     var endpoint = BrokerEndPoint.createBrokerEndPoint(1, connectionString)
-    assert(endpoint.host == "localhost")
-    assert(endpoint.port == 9092)
+    assertEquals("localhost", endpoint.host)
+    assertEquals(9092, endpoint.port)
     //KAFKA-3719
     connectionString = "local_host:9092"
     endpoint = BrokerEndPoint.createBrokerEndPoint(1, connectionString)
-    assert(endpoint.host == "local_host")
-    assert(endpoint.port == 9092)
+    assertEquals("local_host", endpoint.host)
+    assertEquals(9092, endpoint.port)
     // also test for ipv6
     connectionString = "[::1]:9092"
     endpoint = BrokerEndPoint.createBrokerEndPoint(1, connectionString)
-    assert(endpoint.host == "::1")
-    assert(endpoint.port == 9092)
+    assertEquals("::1", endpoint.host)
+    assertEquals(9092, endpoint.port)
     // test for ipv6 with % character
     connectionString = "[fe80::b1da:69ca:57f7:63d8%3]:9092"
     endpoint = BrokerEndPoint.createBrokerEndPoint(1, connectionString)
-    assert(endpoint.host == "fe80::b1da:69ca:57f7:63d8%3")
-    assert(endpoint.port == 9092)
+    assertEquals("fe80::b1da:69ca:57f7:63d8%3", endpoint.host)
+    assertEquals(9092, endpoint.port)
     // add test for uppercase in hostname
     connectionString = "MyHostname:9092"
     endpoint = BrokerEndPoint.createBrokerEndPoint(1, connectionString)
-    assert(endpoint.host == "MyHostname")
-    assert(endpoint.port == 9092)
+    assertEquals("MyHostname", endpoint.host)
+    assertEquals(9092, endpoint.port)
   }
 
   @Test
-  def testEndpointFromUri() {
+  def testEndpointFromUri(): Unit = {
     var connectionString = "PLAINTEXT://localhost:9092"
     var endpoint = EndPoint.createEndPoint(connectionString, None)
-    assert(endpoint.host == "localhost")
-    assert(endpoint.port == 9092)
-    assert(endpoint.connectionString == "PLAINTEXT://localhost:9092")
+    assertEquals("localhost", endpoint.host)
+    assertEquals(9092, endpoint.port)
+    assertEquals("PLAINTEXT://localhost:9092", endpoint.connectionString)
     // KAFKA-3719
     connectionString = "PLAINTEXT://local_host:9092"
     endpoint = EndPoint.createEndPoint(connectionString, None)
-    assert(endpoint.host == "local_host")
-    assert(endpoint.port == 9092)
-    assert(endpoint.connectionString == "PLAINTEXT://local_host:9092")
+    assertEquals("local_host", endpoint.host)
+    assertEquals(9092, endpoint.port)
+    assertEquals("PLAINTEXT://local_host:9092", endpoint.connectionString)
     // also test for default bind
     connectionString = "PLAINTEXT://:9092"
     endpoint = EndPoint.createEndPoint(connectionString, None)
-    assert(endpoint.host == null)
-    assert(endpoint.port == 9092)
-    assert(endpoint.connectionString == "PLAINTEXT://:9092")
+    assertNull(endpoint.host)
+    assertEquals(9092, endpoint.port)
+    assertEquals( "PLAINTEXT://:9092", endpoint.connectionString)
     // also test for ipv6
     connectionString = "PLAINTEXT://[::1]:9092"
     endpoint = EndPoint.createEndPoint(connectionString, None)
-    assert(endpoint.host == "::1")
-    assert(endpoint.port == 9092)
-    assert(endpoint.connectionString ==  "PLAINTEXT://[::1]:9092")
+    assertEquals("::1", endpoint.host)
+    assertEquals(9092, endpoint.port)
+    assertEquals("PLAINTEXT://[::1]:9092", endpoint.connectionString)
     // test for ipv6 with % character
     connectionString = "PLAINTEXT://[fe80::b1da:69ca:57f7:63d8%3]:9092"
     endpoint = EndPoint.createEndPoint(connectionString, None)
-    assert(endpoint.host == "fe80::b1da:69ca:57f7:63d8%3")
-    assert(endpoint.port == 9092)
-    assert(endpoint.connectionString ==  "PLAINTEXT://[fe80::b1da:69ca:57f7:63d8%3]:9092")
+    assertEquals("fe80::b1da:69ca:57f7:63d8%3", endpoint.host)
+    assertEquals(9092, endpoint.port)
+    assertEquals("PLAINTEXT://[fe80::b1da:69ca:57f7:63d8%3]:9092", endpoint.connectionString)
     // test hostname
     connectionString = "PLAINTEXT://MyHostname:9092"
     endpoint = EndPoint.createEndPoint(connectionString, None)
-    assert(endpoint.host == "MyHostname")
-    assert(endpoint.port == 9092)
-    assert(endpoint.connectionString ==  "PLAINTEXT://MyHostname:9092")
+    assertEquals("MyHostname", endpoint.host)
+    assertEquals(9092, endpoint.port)
+    assertEquals("PLAINTEXT://MyHostname:9092", endpoint.connectionString)
   }
 }
