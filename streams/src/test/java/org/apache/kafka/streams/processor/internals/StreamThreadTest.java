@@ -1502,7 +1502,8 @@ public class StreamThreadTest {
                 metrics,
                 mockTime,
                 new StreamsMetadataState(builder.internalTopologyBuilder, StreamsMetadataState.UNKNOWN_HOST),
-                0) {
+                0,
+                stateDirectory) {
 
             @Override
             protected StreamTask createStreamTask(final TaskId id, final Collection<TopicPartition> partitions) {
