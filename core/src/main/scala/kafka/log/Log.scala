@@ -1094,7 +1094,7 @@ class Log(@volatile var dir: File,
     lock synchronized {
       val deletable = deletableSegments(predicate)
       if (deletable.nonEmpty)
-        info(s"Found deletable segments due to $reason: ${deletable.map(_.baseOffset).mkString(",")}")
+        info(s"Found deletable segments with base offsets [${deletable.map(_.baseOffset).mkString(",")}] due to $reason")
       deleteSegments(deletable)
     }
   }
@@ -1135,7 +1135,7 @@ class Log(@volatile var dir: File,
     } else {
       val highWatermark = replicaHighWatermark.get
       val deletable = ArrayBuffer.empty[LogSegment]
-      var segmentEntry = segments.firstEntry()
+      var segmentEntry = segments.firstEntry
       while (segmentEntry != null) {
         val segment = segmentEntry.getValue
         val nextSegmentEntry = segments.higherEntry(segmentEntry.getKey)
@@ -1166,9 +1166,8 @@ class Log(@volatile var dir: File,
   private def deleteRetentionMsBreachedSegments(): Int = {
     if (config.retentionMs < 0) return 0
     val startMs = time.milliseconds
-    def shouldDelete(segment: LogSegment, nextSegmentOpt: Option[LogSegment]) =
-      startMs - segment.largestTimestamp > config.retentionMs
-    deleteOldSegments(shouldDelete, reason = "retention time breach")
+    deleteOldSegments((segment, _) => startMs - segment.largestTimestamp > config.retentionMs,
+      reason = s"retention time ${config.retentionMs}ms breached")
   }
 
   private def deleteRetentionSizeBreachedSegments(): Int = {
@@ -1182,13 +1181,13 @@ class Log(@volatile var dir: File,
         false
       }
     }
-    deleteOldSegments(shouldDelete, reason = "retention size breach")
+    deleteOldSegments(shouldDelete, reason = s"retention size ${config.retentionSize} breached")
   }
 
   private def deleteLogStartOffsetBreachedSegments(): Int = {
     def shouldDelete(segment: LogSegment, nextSegmentOpt: Option[LogSegment]) =
       nextSegmentOpt.exists(_.baseOffset <= logStartOffset)
-    deleteOldSegments(shouldDelete, reason = "log start offset breach")
+    deleteOldSegments(shouldDelete, reason = s"log start offset $logStartOffset breached")
   }
 
   /**

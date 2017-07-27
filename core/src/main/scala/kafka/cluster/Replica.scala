@@ -107,9 +107,9 @@ class Replica(val brokerId: Int,
 
   def maybeIncrementLogStartOffset(offset: Long) {
     if (isLocal) {
-      if (highWatermark.messageOffset < offset)
+      if (offset > highWatermark.messageOffset)
         throw new OffsetOutOfRangeException(s"Cannot increment the log start offset to $offset of partition $topicPartition " +
-          s"since it is higher than the high watermark ${highWatermark.messageOffset}")
+          s"since it is larger than the high watermark ${highWatermark.messageOffset}")
       log.get.maybeIncrementLogStartOffset(offset)
     } else {
       throw new KafkaException(s"Should not try to delete records on partition $topicPartition's non-local replica $brokerId")
