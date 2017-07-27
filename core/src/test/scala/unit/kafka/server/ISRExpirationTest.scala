@@ -189,8 +189,9 @@ class IsrExpirationTest {
   private def getPartitionWithAllReplicasInIsr(topic: String, partitionId: Int, time: Time, config: KafkaConfig,
                                                localLog: Log): Partition = {
     val leaderId = config.brokerId
-    val partition = replicaManager.getOrCreatePartition(new TopicPartition(topic, partitionId))
-    val leaderReplica = new Replica(leaderId, partition, time, 0, Some(localLog))
+    val tp = new TopicPartition(topic, partitionId)
+    val partition = replicaManager.getOrCreatePartition(tp)
+    val leaderReplica = new Replica(leaderId, tp, time, 0, Some(localLog))
 
     val allReplicas = getFollowerReplicas(partition, leaderId, time) :+ leaderReplica
     allReplicas.foreach(r => partition.addReplicaIfNotExists(r))
@@ -216,13 +217,14 @@ class IsrExpirationTest {
     val cache = EasyMock.createNiceMock(classOf[LeaderEpochCache])
     EasyMock.expect(log.dir).andReturn(TestUtils.tempDir()).anyTimes()
     EasyMock.expect(log.leaderEpochCache).andReturn(cache).anyTimes()
+    EasyMock.expect(log.onHighWatermarkIncremented(0L))
     EasyMock.replay(log)
     log
   }
 
   private def getFollowerReplicas(partition: Partition, leaderId: Int, time: Time): Seq[Replica] = {
     configs.filter(_.brokerId != leaderId).map { config =>
-      new Replica(config.brokerId, partition, time)
+      new Replica(config.brokerId, partition.topicPartition, time)
     }
   }
 }

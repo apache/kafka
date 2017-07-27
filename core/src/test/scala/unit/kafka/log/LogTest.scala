@@ -612,6 +612,7 @@ class LogTest {
     assertEquals(2, log.activeProducers.size)
 
     log.maybeIncrementLogStartOffset(1L)
+    log.onHighWatermarkIncremented(log.logEndOffset)
     log.deleteOldSegments()
 
     assertEquals(1, log.logSegments.size)
@@ -667,6 +668,7 @@ class LogTest {
     assertEquals(3, log.logSegments.size)
     assertEquals(Set(pid1, pid2), log.activeProducers.keySet)
 
+    log.onHighWatermarkIncremented(log.logEndOffset)
     log.deleteOldSegments()
 
     assertEquals(2, log.logSegments.size)
@@ -1300,6 +1302,7 @@ class LogTest {
       assertEquals(currOffset, messagesToAppend)
 
       // time goes by; the log file is deleted
+      log.onHighWatermarkIncremented(currOffset)
       log.deleteOldSegments()
 
       assertEquals("Deleting segments shouldn't have changed the logEndOffset", currOffset, log.logEndOffset)
@@ -1812,6 +1815,7 @@ class LogTest {
     val segments = log.logSegments.toArray
     val oldFiles = segments.map(_.log.file) ++ segments.map(_.index.file)
 
+    log.onHighWatermarkIncremented(log.logEndOffset)
     log.deleteOldSegments()
 
     assertEquals("Only one segment should remain.", 1, log.numberOfSegments)
@@ -1851,6 +1855,7 @@ class LogTest {
       log.appendAsLeader(createRecords, leaderEpoch = 0)
 
     // expire all segments
+    log.onHighWatermarkIncremented(log.logEndOffset)
     log.deleteOldSegments()
     log.close()
 
@@ -2186,7 +2191,7 @@ class LogTest {
     topic + "-" + partition
 
   @Test
-  def testDeleteOldSegmentsMethod() {
+  def testDeleteOldSegments() {
     def createRecords = TestUtils.singletonRecords(value = "test".getBytes, timestamp = time.milliseconds - 1000)
     val logProps = new Properties()
     logProps.put(LogConfig.SegmentBytesProp, createRecords.sizeInBytes * 5: java.lang.Integer)
@@ -2208,11 +2213,32 @@ class LogTest {
     log.leaderEpochCache.assign(0, 40)
     log.leaderEpochCache.assign(1, 90)
 
+    // segments are not eligible for deletion if no high watermark has been set
+    val numSegments = log.numberOfSegments
+    log.deleteOldSegments()
+    assertEquals(numSegments, log.numberOfSegments)
+    assertEquals(0L, log.logStartOffset)
+
+    // only segments with offset before the current high watermark are eligible for deletion
+    for (hw <- 25 to 30) {
+      log.onHighWatermarkIncremented(hw)
+      log.deleteOldSegments()
+      assertTrue(log.logStartOffset <= hw)
+      log.logSegments.foreach { segment =>
+        val segmentFetchInfo = segment.read(startOffset = segment.baseOffset, maxOffset = None, maxSize = Int.MaxValue)
+        val segmentLastOffsetOpt = segmentFetchInfo.records.records.asScala.lastOption.map(_.offset)
+        segmentLastOffsetOpt.foreach { lastOffset =>
+          assertTrue(lastOffset >= hw)
+        }
+      }
+    }
+
     // expire all segments
+    log.onHighWatermarkIncremented(log.logEndOffset)
     log.deleteOldSegments()
     assertEquals("The deleted segments should be gone.", 1, log.numberOfSegments)
     assertEquals("Epoch entries should have gone.", 1, epochCache(log).epochEntries().size)
-    assertEquals("Epoch entry should be the latest epoch and the leo.", new EpochEntry(1, 100), epochCache(log).epochEntries().head)
+    assertEquals("Epoch entry should be the latest epoch and the leo.", EpochEntry(1, 100), epochCache(log).epochEntries().head)
 
     // append some messages to create some segments
     for (_ <- 0 until 100)
@@ -2222,7 +2248,6 @@ class LogTest {
     assertEquals("The number of segments should be 0", 0, log.numberOfSegments)
     assertEquals("The number of deleted segments should be zero.", 0, log.deleteOldSegments())
     assertEquals("Epoch entries should have gone.", 0, epochCache(log).epochEntries().size)
-
   }
 
   @Test
@@ -2234,6 +2259,7 @@ class LogTest {
       log.appendAsLeader(createRecords, leaderEpoch = 0)
     assertEquals("should have 3 segments", 3, log.numberOfSegments)
     assertEquals(log.logStartOffset, 0)
+    log.onHighWatermarkIncremented(log.logEndOffset)
 
     log.maybeIncrementLogStartOffset(1)
     log.deleteOldSegments()
@@ -2264,7 +2290,8 @@ class LogTest {
     for (_ <- 0 until 15)
       log.appendAsLeader(createRecords, leaderEpoch = 0)
 
-    log.deleteOldSegments
+    log.onHighWatermarkIncremented(log.logEndOffset)
+    log.deleteOldSegments()
     assertEquals("should have 2 segments", 2,log.numberOfSegments)
   }
 
@@ -2277,7 +2304,8 @@ class LogTest {
     for (_ <- 0 until 15)
       log.appendAsLeader(createRecords, leaderEpoch = 0)
 
-    log.deleteOldSegments
+    log.onHighWatermarkIncremented(log.logEndOffset)
+    log.deleteOldSegments()
     assertEquals("should have 3 segments", 3,log.numberOfSegments)
   }
 
@@ -2290,6 +2318,7 @@ class LogTest {
     for (_ <- 0 until 15)
       log.appendAsLeader(createRecords, leaderEpoch = 0)
 
+    log.onHighWatermarkIncremented(log.logEndOffset)
     log.deleteOldSegments()
     assertEquals("There should be 1 segment remaining", 1, log.numberOfSegments)
   }
@@ -2303,6 +2332,7 @@ class LogTest {
     for (_ <- 0 until 15)
       log.appendAsLeader(createRecords, leaderEpoch = 0)
 
+    log.onHighWatermarkIncremented(log.logEndOffset)
     log.deleteOldSegments()
     assertEquals("There should be 3 segments remaining", 3, log.numberOfSegments)
   }
@@ -2322,6 +2352,7 @@ class LogTest {
     log.logSegments.head.lastModified = time.milliseconds - 20000
 
     val segments = log.numberOfSegments
+    log.onHighWatermarkIncremented(log.logEndOffset)
     log.deleteOldSegments()
     assertEquals("There should be 3 segments remaining", segments, log.numberOfSegments)
   }
@@ -2337,6 +2368,7 @@ class LogTest {
     for (_ <- 0 until 15)
       log.appendAsLeader(createRecords, leaderEpoch = 0)
 
+    log.onHighWatermarkIncremented(log.logEndOffset)
     log.deleteOldSegments()
     assertEquals("There should be 1 segment remaining", 1, log.numberOfSegments)
   }
@@ -2407,7 +2439,8 @@ class LogTest {
     cache.assign(2, 10)
 
     //When first segment is removed
-    log.deleteOldSegments
+    log.onHighWatermarkIncremented(log.logEndOffset)
+    log.deleteOldSegments()
 
     //The oldest epoch entry should have been removed
     assertEquals(ListBuffer(EpochEntry(1, 5), EpochEntry(2, 10)), cache.epochEntries)
@@ -2430,7 +2463,8 @@ class LogTest {
     cache.assign(2, 10)
 
     //When first segment removed (up to offset 5)
-    log.deleteOldSegments
+    log.onHighWatermarkIncremented(log.logEndOffset)
+    log.deleteOldSegments()
 
     //The the first entry should have gone from (0,0) => (0,5)
     assertEquals(ListBuffer(EpochEntry(0, 5), EpochEntry(1, 7), EpochEntry(2, 10)), cache.epochEntries)
@@ -2881,6 +2915,7 @@ class LogTest {
     assertEquals(Some(0L), log.firstUnstableOffset.map(_.messageOffset))
 
     log.maybeIncrementLogStartOffset(8L)
+    log.onHighWatermarkIncremented(log.logEndOffset)
     log.deleteOldSegments()
     assertEquals(1, log.logSegments.size)
 

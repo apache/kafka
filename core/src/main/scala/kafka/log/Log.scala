@@ -33,7 +33,7 @@ import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.{IsolationLevel, ListOffsetRequest}
 
 import scala.collection.JavaConverters._
-import scala.collection.mutable.ListBuffer
+import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 import scala.collection.{Seq, mutable}
 import com.yammer.metrics.core.Gauge
 import org.apache.kafka.common.utils.{Time, Utils}
@@ -167,6 +167,13 @@ class Log(@volatile var dir: File,
    * In the worst case, the LSO could be seen by a consumer to go backwards. 
    */
   @volatile var firstUnstableOffset: Option[LogOffsetMetadata] = None
+
+  /* Keep track of the current high watermark in order to ensure that segments containing offsets at or above it are
+   * not eligible for deletion. This means that the active segment is only eligible for deletion if the high watermark
+   * equals the log end offset (which may never happen for a partition under consistent load). This is needed to
+   * prevent the log start offset (which is exposed in fetch responses) from getting ahead of the high watermark.
+   */
+  @volatile private var replicaHighWatermark: Option[Long] = None
 
   /* the actual segments of the log */
   private val segments: ConcurrentNavigableMap[java.lang.Long, LogSegment] = new ConcurrentSkipListMap[java.lang.Long, LogSegment]
@@ -702,6 +709,7 @@ class Log(@volatile var dir: File,
 
   def onHighWatermarkIncremented(highWatermark: Long): Unit = {
     lock synchronized {
+      replicaHighWatermark = Some(highWatermark)
       producerStateManager.onHighWatermarkUpdated(highWatermark)
       updateFirstUnstableOffset()
     }
@@ -726,13 +734,14 @@ class Log(@volatile var dir: File,
   /**
    * Increment the log start offset if the provided offset is larger.
    */
-  def maybeIncrementLogStartOffset(offset: Long) {
+  def maybeIncrementLogStartOffset(newLogStartOffset: Long) {
     // We don't have to write the log start offset to log-start-offset-checkpoint immediately.
     // The deleteRecordsOffset may be lost only if all in-sync replicas of this broker are shutdown
     // in an unclean manner within log.flush.start.offset.checkpoint.interval.ms. The chance of this happening is low.
     lock synchronized {
-      if (offset > logStartOffset) {
-        logStartOffset = offset
+      if (newLogStartOffset > logStartOffset) {
+        info(s"Incrementing log start offset of partition $topicPartition to $newLogStartOffset in dir ${dir.getParent}")
+        logStartOffset = newLogStartOffset
         leaderEpochCache.clearAndFlushEarliest(logStartOffset)
         producerStateManager.truncateHead(logStartOffset)
         updateFirstUnstableOffset()
@@ -1059,12 +1068,15 @@ class Log(@volatile var dir: File,
    * Delete any log segments matching the given predicate function,
    * starting with the oldest segment and moving forward until a segment doesn't match.
    *
-   * @param predicate A function that takes in a single log segment and returns true iff it is deletable
+   * @param predicate A function that takes in a candidate log segment and the next higher segment
+   *                  (if there is one) and returns true iff it is deletable
    * @return The number of segments deleted
    */
-  private def deleteOldSegments(predicate: LogSegment => Boolean): Int = {
+  private def deleteOldSegments(predicate: (LogSegment, Option[LogSegment]) => Boolean, reason: String): Int = {
     lock synchronized {
       val deletable = deletableSegments(predicate)
+      if (deletable.nonEmpty)
+        info(s"Found deletable segments with base offsets [${deletable.map(_.baseOffset).mkString(",")}] due to $reason")
       deleteSegments(deletable)
     }
   }
@@ -1085,36 +1097,63 @@ class Log(@volatile var dir: File,
   }
 
   /**
-    * Find segments starting from the oldest until the user-supplied predicate is false.
-    * A final segment that is empty will never be returned (since we would just end up re-creating it).
-    * @param predicate A function that takes in a single log segment and returns true iff it is deletable
-    * @return the segments ready to be deleted
-    */
-  private def deletableSegments(predicate: LogSegment => Boolean) = {
-    val lastEntry = segments.lastEntry
-    if (lastEntry == null) Seq.empty
-    else logSegments.takeWhile(s => predicate(s) && (s.baseOffset != lastEntry.getValue.baseOffset || s.size > 0))
+   * Find segments starting from the oldest until the user-supplied predicate is false or the segment
+   * containing the current high watermark is reached. We do not delete segments with offsets at or beyond
+   * the high watermark to ensure that the log start offset can never exceed it. If the high watermark
+   * has not yet been initialized, no segments are eligible for deletion.
+   *
+   * A final segment that is empty will never be returned (since we would just end up re-creating it).
+   *
+   * @param predicate A function that takes in a candidate log segment and the next higher segment
+   *                  (if there is one) and returns true iff it is deletable
+   * @return the segments ready to be deleted
+   */
+  private def deletableSegments(predicate: (LogSegment, Option[LogSegment]) => Boolean): Iterable[LogSegment] = {
+    if (segments.isEmpty || replicaHighWatermark.isEmpty) {
+      Seq.empty
+    } else {
+      val highWatermark = replicaHighWatermark.get
+      val deletable = ArrayBuffer.empty[LogSegment]
+      var segmentEntry = segments.firstEntry
+      while (segmentEntry != null) {
+        val segment = segmentEntry.getValue
+        val nextSegmentEntry = segments.higherEntry(segmentEntry.getKey)
+        val (nextSegment, upperBoundOffset, isLastSegmentAndEmpty) = if (nextSegmentEntry != null)
+          (nextSegmentEntry.getValue, nextSegmentEntry.getValue.baseOffset, false)
+        else
+          (null, logEndOffset, segment.size == 0)
+
+        if (highWatermark >= upperBoundOffset && predicate(segment, Option(nextSegment)) && !isLastSegmentAndEmpty) {
+          deletable += segment
+          segmentEntry = nextSegmentEntry
+        } else {
+          segmentEntry = null
+        }
+      }
+      deletable
+    }
   }
 
   /**
-    * Delete any log segments that have either expired due to time based retention
-    * or because the log size is > retentionSize
-    */
+   * Delete any log segments that have either expired due to time based retention
+   * or because the log size is > retentionSize
+   */
   def deleteOldSegments(): Int = {
     if (!config.delete) return 0
     deleteRetentionMsBreachedSegments() + deleteRetentionSizeBreachedSegments() + deleteLogStartOffsetBreachedSegments()
   }
 
-  private def deleteRetentionMsBreachedSegments() : Int = {
+  private def deleteRetentionMsBreachedSegments(): Int = {
     if (config.retentionMs < 0) return 0
     val startMs = time.milliseconds
-    deleteOldSegments(startMs - _.largestTimestamp > config.retentionMs)
+    deleteOldSegments((segment, _) => startMs - segment.largestTimestamp > config.retentionMs,
+      reason = s"retention time ${config.retentionMs}ms breach")
   }
 
-  private def deleteRetentionSizeBreachedSegments() : Int = {
+  private def deleteRetentionSizeBreachedSegments(): Int = {
     if (config.retentionSize < 0 || size < config.retentionSize) return 0
     var diff = size - config.retentionSize
-    def shouldDelete(segment: LogSegment) = {
+    def shouldDelete(segment: LogSegment, nextSegmentOpt: Option[LogSegment]) = {
       if (diff - segment.size >= 0) {
         diff -= segment.size
         true
@@ -1122,23 +1161,13 @@ class Log(@volatile var dir: File,
         false
       }
     }
-    deleteOldSegments(shouldDelete)
+    deleteOldSegments(shouldDelete, reason = s"retention size in bytes ${config.retentionSize} breach")
   }
 
-  private def deleteLogStartOffsetBreachedSegments() : Int = {
-    // keep active segment to avoid frequent log rolling due to user's DeleteRecordsRequest
-    lock synchronized {
-      val deletable = {
-        if (segments.size() < 2)
-          Seq.empty
-        else
-          logSegments.sliding(2).takeWhile { iterable =>
-            val nextSegment = iterable.toSeq(1)
-            nextSegment.baseOffset <= logStartOffset
-          }.map(_.toSeq(0)).toSeq
-      }
-      deleteSegments(deletable)
-    }
+  private def deleteLogStartOffsetBreachedSegments(): Int = {
+    def shouldDelete(segment: LogSegment, nextSegmentOpt: Option[LogSegment]) =
+      nextSegmentOpt.exists(_.baseOffset <= logStartOffset)
+    deleteOldSegments(shouldDelete, reason = s"log start offset $logStartOffset breach")
   }
 
   /**
