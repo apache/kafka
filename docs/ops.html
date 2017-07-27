@@ -729,6 +729,16 @@
         <td>0</td>
       </tr>
       <tr>
+        <td># of under minIsr partitions (|ISR| &lt min.insync.replicas)</td>
+        <td>kafka.server:type=ReplicaManager,name=UnderMinIsrPartitionCount</td>
+        <td>0</td>
+      </tr>
+      <tr>
+        <td># of offline log directories</td>
+        <td>kafka.log:type=LogManager,name=OfflineLogDirectoryCount</td>
+        <td>0</td>
+      </tr>
+      <tr>
         <td>Is controller active on broker</td>
         <td>kafka.controller:type=KafkaController,name=ActiveControllerCount</td>
         <td>only one broker in the cluster should have 1</td>
