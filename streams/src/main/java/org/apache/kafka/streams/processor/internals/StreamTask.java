@@ -342,30 +342,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         }
     }
 
-    private void closeTopology() {
-        log.trace("{} Closing processor topology", logPrefix);
-
-        partitionGroup.clear();
-
-        // close the processors
-        // make sure close() is called for each node even when there is a RuntimeException
-        RuntimeException exception = null;
-        for (final ProcessorNode node : topology.processors()) {
-            processorContext.setCurrentNode(node);
-            try {
-                node.close();
-            } catch (final RuntimeException e) {
-                exception = e;
-            } finally {
-                processorContext.setCurrentNode(null);
-            }
-        }
-
-        if (exception != null) {
-            throw exception;
-        }
-    }
-
     /**
      * <pre>
      * - close topology
@@ -395,6 +371,30 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         closeTopology(); // should we call this only on clean suspend?
         if (clean) {
             commit(false);
+        }
+    }
+
+    private void closeTopology() {
+        log.trace("{} Closing processor topology", logPrefix);
+
+        partitionGroup.clear();
+
+        // close the processors
+        // make sure close() is called for each node even when there is a RuntimeException
+        RuntimeException exception = null;
+        for (final ProcessorNode node : topology.processors()) {
+            processorContext.setCurrentNode(node);
+            try {
+                node.close();
+            } catch (final RuntimeException e) {
+                exception = e;
+            } finally {
+                processorContext.setCurrentNode(null);
+            }
+        }
+
+        if (exception != null) {
+            throw exception;
         }
     }
 
