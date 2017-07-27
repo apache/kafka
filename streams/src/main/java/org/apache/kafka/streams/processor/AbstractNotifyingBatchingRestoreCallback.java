@@ -26,8 +26,7 @@ import org.apache.kafka.common.TopicPartition;
  * Includes default no-op methods of the {@link StateRestoreListener} {@link StateRestoreListener#onRestoreStart(TopicPartition, String, long, long)},
  * {@link StateRestoreListener#onBatchRestored(TopicPartition, String, long, long)}, and {@link StateRestoreListener#onRestoreEnd(TopicPartition, String, long)}.
  */
-public abstract class AbstractNotifyingBatchingRestoreCallback
-    implements BatchingStateRestoreCallback, StateRestoreListener {
+public abstract class AbstractNotifyingBatchingRestoreCallback implements BatchingStateRestoreCallback, StateRestoreListener {
 
     /**
      * Single put restore operations not supported, please use {@link AbstractNotifyingRestoreCallback}
