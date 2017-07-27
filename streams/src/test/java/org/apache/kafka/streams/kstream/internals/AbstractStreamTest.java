@@ -17,8 +17,8 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
@@ -28,11 +28,10 @@ import org.junit.After;
 import org.junit.Test;
 
 import java.util.Random;
+
 import static org.junit.Assert.assertTrue;
 
 public class AbstractStreamTest {
-
-    private final String topicName = "topic";
 
     private KStreamTestDriver driver;
 
@@ -45,9 +44,10 @@ public class AbstractStreamTest {
 
     @Test
     public void testShouldBeExtensible() {
-        final KStreamBuilder builder = new KStreamBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
         final int[] expectedKeys = new int[]{1, 2, 3, 4, 5, 6, 7};
         final MockProcessorSupplier<Integer, String> processor = new MockProcessorSupplier<>();
+        final String topicName = "topic";
 
         ExtendedKStream<Integer, String> stream = new ExtendedKStream<>(builder.stream(Serdes.Integer(), Serdes.String(), topicName));
 
@@ -63,14 +63,14 @@ public class AbstractStreamTest {
 
     private class ExtendedKStream<K, V> extends AbstractStream<K> {
 
-        ExtendedKStream(KStream<K, V> stream) {
+        ExtendedKStream(final KStream<K, V> stream) {
             super((KStreamImpl<K, V>) stream);
         }
 
         KStream<K, V> randomFilter() {
-            String name = this.topology.newName("RANDOM-FILTER-");
-            this.topology.addProcessor(name, new ExtendedKStreamDummy(), this.name);
-            return new KStreamImpl<>(topology, name, sourceNodes, false);
+            String name = builder.newName("RANDOM-FILTER-");
+            builder.internalTopologyBuilder.addProcessor(name, new ExtendedKStreamDummy(), this.name);
+            return new KStreamImpl<>(builder, name, sourceNodes, false);
         }
     }
 

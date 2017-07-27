@@ -17,18 +17,18 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.junit.After;
 import org.junit.Test;
 
-import static org.junit.Assert.assertEquals;
-
 import java.util.ArrayList;
+
+import static org.junit.Assert.assertEquals;
 
 public class KStreamFlatMapTest {
 
@@ -46,7 +46,7 @@ public class KStreamFlatMapTest {
 
     @Test
     public void testFlatMap() {
-        KStreamBuilder builder = new KStreamBuilder();
+        StreamsBuilder builder = new StreamsBuilder();
 
         KeyValueMapper<Number, Object, Iterable<KeyValue<String, String>>> mapper =
             new KeyValueMapper<Number, Object, Iterable<KeyValue<String, String>>>() {
