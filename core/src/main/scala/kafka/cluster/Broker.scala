@@ -116,7 +116,7 @@ object Broker {
               listeners.map(EndPoint.createEndPoint(_, securityProtocolMap))
             }
 
-          val rack = brokerInfo.get(RackKey).filter(_ != null).map(_.to[String])
+          val rack = brokerInfo.get(RackKey).flatMap(_.to[Option[String]])
           Broker(id, endpoints, rack)
         case None =>
           throw new BrokerNotAvailableException(s"Broker id $id does not exist")
