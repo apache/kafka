@@ -138,9 +138,7 @@ object KafkaController extends Logging {
   def parseControllerId(controllerInfoString: String): Int = {
     try {
       Json.parseFull(controllerInfoString) match {
-        case Some(m) =>
-          val controllerInfo = m.asInstanceOf[Map[String, Any]]
-          controllerInfo("brokerid").asInstanceOf[Int]
+        case Some(js) => js.asJsonObject("brokerid").to[Int]
         case None => throw new KafkaException("Failed to parse the controller info json [%s].".format(controllerInfoString))
       }
     } catch {
@@ -148,9 +146,8 @@ object KafkaController extends Logging {
         // It may be due to an incompatible controller register version
         warn("Failed to parse the controller info as json. "
           + "Probably this controller is still using the old format [%s] to store the broker id in zookeeper".format(controllerInfoString))
-        try {
-          controllerInfoString.toInt
-        } catch {
+        try controllerInfoString.toInt
+        catch {
           case t: Throwable => throw new KafkaException("Failed to parse the controller info: " + controllerInfoString + ". This is neither the new or the old format.", t)
         }
     }
@@ -1370,31 +1367,22 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, time: Time, met
     }
 
     private def getTopicAndPartition(child: String): Set[TopicAndPartition] = {
-      val changeZnode: String = ZkUtils.IsrChangeNotificationPath + "/" + child
+      val changeZnode = ZkUtils.IsrChangeNotificationPath + "/" + child
       val (jsonOpt, _) = controllerContext.zkUtils.readDataMaybeNull(changeZnode)
-      if (jsonOpt.isDefined) {
-        val json = Json.parseFull(jsonOpt.get)
-
-        json match {
-          case Some(m) =>
-            val topicAndPartitions: mutable.Set[TopicAndPartition] = new mutable.HashSet[TopicAndPartition]()
-            val isrChanges = m.asInstanceOf[Map[String, Any]]
-            val topicAndPartitionList = isrChanges("partitions").asInstanceOf[List[Any]]
-            topicAndPartitionList.foreach {
-              case tp =>
-                val topicAndPartition = tp.asInstanceOf[Map[String, Any]]
-                val topic = topicAndPartition("topic").asInstanceOf[String]
-                val partition = topicAndPartition("partition").asInstanceOf[Int]
-                topicAndPartitions += TopicAndPartition(topic, partition)
-            }
-            topicAndPartitions
+      jsonOpt.map { json =>
+        Json.parseFull(json) match {
+          case Some(js) =>
+            val isrChanges = js.asJsonObject
+            isrChanges("partitions").asJsonArray.iterator.map(_.asJsonObject).map { tpJs =>
+              val topic = tpJs("topic").to[String]
+              val partition = tpJs("partition").to[Int]
+              TopicAndPartition(topic, partition)
+            }.toSet
           case None =>
-            error("Invalid topic and partition JSON: " + jsonOpt.get + " in ZK: " + changeZnode)
-            Set.empty
+            error(s"Invalid topic and partition JSON in ZK. ZK notification node: $changeZnode, JSON: $json")
+            Set.empty[TopicAndPartition]
         }
-      } else {
-        Set.empty
-      }
+      }.getOrElse(Set.empty[TopicAndPartition])
     }
 
   }

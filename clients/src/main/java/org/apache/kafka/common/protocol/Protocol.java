@@ -21,10 +21,13 @@ import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Type;
 
+import java.util.EnumSet;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.apache.kafka.common.protocol.types.Type.BOOLEAN;
 import static org.apache.kafka.common.protocol.types.Type.BYTES;
@@ -32,6 +35,7 @@ import static org.apache.kafka.common.protocol.types.Type.INT16;
 import static org.apache.kafka.common.protocol.types.Type.INT32;
 import static org.apache.kafka.common.protocol.types.Type.INT64;
 import static org.apache.kafka.common.protocol.types.Type.INT8;
+import static org.apache.kafka.common.protocol.types.Type.NULLABLE_BYTES;
 import static org.apache.kafka.common.protocol.types.Type.RECORDS;
 import static org.apache.kafka.common.protocol.types.Type.STRING;
 import static org.apache.kafka.common.protocol.types.Type.NULLABLE_STRING;
@@ -1825,6 +1829,7 @@ public class Protocol {
     public static final Schema[][] REQUESTS = new Schema[ApiKeys.MAX_API_KEY + 1][];
     public static final Schema[][] RESPONSES = new Schema[ApiKeys.MAX_API_KEY + 1][];
     static final short[] MIN_VERSIONS = new short[ApiKeys.MAX_API_KEY + 1];
+    static final EnumSet<ApiKeys> DELAYED_DEALLOCATION_REQUESTS; //initialized in static block
 
     /* the latest version of each api */
     static final short[] CURR_VERSION = new short[ApiKeys.MAX_API_KEY + 1];
@@ -1924,6 +1929,44 @@ public class Protocol {
                     throw new IllegalStateException("Request and response for version " + i + " of API "
                             + api.id + " are defined inconsistently. One is null while the other is not null.");
         }
+
+        /* go over all request schemata and find those that retain links to the underlying ByteBuffer from
+         * which they were read out. knowing which requests do (and do not) retain a reference to the buffer
+         * is needed to enable buffers to be released as soon as possible for requests that no longer need them */
+        Set<ApiKeys> requestsWithBufferRefs = new HashSet<>();
+        for (int reqId = 0; reqId < REQUESTS.length; reqId++) {
+            ApiKeys requestType = ApiKeys.forId(reqId);
+            Schema[] schemata = REQUESTS[reqId];
+            if (schemata == null) {
+                continue;
+            }
+            for (Schema requestVersionSchema : schemata) {
+                if (retainsBufferReference(requestVersionSchema)) {
+                    requestsWithBufferRefs.add(requestType);
+                    break; //kafka is loose with versions, so if _ANY_ version retains buffers we must assume all do.
+                }
+            }
+        }
+
+        DELAYED_DEALLOCATION_REQUESTS = EnumSet.copyOf(requestsWithBufferRefs);
+    }
+
+    private static boolean retainsBufferReference(Schema schema) {
+        if (schema == null) {
+            return false;
+        }
+        final AtomicReference<Boolean> foundBufferReference = new AtomicReference<>(Boolean.FALSE);
+        SchemaVisitor detector = new SchemaVisitorAdapter() {
+            @Override
+            public void visit(Type field) {
+                if (field == BYTES || field == NULLABLE_BYTES || field == RECORDS) {
+                    foundBufferReference.set(Boolean.TRUE);
+                }
+            }
+        };
+        foundBufferReference.set(Boolean.FALSE);
+        ProtoUtils.walk(schema, detector);
+        return foundBufferReference.get();
     }
 
     public static boolean apiVersionSupported(short apiKey, short apiVersion) {
@@ -1936,6 +1979,10 @@ public class Protocol {
                 0);
     }
 
+    public static boolean requiresDelayedDeallocation(int apiKey) {
+        return DELAYED_DEALLOCATION_REQUESTS.contains(ApiKeys.forId(apiKey));
+    }
+    
     private static String indentString(int size) {
         StringBuilder b = new StringBuilder(size);
         for (int i = 0; i < size; i++)
