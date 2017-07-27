@@ -1167,7 +1167,7 @@ class Log(@volatile var dir: File,
     if (config.retentionMs < 0) return 0
     val startMs = time.milliseconds
     deleteOldSegments((segment, _) => startMs - segment.largestTimestamp > config.retentionMs,
-      reason = s"retention time ${config.retentionMs}ms breached")
+      reason = s"retention time ${config.retentionMs}ms breach")
   }
 
   private def deleteRetentionSizeBreachedSegments(): Int = {
@@ -1181,13 +1181,13 @@ class Log(@volatile var dir: File,
         false
       }
     }
-    deleteOldSegments(shouldDelete, reason = s"retention size ${config.retentionSize} breached")
+    deleteOldSegments(shouldDelete, reason = s"retention size ${config.retentionSize} breach")
   }
 
   private def deleteLogStartOffsetBreachedSegments(): Int = {
     def shouldDelete(segment: LogSegment, nextSegmentOpt: Option[LogSegment]) =
       nextSegmentOpt.exists(_.baseOffset <= logStartOffset)
-    deleteOldSegments(shouldDelete, reason = s"log start offset $logStartOffset breached")
+    deleteOldSegments(shouldDelete, reason = s"log start offset $logStartOffset breach")
   }
 
   /**
