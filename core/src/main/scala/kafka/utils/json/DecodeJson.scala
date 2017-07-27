@@ -18,23 +18,44 @@
 package kafka.utils.json
 
 import scala.collection._
+import scala.language.higherKinds
 import JavaConverters._
 import generic.CanBuildFrom
 
 import com.fasterxml.jackson.databind.{JsonMappingException, JsonNode}
 
+/**
+ * A type class for parsing JSON. This should typically be used via `JsonValue.apply`.
+ */
 trait DecodeJson[T] {
 
+  /**
+   * Decode the JSON node provided into an instance of `Right[T]`, if possible. Otherwise, return an error message
+   * wrapped by an instance of `Left`.
+   */
   def decodeEither(node: JsonNode): Either[String, T]
 
+  /**
+   * Decode the JSON node provided into an instance of `T`.
+   *
+   * @throws JsonMappingException if `node` cannot be decoded into `T`.
+   */
   def decode(node: JsonNode): T =
     decodeEither(node) match {
       case Right(x) => x
-      case Left(x) => throw new JsonMappingException(x)
+      case Left(x) =>
+        // Non-deprecated constructors were only introduced in Jackson 2.7, so stick with the deprecated one in case
+        // people have older versions of Jackson in their classpath. Once the Scala clients are removed, we can loosen
+        // this restriction.
+        throw new JsonMappingException(x)
     }
 
 }
 
+/**
+ * Contains `DecodeJson` type class instances. That is, we need one instance for each type that we want to be able to
+ * to parse into. It is a compiler error to try to parse into a type for which there is no instance.
+ */
 object DecodeJson {
 
   implicit object DecodeBoolean extends DecodeJson[Boolean] {

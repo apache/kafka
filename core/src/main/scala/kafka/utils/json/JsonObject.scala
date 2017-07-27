@@ -25,6 +25,9 @@ import com.fasterxml.jackson.databind.node.ObjectNode
 
 import scala.collection.Iterator
 
+/**
+ * A thin wrapper over Jackson's `ObjectNode` for a more idiomatic API. See `JsonValue` for more details.
+ */
 class JsonObject private[json] (protected val node: ObjectNode) extends JsonValue {
 
   def apply(name: String): JsonValue =

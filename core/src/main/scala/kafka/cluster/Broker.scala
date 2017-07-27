@@ -59,7 +59,7 @@ object Broker {
     * {
     *   "version":2,
     *   "host":"localhost",
-    *   "port":9092
+    *   "port":9092,
     *   "jmx_port":9999,
     *   "timestamp":"2233345666",
     *   "endpoints":["PLAINTEXT://host1:9092", "SSL://host1:9093"]
@@ -69,7 +69,7 @@ object Broker {
     * {
     *   "version":3,
     *   "host":"localhost",
-    *   "port":9092
+    *   "port":9092,
     *   "jmx_port":9999,
     *   "timestamp":"2233345666",
     *   "endpoints":["PLAINTEXT://host1:9092", "SSL://host1:9093"],
@@ -80,11 +80,11 @@ object Broker {
     * {
     *   "version":4,
     *   "host":"localhost",
-    *   "port":9092
+    *   "port":9092,
     *   "jmx_port":9999,
     *   "timestamp":"2233345666",
     *   "endpoints":["CLIENT://host1:9092", "REPLICATION://host1:9093"],
-    *   "listener_security_protocol_map":{"CLIENT":"SSL", "REPLICATION":"PLAINTEXT"}
+    *   "listener_security_protocol_map":{"CLIENT":"SSL", "REPLICATION":"PLAINTEXT"},
     *   "rack":"dc1"
     * }
     */

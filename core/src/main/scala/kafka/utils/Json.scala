@@ -22,18 +22,18 @@ import kafka.utils.json.JsonValue
 import scala.collection._
 
 /**
- *  A wrapper that synchronizes JSON in scala, which is not threadsafe.
+ * Provides methods for parsing JSON with Jackson and encoding to JSON with a simple and naive custom implementation.
  */
 object Json {
 
   private val mapper = new ObjectMapper()
 
   /**
-   * Parse a JSON string into an object
+   * Parse a JSON string into a JsonValue if possible. `None` is returned if `input` is not valid JSON.
    */
   def parseFull(input: String): Option[JsonValue] =
     try Option(mapper.readTree(input)).map(JsonValue(_))
-    catch { case e: JsonProcessingException => None }
+    catch { case _: JsonProcessingException => None }
 
   /**
    * Encode an object into a JSON string. This method accepts any type T where
