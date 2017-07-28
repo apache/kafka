@@ -32,8 +32,11 @@ import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.PrintForeachAction;
 import org.apache.kafka.streams.kstream.TransformerSupplier;
 import org.apache.kafka.streams.kstream.ValueJoiner;
+import org.apache.kafka.streams.kstream.ValueJoinerWithKey;
 import org.apache.kafka.streams.kstream.ValueMapper;
+import org.apache.kafka.streams.kstream.ValueMapperWithKey;
 import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
+import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
@@ -180,8 +183,16 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         Objects.requireNonNull(mapper, "mapper can't be null");
         String name = builder.newName(MAPVALUES_NAME);
 
-        builder.internalTopologyBuilder.addProcessor(name, new KStreamMapValues<>(mapper), this.name);
+        builder.internalTopologyBuilder.addProcessor(name, new KStreamMapValues<>(withKey(mapper)), this.name);
+        return mapValues(withKey(mapper));
+    }
 
+    @Override
+    public <VR> KStream<K, VR> mapValues(final ValueMapperWithKey<? super K, ? super V, ? extends VR> mapper) {
+        Objects.requireNonNull(mapper, "mapper can't be null");
+        String name = builder.newName(MAPVALUES_NAME);
+
+        builder.internalTopologyBuilder.addProcessor(name, new KStreamMapValues<>(mapper), this.name);
         return new KStreamImpl<>(builder, name, sourceNodes, this.repartitionRequired);
     }
 
@@ -319,7 +330,16 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         Objects.requireNonNull(mapper, "mapper can't be null");
         String name = builder.newName(FLATMAPVALUES_NAME);
 
-        builder.internalTopologyBuilder.addProcessor(name, new KStreamFlatMapValues<>(mapper), this.name);
+        builder.internalTopologyBuilder.addProcessor(name, new KStreamFlatMapValues<>(withKey(mapper)), this.name);
+        return flatMapValues(withKey(mapper));
+    }
+
+    @Override
+    public <VR> KStream<K, VR> flatMapValues(final ValueMapperWithKey<? super K, ? super V, ? extends Iterable<? extends VR>> valueMapperWithKey) {
+        Objects.requireNonNull(valueMapperWithKey, "valueMapperWithKey can't be null");
+        String name = builder.newName(FLATMAPVALUES_NAME);
+
+        builder.internalTopologyBuilder.addProcessor(name, new KStreamFlatMapValues<>(valueMapperWithKey), this.name);
 
         return new KStreamImpl<>(builder, name, sourceNodes, this.repartitionRequired);
     }
@@ -472,16 +492,21 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     }
 
     @Override
-    public <V1> KStream<K, V1> transformValues(final ValueTransformerSupplier<? super V, ? extends V1> valueTransformerSupplier,
-                                               final String... stateStoreNames) {
+    public <VR> KStream<K, VR> transformValues(final ValueTransformerSupplier<? super V, ? extends VR> valueTransformerSupplier, final String... stateStoreNames) {
         Objects.requireNonNull(valueTransformerSupplier, "valueTransformSupplier can't be null");
+        return transformValues(withKey(valueTransformerSupplier), stateStoreNames);
+    }
+
+    @Override
+    public <VR> KStream<K, VR> transformValues(final ValueTransformerWithKeySupplier<? super K, ? super V, ? extends VR> valueTransformerWithKeySupplier,
+                                               final String... stateStoreNames) {
+        Objects.requireNonNull(valueTransformerWithKeySupplier, "valueTransformerWithKeySupplier can't be null");
         String name = builder.newName(TRANSFORMVALUES_NAME);
 
-        builder.internalTopologyBuilder.addProcessor(name, new KStreamTransformValues<>(valueTransformerSupplier), this.name);
+        builder.internalTopologyBuilder.addProcessor(name, new KStreamTransformValues<>(valueTransformerWithKeySupplier), this.name);
         if (stateStoreNames != null && stateStoreNames.length > 0) {
             builder.internalTopologyBuilder.connectProcessorAndStateStores(name, stateStoreNames);
         }
-
         return new KStreamImpl<>(builder, name, sourceNodes, this.repartitionRequired);
     }
 
@@ -497,31 +522,62 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     }
 
     @Override
-    public <V1, R> KStream<K, R> join(final KStream<K, V1> other,
-                                      final ValueJoiner<? super V, ? super V1, ? extends R> joiner,
-                                      final JoinWindows windows,
-                                      final Serde<K> keySerde,
-                                      final Serde<V> thisValueSerde,
-                                      final Serde<V1> otherValueSerde) {
-        return doJoin(other, joiner, windows, keySerde, thisValueSerde, otherValueSerde,
-            new KStreamImplJoin(false, false));
+    public <V1, R> KStream<K, R> join(
+            final KStream<K, V1> other,
+            final ValueJoiner<? super V, ? super V1, ? extends R> joiner,
+            final JoinWindows windows,
+            final Serde<K> keySerde,
+            final Serde<V> thisValueSerde,
+            final Serde<V1> otherValueSerde) {
+
+        return join(other, withKey(joiner), windows, keySerde, thisValueSerde, otherValueSerde);
     }
 
     @Override
-    public <V1, R> KStream<K, R> join(final KStream<K, V1> other,
-                                      final ValueJoiner<? super V, ? super V1, ? extends R> joiner,
-                                      final JoinWindows windows) {
-        return join(other, joiner, windows, null, null, null);
+    public <VO, VR> KStream<K, VR> join(final KStream<K, VO> otherStream,
+                                        final ValueJoinerWithKey<? super K, ? super V, ? super VO, ? extends VR> joiner,
+                                        final JoinWindows windows, Serde<K> keySerde,
+                                        final Serde<V> thisValueSerde,
+                                        final Serde<VO> otherValueSerde) {
+        return doJoin(otherStream, joiner, windows, keySerde, thisValueSerde, otherValueSerde, new KStreamImplJoin(false, false));
     }
 
     @Override
-    public <V1, R> KStream<K, R> outerJoin(final KStream<K, V1> other,
-                                           final ValueJoiner<? super V, ? super V1, ? extends R> joiner,
-                                           final JoinWindows windows,
-                                           final Serde<K> keySerde,
-                                           final Serde<V> thisValueSerde,
-                                           final Serde<V1> otherValueSerde) {
-        return doJoin(other, joiner, windows, keySerde, thisValueSerde, otherValueSerde, new KStreamImplJoin(true, true));
+    public <V1, R> KStream<K, R> join(
+        final KStream<K, V1> other,
+        final ValueJoiner<? super V, ? super V1, ? extends R> joiner,
+        final JoinWindows windows) {
+
+        return join(other, withKey(joiner), windows, null, null, null);
+    }
+
+    @Override
+    public <VO, VR> KStream<K, VR> join(final KStream<K, VO> otherStream,
+                                        final ValueJoinerWithKey<? super K, ? super V, ? super VO, ? extends VR> joiner,
+                                        final JoinWindows windows) {
+        return join(otherStream, joiner, windows, null, null, null);
+    }
+
+    @Override
+    public <V1, R> KStream<K, R> outerJoin(
+        final KStream<K, V1> other,
+        final ValueJoiner<? super V, ? super V1, ? extends R> joiner,
+        final JoinWindows windows,
+        final Serde<K> keySerde,
+        final Serde<V> thisValueSerde,
+        final Serde<V1> otherValueSerde) {
+
+        return doJoin(other, withKey(joiner), windows, keySerde, thisValueSerde, otherValueSerde, new KStreamImplJoin(true, true));
+    }
+
+    @Override
+    public <VO, VR> KStream<K, VR> outerJoin(final KStream<K, VO> otherStream,
+                                             final ValueJoinerWithKey<? super K, ? super V, ? super VO, ? extends VR> joiner,
+                                             final JoinWindows windows,
+                                             final Serde<K> keySerde,
+                                             final Serde<V> thisValueSerde,
+                                             final Serde<VO> otherValueSerde) {
+        return doJoin(otherStream, joiner, windows, keySerde, thisValueSerde, otherValueSerde, new KStreamImplJoin(true, true));
     }
 
     @Override
@@ -531,15 +587,22 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         return outerJoin(other, joiner, windows, null, null, null);
     }
 
+    @Override
+    public <VO, VR> KStream<K, VR> outerJoin(final KStream<K, VO> otherStream,
+                                             final ValueJoinerWithKey<? super K, ? super V, ? super VO, ? extends VR> joiner,
+                                             final JoinWindows windows) {
+        return outerJoin(otherStream, joiner, windows, null, null, null);
+    }
+
     private <V1, R> KStream<K, R> doJoin(final KStream<K, V1> other,
-                                         final ValueJoiner<? super V, ? super V1, ? extends R> joiner,
+                                         final ValueJoinerWithKey<? super K, ? super V, ? super V1, ? extends R> valueJoinerWithKey,
                                          final JoinWindows windows,
                                          final Serde<K> keySerde,
                                          final Serde<V> thisValueSerde,
                                          final Serde<V1> otherValueSerde,
                                          final KStreamImplJoin join) {
         Objects.requireNonNull(other, "other KStream can't be null");
-        Objects.requireNonNull(joiner, "joiner can't be null");
+        Objects.requireNonNull(valueJoinerWithKey, "joiner can't be null");
         Objects.requireNonNull(windows, "windows can't be null");
 
         KStreamImpl<K, V> joinThis = this;
@@ -557,7 +620,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
         return join.join(joinThis,
             joinOther,
-            joiner,
+            valueJoinerWithKey,
             windows,
             keySerde,
             thisValueSerde,
@@ -610,31 +673,58 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     }
 
     @Override
-    public <V1, R> KStream<K, R> leftJoin(final KStream<K, V1> other,
-                                          final ValueJoiner<? super V, ? super V1, ? extends R> joiner,
+    public <V1, R> KStream<K, R> leftJoin(
+        final KStream<K, V1> other,
+        final ValueJoiner<? super V, ? super V1, ? extends R> joiner,
+        final JoinWindows windows,
+        final Serde<K> keySerde,
+        final Serde<V> thisValSerde,
+        final Serde<V1> otherValueSerde) {
+
+        return leftJoin(other, withKey(joiner), windows, keySerde, thisValSerde, otherValueSerde);
+    }
+
+    @Override
+    public <V1, R> KStream<K, R> leftJoin(final KStream<K, V1> otherStream,
+                                          final ValueJoinerWithKey<? super K, ? super V, ? super V1, ? extends R> joiner,
                                           final JoinWindows windows,
                                           final Serde<K> keySerde,
                                           final Serde<V> thisValSerde,
                                           final Serde<V1> otherValueSerde) {
-        return doJoin(other,
-            joiner,
-            windows,
-            keySerde,
-            thisValSerde,
-            otherValueSerde,
-            new KStreamImplJoin(true, false));
+        return doJoin(otherStream,
+                joiner,
+                windows,
+                keySerde,
+                thisValSerde,
+                otherValueSerde,
+                new KStreamImplJoin(true, false));
     }
 
     @Override
-    public <V1, R> KStream<K, R> leftJoin(final KStream<K, V1> other,
-                                          final ValueJoiner<? super V, ? super V1, ? extends R> joiner,
-                                          final JoinWindows windows) {
-        return leftJoin(other, joiner, windows, null, null, null);
+    public <V1, R> KStream<K, R> leftJoin(
+        KStream<K, V1> other,
+        ValueJoiner<? super V, ? super V1, ? extends R> joiner,
+        JoinWindows windows) {
+
+        return leftJoin(other, withKey(joiner), windows, null, null, null);
     }
 
     @Override
-    public <V1, R> KStream<K, R> join(final KTable<K, V1> other,
-                                      final ValueJoiner<? super V, ? super V1, ? extends R> joiner) {
+    public <VO, VR> KStream<K, VR> leftJoin(final KStream<K, VO> otherStream,
+                                            final ValueJoinerWithKey<? super K, ? super V, ? super VO, ? extends VR> joiner,
+                                            final JoinWindows windows) {
+        return leftJoin(otherStream, joiner, windows, null, null, null);
+    }
+
+    @Override
+    public <V1, R> KStream<K, R> join(final KTable<K, V1> other, final ValueJoiner<? super V, ? super V1, ? extends R> joiner) {
+        return join(other, withKey(joiner), null, null);
+
+    }
+
+    @Override
+    public <VT, VR> KStream<K, VR> join(final KTable<K, VT> other,
+                                        final ValueJoinerWithKey<? super K, ? super V, ? super VT, ? extends VR> joiner) {
         return join(other, joiner, null, null);
     }
 
@@ -643,8 +733,17 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                       final ValueJoiner<? super V, ? super V1, ? extends R> joiner,
                                       final Serde<K> keySerde,
                                       final Serde<V> valueSerde) {
+        return join(other, withKey(joiner), keySerde, valueSerde);
+    }
+
+    @Override
+    public <VT, VR> KStream<K, VR> join(final KTable<K, VT> other,
+                                        final ValueJoinerWithKey<? super K, ? super V, ? super VT, ? extends VR> joiner,
+                                        final Serde<K> keySerde,
+                                        final Serde<V> valSerde) {
         if (repartitionRequired) {
-            final KStreamImpl<K, V> thisStreamRepartitioned = repartitionForJoin(keySerde, valueSerde);
+            final KStreamImpl<K, V> thisStreamRepartitioned = repartitionForJoin(keySerde,
+                    valSerde);
             return thisStreamRepartitioned.doStreamTableJoin(other, joiner, false);
         } else {
             return doStreamTableJoin(other, joiner, false);
@@ -655,19 +754,33 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     public <K1, V1, R> KStream<K, R> leftJoin(final GlobalKTable<K1, V1> globalTable,
                                               final KeyValueMapper<? super K, ? super V, ? extends K1> keyMapper,
                                               final ValueJoiner<? super V, ? super V1, ? extends R> joiner) {
-        return globalTableJoin(globalTable, keyMapper, joiner, true);
+        return globalTableJoin(globalTable, keyMapper, withKey(joiner), true);
+    }
+
+    @Override
+    public <GK, GV, RV> KStream<K, RV> leftJoin(final GlobalKTable<GK, GV> globalKTable,
+                                                final KeyValueMapper<? super K, ? super V, ? extends GK> keyValueMapper,
+                                                final ValueJoinerWithKey<? super K, ? super V, ? super GV, ? extends RV> valueJoinerWithKey) {
+        return globalTableJoin(globalKTable, keyValueMapper, valueJoinerWithKey, true);
     }
 
     @Override
     public <K1, V1, V2> KStream<K, V2> join(final GlobalKTable<K1, V1> globalTable,
                                             final KeyValueMapper<? super K, ? super V, ? extends K1> keyMapper,
                                             final ValueJoiner<? super V, ? super V1, ? extends V2> joiner) {
-        return globalTableJoin(globalTable, keyMapper, joiner, false);
+        return globalTableJoin(globalTable, keyMapper, withKey(joiner), false);
+    }
+
+    @Override
+    public <GK, GV, RV> KStream<K, RV> join(final GlobalKTable<GK, GV> globalKTable,
+                                            final KeyValueMapper<? super K, ? super V, ? extends GK> keyValueMapper,
+                                            final ValueJoinerWithKey<? super K, ? super V, ? super GV, ? extends RV> joiner) {
+        return globalTableJoin(globalKTable, keyValueMapper, joiner, false);
     }
 
     private <K1, V1, V2> KStream<K, V2> globalTableJoin(final GlobalKTable<K1, V1> globalTable,
                                                         final KeyValueMapper<? super K, ? super V, ? extends K1> keyMapper,
-                                                        final ValueJoiner<? super V, ? super V1, ? extends V2> joiner,
+                                                        final ValueJoinerWithKey<? super K, ? super V, ? super V1, ? extends V2> joiner,
                                                         final boolean leftJoin) {
         Objects.requireNonNull(globalTable, "globalTable can't be null");
         Objects.requireNonNull(keyMapper, "keyMapper can't be null");
@@ -680,7 +793,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     }
 
     private <V1, R> KStream<K, R> doStreamTableJoin(final KTable<K, V1> other,
-                                                    final ValueJoiner<? super V, ? super V1, ? extends R> joiner,
+                                                    final ValueJoinerWithKey<? super K, ? super V, ? super V1, ? extends R> joiner,
                                                     final boolean leftJoin) {
         Objects.requireNonNull(other, "other KTable can't be null");
         Objects.requireNonNull(joiner, "joiner can't be null");
@@ -697,6 +810,12 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
     @Override
     public <V1, R> KStream<K, R> leftJoin(final KTable<K, V1> other, final ValueJoiner<? super V, ? super V1, ? extends R> joiner) {
+        return leftJoin(other, withKey(joiner), null, null);
+    }
+
+    @Override
+    public <VT, VR> KStream<K, VR> leftJoin(final KTable<K, VT> other,
+                                            final ValueJoinerWithKey<? super K, ? super V, ? super VT, ? extends VR> joiner) {
         return leftJoin(other, joiner, null, null);
     }
 
@@ -704,8 +823,17 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                           final ValueJoiner<? super V, ? super V1, ? extends R> joiner,
                                           final Serde<K> keySerde,
                                           final Serde<V> valueSerde) {
+        return leftJoin(other, withKey(joiner), keySerde, valueSerde);
+    }
+
+    @Override
+    public <VT, VR> KStream<K, VR> leftJoin(final KTable<K, VT> other,
+                                            final ValueJoinerWithKey<? super K, ? super V, ? super VT, ? extends VR> joiner,
+                                            final Serde<K> keySerde,
+                                            final Serde<V> valSerde) {
         if (repartitionRequired) {
-            final KStreamImpl<K, V> thisStreamRepartitioned = this.repartitionForJoin(keySerde, valueSerde);
+            final KStreamImpl<K, V> thisStreamRepartitioned = this.repartitionForJoin(keySerde,
+                    valSerde);
             return thisStreamRepartitioned.doStreamTableJoin(other, joiner, true);
         } else {
             return doStreamTableJoin(other, joiner, true);
@@ -769,13 +897,13 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
             this.rightOuter = rightOuter;
         }
 
-        public <K1, R, V1, V2> KStream<K1, R> join(final KStream<K1, V1> lhs,
-                                                   final KStream<K1, V2> other,
-                                                   final ValueJoiner<? super V1, ? super V2, ? extends R> joiner,
-                                                   final JoinWindows windows,
-                                                   final Serde<K1> keySerde,
-                                                   final Serde<V1> lhsValueSerde,
-                                                   final Serde<V2> otherValueSerde) {
+        public <K1, R, V1, V2> KStream<K1, R> join(KStream<K1, V1> lhs,
+                                                   KStream<K1, V2> other,
+                                                   ValueJoinerWithKey<? super K1, ? super V1, ? super V2, ? extends R> valueJoinerWithKey,
+                                                   JoinWindows windows,
+                                                   Serde<K1> keySerde,
+                                                   Serde<V1> lhsValueSerde,
+                                                   Serde<V2> otherValueSerde) {
             String thisWindowStreamName = builder.newName(WINDOWED_NAME);
             String otherWindowStreamName = builder.newName(WINDOWED_NAME);
             String joinThisName = rightOuter ? builder.newName(OUTERTHIS_NAME) : builder.newName(JOINTHIS_NAME);
@@ -799,12 +927,12 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
             final KStreamKStreamJoin<K1, R, ? super V1, ? super V2> joinThis = new KStreamKStreamJoin<>(otherWindow.name(),
                 windows.beforeMs,
                 windows.afterMs,
-                joiner,
+                valueJoinerWithKey,
                 leftOuter);
             final KStreamKStreamJoin<K1, R, ? super V2, ? super V1> joinOther = new KStreamKStreamJoin<>(thisWindow.name(),
                 windows.afterMs,
                 windows.beforeMs,
-                reverseJoiner(joiner),
+                reverseJoiner(valueJoinerWithKey),
                 rightOuter);
 
             KStreamPassThrough<K1, R> joinMerge = new KStreamPassThrough<>();

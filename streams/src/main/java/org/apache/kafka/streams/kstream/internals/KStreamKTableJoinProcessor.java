@@ -17,7 +17,7 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.kstream.KeyValueMapper;
-import org.apache.kafka.streams.kstream.ValueJoiner;
+import org.apache.kafka.streams.kstream.ValueJoinerWithKey;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 
@@ -25,12 +25,12 @@ class KStreamKTableJoinProcessor<K1, K2, V1, V2, R> extends AbstractProcessor<K1
 
     private final KTableValueGetter<K2, V2> valueGetter;
     private final KeyValueMapper<? super K1, ? super V1, ? extends K2> keyMapper;
-    private final ValueJoiner<? super V1, ? super V2, ? extends R> joiner;
+    private final ValueJoinerWithKey<? super K1, ? super V1, ? super V2, ? extends R> joiner;
     private final boolean leftJoin;
 
     KStreamKTableJoinProcessor(final KTableValueGetter<K2, V2> valueGetter,
                                final KeyValueMapper<? super K1, ? super V1, ? extends K2> keyMapper,
-                               final ValueJoiner<? super V1, ? super V2, ? extends R> joiner,
+                               final ValueJoinerWithKey<? super K1, ? super V1, ? super V2, ? extends R> joiner,
                                final boolean leftJoin) {
         this.valueGetter = valueGetter;
         this.keyMapper = keyMapper;
@@ -55,7 +55,7 @@ class KStreamKTableJoinProcessor<K1, K2, V1, V2, R> extends AbstractProcessor<K1
         if (key != null && value != null) {
             final V2 value2 = valueGetter.get(keyMapper.apply(key, value));
             if (leftJoin || value2 != null) {
-                context().forward(key, joiner.apply(value, value2));
+                context().forward(key, joiner.apply(key, value, value2));
             }
         }
     }

@@ -17,6 +17,7 @@
 package org.apache.kafka.test;
 
 import org.apache.kafka.streams.kstream.ValueJoiner;
+import org.apache.kafka.streams.kstream.ValueJoinerWithKey;
 
 public class MockValueJoiner {
 
@@ -30,4 +31,15 @@ public class MockValueJoiner {
             }
         };
     }
+
+    public static <K, V1, V2> ValueJoinerWithKey<K, V1, V2, String> instanceWithKey(final String separator) {
+        return new ValueJoinerWithKey<K, V1, V2, String>() {
+            @Override
+            public String apply(K key, V1 value1, V2 value2) {
+                return key + separator + value1 + separator + value2;
+            }
+        };
+    }
+    public final static ValueJoinerWithKey<Object, Object, Object, String> TOSTRING_JOINER_WITH_KEY = instanceWithKey("+");
+
 }

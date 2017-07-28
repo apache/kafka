@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.streams.kstream.ValueJoiner;
+import org.apache.kafka.streams.kstream.ValueJoinerWithKey;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -31,10 +31,10 @@ class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
     private final long joinBeforeMs;
     private final long joinAfterMs;
 
-    private final ValueJoiner<? super V1, ? super V2, ? extends R> joiner;
+    private final ValueJoinerWithKey<? super K, ? super V1, ? super V2, ? extends R> joiner;
     private final boolean outer;
 
-    KStreamKStreamJoin(String otherWindowName, long joinBeforeMs, long joinAfterMs, ValueJoiner<? super V1, ? super V2, ? extends R> joiner, boolean outer) {
+    KStreamKStreamJoin(String otherWindowName, long joinBeforeMs, long joinAfterMs, ValueJoinerWithKey<? super K, ? super V1, ? super V2, ? extends R> joiner, boolean outer) {
         this.otherWindowName = otherWindowName;
         this.joinBeforeMs = joinBeforeMs;
         this.joinAfterMs = joinAfterMs;
@@ -79,11 +79,11 @@ class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
             try (WindowStoreIterator<V2> iter = otherWindow.fetch(key, timeFrom, timeTo)) {
                 while (iter.hasNext()) {
                     needOuterJoin = false;
-                    context().forward(key, joiner.apply(value, iter.next().value));
+                    context().forward(key, joiner.apply(key, value, iter.next().value));
                 }
 
                 if (needOuterJoin) {
-                    context().forward(key, joiner.apply(value, null));
+                    context().forward(key, joiner.apply(key, value, null));
                 }
             }
         }

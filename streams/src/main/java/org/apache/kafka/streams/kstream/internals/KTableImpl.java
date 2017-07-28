@@ -28,6 +28,7 @@ import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.PrintForeachAction;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
+import org.apache.kafka.streams.kstream.ValueMapperWithKey;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
@@ -454,9 +455,9 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     public KStream<K, V> toStream() {
         String name = builder.newName(TOSTREAM_NAME);
 
-        builder.internalTopologyBuilder.addProcessor(name, new KStreamMapValues<K, Change<V>, V>(new ValueMapper<Change<V>, V>() {
+        builder.internalTopologyBuilder.addProcessor(name, new KStreamMapValues<K, Change<V>, V>(new ValueMapperWithKey<K, Change<V>, V>() {
             @Override
-            public V apply(Change<V> change) {
+            public V apply(K key, Change<V> change) {
                 return change.newValue;
             }
         }), this.name);

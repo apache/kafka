@@ -30,7 +30,10 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.ValueJoiner;
+import org.apache.kafka.streams.kstream.ValueJoinerWithKey;
 import org.apache.kafka.streams.kstream.ValueMapper;
+import org.apache.kafka.streams.kstream.ValueMapperWithKey;
+import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.SourceNode;
@@ -82,16 +85,16 @@ public class KStreamImplTest {
                 }
             });
 
-        KStream<String, Integer> stream2 = stream1.mapValues(new ValueMapper<String, Integer>() {
+        KStream<String, Integer> stream2 = stream1.mapValues(new ValueMapperWithKey<String, String, Integer>() {
             @Override
-            public Integer apply(String value) {
+            public Integer apply(String key, String value) {
                 return new Integer(value);
             }
         });
 
-        KStream<String, Integer> stream3 = source2.flatMapValues(new ValueMapper<String, Iterable<Integer>>() {
+        KStream<String, Integer> stream3 = source2.flatMapValues(new ValueMapperWithKey<String, String, Iterable<Integer>>() {
             @Override
-            public Iterable<Integer> apply(String value) {
+            public Iterable<Integer> apply(String key, String value) {
                 return Collections.singletonList(new Integer(value));
             }
         });
@@ -127,16 +130,16 @@ public class KStreamImplTest {
         );
 
         final int anyWindowSize = 1;
-        KStream<String, Integer> stream4 = streams2[0].join(streams3[0], new ValueJoiner<Integer, Integer, Integer>() {
+        KStream<String, Integer> stream4 = streams2[0].join(streams3[0], new ValueJoinerWithKey<String, Integer, Integer, Integer>() {
             @Override
-            public Integer apply(Integer value1, Integer value2) {
+            public Integer apply(String key, Integer value1, Integer value2) {
                 return value1 + value2;
             }
         }, JoinWindows.of(anyWindowSize), stringSerde, intSerde, intSerde);
 
-        KStream<String, Integer> stream5 = streams2[1].join(streams3[1], new ValueJoiner<Integer, Integer, Integer>() {
+        KStream<String, Integer> stream5 = streams2[1].join(streams3[1], new ValueJoinerWithKey<String, Integer, Integer, Integer>() {
             @Override
-            public Integer apply(Integer value1, Integer value2) {
+            public Integer apply(String key, Integer value1, Integer value2) {
                 return value1 + value2;
             }
         }, JoinWindows.of(anyWindowSize), stringSerde, intSerde, intSerde);
@@ -238,7 +241,7 @@ public class KStreamImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullMapperOnMapValues() throws Exception {
-        testStream.mapValues(null);
+        testStream.mapValues((ValueMapper) null);
     }
 
     @Test(expected = NullPointerException.class)
@@ -258,7 +261,7 @@ public class KStreamImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullMapperOnFlatMapValues() throws Exception {
-        testStream.flatMapValues(null);
+        testStream.flatMapValues((ValueMapper) null);
     }
 
     @Test(expected = IllegalArgumentException.class)
@@ -288,7 +291,7 @@ public class KStreamImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullTransformSupplierOnTransformValues() throws Exception {
-        testStream.transformValues(null);
+        testStream.transformValues((ValueTransformerSupplier) null);
     }
 
     @Test(expected = NullPointerException.class)
@@ -303,7 +306,7 @@ public class KStreamImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullValueJoinerOnJoin() throws Exception {
-        testStream.join(testStream, null, JoinWindows.of(10));
+        testStream.join(testStream, (ValueJoiner) null, JoinWindows.of(10));
     }
 
     @Test(expected = NullPointerException.class)
@@ -318,7 +321,7 @@ public class KStreamImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullValueMapperOnTableJoin() throws Exception {
-        testStream.leftJoin(builder.table(Serdes.String(), Serdes.String(), "topic", "store"), null);
+        testStream.leftJoin(builder.table(Serdes.String(), Serdes.String(), "topic", "store"), (ValueJoiner) null);
     }
 
     @Test(expected = NullPointerException.class)
@@ -349,7 +352,7 @@ public class KStreamImplTest {
     public void shouldNotAllowNullJoinerOnJoinWithGlobalTable() throws Exception {
         testStream.join(builder.globalTable(Serdes.String(), Serdes.String(), null, "global", "global"),
                         MockKeyValueMapper.<String, String>SelectValueMapper(),
-                        null);
+                        (ValueJoiner) null);
     }
 
     @Test(expected = NullPointerException.class)
@@ -370,7 +373,34 @@ public class KStreamImplTest {
     public void shouldNotAllowNullJoinerOnLeftJoinWithGlobalTable() throws Exception {
         testStream.leftJoin(builder.globalTable(Serdes.String(), Serdes.String(), null, "global", "global"),
                         MockKeyValueMapper.<String, String>SelectValueMapper(),
-                        null);
+                        (ValueJoiner) null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAllowNullValueJoinerWithKeyOnJoin() throws Exception {
+        testStream.join(testStream, (ValueJoinerWithKey<? super String, ? super String, ? super String, ?>) null, JoinWindows.of(10));
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAllowNullMapperOnMapValuesWithKey() throws Exception {
+        testStream.mapValues((ValueMapperWithKey<? super String, ? super String, ?>) null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAllowNullMapperWithKeyOnFlatMapValues() throws Exception {
+        testStream.flatMapValues((ValueMapperWithKey<? super String, ? super String, ? extends Iterable<?>>) null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAllowNullValueMapperWithKeyOnTableJoin() throws Exception {
+        testStream.leftJoin(builder.table(Serdes.String(), Serdes.String(), "topic", "store"), (ValueJoinerWithKey) null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAllowNullJoinerWithKeyOnLeftJoinWithGlobalTable() throws Exception {
+        testStream.leftJoin(builder.globalTable(Serdes.String(), Serdes.String(), null, "global", "global"),
+                MockKeyValueMapper.<String, String>SelectValueMapper(),
+                (ValueJoinerWithKey) null);
     }
 
 }
