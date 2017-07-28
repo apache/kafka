@@ -960,9 +960,8 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         private CloseableIterator<Record> records;
         private long nextFetchOffset;
         private boolean isFetched = false;
-        private boolean hasExceptionInLastFetch = false;
         // We have to cache the iterator exception because they are not reproducible.
-        private KafkaException cachedIteratorException = null;
+        private KafkaException cachedRecordFetchException = null;
 
         private PartitionRecords(TopicPartition partition,
                                  CompletedFetch completedFetch,
@@ -973,13 +972,12 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             this.nextFetchOffset = completedFetch.fetchedOffset;
             this.abortedProducerIds = new HashSet<>();
             this.abortedTransactions = abortedTransactions(completedFetch.partitionData);
-            this.hasExceptionInLastFetch = false;
         }
 
         private void drain() {
             if (!isFetched) {
                 maybeCloseRecordStream();
-                hasExceptionInLastFetch = false;
+                cachedRecordFetchException = null;
                 this.isFetched = true;
                 this.completedFetch.metricAggregator.record(partition, bytesRead, recordsRead);
 
@@ -1019,61 +1017,24 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             }
         }
 
-        /**
-         * Because after iterator.hasNext() throws exception, the state of the iterator will be FAILED.
-         * So the exception is not reproducible. Here we cache the first exception thrown from iterator.hasNext() and
-         * use that exception as suppressed exception when the iterator throws exception again.
-         */
-        private boolean wrappedHasNext(Iterator iter) {
-            try {
-                return iter.hasNext();
-            } catch (KafkaException ke) {
-                cachedIteratorException = ke;
-                throw ke;
-            } catch (IllegalStateException ise) {
-                if (cachedIteratorException != null) {
-                    ise.addSuppressed(cachedIteratorException);
-                    throw new KafkaException(ise);
-                } else {
-                    throw ise;
-                }
-            }
-        }
-
         private Record nextFetchedRecord() {
             while (true) {
-                Record record = lastRecord;
-                boolean currentBatchExhausted = false;
-                // Only move to the next record when
-                // 1. There was no exception in the last fetch, OR
-                // 2. An exception was thrown earlier when moving to the next record. (So the same exception can
-                //    be thrown again)
-                if (!hasExceptionInLastFetch || lastRecord == null) {
-                    lastRecord = null;
-                    currentBatchExhausted = records == null || !wrappedHasNext(records);
-                }
-                if (currentBatchExhausted) {
-                    // We only move to the next batch when
-                    // 1. There was no exception in the last fetch, OR
-                    // 2. An exception was thrown earlier when moving to the next batch (so the same error can be
-                    //    thrown again).
-                    if (!hasExceptionInLastFetch || currentBatch == null) {
-                        maybeCloseRecordStream();
-                        RecordBatch recordBatch = currentBatch;
-                        currentBatch = null;
-                        if (!wrappedHasNext(batches)) {
-                            // Message format v2 preserves the last offset in a batch even if the last record is removed
-                            // through compaction. By using the next offset computed from the last offset in the batch,
-                            // we ensure that the offset of the next fetch will point to the next batch, which avoids
-                            // unnecessary re-fetching of the same batch (in the worst case, the consumer could get stuck
-                            // fetching the same batch repeatedly).
-                            if (recordBatch != null) nextFetchOffset = recordBatch.nextOffset();
-                            drain();
-                            return null;
-                        }
-                        currentBatch = batches.next();
+                if (records == null || !records.hasNext()) {
+                    maybeCloseRecordStream();
+
+                    if (!batches.hasNext()) {
+                        // Message format v2 preserves the last offset in a batch even if the last record is removed
+                        // through compaction. By using the next offset computed from the last offset in the batch,
+                        // we ensure that the offset of the next fetch will point to the next batch, which avoids
+                        // unnecessary re-fetching of the same batch (in the worst case, the consumer could get stuck
+                        // fetching the same batch repeatedly).
+                        if (currentBatch != null)
+                            nextFetchOffset = currentBatch.nextOffset();
+                        drain();
+                        return null;
                     }
 
+                    currentBatch = batches.next();
                     maybeEnsureValid(currentBatch);
 
                     if (isolationLevel == IsolationLevel.READ_COMMITTED && currentBatch.hasProducerId()) {
@@ -1087,8 +1048,8 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                             abortedProducerIds.remove(producerId);
                         } else if (isBatchAborted(currentBatch)) {
                             log.debug("Skipping aborted record batch from partition {} with producerId {} and " +
-                                            "offsets {} to {}",
-                                    partition, producerId, currentBatch.baseOffset(), currentBatch.lastOffset());
+                                          "offsets {} to {}",
+                                      partition, producerId, currentBatch.baseOffset(), currentBatch.lastOffset());
                             nextFetchOffset = currentBatch.nextOffset();
                             continue;
                         }
@@ -1096,12 +1057,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
 
                     records = currentBatch.streamingIterator(decompressionBufferSupplier);
                 } else {
-                    // Do not move to next record if there was an exception. This is assuming records.next() won't
-                    // throw exception.
-                    if (!hasExceptionInLastFetch) {
-                        record = records.next();
-                    }
-                    lastRecord = record;
+                    Record record = records.next();
                     // skip any records out of range
                     if (record.offset() >= nextFetchOffset) {
                         // we only do validation when the message should not be skipped.
@@ -1120,26 +1076,38 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         }
 
         private List<ConsumerRecord<K, V>> fetchRecords(int maxRecords) {
+            // Error when fetching the next record before deserialization.
+            if (cachedRecordFetchException != null && lastRecord == null)
+                throw cachedRecordFetchException;
+
             if (isFetched)
                 return Collections.emptyList();
 
             List<ConsumerRecord<K, V>> records = new ArrayList<>();
             try {
                 for (int i = 0; i < maxRecords; i++) {
-                    Record record = nextFetchedRecord();
+                    Record record = lastRecord;
+                    // Only move to next record if there was no exception in the last fetch. Otherwise we should
+                    // use the last record to do deserialization again.
+                    if (cachedRecordFetchException == null) {
+                        lastRecord = null;
+                        record = nextFetchedRecord();
+                        lastRecord = record;
+                    }
                     if (record == null)
                         break;
-
                     records.add(parseRecord(partition, currentBatch, record));
                     recordsRead++;
                     bytesRead += record.sizeInBytes();
                     nextFetchOffset = record.offset() + 1;
+                    // In some cases, the deserialization may have thrown an exception and the retry may succeed,
+                    // we allow user to move forward in this case.
+                    cachedRecordFetchException = null;
                 }
-                // In some cases, the deserialization may have thrown an exception and the retry may succeed,
-                // we allow user to move forward in this case.
-                hasExceptionInLastFetch = false;
-            } catch (KafkaException e) {
-                hasExceptionInLastFetch = true;
+            } catch (Exception e) {
+                cachedRecordFetchException = new KafkaException("Received exception when fetching the next record. "
+                                                                    + "If needed, please seek past the record to "
+                                                                    + "continue consumption.", e);
                 if (records.isEmpty())
                     throw e;
             }
