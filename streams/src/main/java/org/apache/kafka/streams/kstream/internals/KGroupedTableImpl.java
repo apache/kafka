@@ -24,6 +24,8 @@ import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Initializer;
+import org.apache.kafka.streams.kstream.InitializerWithKey;
+import org.apache.kafka.streams.kstream.ReducerWithKey;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.KGroupedTable;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
@@ -73,8 +75,17 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
                                       final Aggregator<? super K, ? super V, T> subtractor,
                                       final Serde<T> aggValueSerde,
                                       final String queryableStoreName) {
+        return aggregate(AbstractStream.<K, T>withKey(initializer), adder, subtractor, aggValueSerde, queryableStoreName);
+    }
+
+    @Override
+    public <T> KTable<K, T> aggregate(final InitializerWithKey<K, T> initializerWithKey,
+                                      final Aggregator<? super K, ? super V, T> adder,
+                                      final Aggregator<? super K, ? super V, T> subtractor,
+                                      final Serde<T> aggValueSerde,
+                                      final String queryableStoreName) {
         determineIsQueryable(queryableStoreName);
-        return aggregate(initializer, adder, subtractor, keyValueStore(keySerde, aggValueSerde, getOrCreateName(queryableStoreName, AGGREGATE_NAME)));
+        return aggregate(initializerWithKey, adder, subtractor, keyValueStore(keySerde, aggValueSerde, getOrCreateName(queryableStoreName, AGGREGATE_NAME)));
     }
 
     @Override
@@ -82,7 +93,15 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
                                       final Aggregator<? super K, ? super V, T> adder,
                                       final Aggregator<? super K, ? super V, T> subtractor,
                                       final Serde<T> aggValueSerde) {
-        return aggregate(initializer, adder, subtractor, aggValueSerde, (String) null);
+        return aggregate(AbstractStream.<K, T>withKey(initializer), adder, subtractor, aggValueSerde, (String) null);
+    }
+
+    @Override
+    public <VR> KTable<K, VR> aggregate(final InitializerWithKey<K, VR> initializerWithKey,
+                                        final Aggregator<? super K, ? super V, VR> adder,
+                                        final Aggregator<? super K, ? super V, VR> subtractor,
+                                        final Serde<VR> aggValueSerde) {
+        return aggregate(initializerWithKey, adder, subtractor, aggValueSerde, (String) null);
     }
 
     @Override
@@ -90,15 +109,30 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
                                       final Aggregator<? super K, ? super V, T> adder,
                                       final Aggregator<? super K, ? super V, T> subtractor,
                                       final String queryableStoreName) {
+        return aggregate(AbstractStream.<K, T>withKey(initializer), adder, subtractor, queryableStoreName);
+    }
+
+    @Override
+    public <VR> KTable<K, VR> aggregate(final InitializerWithKey<K, VR> initializerWithKey,
+                                        final Aggregator<? super K, ? super V, VR> adder,
+                                        final Aggregator<? super K, ? super V, VR> subtractor,
+                                        final String queryableStoreName) {
         determineIsQueryable(queryableStoreName);
-        return aggregate(initializer, adder, subtractor, null, getOrCreateName(queryableStoreName, AGGREGATE_NAME));
+        return aggregate(initializerWithKey, adder, subtractor, null, getOrCreateName(queryableStoreName, AGGREGATE_NAME));
     }
 
     @Override
     public <T> KTable<K, T> aggregate(final Initializer<T> initializer,
                                       final Aggregator<? super K, ? super V, T> adder,
                                       final Aggregator<? super K, ? super V, T> subtractor) {
-        return aggregate(initializer, adder, subtractor, (String) null);
+        return aggregate(AbstractStream.<K, T>withKey(initializer), adder, subtractor, (String) null);
+    }
+
+    @Override
+    public <VR> KTable<K, VR> aggregate(final InitializerWithKey<K, VR> initializerWithKey,
+                                        final Aggregator<? super K, ? super V, VR> adder,
+                                        final Aggregator<? super K, ? super V, VR> subtractor) {
+        return aggregate(initializerWithKey, adder, subtractor, (String) null);
     }
 
     @Override
@@ -110,7 +144,19 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
         Objects.requireNonNull(adder, "adder can't be null");
         Objects.requireNonNull(subtractor, "subtractor can't be null");
         Objects.requireNonNull(storeSupplier, "storeSupplier can't be null");
-        ProcessorSupplier<K, Change<V>> aggregateSupplier = new KTableAggregate<>(storeSupplier.name(), initializer, adder, subtractor);
+        return aggregate(AbstractStream.<K, T>withKey(initializer), adder, subtractor, storeSupplier);
+    }
+
+    @Override
+    public <VR> KTable<K, VR> aggregate(final InitializerWithKey<K, VR> initializerWithKey,
+                                        final Aggregator<? super K, ? super V, VR> adder,
+                                        final Aggregator<? super K, ? super V, VR> subtractor,
+                                        final StateStoreSupplier<KeyValueStore> storeSupplier) {
+        Objects.requireNonNull(initializerWithKey, "initializerWithKey can't be null");
+        Objects.requireNonNull(adder, "adder can't be null");
+        Objects.requireNonNull(subtractor, "subtractor can't be null");
+        Objects.requireNonNull(storeSupplier, "storeSupplier can't be null");
+        ProcessorSupplier<K, Change<V>> aggregateSupplier = new KTableAggregate<>(storeSupplier.name(), initializerWithKey, adder, subtractor);
         return doAggregate(aggregateSupplier, AGGREGATE_NAME, storeSupplier);
     }
 
@@ -150,24 +196,84 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
     public KTable<K, V> reduce(final Reducer<V> adder,
                                final Reducer<V> subtractor,
                                final String queryableStoreName) {
+        return reduce(AbstractStream.<K, V>withKey(adder), AbstractStream.<K, V>withKey(subtractor), queryableStoreName);
+    }
+
+    @Override
+    public KTable<K, V> reduce(final ReducerWithKey<K, V> adderWithKey,
+                               final Reducer<V> subtractor,
+                               final String queryableStoreName) {
+        return reduce(adderWithKey, AbstractStream.<K, V>withKey(subtractor), queryableStoreName);
+    }
+
+    @Override
+    public KTable<K, V> reduce(final Reducer<V> adder,
+                               final ReducerWithKey<K, V> subtractorWithKey,
+                               final String queryableStoreName) {
+        return reduce(AbstractStream.<K, V>withKey(adder), subtractorWithKey, queryableStoreName);
+    }
+
+    @Override
+    public KTable<K, V> reduce(final ReducerWithKey<K, V> adderWithKey,
+                               final ReducerWithKey<K, V> subtractorWithKey,
+                               final String queryableStoreName) {
         determineIsQueryable(queryableStoreName);
-        return reduce(adder, subtractor, keyValueStore(keySerde, valSerde, getOrCreateName(queryableStoreName, REDUCE_NAME)));
+        return reduce(adderWithKey, subtractorWithKey, keyValueStore(keySerde, valSerde, getOrCreateName(queryableStoreName, REDUCE_NAME)));
     }
 
     @Override
     public KTable<K, V> reduce(final Reducer<V> adder,
                                final Reducer<V> subtractor) {
-        return reduce(adder, subtractor, (String) null);
+        return reduce(AbstractStream.<K, V>withKey(adder), AbstractStream.<K, V>withKey(subtractor), (String) null);
+    }
+
+    @Override
+    public KTable<K, V> reduce(final ReducerWithKey<K, V> adderWithKey,
+                               final Reducer<V> subtractor) {
+        return reduce(adderWithKey, AbstractStream.<K, V>withKey(subtractor), (String) null);
+    }
+
+    @Override
+    public KTable<K, V> reduce(final Reducer<V> adder,
+                               final ReducerWithKey<K, V> subtractorWithKey) {
+        return reduce(AbstractStream.<K, V>withKey(adder), subtractorWithKey, (String) null);
+    }
+
+    @Override
+    public KTable<K, V> reduce(final ReducerWithKey<K, V> adderWithKey,
+                               final ReducerWithKey<K, V> subtractorWithKey) {
+        return reduce(adderWithKey, subtractorWithKey, (String) null);
     }
 
     @Override
     public KTable<K, V> reduce(final Reducer<V> adder,
                                final Reducer<V> subtractor,
                                final StateStoreSupplier<KeyValueStore> storeSupplier) {
-        Objects.requireNonNull(adder, "adder can't be null");
-        Objects.requireNonNull(subtractor, "subtractor can't be null");
+        return reduce(AbstractStream.<K, V>withKey(adder), AbstractStream.<K, V>withKey(subtractor), storeSupplier);
+    }
+
+    @Override
+    public KTable<K, V> reduce(final ReducerWithKey<K, V> adderWithKey,
+                               final Reducer<V> subtractor,
+                               final StateStoreSupplier<KeyValueStore> storeSupplier) {
+        return reduce(adderWithKey, AbstractStream.<K, V>withKey(subtractor), storeSupplier);
+    }
+
+    @Override
+    public KTable<K, V> reduce(final Reducer<V> adder,
+                               final ReducerWithKey<K, V> subtractorWithKey,
+                               final StateStoreSupplier<KeyValueStore> storeSupplier) {
+        return reduce(AbstractStream.<K, V>withKey(adder), subtractorWithKey, storeSupplier);
+    }
+
+    @Override
+    public KTable<K, V> reduce(final ReducerWithKey<K, V> adderWithKey,
+                               final ReducerWithKey<K, V> subtractorWithKey,
+                               final StateStoreSupplier<KeyValueStore> storeSupplier) {
+        Objects.requireNonNull(adderWithKey, "adder can't be null");
+        Objects.requireNonNull(subtractorWithKey, "subtractor can't be null");
         Objects.requireNonNull(storeSupplier, "storeSupplier can't be null");
-        ProcessorSupplier<K, Change<V>> aggregateSupplier = new KTableReduce<>(storeSupplier.name(), adder, subtractor);
+        ProcessorSupplier<K, Change<V>> aggregateSupplier = new KTableReduce<>(storeSupplier.name(), adderWithKey, subtractorWithKey);
         return doAggregate(aggregateSupplier, REDUCE_NAME, storeSupplier);
     }
 

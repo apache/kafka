@@ -21,6 +21,18 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.Window;
+import org.apache.kafka.streams.kstream.ValueTransformerWithKey;
+import org.apache.kafka.streams.kstream.ValueJoinerWithKey;
+import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
+import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
+import org.apache.kafka.streams.kstream.ReducerWithKey;
+import org.apache.kafka.streams.kstream.Reducer;
+import org.apache.kafka.streams.kstream.Initializer;
+import org.apache.kafka.streams.kstream.ValueMapperWithKey;
+import org.apache.kafka.streams.kstream.ValueMapper;
+import org.apache.kafka.streams.kstream.ValueTransformer;
+import org.apache.kafka.streams.kstream.InitializerWithKey;
+import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.kstream.Windows;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -81,6 +93,15 @@ public abstract class AbstractStream<K> {
         };
     }
 
+    static <K, T2, T1, R> ValueJoinerWithKey<K, T2, T1, R> reverseJoiner(final ValueJoinerWithKey<K, T1, T2, R> joinerWithKey) {
+        return new ValueJoinerWithKey<K, T2, T1, R>() {
+            @Override
+            public R apply(K key, T2 value2, T1 value1) {
+                return joinerWithKey.apply(key, value1, value2);
+            }
+        };
+    }
+
     @SuppressWarnings("unchecked")
     static <T, K>  StateStoreSupplier<KeyValueStore> keyValueStore(final Serde<K> keySerde,
                                                                    final Serde<T> aggValueSerde,
@@ -112,5 +133,78 @@ public abstract class AbstractStream<K> {
                 .enableCaching();
     }
 
+    static <K, V, VR> ValueMapperWithKey<K, V, VR> withKey(final ValueMapper<V, VR> valueMapper) {
+        Objects.requireNonNull(valueMapper);
+        return new ValueMapperWithKey<K, V, VR>() {
+            @Override
+            public VR apply(K key, V value) {
+                return valueMapper.apply(value);
+            }
+        };
+    }
 
+    static <K, V1, V2, VR> ValueJoinerWithKey<K, V1, V2, VR> withKey(final ValueJoiner<V1, V2, VR> valueJoiner) {
+        Objects.requireNonNull(valueJoiner);
+        return new ValueJoinerWithKey<K, V1, V2, VR>() {
+            @Override
+            public VR apply(K key, V1 value1, V2 value2) {
+                return valueJoiner.apply(value1, value2);
+            }
+        };
+    }
+
+    static <K, V, VR> ValueTransformerWithKey<K, V, VR> withKey(final ValueTransformer<V, VR> valueTransformer) {
+        Objects.requireNonNull(valueTransformer);
+        return new ValueTransformerWithKey<K, V, VR>() {
+            @Override
+            public void init(ProcessorContext context) {
+                valueTransformer.init(context);
+            }
+
+            @Override
+            public VR transform(K key, V value) {
+                return valueTransformer.transform(value);
+            }
+
+            @Override
+            public VR punctuate(long timestamp) {
+                return valueTransformer.punctuate(timestamp);
+            }
+
+            @Override
+            public void close() {
+                valueTransformer.close();
+            }
+        };
+    }
+
+    static <K, V, VR> ValueTransformerWithKeySupplier<K, V, VR> withKey(final ValueTransformerSupplier<V, VR> valueTransformerSupplier) {
+        Objects.requireNonNull(valueTransformerSupplier);
+        return new ValueTransformerWithKeySupplier<K, V, VR>() {
+            @Override
+            public ValueTransformerWithKey<K, V, VR> get() {
+                return withKey(valueTransformerSupplier.get());
+            }
+        };
+    }
+
+    static <K, V> ReducerWithKey<K, V> withKey(final Reducer<V> reducer) {
+        Objects.requireNonNull(reducer);
+        return new ReducerWithKey<K, V>() {
+            @Override
+            public V apply(K key, V value1, V value2) {
+                return reducer.apply(value1, value2);
+            }
+        };
+    }
+
+    static <K, VA> InitializerWithKey<K, VA> withKey(final Initializer<VA> initializer) {
+        Objects.requireNonNull(initializer);
+        return new InitializerWithKey<K, VA>() {
+            @Override
+            public VA apply(K key) {
+                return initializer.apply();
+            }
+        };
+    }
 }

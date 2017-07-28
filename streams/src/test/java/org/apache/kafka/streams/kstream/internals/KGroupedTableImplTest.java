@@ -23,6 +23,8 @@ import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.KGroupedTable;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
+import org.apache.kafka.streams.kstream.Initializer;
+import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -41,7 +43,6 @@ import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
-
 
 public class KGroupedTableImplTest {
 
@@ -81,7 +82,7 @@ public class KGroupedTableImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullInitializerOnAggregate() throws Exception {
-        groupedTable.aggregate(null, MockAggregator.TOSTRING_ADDER, MockAggregator.TOSTRING_REMOVER, "store");
+        groupedTable.aggregate((Initializer<String>) null, MockAggregator.TOSTRING_ADDER, MockAggregator.TOSTRING_REMOVER, "store");
     }
 
     @Test(expected = NullPointerException.class)
@@ -96,12 +97,12 @@ public class KGroupedTableImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullAdderOnReduce() throws Exception {
-        groupedTable.reduce(null, MockReducer.STRING_REMOVER, "store");
+        groupedTable.reduce((Reducer<String>) null, MockReducer.STRING_REMOVER, "store");
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullSubtractorOnReduce() throws Exception {
-        groupedTable.reduce(MockReducer.STRING_ADDER, null, "store");
+        groupedTable.reduce(MockReducer.STRING_ADDER, (Reducer<String>) null, "store");
     }
 
     @Test

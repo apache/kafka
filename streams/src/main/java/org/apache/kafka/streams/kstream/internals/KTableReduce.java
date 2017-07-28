@@ -17,7 +17,7 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.kstream.Reducer;
+import org.apache.kafka.streams.kstream.ReducerWithKey;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -26,15 +26,15 @@ import org.apache.kafka.streams.state.KeyValueStore;
 public class KTableReduce<K, V> implements KTableProcessorSupplier<K, V, V> {
 
     private final String storeName;
-    private final Reducer<V> addReducer;
-    private final Reducer<V> removeReducer;
+    private final ReducerWithKey<K, V> addReducerWithKey;
+    private final ReducerWithKey<K, V> removeReducerWithKey;
 
     private boolean sendOldValues = false;
 
-    public KTableReduce(String storeName, Reducer<V> addReducer, Reducer<V> removeReducer) {
+    public KTableReduce(String storeName, ReducerWithKey<K, V> addReducerWithKey, ReducerWithKey<K, V> removeReducerWithKey) {
         this.storeName = storeName;
-        this.addReducer = addReducer;
-        this.removeReducer = removeReducer;
+        this.addReducerWithKey = addReducerWithKey;
+        this.removeReducerWithKey = removeReducerWithKey;
     }
 
     @Override
@@ -77,13 +77,13 @@ public class KTableReduce<K, V> implements KTableProcessorSupplier<K, V, V> {
                 if (newAgg == null) {
                     newAgg = value.newValue;
                 } else {
-                    newAgg = addReducer.apply(newAgg, value.newValue);
+                    newAgg = addReducerWithKey.apply(key, newAgg, value.newValue);
                 }
             }
 
             // then try to remove the old value
             if (value.oldValue != null) {
-                newAgg = removeReducer.apply(newAgg, value.oldValue);
+                newAgg = removeReducerWithKey.apply(key, newAgg, value.oldValue);
             }
 
             // update the store with the new value
