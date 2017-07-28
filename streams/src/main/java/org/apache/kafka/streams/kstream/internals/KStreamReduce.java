@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.streams.kstream.Reducer;
+import org.apache.kafka.streams.kstream.ReducerWithKey;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -25,13 +25,13 @@ import org.apache.kafka.streams.state.KeyValueStore;
 public class KStreamReduce<K, V> implements KStreamAggProcessorSupplier<K, K, V, V> {
 
     private final String storeName;
-    private final Reducer<V> reducer;
+    private final ReducerWithKey<K, V> reducerWithKey;
 
     private boolean sendOldValues = false;
 
-    public KStreamReduce(String storeName, Reducer<V> reducer) {
+    public KStreamReduce(String storeName, ReducerWithKey<K, V> reducerWithKey) {
         this.storeName = storeName;
-        this.reducer = reducer;
+        this.reducerWithKey = reducerWithKey;
     }
 
     @Override
@@ -73,7 +73,7 @@ public class KStreamReduce<K, V> implements KStreamAggProcessorSupplier<K, K, V,
                 if (newAgg == null) {
                     newAgg = value;
                 } else {
-                    newAgg = reducer.apply(newAgg, value);
+                    newAgg = reducerWithKey.apply(key, newAgg, value);
                 }
             }
             // update the store with the new value
@@ -114,4 +114,3 @@ public class KStreamReduce<K, V> implements KStreamAggProcessorSupplier<K, K, V,
         }
     }
 }
-

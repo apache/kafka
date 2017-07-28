@@ -17,7 +17,7 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.kstream.Aggregator;
-import org.apache.kafka.streams.kstream.Initializer;
+import org.apache.kafka.streams.kstream.InitializerWithKey;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -26,15 +26,15 @@ import org.apache.kafka.streams.state.KeyValueStore;
 public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K, K, V, T> {
 
     private final String storeName;
-    private final Initializer<T> initializer;
+    private final InitializerWithKey<K, T> initializerWithKey;
     private final Aggregator<? super K, ? super V, T> aggregator;
 
 
     private boolean sendOldValues = false;
 
-    public KStreamAggregate(String storeName, Initializer<T> initializer, Aggregator<? super K, ? super V, T> aggregator) {
+    public KStreamAggregate(String storeName, InitializerWithKey<K, T> initializerWithKey, Aggregator<? super K, ? super V, T> aggregator) {
         this.storeName = storeName;
-        this.initializer = initializer;
+        this.initializerWithKey = initializerWithKey;
         this.aggregator = aggregator;
     }
 
@@ -70,7 +70,7 @@ public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K,
             T oldAgg = store.get(key);
 
             if (oldAgg == null)
-                oldAgg = initializer.apply();
+                oldAgg = initializerWithKey.apply(key);
 
             T newAgg = oldAgg;
 

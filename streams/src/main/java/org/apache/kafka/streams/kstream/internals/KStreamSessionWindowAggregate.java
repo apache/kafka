@@ -19,7 +19,7 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.kstream.Aggregator;
-import org.apache.kafka.streams.kstream.Initializer;
+import org.apache.kafka.streams.kstream.InitializerWithKey;
 import org.apache.kafka.streams.kstream.Merger;
 import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.Windowed;
@@ -32,11 +32,12 @@ import org.apache.kafka.streams.state.SessionStore;
 import java.util.ArrayList;
 import java.util.List;
 
+
 class KStreamSessionWindowAggregate<K, V, T> implements KStreamAggProcessorSupplier<K, Windowed<K>, V, T> {
 
     private final String storeName;
     private final SessionWindows windows;
-    private final Initializer<T> initializer;
+    private final InitializerWithKey<K, T> initializerWithKey;
     private final Aggregator<? super K, ? super V, T> aggregator;
     private final Merger<? super K, T> sessionMerger;
 
@@ -44,12 +45,12 @@ class KStreamSessionWindowAggregate<K, V, T> implements KStreamAggProcessorSuppl
 
     KStreamSessionWindowAggregate(final SessionWindows windows,
                                   final String storeName,
-                                  final Initializer<T> initializer,
+                                  final InitializerWithKey<K, T> initializerWithKey,
                                   final Aggregator<? super K, ? super V, T> aggregator,
                                   final Merger<? super K, T> sessionMerger) {
         this.windows = windows;
         this.storeName = storeName;
-        this.initializer = initializer;
+        this.initializerWithKey = initializerWithKey;
         this.aggregator = aggregator;
         this.sessionMerger = sessionMerger;
     }
@@ -89,10 +90,10 @@ class KStreamSessionWindowAggregate<K, V, T> implements KStreamAggProcessorSuppl
             final List<KeyValue<Windowed<K>, T>> merged = new ArrayList<>();
             final SessionWindow newSessionWindow = new SessionWindow(timestamp, timestamp);
             SessionWindow mergedWindow = newSessionWindow;
-            T agg = initializer.apply();
+            T agg = initializerWithKey.apply(key);
 
             try (final KeyValueIterator<Windowed<K>, T> iterator = store.findSessions(key, timestamp - windows.inactivityGap(),
-                                                                                      timestamp + windows.inactivityGap())) {
+                    timestamp + windows.inactivityGap())) {
                 while (iterator.hasNext()) {
                     final KeyValue<Windowed<K>, T> next = iterator.next();
                     merged.add(next);

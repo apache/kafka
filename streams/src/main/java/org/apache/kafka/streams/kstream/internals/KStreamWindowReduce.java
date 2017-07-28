@@ -17,7 +17,7 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.kstream.Reducer;
+import org.apache.kafka.streams.kstream.ReducerWithKey;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.Windows;
@@ -29,18 +29,19 @@ import org.apache.kafka.streams.state.WindowStoreIterator;
 
 import java.util.Map;
 
+
 public class KStreamWindowReduce<K, V, W extends Window> implements KStreamAggProcessorSupplier<K, Windowed<K>, V, V> {
 
     private final String storeName;
     private final Windows<W> windows;
-    private final Reducer<V> reducer;
+    private final ReducerWithKey<K, V> reducerWithKey;
 
     private boolean sendOldValues = false;
 
-    public KStreamWindowReduce(Windows<W> windows, String storeName, Reducer<V> reducer) {
+    public KStreamWindowReduce(Windows<W> windows, String storeName, ReducerWithKey<K, V> reducerWithKey) {
         this.windows = windows;
         this.storeName = storeName;
-        this.reducer = reducer;
+        this.reducerWithKey = reducerWithKey;
     }
 
     @Override
@@ -102,7 +103,7 @@ public class KStreamWindowReduce<K, V, W extends Window> implements KStreamAggPr
                         if (newAgg == null) {
                             newAgg = value;
                         } else {
-                            newAgg = reducer.apply(newAgg, value);
+                            newAgg = reducerWithKey.apply(key, newAgg, value);
                         }
 
                         // update the store with the new value
