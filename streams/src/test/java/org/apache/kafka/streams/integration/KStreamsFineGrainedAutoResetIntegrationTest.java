@@ -30,6 +30,7 @@ import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.TopologyBuilderException;
+import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.KStream;
@@ -56,6 +57,7 @@ import java.util.regex.Pattern;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.junit.Assert.assertThat;
+import static org.junit.Assert.fail;
 
 @Category({IntegrationTest.class})
 public class KStreamsFineGrainedAutoResetIntegrationTest {
@@ -238,26 +240,29 @@ public class KStreamsFineGrainedAutoResetIntegrationTest {
         consumer.close();
     }
 
-    @Test(expected = TopologyBuilderException.class)
+    @Test
     public void shouldThrowExceptionOverlappingPattern() throws  Exception {
         final KStreamBuilder builder = new KStreamBuilder();
         //NOTE this would realistically get caught when building topology, the test is for completeness
         builder.stream(KStreamBuilder.AutoOffsetReset.EARLIEST, Pattern.compile("topic-[A-D]_1"));
         builder.stream(KStreamBuilder.AutoOffsetReset.LATEST, Pattern.compile("topic-[A-D]_1"));
-        builder.stream(TOPIC_Y_1, TOPIC_Z_1);
 
-        builder.earliestResetTopicsPattern();
+        try {
+            builder.earliestResetTopicsPattern();
+            fail("Should have thrown TopologyException");
+        } catch (final TopologyException expected) { }
     }
 
-    @Test(expected = TopologyBuilderException.class)
+    @Test
     public void shouldThrowExceptionOverlappingTopic() throws  Exception {
         final KStreamBuilder builder = new KStreamBuilder();
         //NOTE this would realistically get caught when building topology, the test is for completeness
         builder.stream(KStreamBuilder.AutoOffsetReset.EARLIEST, Pattern.compile("topic-[A-D]_1"));
-        builder.stream(KStreamBuilder.AutoOffsetReset.LATEST, Pattern.compile("topic-\\d_1"));
-        builder.stream(KStreamBuilder.AutoOffsetReset.LATEST, TOPIC_A_1, TOPIC_Z_1);
 
-        builder.latestResetTopicsPattern();
+        try {
+            builder.stream(KStreamBuilder.AutoOffsetReset.LATEST, TOPIC_A_1, TOPIC_Z_1);
+            fail("Should have thrown TopologyBuilderException");
+        } catch (final TopologyBuilderException expected) { }
     }
 
     @Test
