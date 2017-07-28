@@ -40,6 +40,7 @@ import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
+import java.io.File;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -51,6 +52,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 @Category({IntegrationTest.class})
 public class KafkaStreamsTest {
@@ -81,7 +83,7 @@ public class KafkaStreamsTest {
         final KStreamBuilder builder = new KStreamBuilder();
         final KafkaStreams streams = new KafkaStreams(builder, props);
 
-        StateListenerStub stateListener = new StateListenerStub();
+        final StateListenerStub stateListener = new StateListenerStub();
         streams.setStateListener(stateListener);
         Assert.assertEquals(streams.state(), KafkaStreams.State.CREATED);
         Assert.assertEquals(stateListener.numChanges, 0);
@@ -102,7 +104,7 @@ public class KafkaStreamsTest {
         final KStreamBuilder builder = new KStreamBuilder();
         final KafkaStreams streams = new KafkaStreams(builder, props);
 
-        StateListenerStub stateListener = new StateListenerStub();
+        final StateListenerStub stateListener = new StateListenerStub();
         streams.setStateListener(stateListener);
         streams.close();
         Assert.assertEquals(streams.state(), KafkaStreams.State.NOT_RUNNING);
@@ -161,7 +163,7 @@ public class KafkaStreamsTest {
 
         final java.lang.reflect.Field globalThreadField = streams.getClass().getDeclaredField("globalStreamThread");
         globalThreadField.setAccessible(true);
-        GlobalStreamThread globalStreamThread = (GlobalStreamThread) globalThreadField.get(streams);
+        final GlobalStreamThread globalStreamThread = (GlobalStreamThread) globalThreadField.get(streams);
         assertEquals(globalStreamThread, null);
     }
 
@@ -255,6 +257,32 @@ public class KafkaStreamsTest {
     }
 
     @Test
+    public void shouldThrowExceptionSettingUncaughtExceptionHandlerNotInCreateState() {
+        streams.start();
+        try {
+            streams.setUncaughtExceptionHandler(null);
+            fail("Should throw IllegalStateException");
+        } catch (final IllegalStateException e) {
+            Assert.assertEquals("Can only set UncaughtExceptionHandler in CREATED state.", e.getMessage());
+        } finally {
+            streams.close();
+        }
+    }
+
+    @Test
+    public void shouldThrowExceptionSettingStateListenerNotInCreateState() {
+        streams.start();
+        try {
+            streams.setStateListener(null);
+            fail("Should throw IllegalStateException");
+        } catch (final IllegalStateException e) {
+            Assert.assertEquals("Can only set StateListener in CREATED state.", e.getMessage());
+        } finally {
+            streams.close();
+        }
+    }
+
+    @Test
     public void testNumberDefaultMetrics() {
         final KafkaStreams streams = createKafkaStreams();
         final Map<MetricName, ? extends Metric> metrics = streams.metrics();
@@ -269,8 +297,7 @@ public class KafkaStreamsTest {
         props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         props.setProperty(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, "illegalConfig");
         final KStreamBuilder builder = new KStreamBuilder();
-        final KafkaStreams streams = new KafkaStreams(builder, props);
-
+        new KafkaStreams(builder, props);
     }
 
     @Test
@@ -285,8 +312,7 @@ public class KafkaStreamsTest {
 
         props.setProperty(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, Sensor.RecordingLevel.DEBUG.toString());
         final KStreamBuilder builder2 = new KStreamBuilder();
-        final KafkaStreams streams2 = new KafkaStreams(builder2, props);
-
+        new KafkaStreams(builder2, props);
     }
 
     @Test(expected = IllegalStateException.class)
@@ -337,7 +363,7 @@ public class KafkaStreamsTest {
                                 while (keepRunning.get()) {
                                     Thread.sleep(10);
                                 }
-                            } catch (InterruptedException e) {
+                            } catch (final InterruptedException e) {
                                 // no-op
                             }
                         }
@@ -415,29 +441,80 @@ public class KafkaStreamsTest {
     @Test
     public void testToString() {
         streams.start();
-        String streamString = streams.toString();
+        final String streamString = streams.toString();
         streams.close();
-        String appId = streamString.split("\\n")[1].split(":")[1].trim();
+        final String appId = streamString.split("\\n")[1].split(":")[1].trim();
         Assert.assertNotEquals("streamString should not be empty", "", streamString);
         Assert.assertNotNull("streamString should not be null", streamString);
         Assert.assertNotEquals("streamString contains non-empty appId", "", appId);
         Assert.assertNotNull("streamString contains non-null appId", appId);
     }
 
+    @Test
+    public void shouldCleanupOldStateDirs() throws InterruptedException {
+        final Properties props = new Properties();
+        final String appId = "cleanupOldStateDirs";
+        final String stateDir = TestUtils.tempDirectory().getPath();
+        props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, appId);
+        props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
+        props.setProperty(StreamsConfig.STATE_CLEANUP_DELAY_MS_CONFIG, "1");
+        props.setProperty(StreamsConfig.STATE_DIR_CONFIG, stateDir);
+
+
+        final String topic = "topic";
+        CLUSTER.createTopic(topic);
+        final KStreamBuilder builder = new KStreamBuilder();
+
+        builder.stream(Serdes.String(), Serdes.String(), topic);
+
+        final KafkaStreams streams = new KafkaStreams(builder, props);
+        final CountDownLatch latch = new CountDownLatch(1);
+        streams.setStateListener(new KafkaStreams.StateListener() {
+            @Override
+            public void onChange(final KafkaStreams.State newState, final KafkaStreams.State oldState) {
+                if (newState == KafkaStreams.State.RUNNING && oldState == KafkaStreams.State.REBALANCING) {
+                    latch.countDown();
+                }
+            }
+        });
+        final String appDir = stateDir + File.separator + appId;
+        final File oldTaskDir = new File(appDir, "10_1");
+        assertTrue(oldTaskDir.mkdirs());
+        try {
+            streams.start();
+            latch.await(30, TimeUnit.SECONDS);
+            verifyCleanupStateDir(appDir, oldTaskDir);
+            assertTrue(oldTaskDir.mkdirs());
+            verifyCleanupStateDir(appDir, oldTaskDir);
+        } finally {
+            streams.close();
+        }
+    }
+
+    private void verifyCleanupStateDir(final String appDir, final File oldTaskDir) throws InterruptedException {
+        final File taskDir = new File(appDir, "0_0");
+        TestUtils.waitForCondition(new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                return !oldTaskDir.exists() && taskDir.exists();
+            }
+        }, 30000, "cleanup has not successfully run");
+        assertTrue(taskDir.exists());
+    }
 
     public static class StateListenerStub implements KafkaStreams.StateListener {
-        public int numChanges = 0;
-        public KafkaStreams.State oldState;
-        public KafkaStreams.State newState;
+        int numChanges = 0;
+        KafkaStreams.State oldState;
+        KafkaStreams.State newState;
         public Map<KafkaStreams.State, Long> mapStates = new HashMap<>();
 
         @Override
         public void onChange(final KafkaStreams.State newState, final KafkaStreams.State oldState) {
-            long prevCount = this.mapStates.containsKey(newState) ? this.mapStates.get(newState) : 0;
-            this.numChanges++;
+            final long prevCount = mapStates.containsKey(newState) ? mapStates.get(newState) : 0;
+            numChanges++;
             this.oldState = oldState;
             this.newState = newState;
-            this.mapStates.put(newState, prevCount + 1);
+            mapStates.put(newState, prevCount + 1);
         }
     }
 }

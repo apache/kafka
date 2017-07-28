@@ -408,7 +408,7 @@ object AdminUtils extends Logging with AdminUtilities {
     zkUtils.pathExists(getTopicPath(topic))
 
   def getBrokerMetadatas(zkUtils: ZkUtils, rackAwareMode: RackAwareMode = RackAwareMode.Enforced,
-                        brokerList: Option[Seq[Int]] = None): Seq[BrokerMetadata] = {
+                         brokerList: Option[Seq[Int]] = None): Seq[BrokerMetadata] = {
     val allBrokers = zkUtils.getAllBrokersInCluster()
     val brokers = brokerList.map(brokerIds => allBrokers.filter(b => brokerIds.contains(b.id))).getOrElse(allBrokers)
     val brokersWithRack = brokers.filter(_.rack.nonEmpty)
@@ -616,23 +616,15 @@ object AdminUtils extends Logging with AdminUtilities {
     val str: String = zkUtils.readDataMaybeNull(entityConfigPath)._1.orNull
     val props = new Properties()
     if (str != null) {
-      Json.parseFull(str) match {
-        case None => // there are no config overrides
-        case Some(mapAnon: Map[_, _]) =>
-          val map = mapAnon collect { case (k: String, v: Any) => k -> v }
-          require(map("version") == 1)
-          map.get("config") match {
-            case Some(config: Map[_, _]) =>
-              for(configTup <- config)
-                configTup match {
-                  case (k: String, v: String) =>
-                    props.setProperty(k, v)
-                  case _ => throw new IllegalArgumentException(s"Invalid ${entityConfigPath} config: ${str}")
-                }
-            case _ => throw new IllegalArgumentException(s"Invalid ${entityConfigPath} config: ${str}")
-          }
-
-        case _ => throw new IllegalArgumentException(s"Unexpected value in config:(${str}), entity_config_path: ${entityConfigPath}")
+      Json.parseFull(str).foreach { jsValue =>
+        val jsObject = jsValue.asJsonObjectOption.getOrElse {
+          throw new IllegalArgumentException(s"Unexpected value in config: $str, entity_config_path: $entityConfigPath")
+        }
+        require(jsObject("version").to[Int] == 1)
+        val config = jsObject.get("config").flatMap(_.asJsonObjectOption).getOrElse {
+          throw new IllegalArgumentException(s"Invalid $entityConfigPath config: $str")
+        }
+        config.iterator.foreach { case (k, v) => props.setProperty(k, v.to[String]) }
       }
     }
     props

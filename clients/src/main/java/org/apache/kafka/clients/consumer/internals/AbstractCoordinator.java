@@ -182,7 +182,10 @@ public abstract class AbstractCoordinator implements Closeable {
                                                                  Map<String, ByteBuffer> allMemberMetadata);
 
     /**
-     * Invoked when a group member has successfully joined a group.
+     * Invoked when a group member has successfully joined a group. If this call is woken up (i.e.
+     * if the invocation raises {@link org.apache.kafka.common.errors.WakeupException}), then it
+     * will be retried on the next call to {@link #ensureActiveGroup()}.
+     *
      * @param generation The generation that was joined
      * @param memberId The identifier for the local member in the group
      * @param protocol The protocol selected by the coordinator
@@ -288,7 +291,10 @@ public abstract class AbstractCoordinator implements Closeable {
                 heartbeatThread = null;
                 throw cause;
             }
-
+            // Awake the heartbeat thread if needed
+            if (heartbeat.shouldHeartbeat(now)) {
+                notify();
+            }
             heartbeat.poll(now);
         }
     }
@@ -357,12 +363,16 @@ public abstract class AbstractCoordinator implements Closeable {
 
             RequestFuture<ByteBuffer> future = initiateJoinGroup();
             client.poll(future);
-            resetJoinGroupFuture();
 
             if (future.succeeded()) {
-                needsJoinPrepare = true;
                 onJoinComplete(generation.generationId, generation.memberId, generation.protocol, future.value());
+
+                // We reset the join group future only after the completion callback returns. This ensures
+                // that if the callback is woken up, we will retry it on the next joinGroupIfNeeded.
+                resetJoinGroupFuture();
+                needsJoinPrepare = true;
             } else {
+                resetJoinGroupFuture();
                 RuntimeException exception = future.exception();
                 if (exception instanceof UnknownMemberIdException ||
                         exception instanceof RebalanceInProgressException ||

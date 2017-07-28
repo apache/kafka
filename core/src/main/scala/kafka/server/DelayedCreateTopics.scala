@@ -19,7 +19,7 @@ package kafka.server
 
 import kafka.api.LeaderAndIsr
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.{ApiError, CreateTopicsResponse}
+import org.apache.kafka.common.requests.ApiError
 
 import scala.collection._
 
@@ -87,6 +87,6 @@ class DelayedCreateTopics(delayMs: Long,
 
   private def isMissingLeader(topic: String, partition: Int): Boolean = {
     val partitionInfo = adminManager.metadataCache.getPartitionInfo(topic, partition)
-    partitionInfo.isEmpty || partitionInfo.get.leaderIsrAndControllerEpoch.leaderAndIsr.leader == LeaderAndIsr.NoLeader
+    partitionInfo.isEmpty || partitionInfo.get.basePartitionState.leader == LeaderAndIsr.NoLeader
   }
 }

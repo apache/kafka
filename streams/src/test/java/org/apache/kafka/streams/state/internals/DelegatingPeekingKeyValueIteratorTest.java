@@ -43,6 +43,7 @@ public class DelegatingPeekingKeyValueIteratorTest {
         assertEquals("A", peekingIterator.peekNextKey());
         assertEquals("A", peekingIterator.peekNextKey());
         assertTrue(peekingIterator.hasNext());
+        peekingIterator.close();
     }
 
     @Test
@@ -52,6 +53,7 @@ public class DelegatingPeekingKeyValueIteratorTest {
         assertEquals(KeyValue.pair("A", "A"), peekingIterator.peekNext());
         assertEquals(KeyValue.pair("A", "A"), peekingIterator.peekNext());
         assertTrue(peekingIterator.hasNext());
+        peekingIterator.close();
     }
 
     @Test
@@ -71,18 +73,21 @@ public class DelegatingPeekingKeyValueIteratorTest {
             index++;
         }
         assertEquals(kvs.length, index);
+        peekingIterator.close();
     }
 
     @Test(expected = NoSuchElementException.class)
     public void shouldThrowNoSuchElementWhenNoMoreItemsLeftAndNextCalled() throws Exception {
         final DelegatingPeekingKeyValueIterator<String, String> peekingIterator = new DelegatingPeekingKeyValueIterator<>(name, store.all());
         peekingIterator.next();
+        peekingIterator.close();
     }
 
     @Test(expected = NoSuchElementException.class)
     public void shouldThrowNoSuchElementWhenNoMoreItemsLeftAndPeekNextCalled() throws Exception {
         final DelegatingPeekingKeyValueIterator<String, String> peekingIterator = new DelegatingPeekingKeyValueIterator<>(name, store.all());
         peekingIterator.peekNextKey();
+        peekingIterator.close();
     }
 
 

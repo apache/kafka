@@ -26,7 +26,6 @@ import static org.junit.Assert.assertNotEquals;
 
 public class QuickUnionTest {
 
-    @SuppressWarnings("unchecked")
     @Test
     public void testUnite() {
         QuickUnion<Long> qu = new QuickUnion<>();

@@ -25,6 +25,8 @@ import java.nio.channels.SelectionKey;
 
 import java.security.Principal;
 
+import java.util.Objects;
+import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.utils.Utils;
 
 public class KafkaChannel {
@@ -35,6 +37,7 @@ public class KafkaChannel {
     // The values are read and reset after each response is sent.
     private long networkThreadTimeNanos;
     private final int maxReceiveSize;
+    private final MemoryPool memoryPool;
     private NetworkReceive receive;
     private Send send;
     // Track connection and mute state of channels to enable outstanding requests on channels to be
@@ -43,12 +46,13 @@ public class KafkaChannel {
     private boolean muted;
     private ChannelState state;
 
-    public KafkaChannel(String id, TransportLayer transportLayer, Authenticator authenticator, int maxReceiveSize) throws IOException {
+    public KafkaChannel(String id, TransportLayer transportLayer, Authenticator authenticator, int maxReceiveSize, MemoryPool memoryPool) throws IOException {
         this.id = id;
         this.transportLayer = transportLayer;
         this.authenticator = authenticator;
         this.networkThreadTimeNanos = 0L;
         this.maxReceiveSize = maxReceiveSize;
+        this.memoryPool = memoryPool;
         this.disconnected = false;
         this.muted = false;
         this.state = ChannelState.NOT_CONNECTED;
@@ -56,7 +60,7 @@ public class KafkaChannel {
 
     public void close() throws IOException {
         this.disconnected = true;
-        Utils.closeAll(transportLayer, authenticator);
+        Utils.closeAll(transportLayer, authenticator, receive);
     }
 
     /**
@@ -106,13 +110,16 @@ public class KafkaChannel {
         return id;
     }
 
-    public void mute() {
+    /**
+     * externally muting a channel should be done via selector to ensure proper state handling
+     */
+    void mute() {
         if (!disconnected)
             transportLayer.removeInterestOps(SelectionKey.OP_READ);
         muted = true;
     }
 
-    public void unmute() {
+    void unmute() {
         if (!disconnected)
             transportLayer.addInterestOps(SelectionKey.OP_READ);
         muted = false;
@@ -123,6 +130,17 @@ public class KafkaChannel {
      */
     public boolean isMute() {
         return muted;
+    }
+
+    public boolean isInMutableState() {
+        //some requests do not require memory, so if we do not know what the current (or future) request is
+        //(receive == null) we dont mute. we also dont mute if whatever memory required has already been
+        //successfully allocated (if none is required for the currently-being-read request
+        //receive.memoryAllocated() is expected to return true)
+        if (receive == null || receive.memoryAllocated())
+            return false;
+        //also cannot mute if underlying transport is not in the ready state
+        return transportLayer.ready();
     }
 
     public boolean ready() {
@@ -152,7 +170,7 @@ public class KafkaChannel {
 
     public void setSend(Send send) {
         if (this.send != null)
-            throw new IllegalStateException("Attempt to begin a send operation with prior send operation still in progress.");
+            throw new IllegalStateException("Attempt to begin a send operation with prior send operation still in progress, connection id is " + id);
         this.send = send;
         this.transportLayer.addInterestOps(SelectionKey.OP_WRITE);
     }
@@ -161,7 +179,7 @@ public class KafkaChannel {
         NetworkReceive result = null;
 
         if (receive == null) {
-            receive = new NetworkReceive(maxReceiveSize, id);
+            receive = new NetworkReceive(maxReceiveSize, id, memoryPool);
         }
 
         receive(receive);
@@ -169,6 +187,9 @@ public class KafkaChannel {
             receive.payload().rewind();
             result = receive;
             receive = null;
+        } else if (receive.requiredMemoryAmountKnown() && !receive.memoryAllocated() && isInMutableState()) {
+            //pool must be out of memory, mute ourselves.
+            mute();
         }
         return result;
     }
@@ -209,5 +230,29 @@ public class KafkaChannel {
             transportLayer.removeInterestOps(SelectionKey.OP_WRITE);
 
         return send.completed();
+    }
+
+    /**
+     * @return true if underlying transport has bytes remaining to be read from any underlying intermediate buffers.
+     */
+    public boolean hasBytesBuffered() {
+        return transportLayer.hasBytesBuffered();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
+        KafkaChannel that = (KafkaChannel) o;
+        return Objects.equals(id, that.id);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(id);
     }
 }

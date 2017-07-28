@@ -101,6 +101,7 @@ public class BrokerCompatibilityTest {
 
 
         System.out.println("close Kafka Streams");
+        producer.close();
         streams.close();
     }
 

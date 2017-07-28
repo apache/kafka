@@ -185,7 +185,6 @@ public class KeyValueStoreTestDriver<K, V> {
         final Producer<byte[], byte[]> producer = new MockProducer<>(true, rawSerializer, rawSerializer);
 
         final RecordCollector recordCollector = new RecordCollectorImpl(producer, "KeyValueStoreTestDriver") {
-            @SuppressWarnings("unchecked")
             @Override
             public <K1, V1> void send(final String topic,
                                       final K1 key,
