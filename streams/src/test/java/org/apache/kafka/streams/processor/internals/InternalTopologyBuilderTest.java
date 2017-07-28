@@ -565,7 +565,7 @@ public class InternalTopologyBuilderTest {
 
     @SuppressWarnings("deprecation")
     @Test
-    public void shouldThroughOnUnassignedStateStoreAccess() {
+    public void shouldThrowOnUnassignedStateStoreAccess() {
         final String sourceNodeName = "source";
         final String goodNodeName = "goodGuy";
         final String badNodeName = "badGuy";

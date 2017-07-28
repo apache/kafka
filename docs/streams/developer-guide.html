@@ -123,7 +123,7 @@
     <h4><a id="streams_processor_topology" href="#streams_processor_topology">Processor Topology</a></h4>
 
     <p>
-        With the customized processors defined in the Processor API, developers can use the <code>Topology</code> to build a processor topology
+        With the customized processors defined in the Processor API, developers can use <code>Topology</code> to build a processor topology
         by connecting these processors together:
     </p>
 
@@ -203,6 +203,26 @@
     .addSink("SINK2", "sink-topic2", "PROCESS2")
     .addSink("SINK3", "sink-topic3", "PROCESS3");
     </pre>
+
+    <h4><a id="streams_processor_describe" href="#streams_processor_describe">Describe a <code>Topology</code></a></h4>
+
+    <p>
+        After a <code>Topology</code> is specified it is possible to retrieve a description of the corresponding DAG via <code>#describe()</code> that returns a <code>TopologyDescription</code>.
+        A <code>TopologyDescription</code> contains all added source, processor, and sink nodes as well as all attached stores.
+        For source and sink nodes one can access the specified input/output topic name/pattern.
+        For processor nodes the attached stores are added to the description.
+        Additionally, all nodes have a list to all their connected successor and predecessor nodes.
+        Thus, <code>TopologyDescritpion</code> allows to retrieve the DAG structure of the specified topology.
+        <br />
+        Note that global stores are listed explicitly as they are accessible by all nodes without the need to explicitly connect them.
+        Furthermore, nodes are grouped by <code>Subtopology</code>.
+        Subtopologies are groups of nodes that are directly connected to each other (i.e., either by a direct connection&mdash;but not a topic&mdash;or by sharing a store).
+        For execution, each <code>Subtopology</code> is executed by <a href="/{{version}}/documentation/streams/architecture#streams_architecture_tasks">one or multiple tasks</a>.
+        Thus, each <code>Subtopology</code> describes an independent unit of works that can be executed by different threads in parallel.
+        <br />
+        Describing a <code>Topology</code> is helpful to reason about tasks and thus maximum parallelism.
+        It is also helpful to get insight into a <code>Topology</code> if it is not specified manually but via Kafka Streams DSL that is described in the next section.
+    </p>
 
     In the next section we present another way to build the processor topology: the Kafka Streams DSL.
     <br>
@@ -1064,7 +1084,7 @@
     import org.apache.kafka.streams.KafkaStreams;
     import org.apache.kafka.streams.StreamsConfig;
     import org.apache.kafka.streams.kstream.KStreamBuilder;
-    import org.apache.kafka.streams.processor.Topology;
+    import org.apache.kafka.streams.Topology;
 
     // Use the builders to define the actual processing topology, e.g. to specify
     // from which input topics to read, which stream operations (filter, map, etc.)

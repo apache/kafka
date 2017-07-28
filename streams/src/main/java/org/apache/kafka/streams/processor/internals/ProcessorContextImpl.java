@@ -54,10 +54,10 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         return this.collector;
     }
 
-    @SuppressWarnings("deprecation")
     /**
      * @throws TopologyBuilderException if an attempt is made to access this state store from an unknown node
      */
+    @SuppressWarnings("deprecation")
     @Override
     public StateStore getStateStore(final String name) {
         if (currentNode() == null) {

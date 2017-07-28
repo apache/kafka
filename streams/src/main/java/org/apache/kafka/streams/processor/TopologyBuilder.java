@@ -57,9 +57,7 @@ public class TopologyBuilder {
     /**
      * NOTE this member would not needed by developers working with the processor APIs, but only used
      * for internal functionalities.
-     * @deprecated not part of public API and for internal usage only
      */
-    @Deprecated
     public final InternalTopologyBuilder internalTopologyBuilder = new InternalTopologyBuilder();
 
     private Topology.AutoOffsetReset translateAutoOffsetReset(final TopologyBuilder.AutoOffsetReset resetPolicy) {
@@ -72,9 +70,7 @@ public class TopologyBuilder {
     /**
      * NOTE this class would not needed by developers working with the processor APIs, but only used
      * for internal functionalities.
-     * @deprecated not part of public API and for internal usage only
      */
-    @Deprecated
     public static class TopicsInfo {
         public Set<String> sinkTopics;
         public Set<String> sourceTopics;
@@ -120,23 +116,17 @@ public class TopologyBuilder {
 
     /**
      * Enum used to define auto offset reset policy when creating {@link KStream} or {@link KTable}.
-     * @deprecated use {@link Topology} instead
      */
-    @Deprecated
     public enum AutoOffsetReset {
         EARLIEST, LATEST
     }
 
     /**
      * Create a new builder.
-     *
-     * @deprecated use {@link Topology} instead
      */
-    @Deprecated
     public TopologyBuilder() {}
 
-    /** @deprecated This class is not part of public API and should never be used by a developer. */
-    @Deprecated
+    /** This class is not part of public API and should never be used by a developer. */
     public synchronized final TopologyBuilder setApplicationId(final String applicationId) {
         internalTopologyBuilder.setApplicationId(applicationId);
         return this;
@@ -153,9 +143,7 @@ public class TopologyBuilder {
      * {@link #addProcessor(String, ProcessorSupplier, String...) adding processor children}.
      * @param topics the name of one or more Kafka topics that this source is to consume
      * @return this builder instance so methods can be chained together; never null
-     * @deprecated use {@link Topology} instead
      */
-    @Deprecated
     public synchronized final TopologyBuilder addSource(final String name,
                                                         final String... topics) {
         try {
@@ -178,9 +166,7 @@ public class TopologyBuilder {
      * {@link #addProcessor(String, ProcessorSupplier, String...) adding processor children}.
      * @param topics the name of one or more Kafka topics that this source is to consume
      * @return this builder instance so methods can be chained together; never null
-     * @deprecated use {@link Topology} instead
      */
-    @Deprecated
     public synchronized final TopologyBuilder addSource(final AutoOffsetReset offsetReset,
                                                         final String name,
                                                         final String... topics) {
@@ -204,9 +190,7 @@ public class TopologyBuilder {
      *                           {@link #addProcessor(String, ProcessorSupplier, String...) adding processor children}.
      * @param topics             the name of one or more Kafka topics that this source is to consume
      * @return this builder instance so methods can be chained together; never null
-     * @deprecated use {@link Topology} instead
      */
-    @Deprecated
     public synchronized final TopologyBuilder addSource(final TimestampExtractor timestampExtractor,
                                                         final String name,
                                                         final String... topics) {
@@ -232,9 +216,7 @@ public class TopologyBuilder {
      *                           {@link #addProcessor(String, ProcessorSupplier, String...) adding processor children}.
      * @param topics             the name of one or more Kafka topics that this source is to consume
      * @return this builder instance so methods can be chained together; never null
-     * @deprecated use {@link Topology} instead
      */
-    @Deprecated
     public synchronized final TopologyBuilder addSource(final AutoOffsetReset offsetReset,
                                                         final TimestampExtractor timestampExtractor,
                                                         final String name,
@@ -259,9 +241,7 @@ public class TopologyBuilder {
      * {@link #addProcessor(String, ProcessorSupplier, String...) adding processor children}.
      * @param topicPattern regular expression pattern to match Kafka topics that this source is to consume
      * @return this builder instance so methods can be chained together; never null
-     * @deprecated use {@link Topology} instead
      */
-    @Deprecated
     public synchronized final TopologyBuilder addSource(final String name,
                                                         final Pattern topicPattern) {
         try {
@@ -285,9 +265,7 @@ public class TopologyBuilder {
      * {@link #addProcessor(String, ProcessorSupplier, String...) adding processor children}.
      * @param topicPattern regular expression pattern to match Kafka topics that this source is to consume
      * @return this builder instance so methods can be chained together; never null
-     * @deprecated use {@link Topology} instead
      */
-    @Deprecated
     public synchronized final TopologyBuilder addSource(final AutoOffsetReset offsetReset,
                                                         final String name,
                                                         final Pattern topicPattern) {
@@ -313,9 +291,7 @@ public class TopologyBuilder {
      *                           {@link #addProcessor(String, ProcessorSupplier, String...) adding processor children}.
      * @param topicPattern       regular expression pattern to match Kafka topics that this source is to consume
      * @return this builder instance so methods can be chained together; never null
-     * @deprecated use {@link Topology} instead
      */
-    @Deprecated
     public synchronized final TopologyBuilder addSource(final TimestampExtractor timestampExtractor,
                                                         final String name,
                                                         final Pattern topicPattern) {
@@ -342,9 +318,7 @@ public class TopologyBuilder {
      *                           {@link #addProcessor(String, ProcessorSupplier, String...) adding processor children}.
      * @param topicPattern       regular expression pattern to match Kafka topics that this source is to consume
      * @return this builder instance so methods can be chained together; never null
-     * @deprecated use {@link Topology} instead
      */
-    @Deprecated
     public synchronized final TopologyBuilder addSource(final AutoOffsetReset offsetReset,
                                                         final TimestampExtractor timestampExtractor,
                                                         final String name,
@@ -371,9 +345,7 @@ public class TopologyBuilder {
      * @param topics             the name of one or more Kafka topics that this source is to consume
      * @return this builder instance so methods can be chained together; never null
      * @throws TopologyBuilderException if processor is already added or if topics have already been registered by another source
-     * @deprecated use {@link Topology} instead
      */
-    @Deprecated
     public synchronized final TopologyBuilder addSource(final String name,
                                                         final Deserializer keyDeserializer,
                                                         final Deserializer valDeserializer,
@@ -403,9 +375,7 @@ public class TopologyBuilder {
      * @param topics             the name of one or more Kafka topics that this source is to consume
      * @return this builder instance so methods can be chained together; never null
      * @throws TopologyBuilderException if processor is already added or if topics have already been registered by another source
-     * @deprecated use {@link Topology} instead
      */
-    @Deprecated
     public synchronized final TopologyBuilder addSource(final AutoOffsetReset offsetReset,
                                                         final String name,
                                                         final TimestampExtractor timestampExtractor,
@@ -441,9 +411,7 @@ public class TopologyBuilder {
      * @param processorName         the name of the {@link ProcessorSupplier}
      * @param stateUpdateSupplier   the instance of {@link ProcessorSupplier}
      * @return this builder instance so methods can be chained together; never null
-     * @deprecated use {@link Topology} instead
      */
-    @Deprecated
     public synchronized TopologyBuilder addGlobalStore(final StateStoreSupplier<KeyValueStore> storeSupplier,
                                                        final String sourceName,
                                                        final Deserializer keyDeserializer,
@@ -481,9 +449,7 @@ public class TopologyBuilder {
      * @param processorName         the name of the {@link ProcessorSupplier}
      * @param stateUpdateSupplier   the instance of {@link ProcessorSupplier}
      * @return this builder instance so methods can be chained together; never null
-     * @deprecated use {@link Topology} instead
      */
-    @Deprecated
     public synchronized TopologyBuilder addGlobalStore(final StateStoreSupplier<KeyValueStore> storeSupplier,
                                                        final String sourceName,
                                                        final TimestampExtractor timestampExtractor,
@@ -517,9 +483,7 @@ public class TopologyBuilder {
      * @param topicPattern       regular expression pattern to match Kafka topics that this source is to consume
      * @return this builder instance so methods can be chained together; never null
      * @throws TopologyBuilderException if processor is already added or if topics have already been registered by name
-     * @deprecated use {@link Topology} instead
      */
-    @Deprecated
     public synchronized final TopologyBuilder addSource(final String name,
                                                         final Deserializer keyDeserializer,
                                                         final Deserializer valDeserializer,
@@ -552,9 +516,7 @@ public class TopologyBuilder {
      * @param topicPattern       regular expression pattern to match Kafka topics that this source is to consume
      * @return this builder instance so methods can be chained together; never null
      * @throws TopologyBuilderException if processor is already added or if topics have already been registered by name
-     * @deprecated use {@link Topology} instead
      */
-    @Deprecated
     public synchronized final TopologyBuilder addSource(final AutoOffsetReset offsetReset,
                                                         final String name,
                                                         final TimestampExtractor timestampExtractor,
@@ -587,9 +549,7 @@ public class TopologyBuilder {
      * @param topicPattern       regular expression pattern to match Kafka topics that this source is to consume
      * @return this builder instance so methods can be chained together; never null
      * @throws TopologyBuilderException if processor is already added or if topics have already been registered by name
-     * @deprecated use {@link Topology} instead
      */
-    @Deprecated
     public synchronized final TopologyBuilder addSource(final AutoOffsetReset offsetReset,
                                                         final String name,
                                                         final Deserializer keyDeserializer,
@@ -617,9 +577,7 @@ public class TopologyBuilder {
      * @see #addSink(String, String, StreamPartitioner, String...)
      * @see #addSink(String, String, Serializer, Serializer, String...)
      * @see #addSink(String, String, Serializer, Serializer, StreamPartitioner, String...)
-     * @deprecated use {@link Topology} instead
      */
-    @Deprecated
     public synchronized final TopologyBuilder addSink(final String name,
                                                       final String topic,
                                                       final String... predecessorNames) {
@@ -653,9 +611,7 @@ public class TopologyBuilder {
      * @see #addSink(String, String, String...)
      * @see #addSink(String, String, Serializer, Serializer, String...)
      * @see #addSink(String, String, Serializer, Serializer, StreamPartitioner, String...)
-     * @deprecated use {@link Topology} instead
      */
-    @Deprecated
     public synchronized final TopologyBuilder addSink(final String name,
                                                       final String topic,
                                                       final StreamPartitioner partitioner,
@@ -686,9 +642,7 @@ public class TopologyBuilder {
      * @see #addSink(String, String, String...)
      * @see #addSink(String, String, StreamPartitioner, String...)
      * @see #addSink(String, String, Serializer, Serializer, StreamPartitioner, String...)
-     * @deprecated use {@link Topology} instead
      */
-    @Deprecated
     public synchronized final TopologyBuilder addSink(final String name,
                                                       final String topic,
                                                       final Serializer keySerializer,
@@ -722,9 +676,7 @@ public class TopologyBuilder {
      * @see #addSink(String, String, StreamPartitioner, String...)
      * @see #addSink(String, String, Serializer, Serializer, String...)
      * @throws TopologyBuilderException if predecessor is not added yet, or if this processor's name is equal to the predecessor's name
-     * @deprecated use {@link Topology} instead
      */
-    @Deprecated
     public synchronized final <K, V> TopologyBuilder addSink(final String name,
                                                              final String topic,
                                                              final Serializer<K> keySerializer,
@@ -748,9 +700,7 @@ public class TopologyBuilder {
      * and process
      * @return this builder instance so methods can be chained together; never null
      * @throws TopologyBuilderException if predecessor is not added yet, or if this processor's name is equal to the predecessor's name
-     * @deprecated use {@link Topology} instead
      */
-    @Deprecated
     public synchronized final TopologyBuilder addProcessor(final String name,
                                                            final ProcessorSupplier supplier,
                                                            final String... predecessorNames) {
@@ -768,9 +718,7 @@ public class TopologyBuilder {
      * @param supplier the supplier used to obtain this state store {@link StateStore} instance
      * @return this builder instance so methods can be chained together; never null
      * @throws TopologyBuilderException if state store supplier is already added
-     * @deprecated use {@link Topology} instead
      */
-    @Deprecated
     public synchronized final TopologyBuilder addStateStore(final StateStoreSupplier supplier,
                                                             final String... processorNames) {
         try {
@@ -787,9 +735,7 @@ public class TopologyBuilder {
      * @param processorName the name of the processor
      * @param stateStoreNames the names of state stores that the processor uses
      * @return this builder instance so methods can be chained together; never null
-     * @deprecated use {@link Topology} instead
      */
-    @Deprecated
     public synchronized final TopologyBuilder connectProcessorAndStateStores(final String processorName,
                                                                              final String... stateStoreNames) {
         if (stateStoreNames != null && stateStoreNames.length > 0) {
@@ -808,10 +754,7 @@ public class TopologyBuilder {
      *
      * NOTE this function would not needed by developers working with the processor APIs, but only used
      * for the high-level DSL parsing functionalities.
-     *
-     * @deprecated not part of public API and for internal usage only
      */
-    @Deprecated
     protected synchronized final TopologyBuilder connectSourceStoreAndTopic(final String sourceStoreName,
                                                                             final String topic) {
         internalTopologyBuilder.connectSourceStoreAndTopic(sourceStoreName, topic);
@@ -827,9 +770,7 @@ public class TopologyBuilder {
      * @param processorNames the name of the processors
      * @return this builder instance so methods can be chained together; never null
      * @throws TopologyBuilderException if less than two processors are specified, or if one of the processors is not added yet
-     * @deprecated not part of public API and for internal usage only
      */
-    @Deprecated
     public synchronized final TopologyBuilder connectProcessors(final String... processorNames) {
         internalTopologyBuilder.connectProcessors(processorNames);
         return this;
@@ -843,9 +784,7 @@ public class TopologyBuilder {
      *
      * @param topicName the name of the topic
      * @return this builder instance so methods can be chained together; never null
-     * @deprecated not part of public API and for internal usage only
      */
-    @Deprecated
     public synchronized final TopologyBuilder addInternalTopic(final String topicName) {
         internalTopologyBuilder.addInternalTopic(topicName);
         return this;
@@ -859,9 +798,7 @@ public class TopologyBuilder {
      *
      * @param sourceNodes a set of source node names
      * @return this builder instance so methods can be chained together; never null
-     * @deprecated not part of public API and for internal usage only
      */
-    @Deprecated
     public synchronized final TopologyBuilder copartitionSources(final Collection<String> sourceNodes) {
         internalTopologyBuilder.copartitionSources(sourceNodes);
         return this;
@@ -874,9 +811,7 @@ public class TopologyBuilder {
      * for the high-level DSL parsing functionalities.
      *
      * @return groups of node names
-     * @deprecated not part of public API and for internal usage only
      */
-    @Deprecated
     public synchronized Map<Integer, Set<String>> nodeGroups() {
         return internalTopologyBuilder.nodeGroups();
     }
@@ -889,9 +824,7 @@ public class TopologyBuilder {
      * for the high-level DSL parsing functionalities.
      *
      * @see org.apache.kafka.streams.KafkaStreams#KafkaStreams(TopologyBuilder, org.apache.kafka.streams.StreamsConfig)
-     * @deprecated not part of public API and for internal usage only
      */
-    @Deprecated
     public synchronized ProcessorTopology build(final Integer topicGroupId) {
         return internalTopologyBuilder.build(topicGroupId);
     }
@@ -903,9 +836,7 @@ public class TopologyBuilder {
      * for the high-level DSL parsing functionalities.
      *
      * @return ProcessorTopology
-     * @deprecated not part of public API and for internal usage only
      */
-    @Deprecated
     public synchronized ProcessorTopology buildGlobalStateTopology() {
         return internalTopologyBuilder.buildGlobalStateTopology();
     }
@@ -918,9 +849,7 @@ public class TopologyBuilder {
      * for the high-level DSL parsing functionalities.
      *
      * @return map containing all global {@link StateStore}s
-     * @deprecated not part of public API and for internal usage only
      */
-    @Deprecated
     public Map<String, StateStore> globalStateStores() {
         return internalTopologyBuilder.globalStateStores();
     }
@@ -933,9 +862,7 @@ public class TopologyBuilder {
      * for the high-level DSL parsing functionalities.
      *
      * @return groups of topic names
-     * @deprecated not part of public API and for internal usage only
      */
-    @Deprecated
     public synchronized Map<Integer, TopicsInfo> topicGroups() {
         final Map<Integer, InternalTopologyBuilder.TopicsInfo> topicGroupsWithNewTopicsInfo = internalTopologyBuilder.topicGroups();
         final Map<Integer, TopicsInfo> topicGroupsWithDeprecatedTopicInfo = new HashMap<>();
@@ -960,9 +887,7 @@ public class TopologyBuilder {
      * for the high-level DSL parsing functionalities.
      *
      * @return the Pattern for matching all topics reading from earliest offset, never null
-     * @deprecated not part of public API and for internal usage only
      */
-    @Deprecated
     public synchronized Pattern earliestResetTopicsPattern() {
         return internalTopologyBuilder.earliestResetTopicsPattern();
     }
@@ -974,9 +899,7 @@ public class TopologyBuilder {
      * for the high-level DSL parsing functionalities.
      *
      * @return the Pattern for matching all topics reading from latest offset, never null
-     * @deprecated not part of public API and for internal usage only
      */
-    @Deprecated
     public synchronized Pattern latestResetTopicsPattern() {
         return internalTopologyBuilder.latestResetTopicsPattern();
     }
@@ -986,9 +909,7 @@ public class TopologyBuilder {
      * for the high-level DSL parsing functionalities.
      *
      * @return a mapping from state store name to a Set of source Topics.
-     * @deprecated not part of public API and for internal usage only
      */
-    @Deprecated
     public Map<String, List<String>> stateStoreNameToSourceTopics() {
         return internalTopologyBuilder.stateStoreNameToSourceTopics();
     }
@@ -1001,9 +922,7 @@ public class TopologyBuilder {
      * for the high-level DSL parsing functionalities.
      *
      * @return groups of topic names
-     * @deprecated not part of public API and for internal usage only
      */
-    @Deprecated
     public synchronized Collection<Set<String>> copartitionGroups() {
         return internalTopologyBuilder.copartitionGroups();
     }
@@ -1011,10 +930,7 @@ public class TopologyBuilder {
     /**
      * NOTE this function would not needed by developers working with the processor APIs, but only used
      * for the high-level DSL parsing functionalities.
-     *
-     * @deprecated not part of public API and for internal usage only
      */
-    @Deprecated
     public SubscriptionUpdates subscriptionUpdates() {
         return internalTopologyBuilder.subscriptionUpdates();
     }
@@ -1022,10 +938,7 @@ public class TopologyBuilder {
     /**
      * NOTE this function would not needed by developers working with the processor APIs, but only used
      * for the high-level DSL parsing functionalities.
-     *
-     * @deprecated not part of public API and for internal usage only
      */
-    @Deprecated
     public synchronized Pattern sourceTopicPattern() {
         return internalTopologyBuilder.sourceTopicPattern();
     }
@@ -1033,10 +946,7 @@ public class TopologyBuilder {
     /**
      * NOTE this function would not needed by developers working with the processor APIs, but only used
      * for the high-level DSL parsing functionalities.
-     *
-     * @deprecated not part of public API and for internal usage only
      */
-    @Deprecated
     public synchronized void updateSubscriptions(final SubscriptionUpdates subscriptionUpdates,
                                                  final String threadId) {
         internalTopologyBuilder.updateSubscriptions(subscriptionUpdates, threadId);
