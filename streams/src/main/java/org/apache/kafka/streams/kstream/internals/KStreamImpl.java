@@ -178,7 +178,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         Objects.requireNonNull(mapper, "mapper can't be null");
         String name = topology.newName(MAPVALUES_NAME);
 
-        topology.addProcessor(name, new KStreamMapValues<>(mapper), this.name);
+        topology.addProcessor(name, new KStreamMapValues<>(withKey(mapper)), this.name);
 
         return new KStreamImpl<>(topology, name, sourceNodes, this.repartitionRequired);
     }

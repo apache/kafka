@@ -402,7 +402,7 @@ public class KTableImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullMapperOnMapValues() throws Exception {
-        table.mapValues(null);
+        table.mapValues((ValueMapper<? super String, ?>) null);
     }
 
     @Test(expected = NullPointerException.class)
@@ -462,7 +462,7 @@ public class KTableImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullJoinerJoin() throws Exception {
-        table.join(table, null);
+        table.join(table, (ValueJoiner<? super String, ? super String, ?>) null);
     }
 
     @Test(expected = NullPointerException.class)
@@ -472,12 +472,12 @@ public class KTableImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullJoinerOnOuterJoin() throws Exception {
-        table.outerJoin(table, null);
+        table.outerJoin(table, (ValueJoiner<? super String, ? super String, ?>) null);
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullJoinerOnLeftJoin() throws Exception {
-        table.leftJoin(table, null);
+        table.leftJoin(table, (ValueJoiner<? super String, ? super String, ?>) null);
     }
 
     @Test(expected = NullPointerException.class)

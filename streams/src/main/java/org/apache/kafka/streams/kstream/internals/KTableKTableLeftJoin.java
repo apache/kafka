@@ -16,15 +16,17 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.streams.kstream.ValueJoiner;
+import org.apache.kafka.streams.kstream.ValueJoinerWithKey;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 
 class KTableKTableLeftJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R, V1, V2> {
 
-    KTableKTableLeftJoin(KTableImpl<K, ?, V1> table1, KTableImpl<K, ?, V2> table2, ValueJoiner<? super V1, ? super V2, ? extends R> joiner) {
-        super(table1, table2, joiner);
+    KTableKTableLeftJoin(KTableImpl<K, ?, V1> table1,
+                         KTableImpl<K, ?, V2> table2,
+                         ValueJoinerWithKey<? super K, ? super V1, ? super V2, ? extends R> joinerWithKey) {
+        super(table1, table2, joinerWithKey);
     }
 
     @Override
@@ -79,11 +81,11 @@ class KTableKTableLeftJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R, 
             }
 
             if (change.newValue != null) {
-                newValue = joiner.apply(change.newValue, value2);
+                newValue = joinerWithKey.apply(key, change.newValue, value2);
             }
 
             if (sendOldValues && change.oldValue != null)
-                oldValue = joiner.apply(change.oldValue, value2);
+                oldValue = joinerWithKey.apply(key, change.oldValue, value2);
 
             context().forward(key, new Change<>(newValue, oldValue));
         }
@@ -111,7 +113,7 @@ class KTableKTableLeftJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R, 
 
             if (value1 != null) {
                 V2 value2 = valueGetter2.get(key);
-                return joiner.apply(value1, value2);
+                return joinerWithKey.apply(key, value1, value2);
             } else {
                 return null;
             }

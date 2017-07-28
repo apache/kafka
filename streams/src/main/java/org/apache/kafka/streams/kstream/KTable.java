@@ -290,6 +290,41 @@ public interface KTable<K, V> {
      */
     <VR> KTable<K, VR> mapValues(final ValueMapper<? super V, ? extends VR> mapper);
 
+    /**
+     * Create a new {@code KTable} by transforming the value of each record in this {@code KTable} into a new value
+     * (with possible new type)in the new {@code KTable}.
+     * Note that provided key in {@link ValueMapperWithKey} is read-only and should not be modified.
+     * Any key modification can result in corrupt partitioning.
+     * For each {@code KTable} update the provided {@link ValueMapperWithKey} is applied to the value of the update record and
+     * computes a new value for it, resulting in an update record for the result {@code KTable}.
+     * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K:V'>}.
+     * This is a stateless record-by-record operation.
+     * <p>
+     * The example below counts the number of token of the value string.
+     * <pre>{@code
+     * KTable<String, String> inputTable = builder.table("topic");
+     * KTable<String, Integer> outputTable = inputTable.mapValue(new ValueMapper<String, Integer> {
+     *     Integer apply(String value) {
+     *         return value.split(" ").length;
+     *     }
+     * });
+     * }</pre>
+     * <p>
+     * This operation preserves data co-location with respect to the key.
+     * Thus, <em>no</em> internal data redistribution is required if a key based operator (like a join) is applied to
+     * the result {@code KTable}.
+     * <p>
+     * Note that {@code mapValues} for a <i>changelog stream</i> works different to {@link KStream#mapValues(ValueMapperWithKey)
+     * record stream filters}, because {@link KeyValue records} with {@code null} values (so-called tombstone records)
+     * have delete semantics.
+     * Thus, for tombstones the provided value-mapper is not evaluated but the tombstone record is forwarded directly to
+     * delete the corresponding record in the result {@code KTable}.
+     *
+     * @param mapperWithKey a {@link ValueMapperWithKey} that computes a new output value given read-only key
+     * @param <VR>          the value type of the result {@code KTable}
+     * @return a {@code KTable} that contains records with unmodified keys and new values (possibly of different type)
+     */
+    <VR> KTable<K, VR> mapValues(final ValueMapperWithKey<? super K, ? super V, ? extends VR> mapperWithKey);
 
     /**
      * Create a new {@code KTable} by transforming the value of each record in this {@code KTable} into a new value
@@ -340,6 +375,54 @@ public interface KTable<K, V> {
     /**
      * Create a new {@code KTable} by transforming the value of each record in this {@code KTable} into a new value
      * (with possible new type)in the new {@code KTable}.
+     * Note that provided key in {@link ValueMapperWithKey} is read-only and should not be modified.
+     * Any key modification can result in corrupt partitioning.
+     * For each {@code KTable} update the provided {@link ValueMapperWithKey} is applied to the value of the update
+     * record and computes a new value for it, resulting in an update record for the result {@code KTable}.
+     * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K:V'>}.
+     * This is a stateless record-by-record operation.
+     * <p>
+     * The example below counts the number of token of the value string.
+     * <pre>{@code
+     * KTable<String, String> inputTable = builder.table("topic");
+     * KTable<String, Integer> outputTable = inputTable.mapValue(new ValueMapper<String, Integer> {
+     *     Integer apply(String value) {
+     *         return value.split(" ").length;
+     *     }
+     * });
+     * }</pre>
+     * <p>
+     * To query the local {@link KeyValueStore} representing outputTable above it must be obtained via
+     * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
+     * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#allMetadata()} to
+     * query the value of the key on a parallel running instance of your Kafka Streams application.
+     * <p>
+     * <p>
+     * This operation preserves data co-location with respect to the key.
+     * Thus, <em>no</em> internal data redistribution is required if a key based operator (like a join) is applied to
+     * the result {@code KTable}.
+     * <p>
+     * Note that {@code mapValues} for a <i>changelog stream</i> works different to {@link KStream#mapValues(ValueMapperWithKey)
+     * record stream filters}, because {@link KeyValue records} with {@code null} values (so-called tombstone records)
+     * have delete semantics.
+     * Thus, for tombstones the provided value-mapper is not evaluated but the tombstone record is forwarded directly to
+     * delete the corresponding record in the result {@code KTable}.
+     *
+     * @param mapperWithKey      a {@link ValueMapperWithKey} that computes a new output value given read-only key
+     * @param queryableStoreName a user-provided name of the underlying {@link KTable} that can be used to subsequently
+     *                           query the operation results; valid characters are ASCII
+     *                           alphanumerics, '.', '_' and '-'. If {@code null} then the results cannot be queried
+     *                           (i.e., that would be equivalent to calling {@link KTable#mapValues(ValueMapper)}.
+     * @param valueSerde         serializer for new value type
+     * @param <VR>               the value type of the result {@code KTable}
+     *
+     * @return a {@code KTable} that contains records with unmodified keys and new values (possibly of different type)
+     */
+    <VR> KTable<K, VR> mapValues(final ValueMapperWithKey<? super K, ? super V, ? extends VR> mapperWithKey, final Serde<VR> valueSerde, final String queryableStoreName);
+
+    /**
+     * Create a new {@code KTable} by transforming the value of each record in this {@code KTable} into a new value
+     * (with possible new type)in the new {@code KTable}.
      * For each {@code KTable} update the provided {@link ValueMapper} is applied to the value of the update record and
      * computes a new value for it, resulting in an update record for the result {@code KTable}.
      * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K:V'>}.
@@ -381,6 +464,51 @@ public interface KTable<K, V> {
                                  final Serde<VR> valueSerde,
                                  final StateStoreSupplier<KeyValueStore> storeSupplier);
 
+    /**
+     * Create a new {@code KTable} by transforming the value of each record in this {@code KTable} into a new value
+     * (with possible new type)in the new {@code KTable}.
+     * Note that provided key in {@link ValueMapperWithKey} is read-only and should not be modified.
+     * Any key modification can result in corrupt partitioning.
+     * For each {@code KTable} update the provided {@link ValueMapperWithKey} is applied to the value of the update record and
+     * computes a new value for it, resulting in an update record for the result {@code KTable}.
+     * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K:V'>}.
+     * This is a stateless record-by-record operation.
+     * <p>
+     * The example below counts the number of token of the value string.
+     * <pre>{@code
+     * KTable<String, String> inputTable = builder.table("topic");
+     * KTable<String, Integer> outputTable = inputTable.mapValue(new ValueMapper<String, Integer> {
+     *     Integer apply(String value) {
+     *         return value.split(" ").length;
+     *     }
+     * });
+     * }</pre>
+     * <p>
+     * To query the local {@link KeyValueStore} representing outputTable above it must be obtained via
+     * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
+     * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#allMetadata()} to
+     * query the value of the key on a parallel running instance of your Kafka Streams application.
+     * <p>
+     * <p>
+     * This operation preserves data co-location with respect to the key.
+     * Thus, <em>no</em> internal data redistribution is required if a key based operator (like a join) is applied to
+     * the result {@code KTable}.
+     * <p>
+     * Note that {@code mapValues} for a <i>changelog stream</i> works different to {@link KStream#mapValues(ValueMapperWithKey)
+     * record stream filters}, because {@link KeyValue records} with {@code null} values (so-called tombstone records)
+     * have delete semantics.
+     * Thus, for tombstones the provided value-mapper is not evaluated but the tombstone record is forwarded directly to
+     * delete the corresponding record in the result {@code KTable}.
+     *
+     * @param mapperWithKey a {@link ValueMapperWithKey} that computes a new output value given read-only key
+     * @param valueSerde    serializer for new value type
+     * @param storeSupplier user defined state store supplier. Cannot be {@code null}.
+     * @param <VR>          the value type of the result {@code KTable}
+     * @return a {@code KTable} that contains records with unmodified keys and new values (possibly of different type)
+     */
+    <VR> KTable<K, VR> mapValues(final ValueMapperWithKey<? super K, ? super V, ? extends VR> mapperWithKey,
+                                 final Serde<VR> valueSerde,
+                                 final StateStoreSupplier<KeyValueStore> storeSupplier);
 
     /**
      * Print the update records of this {@code KTable} to {@code System.out}.
@@ -1129,6 +1257,83 @@ public interface KTable<K, V> {
      * {@code KTable} the result gets updated.
      * <p>
      * For each {@code KTable} record that finds a corresponding record in the other {@code KTable} the provided
+     * {@link ValueJoinerWithKey} will be called to compute a value (with arbitrary type) for the result record.
+     * The key of the result record is the same as for both joining input records.
+     * Note that provided key in {@link ValueJoinerWithKey} is read-only and should not be modified.
+     * Any key modification can result in corrupt partitioning.
+     * <p>
+     * Note that {@link KeyValue records} with {@code null} values (so-called tombstone records) have delete semantics.
+     * Thus, for input tombstones the provided value-joiner is not called but a tombstone record is forwarded
+     * directly to delete a record in the result {@code KTable} if required (i.e., if there is anything to be deleted).
+     * <p>
+     * Input records with {@code null} key will be dropped and no join computation is performed.
+     * <p>
+     * Example:
+     * <table border='1'>
+     * <tr>
+     * <th>thisKTable</th>
+     * <th>thisState</th>
+     * <th>otherKTable</th>
+     * <th>otherState</th>
+     * <th>result update record</th>
+     * </tr>
+     * <tr>
+     * <td>&lt;K1:A&gt;</td>
+     * <td>&lt;K1:A&gt;</td>
+     * <td></td>
+     * <td></td>
+     * <td></td>
+     * </tr>
+     * <tr>
+     * <td></td>
+     * <td>&lt;K1:A&gt;</td>
+     * <td>&lt;K1:b&gt;</td>
+     * <td>&lt;K1:b&gt;</td>
+     * <td>&lt;K1:ValueJoiner(A,b)&gt;</td>
+     * </tr>
+     * <tr>
+     * <td>&lt;K1:C&gt;</td>
+     * <td>&lt;K1:C&gt;</td>
+     * <td></td>
+     * <td>&lt;K1:b&gt;</td>
+     * <td>&lt;K1:ValueJoiner(C,b)&gt;</td>
+     * </tr>
+     * <tr>
+     * <td></td>
+     * <td>&lt;K1:C&gt;</td>
+     * <td>&lt;K1:null&gt;</td>
+     * <td></td>
+     * <td>&lt;K1:null&gt;</td>
+     * </tr>
+     * </table>
+     * Both input streams (or to be more precise, their underlying source topics) need to have the same number of
+     * partitions.
+     *
+     * @param other         the other {@code KTable} to be joined with this {@code KTable}
+     * @param joinerWithKey a {@link ValueJoinerWithKey} that computes the join result for a pair of matching records
+     *                      given read-only key
+     * @param <VO>          the value type of the other {@code KTable}
+     * @param <VR>          the value type of the result {@code KTable}
+     * @return a {@code KTable} that contains join-records for each key and values computed by the given
+     * {@link ValueJoiner}, one for each matched record-pair with the same key
+     * @see #leftJoin(KTable, ValueJoinerWithKey)
+     * @see #outerJoin(KTable, ValueJoinerWithKey)
+     */
+    <VO, VR> KTable<K, VR> join(final KTable<K, VO> other,
+                                final ValueJoinerWithKey<? super K, ? super V, ? super VO, ? extends VR> joinerWithKey);
+
+    /**
+     * Join records of this {@code KTable} with another {@code KTable}'s records using non-windowed inner equi join.
+     * The join is a primary key join with join attribute {@code thisKTable.key == otherKTable.key}.
+     * The result is an ever updating {@code KTable} that represents the <em>current</em> (i.e., processing time) result
+     * of the join.
+     * <p>
+     * The join is computed by (1) updating the internal state of one {@code KTable} and (2) performing a lookup for a
+     * matching record in the <em>current</em> (i.e., processing time) internal state of the other {@code KTable}.
+     * This happens in a symmetric way, i.e., for each update of either {@code this} or the {@code other} input
+     * {@code KTable} the result gets updated.
+     * <p>
+     * For each {@code KTable} record that finds a corresponding record in the other {@code KTable} the provided
      * {@link ValueJoiner} will be called to compute a value (with arbitrary type) for the result record.
      * The key of the result record is the same as for both joining input records.
      * <p>
@@ -1210,6 +1415,90 @@ public interface KTable<K, V> {
      * {@code KTable} the result gets updated.
      * <p>
      * For each {@code KTable} record that finds a corresponding record in the other {@code KTable} the provided
+     * {@link ValueJoinerWithKey} will be called to compute a value (with arbitrary type) for the result record.
+     * The key of the result record is the same as for both joining input records.
+     * Note that provided key in {@link ValueJoinerWithKey} is read-only and should not be modified.
+     * Any key modification can result in corrupt partitioning.
+     * <p>
+     * Note that {@link KeyValue records} with {@code null} values (so-called tombstone records) have delete semantics.
+     * Thus, for input tombstones the provided value-joiner is not called but a tombstone record is forwarded
+     * directly to delete a record in the result {@code KTable} if required (i.e., if there is anything to be deleted).
+     * <p>
+     * Input records with {@code null} key will be dropped and no join computation is performed.
+     * <p>
+     * Example:
+     * <table border='1'>
+     * <tr>
+     * <th>thisKTable</th>
+     * <th>thisState</th>
+     * <th>otherKTable</th>
+     * <th>otherState</th>
+     * <th>result update record</th>
+     * </tr>
+     * <tr>
+     * <td>&lt;K1:A&gt;</td>
+     * <td>&lt;K1:A&gt;</td>
+     * <td></td>
+     * <td></td>
+     * <td></td>
+     * </tr>
+     * <tr>
+     * <td></td>
+     * <td>&lt;K1:A&gt;</td>
+     * <td>&lt;K1:b&gt;</td>
+     * <td>&lt;K1:b&gt;</td>
+     * <td>&lt;K1:ValueJoiner(A,b)&gt;</td>
+     * </tr>
+     * <tr>
+     * <td>&lt;K1:C&gt;</td>
+     * <td>&lt;K1:C&gt;</td>
+     * <td></td>
+     * <td>&lt;K1:b&gt;</td>
+     * <td>&lt;K1:ValueJoiner(C,b)&gt;</td>
+     * </tr>
+     * <tr>
+     * <td></td>
+     * <td>&lt;K1:C&gt;</td>
+     * <td>&lt;K1:null&gt;</td>
+     * <td></td>
+     * <td>&lt;K1:null&gt;</td>
+     * </tr>
+     * </table>
+     * Both input streams (or to be more precise, their underlying source topics) need to have the same number of
+     * partitions.
+     *
+     * @param other              the other {@code KTable} to be joined with this {@code KTable}
+     * @param joinerWithKey      a {@link ValueJoinerWithKey} that computes the join result for a pair of matching
+     *                           records given read-only key
+     * @param <VO>               the value type of the other {@code KTable}
+     * @param <VR>               the value type of the result {@code KTable}
+     * @param joinSerde          serializer for join result value type
+     * @param queryableStoreName a user-provided name of the underlying {@link KTable} that can be
+     * used to subsequently query the operation results; valid characters are ASCII
+     * alphanumerics, '.', '_' and '-'. If {@code null} then the results cannot be queried
+     * (i.e., that would be equivalent to calling {@link KTable#join(KTable, ValueJoiner)}.
+     * @return a {@code KTable} that contains join-records for each key and values computed by the given
+     * {@link ValueJoiner}, one for each matched record-pair with the same key
+     * @see #leftJoin(KTable, ValueJoinerWithKey)
+     * @see #outerJoin(KTable, ValueJoinerWithKey)
+     */
+    <VO, VR> KTable<K, VR> join(final KTable<K, VO> other,
+                                final ValueJoinerWithKey<? super K, ? super V, ? super VO, ? extends VR> joinerWithKey,
+                                final Serde<VR> joinSerde,
+                                final String queryableStoreName);
+
+    /**
+     * Join records of this {@code KTable} with another {@code KTable}'s records using non-windowed inner equi join.
+     * The join is a primary key join with join attribute {@code thisKTable.key == otherKTable.key}.
+     * The result is an ever updating {@code KTable} that represents the <em>current</em> (i.e., processing time) result
+     * of the join.
+     * <p>
+     * The join is computed by (1) updating the internal state of one {@code KTable} and (2) performing a lookup for a
+     * matching record in the <em>current</em> (i.e., processing time) internal state of the other {@code KTable}.
+     * This happens in a symmetric way, i.e., for each update of either {@code this} or the {@code other} input
+     * {@code KTable} the result gets updated.
+     * <p>
+     * For each {@code KTable} record that finds a corresponding record in the other {@code KTable} the provided
      * {@link ValueJoiner} will be called to compute a value (with arbitrary type) for the result record.
      * The key of the result record is the same as for both joining input records.
      * <p>
@@ -1274,6 +1563,84 @@ public interface KTable<K, V> {
                                 final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
                                 final StateStoreSupplier<KeyValueStore> storeSupplier);
 
+    /**
+     * Join records of this {@code KTable} with another {@code KTable}'s records using non-windowed inner equi join.
+     * The join is a primary key join with join attribute {@code thisKTable.key == otherKTable.key}.
+     * The result is an ever updating {@code KTable} that represents the <em>current</em> (i.e., processing time) result
+     * of the join.
+     * <p>
+     * The join is computed by (1) updating the internal state of one {@code KTable} and (2) performing a lookup for a
+     * matching record in the <em>current</em> (i.e., processing time) internal state of the other {@code KTable}.
+     * This happens in a symmetric way, i.e., for each update of either {@code this} or the {@code other} input
+     * {@code KTable} the result gets updated.
+     * <p>
+     * For each {@code KTable} record that finds a corresponding record in the other {@code KTable} the provided
+     * {@link ValueJoinerWithKey} will be called to compute a value (with arbitrary type) for the result record.
+     * The key of the result record is the same as for both joining input records.
+     * Note that provided key in {@link ValueJoinerWithKey} is read-only and should not be modified.
+     * Any key modification can result in corrupt partitioning.
+     * <p>
+     * Note that {@link KeyValue records} with {@code null} values (so-called tombstone records) have delete semantics.
+     * Thus, for input tombstones the provided value-joiner is not called but a tombstone record is forwarded
+     * directly to delete a record in the result {@code KTable} if required (i.e., if there is anything to be deleted).
+     * <p>
+     * Input records with {@code null} key will be dropped and no join computation is performed.
+     * <p>
+     * Example:
+     * <table border='1'>
+     * <tr>
+     * <th>thisKTable</th>
+     * <th>thisState</th>
+     * <th>otherKTable</th>
+     * <th>otherState</th>
+     * <th>result update record</th>
+     * </tr>
+     * <tr>
+     * <td>&lt;K1:A&gt;</td>
+     * <td>&lt;K1:A&gt;</td>
+     * <td></td>
+     * <td></td>
+     * <td></td>
+     * </tr>
+     * <tr>
+     * <td></td>
+     * <td>&lt;K1:A&gt;</td>
+     * <td>&lt;K1:b&gt;</td>
+     * <td>&lt;K1:b&gt;</td>
+     * <td>&lt;K1:ValueJoiner(A,b)&gt;</td>
+     * </tr>
+     * <tr>
+     * <td>&lt;K1:C&gt;</td>
+     * <td>&lt;K1:C&gt;</td>
+     * <td></td>
+     * <td>&lt;K1:b&gt;</td>
+     * <td>&lt;K1:ValueJoiner(C,b)&gt;</td>
+     * </tr>
+     * <tr>
+     * <td></td>
+     * <td>&lt;K1:C&gt;</td>
+     * <td>&lt;K1:null&gt;</td>
+     * <td></td>
+     * <td>&lt;K1:null&gt;</td>
+     * </tr>
+     * </table>
+     * Both input streams (or to be more precise, their underlying source topics) need to have the same number of
+     * partitions.
+     *
+     * @param other         the other {@code KTable} to be joined with this {@code KTable}
+     * @param joinerWithKey a {@link ValueJoinerWithKey} that computes the join result for a pair of matching records
+     *                      given read-only key
+     * @param <VO>          the value type of the other {@code KTable}
+     * @param <VR>          the value type of the result {@code KTable}
+     * @param storeSupplier user defined state store supplier. Cannot be {@code null}.
+     * @return a {@code KTable} that contains join-records for each key and values computed by the given
+     * {@link ValueJoiner}, one for each matched record-pair with the same key
+     * @see #leftJoin(KTable, ValueJoinerWithKey)
+     * @see #outerJoin(KTable, ValueJoinerWithKey)
+     */
+    <VO, VR> KTable<K, VR> join(final KTable<K, VO> other,
+                                final ValueJoinerWithKey<? super K, ? super V, ? super VO, ? extends VR> joinerWithKey,
+                                final StateStoreSupplier<KeyValueStore> storeSupplier);
 
     /**
      * Join records of this {@code KTable} (left input) with another {@code KTable}'s (right input) records using
@@ -1356,6 +1723,91 @@ public interface KTable<K, V> {
      */
     <VO, VR> KTable<K, VR> leftJoin(final KTable<K, VO> other,
                                     final ValueJoiner<? super V, ? super VO, ? extends VR> joiner);
+
+    /**
+     * Join records of this {@code KTable} (left input) with another {@code KTable}'s (right input) records using
+     * non-windowed left equi join.
+     * The join is a primary key join with join attribute {@code thisKTable.key == otherKTable.key}.
+     * In contrast to {@link #join(KTable, ValueJoinerWithKey) inner-join}, all records from left {@code KTable} will
+     * produce an output record (cf. below).
+     * The result is an ever updating {@code KTable} that represents the <em>current</em> (i.e., processing time) result
+     * of the join.
+     * <p>
+     * The join is computed by (1) updating the internal state of one {@code KTable} and (2) performing a lookup for a
+     * matching record in the <em>current</em> (i.e., processing time) internal state of the other {@code KTable}.
+     * This happens in a symmetric way, i.e., for each update of either {@code this} or the {@code other} input
+     * {@code KTable} the result gets updated.
+     * <p>
+     * For each {@code KTable} record that finds a corresponding record in the other {@code KTable}'s state the
+     * provided {@link ValueJoinerWithKey} will be called to compute a value (with arbitrary type) for the result record.
+     * Additionally, for each record of left {@code KTable} that does not find a corresponding record in the
+     * right {@code KTable}'s state the provided {@link ValueJoinerWithKey} will be called with {@code rightValue =
+     * null} to compute a value (with arbitrary type) for the result record.
+     * Note that provided key in {@link ValueJoinerWithKey} is read-only and should not be modified.
+     * Any key modification can result in corrupt partitioning.
+     * The key of the result record is the same as for both joining input records.
+     * <p>
+     * Note that {@link KeyValue records} with {@code null} values (so-called tombstone records) have delete semantics.
+     * For example, for left input tombstones the provided value-joiner is not called but a tombstone record is
+     * forwarded directly to delete a record in the result {@code KTable} if required (i.e., if there is anything to be
+     * deleted).
+     * <p>
+     * Input records with {@code null} key will be dropped and no join computation is performed.
+     * <p>
+     * Example:
+     * <table border='1'>
+     * <tr>
+     * <th>thisKTable</th>
+     * <th>thisState</th>
+     * <th>otherKTable</th>
+     * <th>otherState</th>
+     * <th>result update record</th>
+     * </tr>
+     * <tr>
+     * <td>&lt;K1:A&gt;</td>
+     * <td>&lt;K1:A&gt;</td>
+     * <td></td>
+     * <td></td>
+     * <td>&lt;K1:ValueJoiner(A,null)&gt;</td>
+     * </tr>
+     * <tr>
+     * <td></td>
+     * <td>&lt;K1:A&gt;</td>
+     * <td>&lt;K1:b&gt;</td>
+     * <td>&lt;K1:b&gt;</td>
+     * <td>&lt;K1:ValueJoiner(A,b)&gt;</td>
+     * </tr>
+     * <tr>
+     * <td>&lt;K1:null&gt;</td>
+     * <td></td>
+     * <td></td>
+     * <td>&lt;K1:b&gt;</td>
+     * <td>&lt;K1:null&gt;</td>
+     * </tr>
+     * <tr>
+     * <td></td>
+     * <td></td>
+     * <td>&lt;K1:null&gt;</td>
+     * <td></td>
+     * <td></td>
+     * </tr>
+     * </table>
+     * Both input streams (or to be more precise, their underlying source topics) need to have the same number of
+     * partitions.
+     *
+     * @param other         the other {@code KTable} to be joined with this {@code KTable}
+     * @param joinerWithKey a {@link ValueJoinerWithKey} that computes the join result for a pair of matching records
+     *                      given read-only key
+     * @param <VO>          the value type of the other {@code KTable}
+     * @param <VR>          the value type of the result {@code KTable}
+     * @return a {@code KTable} that contains join-records for each key and values computed by the given
+     * {@link ValueJoiner}, one for each matched record-pair with the same key plus one for each non-matching record of
+     * left {@code KTable}
+     * @see #join(KTable, ValueJoiner)
+     * @see #outerJoin(KTable, ValueJoiner)
+     */
+    <VO, VR> KTable<K, VR> leftJoin(final KTable<K, VO> other,
+                                    final ValueJoinerWithKey<? super K, ? super V, ? super VO, ? extends VR> joinerWithKey);
 
     /**
      * Join records of this {@code KTable} (left input) with another {@code KTable}'s (right input) records using
@@ -1450,6 +1902,98 @@ public interface KTable<K, V> {
      * Join records of this {@code KTable} (left input) with another {@code KTable}'s (right input) records using
      * non-windowed left equi join.
      * The join is a primary key join with join attribute {@code thisKTable.key == otherKTable.key}.
+     * In contrast to {@link #join(KTable, ValueJoinerWithKey) inner-join}, all records from left {@code KTable} will
+     * produce an output record (cf. below).
+     * The result is an ever updating {@code KTable} that represents the <em>current</em> (i.e., processing time) result
+     * of the join.
+     * <p>
+     * The join is computed by (1) updating the internal state of one {@code KTable} and (2) performing a lookup for a
+     * matching record in the <em>current</em> (i.e., processing time) internal state of the other {@code KTable}.
+     * This happens in a symmetric way, i.e., for each update of either {@code this} or the {@code other} input
+     * {@code KTable} the result gets updated.
+     * <p>
+     * For each {@code KTable} record that finds a corresponding record in the other {@code KTable}'s state the
+     * provided {@link ValueJoinerWithKey} will be called to compute a value (with arbitrary type) for the result record.
+     * Note that provided key in {@link ValueJoinerWithKey} is read-only and should not be modified.
+     * Any key modification can result in corrupt partitioning.
+     * Additionally, for each record of left {@code KTable} that does not find a corresponding record in the
+     * right {@code KTable}'s state the provided {@link ValueJoinerWithKey} will be called with {@code rightValue =
+     * null} to compute a value (with arbitrary type) for the result record.
+     * The key of the result record is the same as for both joining input records.
+     * <p>
+     * Note that {@link KeyValue records} with {@code null} values (so-called tombstone records) have delete semantics.
+     * For example, for left input tombstones the provided value-joiner is not called but a tombstone record is
+     * forwarded directly to delete a record in the result {@code KTable} if required (i.e., if there is anything to be
+     * deleted).
+     * <p>
+     * Input records with {@code null} key will be dropped and no join computation is performed.
+     * <p>
+     * Example:
+     * <table border='1'>
+     * <tr>
+     * <th>thisKTable</th>
+     * <th>thisState</th>
+     * <th>otherKTable</th>
+     * <th>otherState</th>
+     * <th>result update record</th>
+     * </tr>
+     * <tr>
+     * <td>&lt;K1:A&gt;</td>
+     * <td>&lt;K1:A&gt;</td>
+     * <td></td>
+     * <td></td>
+     * <td>&lt;K1:ValueJoiner(A,null)&gt;</td>
+     * </tr>
+     * <tr>
+     * <td></td>
+     * <td>&lt;K1:A&gt;</td>
+     * <td>&lt;K1:b&gt;</td>
+     * <td>&lt;K1:b&gt;</td>
+     * <td>&lt;K1:ValueJoiner(A,b)&gt;</td>
+     * </tr>
+     * <tr>
+     * <td>&lt;K1:null&gt;</td>
+     * <td></td>
+     * <td></td>
+     * <td>&lt;K1:b&gt;</td>
+     * <td>&lt;K1:null&gt;</td>
+     * </tr>
+     * <tr>
+     * <td></td>
+     * <td></td>
+     * <td>&lt;K1:null&gt;</td>
+     * <td></td>
+     * <td></td>
+     * </tr>
+     * </table>
+     * Both input streams (or to be more precise, their underlying source topics) need to have the same number of
+     * partitions.
+     *
+     * @param other              the other {@code KTable} to be joined with this {@code KTable}
+     * @param joinerWithKey      a {@link ValueJoinerWithKey} that computes the join result for a pair of matching
+     *                           records given read-only key
+     * @param <VO>               the value type of the other {@code KTable}
+     * @param <VR>               the value type of the result {@code KTable}
+     * @param joinSerde          serializer for join result value type
+     * @param queryableStoreName a user-provided name of the underlying {@link KTable} that can be used to subsequently
+     *                           query the operation results; valid characters are ASCII alphanumerics, '.', '_'
+     *                           and '-'. If {@code null} then the results cannot be queried (i.e., that would be
+     *                           equivalent to calling {@link KTable#leftJoin(KTable, ValueJoinerWithKey)}.
+     * @return a {@code KTable} that contains join-records for each key and values computed by the given
+     * {@link ValueJoiner}, one for each matched record-pair with the same key plus one for each non-matching record of
+     * left {@code KTable}
+     * @see #join(KTable, ValueJoinerWithKey)
+     * @see #outerJoin(KTable, ValueJoinerWithKey)
+     */
+    <VO, VR> KTable<K, VR> leftJoin(final KTable<K, VO> other,
+                                    final ValueJoinerWithKey<? super K, ? super V, ? super VO, ? extends VR> joinerWithKey,
+                                    final Serde<VR> joinSerde,
+                                    final String queryableStoreName);
+
+    /**
+     * Join records of this {@code KTable} (left input) with another {@code KTable}'s (right input) records using
+     * non-windowed left equi join.
+     * The join is a primary key join with join attribute {@code thisKTable.key == otherKTable.key}.
      * In contrast to {@link #join(KTable, ValueJoiner) inner-join}, all records from left {@code KTable} will produce
      * an output record (cf. below).
      * The result is an ever updating {@code KTable} that represents the <em>current</em> (i.e., processing time) result
@@ -1528,6 +2072,93 @@ public interface KTable<K, V> {
      */
     <VO, VR> KTable<K, VR> leftJoin(final KTable<K, VO> other,
                                     final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
+                                    final StateStoreSupplier<KeyValueStore> storeSupplier);
+
+    /**
+     * Join records of this {@code KTable} (left input) with another {@code KTable}'s (right input) records using
+     * non-windowed left equi join.
+     * The join is a primary key join with join attribute {@code thisKTable.key == otherKTable.key}.
+     * In contrast to {@link #join(KTable, ValueJoinerWithKey) inner-join}, all records from left {@code KTable} will produce
+     * an output record (cf. below).
+     * The result is an ever updating {@code KTable} that represents the <em>current</em> (i.e., processing time) result
+     * of the join.
+     * <p>
+     * The join is computed by (1) updating the internal state of one {@code KTable} and (2) performing a lookup for a
+     * matching record in the <em>current</em> (i.e., processing time) internal state of the other {@code KTable}.
+     * This happens in a symmetric way, i.e., for each update of either {@code this} or the {@code other} input
+     * {@code KTable} the result gets updated.
+     * <p>
+     * For each {@code KTable} record that finds a corresponding record in the other {@code KTable}'s state the
+     * provided {@link ValueJoinerWithKey} will be called to compute a value (with arbitrary type) for the result record.
+     * Additionally, for each record of left {@code KTable} that does not find a corresponding record in the
+     * right {@code KTable}'s state the provided {@link ValueJoinerWithKey} will be called with {@code rightValue =
+     * null} to compute a value (with arbitrary type) for the result record.
+     * Note that provided key in {@link ValueJoinerWithKey} is read-only and should not be modified.
+     * Any key modification can result in corrupt partitioning.
+     * The key of the result record is the same as for both joining input records.
+     * <p>
+     * Note that {@link KeyValue records} with {@code null} values (so-called tombstone records) have delete semantics.
+     * For example, for left input tombstones the provided value-joiner is not called but a tombstone record is
+     * forwarded directly to delete a record in the result {@code KTable} if required (i.e., if there is anything to be
+     * deleted).
+     * <p>
+     * Input records with {@code null} key will be dropped and no join computation is performed.
+     * <p>
+     * Example:
+     * <table border='1'>
+     * <tr>
+     * <th>thisKTable</th>
+     * <th>thisState</th>
+     * <th>otherKTable</th>
+     * <th>otherState</th>
+     * <th>result update record</th>
+     * </tr>
+     * <tr>
+     * <td>&lt;K1:A&gt;</td>
+     * <td>&lt;K1:A&gt;</td>
+     * <td></td>
+     * <td></td>
+     * <td>&lt;K1:ValueJoiner(A,null)&gt;</td>
+     * </tr>
+     * <tr>
+     * <td></td>
+     * <td>&lt;K1:A&gt;</td>
+     * <td>&lt;K1:b&gt;</td>
+     * <td>&lt;K1:b&gt;</td>
+     * <td>&lt;K1:ValueJoiner(A,b)&gt;</td>
+     * </tr>
+     * <tr>
+     * <td>&lt;K1:null&gt;</td>
+     * <td></td>
+     * <td></td>
+     * <td>&lt;K1:b&gt;</td>
+     * <td>&lt;K1:null&gt;</td>
+     * </tr>
+     * <tr>
+     * <td></td>
+     * <td></td>
+     * <td>&lt;K1:null&gt;</td>
+     * <td></td>
+     * <td></td>
+     * </tr>
+     * </table>
+     * Both input streams (or to be more precise, their underlying source topics) need to have the same number of
+     * partitions.
+     *
+     * @param other         the other {@code KTable} to be joined with this {@code KTable}
+     * @param joinerWithKey a {@link ValueJoinerWithKey} that computes the join result for a pair of matching records
+     *                      given read-only key
+     * @param <VO>          the value type of the other {@code KTable}
+     * @param <VR>          the value type of the result {@code KTable}
+     * @param storeSupplier user defined state store supplier. Cannot be {@code null}.
+     * @return a {@code KTable} that contains join-records for each key and values computed by the given
+     * {@link ValueJoiner}, one for each matched record-pair with the same key plus one for each non-matching record of
+     * left {@code KTable}
+     * @see #join(KTable, ValueJoinerWithKey)
+     * @see #outerJoin(KTable, ValueJoinerWithKey)
+     */
+    <VO, VR> KTable<K, VR> leftJoin(final KTable<K, VO> other,
+                                    final ValueJoinerWithKey<? super K, ? super V, ? super VO, ? extends VR> joinerWithKey,
                                     final StateStoreSupplier<KeyValueStore> storeSupplier);
 
 
@@ -1611,6 +2242,90 @@ public interface KTable<K, V> {
      */
     <VO, VR> KTable<K, VR> outerJoin(final KTable<K, VO> other,
                                      final ValueJoiner<? super V, ? super VO, ? extends VR> joiner);
+
+    /**
+     * Join records of this {@code KTable} (left input) with another {@code KTable}'s (right input) records using
+     * non-windowed outer equi join.
+     * The join is a primary key join with join attribute {@code thisKTable.key == otherKTable.key}.
+     * In contrast to {@link #join(KTable, ValueJoinerWithKey) inner-join} or {@link #leftJoin(KTable, ValueJoinerWithKey)
+     * left-join}, all records from both input {@code KTable}s will produce an output record (cf. below).
+     * The result is an ever updating {@code KTable} that represents the <em>current</em> (i.e., processing time) result
+     * of the join.
+     * <p>
+     * The join is computed by (1) updating the internal state of one {@code KTable} and (2) performing a lookup for a
+     * matching record in the <em>current</em> (i.e., processing time) internal state of the other {@code KTable}.
+     * This happens in a symmetric way, i.e., for each update of either {@code this} or the {@code other} input
+     * {@code KTable} the result gets updated.
+     * <p>
+     * For each {@code KTable} record that finds a corresponding record in the other {@code KTable}'s state the
+     * provided {@link ValueJoinerWithKey} will be called to compute a value (with arbitrary type) for the result record.
+     * Additionally, for each record that does not find a corresponding record in the corresponding other
+     * {@code KTable}'s state the provided {@link ValueJoinerWithKey} will be called with {@code null} value for the
+     * corresponding other value to compute a value (with arbitrary type) for the result record.
+     * Note that provided key in {@link ValueJoinerWithKey} is read-only and should not be modified.
+     * Any key modification can result in corrupt partitioning.
+     * The key of the result record is the same as for both joining input records.
+     * <p>
+     * Note that {@link KeyValue records} with {@code null} values (so-called tombstone records) have delete semantics.
+     * Thus, for input tombstones the provided value-joiner is not called but a tombstone record is forwarded directly
+     * to delete a record in the result {@code KTable} if required (i.e., if there is anything to be deleted).
+     * <p>
+     * Input records with {@code null} key will be dropped and no join computation is performed.
+     * <p>
+     * Example:
+     * <table border='1'>
+     * <tr>
+     * <th>thisKTable</th>
+     * <th>thisState</th>
+     * <th>otherKTable</th>
+     * <th>otherState</th>
+     * <th>result update record</th>
+     * </tr>
+     * <tr>
+     * <td>&lt;K1:A&gt;</td>
+     * <td>&lt;K1:A&gt;</td>
+     * <td></td>
+     * <td></td>
+     * <td>&lt;K1:ValueJoiner(A,null)&gt;</td>
+     * </tr>
+     * <tr>
+     * <td></td>
+     * <td>&lt;K1:A&gt;</td>
+     * <td>&lt;K1:b&gt;</td>
+     * <td>&lt;K1:b&gt;</td>
+     * <td>&lt;K1:ValueJoiner(A,b)&gt;</td>
+     * </tr>
+     * <tr>
+     * <td>&lt;K1:null&gt;</td>
+     * <td></td>
+     * <td></td>
+     * <td>&lt;K1:b&gt;</td>
+     * <td>&lt;K1:ValueJoiner(null,b)&gt;</td>
+     * </tr>
+     * <tr>
+     * <td></td>
+     * <td></td>
+     * <td>&lt;K1:null&gt;</td>
+     * <td></td>
+     * <td>&lt;K1:null&gt;</td>
+     * </tr>
+     * </table>
+     * Both input streams (or to be more precise, their underlying source topics) need to have the same number of
+     * partitions.
+     *
+     * @param other         the other {@code KTable} to be joined with this {@code KTable}
+     * @param joinerWithKey a {@link ValueJoinerWithKey} that computes the join result for a pair of matching records
+     *                      given read-only key
+     * @param <VO>          the value type of the other {@code KTable}
+     * @param <VR>          the value type of the result {@code KTable}
+     * @return a {@code KTable} that contains join-records for each key and values computed by the given
+     * {@link ValueJoiner}, one for each matched record-pair with the same key plus one for each non-matching record of
+     * both {@code KTable}s
+     * @see #join(KTable, ValueJoiner)
+     * @see #leftJoin(KTable, ValueJoiner)
+     */
+    <VO, VR> KTable<K, VR> outerJoin(final KTable<K, VO> other,
+                                     final ValueJoinerWithKey<? super K, ? super V, ? super VO, ? extends VR> joinerWithKey);
 
     /**
      * Join records of this {@code KTable} (left input) with another {@code KTable}'s (right input) records using
@@ -1704,6 +2419,97 @@ public interface KTable<K, V> {
      * Join records of this {@code KTable} (left input) with another {@code KTable}'s (right input) records using
      * non-windowed outer equi join.
      * The join is a primary key join with join attribute {@code thisKTable.key == otherKTable.key}.
+     * In contrast to {@link #join(KTable, ValueJoinerWithKey) inner-join} or {@link #leftJoin(KTable, ValueJoinerWithKey)
+     * left-join}, all records from both input {@code KTable}s will produce an output record (cf. below).
+     * The result is an ever updating {@code KTable} that represents the <em>current</em> (i.e., processing time) result
+     * of the join.
+     * <p>
+     * The join is computed by (1) updating the internal state of one {@code KTable} and (2) performing a lookup for a
+     * matching record in the <em>current</em> (i.e., processing time) internal state of the other {@code KTable}.
+     * This happens in a symmetric way, i.e., for each update of either {@code this} or the {@code other} input
+     * {@code KTable} the result gets updated.
+     * <p>
+     * For each {@code KTable} record that finds a corresponding record in the other {@code KTable}'s state the
+     * provided {@link ValueJoinerWithKey} will be called to compute a value (with arbitrary type) for the result record.
+     * Additionally, for each record that does not find a corresponding record in the corresponding other
+     * {@code KTable}'s state the provided {@link ValueJoinerWithKey} will be called with {@code null} value for the
+     * corresponding other value to compute a value (with arbitrary type) for the result record.
+     * Note that provided key in {@link ValueJoinerWithKey} is read-only and should not be modified.
+     * Any key modification can result in corrupt partitioning.
+     * The key of the result record is the same as for both joining input records.
+     * <p>
+     * Note that {@link KeyValue records} with {@code null} values (so-called tombstone records) have delete semantics.
+     * Thus, for input tombstones the provided value-joiner is not called but a tombstone record is forwarded directly
+     * to delete a record in the result {@code KTable} if required (i.e., if there is anything to be deleted).
+     * <p>
+     * Input records with {@code null} key will be dropped and no join computation is performed.
+     * <p>
+     * Example:
+     * <table border='1'>
+     * <tr>
+     * <th>thisKTable</th>
+     * <th>thisState</th>
+     * <th>otherKTable</th>
+     * <th>otherState</th>
+     * <th>result update record</th>
+     * </tr>
+     * <tr>
+     * <td>&lt;K1:A&gt;</td>
+     * <td>&lt;K1:A&gt;</td>
+     * <td></td>
+     * <td></td>
+     * <td>&lt;K1:ValueJoiner(A,null)&gt;</td>
+     * </tr>
+     * <tr>
+     * <td></td>
+     * <td>&lt;K1:A&gt;</td>
+     * <td>&lt;K1:b&gt;</td>
+     * <td>&lt;K1:b&gt;</td>
+     * <td>&lt;K1:ValueJoiner(A,b)&gt;</td>
+     * </tr>
+     * <tr>
+     * <td>&lt;K1:null&gt;</td>
+     * <td></td>
+     * <td></td>
+     * <td>&lt;K1:b&gt;</td>
+     * <td>&lt;K1:ValueJoiner(null,b)&gt;</td>
+     * </tr>
+     * <tr>
+     * <td></td>
+     * <td></td>
+     * <td>&lt;K1:null&gt;</td>
+     * <td></td>
+     * <td>&lt;K1:null&gt;</td>
+     * </tr>
+     * </table>
+     * Both input streams (or to be more precise, their underlying source topics) need to have the same number of
+     * partitions.
+     *
+     * @param other              the other {@code KTable} to be joined with this {@code KTable}
+     * @param joinerWithKey      a {@link ValueJoinerWithKey} that computes the join result for a pair of matching
+     *                           records given read-only key
+     * @param <VO>               the value type of the other {@code KTable}
+     * @param <VR>               the value type of the result {@code KTable}
+     * @param joinSerde          serializer for join result value type
+     * @param queryableStoreName a user-provided name of the underlying {@link KTable} that can be
+     * used to subsequently query the operation results; valid characters are ASCII
+     * alphanumerics, '.', '_' and '-'. If {@code null} then the results cannot be queried
+     * (i.e., that would be equivalent to calling {@link KTable#outerJoin(KTable, ValueJoiner)}.
+     * @return a {@code KTable} that contains join-records for each key and values computed by the given
+     * {@link ValueJoiner}, one for each matched record-pair with the same key plus one for each non-matching record of
+     * both {@code KTable}s
+     * @see #join(KTable, ValueJoinerWithKey)
+     * @see #leftJoin(KTable, ValueJoinerWithKey)
+     */
+    <VO, VR> KTable<K, VR> outerJoin(final KTable<K, VO> other,
+                                     final ValueJoinerWithKey<? super K, ? super V, ? super VO, ? extends VR> joinerWithKey,
+                                     final Serde<VR> joinSerde,
+                                     final String queryableStoreName);
+
+    /**
+     * Join records of this {@code KTable} (left input) with another {@code KTable}'s (right input) records using
+     * non-windowed outer equi join.
+     * The join is a primary key join with join attribute {@code thisKTable.key == otherKTable.key}.
      * In contrast to {@link #join(KTable, ValueJoiner) inner-join} or {@link #leftJoin(KTable, ValueJoiner) left-join},
      * all records from both input {@code KTable}s will produce an output record (cf. below).
      * The result is an ever updating {@code KTable} that represents the <em>current</em> (i.e., processing time) result
@@ -1781,6 +2587,92 @@ public interface KTable<K, V> {
      */
     <VO, VR> KTable<K, VR> outerJoin(final KTable<K, VO> other,
                                      final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
+                                     final StateStoreSupplier<KeyValueStore> storeSupplier);
+
+    /**
+     * Join records of this {@code KTable} (left input) with another {@code KTable}'s (right input) records using
+     * non-windowed outer equi join.
+     * The join is a primary key join with join attribute {@code thisKTable.key == otherKTable.key}.
+     * In contrast to {@link #join(KTable, ValueJoinerWithKey) inner-join} or {@link #leftJoin(KTable, ValueJoinerWithKey)
+     * left-join}, all records from both input {@code KTable}s will produce an output record (cf. below).
+     * The result is an ever updating {@code KTable} that represents the <em>current</em> (i.e., processing time) result
+     * of the join.
+     * <p>
+     * The join is computed by (1) updating the internal state of one {@code KTable} and (2) performing a lookup for a
+     * matching record in the <em>current</em> (i.e., processing time) internal state of the other {@code KTable}.
+     * This happens in a symmetric way, i.e., for each update of either {@code this} or the {@code other} input
+     * {@code KTable} the result gets updated.
+     * <p>
+     * For each {@code KTable} record that finds a corresponding record in the other {@code KTable}'s state the
+     * provided {@link ValueJoinerWithKey} will be called to compute a value (with arbitrary type) for the result record.
+     * Additionally, for each record that does not find a corresponding record in the corresponding other
+     * {@code KTable}'s state the provided {@link ValueJoinerWithKey} will be called with {@code null} value for the
+     * corresponding other value to compute a value (with arbitrary type) for the result record.
+     * Note that provided key in {@link ValueJoinerWithKey} is read-only and should not be modified.
+     * Any key modification can result in corrupt partitioning.
+     * The key of the result record is the same as for both joining input records.
+     * <p>
+     * Note that {@link KeyValue records} with {@code null} values (so-called tombstone records) have delete semantics.
+     * Thus, for input tombstones the provided value-joiner is not called but a tombstone record is forwarded directly
+     * to delete a record in the result {@code KTable} if required (i.e., if there is anything to be deleted).
+     * <p>
+     * Input records with {@code null} key will be dropped and no join computation is performed.
+     * <p>
+     * Example:
+     * <table border='1'>
+     * <tr>
+     * <th>thisKTable</th>
+     * <th>thisState</th>
+     * <th>otherKTable</th>
+     * <th>otherState</th>
+     * <th>result update record</th>
+     * </tr>
+     * <tr>
+     * <td>&lt;K1:A&gt;</td>
+     * <td>&lt;K1:A&gt;</td>
+     * <td></td>
+     * <td></td>
+     * <td>&lt;K1:ValueJoiner(A,null)&gt;</td>
+     * </tr>
+     * <tr>
+     * <td></td>
+     * <td>&lt;K1:A&gt;</td>
+     * <td>&lt;K1:b&gt;</td>
+     * <td>&lt;K1:b&gt;</td>
+     * <td>&lt;K1:ValueJoiner(A,b)&gt;</td>
+     * </tr>
+     * <tr>
+     * <td>&lt;K1:null&gt;</td>
+     * <td></td>
+     * <td></td>
+     * <td>&lt;K1:b&gt;</td>
+     * <td>&lt;K1:ValueJoiner(null,b)&gt;</td>
+     * </tr>
+     * <tr>
+     * <td></td>
+     * <td></td>
+     * <td>&lt;K1:null&gt;</td>
+     * <td></td>
+     * <td>&lt;K1:null&gt;</td>
+     * </tr>
+     * </table>
+     * Both input streams (or to be more precise, their underlying source topics) need to have the same number of
+     * partitions.
+     *
+     * @param other         the other {@code KTable} to be joined with this {@code KTable}
+     * @param joinerWithKey a {@link ValueJoinerWithKey} that computes the join result for a pair of matching records
+     *                      given read-only key
+     * @param <VO>          the value type of the other {@code KTable}
+     * @param <VR>          the value type of the result {@code KTable}
+     * @param storeSupplier user defined state store supplier. Cannot be {@code null}.
+     * @return a {@code KTable} that contains join-records for each key and values computed by the given
+     * {@link ValueJoiner}, one for each matched record-pair with the same key plus one for each non-matching record of
+     * both {@code KTable}s
+     * @see #join(KTable, ValueJoiner)
+     * @see #leftJoin(KTable, ValueJoiner)
+     */
+    <VO, VR> KTable<K, VR> outerJoin(final KTable<K, VO> other,
+                                     final ValueJoinerWithKey<? super K, ? super V, ? super VO, ? extends VR> joinerWithKey,
                                      final StateStoreSupplier<KeyValueStore> storeSupplier);
 
     /**
