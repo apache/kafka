@@ -32,6 +32,7 @@ import org.apache.kafka.streams.processor.internals.GlobalStreamThread;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.MockMetricsReporter;
+import org.apache.kafka.test.MockStateRestoreListener;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Assert;
@@ -251,6 +252,19 @@ public class KafkaStreamsTest {
         } catch (final IllegalStateException e) {
             Assert.assertEquals("Cannot start again.", e.getMessage());
             throw e;
+        } finally {
+            streams.close();
+        }
+    }
+
+    @Test
+    public void shouldNotSetGlobalRestoreListenerAfterStarting() {
+        streams.start();
+        try {
+            streams.setGlobalStateRestoreListener(new MockStateRestoreListener());
+            fail("Should throw an IllegalStateException");
+        } catch (final IllegalStateException e) {
+            Assert.assertEquals("Can only set the GlobalRestoreListener in the CREATED state", e.getMessage());
         } finally {
             streams.close();
         }

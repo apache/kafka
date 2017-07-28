@@ -40,6 +40,7 @@ import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.MockClientSupplier;
 import org.apache.kafka.test.MockProcessorSupplier;
+import org.apache.kafka.test.MockStateRestoreListener;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
@@ -198,7 +199,7 @@ public class StreamThreadStateStoreProviderTest {
             Collections.singletonList(new TopicPartition(topicName, taskId.partition)),
             topology,
             clientSupplier.consumer,
-            new StoreChangelogReader(clientSupplier.restoreConsumer, Time.SYSTEM, 5000),
+            new StoreChangelogReader(clientSupplier.restoreConsumer, Time.SYSTEM, 5000, new MockStateRestoreListener()),
             streamsConfig,
             new MockStreamsMetrics(new Metrics()),
             stateDirectory,

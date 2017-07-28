@@ -44,6 +44,8 @@ import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskIdFormatException;
 import org.apache.kafka.streams.processor.PartitionGrouper;
+import org.apache.kafka.streams.processor.StateRestoreListener;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.state.HostInfo;
 import org.apache.kafka.streams.state.internals.ThreadCache;
@@ -183,7 +185,9 @@ public class StreamThread extends Thread {
 
             final long start = time.milliseconds();
             try {
-                storeChangelogReader = new StoreChangelogReader(getName(), restoreConsumer, time, requestTimeOut);
+                storeChangelogReader =
+                    new StoreChangelogReader(getName(), restoreConsumer, time, requestTimeOut,
+                                             globalStateRestoreListener);
                 setState(State.ASSIGNING_PARTITIONS);
                 // do this first as we may have suspended standby tasks that
                 // will become active or vice versa
@@ -438,6 +442,7 @@ public class StreamThread extends Thread {
     private final TaskCreator taskCreator = new TaskCreator();
 
     final ConsumerRebalanceListener rebalanceListener;
+    private StateRestoreListener globalStateRestoreListener;
     private final static int UNLIMITED_RECORDS = -1;
 
     public StreamThread(final InternalTopologyBuilder builder,
@@ -993,6 +998,16 @@ public class StreamThread extends Thread {
      */
     public void setStateListener(final StreamThread.StateListener listener) {
         stateListener = listener;
+    }
+
+    /**
+     * Set the listener invoked at the beginning, end of batch updates and the conclusion of
+     * restoring a {@link StateStore}.
+     *
+     * @param globalStateRestoreListener  listener for capturing state store restoration status.
+     */
+    public void setGlobalStateRestoreListener(final StateRestoreListener globalStateRestoreListener) {
+        this.globalStateRestoreListener = globalStateRestoreListener;
     }
 
     /**

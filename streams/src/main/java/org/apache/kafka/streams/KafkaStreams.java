@@ -36,6 +36,7 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.processor.Processor;
+import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TopologyBuilder;
@@ -143,6 +144,7 @@ public class KafkaStreams {
     private final String logPrefix;
     private final StreamsMetadataState streamsMetadataState;
     private final StreamsConfig config;
+    private StateRestoreListener stateRestoreListener;
     private final StateDirectory stateDirectory;
 
     // container states
@@ -773,6 +775,24 @@ public class KafkaStreams {
                 }
             } else {
                 throw new IllegalStateException("Can only set UncaughtExceptionHandler in CREATED state.");
+            }
+        }
+    }
+
+    /**
+     * Set the listener which is triggered whenever a {@link StateStore} is being restored in order to resume
+     * processing.
+     *
+     * @param globalStateRestoreListener The listener triggered when {@link StateStore} is being restored.
+     */
+    public void setGlobalStateRestoreListener(final StateRestoreListener globalStateRestoreListener) {
+        synchronized (stateLock) {
+            if (state == State.CREATED) {
+                for (StreamThread thread : threads) {
+                    thread.setGlobalStateRestoreListener(globalStateRestoreListener);
+                }
+            } else {
+                throw new IllegalStateException("Can only set the GlobalRestoreListener in the CREATED state");
             }
         }
     }
