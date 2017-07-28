@@ -41,7 +41,7 @@ import java.util.regex.Pattern;
  * A topology is an acyclic graph of sources, processors, and sinks.
  * A {@link SourceNode source} is a node in the graph that consumes one or more Kafka topics and forwards them to its
  * successor nodes.
- * A {@link Processor processor} is a node in the graph that receives input records from upstream nodes, processes that
+ * A {@link Processor processor} is a node in the graph that receives input records from upstream nodes, processes the
  * records, and optionally forwarding new records to one or all of its downstream nodes.
  * Finally, a {@link SinkNode sink} is a node in the graph that receives records from upstream nodes and writes them to
  * a Kafka topic.
@@ -568,7 +568,7 @@ public class Topology {
      * @param processorName         the name of the {@link ProcessorSupplier}
      * @param stateUpdateSupplier   the instance of {@link ProcessorSupplier}
      * @return itself
-     * @throws TopologyException TODO
+     * @throws TopologyException if the processor of state is already registered
      */
     public synchronized Topology addGlobalStore(final StateStoreSupplier<KeyValueStore> storeSupplier,
                                                 final String sourceName,
@@ -604,7 +604,7 @@ public class Topology {
      * @param processorName         the name of the {@link ProcessorSupplier}
      * @param stateUpdateSupplier   the instance of {@link ProcessorSupplier}
      * @return itself
-     * @throws TopologyException TODO
+     * @throws TopologyException if the processor of state is already registered
      */
     public synchronized Topology addGlobalStore(final StateStoreSupplier<KeyValueStore> storeSupplier,
                                                 final String sourceName,

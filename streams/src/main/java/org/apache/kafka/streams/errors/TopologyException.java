@@ -18,7 +18,7 @@ package org.apache.kafka.streams.errors;
 
 
 /**
- * Indicates a pre run time error incurred while parsing the {@link org.apache.kafka.streams.Topology logical topology}
+ * Indicates a pre run time error occurred while parsing the {@link org.apache.kafka.streams.Topology logical topology}
  * to construct the {@link org.apache.kafka.streams.processor.internals.ProcessorTopology physical processor topology}.
  */
 public class TopologyException extends StreamsException {
@@ -29,7 +29,8 @@ public class TopologyException extends StreamsException {
         super("Invalid topology" + (message == null ? "" : ": " + message));
     }
 
-    public TopologyException(final String message, final Throwable throwable) {
+    public TopologyException(final String message,
+                             final Throwable throwable) {
         super("Invalid topology" + (message == null ? "" : ": " + message), throwable);
     }
 

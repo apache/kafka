@@ -792,10 +792,12 @@ public class TopologyBuilder {
     @Deprecated
     public synchronized final TopologyBuilder connectProcessorAndStateStores(final String processorName,
                                                                              final String... stateStoreNames) {
-        try {
-            internalTopologyBuilder.connectProcessorAndStateStores(processorName, stateStoreNames);
-        } catch (final TopologyException e) {
-            throw new TopologyBuilderException(e);
+        if (stateStoreNames != null && stateStoreNames.length > 0) {
+            try {
+                internalTopologyBuilder.connectProcessorAndStateStores(processorName, stateStoreNames);
+            } catch (final TopologyException e) {
+                throw new TopologyBuilderException(e);
+            }
         }
         return this;
     }

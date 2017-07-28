@@ -364,6 +364,9 @@ public class InternalTopologyBuilder {
             if (!nodeFactories.containsKey(predecessor)) {
                 throw new TopologyException("Predecessor processor " + predecessor + " is not added yet.");
             }
+            if (nodeToSinkTopic.containsKey(predecessor)) {
+                throw new TopologyException("Sink " + predecessor + " cannot be used a parent.");
+            }
         }
 
         nodeFactories.put(name, new SinkNodeFactory<>(name, predecessorNames, topic, keySerializer, valSerializer, partitioner));
@@ -474,10 +477,12 @@ public class InternalTopologyBuilder {
     public final void connectProcessorAndStateStores(final String processorName,
                                                      final String... stateStoreNames) {
         Objects.requireNonNull(processorName, "processorName can't be null");
-        if (stateStoreNames != null) {
-            for (final String stateStoreName : stateStoreNames) {
-                connectProcessorAndStateStore(processorName, stateStoreName);
-            }
+        Objects.requireNonNull(stateStoreNames, "stateStoreNames can't be null");
+        if (stateStoreNames.length == 0) {
+            throw new TopologyException("Must provide at least one state store name.");
+        }
+        for (final String stateStoreName : stateStoreNames) {
+            connectProcessorAndStateStore(processorName, stateStoreName);
         }
     }
 
