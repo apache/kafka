@@ -16,7 +16,6 @@
  */
 package kafka.api
 
-import java.util.Collection
 import java.util.Collections
 import java.util.concurrent.{ExecutionException, TimeUnit}
 import kafka.controller.{OfflineReplica, PartitionAndReplica}
@@ -28,16 +27,11 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.errors.{KafkaStorageException, NotLeaderForPartitionException}
 import org.junit.{Before, Test}
 import org.junit.Assert.assertTrue
-import org.junit.runner.RunWith
-import org.junit.runners.Parameterized
-import org.junit.runners.Parameterized.Parameters
-import scala.collection.JavaConverters._
 
 /**
   * Test whether clients can producer and consume when there is log directory failure
   */
-@RunWith(value = classOf[Parameterized])
-class LogDirFailureTest(failureType: LogDirFailureType) extends IntegrationTestHarness {
+class LogDirFailureTest() extends IntegrationTestHarness {
   val producerCount: Int = 1
   val consumerCount: Int = 1
   val serverCount: Int = 2
@@ -54,8 +48,16 @@ class LogDirFailureTest(failureType: LogDirFailureType) extends IntegrationTestH
   }
 
   @Test
-  def testProduceAfterLogDirFailure() {
+  def testIOExceptionDuringLogRoll() {
+    testProduceAfterLogDirFailure(Roll)
+  }
 
+  @Test
+  def testIOExceptionDuringCheckpoint() {
+    testProduceAfterLogDirFailure(Checkpoint)
+  }
+
+  def testProduceAfterLogDirFailure(failureType: LogDirFailureType) {
     val consumer = consumers.head
     subscribeAndWaitForAssignment(topic, consumer)
     val producer = producers.head
@@ -141,13 +143,3 @@ class LogDirFailureTest(failureType: LogDirFailureType) extends IntegrationTestH
 sealed trait LogDirFailureType
 case object Roll extends LogDirFailureType
 case object Checkpoint extends LogDirFailureType
-
-object LogDirFailureTest {
-  @Parameters
-  def parameters: Collection[Array[LogDirFailureType]] = {
-    List(
-      Array(Roll.asInstanceOf[LogDirFailureType]),
-      Array(Checkpoint.asInstanceOf[LogDirFailureType])
-    ).asJava
-  }
-}
