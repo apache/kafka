@@ -216,7 +216,8 @@ class LogManager(logDirs: Array[File],
       maxProducerIdExpirationMs = maxPidExpirationMs,
       scheduler = scheduler,
       time = time,
-      brokerTopicStats = brokerTopicStats)
+      brokerTopicStats = brokerTopicStats,
+      logDirFailureChannel = logDirFailureChannel)
 
     if (logDir.getName.endsWith(Log.DeleteDirSuffix)) {
       this.logsToBeDeleted.add(current)
@@ -557,7 +558,9 @@ class LogManager(logDirs: Array[File],
             maxProducerIdExpirationMs = maxPidExpirationMs,
             scheduler = scheduler,
             time = time,
-            brokerTopicStats = brokerTopicStats)
+            brokerTopicStats = brokerTopicStats,
+            logDirFailureChannel = logDirFailureChannel)
+
           logs.put(topicPartition, log)
 
           info("Created log for partition [%s,%d] in %s with properties {%s}."
@@ -568,6 +571,7 @@ class LogManager(logDirs: Array[File],
           log
         } catch {
           case e: IOException =>
+            error(s"Error while creating log for $topicPartition in dir ${dataDir.getAbsolutePath}", e)
             logDirFailureChannel.maybeAddLogFailureEvent(dataDir.getAbsolutePath)
             throw new KafkaStorageException(s"Error while creating log for $topicPartition in dir ${dataDir.getAbsolutePath}", e)
         }
@@ -635,6 +639,7 @@ class LogManager(logDirs: Array[File],
         }
       } catch {
         case e: IOException =>
+          error(s"Error while deleting $topicPartition in dir ${removedLog.dir.getParent}.", e)
           logDirFailureChannel.maybeAddLogFailureEvent(removedLog.dir.getParent)
           throw new KafkaStorageException(s"Error while deleting $topicPartition in dir ${removedLog.dir.getParent}.", e)
       }

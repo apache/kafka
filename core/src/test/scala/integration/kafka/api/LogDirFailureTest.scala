@@ -16,11 +16,10 @@
  */
 package kafka.api
 
+import java.util.Collection
 import java.util.Collections
 import java.util.concurrent.{ExecutionException, TimeUnit}
-
 import kafka.controller.{OfflineReplica, PartitionAndReplica}
-import kafka.server.KafkaConfig
 import kafka.utils.{CoreUtils, TestUtils, ZkUtils}
 import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
@@ -29,11 +28,16 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.errors.{KafkaStorageException, NotLeaderForPartitionException}
 import org.junit.{Before, Test}
 import org.junit.Assert.assertTrue
+import org.junit.runner.RunWith
+import org.junit.runners.Parameterized
+import org.junit.runners.Parameterized.Parameters
+import scala.collection.JavaConverters._
 
 /**
   * Test whether clients can producer and consume when there is log directory failure
   */
-class LogDirFailureTest extends IntegrationTestHarness {
+@RunWith(value = classOf[Parameterized])
+class LogDirFailureTest(failureType: LogDirFailureType) extends IntegrationTestHarness {
   val producerCount: Int = 1
   val consumerCount: Int = 1
   val serverCount: Int = 2
@@ -42,7 +46,6 @@ class LogDirFailureTest extends IntegrationTestHarness {
   this.logDirCount = 2
   this.producerConfig.setProperty(ProducerConfig.RETRIES_CONFIG, "0")
   this.producerConfig.setProperty(ProducerConfig.RETRY_BACKOFF_MS_CONFIG, "100")
-  this.serverConfig.setProperty(KafkaConfig.ReplicaHighWatermarkCheckpointIntervalMsProp, "100")
 
   @Before
   override def setUp() {
@@ -74,6 +77,17 @@ class LogDirFailureTest extends IntegrationTestHarness {
     CoreUtils.swallow(Utils.delete(logDir))
     logDir.createNewFile()
     assertTrue(logDir.isFile)
+
+    if (failureType == Roll) {
+      try {
+        leaderServer.replicaManager.getLog(partition).get.roll()
+        fail("Log rolling should fail with KafkaStorageException")
+      } catch {
+        case e: KafkaStorageException => // This is expected
+      }
+    } else if (failureType == Checkpoint) {
+      leaderServer.replicaManager.checkpointHighWatermarks()
+    }
 
     // Wait for ReplicaHighWatermarkCheckpoint to happen so that the log directory of the topic will be offline
     TestUtils.waitUntilTrue(() => !leaderServer.logManager.liveLogDirs.contains(logDir), "Expected log directory offline", 3000L)
@@ -122,4 +136,18 @@ class LogDirFailureTest extends IntegrationTestHarness {
     }, "Expected non-empty assignment")
   }
 
+}
+
+sealed trait LogDirFailureType
+case object Roll extends LogDirFailureType
+case object Checkpoint extends LogDirFailureType
+
+object LogDirFailureTest {
+  @Parameters
+  def parameters: Collection[Array[LogDirFailureType]] = {
+    List(
+      Array(Roll.asInstanceOf[LogDirFailureType]),
+      Array(Checkpoint.asInstanceOf[LogDirFailureType])
+    ).asJava
+  }
 }

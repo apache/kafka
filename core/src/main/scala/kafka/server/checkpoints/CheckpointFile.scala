@@ -72,6 +72,7 @@ class CheckpointFile[T](val file: File,
         Utils.atomicMoveWithFallback(tempPath, path)
       } catch {
         case e: IOException =>
+          error(s"Error while writing to checkpoint file ${file.getAbsolutePath}", e)
           logDirFailureChannel.maybeAddLogFailureEvent(logDir)
           throw new KafkaStorageException(s"Error while writing to checkpoint file ${file.getAbsolutePath}", e)
       }
@@ -119,6 +120,7 @@ class CheckpointFile[T](val file: File,
         }
       } catch {
         case e: IOException =>
+          error(s"Error while reading checkpoint file ${file.getAbsolutePath}", e)
           logDirFailureChannel.maybeAddLogFailureEvent(logDir)
           throw new KafkaStorageException(s"Error while reading checkpoint file ${file.getAbsolutePath}", e)
       }
