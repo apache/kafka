@@ -318,7 +318,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
                 try {
                     consumer.commitSync(consumedOffsetsAndMetadata);
                 } catch (final CommitFailedException e) {
-                    log.warn("{} Failed offset commits {}: ", logPrefix, consumedOffsetsAndMetadata, e);
+                    log.warn("{} Failed offset commits {} due to CommitFailedException", logPrefix, consumedOffsetsAndMetadata);
                     throw e;
                 }
             }
@@ -407,7 +407,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             if (firstException == null) {
                 firstException = e;
             }
-            log.error("{} Could not close state manager: ", logPrefix, e);
+            log.error("{} Could not close state manager due to the following error:", logPrefix, e);
         }
 
         try {
@@ -426,7 +426,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
                 try {
                     recordCollector.close();
                 } catch (final Throwable e) {
-                    log.error("{} Failed to close producer: ", logPrefix, e);
+                    log.error("{} Failed to close producer due to the following error:", logPrefix, e);
                 }
             }
         }
@@ -460,7 +460,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         } catch (final RuntimeException e) {
             clean = false;
             firstException = e;
-            log.error("{} Could not close task: ", logPrefix, e);
+            log.error("{} Could not close task due to the following error:", logPrefix, e);
         }
 
         closeSuspended(clean, firstException);
