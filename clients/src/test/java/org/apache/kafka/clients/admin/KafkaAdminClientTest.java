@@ -45,6 +45,8 @@ import org.apache.kafka.common.resource.Resource;
 import org.apache.kafka.common.resource.ResourceFilter;
 import org.apache.kafka.common.resource.ResourceType;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.test.TestCondition;
+import org.apache.kafka.test.TestUtils;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.Timeout;
@@ -326,15 +328,20 @@ public class KafkaAdminClientTest {
             // Make a request with an extremely short timeout.
             // Then wait for it to fail by not supplying any response.
             log.info("Starting AdminClient#listTopics...");
-            ListTopicsResult result = env.adminClient().listTopics(new ListTopicsOptions().timeoutMs(1000));
-            while (!env.kafkaClient().hasInFlightRequests()) {
-                Thread.sleep(0, 500000);
-            }
-            log.info("Found in-flight requests for AdminClient#listTopics...");
+            final ListTopicsResult result = env.adminClient().listTopics(new ListTopicsOptions().timeoutMs(1000));
+            TestUtils.waitForCondition(new TestCondition() {
+                @Override
+                public boolean conditionMet() {
+                    return env.kafkaClient().hasInFlightRequests();
+                }
+            }, "Timed out waiting for inFlightRequests");
             time.sleep(5000);
-            while (!result.listings().isDone()) {
-                Thread.sleep(0, 500000);
-            }
+            TestUtils.waitForCondition(new TestCondition() {
+                @Override
+                public boolean conditionMet() {
+                    return result.listings().isDone();
+                }
+            }, "Timed out waiting for inFlightRequests");
             assertFutureError(result.listings(), TimeoutException.class);
             log.info("Verified the error result of AdminClient#listTopics");
 
@@ -347,7 +354,7 @@ public class KafkaAdminClientTest {
             DescribeConfigsResult result2 = env.adminClient().describeConfigs(Collections.singleton(
                 new ConfigResource(ConfigResource.Type.TOPIC, "foo")));
             time.sleep(5000);
-            result2.all().get();
+            result2.values().get(ConfigResource.Type.TOPIC).get();
         }
     }
 

@@ -843,7 +843,12 @@ public class KafkaAdminClient extends AdminClient {
 
                 // Stop tracking this call.
                 correlationIdToCall.remove(correlationId);
-                getOrCreateListValue(callsInFlight, response.destination()).remove(call);
+                List<Call> calls = callsInFlight.get(response.destination());
+                if ((calls == null) || (!calls.remove(call))) {
+                    log.error("Internal server error on {}: found call {} in correlationIdToCall " +
+                        "that did not exist in callsInFlight", response.destination(), call);
+                    continue;
+                }
 
                 // Handle the result of the call.  This may involve retrying the call, if we got a
                 // retryible exception.
