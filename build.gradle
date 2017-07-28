@@ -38,7 +38,7 @@ allprojects {
   repositories {
     mavenCentral()
     maven {
-       url "http://mvnrepository.com/artifact/"
+      url "http://maven-repository.com/artifact/"
     }
   }
 
@@ -381,7 +381,10 @@ tasks.create(name: "installAll", dependsOn: ['install_2_10', 'install_2_11'] + p
 tasks.create(name: "releaseTarGzAll", dependsOn: ['releaseTarGz_2_10', 'releaseTarGz_2_11']) { }
 
 tasks.create(name: "uploadArchivesAll", dependsOn: ['uploadCoreArchives_2_10', 'uploadCoreArchives_2_11'] + pkgs.collect { it + ":uploadArchives" }) { }
-
+configurations.all {
+   exclude group: 'org.slf4j', module: 'slf4j-log4j12'
+   exclude group: 'log4j', module: 'log4j'
+}
 project(':core') {
   println "Building project 'core' with Scala version ${versions.scala}"
 
@@ -450,7 +453,7 @@ project(':core') {
 
   tasks.create(name: "copyDependantLibs", type: Copy) {
     from (configurations.testRuntime) {
-      include('slf4j-log4j12*')
+      //include('slf4j-log4j12*')
     }
     from (configurations.runtime) {
       exclude('kafka-clients*')
