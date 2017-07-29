@@ -36,7 +36,7 @@ import org.apache.kafka.common.record.{MemoryRecords, RecordBatch}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.Time
-import org.apache.log4j.Logger
+import org.apache.log4j.{Level, Logger}
 
 import scala.reflect.ClassTag
 
@@ -190,6 +190,7 @@ object RequestChannel extends Logging {
 
       if (requestLogger.isDebugEnabled) {
         val detailsEnabled = requestLogger.isTraceEnabled
+        val level = if (requestLogger.isTraceEnabled) Level.TRACE else Level.DEBUG
         def nanosToMs(nanos: Long) = TimeUnit.NANOSECONDS.toMicros(math.max(nanos, 0)).toDouble / TimeUnit.MILLISECONDS.toMicros(1)
         val totalTimeMs = nanosToMs(endTimeNanos - startTimeNanos)
         val requestQueueTimeMs = nanosToMs(requestDequeueTimeNanos - startTimeNanos)
@@ -198,7 +199,7 @@ object RequestChannel extends Logging {
         val apiThrottleTimeMs = nanosToMs(responseCompleteTimeNanos - apiRemoteCompleteTimeNanos)
         val responseQueueTimeMs = nanosToMs(responseDequeueTimeNanos - responseCompleteTimeNanos)
         val responseSendTimeMs = nanosToMs(endTimeNanos - responseDequeueTimeNanos)
-        requestLogger.trace("Completed request:%s from connection %s;totalTime:%f,requestQueueTime:%f,localTime:%f,remoteTime:%f,throttleTime:%f,responseQueueTime:%f,sendTime:%f,securityProtocol:%s,principal:%s,listener:%s"
+        requestLogger.log(level, "Completed request:%s from connection %s;totalTime:%f,requestQueueTime:%f,localTime:%f,remoteTime:%f,throttleTime:%f,responseQueueTime:%f,sendTime:%f,securityProtocol:%s,principal:%s,listener:%s"
           .format(requestDesc(detailsEnabled), connectionId, totalTimeMs, requestQueueTimeMs, apiLocalTimeMs, apiRemoteTimeMs, apiThrottleTimeMs, responseQueueTimeMs, responseSendTimeMs, securityProtocol, session.principal, listenerName.value))
       }
     }
