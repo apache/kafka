@@ -42,8 +42,8 @@ import scala.reflect.ClassTag
 
 object RequestChannel extends Logging {
   val AllDone = Request(processor = 1, connectionId = "2", Session(KafkaPrincipal.ANONYMOUS, InetAddress.getLocalHost),
-    buffer = shutdownReceive, memoryPool = MemoryPool.NONE, startTimeNanos = 0, listenerName = new ListenerName(""),
-    securityProtocol = SecurityProtocol.PLAINTEXT)
+    startTimeNanos = 0, listenerName = new ListenerName(""), securityProtocol = SecurityProtocol.PLAINTEXT)(
+    MemoryPool.NONE, shutdownReceive)
   private val requestLogger = Logger.getLogger("kafka.request.logger")
 
   private def shutdownReceive: ByteBuffer = {
@@ -57,12 +57,11 @@ object RequestChannel extends Logging {
     val sanitizedUser = QuotaId.sanitize(principal.getName)
   }
 
-  case class Request(processor: Int, connectionId: String, session: Session, buffer: ByteBuffer,
-                     private val memoryPool: MemoryPool, startTimeNanos: Long, listenerName: ListenerName, 
-                     securityProtocol: SecurityProtocol) {
+  case class Request(processor: Int, connectionId: String, session: Session, startTimeNanos: Long,
+                     listenerName: ListenerName, securityProtocol: SecurityProtocol)(memoryPool: MemoryPool,
+                     @volatile private var buffer: ByteBuffer) {
     // These need to be volatile because the readers are in the network thread and the writers are in the request
     // handler threads or the purgatory threads
-    @volatile var bufferReference = buffer
     @volatile var requestDequeueTimeNanos = -1L
     @volatile var apiLocalCompleteTimeNanos = -1L
     @volatile var responseCompleteTimeNanos = -1L
@@ -204,9 +203,9 @@ object RequestChannel extends Logging {
     }
 
     def dispose(): Unit = {
-      if (bufferReference != null) {
-        memoryPool.release(bufferReference)
-        bufferReference = null
+      if (buffer != null) {
+        memoryPool.release(buffer)
+        buffer = null
       }
     }
   }
