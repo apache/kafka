@@ -286,7 +286,8 @@ public class FetcherTest {
             try {
                 fetcher.fetchedRecords();
                 fail("fetchedRecords should have raised");
-            } catch (SerializationException e) {
+            } catch (KafkaException e) {
+                assertTrue(e.getCause() instanceof SerializationException);
                 // the position should not advance since no data has been returned
                 assertEquals(1, subscriptions.position(tp0).longValue());
             }

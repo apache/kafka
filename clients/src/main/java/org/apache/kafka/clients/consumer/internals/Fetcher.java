@@ -961,7 +961,8 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         private long nextFetchOffset;
         private boolean isFetched = false;
         // We have to cache the iterator exception because they are not reproducible.
-        private KafkaException cachedRecordFetchException = null;
+        private Exception cachedRecordException = null;
+        private boolean corruptLastRecord = false;
 
         private PartitionRecords(TopicPartition partition,
                                  CompletedFetch completedFetch,
@@ -977,7 +978,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         private void drain() {
             if (!isFetched) {
                 maybeCloseRecordStream();
-                cachedRecordFetchException = null;
+                cachedRecordException = null;
                 this.isFetched = true;
                 this.completedFetch.metricAggregator.record(partition, bytesRead, recordsRead);
 
@@ -1077,8 +1078,10 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
 
         private List<ConsumerRecord<K, V>> fetchRecords(int maxRecords) {
             // Error when fetching the next record before deserialization.
-            if (cachedRecordFetchException != null && lastRecord == null)
-                throw cachedRecordFetchException;
+            if (corruptLastRecord)
+                throw new KafkaException("Received exception when fetching the next record from " + partition
+                                             + "If needed, please seek past the record to "
+                                             + "continue consumption.", cachedRecordException);
 
             if (isFetched)
                 return Collections.emptyList();
@@ -1086,30 +1089,29 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             List<ConsumerRecord<K, V>> records = new ArrayList<>();
             try {
                 for (int i = 0; i < maxRecords; i++) {
-                    Record record = lastRecord;
                     // Only move to next record if there was no exception in the last fetch. Otherwise we should
                     // use the last record to do deserialization again.
-                    if (cachedRecordFetchException == null) {
-                        lastRecord = null;
-                        record = nextFetchedRecord();
-                        lastRecord = record;
+                    if (cachedRecordException == null) {
+                        corruptLastRecord = true;
+                        lastRecord = nextFetchedRecord();
+                        corruptLastRecord = false;
                     }
-                    if (record == null)
+                    if (lastRecord == null)
                         break;
-                    records.add(parseRecord(partition, currentBatch, record));
+                    records.add(parseRecord(partition, currentBatch, lastRecord));
                     recordsRead++;
-                    bytesRead += record.sizeInBytes();
-                    nextFetchOffset = record.offset() + 1;
+                    bytesRead += lastRecord.sizeInBytes();
+                    nextFetchOffset = lastRecord.offset() + 1;
                     // In some cases, the deserialization may have thrown an exception and the retry may succeed,
                     // we allow user to move forward in this case.
-                    cachedRecordFetchException = null;
+                    cachedRecordException = null;
                 }
-            } catch (Exception e) {
-                cachedRecordFetchException = new KafkaException("Received exception when fetching the next record. "
-                                                                    + "If needed, please seek past the record to "
-                                                                    + "continue consumption.", e);
+            } catch (KafkaException e) {
+                cachedRecordException = e;
                 if (records.isEmpty())
-                    throw e;
+                    throw new KafkaException("Received exception when fetching the next record from " + partition
+                                                 + "If needed, please seek past the record to "
+                                                 + "continue consumption.", e);
             }
             return records;
         }
