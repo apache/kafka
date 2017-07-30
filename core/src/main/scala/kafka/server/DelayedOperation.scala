@@ -70,6 +70,12 @@ abstract class DelayedOperation(override val delayMs: Long) extends TimerTask wi
     }
   }
 
+  def safeForceComplete(): Boolean = {
+    synchronized {
+      forceComplete()
+    }
+  }
+
   /**
    * Check if the delayed operation is already completed
    */
@@ -341,23 +347,21 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
 
     // traverse the list and force complete some watched elements
     def forceCompleteWatched(): Int = {
-
       var completed = 0
-      operations synchronized {
-        val iter = operations.iterator()
-        while (iter.hasNext) {
-          val curr = iter.next()
-          if (curr.isCompleted) {
-            // another thread has completed this operation, just remove it
-            iter.remove()
-          } else if (curr synchronized curr.forceComplete()) {
-            completed += 1
-            iter.remove()
-          }
+
+      val iter = operations.iterator()
+      while (iter.hasNext) {
+        val curr = iter.next()
+        if (curr.isCompleted) {
+          // another thread has completed this operation, just remove it
+          iter.remove()
+        } else if (curr.safeForceComplete()) {
+          iter.remove()
+          completed += 1
         }
       }
 
-      if (operations.size == 0)
+      if (operations.isEmpty)
         removeKeyIfEmpty(key, this)
 
       completed
