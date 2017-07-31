@@ -507,15 +507,15 @@ private[kafka] class Processor(val id: Int,
   protected[network] def sendResponse(response: RequestChannel.Response, responseSend: Send) {
     val connectionId = response.request.connectionId
     trace(s"Socket server received response to send to $connectionId, registering for write and sending data: $response")
-    // Invoke send for closingChannel as well so that the send is failed and the channel closed properly after
-    // discarding any pending staged receives.
-    val channel = openOrClosingChannel(connectionId)
-    // `channel` can be null if the selector closed the connection because it was idle for too long
-    if (channel.isEmpty) {
+    // `channel` can be None if the connection was closed remotely or if selector closed it for being idle for too long
+    if (channel(connectionId).isEmpty) {
       warn(s"Attempting to send response via channel for which there is no open connection, connection id $connectionId")
       response.request.updateRequestMetrics(0L)
     }
-    else {
+    // Invoke send for closingChannel as well so that the send is failed and the channel closed properly and
+    // removed from the Selector after discarding any pending staged receives.
+    // `openOrClosingChannel` can be None if the selector closed the connection because it was idle for too long
+    if (!openOrClosingChannel(connectionId).isEmpty) {
       selector.send(responseSend)
       inflightResponses += (connectionId -> response)
     }
@@ -597,7 +597,7 @@ private[kafka] class Processor(val id: Int,
       val channel = newConnections.poll()
       try {
         debug(s"Processor $id listening to new connection from ${channel.socket.getRemoteSocketAddress}")
-        selector.register(connectionId(channel), channel)
+        selector.register(connectionId(channel.socket), channel)
       } catch {
         // We explicitly catch all non fatal exceptions and close the socket to avoid a socket leak. The other
         // throwables will be caught in processor and logged as uncaught exceptions.
@@ -620,16 +620,18 @@ private[kafka] class Processor(val id: Int,
     selector.close()
   }
 
-  private[network] def connectionId(channel: SocketChannel): String = {
-    val localHost = channel.socket().getLocalAddress.getHostAddress
-    val localPort = channel.socket().getLocalPort
-    val remoteHost = channel.socket().getInetAddress.getHostAddress
-    val remotePort = channel.socket().getPort
+  // 'protected` to allow override for testing
+  protected[network] def connectionId(socket: Socket): String = {
+    val localHost = socket.getLocalAddress.getHostAddress
+    val localPort = socket.getLocalPort
+    val remoteHost = socket.getInetAddress.getHostAddress
+    val remotePort = socket.getPort
     val connId = ConnectionId(localHost, localPort, remoteHost, remotePort, nextConnectionIndex).toString
     nextConnectionIndex = if (nextConnectionIndex == Int.MaxValue) 0 else nextConnectionIndex + 1
     connId
   }
 
+  // Visible for testing
   private[network] def openOrClosingChannel(connectionId: String): Option[KafkaChannel] = {
     Option(selector.channel(connectionId)).orElse(Option(selector.closingChannel(connectionId)))
   }

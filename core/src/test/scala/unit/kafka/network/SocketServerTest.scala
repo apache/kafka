@@ -190,12 +190,12 @@ class SocketServerTest extends JUnitSuite {
     val sockets = (1 to 5).map(_ => connect(protocol = SecurityProtocol.PLAINTEXT))
     val serializedBytes = producerRequestBytes
 
-    val requests = sockets.map{ socket =>
+    val requests = sockets.map{socket =>
       sendRequest(socket, serializedBytes)
       server.requestChannel.receiveRequest(2000)
     }
     requests.zipWithIndex.foreach { case (request, i) =>
-      val index = requests(i).connectionId.split("-").last
+      val index = request.connectionId.split("-").last
       assertEquals(i.toString, index)
     }
 
@@ -259,10 +259,10 @@ class SocketServerTest extends JUnitSuite {
     val overrideConnectionId = "127.0.0.1:1-127.0.0.1:2-0"
     val overrideServer = new SocketServer(KafkaConfig.fromProps(props), serverMetrics, time, credentialProvider) {
       override def newProcessor(id: Int, connectionQuotas: ConnectionQuotas, listenerName: ListenerName,
-                                protocol: SecurityProtocol): Processor = {
+                                protocol: SecurityProtocol, memoryPool: MemoryPool): Processor = {
         new Processor(id, time, config.socketRequestMaxBytes, requestChannel, connectionQuotas,
-          config.connectionsMaxIdleMs, listenerName, protocol, config, metrics, credentialProvider) {
-          override private[network] def connectionId(channel: SocketChannel): String = overrideConnectionId
+          config.connectionsMaxIdleMs, listenerName, protocol, config, metrics, credentialProvider, memoryPool) {
+          override protected[network] def connectionId(socket: Socket): String = overrideConnectionId
         }
       }
     }
@@ -275,14 +275,16 @@ class SocketServerTest extends JUnitSuite {
       overrideServer.startup()
       val socket1 = connect(overrideServer)
       TestUtils.waitUntilTrue(() => connectionCount == 1, "Failed to create channel")
-      val channel1 = openChannel
+      val channel1 = openChannel.getOrElse(throw new RuntimeException("Channel not found"))
 
-      // Create new connection with same id when channel1 is still open and in Selector.channels
+      // Create new connection with same id when `channel1` is still open and in Selector.channels
+      // Check that new connection is closed and openChannel still contains `channel1`
       connect(overrideServer)
       TestUtils.waitUntilTrue(() => connectionCount == 1, "Failed to close channel")
-      assertEquals(channel1, openChannel)
+      assertSame(channel1, openChannel.getOrElse(throw new RuntimeException("Channel not found")))
 
-      // Create new connection with same id when channel1 is closed with staged receives and in Selector.closingChannels
+      // Send a request to `channel1` and advance time beyond idle time so that `channel1` is
+      // closed with staged receives and is in Selector.closingChannels
       val serializedBytes = producerRequestBytes
       (1 to 3).foreach(_ => sendRequest(socket1, serializedBytes))
       val request = overrideServer.requestChannel.receiveRequest(2000)
@@ -290,9 +292,23 @@ class SocketServerTest extends JUnitSuite {
       TestUtils.waitUntilTrue(() => openChannel.isEmpty, "Idle channel not closed")
       assertTrue("Channel removed without processing staging receives", openOrClosingChannel.nonEmpty)
 
+      // Create new connection with same id when when `channel1` is in Selector.closingChannels
+      // Check that new connection is closed and openOrClosingChannel still contains `channel1`
       connect(overrideServer)
       TestUtils.waitUntilTrue(() => connectionCount == 1, "Failed to close channel")
-      assertEquals(channel1, openOrClosingChannel)
+      assertSame(channel1, openOrClosingChannel.getOrElse(throw new RuntimeException("Channel not found")))
+
+      // Complete request with failed send so that `channel1` is removed from Selector.closingChannels
+      processRequest(overrideServer.requestChannel, request)
+      TestUtils.waitUntilTrue(() => connectionCount == 0, "Failed to remove channel with failed send")
+      assertTrue("Channel not removed", openOrClosingChannel.isEmpty)
+
+      // Check that new connections can be created with the same id since `channel1` is no longer in Selector
+      connect(overrideServer)
+      TestUtils.waitUntilTrue(() => connectionCount == 1, "Failed to open new channel")
+      val newChannel = openChannel.getOrElse(throw new RuntimeException("Channel not found"))
+      assertNotSame(channel1, newChannel)
+      newChannel.disconnect()
 
     } finally {
       overrideServer.shutdown()
