@@ -57,7 +57,11 @@ class GetOffsetShellTimestampTest extends IntegrationTestHarness {
       requestedTimestamp,
       includeInternalTopics = false)
 
-    assertEquals(s"Must not have an offset entry for non-existing timestamp: $offsets", 0, offsets.size)
+    assertEquals(s"Must have 1 offset entry: $offsets", 1, offsets.size)
+
+    val error = offsets(new TopicPartition(topic1, 0)).left.get
+    assertTrue(s"Must return an error about non-existing timestamp: $error",
+      error.toLowerCase.contains("timestamp not found"))
   }
 
   @Test
