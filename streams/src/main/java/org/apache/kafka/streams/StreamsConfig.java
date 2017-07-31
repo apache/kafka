@@ -52,7 +52,7 @@ import static org.apache.kafka.common.requests.IsolationLevel.READ_COMMITTED;
 
 /**
  * Configuration for a {@link KafkaStreams} instance.
- * Can also be use to configure the Kafka Streams internal {@link KafkaConsumer} and {@link KafkaProducer}.
+ * Can also be used to configure the Kafka Streams internal {@link KafkaConsumer} and {@link KafkaProducer}.
  * To avoid consumer/producer property conflicts, you should prefix those properties using
  * {@link #consumerPrefix(String)} and {@link #producerPrefix(String)}, respectively.
  * <p>
@@ -73,8 +73,8 @@ import static org.apache.kafka.common.requests.IsolationLevel.READ_COMMITTED;
  *
  * StreamsConfig streamsConfig = new StreamsConfig(streamsProperties);
  * }</pre>
- * Kafka Streams required to set at least properties {@link #APPLICATION_ID_CONFIG "application.id"} and
- * {@link #BOOTSTRAP_SERVERS_CONFIG "bootstrap.servers"}.
+ * Kafka Streams is required to set at least {@link #APPLICATION_ID_CONFIG "application.id"} and
+ * {@link #BOOTSTRAP_SERVERS_CONFIG "bootstrap.servers"} properties.
  * Furthermore, it is not allowed to enable {@link ConsumerConfig#ENABLE_AUTO_COMMIT_CONFIG "enable.auto.commit"} that
  * is disabled by Kafka Streams by default.
  *
