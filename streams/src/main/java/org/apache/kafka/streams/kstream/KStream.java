@@ -37,8 +37,8 @@ import org.apache.kafka.streams.processor.StreamPartitioner;
  * For example a user X might buy two items I1 and I2, and thus there might be two records {@code <K:I1>, <K:I2>}
  * in the stream.
  * <p>
- * A {@code KStream} is either {@link org.apache.kafka.streams.StreamsBuilder#stream(String...) defined from one or
- * multiple Kafka topics} that are consumed message by message or the result of a {@code KStream} transformation.
+ * A {@code KStream} is either {@link StreamsBuilder#stream(String...) defined from one or multiple Kafka topics} that
+ * are consumed message by message or the result of a {@code KStream} transformation.
  * A {@link KTable} can also be {@link KTable#toStream() converted} into a {@code KStream}.
  * <p>
  * A {@code KStream} can be transformed record by record, joined with another {@code KStream}, {@link KTable},

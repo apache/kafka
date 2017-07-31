@@ -364,15 +364,15 @@ public class StreamsBuilder {
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
      * <pre>{@code
      * KafkaStreams streams = ...
-     * ReadOnlyKeyValueStore<String,Long> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<String, Long>keyValueStore());
+     * ReadOnlyKeyValueStore<String, Long> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<String, Long>keyValueStore());
      * String key = "some-key";
      * Long valueForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
      * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#allMetadata()} to
      * query the value of the key on a parallel running instance of your Kafka Streams application.
      *
-     * @param topic     the topic name; cannot be {@code null}
-     * @param queryableStoreName the state store name; If {@code null} this is the equivalent of {@link StreamsBuilder#table(String)} ()}.
+     * @param topic              the topic name; cannot be {@code null}
+     * @param queryableStoreName the state store name; if {@code null} this is the equivalent of {@link #table(String)}
      * @return a {@link KTable} for the specified topic
      */
     public synchronized <K, V> KTable<K, V> table(final String topic,
@@ -398,15 +398,15 @@ public class StreamsBuilder {
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
      * <pre>{@code
      * KafkaStreams streams = ...
-     * ReadOnlyKeyValueStore<String,Long> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<String, Long>keyValueStore());
+     * ReadOnlyKeyValueStore<String, Long> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<String, Long>keyValueStore());
      * String key = "some-key";
      * Long valueForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
      * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#allMetadata()} to
      * query the value of the key on a parallel running instance of your Kafka Streams application.
      *
-     * @param topic     the topic name; cannot be {@code null}
-     * @param storeSupplier user defined state store supplier. Cannot be {@code null}.
+     * @param topic         the topic name; cannot be {@code null}
+     * @param storeSupplier user defined state store supplier; cannot be {@code null}
      * @return a {@link KTable} for the specified topic
      */
     public synchronized <K, V> KTable<K, V> table(final String topic,
@@ -427,7 +427,8 @@ public class StreamsBuilder {
      * store name. Note that that store name may not be queriable through Interactive Queries.
      * No internal changelog topic is created since the original input topic can be used for recovery (cf.
      * methods of {@link KGroupedStream} and {@link KGroupedTable} that return a {@link KTable}).
-     * @param topic     the topic name; cannot be {@code null}
+     *
+     * @param topic the topic name; cannot be {@code null}
      * @return a {@link KTable} for the specified topic
      */
     public synchronized <K, V> KTable<K, V> table(final String topic) {
@@ -451,17 +452,18 @@ public class StreamsBuilder {
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
      * <pre>{@code
      * KafkaStreams streams = ...
-     * ReadOnlyKeyValueStore<String,Long> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<String, Long>keyValueStore());
+     * ReadOnlyKeyValueStore<String, Long> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<String, Long>keyValueStore());
      * String key = "some-key";
      * Long valueForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
      * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#allMetadata()} to
      * query the value of the key on a parallel running instance of your Kafka Streams application.
      *
-     * @param offsetReset the {@code "auto.offset.reset"} policy to use for the specified topic if no valid committed
-     *                    offsets are available
-     * @param topic       the topic name; cannot be {@code null}
-     * @param queryableStoreName   the state store name; If {@code null} this is the equivalent of {@link StreamsBuilder#table(Topology.AutoOffsetReset, String)} ()}.
+     * @param offsetReset        the {@code "auto.offset.reset"} policy to use for the specified topic if no valid committed
+     *                           offsets are available
+     * @param topic              the topic name; cannot be {@code null}
+     * @param queryableStoreName the state store name; if {@code null} this is the equivalent of
+     *                           {@link #table(Topology.AutoOffsetReset, String)}
      * @return a {@link KTable} for the specified topic
      */
     public synchronized <K, V> KTable<K, V> table(final Topology.AutoOffsetReset offsetReset,
@@ -488,17 +490,17 @@ public class StreamsBuilder {
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
      * <pre>{@code
      * KafkaStreams streams = ...
-     * ReadOnlyKeyValueStore<String,Long> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<String, Long>keyValueStore());
+     * ReadOnlyKeyValueStore<String, Long> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<String, Long>keyValueStore());
      * String key = "some-key";
      * Long valueForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
      * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#allMetadata()} to
      * query the value of the key on a parallel running instance of your Kafka Streams application.
      *
-     * @param offsetReset the {@code "auto.offset.reset"} policy to use for the specified topic if no valid committed
-     *                    offsets are available
-     * @param topic       the topic name; cannot be {@code null}
-     * @param storeSupplier user defined state store supplier. Cannot be {@code null}.
+     * @param offsetReset   the {@code "auto.offset.reset"} policy to use for the specified topic if no valid committed
+     *                      offsets are available
+     * @param topic         the topic name; cannot be {@code null}
+     * @param storeSupplier user defined state store supplier; cannot be {@code null}
      * @return a {@link KTable} for the specified topic
      */
     public synchronized <K, V> KTable<K, V> table(final Topology.AutoOffsetReset offsetReset,
@@ -522,7 +524,7 @@ public class StreamsBuilder {
      * <p>
      * @param offsetReset the {@code "auto.offset.reset"} policy to use for the specified topic if no valid committed
      *                    offsets are available
-     * @param topic       the topic name; if {@code null} an internal store name will be automatically given.
+     * @param topic       the topic name; cannot be {@code null}
      * @return a {@link KTable} for the specified topic
      */
     public synchronized <K, V> KTable<K, V> table(final Topology.AutoOffsetReset offsetReset,
@@ -548,7 +550,7 @@ public class StreamsBuilder {
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
      * <pre>{@code
      * KafkaStreams streams = ...
-     * ReadOnlyKeyValueStore<String,Long> localStore = streams.store(storeName, QueryableStoreTypes.<String, Long>keyValueStore());
+     * ReadOnlyKeyValueStore<String, Long> localStore = streams.store(storeName, QueryableStoreTypes.<String, Long>keyValueStore());
      * String key = "some-key";
      * Long valueForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
@@ -558,13 +560,13 @@ public class StreamsBuilder {
      * @param timestampExtractor the stateless timestamp extractor used for this source {@link KTable},
      *                           if not specified the default extractor defined in the configs will be used
      * @param topic              the topic name; cannot be {@code null}
-     * @param storeName          the state store name; cannot be {@code null}
+     * @param queryableStoreName the state store name; if {@code null} an internal store name will be automatically given
      * @return a {@link KTable} for the specified topic
      */
     public synchronized <K, V> KTable<K, V> table(final TimestampExtractor timestampExtractor,
                                                   final String topic,
-                                                  final String storeName) {
-        return internalStreamsBuilder.table(null, timestampExtractor, null, null, topic, storeName);
+                                                  final String queryableStoreName) {
+        return internalStreamsBuilder.table(null, timestampExtractor, null, null, topic, queryableStoreName);
     }
 
     /**
@@ -584,7 +586,7 @@ public class StreamsBuilder {
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
      * <pre>{@code
      * KafkaStreams streams = ...
-     * ReadOnlyKeyValueStore<String,Long> localStore = streams.store(storeName, QueryableStoreTypes.<String, Long>keyValueStore());
+     * ReadOnlyKeyValueStore<String, Long> localStore = streams.store(storeName, QueryableStoreTypes.<String, Long>keyValueStore());
      * String key = "some-key";
      * Long valueForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
@@ -596,14 +598,14 @@ public class StreamsBuilder {
      * @param timestampExtractor the stateless timestamp extractor used for this source {@link KTable},
      *                           if not specified the default extractor defined in the configs will be used
      * @param topic              the topic name; cannot be {@code null}
-     * @param storeName          the state store name; cannot be {@code null}
+     * @param queryableStoreName the state store name; if {@code null} an internal store name will be automatically given
      * @return a {@link KTable} for the specified topic
      */
     public synchronized <K, V> KTable<K, V> table(final Topology.AutoOffsetReset offsetReset,
                                                   final TimestampExtractor timestampExtractor,
                                                   final String topic,
-                                                  final String storeName) {
-        return internalStreamsBuilder.table(offsetReset, timestampExtractor, null, null, topic, storeName);
+                                                  final String queryableStoreName) {
+        return internalStreamsBuilder.table(offsetReset, timestampExtractor, null, null, topic, queryableStoreName);
     }
 
     /**
@@ -624,7 +626,7 @@ public class StreamsBuilder {
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
      * <pre>{@code
      * KafkaStreams streams = ...
-     * ReadOnlyKeyValueStore<String,Long> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<String, Long>keyValueStore());
+     * ReadOnlyKeyValueStore<String, Long> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<String, Long>keyValueStore());
      * String key = "some-key";
      * Long valueForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
@@ -636,7 +638,7 @@ public class StreamsBuilder {
      * @param valueSerde         value serde used to send key-value pairs,
      *                           if not specified the default value serde defined in the configuration will be used
      * @param topic              the topic name; cannot be {@code null}
-     * @param queryableStoreName the state store name; If {@code null} this is the equivalent of {@link StreamsBuilder#table(Serde, Serde, String)} ()}.
+     * @param queryableStoreName the state store name; if {@code null} an internal store name will be automatically given
      * @return a {@link KTable} for the specified topic
      */
     public synchronized <K, V> KTable<K, V> table(final Serde<K> keySerde,
@@ -664,7 +666,7 @@ public class StreamsBuilder {
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
      * <pre>{@code
      * KafkaStreams streams = ...
-     * ReadOnlyKeyValueStore<String,Long> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<String, Long>keyValueStore());
+     * ReadOnlyKeyValueStore<String, Long> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<String, Long>keyValueStore());
      * String key = "some-key";
      * Long valueForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
@@ -676,7 +678,7 @@ public class StreamsBuilder {
      * @param valueSerde    value serde used to send key-value pairs,
      *                      if not specified the default value serde defined in the configuration will be used
      * @param topic         the topic name; cannot be {@code null}
-     * @param storeSupplier user defined state store supplier. Cannot be {@code null}.
+     * @param storeSupplier user defined state store supplier; cannot be {@code null}
      * @return a {@link KTable} for the specified topic
      */
     public synchronized <K, V> KTable<K, V> table(final Serde<K> keySerde,
@@ -728,21 +730,21 @@ public class StreamsBuilder {
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
      * <pre>{@code
      * KafkaStreams streams = ...
-     * ReadOnlyKeyValueStore<String,Long> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<String, Long>keyValueStore());
+     * ReadOnlyKeyValueStore<String, Long> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<String, Long>keyValueStore());
      * String key = "some-key";
      * Long valueForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
      * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#allMetadata()} to
      * query the value of the key on a parallel running instance of your Kafka Streams application.
      *
-     * @param offsetReset the {@code "auto.offset.reset"} policy to use for the specified topic if no valid committed
-     *                    offsets are available
-     * @param keySerde    key serde used to send key-value pairs,
-     *                    if not specified the default key serde defined in the configuration will be used
-     * @param valueSerde  value serde used to send key-value pairs,
-     *                    if not specified the default value serde defined in the configuration will be used
-     * @param topic       the topic name; cannot be {@code null}
-     * @param queryableStoreName   the state store name; If {@code null} this is the equivalent of {@link StreamsBuilder#table(Topology.AutoOffsetReset, Serde, Serde, String)} ()} ()}.
+     * @param offsetReset        the {@code "auto.offset.reset"} policy to use for the specified topic if no valid
+     *                           committed offsets are available
+     * @param keySerde           key serde used to send key-value pairs,
+     *                           if not specified the default key serde defined in the configuration will be used
+     * @param valueSerde         value serde used to send key-value pairs,
+     *                           if not specified the default value serde defined in the configuration will be used
+     * @param topic              the topic name; cannot be {@code null}
+     * @param queryableStoreName the state store name; if {@code null} an internal store name will be automatically given
      * @return a {@link KTable} for the specified topic
      */
     public synchronized <K, V> KTable<K, V> table(final Topology.AutoOffsetReset offsetReset,
@@ -770,7 +772,7 @@ public class StreamsBuilder {
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
      * <pre>{@code
      * KafkaStreams streams = ...
-     * ReadOnlyKeyValueStore<String,Long> localStore = streams.store(storeName, QueryableStoreTypes.<String, Long>keyValueStore());
+     * ReadOnlyKeyValueStore<String, Long> localStore = streams.store(storeName, QueryableStoreTypes.<String, Long>keyValueStore());
      * String key = "some-key";
      * Long valueForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
@@ -784,15 +786,15 @@ public class StreamsBuilder {
      * @param valueSerde         value serde used to send key-value pairs,
      *                           if not specified the default value serde defined in the configuration will be used
      * @param topic              the topic name; cannot be {@code null}
-     * @param storeName          the state store name; cannot be {@code null}
+     * @param queryableStoreName the state store name; if {@code null} an internal store name will be automatically given
      * @return a {@link KTable} for the specified topic
      */
     public synchronized <K, V> KTable<K, V> table(final TimestampExtractor timestampExtractor,
                                                   final Serde<K> keySerde,
                                                   final Serde<V> valueSerde,
                                                   final String topic,
-                                                  final String storeName) {
-        return internalStreamsBuilder.table(null, timestampExtractor, keySerde, valueSerde, topic, storeName);
+                                                  final String queryableStoreName) {
+        return internalStreamsBuilder.table(null, timestampExtractor, keySerde, valueSerde, topic, queryableStoreName);
     }
 
     /**
@@ -811,7 +813,7 @@ public class StreamsBuilder {
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
      * <pre>{@code
      * KafkaStreams streams = ...
-     * ReadOnlyKeyValueStore<String,Long> localStore = streams.store(storeName, QueryableStoreTypes.<String, Long>keyValueStore());
+     * ReadOnlyKeyValueStore<String, Long> localStore = streams.store(storeName, QueryableStoreTypes.<String, Long>keyValueStore());
      * String key = "some-key";
      * Long valueForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
@@ -827,7 +829,7 @@ public class StreamsBuilder {
      * @param valueSerde         value serde used to send key-value pairs,
      *                           if not specified the default value serde defined in the configuration will be used
      * @param topic              the topic name; cannot be {@code null}
-     * @param queryableStoreName the state store name; If {@code null} this is the equivalent of {@link StreamsBuilder#table(Topology.AutoOffsetReset, Serde, Serde, String)} ()} ()}.
+     * @param queryableStoreName the state store name; if {@code null} an internal store name will be automatically given
      * @return a {@link KTable} for the specified topic
      */
     public synchronized <K, V> KTable<K, V> table(final Topology.AutoOffsetReset offsetReset,
@@ -884,7 +886,7 @@ public class StreamsBuilder {
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
      * <pre>{@code
      * KafkaStreams streams = ...
-     * ReadOnlyKeyValueStore<String,Long> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<String, Long>keyValueStore());
+     * ReadOnlyKeyValueStore<String, Long> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<String, Long>keyValueStore());
      * String key = "some-key";
      * Long valueForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
@@ -900,7 +902,7 @@ public class StreamsBuilder {
      * @param valueSerde         value serde used to send key-value pairs,
      *                           if not specified the default value serde defined in the configuration will be used
      * @param topic              the topic name; cannot be {@code null}
-     * @param storeSupplier      user defined state store supplier. Cannot be {@code null}.
+     * @param storeSupplier      user defined state store supplier; cannot be {@code null}
      * @return a {@link KTable} for the specified topic
      */
     public synchronized <K, V> KTable<K, V> table(final Topology.AutoOffsetReset offsetReset,
@@ -926,15 +928,15 @@ public class StreamsBuilder {
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
      * <pre>{@code
      * KafkaStreams streams = ...
-     * ReadOnlyKeyValueStore<String,Long> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<String, Long>keyValueStore());
+     * ReadOnlyKeyValueStore<String, Long> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<String, Long>keyValueStore());
      * String key = "some-key";
      * Long valueForKey = localStore.get(key);
      * }</pre>
      * Note that {@link GlobalKTable} always applies {@code "auto.offset.reset"} strategy {@code "earliest"}
      * regardless of the specified value in {@link StreamsConfig}.
      *
-     * @param topic     the topic name; cannot be {@code null}
-     * @param queryableStoreName the state store name; If {@code null} this is the equivalent of {@link StreamsBuilder#globalTable(String)}
+     * @param topic              the topic name; cannot be {@code null}
+     * @param queryableStoreName the state store name; if {@code null} an internal store name will be automatically given
      * @return a {@link GlobalKTable} for the specified topic
      */
     public synchronized <K, V> GlobalKTable<K, V> globalTable(final String topic,
@@ -955,7 +957,7 @@ public class StreamsBuilder {
      * Note that {@link GlobalKTable} always applies {@code "auto.offset.reset"} strategy {@code "earliest"}
      * regardless of the specified value in {@link StreamsConfig}.
      *
-     * @param topic     the topic name; cannot be {@code null}
+     * @param topic the topic name; cannot be {@code null}
      * @return a {@link GlobalKTable} for the specified topic
      */
     public synchronized <K, V> GlobalKTable<K, V> globalTable(final String topic) {
@@ -977,7 +979,7 @@ public class StreamsBuilder {
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
      * <pre>{@code
      * KafkaStreams streams = ...
-     * ReadOnlyKeyValueStore<String,Long> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<String, Long>keyValueStore());
+     * ReadOnlyKeyValueStore<String, Long> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<String, Long>keyValueStore());
      * String key = "some-key";
      * Long valueForKey = localStore.get(key);
      * }</pre>
@@ -991,8 +993,7 @@ public class StreamsBuilder {
      * @param timestampExtractor the stateless timestamp extractor used for this source {@link KTable},
      *                           if not specified the default extractor defined in the configs will be used
      * @param topic              the topic name; cannot be {@code null}
-     * @param queryableStoreName the state store name; If {@code null} this is the equivalent of
-     *                           {@link StreamsBuilder#globalTable(Serde, Serde, String)} ()}
+     * @param queryableStoreName the state store name; if {@code null} an internal store name will be automatically given
      * @return a {@link GlobalKTable} for the specified topic
      */
     public synchronized <K, V> GlobalKTable<K, V> globalTable(final Serde<K> keySerde,
@@ -1017,7 +1018,7 @@ public class StreamsBuilder {
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
      * <pre>{@code
      * KafkaStreams streams = ...
-     * ReadOnlyKeyValueStore<String,Long> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<String, Long>keyValueStore());
+     * ReadOnlyKeyValueStore<String, Long> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<String, Long>keyValueStore());
      * String key = "some-key";
      * Long valueForKey = localStore.get(key);
      * }</pre>
@@ -1029,7 +1030,7 @@ public class StreamsBuilder {
      * @param valueSerde    value serde used to send key-value pairs,
      *                      if not specified the default value serde defined in the configuration will be used
      * @param topic         the topic name; cannot be {@code null}
-     * @param storeSupplier user defined state store supplier. Cannot be {@code null}.
+     * @param storeSupplier user defined state store supplier; Cannot be {@code null}
      * @return a {@link GlobalKTable} for the specified topic
      */
     public synchronized <K, V> GlobalKTable<K, V> globalTable(final Serde<K> keySerde,
@@ -1053,7 +1054,7 @@ public class StreamsBuilder {
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
      * <pre>{@code
      * KafkaStreams streams = ...
-     * ReadOnlyKeyValueStore<String,Long> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<String, Long>keyValueStore());
+     * ReadOnlyKeyValueStore<String, Long> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<String, Long>keyValueStore());
      * String key = "some-key";
      * Long valueForKey = localStore.get(key);
      * }</pre>
@@ -1065,8 +1066,7 @@ public class StreamsBuilder {
      * @param valueSerde         value serde used to send key-value pairs,
      *                           if not specified the default value serde defined in the configuration will be used
      * @param topic              the topic name; cannot be {@code null}
-     * @param queryableStoreName the state store name; If {@code null} this is the equivalent of
-     *                           {@link StreamsBuilder#globalTable(Serde, Serde, String)} ()}
+     * @param queryableStoreName the state store name; if {@code null} an internal store name will be automatically given
      * @return a {@link GlobalKTable} for the specified topic
      */
     public synchronized <K, V> GlobalKTable<K, V> globalTable(final Serde<K> keySerde,
