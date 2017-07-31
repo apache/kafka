@@ -310,7 +310,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
             PrintWriter printWriter = new PrintWriter(filePath, StandardCharsets.UTF_8.name());
             builder.internalTopologyBuilder.addProcessor(name, new KStreamPrint<>(new PrintForeachAction(printWriter, defaultKeyValueMapper, label), keySerde, valSerde), this.name);
         } catch (final FileNotFoundException | UnsupportedEncodingException e) {
-            throw new TopologyException("Unable to write stream to file at [" + filePath + "] " + e.getMessage());
+            throw new TopologyException(String.format("Unable to write stream to file at [%s] %s", filePath, e.getMessage()));
         }
     }
 

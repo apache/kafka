@@ -32,7 +32,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.internals.InternalStreamsBuilder;
+import org.apache.kafka.streams.kstream.internals.InternalStreamsBuilderTest;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TopologyBuilder;
@@ -156,7 +156,7 @@ public class RegexSourceIntegrationTest {
         final StreamThread originalThread = streamThreads[0];
 
         final TestStreamThread testStreamThread = new TestStreamThread(
-            InternalStreamsBuilder.internalTopologyBuilder(builder),
+            InternalStreamsBuilderTest.internalTopologyBuilder(builder),
             streamsConfig,
             new DefaultKafkaClientSupplier(),
             originalThread.applicationId,
@@ -216,7 +216,7 @@ public class RegexSourceIntegrationTest {
         final StreamThread originalThread = streamThreads[0];
 
         final TestStreamThread testStreamThread = new TestStreamThread(
-            InternalStreamsBuilder.internalTopologyBuilder(builder),
+            InternalStreamsBuilderTest.internalTopologyBuilder(builder),
             streamsConfig,
             new DefaultKafkaClientSupplier(),
             originalThread.applicationId,
@@ -363,7 +363,7 @@ public class RegexSourceIntegrationTest {
         final StreamThread originalLeaderThread = leaderStreamThreads[0];
 
         final TestStreamThread leaderTestStreamThread = new TestStreamThread(
-            InternalStreamsBuilder.internalTopologyBuilder(builderLeader),
+            InternalStreamsBuilderTest.internalTopologyBuilder(builderLeader),
             streamsConfig,
             new DefaultKafkaClientSupplier(),
             originalLeaderThread.applicationId,
@@ -389,7 +389,7 @@ public class RegexSourceIntegrationTest {
         final StreamThread originalFollowerThread = followerStreamThreads[0];
 
         final TestStreamThread followerTestStreamThread = new TestStreamThread(
-            InternalStreamsBuilder.internalTopologyBuilder(builderFollower),
+            InternalStreamsBuilderTest.internalTopologyBuilder(builderFollower),
             streamsConfig,
             new DefaultKafkaClientSupplier(),
             originalFollowerThread.applicationId,

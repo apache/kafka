@@ -50,7 +50,7 @@ public class StreamsBuilderTest {
     }
 
     @Test
-    public void shouldNotTryProcessingFromSinkTopic() {
+    public void shouldProcessingFromSinkTopic() {
         final KStream<String, String> source = builder.stream("topic-source");
         source.to("topic-sink");
 
@@ -68,7 +68,7 @@ public class StreamsBuilderTest {
     }
 
     @Test
-    public void shouldTryProcessingFromThoughTopic() {
+    public void shouldProcessViaThroughTopic() {
         final KStream<String, String> source = builder.stream("topic-source");
         final KStream<String, String> through = source.through("topic-sink");
 

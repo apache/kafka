@@ -18,7 +18,6 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.kstream.GlobalKTable;
 import org.apache.kafka.streams.kstream.KStream;
@@ -30,7 +29,6 @@ import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.internals.RocksDBKeyValueStoreSupplier;
 
-import java.lang.reflect.Field;
 import java.util.Collections;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -38,35 +36,12 @@ import java.util.regex.Pattern;
 
 public class InternalStreamsBuilder {
 
-    private final Topology topology = new Topology();
-
     final InternalTopologyBuilder internalTopologyBuilder;
 
     private final AtomicInteger index = new AtomicInteger(0);
 
-    public InternalStreamsBuilder() {
-        // TODO: we should refactor this to avoid usage of reflection
-        try {
-            final Field internalStreamsBuilderField = topology.getClass().getDeclaredField("internalTopologyBuilder");
-            internalStreamsBuilderField.setAccessible(true);
-            internalTopologyBuilder = (InternalTopologyBuilder) internalStreamsBuilderField.get(topology);
-        } catch (final NoSuchFieldException | IllegalAccessException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    public static InternalTopologyBuilder internalTopologyBuilder(final StreamsBuilder streamsBuilder) throws NoSuchFieldException, IllegalAccessException {
-        final Field internalStreamsBuilderField = streamsBuilder.getClass().getDeclaredField("internalStreamsBuilder");
-        internalStreamsBuilderField.setAccessible(true);
-        final InternalStreamsBuilder internalStreamsBuilder = (InternalStreamsBuilder) internalStreamsBuilderField.get(streamsBuilder);
-
-        return internalTopologyBuilder(internalStreamsBuilder);
-    }
-
-    public static InternalTopologyBuilder internalTopologyBuilder(final InternalStreamsBuilder internalStreamsBuilder) throws NoSuchFieldException, IllegalAccessException {
-        final Field internalTopologyBuilderField = internalStreamsBuilder.getClass().getDeclaredField("internalTopologyBuilder");
-        internalTopologyBuilderField.setAccessible(true);
-        return (InternalTopologyBuilder) internalTopologyBuilderField.get(internalStreamsBuilder);
+    public InternalStreamsBuilder(final InternalTopologyBuilder internalTopologyBuilder) {
+        this.internalTopologyBuilder = internalTopologyBuilder;
     }
 
     public <K, V> KStream<K, V> stream(final Topology.AutoOffsetReset offsetReset,
@@ -195,10 +170,6 @@ public class InternalStreamsBuilder {
 
     String newStoreName(final String prefix) {
         return prefix + String.format(KTableImpl.STATE_STORE_NAME + "%010d", index.getAndIncrement());
-    }
-
-    public Topology build() {
-        return topology;
     }
 
     public synchronized void addStateStore(final StateStoreSupplier supplier,

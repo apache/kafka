@@ -29,6 +29,7 @@ import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.processor.TimestampExtractor;
+import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.SourceNode;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -46,7 +47,12 @@ import java.util.regex.Pattern;
  */
 public class StreamsBuilder {
 
-    private final InternalStreamsBuilder internalStreamsBuilder = new InternalStreamsBuilder();
+    /** The actual topology that is constructed by this StreamsBuilder. */
+    private final Topology topology = new Topology();
+    /** The topology's internal builder. */
+    private final InternalTopologyBuilder internalTopologyBuilder = topology.internalTopologyBuilder;
+
+    private final InternalStreamsBuilder internalStreamsBuilder = new InternalStreamsBuilder(internalTopologyBuilder);
 
     /**
      * Create a {@link KStream} from the specified topics.
@@ -585,10 +591,12 @@ public class StreamsBuilder {
      * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#allMetadata()} to
      * query the value of the key on a parallel running instance of your Kafka Streams application.
      *
-     * @param offsetReset the {@code "auto.offset.reset"} policy to use for the specified topic if no valid committed
-     *                    offsets are available
-     * @param topic       the topic name; cannot be {@code null}
-     * @param storeName   the state store name; cannot be {@code null}
+     * @param offsetReset        the {@code "auto.offset.reset"} policy to use for the specified topic if no valid committed
+     *                           offsets are available
+     * @param timestampExtractor the stateless timestamp extractor used for this source {@link KTable},
+     *                           if not specified the default extractor defined in the configs will be used
+     * @param topic              the topic name; cannot be {@code null}
+     * @param storeName          the state store name; cannot be {@code null}
      * @return a {@link KTable} for the specified topic
      */
     public synchronized <K, V> KTable<K, V> table(final Topology.AutoOffsetReset offsetReset,
@@ -883,14 +891,16 @@ public class StreamsBuilder {
      * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#allMetadata()} to
      * query the value of the key on a parallel running instance of your Kafka Streams application.
      *
-     * @param offsetReset the {@code "auto.offset.reset"} policy to use for the specified topic if no valid committed
-     *                    offsets are available
-     * @param keySerde    key serde used to send key-value pairs,
-     *                    if not specified the default key serde defined in the configuration will be used
-     * @param valueSerde  value serde used to send key-value pairs,
-     *                    if not specified the default value serde defined in the configuration will be used
-     * @param topic       the topic name; cannot be {@code null}
-     * @param storeSupplier user defined state store supplier. Cannot be {@code null}.
+     * @param offsetReset        the {@code "auto.offset.reset"} policy to use for the specified topic if no valid committed
+     *                           offsets are available
+     * @param timestampExtractor the stateless timestamp extractor used for this source {@link KTable},
+     *                           if not specified the default extractor defined in the configs will be used
+     * @param keySerde           key serde used to send key-value pairs,
+     *                           if not specified the default key serde defined in the configuration will be used
+     * @param valueSerde         value serde used to send key-value pairs,
+     *                           if not specified the default value serde defined in the configuration will be used
+     * @param topic              the topic name; cannot be {@code null}
+     * @param storeSupplier      user defined state store supplier. Cannot be {@code null}.
      * @return a {@link KTable} for the specified topic
      */
     public synchronized <K, V> KTable<K, V> table(final Topology.AutoOffsetReset offsetReset,
@@ -978,6 +988,8 @@ public class StreamsBuilder {
      *                           if not specified the default key serde defined in the configuration will be used
      * @param valueSerde         value serde used to send key-value pairs,
      *                           if not specified the default value serde defined in the configuration will be used
+     * @param timestampExtractor the stateless timestamp extractor used for this source {@link KTable},
+     *                           if not specified the default extractor defined in the configs will be used
      * @param topic              the topic name; cannot be {@code null}
      * @param queryableStoreName the state store name; If {@code null} this is the equivalent of
      *                           {@link StreamsBuilder#globalTable(Serde, Serde, String)} ()}
@@ -1194,6 +1206,6 @@ public class StreamsBuilder {
      * @return the {@link Topology} that represents the specified processing logic
      */
     public synchronized Topology build() {
-        return this.internalStreamsBuilder.build();
+        return topology;
     }
 }

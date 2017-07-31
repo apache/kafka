@@ -329,7 +329,7 @@ public class StandbyTaskTest {
 
         restoreStateConsumer.updatePartitions(changelogName, Utils.mkList(
                 new PartitionInfo(changelogName, 0, Node.noNode(), new Node[0], new Node[0])));
-        final InternalStreamsBuilder builder = new InternalStreamsBuilder();
+        final InternalStreamsBuilder builder = new InternalStreamsBuilder(new InternalTopologyBuilder());
         builder.stream(null, null, null, null, "topic").groupByKey().count("my-store");
 
         // TODO: we should refactor this to avoid usage of reflection

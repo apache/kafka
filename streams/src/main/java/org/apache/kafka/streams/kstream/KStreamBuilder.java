@@ -36,7 +36,6 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.streams.state.internals.RocksDBKeyValueStoreSupplier;
 
-import java.lang.reflect.Field;
 import java.util.Collections;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -56,7 +55,7 @@ public class KStreamBuilder extends TopologyBuilder {
 
     private final AtomicInteger index = new AtomicInteger(0);
 
-    private final InternalStreamsBuilder internalStreamsBuilder = new InternalStreamsBuilder();
+    private final InternalStreamsBuilder internalStreamsBuilder = new InternalStreamsBuilder(super.internalTopologyBuilder);
 
     private Topology.AutoOffsetReset translateAutoOffsetReset(final TopologyBuilder.AutoOffsetReset resetPolicy) {
         if (resetPolicy == null) {
@@ -65,17 +64,17 @@ public class KStreamBuilder extends TopologyBuilder {
         return resetPolicy == TopologyBuilder.AutoOffsetReset.EARLIEST ? Topology.AutoOffsetReset.EARLIEST : Topology.AutoOffsetReset.LATEST;
     }
 
-    public KStreamBuilder() {
-        // TODO: we should refactor this to avoid usage of reflection
-        try {
-            final Field internalTopologyBuilderField = internalStreamsBuilder.getClass().getDeclaredField("internalTopologyBuilder");
-            internalTopologyBuilderField.setAccessible(true);
-            internalTopologyBuilderField.set(internalStreamsBuilder, internalTopologyBuilder);
-        } catch (final NoSuchFieldException | IllegalAccessException e) {
-            throw new RuntimeException(e);
-        }
+//    public KStreamBuilder() {
+//        // TODO: we should refactor this to avoid usage of reflection
+//        try {
+//            final Field internalTopologyBuilderField = internalStreamsBuilder.getClass().getDeclaredField("internalTopologyBuilder");
+//            internalTopologyBuilderField.setAccessible(true);
+//            internalTopologyBuilderField.set(internalStreamsBuilder, internalTopologyBuilder);
+//        } catch (final NoSuchFieldException | IllegalAccessException e) {
+//            throw new RuntimeException(e);
+//        }
+//    }
 
-    }
     /**
      * Create a {@link KStream} from the specified topics.
      * The default {@code "auto.offset.reset"} strategy, default {@link TimestampExtractor}, and default key and value
@@ -261,7 +260,8 @@ public class KStreamBuilder extends TopologyBuilder {
         try {
             final String name = newName(KStreamImpl.SOURCE_NAME);
 
-            internalTopologyBuilder.addSource(translateAutoOffsetReset(offsetReset), name, timestampExtractor, keySerde == null ? null : keySerde.deserializer(), valSerde == null ? null : valSerde.deserializer(), topics);
+            internalTopologyBuilder.addSource(translateAutoOffsetReset(offsetReset), name, timestampExtractor,
+                keySerde == null ? null : keySerde.deserializer(), valSerde == null ? null : valSerde.deserializer(), topics);
 
             return new KStreamImpl<>(internalStreamsBuilder, name, Collections.singleton(name), false);
         } catch (final org.apache.kafka.streams.errors.TopologyException e) {
@@ -379,7 +379,8 @@ public class KStreamBuilder extends TopologyBuilder {
         try {
             final String name = newName(KStreamImpl.SOURCE_NAME);
 
-            internalTopologyBuilder.addSource(translateAutoOffsetReset(offsetReset), name, timestampExtractor, keySerde == null ? null : keySerde.deserializer(), valSerde == null ? null : valSerde.deserializer(), topicPattern);
+            internalTopologyBuilder.addSource(translateAutoOffsetReset(offsetReset), name, timestampExtractor,
+                keySerde == null ? null : keySerde.deserializer(), valSerde == null ? null : valSerde.deserializer(), topicPattern);
 
             return new KStreamImpl<>(internalStreamsBuilder, name, Collections.singleton(name), false);
         } catch (final org.apache.kafka.streams.errors.TopologyException e) {

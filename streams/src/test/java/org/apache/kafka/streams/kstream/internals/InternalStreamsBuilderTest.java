@@ -19,6 +19,7 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.kstream.GlobalKTable;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
@@ -26,8 +27,8 @@ import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
-import org.apache.kafka.streams.processor.internals.SourceNode;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockKeyValueMapper;
 import org.apache.kafka.test.MockTimestampExtractor;
@@ -36,6 +37,7 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.lang.reflect.Field;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -55,9 +57,23 @@ public class InternalStreamsBuilderTest {
 
     private static final String APP_ID = "app-id";
 
-    private final InternalStreamsBuilder builder = new InternalStreamsBuilder();
+    private final InternalStreamsBuilder builder = new InternalStreamsBuilder(new InternalTopologyBuilder());
 
     private KStreamTestDriver driver = null;
+
+    public static InternalTopologyBuilder internalTopologyBuilder(final StreamsBuilder streamsBuilder) throws NoSuchFieldException, IllegalAccessException {
+        final Field internalStreamsBuilderField = streamsBuilder.getClass().getDeclaredField("internalStreamsBuilder");
+        internalStreamsBuilderField.setAccessible(true);
+        final InternalStreamsBuilder internalStreamsBuilder = (InternalStreamsBuilder) internalStreamsBuilderField.get(streamsBuilder);
+
+        return internalTopologyBuilder(internalStreamsBuilder);
+    }
+
+    public static InternalTopologyBuilder internalTopologyBuilder(final InternalStreamsBuilder internalStreamsBuilder) throws NoSuchFieldException, IllegalAccessException {
+        final Field internalTopologyBuilderField = internalStreamsBuilder.getClass().getDeclaredField("internalTopologyBuilder");
+        internalTopologyBuilderField.setAccessible(true);
+        return (InternalTopologyBuilder) internalTopologyBuilderField.get(internalStreamsBuilder);
+    }
 
     @Before
     public void setUp() {
@@ -78,7 +94,7 @@ public class InternalStreamsBuilderTest {
         assertEquals("Y-0000000001", builder.newName("Y-"));
         assertEquals("Z-0000000002", builder.newName("Z-"));
 
-        final InternalStreamsBuilder newBuilder = new InternalStreamsBuilder();
+        final InternalStreamsBuilder newBuilder = new InternalStreamsBuilder(new InternalTopologyBuilder());
 
         assertEquals("X-0000000000", newBuilder.newName("X-"));
         assertEquals("Y-0000000001", newBuilder.newName("Y-"));
@@ -91,7 +107,7 @@ public class InternalStreamsBuilderTest {
         assertEquals("Y-STATE-STORE-0000000001", builder.newStoreName("Y-"));
         assertEquals("Z-STATE-STORE-0000000002", builder.newStoreName("Z-"));
 
-        final InternalStreamsBuilder newBuilder = new InternalStreamsBuilder();
+        final InternalStreamsBuilder newBuilder = new InternalStreamsBuilder(new InternalTopologyBuilder());
 
         assertEquals("X-STATE-STORE-0000000000", newBuilder.newStoreName("X-"));
         assertEquals("Y-STATE-STORE-0000000001", newBuilder.newStoreName("Y-"));
@@ -325,44 +341,28 @@ public class InternalStreamsBuilderTest {
     }
 
     @Test
-    public void kStreamTimestampExtractorShouldBeNull() throws Exception {
+    public void shouldHaveNullTimestampExtractorWhenNoneSupplied() throws Exception {
         builder.stream(null, null, null, null, "topic");
         final ProcessorTopology processorTopology = builder.internalTopologyBuilder.build(null);
         assertNull(processorTopology.source("topic").getTimestampExtractor());
     }
 
     @Test
-    public void shouldAddTimestampExtractorToStreamWithKeyValSerdePerSource() throws Exception {
-        builder.stream(null, new MockTimestampExtractor(), null, null, "topic");
-        final ProcessorTopology processorTopology = builder.internalTopologyBuilder.build(null);
-        for (final SourceNode sourceNode: processorTopology.sources()) {
-            assertThat(sourceNode.getTimestampExtractor(), instanceOf(MockTimestampExtractor.class));
-        }
-    }
-
-    @Test
-    public void shouldAddTimestampExtractorToStreamWithOffsetResetPerSource() throws Exception {
+    public void shouldUseProvidedTimestampExtractor() throws Exception {
         builder.stream(null, new MockTimestampExtractor(), null, null, "topic");
         final ProcessorTopology processorTopology = builder.internalTopologyBuilder.build(null);
         assertThat(processorTopology.source("topic").getTimestampExtractor(), instanceOf(MockTimestampExtractor.class));
     }
 
     @Test
-    public void shouldAddTimestampExtractorToTablePerSource() throws Exception {
+    public void ktableShouldHaveNullTimestampExtractorWhenNoneSupplied() throws Exception {
         builder.table(null, null, null, null, "topic", "store");
         final ProcessorTopology processorTopology = builder.internalTopologyBuilder.build(null);
         assertNull(processorTopology.source("topic").getTimestampExtractor());
     }
 
     @Test
-    public void kTableTimestampExtractorShouldBeNull() throws Exception {
-        builder.table(null, null, null, null, "topic", "store");
-        final ProcessorTopology processorTopology = builder.internalTopologyBuilder.build(null);
-        assertNull(processorTopology.source("topic").getTimestampExtractor());
-    }
-
-    @Test
-    public void shouldAddTimestampExtractorToTableWithKeyValSerdePerSource() throws Exception {
+    public void ktableShouldUseProvidedTimestampExtractor() throws Exception {
         builder.table(null, new MockTimestampExtractor(), null, null, "topic", "store");
         final ProcessorTopology processorTopology = builder.internalTopologyBuilder.build(null);
         assertThat(processorTopology.source("topic").getTimestampExtractor(), instanceOf(MockTimestampExtractor.class));
