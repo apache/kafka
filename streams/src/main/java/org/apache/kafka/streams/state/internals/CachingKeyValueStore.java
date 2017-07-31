@@ -53,7 +53,6 @@ class CachingKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore im
         this.valueSerde = valueSerde;
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public void init(final ProcessorContext context, final StateStore root) {
         underlying.init(context, root);
@@ -184,11 +183,13 @@ class CachingKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore im
 
     @Override
     public synchronized void put(final K key, final V value) {
+        Objects.requireNonNull(key, "key cannot be null");
         validateStoreOpen();
         put(serdes.rawKey(key), value);
     }
 
     private synchronized void put(final byte[] rawKey, final V value) {
+        Objects.requireNonNull(rawKey, "key cannot be null");
         final byte[] rawValue = serdes.rawValue(value);
         cache.put(cacheName, Bytes.wrap(rawKey), new LRUCacheEntry(rawValue, true, context.offset(),
                   context.timestamp(), context.partition(), context.topic()));
@@ -196,6 +197,7 @@ class CachingKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore im
 
     @Override
     public synchronized V putIfAbsent(final K key, final V value) {
+        Objects.requireNonNull(key, "key cannot be null");
         validateStoreOpen();
         final byte[] rawKey = serdes.rawKey(key);
         final V v = get(rawKey);

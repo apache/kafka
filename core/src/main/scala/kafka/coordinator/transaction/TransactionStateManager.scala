@@ -485,12 +485,13 @@ class TransactionStateManager(brokerId: Int,
                | Errors.REQUEST_TIMED_OUT => // note that for timed out request we return NOT_AVAILABLE error code to let client retry
             Errors.COORDINATOR_NOT_AVAILABLE
 
-          case Errors.NOT_LEADER_FOR_PARTITION =>
+          case Errors.NOT_LEADER_FOR_PARTITION
+               | Errors.KAFKA_STORAGE_ERROR =>
             Errors.NOT_COORDINATOR
 
           case Errors.MESSAGE_TOO_LARGE
                | Errors.RECORD_LIST_TOO_LARGE =>
-            Errors.UNKNOWN
+            Errors.UNKNOWN_SERVER_ERROR
 
           case other =>
             other
@@ -506,7 +507,6 @@ class TransactionStateManager(brokerId: Int,
             info(s"Accessing the cached transaction metadata for $transactionalId returns $err error; " +
               s"aborting transition to the new metadata and setting the error in the callback")
             responseError = err
-
           case Right(Some(epochAndMetadata)) =>
             val metadata = epochAndMetadata.transactionMetadata
 

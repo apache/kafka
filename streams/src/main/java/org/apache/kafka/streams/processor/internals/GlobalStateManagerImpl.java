@@ -21,9 +21,11 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.processor.BatchingStateRestoreCallback;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
@@ -86,7 +88,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
             try {
                 stateDirectory.unlockGlobalState();
             } catch (IOException e1) {
-                log.error("failed to unlock the global state directory", e);
+                log.error("Failed to unlock the global state directory", e);
             }
             throw new StreamsException("Failed to read checkpoints for global state stores", e);
         }
@@ -129,7 +131,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
             throw new IllegalArgumentException(String.format("The stateRestoreCallback provided for store %s was null", store.name()));
         }
 
-        log.info("restoring state for global store {}", store.name());
+        log.info("Restoring state for global store {}", store.name());
         final List<TopicPartition> topicPartitions = topicPartitionsForStore(store);
         final Map<TopicPartition, Long> highWatermarks = consumer.endOffsets(topicPartitions);
         try {
@@ -169,15 +171,23 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
 
             long offset = consumer.position(topicPartition);
             final Long highWatermark = highWatermarks.get(topicPartition);
+            BatchingStateRestoreCallback
+                stateRestoreAdapter =
+                (BatchingStateRestoreCallback) ((stateRestoreCallback instanceof
+                                                     BatchingStateRestoreCallback)
+                                                ? stateRestoreCallback
+                                                : new WrappedBatchingStateRestoreCallback(stateRestoreCallback));
 
             while (offset < highWatermark) {
                 final ConsumerRecords<byte[], byte[]> records = consumer.poll(100);
+                final List<KeyValue<byte[], byte[]>> restoreRecords = new ArrayList<>();
                 for (ConsumerRecord<byte[], byte[]> record : records) {
                     offset = record.offset() + 1;
                     if (record.key() != null) {
-                        stateRestoreCallback.restore(record.key(), record.value());
+                        restoreRecords.add(KeyValue.pair(record.key(), record.value()));
                     }
                 }
+                stateRestoreAdapter.restoreAll(restoreRecords);
             }
             checkpointableOffsets.put(topicPartition, offset);
         }
@@ -234,7 +244,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
             try {
                 checkpoint.write(checkpointableOffsets);
             } catch (IOException e) {
-                log.warn("failed to write offsets checkpoint for global stores", e);
+                log.warn("Failed to write offsets checkpoint for global stores", e);
             }
         }
     }

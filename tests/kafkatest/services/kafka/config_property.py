@@ -44,6 +44,10 @@ MESSAGE_FORMAT_VERSION = "log.message.format.version"
 MESSAGE_TIMESTAMP_TYPE = "message.timestamp.type"
 THROTTLING_REPLICATION_RATE_LIMIT = "replication.quota.throttled.rate"
 
+LOG_FLUSH_INTERVAL_MESSAGE = "log.flush.interval.messages"
+REPLICA_HIGHWATERMARK_CHECKPOINT_INTERVAL_MS = "replica.high.watermark.checkpoint.interval.ms"
+LOG_ROLL_TIME_MS = "log.roll.ms"
+
 """
 From KafkaConfig.scala
 

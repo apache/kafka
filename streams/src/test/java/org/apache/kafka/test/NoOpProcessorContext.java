@@ -18,6 +18,9 @@ package org.apache.kafka.test;
 
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.processor.Cancellable;
+import org.apache.kafka.streams.processor.PunctuationType;
+import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
@@ -48,9 +51,12 @@ public class NoOpProcessorContext extends AbstractProcessorContext {
         return null;
     }
 
+    @Override public Cancellable schedule(long interval, PunctuationType type, Punctuator callback) {
+        return null;
+    }
+
     @Override
     public void schedule(final long interval) {
-
     }
 
     @Override

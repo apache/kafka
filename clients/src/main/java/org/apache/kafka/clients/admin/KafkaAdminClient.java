@@ -272,7 +272,6 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     static KafkaAdminClient createInternal(AdminClientConfig config, TimeoutProcessorFactory timeoutProcessorFactory) {
-        Metadata metadata = null;
         Metrics metrics = null;
         NetworkClient networkClient = null;
         Time time = Time.SYSTEM;
@@ -284,7 +283,7 @@ public class KafkaAdminClient extends AdminClient {
         try {
             // Since we only request node information, it's safe to pass true for allowAutoTopicCreation (and it
             // simplifies communication with older brokers)
-            metadata = new Metadata(config.getLong(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG),
+            Metadata metadata = new Metadata(config.getLong(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG),
                     config.getLong(AdminClientConfig.METADATA_MAX_AGE_CONFIG), true);
             List<MetricsReporter> reporters = config.getConfiguredInstances(AdminClientConfig.METRIC_REPORTER_CLASSES_CONFIG,
                 MetricsReporter.class);
@@ -312,7 +311,6 @@ public class KafkaAdminClient extends AdminClient {
                 time,
                 true,
                 apiVersions);
-            channelBuilder = null;
             return new KafkaAdminClient(config, clientId, time, metadata, metrics, networkClient,
                 timeoutProcessorFactory);
         } catch (Throwable exc) {
@@ -1277,8 +1275,8 @@ public class KafkaAdminClient extends AdminClient {
             @Override
             void handleResponse(AbstractResponse abstractResponse) {
                 DescribeAclsResponse response = (DescribeAclsResponse) abstractResponse;
-                if (response.throwable() != null) {
-                    future.completeExceptionally(response.throwable());
+                if (response.error().isFailure()) {
+                    future.completeExceptionally(response.error().exception());
                 } else {
                     future.complete(response.acls());
                 }
@@ -1330,8 +1328,8 @@ public class KafkaAdminClient extends AdminClient {
                             "The broker reported no creation result for the given ACL."));
                     } else {
                         AclCreationResponse creation = iter.next();
-                        if (creation.throwable() != null) {
-                            future.completeExceptionally(creation.throwable());
+                        if (creation.error().isFailure()) {
+                            future.completeExceptionally(creation.error().exception());
                         } else {
                             future.complete(null);
                         }
@@ -1378,12 +1376,12 @@ public class KafkaAdminClient extends AdminClient {
                             "The broker reported no deletion result for the given filter."));
                     } else {
                         AclFilterResponse deletion = iter.next();
-                        if (deletion.throwable() != null) {
-                            future.completeExceptionally(deletion.throwable());
+                        if (deletion.error().isFailure()) {
+                            future.completeExceptionally(deletion.error().exception());
                         } else {
                             List<FilterResult> filterResults = new ArrayList<>();
                             for (AclDeletionResult deletionResult : deletion.deletions()) {
-                                filterResults.add(new FilterResult(deletionResult.acl(), deletionResult.exception()));
+                                filterResults.add(new FilterResult(deletionResult.acl(), deletionResult.error().exception()));
                             }
                             future.complete(new FilterResults(filterResults));
                         }
@@ -1433,7 +1431,7 @@ public class KafkaAdminClient extends AdminClient {
                     ConfigResource configResource = entry.getKey();
                     KafkaFutureImpl<Config> future = entry.getValue();
                     DescribeConfigsResponse.Config config = response.config(configResourceToResource(configResource));
-                    if (!config.error().is(Errors.NONE)) {
+                    if (config.error().isFailure()) {
                         future.completeExceptionally(config.error().exception());
                         continue;
                     }
@@ -1469,7 +1467,7 @@ public class KafkaAdminClient extends AdminClient {
                     DescribeConfigsResponse response = (DescribeConfigsResponse) abstractResponse;
                     DescribeConfigsResponse.Config config = response.configs().get(resource);
 
-                    if (!config.error().is(Errors.NONE))
+                    if (config.error().isFailure())
                         brokerFuture.completeExceptionally(config.error().exception());
                     else {
                         List<ConfigEntry> configEntries = new ArrayList<>();

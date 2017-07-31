@@ -1039,7 +1039,6 @@ public class KStreamBuilder extends TopologyBuilder {
      * @param queryableStoreName the state store name; If {@code null} this is the equivalent of {@link KStreamBuilder#globalTable(Serde, Serde, String)} ()}
      * @return a {@link GlobalKTable} for the specified topic
      */
-    @SuppressWarnings("unchecked")
     public <K, V> GlobalKTable<K, V> globalTable(final Serde<K> keySerde,
                                                  final Serde<V> valSerde,
                                                  final TimestampExtractor timestampExtractor,
@@ -1083,14 +1082,13 @@ public class KStreamBuilder extends TopologyBuilder {
      * @param storeSupplier user defined state store supplier. Cannot be {@code null}.
      * @return a {@link GlobalKTable} for the specified topic
      */
-    @SuppressWarnings("unchecked")
     public <K, V> GlobalKTable<K, V> globalTable(final Serde<K> keySerde,
                                                  final Serde<V> valSerde,
                                                  final String topic,
                                                  final StateStoreSupplier<KeyValueStore> storeSupplier) {
         return doGlobalTable(keySerde, valSerde, null, topic, storeSupplier);
     }
-    
+
     /**
      * Create a {@link GlobalKTable} for the specified topic.
      * The default {@link TimestampExtractor} as specified in the {@link StreamsConfig config} is used.
@@ -1121,7 +1119,6 @@ public class KStreamBuilder extends TopologyBuilder {
      *                           {@link KStreamBuilder#globalTable(Serde, Serde, String)} ()}
      * @return a {@link GlobalKTable} for the specified topic
      */
-    @SuppressWarnings("unchecked")
     public <K, V> GlobalKTable<K, V> globalTable(final Serde<K> keySerde,
                                                  final Serde<V> valSerde,
                                                  final String topic,
@@ -1198,7 +1195,6 @@ public class KStreamBuilder extends TopologyBuilder {
      * @param topic     the topic name; cannot be {@code null}
      * @return a {@link GlobalKTable} for the specified topic
      */
-    @SuppressWarnings("unchecked")
     public <K, V> GlobalKTable<K, V> globalTable(final Serde<K> keySerde,
                                                  final Serde<V> valSerde,
                                                  final String topic) {

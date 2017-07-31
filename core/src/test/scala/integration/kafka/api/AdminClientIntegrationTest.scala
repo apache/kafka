@@ -364,7 +364,7 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
     client.close()
   }
 
-  override def generateConfigs() = {
+  override def generateConfigs = {
     val cfgs = TestUtils.createBrokerConfigs(brokerCount, zkConnect, interBrokerSecurityProtocol = Some(securityProtocol),
       trustStoreFile = trustStoreFile, saslProperties = serverSaslProperties)
     cfgs.foreach { config =>

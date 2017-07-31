@@ -56,8 +56,8 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
         this.config = config;
         this.metrics = metrics;
         this.stateManager = stateManager;
-        valueSerde = config.valueSerde();
-        keySerde = config.keySerde();
+        valueSerde = config.defaultValueSerde();
+        keySerde = config.defaultKeySerde();
         this.cache = cache;
     }
 
@@ -160,7 +160,7 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
     }
 
     @Override
-    public Map<String, Object> appConfigsWithPrefix(String prefix) {
+    public Map<String, Object> appConfigsWithPrefix(final String prefix) {
         return config.originalsWithPrefix(prefix);
     }
 
@@ -171,7 +171,7 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
 
     @Override
     public RecordContext recordContext() {
-        return this.recordContext;
+        return recordContext;
     }
 
     @Override

@@ -256,7 +256,7 @@ class TransactionCoordinator(brokerId: Int,
 
       result match {
         case Left(err) =>
-          info(s"Returning $err error code to client for $transactionalId's AddPartitions request")
+          debug(s"Returning $err error code to client for $transactionalId's AddPartitions request")
           responseCallback(err)
 
         case Right((coordinatorEpoch, newMetadata)) =>
@@ -266,7 +266,7 @@ class TransactionCoordinator(brokerId: Int,
   }
 
   def handleTxnImmigration(txnTopicPartitionId: Int, coordinatorEpoch: Int) {
-      txnManager.loadTransactionsForTxnTopicPartition(txnTopicPartitionId, coordinatorEpoch, txnMarkerChannelManager.addTxnMarkersToSend)
+    txnManager.loadTransactionsForTxnTopicPartition(txnTopicPartitionId, coordinatorEpoch, txnMarkerChannelManager.addTxnMarkersToSend)
   }
 
   def handleTxnEmigration(txnTopicPartitionId: Int, coordinatorEpoch: Int) {
@@ -346,7 +346,7 @@ class TransactionCoordinator(brokerId: Int,
 
       preAppendResult match {
         case Left(err) =>
-          info(s"Aborting append of $txnMarkerResult to transaction log with coordinator and returning $err error to client for $transactionalId's EndTransaction request")
+          debug(s"Aborting append of $txnMarkerResult to transaction log with coordinator and returning $err error to client for $transactionalId's EndTransaction request")
           responseCallback(err)
 
         case Right((coordinatorEpoch, newMetadata)) =>
@@ -400,7 +400,6 @@ class TransactionCoordinator(brokerId: Int,
               preSendResult match {
                 case Left(err) =>
                   info(s"Aborting sending of transaction markers after appended $txnMarkerResult to transaction log and returning $err error to client for $transactionalId's EndTransaction request")
-
                   responseCallback(err)
 
                 case Right((txnMetadata, newPreSendMetadata)) =>
@@ -435,7 +434,7 @@ class TransactionCoordinator(brokerId: Int,
         TransactionResult.ABORT,
         (error: Errors) => error match {
           case Errors.NONE =>
-            debug(s"Completed rollback ongoing transaction of transactionalId: ${txnIdAndPidEpoch.transactionalId} due to timeout")
+            info(s"Completed rollback ongoing transaction of transactionalId: ${txnIdAndPidEpoch.transactionalId} due to timeout")
           case Errors.INVALID_PRODUCER_ID_MAPPING |
                Errors.INVALID_PRODUCER_EPOCH |
                Errors.CONCURRENT_TRANSACTIONS =>

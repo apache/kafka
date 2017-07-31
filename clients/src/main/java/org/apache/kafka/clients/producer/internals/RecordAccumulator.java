@@ -200,7 +200,7 @@ public final class RecordAccumulator {
 
             // we don't have an in-progress record batch try to allocate a new batch
             byte maxUsableMagic = apiVersions.maxUsableProduceMagic();
-            int size = Math.max(this.batchSize, AbstractRecords.sizeInBytesUpperBound(maxUsableMagic, key, value, headers));
+            int size = Math.max(this.batchSize, AbstractRecords.estimateSizeInBytesUpperBound(maxUsableMagic, compression, key, value, headers));
             log.trace("Allocating a new {} byte message buffer for topic {} partition {}", size, tp.topic(), tp.partition());
             buffer = free.allocate(size, maxTimeToBlock);
             synchronized (dq) {
@@ -449,7 +449,7 @@ public final class RecordAccumulator {
                                 boolean backoff = first.attempts() > 0 && first.waitedTimeMs(now) < retryBackoffMs;
                                 // Only drain the batch if it is not during backoff period.
                                 if (!backoff) {
-                                    if (size + first.sizeInBytes() > maxSize && !ready.isEmpty()) {
+                                    if (size + first.estimatedSizeInBytes() > maxSize && !ready.isEmpty()) {
                                         // there is a rare case that a single batch size is larger than the request size due
                                         // to compression; in this case we will still eventually send this batch in a single
                                         // request
@@ -483,7 +483,7 @@ public final class RecordAccumulator {
                                             batch.setProducerState(producerIdAndEpoch, sequenceNumber, isTransactional);
                                         }
                                         batch.close();
-                                        size += batch.sizeInBytes();
+                                        size += batch.records().sizeInBytes();
                                         ready.add(batch);
                                         batch.drained(now);
                                     }

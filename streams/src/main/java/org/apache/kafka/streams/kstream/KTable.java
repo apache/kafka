@@ -415,13 +415,13 @@ public interface KTable<K, V> {
      * Note that {@code print()} is not applied to the internal state store and only called for each new {@code KTable}
      * update record.
      *
-     * @param streamName the name used to label the key/value pairs printed to the console
+     * @param label the name used to label the key/value pairs printed to the console
      * @deprecated Use the Interactive Queries APIs (e.g., {@link KafkaStreams#store(String, QueryableStoreType) }
      * followed by {@link ReadOnlyKeyValueStore#all()}) to iterate over the keys of a KTable. Alternatively
      * convert to a KStream using {@code toStream()} and then use {@link KStream#print(String)} on the result.
      */
     @Deprecated
-    void print(final String streamName);
+    void print(final String label);
 
     /**
      * Print the update records of this {@code KTable} to {@code System.out}.
@@ -462,7 +462,7 @@ public interface KTable<K, V> {
      *
      * @param keySerde   key serde used to deserialize key if type is {@code byte[]},
      * @param valSerde   value serde used to deserialize value if type is {@code byte[]},
-     * @param streamName the name used to label the key/value pairs printed to the console
+     * @param label the name used to label the key/value pairs printed to the console
      * @deprecated Use the Interactive Queries APIs (e.g., {@link KafkaStreams#store(String, QueryableStoreType) }
      * followed by {@link ReadOnlyKeyValueStore#all()}) to iterate over the keys of a KTable. Alternatively
      * convert to a KStream using {@code toStream()} and then use {@link KStream#print(Serde, Serde, String)} on the result.
@@ -470,7 +470,7 @@ public interface KTable<K, V> {
     @Deprecated
     void print(final Serde<K> keySerde,
                final Serde<V> valSerde,
-               final String streamName);
+               final String label);
 
     /**
      * Write the update records of this {@code KTable} to a file at the given path.
@@ -508,14 +508,14 @@ public interface KTable<K, V> {
      * {@code KTable} update record.
      *
      * @param filePath   name of file to write to
-     * @param streamName the name used to label the key/value pairs printed out to the console
+     * @param label the name used to label the key/value pairs printed out to the console
      * @deprecated Use the Interactive Queries APIs (e.g., {@link KafkaStreams#store(String, QueryableStoreType) }
      * followed by {@link ReadOnlyKeyValueStore#all()}) to iterate over the keys of a KTable. Alternatively
      * convert to a KStream using {@code toStream()} and then use {@link KStream#writeAsText(String, String)}} on the result.
      */
     @Deprecated
     void writeAsText(final String filePath,
-                     final String streamName);
+                     final String label);
 
     /**
      * Write the update records of this {@code KTable} to a file at the given path.
@@ -557,7 +557,7 @@ public interface KTable<K, V> {
      * {@code KTable} update record.
      *
      * @param filePath name of file to write to
-     * @param streamName the name used to label the key/value pairs printed to the console
+     * @param label the name used to label the key/value pairs printed to the console
      * @param keySerde key serde used to deserialize key if type is {@code byte[]},
      * @param valSerde value serde used to deserialize value if type is {@code byte[]}
      * @deprecated Use the Interactive Queries APIs (e.g., {@link KafkaStreams#store(String, QueryableStoreType) }
@@ -567,7 +567,7 @@ public interface KTable<K, V> {
      */
     @Deprecated
     void writeAsText(final String filePath,
-                     final String streamName,
+                     final String label,
                      final Serde<K> keySerde,
                      final Serde<V> valSerde);
 

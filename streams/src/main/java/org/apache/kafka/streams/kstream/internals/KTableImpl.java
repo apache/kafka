@@ -29,6 +29,7 @@ import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
+import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.processor.StreamPartitioner;
@@ -74,6 +75,8 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
 
     private final ProcessorSupplier<?, ?> processorSupplier;
 
+    private final KeyValueMapper<K, V, String> defaultKeyValueMapper;
+
     private final String queryableStoreName;
     private final boolean isQueryable;
 
@@ -93,6 +96,12 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         this.keySerde = null;
         this.valSerde = null;
         this.isQueryable = isQueryable;
+        this.defaultKeyValueMapper = new KeyValueMapper<K, V, String>() {
+            @Override
+            public String apply(K key, V value) {
+                return String.format("%s, %s", key, value);
+            }
+        };
     }
 
     public KTableImpl(KStreamBuilder topology,
@@ -109,6 +118,12 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         this.keySerde = keySerde;
         this.valSerde = valSerde;
         this.isQueryable = isQueryable;
+        this.defaultKeyValueMapper = new KeyValueMapper<K, V, String>() {
+            @Override
+            public String apply(K key, V value) {
+                return String.format("%s, %s", key, value);
+            }
+        };
     }
 
     @Override
@@ -223,64 +238,72 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         return doMapValues(mapper, valueSerde, storeSupplier);
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public void print() {
-        print(null, null, null);
+        print(null, null, this.name);
     }
 
+    @SuppressWarnings("deprecation")
     @Override
-    public void print(String streamName) {
-        print(null, null, streamName);
+    public void print(String label) {
+        print(null, null, label);
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public void print(Serde<K> keySerde, Serde<V> valSerde) {
-        print(keySerde, valSerde, null);
+        print(keySerde, valSerde, this.name);
     }
 
-
+    @SuppressWarnings("deprecation")
     @Override
-    public void print(Serde<K> keySerde, Serde<V> valSerde, String streamName) {
+    public void print(Serde<K> keySerde, final Serde<V> valSerde, String label) {
+        Objects.requireNonNull(label, "label can't be null");
         String name = topology.newName(PRINTING_NAME);
-        streamName = (streamName == null) ? this.name : streamName;
-        topology.addProcessor(name, new KStreamPrint<>(new PrintForeachAction(null, streamName), keySerde, valSerde), this.name);
+        topology.addProcessor(name, new KStreamPrint<>(new PrintForeachAction(null, defaultKeyValueMapper, label), keySerde, valSerde), this.name);
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public void writeAsText(String filePath) {
-        writeAsText(filePath, null, null, null);
+        writeAsText(filePath, this.name, null, null);
     }
 
+    @SuppressWarnings("deprecation")
     @Override
-    public void writeAsText(String filePath, String streamName) {
-        writeAsText(filePath, streamName, null, null);
+    public void writeAsText(String filePath, String label) {
+        writeAsText(filePath, label, null, null);
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public void writeAsText(String filePath, Serde<K> keySerde, Serde<V> valSerde) {
-        writeAsText(filePath, null, keySerde, valSerde);
+        writeAsText(filePath, this.name, keySerde, valSerde);
     }
 
     /**
      * @throws TopologyBuilderException if file is not found
      */
+    @SuppressWarnings("deprecation")
     @Override
-    public void writeAsText(String filePath, String streamName, Serde<K> keySerde, Serde<V> valSerde) {
+    public void writeAsText(String filePath, String label, Serde<K> keySerde, Serde<V> valSerde) {
         Objects.requireNonNull(filePath, "filePath can't be null");
+        Objects.requireNonNull(label, "label can't be null");
         if (filePath.trim().isEmpty()) {
             throw new TopologyBuilderException("filePath can't be an empty string");
         }
         String name = topology.newName(PRINTING_NAME);
-        streamName = (streamName == null) ? this.name : streamName;
         try {
             PrintWriter printWriter = new PrintWriter(filePath, StandardCharsets.UTF_8.name());
-            topology.addProcessor(name, new KStreamPrint<>(new PrintForeachAction(printWriter, streamName), keySerde, valSerde), this.name);
+            topology.addProcessor(name, new KStreamPrint<>(new PrintForeachAction(printWriter, defaultKeyValueMapper, label), keySerde, valSerde), this.name);
         } catch (FileNotFoundException | UnsupportedEncodingException e) {
             String message = "Unable to write stream to file at [" + filePath + "] " + e.getMessage();
             throw new TopologyBuilderException(message);
         }
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public void foreach(final ForeachAction<? super K, ? super V> action) {
         Objects.requireNonNull(action, "action can't be null");
@@ -304,7 +327,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
 
         to(keySerde, valSerde, partitioner, topic);
 
-        return topology.table(keySerde, valSerde, topic, internalStoreName);
+        return topology.table(null, new FailOnInvalidTimestamp(), keySerde, valSerde, topic, internalStoreName);
     }
 
     @Override
@@ -316,7 +339,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         Objects.requireNonNull(storeSupplier, "storeSupplier can't be null");
         to(keySerde, valSerde, partitioner, topic);
 
-        return topology.table(keySerde, valSerde, topic, storeSupplier);
+        return topology.table(null, new FailOnInvalidTimestamp(), keySerde, valSerde, topic, storeSupplier);
     }
 
     @Override

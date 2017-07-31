@@ -53,16 +53,14 @@ object ReplicationUtils extends Logging {
       val writtenLeaderOpt = writtenLeaderAndIsrInfo._1
       val writtenStat = writtenLeaderAndIsrInfo._2
       val expectedLeader = parseLeaderAndIsr(expectedLeaderAndIsrInfo, path, writtenStat)
-      writtenLeaderOpt match {
-        case Some(writtenData) =>
-          val writtenLeader = parseLeaderAndIsr(writtenData, path, writtenStat)
-          (expectedLeader,writtenLeader) match {
-            case (Some(expectedLeader),Some(writtenLeader)) =>
-              if(expectedLeader == writtenLeader)
-                return (true, writtenStat.getVersion())
-            case _ =>
-          }
-        case None =>
+      writtenLeaderOpt.foreach { writtenData =>
+        val writtenLeader = parseLeaderAndIsr(writtenData, path, writtenStat)
+        (expectedLeader,writtenLeader) match {
+          case (Some(expectedLeader),Some(writtenLeader)) =>
+            if(expectedLeader == writtenLeader)
+              return (true, writtenStat.getVersion())
+          case _ =>
+        }
       }
     } catch {
       case _: Exception =>
@@ -77,14 +75,13 @@ object ReplicationUtils extends Logging {
     leaderAndIsrOpt.flatMap(leaderAndIsrStr => parseLeaderAndIsr(leaderAndIsrStr, leaderAndIsrPath, stat))
   }
 
-  private def parseLeaderAndIsr(leaderAndIsrStr: String, path: String, stat: Stat)
-      : Option[LeaderIsrAndControllerEpoch] = {
-    Json.parseFull(leaderAndIsrStr).flatMap {m =>
-      val leaderIsrAndEpochInfo = m.asInstanceOf[Map[String, Any]]
-      val leader = leaderIsrAndEpochInfo.get("leader").get.asInstanceOf[Int]
-      val epoch = leaderIsrAndEpochInfo.get("leader_epoch").get.asInstanceOf[Int]
-      val isr = leaderIsrAndEpochInfo.get("isr").get.asInstanceOf[List[Int]]
-      val controllerEpoch = leaderIsrAndEpochInfo.get("controller_epoch").get.asInstanceOf[Int]
+  private def parseLeaderAndIsr(leaderAndIsrStr: String, path: String, stat: Stat): Option[LeaderIsrAndControllerEpoch] = {
+    Json.parseFull(leaderAndIsrStr).flatMap { js =>
+      val leaderIsrAndEpochInfo = js.asJsonObject
+      val leader = leaderIsrAndEpochInfo("leader").to[Int]
+      val epoch = leaderIsrAndEpochInfo("leader_epoch").to[Int]
+      val isr = leaderIsrAndEpochInfo("isr").to[List[Int]]
+      val controllerEpoch = leaderIsrAndEpochInfo("controller_epoch").to[Int]
       val zkPathVersion = stat.getVersion
       trace(s"Leader $leader, Epoch $epoch, Isr $isr, Zk path version $zkPathVersion for leaderAndIsrPath $path")
       Some(LeaderIsrAndControllerEpoch(LeaderAndIsr(leader, epoch, isr, zkPathVersion), controllerEpoch))}

@@ -29,6 +29,8 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
+import org.apache.kafka.streams.errors.LogAndFailExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.DefaultPartitionGrouper;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
@@ -97,7 +99,15 @@ public class StreamsConfig extends AbstractConfig {
      */
     public static final String CONSUMER_PREFIX = "consumer.";
 
-    // Prefix used to isolate producer configs from consumer configs.
+
+    /**
+     * Prefix used to provide default topic configs to be applied when creating internal topics.
+     * These should be valid properties from {@link org.apache.kafka.common.config.TopicConfig TopicConfig}.
+     * It is recommended to use {@link #topicPrefix(String)}.
+     */
+    public static final String TOPIC_PREFIX = "topic.";
+
+
     /**
      * Prefix used to isolate {@link KafkaProducer producer} configs from {@link KafkaConsumer consumer} configs.
      * It is recommended to use {@link #producerPrefix(String)} to add this prefix to {@link ProducerConfig producer
@@ -136,6 +146,8 @@ public class StreamsConfig extends AbstractConfig {
 
     /** {@code client.id} */
     public static final String CLIENT_ID_CONFIG = CommonClientConfigs.CLIENT_ID_CONFIG;
+    private static final String CLIENT_ID_DOC = "An ID prefix string used for the client IDs of internal consumer, producer and restore-consumer," +
+        " with pattern '<client.id>-StreamThread-<threadSequenceNumber>-<consumer|producer|restore-consumer>'.";
 
     /** {@code commit.interval.ms} */
     public static final String COMMIT_INTERVAL_MS_CONFIG = "commit.interval.ms";
@@ -145,6 +157,13 @@ public class StreamsConfig extends AbstractConfig {
 
     /** {@code connections.max.idle.ms} */
     public static final String CONNECTIONS_MAX_IDLE_MS_CONFIG = CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG;
+
+    /**
+     * {@code default.deserialization.exception.handler}
+     */
+    public static final String DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG = "default.deserialization.exception.handler";
+    private static final String DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_DOC = "Exception handling class that implements the <code>DeserializationExceptionHandler</code> interface.";
+
 
     /** {@code default key.serde} */
     public static final String DEFAULT_KEY_SERDE_CLASS_CONFIG = "default.key.serde";
@@ -264,7 +283,7 @@ public class StreamsConfig extends AbstractConfig {
      */
     @Deprecated
     public static final String ZOOKEEPER_CONNECT_CONFIG = "zookeeper.connect";
-    private static final String ZOOKEEPER_CONNECT_DOC = "Zookeeper connect string for Kafka topics management.";
+    private static final String ZOOKEEPER_CONNECT_DOC = "Zookeeper connect string for Kafka topics management. This config is deprecated and will be ignored as Streams API does not use Zookeeper anymore.";
 
     static {
         CONFIG = new ConfigDef()
@@ -302,7 +321,12 @@ public class StreamsConfig extends AbstractConfig {
                     Type.STRING,
                     "",
                     Importance.MEDIUM,
-                    CommonClientConfigs.CLIENT_ID_DOC)
+                    CLIENT_ID_DOC)
+            .define(DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG,
+                Type.CLASS,
+                LogAndFailExceptionHandler.class.getName(),
+                Importance.MEDIUM,
+                DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_DOC)
             .define(DEFAULT_KEY_SERDE_CLASS_CONFIG,
                     Type.CLASS,
                     Serdes.ByteArraySerde.class.getName(),
@@ -549,6 +573,17 @@ public class StreamsConfig extends AbstractConfig {
     }
 
     /**
+     * Prefix a property with {@link #TOPIC_PREFIX}
+     * used to provide default topic configs to be applied when creating internal topics.
+     *
+     * @param topicProp the topic property to be masked
+     * @return TOPIC_PREFIX + {@code topicProp}
+     */
+    public static String topicPrefix(final String topicProp) {
+        return TOPIC_PREFIX + topicProp;
+    }
+
+    /**
      * Return a copy of the config definition.
      *
      * @return a copy of the config definition
@@ -574,8 +609,8 @@ public class StreamsConfig extends AbstractConfig {
 
         final boolean eosEnabled = EXACTLY_ONCE.equals(parsedValues.get(PROCESSING_GUARANTEE_CONFIG));
         if (eosEnabled && !originals().containsKey(COMMIT_INTERVAL_MS_CONFIG)) {
-            log.debug("Using " + COMMIT_INTERVAL_MS_CONFIG + " default value of "
-                + EOS_DEFAULT_COMMIT_INTERVAL_MS + " as exactly once is enabled.");
+            log.debug("Using {} default value of {} as exactly once is enabled.",
+                    COMMIT_INTERVAL_MS_CONFIG, EOS_DEFAULT_COMMIT_INTERVAL_MS);
             configUpdates.put(COMMIT_INTERVAL_MS_CONFIG, EOS_DEFAULT_COMMIT_INTERVAL_MS);
         }
 
@@ -713,18 +748,7 @@ public class StreamsConfig extends AbstractConfig {
      */
     @Deprecated
     public Serde keySerde() {
-        try {
-            Serde<?> serde = getConfiguredInstance(KEY_SERDE_CLASS_CONFIG, Serde.class);
-            // the default value of deprecated key serde is null
-            if (serde == null) {
-                serde = defaultKeySerde();
-            } else {
-                serde.configure(originals(), true);
-            }
-            return serde;
-        } catch (final Exception e) {
-            throw new StreamsException(String.format("Failed to configure key serde %s", get(KEY_SERDE_CLASS_CONFIG)), e);
-        }
+        return defaultKeySerde();
     }
 
     /**
@@ -734,12 +758,18 @@ public class StreamsConfig extends AbstractConfig {
      * @return an configured instance of key Serde class
      */
     public Serde defaultKeySerde() {
+        Object keySerdeConfigSetting = get(KEY_SERDE_CLASS_CONFIG);
         try {
-            Serde<?> serde = getConfiguredInstance(DEFAULT_KEY_SERDE_CLASS_CONFIG, Serde.class);
+            Serde<?> serde = getConfiguredInstance(KEY_SERDE_CLASS_CONFIG, Serde.class);
+            if (serde == null) {
+                keySerdeConfigSetting = get(DEFAULT_KEY_SERDE_CLASS_CONFIG);
+                serde = getConfiguredInstance(DEFAULT_KEY_SERDE_CLASS_CONFIG, Serde.class);
+            }
             serde.configure(originals(), true);
             return serde;
         } catch (final Exception e) {
-            throw new StreamsException(String.format("Failed to configure key serde %s", get(DEFAULT_KEY_SERDE_CLASS_CONFIG)), e);
+            throw new StreamsException(
+                String.format("Failed to configure key serde %s", keySerdeConfigSetting), e);
         }
     }
 
@@ -751,18 +781,7 @@ public class StreamsConfig extends AbstractConfig {
      */
     @Deprecated
     public Serde valueSerde() {
-        try {
-            Serde<?> serde = getConfiguredInstance(VALUE_SERDE_CLASS_CONFIG, Serde.class);
-            // the default value of deprecated value serde is null
-            if (serde == null) {
-                serde = defaultValueSerde();
-            } else {
-                serde.configure(originals(), false);
-            }
-            return serde;
-        } catch (final Exception e) {
-            throw new StreamsException(String.format("Failed to configure value serde %s", get(VALUE_SERDE_CLASS_CONFIG)), e);
-        }
+        return defaultValueSerde();
     }
 
     /**
@@ -772,12 +791,19 @@ public class StreamsConfig extends AbstractConfig {
      * @return an configured instance of value Serde class
      */
     public Serde defaultValueSerde() {
+        Object valueSerdeConfigSetting = get(VALUE_SERDE_CLASS_CONFIG);
         try {
-            Serde<?> serde = getConfiguredInstance(DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serde.class);
+            Serde<?> serde = getConfiguredInstance(VALUE_SERDE_CLASS_CONFIG, Serde.class);
+            if (serde == null) {
+                valueSerdeConfigSetting = get(DEFAULT_VALUE_SERDE_CLASS_CONFIG);
+                serde = getConfiguredInstance(DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serde.class);
+            }
             serde.configure(originals(), false);
+
             return serde;
         } catch (final Exception e) {
-            throw new StreamsException(String.format("Failed to configure value serde %s", get(DEFAULT_VALUE_SERDE_CLASS_CONFIG)), e);
+            throw new StreamsException(
+                String.format("Failed to configure value serde %s", valueSerdeConfigSetting), e);
         }
     }
 
@@ -788,6 +814,10 @@ public class StreamsConfig extends AbstractConfig {
             return getConfiguredInstance(DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, TimestampExtractor.class);
         }
         return timestampExtractor;
+    }
+
+    public DeserializationExceptionHandler defaultDeserializationExceptionHandler() {
+        return getConfiguredInstance(DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG, DeserializationExceptionHandler.class);
     }
 
     /**

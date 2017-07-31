@@ -85,6 +85,11 @@ public interface TransportLayer extends ScatteringByteChannel, GatheringByteChan
     boolean isMute();
 
     /**
+     * @return true if channel has bytes to be read in any intermediate buffers
+     */
+    boolean hasBytesBuffered();
+
+    /**
      * Transfers bytes from `fileChannel` to this `TransportLayer`.
      *
      * This method will delegate to {@link FileChannel#transferTo(long, long, java.nio.channels.WritableByteChannel)},
@@ -99,5 +104,4 @@ public interface TransportLayer extends ScatteringByteChannel, GatheringByteChan
      * @see FileChannel#transferTo(long, long, java.nio.channels.WritableByteChannel)
      */
     long transferFrom(FileChannel fileChannel, long position, long count) throws IOException;
-
 }

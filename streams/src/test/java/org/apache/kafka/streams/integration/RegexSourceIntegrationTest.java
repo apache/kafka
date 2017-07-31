@@ -36,12 +36,14 @@ import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
+import org.apache.kafka.streams.processor.internals.StateDirectory;
+import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.StreamsMetadataState;
+import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockStateStoreSupplier;
-import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
@@ -152,9 +154,15 @@ public class RegexSourceIntegrationTest {
         final StreamThread[] streamThreads = (StreamThread[]) streamThreadsField.get(streams);
         final StreamThread originalThread = streamThreads[0];
 
-        final TestStreamThread testStreamThread = new TestStreamThread(builder, streamsConfig,
+        final TestStreamThread testStreamThread = new TestStreamThread(
+            builder.internalTopologyBuilder,
+            streamsConfig,
             new DefaultKafkaClientSupplier(),
-            originalThread.applicationId, originalThread.clientId, originalThread.processId, new Metrics(), Time.SYSTEM);
+            originalThread.applicationId,
+            originalThread.clientId,
+            originalThread.processId,
+            new Metrics(),
+            Time.SYSTEM);
 
         final TestCondition oneTopicAdded = new TestCondition() {
             @Override
@@ -206,9 +214,15 @@ public class RegexSourceIntegrationTest {
         final StreamThread[] streamThreads = (StreamThread[]) streamThreadsField.get(streams);
         final StreamThread originalThread = streamThreads[0];
 
-        final TestStreamThread testStreamThread = new TestStreamThread(builder, streamsConfig,
+        final TestStreamThread testStreamThread = new TestStreamThread(
+            builder.internalTopologyBuilder,
+            streamsConfig,
             new DefaultKafkaClientSupplier(),
-            originalThread.applicationId, originalThread.clientId, originalThread.processId, new Metrics(), Time.SYSTEM);
+            originalThread.applicationId,
+            originalThread.clientId,
+            originalThread.processId,
+            new Metrics(),
+            Time.SYSTEM);
 
         streamThreads[0] = testStreamThread;
 
@@ -347,9 +361,15 @@ public class RegexSourceIntegrationTest {
         final StreamThread[] leaderStreamThreads = (StreamThread[]) leaderStreamThreadsField.get(partitionedStreamsLeader);
         final StreamThread originalLeaderThread = leaderStreamThreads[0];
 
-        final TestStreamThread leaderTestStreamThread = new TestStreamThread(builderLeader, streamsConfig,
-                new DefaultKafkaClientSupplier(),
-                originalLeaderThread.applicationId, originalLeaderThread.clientId, originalLeaderThread.processId, new Metrics(), Time.SYSTEM);
+        final TestStreamThread leaderTestStreamThread = new TestStreamThread(
+            builderLeader.internalTopologyBuilder,
+            streamsConfig,
+            new DefaultKafkaClientSupplier(),
+            originalLeaderThread.applicationId,
+            originalLeaderThread.clientId,
+            originalLeaderThread.processId,
+            new Metrics(),
+            Time.SYSTEM);
 
         leaderStreamThreads[0] = leaderTestStreamThread;
 
@@ -367,9 +387,15 @@ public class RegexSourceIntegrationTest {
         final StreamThread[] followerStreamThreads = (StreamThread[]) followerStreamThreadsField.get(partitionedStreamsFollower);
         final StreamThread originalFollowerThread = followerStreamThreads[0];
 
-        final TestStreamThread followerTestStreamThread = new TestStreamThread(builderFollower, streamsConfig,
-                new DefaultKafkaClientSupplier(),
-                originalFollowerThread.applicationId, originalFollowerThread.clientId, originalFollowerThread.processId, new Metrics(), Time.SYSTEM);
+        final TestStreamThread followerTestStreamThread = new TestStreamThread(
+            builderFollower.internalTopologyBuilder,
+            streamsConfig,
+            new DefaultKafkaClientSupplier(),
+            originalFollowerThread.applicationId,
+            originalFollowerThread.clientId,
+            originalFollowerThread.processId,
+            new Metrics(),
+            Time.SYSTEM);
 
         followerStreamThreads[0] = followerTestStreamThread;
 
@@ -438,9 +464,9 @@ public class RegexSourceIntegrationTest {
     private class TestStreamThread extends StreamThread {
         public volatile List<String> assignedTopicPartitions = new ArrayList<>();
 
-        public TestStreamThread(final TopologyBuilder builder, final StreamsConfig config, final KafkaClientSupplier clientSupplier, final String applicationId, final String clientId, final UUID processId, final Metrics metrics, final Time time) {
+        public TestStreamThread(final InternalTopologyBuilder builder, final StreamsConfig config, final KafkaClientSupplier clientSupplier, final String applicationId, final String clientId, final UUID processId, final Metrics metrics, final Time time) {
             super(builder, config, clientSupplier, applicationId, clientId, processId, metrics, time, new StreamsMetadataState(builder, StreamsMetadataState.UNKNOWN_HOST),
-                  0);
+                  0, new StateDirectory(applicationId, config.getString(StreamsConfig.STATE_DIR_CONFIG), time));
         }
 
         @Override

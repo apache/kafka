@@ -318,7 +318,7 @@ public class KStreamBuilderTest {
         final String topicName = "topic-1";
         
         builder.stream(TopologyBuilder.AutoOffsetReset.EARLIEST, topicName);
-        
+
         assertTrue(builder.earliestResetTopicsPattern().matcher(topicName).matches());
         assertFalse(builder.latestResetTopicsPattern().matcher(topicName).matches());
     }
@@ -373,7 +373,7 @@ public class KStreamBuilderTest {
         final String topic = "topic-5";
 
         builder.stream(topicPattern);
-        
+
         assertFalse(builder.latestResetTopicsPattern().matcher(topic).matches());
         assertFalse(builder.earliestResetTopicsPattern().matcher(topic).matches());
 
@@ -401,7 +401,6 @@ public class KStreamBuilderTest {
         assertFalse(builder.earliestResetTopicsPattern().matcher(topicTwo).matches());
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void kStreamTimestampExtractorShouldBeNull() throws Exception {
         builder.stream("topic");
@@ -409,7 +408,6 @@ public class KStreamBuilderTest {
         assertNull(processorTopology.source("topic").getTimestampExtractor());
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldAddTimestampExtractorToStreamWithKeyValSerdePerSource() throws Exception {
         builder.stream(new MockTimestampExtractor(), null, null, "topic");
@@ -419,7 +417,6 @@ public class KStreamBuilderTest {
         }
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldAddTimestampExtractorToStreamWithOffsetResetPerSource() throws Exception {
         builder.stream(null, new MockTimestampExtractor(), null, null, "topic");
@@ -427,7 +424,6 @@ public class KStreamBuilderTest {
         assertThat(processorTopology.source("topic").getTimestampExtractor(), instanceOf(MockTimestampExtractor.class));
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldAddTimestampExtractorToTablePerSource() throws Exception {
         builder.table("topic", "store");
@@ -435,7 +431,6 @@ public class KStreamBuilderTest {
         assertNull(processorTopology.source("topic").getTimestampExtractor());
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void kTableTimestampExtractorShouldBeNull() throws Exception {
         builder.table("topic", "store");
@@ -443,7 +438,6 @@ public class KStreamBuilderTest {
         assertNull(processorTopology.source("topic").getTimestampExtractor());
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldAddTimestampExtractorToTableWithKeyValSerdePerSource() throws Exception {
         builder.table(null, new MockTimestampExtractor(), null, null, "topic", "store");

@@ -31,13 +31,13 @@ import scala.util.{Failure, Success, Try}
 
 class SaslSslAdminClientIntegrationTest extends AdminClientIntegrationTest with SaslSetup {
   this.serverConfig.setProperty(KafkaConfig.ZkEnableSecureAclsProp, "true")
-  this.serverConfig.setProperty(KafkaConfig.AuthorizerClassNameProp, classOf[SimpleAclAuthorizer].getName())
+  this.serverConfig.setProperty(KafkaConfig.AuthorizerClassNameProp, classOf[SimpleAclAuthorizer].getName)
 
   override protected def securityProtocol = SecurityProtocol.SASL_SSL
   override protected lazy val trustStoreFile = Some(File.createTempFile("truststore", ".jks"))
 
   override def configureSecurityBeforeServersStart() {
-    val authorizer = CoreUtils.createObject[Authorizer](classOf[SimpleAclAuthorizer].getName())
+    val authorizer = CoreUtils.createObject[Authorizer](classOf[SimpleAclAuthorizer].getName)
     try {
       authorizer.configure(this.configs.head.originals())
       authorizer.addAcls(Set(new AuthAcl(AuthAcl.WildCardPrincipal, Allow,
@@ -92,6 +92,8 @@ class SaslSslAdminClientIntegrationTest extends AdminClientIntegrationTest with 
     new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.READ, AclPermissionType.ALLOW))
   val fooAcl = new AclBinding(new Resource(ResourceType.TOPIC, "foobar"),
     new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.READ, AclPermissionType.ALLOW))
+  val transactionalIdAcl = new AclBinding(new Resource(ResourceType.TRANSACTIONAL_ID, "transactional_id"),
+    new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.WRITE, AclPermissionType.ALLOW))
 
   @Test
   override def testAclOperations(): Unit = {
@@ -116,28 +118,33 @@ class SaslSslAdminClientIntegrationTest extends AdminClientIntegrationTest with 
     TestUtils.waitUntilTrue(() => {
       val results = client.describeAcls(filter).values.get()
       acls == results.asScala.toSet
-    }, "timed out waiting for ACLs")
+    }, s"timed out waiting for ACLs $acls")
   }
 
   @Test
   def testAclOperations2(): Unit = {
     client = AdminClient.create(createConfig())
-    val results = client.createAcls(List(acl2, acl2).asJava)
-    assertEquals(Set(acl2, acl2), results.values.keySet().asScala)
+    val results = client.createAcls(List(acl2, acl2, transactionalIdAcl).asJava)
+    assertEquals(Set(acl2, acl2, transactionalIdAcl), results.values.keySet.asScala)
     results.all.get()
     waitForDescribeAcls(client, acl2.toFilter, Set(acl2))
+    waitForDescribeAcls(client, transactionalIdAcl.toFilter, Set(transactionalIdAcl))
 
     val filterA = new AclBindingFilter(new ResourceFilter(ResourceType.GROUP, null), AccessControlEntryFilter.ANY)
     val filterB = new AclBindingFilter(new ResourceFilter(ResourceType.TOPIC, "mytopic2"), AccessControlEntryFilter.ANY)
+    val filterC = new AclBindingFilter(new ResourceFilter(ResourceType.TRANSACTIONAL_ID, null), AccessControlEntryFilter.ANY)
 
     waitForDescribeAcls(client, filterA, Set())
+    waitForDescribeAcls(client, filterC, Set(transactionalIdAcl))
 
-    val results2 = client.deleteAcls(List(filterA, filterB).asJava, new DeleteAclsOptions())
-    assertEquals(Set(filterA, filterB), results2.values.keySet().asScala)
+    val results2 = client.deleteAcls(List(filterA, filterB, filterC).asJava, new DeleteAclsOptions())
+    assertEquals(Set(filterA, filterB, filterC), results2.values.keySet.asScala)
     assertEquals(Set(), results2.values.get(filterA).get.values.asScala.map(_.binding).toSet)
+    assertEquals(Set(transactionalIdAcl), results2.values.get(filterC).get.values.asScala.map(_.binding).toSet)
     assertEquals(Set(acl2), results2.values.get(filterB).get.values.asScala.map(_.binding).toSet)
 
     waitForDescribeAcls(client, filterB, Set())
+    waitForDescribeAcls(client, filterC, Set())
   }
 
   @Test
@@ -161,7 +168,7 @@ class SaslSslAdminClientIntegrationTest extends AdminClientIntegrationTest with 
 
   private def testAclCreateGetDelete(expectAuth: Boolean): Unit = {
     TestUtils.waitUntilTrue(() => {
-      val result = client.createAcls(List(fooAcl).asJava, new CreateAclsOptions)
+      val result = client.createAcls(List(fooAcl, transactionalIdAcl).asJava, new CreateAclsOptions)
       if (expectAuth) {
         Try(result.all.get) match {
           case Failure(e) =>
@@ -180,9 +187,10 @@ class SaslSslAdminClientIntegrationTest extends AdminClientIntegrationTest with 
     }, "timed out waiting for createAcls to " + (if (expectAuth) "succeed" else "fail"))
     if (expectAuth) {
       waitForDescribeAcls(client, fooAcl.toFilter, Set(fooAcl))
+      waitForDescribeAcls(client, transactionalIdAcl.toFilter, Set(transactionalIdAcl))
     }
     TestUtils.waitUntilTrue(() => {
-      val result = client.deleteAcls(List(fooAcl.toFilter).asJava, new DeleteAclsOptions)
+      val result = client.deleteAcls(List(fooAcl.toFilter, transactionalIdAcl.toFilter).asJava, new DeleteAclsOptions)
       if (expectAuth) {
         Try(result.all.get) match {
           case Failure(e) =>
@@ -196,13 +204,17 @@ class SaslSslAdminClientIntegrationTest extends AdminClientIntegrationTest with 
             verifyCauseIsClusterAuth(e)
             true
           case Success(_) =>
+            assertEquals(Set(fooAcl, transactionalIdAcl), result.values.keySet)
             assertEquals(Set(fooAcl), result.values.get(fooAcl.toFilter).get.values.asScala.map(_.binding).toSet)
+            assertEquals(Set(transactionalIdAcl),
+              result.values.get(transactionalIdAcl.toFilter).get.values.asScala.map(_.binding).toSet)
             true
         }
       }
     }, "timed out waiting for deleteAcls to " + (if (expectAuth) "succeed" else "fail"))
     if (expectAuth) {
-      waitForDescribeAcls(client, fooAcl.toFilter, Set())
+      waitForDescribeAcls(client, fooAcl.toFilter, Set.empty)
+      waitForDescribeAcls(client, transactionalIdAcl.toFilter, Set.empty)
     }
   }
 

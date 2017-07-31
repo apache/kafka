@@ -43,13 +43,13 @@ object StressTestLog {
     logProperties.put(LogConfig.MaxMessageBytesProp, Int.MaxValue: java.lang.Integer)
     logProperties.put(LogConfig.SegmentIndexBytesProp, 1024*1024: java.lang.Integer)
 
-    val log = new Log(dir = dir,
-                      config = LogConfig(logProperties),
-                      logStartOffset = 0L,
-                      recoveryPoint = 0L,
-                      scheduler = time.scheduler,
-                      time = time,
-                      brokerTopicStats = new BrokerTopicStats)
+    val log = Log(dir = dir,
+      config = LogConfig(logProperties),
+      logStartOffset = 0L,
+      recoveryPoint = 0L,
+      scheduler = time.scheduler,
+      time = time,
+      brokerTopicStats = new BrokerTopicStats)
     val writer = new WriterThread(log)
     writer.start()
     val reader = new ReaderThread(log)

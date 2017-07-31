@@ -31,7 +31,7 @@ trait BaseMessageSetTestCases extends JUnitSuite {
   def createMessageSet(messages: Seq[Message], compressed: CompressionCodec = NoCompressionCodec): MessageSet
 
   @Test
-  def testWrittenEqualsRead {
+  def testWrittenEqualsRead(): Unit = {
     val messageSet = createMessageSet(messages)
     assertEquals(messages.toSeq, messageSet.asScala.map(m => m.message))
   }

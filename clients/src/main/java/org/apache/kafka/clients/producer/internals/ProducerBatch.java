@@ -100,11 +100,12 @@ public final class ProducerBatch {
      * @return The RecordSend corresponding to this record or null if there isn't sufficient room.
      */
     public FutureRecordMetadata tryAppend(long timestamp, byte[] key, byte[] value, Header[] headers, Callback callback, long now) {
-        if (!recordsBuilder.hasRoomFor(timestamp, key, value)) {
+        if (!recordsBuilder.hasRoomFor(timestamp, key, value, headers)) {
             return null;
         } else {
             Long checksum = this.recordsBuilder.append(timestamp, key, value, headers);
-            this.maxRecordSize = Math.max(this.maxRecordSize, AbstractRecords.sizeInBytesUpperBound(magic(), key, value, headers));
+            this.maxRecordSize = Math.max(this.maxRecordSize, AbstractRecords.estimateSizeInBytesUpperBound(magic(),
+                    recordsBuilder.compressionType(), key, value, headers));
             this.lastAppendTime = now;
             FutureRecordMetadata future = new FutureRecordMetadata(this.produceFuture, this.recordCount,
                                                                    timestamp, checksum,
@@ -123,13 +124,13 @@ public final class ProducerBatch {
      * @return true if the record has been successfully appended, false otherwise.
      */
     private boolean tryAppendForSplit(long timestamp, ByteBuffer key, ByteBuffer value, Header[] headers, Thunk thunk) {
-        if (!recordsBuilder.hasRoomFor(timestamp, key, value)) {
+        if (!recordsBuilder.hasRoomFor(timestamp, key, value, headers)) {
             return false;
         } else {
             // No need to get the CRC.
             this.recordsBuilder.append(timestamp, key, value);
-            this.maxRecordSize = Math.max(this.maxRecordSize,
-                                          AbstractRecords.sizeInBytesUpperBound(magic(), key, value, headers));
+            this.maxRecordSize = Math.max(this.maxRecordSize, AbstractRecords.estimateSizeInBytesUpperBound(magic(),
+                    recordsBuilder.compressionType(), key, value, headers));
             FutureRecordMetadata future = new FutureRecordMetadata(this.produceFuture, this.recordCount,
                                                                    timestamp, thunk.future.checksumOrNull(),
                                                                    key == null ? -1 : key.remaining(),
@@ -252,8 +253,8 @@ public final class ProducerBatch {
     }
 
     private ProducerBatch createBatchOffAccumulatorForRecord(Record record, int batchSize) {
-        int initialSize = Math.max(AbstractRecords.sizeInBytesUpperBound(magic(),
-                record.key(), record.value(), record.headers()), batchSize);
+        int initialSize = Math.max(AbstractRecords.estimateSizeInBytesUpperBound(magic(),
+                recordsBuilder.compressionType(), record.key(), record.value(), record.headers()), batchSize);
         ByteBuffer buffer = ByteBuffer.allocate(initialSize);
 
         // Note that we intentionally do not set producer state (producerId, epoch, sequence, and isTransactional)
@@ -361,8 +362,8 @@ public final class ProducerBatch {
         return recordsBuilder.build();
     }
 
-    public int sizeInBytes() {
-        return recordsBuilder.sizeInBytes();
+    public int estimatedSizeInBytes() {
+        return recordsBuilder.estimatedSizeInBytes();
     }
 
     public double compressionRatio() {

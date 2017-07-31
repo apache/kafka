@@ -37,6 +37,7 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.test.MockRestoreConsumer;
+import org.apache.kafka.test.MockStateRestoreListener;
 import org.apache.kafka.test.MockStateStoreSupplier;
 import org.apache.kafka.test.MockTimestampExtractor;
 import org.apache.kafka.test.TestUtils;
@@ -76,6 +77,7 @@ public class StandbyTaskTest {
 
     private final TopicPartition partition1 = new TopicPartition(storeChangelogTopicName1, 1);
     private final TopicPartition partition2 = new TopicPartition(storeChangelogTopicName2, 1);
+    private final MockStateRestoreListener stateRestoreListener = new MockStateRestoreListener();
 
     private final Set<TopicPartition> topicPartitions = Collections.emptySet();
     private final ProcessorTopology topology = new ProcessorTopology(
@@ -126,7 +128,7 @@ public class StandbyTaskTest {
 
     private final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
     private final MockRestoreConsumer restoreStateConsumer = new MockRestoreConsumer();
-    private final StoreChangelogReader changelogReader = new StoreChangelogReader(restoreStateConsumer, Time.SYSTEM, 5000);
+    private final StoreChangelogReader changelogReader = new StoreChangelogReader(restoreStateConsumer, Time.SYSTEM, 5000, stateRestoreListener);
 
     private final byte[] recordValue = intSerializer.serialize(null, 10);
     private final byte[] recordKey = intSerializer.serialize(null, 1);
@@ -177,7 +179,6 @@ public class StandbyTaskTest {
 
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void testUpdate() throws Exception {
         StreamsConfig config = createConfig(baseDir);
@@ -224,7 +225,6 @@ public class StandbyTaskTest {
 
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void testUpdateKTable() throws Exception {
         consumer.assign(Utils.mkList(ktable));
