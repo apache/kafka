@@ -28,12 +28,13 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.ValueJoiner;
+import org.apache.kafka.streams.kstream.internals.InternalStreamsBuilderTest;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.assignment.AssignmentInfo;
 import org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo;
@@ -934,11 +935,13 @@ public class StreamPartitionAssignorTest {
     }
 
     @Test
-    public void shouldNotLoopInfinitelyOnMissingMetadataAndShouldNotCreateRelatedTasks() {
+    public void shouldNotLoopInfinitelyOnMissingMetadataAndShouldNotCreateRelatedTasks() throws Exception {
         final String applicationId = "application-id";
 
-        final KStreamBuilder builder = new KStreamBuilder();
-        builder.setApplicationId(applicationId);
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final InternalTopologyBuilder internalTopologyBuilder = InternalStreamsBuilderTest.internalTopologyBuilder(builder);
+        internalTopologyBuilder.setApplicationId(applicationId);
 
         KStream<Object, Object> stream1 = builder
 
@@ -997,7 +1000,7 @@ public class StreamPartitionAssignorTest {
         final String client = "client1";
 
         final StreamThread streamThread = new StreamThread(
-            builder.internalTopologyBuilder,
+            internalTopologyBuilder,
             config,
             mockClientSupplier,
             applicationId,
@@ -1005,7 +1008,7 @@ public class StreamPartitionAssignorTest {
             uuid,
             new Metrics(),
             Time.SYSTEM,
-            new StreamsMetadataState(builder.internalTopologyBuilder, StreamsMetadataState.UNKNOWN_HOST),
+            new StreamsMetadataState(internalTopologyBuilder, StreamsMetadataState.UNKNOWN_HOST),
             0,
             stateDirectory);
 
@@ -1077,19 +1080,22 @@ public class StreamPartitionAssignorTest {
 
     @Test
     public void shouldNotAddStandbyTaskPartitionsToPartitionsForHost() throws Exception {
+        final String applicationId = "appId";
         final Properties props = configProps();
         props.setProperty(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, "1");
         final StreamsConfig config = new StreamsConfig(props);
-        final KStreamBuilder builder = new KStreamBuilder();
-        final String applicationId = "appId";
-        builder.setApplicationId(applicationId);
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final InternalTopologyBuilder internalTopologyBuilder = InternalStreamsBuilderTest.internalTopologyBuilder(builder);
+        internalTopologyBuilder.setApplicationId(applicationId);
+
         builder.stream("topic1").groupByKey().count("count");
 
         final UUID uuid = UUID.randomUUID();
         final String client = "client1";
 
         final StreamThread streamThread = new StreamThread(
-            builder.internalTopologyBuilder,
+            internalTopologyBuilder,
             config,
             mockClientSupplier,
             applicationId,
@@ -1097,7 +1103,7 @@ public class StreamPartitionAssignorTest {
             uuid,
             new Metrics(),
             Time.SYSTEM,
-            new StreamsMetadataState(builder.internalTopologyBuilder, StreamsMetadataState.UNKNOWN_HOST),
+            new StreamsMetadataState(internalTopologyBuilder, StreamsMetadataState.UNKNOWN_HOST),
             0,
             stateDirectory);
 

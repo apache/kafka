@@ -33,11 +33,11 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
-import org.apache.kafka.streams.processor.StateRestoreListener;
+import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
+import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.apache.kafka.streams.processor.internals.GlobalProcessorContextImpl;
 import org.apache.kafka.streams.processor.internals.GlobalStateManagerImpl;
 import org.apache.kafka.streams.processor.internals.GlobalStateUpdateTask;
@@ -67,9 +67,9 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * This class makes it easier to write tests to verify the behavior of topologies created with a {@link TopologyBuilder}.
+ * This class makes it easier to write tests to verify the behavior of topologies created with a {@link Topology}.
  * You can test simple topologies that have a single processor, or very complex topologies that have multiple sources, processors,
- * and sinks. And because it starts with a {@link TopologyBuilder}, you can create topologies specific to your tests or you
+ * and sinks. And because it starts with a {@link Topology}, you can create topologies specific to your tests or you
  * can use and test code you already have that uses a builder to create topologies. Best of all, the class works without a real
  * Kafka broker, so the tests execute very quickly with very little overhead.
  * <p>

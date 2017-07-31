@@ -24,10 +24,10 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -337,7 +337,7 @@ public class KTableKTableJoinIntegrationTest {
     }
 
     private KafkaStreams prepareTopology(final JoinType joinType1, final JoinType joinType2, final String queryableName) {
-        final KStreamBuilder builder = new KStreamBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
         final KTable<String, String> table1 = builder.table(TABLE_1, TABLE_1);
         final KTable<String, String> table2 = builder.table(TABLE_2, TABLE_2);
@@ -346,7 +346,7 @@ public class KTableKTableJoinIntegrationTest {
         join(join(table1, table2, joinType1, null /* no need to query intermediate result */), table3,
             joinType2, queryableName).to(OUTPUT);
 
-        return new KafkaStreams(builder, new StreamsConfig(streamsConfig));
+        return new KafkaStreams(builder.build(), new StreamsConfig(streamsConfig));
     }
 
     private KTable<String, String> join(final KTable<String, String> first,

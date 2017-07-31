@@ -538,6 +538,7 @@ public class Topology {
      * Adds a state store.
      *
      * @param supplier the supplier used to obtain this state store {@link StateStore} instance
+     * @param processorNames the names of the processors that should be able to access the provided store
      * @return itself
      * @throws TopologyException if state store supplier is already added
      */
@@ -633,6 +634,11 @@ public class Topology {
         return this;
     }
 
+    /**
+     * Returns a description of the specified {@code Topology}.
+     *
+     * @return a description of the topology.
+     */
     public synchronized TopologyDescription describe() {
         return internalTopologyBuilder.describe();
     }

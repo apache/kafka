@@ -18,7 +18,7 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
+import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.test.KStreamTestDriver;
@@ -57,7 +57,7 @@ public class KTableFilterTest {
         stateDir = TestUtils.tempDirectory("kafka-test");
     }
 
-    private void doTestKTable(final KStreamBuilder builder, final KTable<String, Integer> table2,
+    private void doTestKTable(final StreamsBuilder builder, final KTable<String, Integer> table2,
                               final KTable<String, Integer> table3, final String topic1) {
         MockProcessorSupplier<String, Integer> proc2 = new MockProcessorSupplier<>();
         MockProcessorSupplier<String, Integer> proc3 = new MockProcessorSupplier<>();
@@ -81,7 +81,7 @@ public class KTableFilterTest {
 
     @Test
     public void testKTable() {
-        final KStreamBuilder builder = new KStreamBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
         String topic1 = "topic1";
 
@@ -105,7 +105,7 @@ public class KTableFilterTest {
 
     @Test
     public void testQueryableKTable() {
-        final KStreamBuilder builder = new KStreamBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
         String topic1 = "topic1";
 
@@ -127,7 +127,7 @@ public class KTableFilterTest {
         doTestKTable(builder, table2, table3, topic1);
     }
 
-    private void doTestValueGetter(final KStreamBuilder builder,
+    private void doTestValueGetter(final StreamsBuilder builder,
                                    final KTableImpl<String, Integer, Integer> table2,
                                    final KTableImpl<String, Integer, Integer> table3,
                                    final String topic1) throws IOException {
@@ -189,7 +189,7 @@ public class KTableFilterTest {
 
     @Test
     public void testValueGetter() throws IOException {
-        KStreamBuilder builder = new KStreamBuilder();
+        StreamsBuilder builder = new StreamsBuilder();
 
         String topic1 = "topic1";
 
@@ -215,7 +215,7 @@ public class KTableFilterTest {
 
     @Test
     public void testQueryableValueGetter() throws IOException {
-        KStreamBuilder builder = new KStreamBuilder();
+        StreamsBuilder builder = new StreamsBuilder();
 
         String topic1 = "topic1";
 
@@ -239,15 +239,15 @@ public class KTableFilterTest {
         doTestValueGetter(builder, table2, table3, topic1);
     }
 
-    private void doTestNotSendingOldValue(final KStreamBuilder builder,
+    private void doTestNotSendingOldValue(final StreamsBuilder builder,
                                           final KTableImpl<String, Integer, Integer> table1,
                                           final KTableImpl<String, Integer, Integer> table2,
                                           final String topic1) throws IOException {
         MockProcessorSupplier<String, Integer> proc1 = new MockProcessorSupplier<>();
         MockProcessorSupplier<String, Integer> proc2 = new MockProcessorSupplier<>();
 
-        builder.addProcessor("proc1", proc1, table1.name);
-        builder.addProcessor("proc2", proc2, table2.name);
+        builder.build().addProcessor("proc1", proc1, table1.name);
+        builder.build().addProcessor("proc2", proc2, table2.name);
 
         driver = new KStreamTestDriver(builder, stateDir, Serdes.String(), Serdes.Integer());
 
@@ -280,7 +280,7 @@ public class KTableFilterTest {
 
     @Test
     public void testNotSendingOldValue() throws IOException {
-        KStreamBuilder builder = new KStreamBuilder();
+        StreamsBuilder builder = new StreamsBuilder();
 
         String topic1 = "topic1";
 
@@ -299,7 +299,7 @@ public class KTableFilterTest {
 
     @Test
     public void testQueryableNotSendingOldValue() throws IOException {
-        KStreamBuilder builder = new KStreamBuilder();
+        StreamsBuilder builder = new StreamsBuilder();
 
         String topic1 = "topic1";
 
@@ -316,7 +316,7 @@ public class KTableFilterTest {
         doTestNotSendingOldValue(builder, table1, table2, topic1);
     }
 
-    private void doTestSendingOldValue(final KStreamBuilder builder,
+    private void doTestSendingOldValue(final StreamsBuilder builder,
                                        final KTableImpl<String, Integer, Integer> table1,
                                        final KTableImpl<String, Integer, Integer> table2,
                                        final String topic1) throws IOException {
@@ -325,8 +325,8 @@ public class KTableFilterTest {
         MockProcessorSupplier<String, Integer> proc1 = new MockProcessorSupplier<>();
         MockProcessorSupplier<String, Integer> proc2 = new MockProcessorSupplier<>();
 
-        builder.addProcessor("proc1", proc1, table1.name);
-        builder.addProcessor("proc2", proc2, table2.name);
+        builder.build().addProcessor("proc1", proc1, table1.name);
+        builder.build().addProcessor("proc2", proc2, table2.name);
 
         driver = new KStreamTestDriver(builder, stateDir, Serdes.String(), Serdes.Integer());
 
@@ -358,7 +358,7 @@ public class KTableFilterTest {
 
     @Test
     public void testSendingOldValue() throws IOException {
-        KStreamBuilder builder = new KStreamBuilder();
+        StreamsBuilder builder = new StreamsBuilder();
 
         String topic1 = "topic1";
 
@@ -377,7 +377,7 @@ public class KTableFilterTest {
 
     @Test
     public void testQueryableSendingOldValue() throws IOException {
-        KStreamBuilder builder = new KStreamBuilder();
+        StreamsBuilder builder = new StreamsBuilder();
 
         String topic1 = "topic1";
 
@@ -394,15 +394,15 @@ public class KTableFilterTest {
         doTestSendingOldValue(builder, table1, table2, topic1);
     }
 
-    private void doTestSkipNullOnMaterialization(final KStreamBuilder builder,
+    private void doTestSkipNullOnMaterialization(final StreamsBuilder builder,
                                                  final KTableImpl<String, String, String> table1,
                                                  final KTableImpl<String, String, String> table2,
                                                  final String topic1) throws IOException {
         MockProcessorSupplier<String, String> proc1 = new MockProcessorSupplier<>();
         MockProcessorSupplier<String, String> proc2 = new MockProcessorSupplier<>();
 
-        builder.addProcessor("proc1", proc1, table1.name);
-        builder.addProcessor("proc2", proc2, table2.name);
+        builder.build().addProcessor("proc1", proc1, table1.name);
+        builder.build().addProcessor("proc2", proc2, table2.name);
 
         driver = new KStreamTestDriver(builder, stateDir, stringSerde, stringSerde);
 
@@ -417,7 +417,7 @@ public class KTableFilterTest {
     @Test
     public void testSkipNullOnMaterialization() throws IOException {
         // Do not explicitly set enableSendingOldValues. Let a further downstream stateful operator trigger it instead.
-        KStreamBuilder builder = new KStreamBuilder();
+        StreamsBuilder builder = new StreamsBuilder();
 
         String topic1 = "topic1";
 
@@ -438,7 +438,7 @@ public class KTableFilterTest {
     @Test
     public void testQueryableSkipNullOnMaterialization() throws IOException {
         // Do not explicitly set enableSendingOldValues. Let a further downstream stateful operator trigger it instead.
-        KStreamBuilder builder = new KStreamBuilder();
+        StreamsBuilder builder = new StreamsBuilder();
 
         String topic1 = "topic1";
 
@@ -465,7 +465,7 @@ public class KTableFilterTest {
             }
         };
 
-        new KStreamBuilder()
+        new StreamsBuilder()
             .<Integer, String>table("empty", "emptyStore")
             .filter(numberKeyPredicate)
             .filterNot(numberKeyPredicate)

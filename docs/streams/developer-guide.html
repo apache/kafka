@@ -294,7 +294,7 @@
     </p>
 
     <pre class="brush: java;">
-    KStreamBuilder builder = new KStreamBuilder();
+    StreamsBuilder builder = new StreamsBuilder();
 
     KStream&lt;String, GenericRecord&gt; source1 = builder.stream("topic1", "topic2");
     KTable&lt;String, GenericRecord&gt; source2 = builder.table("topic3", "stateStoreName");
@@ -571,7 +571,7 @@
 
     <pre class="brush: java;">
           StreamsConfig config = ...;
-          KStreamBuilder builder = ...;
+          StreamsBuilder builder = ...;
           KStream&lt;String, String&gt; textLines = ...;
 
           // Define the processing topology (here: WordCount)
@@ -583,7 +583,7 @@
           groupedByWord.count("CountsKeyValueStore");
 
           // Start an instance of the topology
-          KafkaStreams streams = new KafkaStreams(builder, config);
+          KafkaStreams streams = new KafkaStreams(builder.build(), config);
           streams.start();
         </pre>
 
@@ -627,7 +627,7 @@
 
     <pre class="brush: java;">
           StreamsConfig config = ...;
-          KStreamBuilder builder = ...;
+          StreamsBuilder builder = ...;
           KStream&lt;String, String&gt; textLines = ...;
 
           // Define the processing topology (here: WordCount)
@@ -850,7 +850,7 @@
           // ... further settings may follow here ...
 
           StreamsConfig config = new StreamsConfig(props);
-          KStreamBuilder builder = new KStreamBuilder();
+          StreamsBuilder builder = new StreamsBuilder();
 
           KStream&lt;String, String&gt; textLines = builder.stream(stringSerde, stringSerde, "word-count-input");
 
@@ -863,7 +863,7 @@
           groupedByWord.count("word-count");
 
           // Start an instance of the topology
-          KafkaStreams streams = new KafkaStreams(builder, streamsConfiguration);
+          KafkaStreams streams = new KafkaStreams(builder.build(), streamsConfiguration);
           streams.start();
 
           // Then, create and start the actual RPC service for remote access to this
@@ -1082,8 +1082,8 @@
 
     <pre class="brush: java;">
     import org.apache.kafka.streams.KafkaStreams;
+    import org.apache.kafka.streams.StreamsBuilder;
     import org.apache.kafka.streams.StreamsConfig;
-    import org.apache.kafka.streams.kstream.KStreamBuilder;
     import org.apache.kafka.streams.Topology;
 
     // Use the builders to define the actual processing topology, e.g. to specify
@@ -1094,8 +1094,8 @@
     //
     // OR
     //
-    KStreamBuilder builder = ...;  // when using the Kafka Streams DSL
-    Topology topology = builder.topology();
+    StreamsBuilder builder = ...;  // when using the Kafka Streams DSL
+    Topology topology = builder.build();
 
     // Use the configuration to tell your application where the Kafka cluster is,
     // which serializers/deserializers to use by default, to specify security settings,

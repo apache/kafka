@@ -19,11 +19,10 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.test.KStreamTestDriver;
-
 import org.junit.After;
 import org.junit.Test;
 
@@ -49,7 +48,7 @@ public class KStreamPeekTest {
 
     @Test
     public void shouldObserveStreamElements() {
-        final KStreamBuilder builder = new KStreamBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
         final KStream<Integer, String> stream = builder.stream(intSerd, stringSerd, topicName);
         final List<KeyValue<Integer, String>> peekObserved = new ArrayList<>(), streamObserved = new ArrayList<>();
         stream.peek(collect(peekObserved)).foreach(collect(streamObserved));
@@ -68,7 +67,7 @@ public class KStreamPeekTest {
 
     @Test
     public void shouldNotAllowNullAction() {
-        final KStreamBuilder builder = new KStreamBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
         final KStream<Integer, String> stream = builder.stream(intSerd, stringSerd, topicName);
         try {
             stream.peek(null);
