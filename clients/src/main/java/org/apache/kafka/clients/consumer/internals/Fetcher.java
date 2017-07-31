@@ -1106,6 +1106,10 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                     // we allow user to move forward in this case.
                     cachedRecordException = null;
                 }
+            } catch (SerializationException se) {
+                cachedRecordException = se;
+                if (records.isEmpty())
+                    throw se;
             } catch (KafkaException e) {
                 cachedRecordException = e;
                 if (records.isEmpty())
