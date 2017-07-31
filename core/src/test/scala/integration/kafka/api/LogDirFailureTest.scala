@@ -18,7 +18,9 @@ package kafka.api
 
 import java.util.Collections
 import java.util.concurrent.{ExecutionException, TimeUnit}
+
 import kafka.controller.{OfflineReplica, PartitionAndReplica}
+import kafka.server.KafkaConfig
 import kafka.utils.{CoreUtils, TestUtils, ZkUtils}
 import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
@@ -31,7 +33,7 @@ import org.junit.Assert.assertTrue
 /**
   * Test whether clients can producer and consume when there is log directory failure
   */
-class LogDirFailureTest() extends IntegrationTestHarness {
+class LogDirFailureTest extends IntegrationTestHarness {
   val producerCount: Int = 1
   val consumerCount: Int = 1
   val serverCount: Int = 2
@@ -40,6 +42,8 @@ class LogDirFailureTest() extends IntegrationTestHarness {
   this.logDirCount = 2
   this.producerConfig.setProperty(ProducerConfig.RETRIES_CONFIG, "0")
   this.producerConfig.setProperty(ProducerConfig.RETRY_BACKOFF_MS_CONFIG, "100")
+  this.serverConfig.setProperty(KafkaConfig.ReplicaHighWatermarkCheckpointIntervalMsProp, "60000")
+
 
   @Before
   override def setUp() {

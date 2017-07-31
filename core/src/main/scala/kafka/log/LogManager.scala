@@ -194,8 +194,7 @@ class LogManager(logDirs: Array[File],
         Some(lock)
       } catch {
         case e: IOException =>
-          error(s"Disk error while locking directory $dir", e)
-          logDirFailureChannel.maybeAddLogFailureEvent(dir.getAbsolutePath)
+          logDirFailureChannel.maybeAddLogFailureEvent(dir.getAbsolutePath, s"Disk error while locking directory $dir", e)
           None
       }
     }
@@ -308,7 +307,7 @@ class LogManager(logDirs: Array[File],
             error(s"Error while deleting the clean shutdown file $cleanShutdownFile", e)
         }
       }
-      offlineDirs.foreach(logDirFailureChannel.maybeAddLogFailureEvent)
+      offlineDirs.foreach(dir => logDirFailureChannel.maybeAddLogFailureEvent(dir, "Error while deleting the clean shutdown file", null))
     } catch {
       case e: ExecutionException => {
         error("There was an error in one of the threads during logs loading: " + e.getCause)
@@ -501,8 +500,7 @@ class LogManager(logDirs: Array[File],
         this.recoveryPointCheckpoints.get(dir).foreach(_.write(recoveryPoints.get.mapValues(_.recoveryPoint)))
       } catch {
         case e: IOException =>
-          error(s"Disk error while writing to recovery point file in directory $dir", e)
-          logDirFailureChannel.maybeAddLogFailureEvent(dir.getAbsolutePath)
+          logDirFailureChannel.maybeAddLogFailureEvent(dir.getAbsolutePath, s"Disk error while writing to recovery point file in directory $dir", e)
       }
     }
   }
@@ -519,8 +517,7 @@ class LogManager(logDirs: Array[File],
         ))
       } catch {
         case e: IOException =>
-          error(s"Disk error while writing to logStartOffset file in directory $dir", e)
-          logDirFailureChannel.maybeAddLogFailureEvent(dir.getAbsolutePath)
+          logDirFailureChannel.maybeAddLogFailureEvent(dir.getAbsolutePath, s"Disk error while writing to logStartOffset file in directory $dir", e)
       }
     }
   }
@@ -571,9 +568,9 @@ class LogManager(logDirs: Array[File],
           log
         } catch {
           case e: IOException =>
-            error(s"Error while creating log for $topicPartition in dir ${dataDir.getAbsolutePath}", e)
-            logDirFailureChannel.maybeAddLogFailureEvent(dataDir.getAbsolutePath)
-            throw new KafkaStorageException(s"Error while creating log for $topicPartition in dir ${dataDir.getAbsolutePath}", e)
+            val msg = s"Error while creating log for $topicPartition in dir ${dataDir.getAbsolutePath}"
+            logDirFailureChannel.maybeAddLogFailureEvent(dataDir.getAbsolutePath, msg, e)
+            throw new KafkaStorageException(msg, e)
         }
       }
     }
@@ -639,9 +636,9 @@ class LogManager(logDirs: Array[File],
         }
       } catch {
         case e: IOException =>
-          error(s"Error while deleting $topicPartition in dir ${removedLog.dir.getParent}.", e)
-          logDirFailureChannel.maybeAddLogFailureEvent(removedLog.dir.getParent)
-          throw new KafkaStorageException(s"Error while deleting $topicPartition in dir ${removedLog.dir.getParent}.", e)
+          val msg = s"Error while deleting $topicPartition in dir ${removedLog.dir.getParent}."
+          logDirFailureChannel.maybeAddLogFailureEvent(removedLog.dir.getParent, msg, e)
+          throw new KafkaStorageException(msg, e)
       }
     } else if (offlineLogDirs.nonEmpty) {
       throw new KafkaStorageException("Failed to delete log for " + topicPartition + " because it may be in one of the offline directories " + offlineLogDirs.mkString(","))
