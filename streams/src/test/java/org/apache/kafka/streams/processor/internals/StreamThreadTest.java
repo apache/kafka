@@ -1484,14 +1484,13 @@ public class StreamThreadTest {
 
     @Test
     public void shouldCaptureCommitFailedExceptionOnTaskSuspension() throws Exception {
-        final KStreamBuilder builder = new KStreamBuilder();
-        builder.stream("t1");
+        internalStreamsBuilder.stream(null, null, null, null, "t1");
 
         final TestStreamTask testStreamTask = new TestStreamTask(
                 new TaskId(0, 0),
                 applicationId,
                 Utils.mkSet(new TopicPartition("t1", 0)),
-                builder.build(0),
+                internalTopologyBuilder.build(0),
                 clientSupplier.consumer,
                 clientSupplier.getProducer(new HashMap<String, Object>()),
                 clientSupplier.restoreConsumer,
@@ -1506,7 +1505,7 @@ public class StreamThreadTest {
         };
 
         final StreamThread thread = new StreamThread(
-                builder.internalTopologyBuilder,
+                internalTopologyBuilder,
                 config,
                 clientSupplier,
                 applicationId,
@@ -1514,7 +1513,7 @@ public class StreamThreadTest {
                 processId,
                 metrics,
                 mockTime,
-                new StreamsMetadataState(builder.internalTopologyBuilder, StreamsMetadataState.UNKNOWN_HOST),
+                new StreamsMetadataState(internalTopologyBuilder, StreamsMetadataState.UNKNOWN_HOST),
                 0,
                 stateDirectory) {
 
@@ -1523,7 +1522,6 @@ public class StreamThreadTest {
                 return testStreamTask;
             }
         };
-
 
         final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
         activeTasks.put(testStreamTask.id(), testStreamTask.partitions);
@@ -1799,7 +1797,6 @@ public class StreamThreadTest {
                 throw new RuntimeException("KABOOM!!!");
             }
         };
-
 
         final StreamThread thread = new StreamThread(
             builder.internalTopologyBuilder,
