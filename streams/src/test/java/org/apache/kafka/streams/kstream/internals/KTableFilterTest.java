@@ -26,8 +26,8 @@ import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockReducer;
 import org.apache.kafka.test.MockKeyValueMapper;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 
 import java.io.File;
@@ -40,17 +40,9 @@ public class KTableFilterTest {
 
     final private Serde<Integer> intSerde = Serdes.Integer();
     final private Serde<String> stringSerde = Serdes.String();
-
-    private KStreamTestDriver driver = null;
+    @Rule
+    public final KStreamTestDriver driver = new KStreamTestDriver();
     private File stateDir = null;
-
-    @After
-    public void tearDown() {
-        if (driver != null) {
-            driver.close();
-        }
-        driver = null;
-    }
 
     @Before
     public void setUp() throws IOException {
@@ -64,7 +56,7 @@ public class KTableFilterTest {
         table2.toStream().process(proc2);
         table3.toStream().process(proc3);
 
-        driver = new KStreamTestDriver(builder, stateDir, Serdes.String(), Serdes.Integer());
+        driver.setUp(builder, stateDir, Serdes.String(), Serdes.Integer());
 
         driver.process(topic1, "A", 1);
         driver.process(topic1, "B", 2);
@@ -134,7 +126,7 @@ public class KTableFilterTest {
         KTableValueGetterSupplier<String, Integer> getterSupplier2 = table2.valueGetterSupplier();
         KTableValueGetterSupplier<String, Integer> getterSupplier3 = table3.valueGetterSupplier();
 
-        driver = new KStreamTestDriver(builder, stateDir, Serdes.String(), Serdes.Integer());
+        driver.setUp(builder, stateDir, Serdes.String(), Serdes.Integer());
 
         KTableValueGetter<String, Integer> getter2 = getterSupplier2.get();
         KTableValueGetter<String, Integer> getter3 = getterSupplier3.get();
@@ -249,7 +241,7 @@ public class KTableFilterTest {
         builder.build().addProcessor("proc1", proc1, table1.name);
         builder.build().addProcessor("proc2", proc2, table2.name);
 
-        driver = new KStreamTestDriver(builder, stateDir, Serdes.String(), Serdes.Integer());
+        driver.setUp(builder, stateDir, Serdes.String(), Serdes.Integer());
 
         driver.process(topic1, "A", 1);
         driver.process(topic1, "B", 1);
@@ -328,7 +320,7 @@ public class KTableFilterTest {
         builder.build().addProcessor("proc1", proc1, table1.name);
         builder.build().addProcessor("proc2", proc2, table2.name);
 
-        driver = new KStreamTestDriver(builder, stateDir, Serdes.String(), Serdes.Integer());
+        driver.setUp(builder, stateDir, Serdes.String(), Serdes.Integer());
 
         driver.process(topic1, "A", 1);
         driver.process(topic1, "B", 1);
@@ -404,7 +396,7 @@ public class KTableFilterTest {
         builder.build().addProcessor("proc1", proc1, table1.name);
         builder.build().addProcessor("proc2", proc2, table2.name);
 
-        driver = new KStreamTestDriver(builder, stateDir, stringSerde, stringSerde);
+        driver.setUp(builder, stateDir, stringSerde, stringSerde);
 
         driver.process(topic1, "A", "reject");
         driver.process(topic1, "B", "reject");

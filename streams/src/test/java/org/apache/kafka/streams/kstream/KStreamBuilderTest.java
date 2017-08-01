@@ -31,8 +31,8 @@ import org.apache.kafka.test.MockKeyValueMapper;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.MockTimestampExtractor;
-import org.junit.After;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 
 import java.util.HashSet;
@@ -55,20 +55,12 @@ public class KStreamBuilderTest {
     private static final String APP_ID = "app-id";
 
     private final KStreamBuilder builder = new KStreamBuilder();
-
-    private KStreamTestDriver driver = null;
+    @Rule
+    public final KStreamTestDriver driver = new KStreamTestDriver();
 
     @Before
     public void setUp() {
         builder.setApplicationId(APP_ID);
-    }
-
-    @After
-    public void cleanup() {
-        if (driver != null) {
-            driver.close();
-        }
-        driver = null;
     }
 
     @Test(expected = TopologyBuilderException.class)
@@ -101,7 +93,7 @@ public class KStreamBuilderTest {
 
         source.process(processorSupplier);
 
-        driver = new KStreamTestDriver(builder);
+        driver.setUp(builder);
         driver.setTime(0L);
 
         driver.process("topic-source", "A", "aa");
@@ -121,7 +113,7 @@ public class KStreamBuilderTest {
         source.process(sourceProcessorSupplier);
         through.process(throughProcessorSupplier);
 
-        driver = new KStreamTestDriver(builder);
+        driver.setUp(builder);
         driver.setTime(0L);
 
         driver.process("topic-source", "A", "aa");
@@ -155,7 +147,7 @@ public class KStreamBuilderTest {
         final MockProcessorSupplier<String, String> processorSupplier = new MockProcessorSupplier<>();
         merged.process(processorSupplier);
 
-        driver = new KStreamTestDriver(builder);
+        driver.setUp(builder);
         driver.setTime(0L);
 
         driver.process(topic1, "A", "aa");

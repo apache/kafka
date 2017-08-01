@@ -36,7 +36,6 @@ import org.apache.kafka.test.MockInitializer;
 import org.apache.kafka.test.MockKeyValueMapper;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -52,19 +51,12 @@ public class KTableAggregateTest {
 
     final private Serde<String> stringSerde = Serdes.String();
 
-    private KStreamTestDriver driver = null;
     private File stateDir = null;
 
     @Rule
     public EmbeddedKafkaCluster cluster = null;
-
-    @After
-    public void tearDown() {
-        if (driver != null) {
-            driver.close();
-        }
-        driver = null;
-    }
+    @Rule
+    public final KStreamTestDriver driver = new KStreamTestDriver();
 
     @Before
     public void setUp() throws IOException {
@@ -89,7 +81,7 @@ public class KTableAggregateTest {
 
         table2.toStream().process(proc);
 
-        driver = new KStreamTestDriver(builder, stateDir);
+        driver.setUp(builder, stateDir);
 
         driver.process(topic1, "A", "1");
         driver.flushState();
@@ -138,7 +130,7 @@ public class KTableAggregateTest {
 
         table2.toStream().process(proc);
 
-        driver = new KStreamTestDriver(builder, stateDir);
+        driver.setUp(builder, stateDir);
 
         driver.process(topic1, "A", "1");
         driver.process(topic1, "A", "3");
@@ -180,7 +172,7 @@ public class KTableAggregateTest {
 
         table2.toStream().process(proc);
 
-        driver = new KStreamTestDriver(builder, stateDir);
+        driver.setUp(builder, stateDir);
 
         driver.process(topic1, "A", "1");
         driver.flushState();
@@ -212,7 +204,7 @@ public class KTableAggregateTest {
     }
 
     private void testCountHelper(final StreamsBuilder builder, final String input, final MockProcessorSupplier<String, Long> proc) throws IOException {
-        driver = new KStreamTestDriver(builder, stateDir);
+        driver.setUp(builder, stateDir);
 
         driver.process(input, "A", "green");
         driver.flushState();
@@ -278,7 +270,7 @@ public class KTableAggregateTest {
             .toStream()
             .process(proc);
 
-        driver = new KStreamTestDriver(builder, stateDir);
+        driver.setUp(builder, stateDir);
 
         driver.process(input, "A", "green");
         driver.process(input, "B", "green");
@@ -331,7 +323,7 @@ public class KTableAggregateTest {
                 .toStream()
                 .process(proc);
 
-        driver = new KStreamTestDriver(builder, stateDir);
+        driver.setUp(builder, stateDir);
 
         driver.process(input, "11", "A");
         driver.flushState();
@@ -400,7 +392,7 @@ public class KTableAggregateTest {
                     }
                 });
 
-        driver = new KStreamTestDriver(builder, stateDir, 111);
+        driver.setUp(builder, stateDir, 111);
         driver.process(reduceTopic, "1", new Change<>(1L, null));
         driver.process("tableOne", "2", "2");
         // this should trigger eviction on the reducer-store topic

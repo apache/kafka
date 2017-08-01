@@ -41,8 +41,8 @@ import org.apache.kafka.test.MockAggregator;
 import org.apache.kafka.test.MockInitializer;
 import org.apache.kafka.test.MockReducer;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 
 import java.util.ArrayList;
@@ -62,20 +62,13 @@ public class KGroupedStreamImplTest {
     private static final String INVALID_STORE_NAME = "~foo bar~";
     private final StreamsBuilder builder = new StreamsBuilder();
     private KGroupedStream<String, String> groupedStream;
-    private KStreamTestDriver driver = null;
+    @Rule
+    public final KStreamTestDriver driver = new KStreamTestDriver();
 
     @Before
     public void before() {
         final KStream<String, String> stream = builder.stream(Serdes.String(), Serdes.String(), TOPIC);
         groupedStream = stream.groupByKey(Serdes.String(), Serdes.String());
-    }
-
-    @After
-    public void cleanup() {
-        if (driver != null) {
-            driver.close();
-        }
-        driver = null;
     }
 
     @Test(expected = NullPointerException.class)
@@ -180,7 +173,7 @@ public class KGroupedStreamImplTest {
     }
 
     private void doAggregateSessionWindows(final Map<Windowed<String>, Integer> results) throws Exception {
-        driver = new KStreamTestDriver(builder, TestUtils.tempDirectory());
+        driver.setUp(builder, TestUtils.tempDirectory());
         driver.setTime(10);
         driver.process(TOPIC, "1", "1");
         driver.setTime(15);
@@ -260,7 +253,7 @@ public class KGroupedStreamImplTest {
     }
 
     private void doCountSessionWindows(final Map<Windowed<String>, Long> results) throws Exception {
-        driver = new KStreamTestDriver(builder, TestUtils.tempDirectory());
+        driver.setUp(builder, TestUtils.tempDirectory());
         driver.setTime(10);
         driver.process(TOPIC, "1", "1");
         driver.setTime(15);
@@ -308,7 +301,7 @@ public class KGroupedStreamImplTest {
     }
 
     private void doReduceSessionWindows(final Map<Windowed<String>, String> results) throws Exception {
-        driver = new KStreamTestDriver(builder, TestUtils.tempDirectory());
+        driver.setUp(builder, TestUtils.tempDirectory());
         driver.setTime(10);
         driver.process(TOPIC, "1", "A");
         driver.setTime(15);
@@ -485,7 +478,7 @@ public class KGroupedStreamImplTest {
     }
 
     private void doCountWindowed(final List<KeyValue<Windowed<String>, Long>> results) throws Exception {
-        driver = new KStreamTestDriver(builder, TestUtils.tempDirectory(), 0);
+        driver.setUp(builder, TestUtils.tempDirectory(), 0);
         driver.setTime(0);
         driver.process(TOPIC, "1", "A");
         driver.process(TOPIC, "2", "B");
