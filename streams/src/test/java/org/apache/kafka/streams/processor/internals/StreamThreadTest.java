@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -98,7 +99,6 @@ public class StreamThreadTest {
     private final StreamsConfig config = new StreamsConfig(configProps(false));
     private final String stateDir = TestUtils.tempDirectory().getPath();
     private final StateDirectory stateDirectory  = new StateDirectory("applicationId", stateDir, mockTime);
-
 
     @Before
     public void setUp() throws Exception {
@@ -1483,6 +1483,62 @@ public class StreamThreadTest {
     }
 
     @Test
+    public void shouldCaptureCommitFailedExceptionOnTaskSuspension() throws Exception {
+        internalStreamsBuilder.stream(null, null, null, null, "t1");
+
+        final TestStreamTask testStreamTask = new TestStreamTask(
+                new TaskId(0, 0),
+                applicationId,
+                Utils.mkSet(new TopicPartition("t1", 0)),
+                internalTopologyBuilder.build(0),
+                clientSupplier.consumer,
+                clientSupplier.getProducer(new HashMap<String, Object>()),
+                clientSupplier.restoreConsumer,
+                config,
+                new MockStreamsMetrics(new Metrics()),
+                new StateDirectory(applicationId, config.getString(StreamsConfig.STATE_DIR_CONFIG), mockTime)) {
+
+            @Override
+            public void suspend() {
+                throw new CommitFailedException();
+            }
+        };
+
+        final StreamThread thread = new StreamThread(
+                internalTopologyBuilder,
+                config,
+                clientSupplier,
+                applicationId,
+                clientId,
+                processId,
+                metrics,
+                mockTime,
+                new StreamsMetadataState(internalTopologyBuilder, StreamsMetadataState.UNKNOWN_HOST),
+                0,
+                stateDirectory) {
+
+            @Override
+            protected StreamTask createStreamTask(final TaskId id, final Collection<TopicPartition> partitions) {
+                return testStreamTask;
+            }
+        };
+
+        final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
+        activeTasks.put(testStreamTask.id(), testStreamTask.partitions);
+
+        thread.setPartitionAssignor(new MockStreamsPartitionAssignor(activeTasks));
+        thread.setState(StreamThread.State.RUNNING);
+
+        thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
+        thread.rebalanceListener.onPartitionsAssigned(testStreamTask.partitions);
+
+        thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
+
+        assertFalse(testStreamTask.committed);
+    }
+
+
+    @Test
     public void shouldNotViolateAtLeastOnceWhenExceptionOccursDuringTaskSuspension() throws Exception {
         internalStreamsBuilder.stream(null, null, null, null, "t1").groupByKey();
 
@@ -1741,7 +1797,6 @@ public class StreamThreadTest {
                 throw new RuntimeException("KABOOM!!!");
             }
         };
-
 
         final StreamThread thread = new StreamThread(
             builder.internalTopologyBuilder,
