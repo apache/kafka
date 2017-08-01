@@ -1062,14 +1062,14 @@
 
     <p>
         Developers of a Kafka Streams application using the Processor API have the option to specify, for an instance of a
-        processing topology, the total memory (RAM) size of the *state store cache* that is used for:
+        processing topology, the total memory (RAM) size of the <i>state store cache</i> that is used for:
     </p>
 
     <ul><li>Internal <i>caching and compacting</i> of output records before they are written from a <b>stateful</b> processor node to its state stores.</li></ul>
 
     <p>
         Note that, unlike <a href="#streams_developer-guide_memory-management_record-cache">record caches</a> in the DSL, the state
-        store cache in the Processor API *will not cache or compact* any output records that are being forwarded downstream.
+        store cache in the Processor API <i>will not cache or compact</i> any output records that are being forwarded downstream.
         In other words, downstream processor nodes see all records, whereas the state stores see a reduced number of records.
         It is important to note that this does not impact correctness of the system but is merely a performance optimization
         for the state stores.
