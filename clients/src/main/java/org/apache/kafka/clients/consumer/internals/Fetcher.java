@@ -923,7 +923,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                                         key, value, headers);
         } catch (RuntimeException e) {
             throw new SerializationException("Error deserializing key/value for partition " + partition +
-                    " at offset " + record.offset(), e);
+                    " at offset " + record.offset() + ". If needed, please seek past the record to continue consumption.", e);
         }
     }
 
@@ -955,7 +955,8 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         private CloseableIterator<Record> records;
         private long nextFetchOffset;
         private boolean isFetched = false;
-        private boolean hasExceptionInLastFetch;
+        private Exception cachedRecordException = null;
+        private boolean corruptLastRecord = false;
 
         private PartitionRecords(TopicPartition partition,
                                  CompletedFetch completedFetch,
@@ -966,13 +967,12 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             this.nextFetchOffset = completedFetch.fetchedOffset;
             this.abortedProducerIds = new HashSet<>();
             this.abortedTransactions = abortedTransactions(completedFetch.partitionData);
-            this.hasExceptionInLastFetch = false;
         }
 
         private void drain() {
             if (!isFetched) {
                 maybeCloseRecordStream();
-                hasExceptionInLastFetch = false;
+                cachedRecordException = null;
                 this.isFetched = true;
                 this.completedFetch.metricAggregator.record(partition, bytesRead, recordsRead);
 
@@ -1013,15 +1013,6 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         }
 
         private Record nextFetchedRecord() {
-            if (hasExceptionInLastFetch) {
-                if (lastRecord == null) {
-                    maybeEnsureValid(currentBatch);
-                } else {
-                    maybeEnsureValid(lastRecord);
-                    return lastRecord;
-                }
-            }
-
             while (true) {
                 if (records == null || !records.hasNext()) {
                     maybeCloseRecordStream();
@@ -1038,7 +1029,6 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                         return null;
                     }
 
-                    lastRecord = null;
                     currentBatch = batches.next();
                     maybeEnsureValid(currentBatch);
 
@@ -1053,8 +1043,8 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                             abortedProducerIds.remove(producerId);
                         } else if (isBatchAborted(currentBatch)) {
                             log.debug("Skipping aborted record batch from partition {} with producerId {} and " +
-                                            "offsets {} to {}",
-                                    partition, producerId, currentBatch.baseOffset(), currentBatch.lastOffset());
+                                          "offsets {} to {}",
+                                      partition, producerId, currentBatch.baseOffset(), currentBatch.lastOffset());
                             nextFetchOffset = currentBatch.nextOffset();
                             continue;
                         }
@@ -1063,7 +1053,6 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                     records = currentBatch.streamingIterator(decompressionBufferSupplier);
                 } else {
                     Record record = records.next();
-                    lastRecord = record;
                     // skip any records out of range
                     if (record.offset() >= nextFetchOffset) {
                         // we only do validation when the message should not be skipped.
@@ -1082,25 +1071,45 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         }
 
         private List<ConsumerRecord<K, V>> fetchRecords(int maxRecords) {
+            // Error when fetching the next record before deserialization.
+            if (corruptLastRecord)
+                throw new KafkaException("Received exception when fetching the next record from " + partition
+                                             + ". If needed, please seek past the record to "
+                                             + "continue consumption.", cachedRecordException);
+
             if (isFetched)
                 return Collections.emptyList();
 
             List<ConsumerRecord<K, V>> records = new ArrayList<>();
             try {
                 for (int i = 0; i < maxRecords; i++) {
-                    Record record = nextFetchedRecord();
-                    if (record == null)
+                    // Only move to next record if there was no exception in the last fetch. Otherwise we should
+                    // use the last record to do deserialization again.
+                    if (cachedRecordException == null) {
+                        corruptLastRecord = true;
+                        lastRecord = nextFetchedRecord();
+                        corruptLastRecord = false;
+                    }
+                    if (lastRecord == null)
                         break;
-
-                    records.add(parseRecord(partition, currentBatch, record));
+                    records.add(parseRecord(partition, currentBatch, lastRecord));
                     recordsRead++;
-                    bytesRead += record.sizeInBytes();
-                    nextFetchOffset = record.offset() + 1;
+                    bytesRead += lastRecord.sizeInBytes();
+                    nextFetchOffset = lastRecord.offset() + 1;
+                    // In some cases, the deserialization may have thrown an exception and the retry may succeed,
+                    // we allow user to move forward in this case.
+                    cachedRecordException = null;
                 }
-            } catch (KafkaException e) {
-                hasExceptionInLastFetch = true;
+            } catch (SerializationException se) {
+                cachedRecordException = se;
                 if (records.isEmpty())
-                    throw e;
+                    throw se;
+            } catch (KafkaException e) {
+                cachedRecordException = e;
+                if (records.isEmpty())
+                    throw new KafkaException("Received exception when fetching the next record from " + partition
+                                                 + ". If needed, please seek past the record to "
+                                                 + "continue consumption.", e);
             }
             return records;
         }
