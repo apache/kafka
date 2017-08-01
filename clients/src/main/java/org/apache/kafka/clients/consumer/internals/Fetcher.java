@@ -928,7 +928,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                                         key, value, headers);
         } catch (RuntimeException e) {
             throw new SerializationException("Error deserializing key/value for partition " + partition +
-                    " at offset " + record.offset(), e);
+                    " at offset " + record.offset() + ". If needed, please seek past the record to continue consumption.", e);
         }
     }
 
@@ -960,7 +960,6 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         private CloseableIterator<Record> records;
         private long nextFetchOffset;
         private boolean isFetched = false;
-        // We have to cache the iterator exception because they are not reproducible.
         private Exception cachedRecordException = null;
         private boolean corruptLastRecord = false;
 
@@ -1080,7 +1079,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             // Error when fetching the next record before deserialization.
             if (corruptLastRecord)
                 throw new KafkaException("Received exception when fetching the next record from " + partition
-                                             + "If needed, please seek past the record to "
+                                             + ". If needed, please seek past the record to "
                                              + "continue consumption.", cachedRecordException);
 
             if (isFetched)
@@ -1114,7 +1113,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                 cachedRecordException = e;
                 if (records.isEmpty())
                     throw new KafkaException("Received exception when fetching the next record from " + partition
-                                                 + "If needed, please seek past the record to "
+                                                 + ". If needed, please seek past the record to "
                                                  + "continue consumption.", e);
             }
             return records;
