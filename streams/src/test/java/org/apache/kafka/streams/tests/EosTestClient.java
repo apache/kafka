@@ -18,12 +18,12 @@ package org.apache.kafka.streams.tests;
 
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KGroupedStream;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
 
 import java.io.File;
 import java.util.Properties;
@@ -99,7 +99,7 @@ public class EosTestClient extends SmokeTestUtil {
         props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
 
 
-        final KStreamBuilder builder = new KStreamBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
         final KStream<String, Integer> data = builder.stream("data");
 
         data.to("echo");
@@ -179,7 +179,7 @@ public class EosTestClient extends SmokeTestUtil {
                 .to(stringSerde, longSerde, "cnt");
         }
 
-        return new KafkaStreams(builder, props);
+        return new KafkaStreams(builder.build(), props);
     }
 
 }

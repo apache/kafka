@@ -19,7 +19,7 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
+import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.ValueMapper;
@@ -58,7 +58,7 @@ public class KTableMapValuesTest {
         stateDir = TestUtils.tempDirectory("kafka-test");
     }
 
-    private void doTestKTable(final KStreamBuilder builder, final String topic1, final MockProcessorSupplier<String, Integer> proc2) {
+    private void doTestKTable(final StreamsBuilder builder, final String topic1, final MockProcessorSupplier<String, Integer> proc2) {
         driver = new KStreamTestDriver(builder, stateDir, Serdes.String(), Serdes.String());
 
         driver.process(topic1, "A", "1");
@@ -71,7 +71,7 @@ public class KTableMapValuesTest {
 
     @Test
     public void testKTable() {
-        final KStreamBuilder builder = new KStreamBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
         String topic1 = "topic1";
 
@@ -91,7 +91,7 @@ public class KTableMapValuesTest {
 
     @Test
     public void testQueryableKTable() {
-        final KStreamBuilder builder = new KStreamBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
         String topic1 = "topic1";
 
@@ -109,7 +109,7 @@ public class KTableMapValuesTest {
         doTestKTable(builder, topic1, proc2);
     }
 
-    private void doTestValueGetter(final KStreamBuilder builder,
+    private void doTestValueGetter(final StreamsBuilder builder,
                                    final String topic1,
                                    final KTableImpl<String, String, String> table1,
                                    final KTableImpl<String, String, Integer> table2,
@@ -212,7 +212,7 @@ public class KTableMapValuesTest {
 
     @Test
     public void testValueGetter() throws IOException {
-        KStreamBuilder builder = new KStreamBuilder();
+        StreamsBuilder builder = new StreamsBuilder();
 
         String topic1 = "topic1";
         String topic2 = "topic2";
@@ -243,7 +243,7 @@ public class KTableMapValuesTest {
 
     @Test
     public void testQueryableValueGetter() throws IOException {
-        KStreamBuilder builder = new KStreamBuilder();
+        StreamsBuilder builder = new StreamsBuilder();
 
         String topic1 = "topic1";
         String topic2 = "topic2";
@@ -274,7 +274,7 @@ public class KTableMapValuesTest {
 
     @Test
     public void testNotSendingOldValue() throws IOException {
-        KStreamBuilder builder = new KStreamBuilder();
+        StreamsBuilder builder = new StreamsBuilder();
 
         String topic1 = "topic1";
 
@@ -290,7 +290,7 @@ public class KTableMapValuesTest {
 
         MockProcessorSupplier<String, Integer> proc = new MockProcessorSupplier<>();
 
-        builder.addProcessor("proc", proc, table2.name);
+        builder.build().addProcessor("proc", proc, table2.name);
 
         driver = new KStreamTestDriver(builder, stateDir, null, null);
         assertFalse(table1.sendingOldValueEnabled());
@@ -322,7 +322,7 @@ public class KTableMapValuesTest {
 
     @Test
     public void testSendingOldValue() throws IOException {
-        KStreamBuilder builder = new KStreamBuilder();
+        StreamsBuilder builder = new StreamsBuilder();
 
         String topic1 = "topic1";
 
@@ -340,7 +340,7 @@ public class KTableMapValuesTest {
 
         MockProcessorSupplier<String, Integer> proc = new MockProcessorSupplier<>();
 
-        builder.addProcessor("proc", proc, table2.name);
+        builder.build().addProcessor("proc", proc, table2.name);
 
         driver = new KStreamTestDriver(builder, stateDir, null, null);
         assertTrue(table1.sendingOldValueEnabled());

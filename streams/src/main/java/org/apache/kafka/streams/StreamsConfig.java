@@ -78,7 +78,7 @@ import static org.apache.kafka.common.requests.IsolationLevel.READ_COMMITTED;
  * Furthermore, it is not allowed to enable {@link ConsumerConfig#ENABLE_AUTO_COMMIT_CONFIG "enable.auto.commit"} that
  * is disabled by Kafka Streams by default.
  *
- * @see KafkaStreams#KafkaStreams(org.apache.kafka.streams.processor.TopologyBuilder, StreamsConfig)
+ * @see KafkaStreams#KafkaStreams(org.apache.kafka.streams.Topology, StreamsConfig)
  * @see ConsumerConfig
  * @see ProducerConfig
  */

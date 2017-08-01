@@ -18,17 +18,18 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
-import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.junit.After;
 import org.junit.Test;
-import java.util.List;
-import java.util.Locale;
+
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
+import java.util.Locale;
 
 import static org.junit.Assert.assertEquals;
 
@@ -76,7 +77,7 @@ public class KStreamForeachTest {
             };
 
         // When
-        KStreamBuilder builder = new KStreamBuilder();
+        StreamsBuilder builder = new StreamsBuilder();
         KStream<Integer, String> stream = builder.stream(intSerde, stringSerde, topicName);
         stream.foreach(action);
 
@@ -101,7 +102,7 @@ public class KStreamForeachTest {
             public void apply(Number key, Object value) {}
         };
 
-        new KStreamBuilder()
+        new StreamsBuilder()
             .<Integer, String>stream("emptyTopic")
             .foreach(consume);
     }

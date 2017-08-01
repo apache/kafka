@@ -19,7 +19,7 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
+import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockProcessorSupplier;
@@ -58,7 +58,7 @@ public class KTableSourceTest {
 
     @Test
     public void testKTable() {
-        final KStreamBuilder builder = new KStreamBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
         String topic1 = "topic1";
 
@@ -82,7 +82,7 @@ public class KTableSourceTest {
 
     @Test
     public void testValueGetter() throws IOException {
-        final KStreamBuilder builder = new KStreamBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
         String topic1 = "topic1";
 
@@ -126,7 +126,7 @@ public class KTableSourceTest {
 
     @Test
     public void testNotSendingOldValue() throws IOException {
-        final KStreamBuilder builder = new KStreamBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
         String topic1 = "topic1";
 
@@ -134,7 +134,7 @@ public class KTableSourceTest {
 
         MockProcessorSupplier<String, Integer> proc1 = new MockProcessorSupplier<>();
 
-        builder.addProcessor("proc1", proc1, table1.name);
+        builder.build().addProcessor("proc1", proc1, table1.name);
 
         driver = new KStreamTestDriver(builder, stateDir, null, null);
         driver.process(topic1, "A", "01");
@@ -164,7 +164,7 @@ public class KTableSourceTest {
 
     @Test
     public void testSendingOldValue() throws IOException {
-        final KStreamBuilder builder = new KStreamBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
         String topic1 = "topic1";
 
@@ -176,7 +176,7 @@ public class KTableSourceTest {
 
         MockProcessorSupplier<String, Integer> proc1 = new MockProcessorSupplier<>();
 
-        builder.addProcessor("proc1", proc1, table1.name);
+        builder.build().addProcessor("proc1", proc1, table1.name);
 
         driver = new KStreamTestDriver(builder, stateDir, null, null);
 

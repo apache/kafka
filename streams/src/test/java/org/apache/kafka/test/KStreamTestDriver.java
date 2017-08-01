@@ -20,10 +20,13 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
+import org.apache.kafka.streams.kstream.internals.InternalStreamsBuilder;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StreamPartitioner;
+import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
@@ -32,6 +35,7 @@ import org.apache.kafka.streams.processor.internals.RecordCollectorImpl;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
 import java.io.File;
+import java.lang.reflect.Field;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -72,6 +76,58 @@ public class KStreamTestDriver {
         builder.setApplicationId("TestDriver");
         topology = builder.build(null);
         globalTopology = builder.buildGlobalStateTopology();
+        final ThreadCache cache = new ThreadCache("testCache", cacheSize, new MockStreamsMetrics(new Metrics()));
+        context = new MockProcessorContext(stateDir, keySerde, valSerde, new MockRecordCollector(), cache);
+        context.setRecordContext(new ProcessorRecordContext(0, 0, 0, "topic"));
+        // init global topology first as it will add stores to the
+        // store map that are required for joins etc.
+        if (globalTopology != null) {
+            initTopology(globalTopology, globalTopology.globalStateStores());
+        }
+        initTopology(topology, topology.stateStores());
+    }
+
+    public KStreamTestDriver(final StreamsBuilder builder) {
+        this(builder, null, Serdes.ByteArray(), Serdes.ByteArray());
+    }
+
+    public KStreamTestDriver(final StreamsBuilder builder, final File stateDir) {
+        this(builder, stateDir, Serdes.ByteArray(), Serdes.ByteArray());
+    }
+
+    public KStreamTestDriver(final StreamsBuilder builder, final File stateDir, final long cacheSize) {
+        this(builder, stateDir, Serdes.ByteArray(), Serdes.ByteArray(), cacheSize);
+    }
+
+    public KStreamTestDriver(final StreamsBuilder builder,
+                             final File stateDir,
+                             final Serde<?> keySerde,
+                             final Serde<?> valSerde) {
+        this(builder, stateDir, keySerde, valSerde, DEFAULT_CACHE_SIZE_BYTES);
+    }
+
+    public KStreamTestDriver(final StreamsBuilder builder,
+                             final File stateDir,
+                             final Serde<?> keySerde,
+                             final Serde<?> valSerde,
+                             final long cacheSize) {
+        // TODO: we should refactor this to avoid usage of reflection
+        final InternalTopologyBuilder internalTopologyBuilder;
+        try {
+            final Field internalStreamsBuilderField = builder.getClass().getDeclaredField("internalStreamsBuilder");
+            internalStreamsBuilderField.setAccessible(true);
+            final InternalStreamsBuilder internalStreamsBuilder = (InternalStreamsBuilder) internalStreamsBuilderField.get(builder);
+
+            final Field internalTopologyBuilderField = internalStreamsBuilder.getClass().getDeclaredField("internalTopologyBuilder");
+            internalTopologyBuilderField.setAccessible(true);
+            internalTopologyBuilder = (InternalTopologyBuilder) internalTopologyBuilderField.get(internalStreamsBuilder);
+        } catch (final NoSuchFieldException | IllegalAccessException e) {
+            throw new RuntimeException(e);
+        }
+
+        internalTopologyBuilder.setApplicationId("TestDriver");
+        topology = internalTopologyBuilder.build(null);
+        globalTopology = internalTopologyBuilder.buildGlobalStateTopology();
         final ThreadCache cache = new ThreadCache("testCache", cacheSize, new MockStreamsMetrics(new Metrics()));
         context = new MockProcessorContext(stateDir, keySerde, valSerde, new MockRecordCollector(), cache);
         context.setRecordContext(new ProcessorRecordContext(0, 0, 0, "topic"));
