@@ -236,13 +236,17 @@ class LogCleanerManagerTest extends JUnitSuite with Logging {
       recoveryPoint = 0L,
       scheduler = time.scheduler,
       time = time,
-      brokerTopicStats = new BrokerTopicStats)
+      brokerTopicStats = new BrokerTopicStats,
+      maxProducerIdExpirationMs = 60 * 60 * 1000,
+      producerIdExpirationCheckIntervalMs = 10 * 60 * 1000,
+      logDirFailureChannel = null)
     log
   }
 
   private def makeLog(dir: File = logDir, config: LogConfig = logConfig) =
     Log(dir = dir, config = config, logStartOffset = 0L, recoveryPoint = 0L, scheduler = time.scheduler,
-      time = time, brokerTopicStats = new BrokerTopicStats)
+      time = time, brokerTopicStats = new BrokerTopicStats, maxProducerIdExpirationMs = 60 * 60 * 1000,
+      producerIdExpirationCheckIntervalMs = 10 * 60 * 1000, logDirFailureChannel = null)
 
   private def records(key: Int, value: Int, timestamp: Long) =
     MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord(timestamp, key.toString.getBytes, value.toString.getBytes))

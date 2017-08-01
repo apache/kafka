@@ -1238,7 +1238,8 @@ class LogCleanerTest extends JUnitSuite {
 
   private def makeLog(dir: File = dir, config: LogConfig = logConfig, recoveryPoint: Long = 0L) =
     Log(dir = dir, config = config, logStartOffset = 0L, recoveryPoint = recoveryPoint, scheduler = time.scheduler,
-      time = time, brokerTopicStats = new BrokerTopicStats)
+      time = time, brokerTopicStats = new BrokerTopicStats, maxProducerIdExpirationMs = 60 * 60 * 1000,
+      producerIdExpirationCheckIntervalMs = 10 * 60 * 1000, logDirFailureChannel = null)
 
   private def noOpCheckDone(topicPartition: TopicPartition) { /* do nothing */  }
 

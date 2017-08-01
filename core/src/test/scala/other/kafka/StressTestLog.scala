@@ -49,7 +49,10 @@ object StressTestLog {
       recoveryPoint = 0L,
       scheduler = time.scheduler,
       time = time,
-      brokerTopicStats = new BrokerTopicStats)
+      maxProducerIdExpirationMs = 60 * 60 * 1000,
+      producerIdExpirationCheckIntervalMs = 10 * 60 * 1000,
+      brokerTopicStats = new BrokerTopicStats,
+      logDirFailureChannel = null)
     val writer = new WriterThread(log)
     writer.start()
     val reader = new ReaderThread(log)
