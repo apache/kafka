@@ -50,7 +50,7 @@ public class StreamsBuilderTest {
     }
 
     @Test
-    public void shouldProcessingFromSinkTopic() {
+    public void shouldProcessingFromSinkTopic() throws Exception {
         final KStream<String, String> source = builder.stream("topic-source");
         source.to("topic-sink");
 
@@ -68,7 +68,7 @@ public class StreamsBuilderTest {
     }
 
     @Test
-    public void shouldProcessViaThroughTopic() {
+    public void shouldProcessViaThroughTopic() throws Exception {
         final KStream<String, String> source = builder.stream("topic-source");
         final KStream<String, String> through = source.through("topic-sink");
 
@@ -88,7 +88,7 @@ public class StreamsBuilderTest {
     }
 
     @Test
-    public void testMerge() {
+    public void testMerge() throws Exception {
         final String topic1 = "topic-1";
         final String topic2 = "topic-2";
 

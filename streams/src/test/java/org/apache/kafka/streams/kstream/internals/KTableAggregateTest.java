@@ -211,7 +211,7 @@ public class KTableAggregateTest {
                 ), proc.processed);
     }
 
-    private void testCountHelper(final StreamsBuilder builder, final String input, final MockProcessorSupplier<String, Long> proc) throws IOException {
+    private void testCountHelper(final StreamsBuilder builder, final String input, final MockProcessorSupplier<String, Long> proc) throws Exception {
         driver = new KStreamTestDriver(builder, stateDir);
 
         driver.process(input, "A", "green");
@@ -237,7 +237,7 @@ public class KTableAggregateTest {
     }
 
     @Test
-    public void testCount() throws IOException {
+    public void testCount() throws Exception {
         final StreamsBuilder builder = new StreamsBuilder();
         final String input = "count-test-input";
         final MockProcessorSupplier<String, Long> proc = new MockProcessorSupplier<>();
@@ -252,7 +252,7 @@ public class KTableAggregateTest {
     }
 
     @Test
-    public void testCountWithInternalStore() throws IOException {
+    public void testCountWithInternalStore() throws Exception {
         final StreamsBuilder builder = new StreamsBuilder();
         final String input = "count-test-input";
         final MockProcessorSupplier<String, Long> proc = new MockProcessorSupplier<>();
@@ -267,7 +267,7 @@ public class KTableAggregateTest {
     }
 
     @Test
-    public void testCountCoalesced() throws IOException {
+    public void testCountCoalesced() throws Exception {
         final StreamsBuilder builder = new StreamsBuilder();
         final String input = "count-test-input";
         final MockProcessorSupplier<String, Long> proc = new MockProcessorSupplier<>();
@@ -296,7 +296,7 @@ public class KTableAggregateTest {
     }
     
     @Test
-    public void testRemoveOldBeforeAddNew() throws IOException {
+    public void testRemoveOldBeforeAddNew() throws Exception {
         final StreamsBuilder builder = new StreamsBuilder();
         final String input = "count-test-input";
         final MockProcessorSupplier<String, String> proc = new MockProcessorSupplier<>();
@@ -380,7 +380,7 @@ public class KTableAggregateTest {
                     }
                 }, "reducer-store");
 
-        reduce.foreach(new ForeachAction<String, Long>() {
+        reduce.toStream().foreach(new ForeachAction<String, Long>() {
             @Override
             public void apply(final String key, final Long value) {
                 reduceResults.put(key, value);

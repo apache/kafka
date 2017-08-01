@@ -102,7 +102,7 @@ public class GlobalKTableJoinsTest {
         verifyJoin(expected, streamTopic);
     }
 
-    private void verifyJoin(final Map<String, String> expected, final String joinInput) {
+    private void verifyJoin(final Map<String, String> expected, final String joinInput) throws Exception {
         driver = new KStreamTestDriver(builder, stateDir);
         driver.setTime(0L);
         // write some data to the global table

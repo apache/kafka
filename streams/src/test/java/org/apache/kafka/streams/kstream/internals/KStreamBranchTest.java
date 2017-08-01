@@ -45,7 +45,7 @@ public class KStreamBranchTest {
 
     @SuppressWarnings("unchecked")
     @Test
-    public void testKStreamBranch() {
+    public void testKStreamBranch() throws Exception {
         final StreamsBuilder builder = new StreamsBuilder();
 
         Predicate<Integer, String> isEven = new Predicate<Integer, String>() {

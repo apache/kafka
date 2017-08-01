@@ -32,7 +32,6 @@ import org.junit.Test;
 
 import java.io.File;
 import java.io.IOException;
-import java.lang.reflect.Field;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashSet;
@@ -210,7 +209,7 @@ public class KTableKTableJoinTest {
                                         final KTable<Integer, String> table2,
                                         final MockProcessorSupplier<Integer, String> proc,
                                         final KTable<Integer, String> joined,
-                                        final boolean sendOldValues) {
+                                        final boolean sendOldValues) throws Exception {
 
 
         driver = new KStreamTestDriver(builder, stateDir, Serdes.Integer(), Serdes.String());

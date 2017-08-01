@@ -48,7 +48,7 @@ public class KStreamTransformTest {
     }
 
     @Test
-    public void testTransform() {
+    public void testTransform() throws Exception {
         StreamsBuilder builder = new StreamsBuilder();
 
         TransformerSupplier<Number, Number, KeyValue<Integer, Integer>> transformerSupplier =

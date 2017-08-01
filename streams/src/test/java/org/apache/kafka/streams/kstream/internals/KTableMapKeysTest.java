@@ -59,7 +59,7 @@ public class KTableMapKeysTest {
     }
 
     @Test
-    public void testMapKeysConvertingToStream() {
+    public void testMapKeysConvertingToStream() throws Exception {
         final StreamsBuilder builder = new StreamsBuilder();
 
         String topic1 = "topic_map_keys";

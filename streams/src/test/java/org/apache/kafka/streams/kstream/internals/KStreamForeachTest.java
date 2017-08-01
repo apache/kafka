@@ -51,7 +51,7 @@ public class KStreamForeachTest {
     }
 
     @Test
-    public void testForeach() {
+    public void testForeach() throws Exception {
         // Given
         List<KeyValue<Integer, String>> inputRecords = Arrays.asList(
             new KeyValue<>(0, "zero"),

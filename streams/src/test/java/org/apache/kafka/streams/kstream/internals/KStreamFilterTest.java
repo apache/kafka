@@ -49,7 +49,7 @@ public class KStreamFilterTest {
     };
 
     @Test
-    public void testFilter() {
+    public void testFilter() throws Exception {
         StreamsBuilder builder = new StreamsBuilder();
         final int[] expectedKeys = new int[]{1, 2, 3, 4, 5, 6, 7};
 
@@ -69,7 +69,7 @@ public class KStreamFilterTest {
     }
 
     @Test
-    public void testFilterNot() {
+    public void testFilterNot() throws Exception {
         StreamsBuilder builder = new StreamsBuilder();
         final int[] expectedKeys = new int[]{1, 2, 3, 4, 5, 6, 7};
 

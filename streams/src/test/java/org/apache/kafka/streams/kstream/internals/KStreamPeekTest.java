@@ -47,7 +47,7 @@ public class KStreamPeekTest {
     }
 
     @Test
-    public void shouldObserveStreamElements() {
+    public void shouldObserveStreamElements() throws Exception {
         final StreamsBuilder builder = new StreamsBuilder();
         final KStream<Integer, String> stream = builder.stream(intSerd, stringSerd, topicName);
         final List<KeyValue<Integer, String>> peekObserved = new ArrayList<>(), streamObserved = new ArrayList<>();
@@ -72,7 +72,9 @@ public class KStreamPeekTest {
         try {
             stream.peek(null);
             fail("expected null action to throw NPE");
-        } catch (NullPointerException expected) { }
+        } catch (NullPointerException expected) {
+            // do nothing
+        }
     }
 
     private static <K, V> ForeachAction<K, V> collect(final List<KeyValue<K, V>> into) {

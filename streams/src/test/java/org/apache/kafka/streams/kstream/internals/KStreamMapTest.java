@@ -47,7 +47,7 @@ public class KStreamMapTest {
     }
 
     @Test
-    public void testMap() {
+    public void testMap() throws Exception {
         StreamsBuilder builder = new StreamsBuilder();
 
         KeyValueMapper<Integer, String, KeyValue<String, Integer>> mapper =

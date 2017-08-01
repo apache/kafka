@@ -31,7 +31,6 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.io.File;
-import java.io.IOException;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -54,11 +53,13 @@ public class KTableMapValuesTest {
     }
 
     @Before
-    public void setUp() throws IOException {
+    public void setUp() throws Exception {
         stateDir = TestUtils.tempDirectory("kafka-test");
     }
 
-    private void doTestKTable(final StreamsBuilder builder, final String topic1, final MockProcessorSupplier<String, Integer> proc2) {
+    private void doTestKTable(final StreamsBuilder builder,
+                              final String topic1,
+                              final MockProcessorSupplier<String, Integer> proc2) throws Exception {
         driver = new KStreamTestDriver(builder, stateDir, Serdes.String(), Serdes.String());
 
         driver.process(topic1, "A", "1");
@@ -70,7 +71,7 @@ public class KTableMapValuesTest {
     }
 
     @Test
-    public void testKTable() {
+    public void testKTable() throws Exception {
         final StreamsBuilder builder = new StreamsBuilder();
 
         String topic1 = "topic1";
@@ -90,7 +91,7 @@ public class KTableMapValuesTest {
     }
 
     @Test
-    public void testQueryableKTable() {
+    public void testQueryableKTable() throws Exception {
         final StreamsBuilder builder = new StreamsBuilder();
 
         String topic1 = "topic1";
@@ -114,7 +115,7 @@ public class KTableMapValuesTest {
                                    final KTableImpl<String, String, String> table1,
                                    final KTableImpl<String, String, Integer> table2,
                                    final KTableImpl<String, Integer, Integer> table3,
-                                   final KTableImpl<String, String, String> table4) {
+                                   final KTableImpl<String, String, String> table4) throws Exception {
         KTableValueGetterSupplier<String, String> getterSupplier1 = table1.valueGetterSupplier();
         KTableValueGetterSupplier<String, Integer> getterSupplier2 = table2.valueGetterSupplier();
         KTableValueGetterSupplier<String, Integer> getterSupplier3 = table3.valueGetterSupplier();
@@ -211,7 +212,7 @@ public class KTableMapValuesTest {
     }
 
     @Test
-    public void testValueGetter() throws IOException {
+    public void testValueGetter() throws Exception {
         StreamsBuilder builder = new StreamsBuilder();
 
         String topic1 = "topic1";
@@ -242,7 +243,7 @@ public class KTableMapValuesTest {
     }
 
     @Test
-    public void testQueryableValueGetter() throws IOException {
+    public void testQueryableValueGetter() throws Exception {
         StreamsBuilder builder = new StreamsBuilder();
 
         String topic1 = "topic1";
@@ -273,7 +274,7 @@ public class KTableMapValuesTest {
     }
 
     @Test
-    public void testNotSendingOldValue() throws IOException {
+    public void testNotSendingOldValue() throws Exception {
         StreamsBuilder builder = new StreamsBuilder();
 
         String topic1 = "topic1";
@@ -321,7 +322,7 @@ public class KTableMapValuesTest {
     }
 
     @Test
-    public void testSendingOldValue() throws IOException {
+    public void testSendingOldValue() throws Exception {
         StreamsBuilder builder = new StreamsBuilder();
 
         String topic1 = "topic1";

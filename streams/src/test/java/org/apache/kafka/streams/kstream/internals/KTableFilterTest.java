@@ -58,7 +58,7 @@ public class KTableFilterTest {
     }
 
     private void doTestKTable(final StreamsBuilder builder, final KTable<String, Integer> table2,
-                              final KTable<String, Integer> table3, final String topic1) {
+                              final KTable<String, Integer> table3, final String topic1) throws Exception {
         MockProcessorSupplier<String, Integer> proc2 = new MockProcessorSupplier<>();
         MockProcessorSupplier<String, Integer> proc3 = new MockProcessorSupplier<>();
         table2.toStream().process(proc2);
@@ -80,7 +80,7 @@ public class KTableFilterTest {
     }
 
     @Test
-    public void testKTable() {
+    public void testKTable() throws Exception {
         final StreamsBuilder builder = new StreamsBuilder();
 
         String topic1 = "topic1";
@@ -104,7 +104,7 @@ public class KTableFilterTest {
     }
 
     @Test
-    public void testQueryableKTable() {
+    public void testQueryableKTable() throws Exception {
         final StreamsBuilder builder = new StreamsBuilder();
 
         String topic1 = "topic1";
@@ -130,7 +130,7 @@ public class KTableFilterTest {
     private void doTestValueGetter(final StreamsBuilder builder,
                                    final KTableImpl<String, Integer, Integer> table2,
                                    final KTableImpl<String, Integer, Integer> table3,
-                                   final String topic1) throws IOException {
+                                   final String topic1) throws Exception {
         KTableValueGetterSupplier<String, Integer> getterSupplier2 = table2.valueGetterSupplier();
         KTableValueGetterSupplier<String, Integer> getterSupplier3 = table3.valueGetterSupplier();
 
@@ -188,7 +188,7 @@ public class KTableFilterTest {
     }
 
     @Test
-    public void testValueGetter() throws IOException {
+    public void testValueGetter() throws Exception {
         StreamsBuilder builder = new StreamsBuilder();
 
         String topic1 = "topic1";
@@ -214,7 +214,7 @@ public class KTableFilterTest {
     }
 
     @Test
-    public void testQueryableValueGetter() throws IOException {
+    public void testQueryableValueGetter() throws Exception {
         StreamsBuilder builder = new StreamsBuilder();
 
         String topic1 = "topic1";
@@ -242,7 +242,7 @@ public class KTableFilterTest {
     private void doTestNotSendingOldValue(final StreamsBuilder builder,
                                           final KTableImpl<String, Integer, Integer> table1,
                                           final KTableImpl<String, Integer, Integer> table2,
-                                          final String topic1) throws IOException {
+                                          final String topic1) throws Exception {
         MockProcessorSupplier<String, Integer> proc1 = new MockProcessorSupplier<>();
         MockProcessorSupplier<String, Integer> proc2 = new MockProcessorSupplier<>();
 
@@ -279,7 +279,7 @@ public class KTableFilterTest {
 
 
     @Test
-    public void testNotSendingOldValue() throws IOException {
+    public void testNotSendingOldValue() throws Exception {
         StreamsBuilder builder = new StreamsBuilder();
 
         String topic1 = "topic1";
@@ -298,7 +298,7 @@ public class KTableFilterTest {
     }
 
     @Test
-    public void testQueryableNotSendingOldValue() throws IOException {
+    public void testQueryableNotSendingOldValue() throws Exception {
         StreamsBuilder builder = new StreamsBuilder();
 
         String topic1 = "topic1";
@@ -319,7 +319,7 @@ public class KTableFilterTest {
     private void doTestSendingOldValue(final StreamsBuilder builder,
                                        final KTableImpl<String, Integer, Integer> table1,
                                        final KTableImpl<String, Integer, Integer> table2,
-                                       final String topic1) throws IOException {
+                                       final String topic1) throws Exception {
         table2.enableSendingOldValues();
 
         MockProcessorSupplier<String, Integer> proc1 = new MockProcessorSupplier<>();
@@ -357,7 +357,7 @@ public class KTableFilterTest {
     }
 
     @Test
-    public void testSendingOldValue() throws IOException {
+    public void testSendingOldValue() throws Exception {
         StreamsBuilder builder = new StreamsBuilder();
 
         String topic1 = "topic1";
@@ -376,7 +376,7 @@ public class KTableFilterTest {
     }
 
     @Test
-    public void testQueryableSendingOldValue() throws IOException {
+    public void testQueryableSendingOldValue() throws Exception {
         StreamsBuilder builder = new StreamsBuilder();
 
         String topic1 = "topic1";
@@ -397,7 +397,7 @@ public class KTableFilterTest {
     private void doTestSkipNullOnMaterialization(final StreamsBuilder builder,
                                                  final KTableImpl<String, String, String> table1,
                                                  final KTableImpl<String, String, String> table2,
-                                                 final String topic1) throws IOException {
+                                                 final String topic1) throws Exception {
         MockProcessorSupplier<String, String> proc1 = new MockProcessorSupplier<>();
         MockProcessorSupplier<String, String> proc2 = new MockProcessorSupplier<>();
 
@@ -415,7 +415,7 @@ public class KTableFilterTest {
     }
 
     @Test
-    public void testSkipNullOnMaterialization() throws IOException {
+    public void testSkipNullOnMaterialization() throws Exception {
         // Do not explicitly set enableSendingOldValues. Let a further downstream stateful operator trigger it instead.
         StreamsBuilder builder = new StreamsBuilder();
 
@@ -436,7 +436,7 @@ public class KTableFilterTest {
     }
 
     @Test
-    public void testQueryableSkipNullOnMaterialization() throws IOException {
+    public void testQueryableSkipNullOnMaterialization() throws Exception {
         // Do not explicitly set enableSendingOldValues. Let a further downstream stateful operator trigger it instead.
         StreamsBuilder builder = new StreamsBuilder();
 

@@ -50,7 +50,7 @@ public class KStreamSelectKeyTest {
     }
 
     @Test
-    public void testSelectKey() {
+    public void testSelectKey() throws Exception {
         StreamsBuilder builder = new StreamsBuilder();
 
         final Map<Number, String> keyMap = new HashMap<>();

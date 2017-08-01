@@ -57,7 +57,7 @@ public class KTableSourceTest {
     }
 
     @Test
-    public void testKTable() {
+    public void testKTable() throws Exception {
         final StreamsBuilder builder = new StreamsBuilder();
 
         String topic1 = "topic1";
@@ -81,7 +81,7 @@ public class KTableSourceTest {
     }
 
     @Test
-    public void testValueGetter() throws IOException {
+    public void testValueGetter() throws Exception {
         final StreamsBuilder builder = new StreamsBuilder();
 
         String topic1 = "topic1";
@@ -125,7 +125,7 @@ public class KTableSourceTest {
     }
 
     @Test
-    public void testNotSendingOldValue() throws IOException {
+    public void testNotSendingOldValue() throws Exception {
         final StreamsBuilder builder = new StreamsBuilder();
 
         String topic1 = "topic1";
@@ -163,7 +163,7 @@ public class KTableSourceTest {
     }
 
     @Test
-    public void testSendingOldValue() throws IOException {
+    public void testSendingOldValue() throws Exception {
         final StreamsBuilder builder = new StreamsBuilder();
 
         String topic1 = "topic1";

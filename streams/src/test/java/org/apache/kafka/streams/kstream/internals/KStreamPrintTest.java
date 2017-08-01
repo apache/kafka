@@ -45,8 +45,7 @@ public class KStreamPrintTest {
     private final Serde<String> stringSerd = Serdes.String();
     private PrintWriter printWriter;
     private ByteArrayOutputStream byteOutStream;
-    private KStreamTestDriver driver = null;
-
+    private KStreamTestDriver driver;
 
     @Before
     public void setUp() {
@@ -62,7 +61,7 @@ public class KStreamPrintTest {
     }
     
     @Test
-    public void testPrintKeyValueWithName() {
+    public void testPrintKeyValueWithName() throws Exception {
         KeyValueMapper<Integer, String, String> mapper = new KeyValueMapper<Integer, String, String>() {
             @Override
             public String apply(Integer key, String value) {
@@ -95,7 +94,7 @@ public class KStreamPrintTest {
     }
 
     @Test
-    public void testPrintStreamWithProvidedKeyValueMapper() {
+    public void testPrintStreamWithProvidedKeyValueMapper() throws Exception {
         final KeyValueMapper<Integer, String, String> mapper = new KeyValueMapper<Integer, String, String>() {
             @Override
             public String apply(Integer key, String value) {

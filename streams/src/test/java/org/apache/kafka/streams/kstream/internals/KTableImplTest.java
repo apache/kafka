@@ -73,7 +73,7 @@ public class KTableImplTest {
     }
 
     @Test
-    public void testKTable() {
+    public void testKTable() throws Exception {
         final StreamsBuilder builder = new StreamsBuilder();
 
         String topic1 = "topic1";
@@ -130,7 +130,7 @@ public class KTableImplTest {
     }
 
     @Test
-    public void testValueGetter() throws IOException {
+    public void testValueGetter() throws Exception {
         final StreamsBuilder builder = new StreamsBuilder();
 
         String topic1 = "topic1";
@@ -258,7 +258,7 @@ public class KTableImplTest {
     }
 
     @Test
-    public void testStateStoreLazyEval() throws IOException {
+    public void testStateStoreLazyEval() throws Exception {
         String topic1 = "topic1";
         String topic2 = "topic2";
         String storeName1 = "storeName1";
@@ -293,7 +293,7 @@ public class KTableImplTest {
     }
 
     @Test
-    public void testStateStore() throws IOException {
+    public void testStateStore() throws Exception {
         String topic1 = "topic1";
         String topic2 = "topic2";
         String storeName1 = "storeName1";

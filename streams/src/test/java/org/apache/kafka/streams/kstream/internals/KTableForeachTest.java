@@ -37,6 +37,7 @@ import java.util.Locale;
 
 import static org.junit.Assert.assertEquals;
 
+@Deprecated
 public class KTableForeachTest {
 
     final private String topicName = "topic";
@@ -60,7 +61,7 @@ public class KTableForeachTest {
     }
 
     @Test
-    public void testForeach() {
+    public void testForeach() throws Exception {
         // Given
         List<KeyValue<Integer, String>> inputRecords = Arrays.asList(
             new KeyValue<>(0, "zero"),
