@@ -180,7 +180,7 @@ class SocketServerTest extends JUnitSuite {
     for (_ <- 0 until 10) {
       val request = server.requestChannel.receiveRequest(2000)
       assertNotNull("receiveRequest timed out", request)
-      server.requestChannel.sendResponse(RequestChannel.Response(request, None, RequestChannel.NoOpAction))
+      server.requestChannel.sendResponse(new RequestChannel.Response(request, None, RequestChannel.NoOpAction))
     }
   }
 
