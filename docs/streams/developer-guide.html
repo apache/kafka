@@ -215,13 +215,12 @@
         Thus, <code>TopologyDescritpion</code> allows to retrieve the DAG structure of the specified topology.
         <br />
         Note that global stores are listed explicitly as they are accessible by all nodes without the need to explicitly connect them.
-        Furthermore, nodes are grouped by <code>Subtopology</code>.
-        Subtopologies are groups of nodes that are directly connected to each other (i.e., either by a direct connection&mdash;but not a topic&mdash;or by sharing a store).
-        For execution, each <code>Subtopology</code> is executed by <a href="/{{version}}/documentation/streams/architecture#streams_architecture_tasks">one or multiple tasks</a>.
-        Thus, each <code>Subtopology</code> describes an independent unit of works that can be executed by different threads in parallel.
+        Furthermore, nodes are grouped by <code>Sub-topologies</code>, where each sub-topology is a group of processor nodes that are directly connected to each other (i.e., either by a direct connection&mdash;but not a topic&mdash;or by sharing a store).
+        During execution, each <code>Sub-topology</code> will be processed by <a href="/{{version}}/documentation/streams/architecture#streams_architecture_tasks">one or multiple tasks</a>.
+        Thus, each <code>Sub-topology</code> describes an independent unit of works that can be executed by different threads in parallel.
         <br />
-        Describing a <code>Topology</code> is helpful to reason about tasks and thus maximum parallelism.
-        It is also helpful to get insight into a <code>Topology</code> if it is not specified manually but via Kafka Streams DSL that is described in the next section.
+        Describing a <code>Topology</code> before starting your streams application with the specified topology is helpful to reason about tasks and thus maximum parallelism (we will talk about how to execute your written application later in this section).
+        It is also helpful to get insight into a <code>Topology</code> if it is not specified directly as described above but via Kafka Streams DSL (we will describe the DSL in the next section.
     </p>
 
     In the next section we present another way to build the processor topology: the Kafka Streams DSL.
@@ -424,6 +423,22 @@
     KStream&lt;String, String&gt; materialized = joined.through("topic4");
     </pre>
     <br>
+
+    <h4><a id="streams_dsl_build" href="#streams_dsl_build">Generate the processor topology</a></h4>
+
+    <p>
+        Within the Streams DSL, while users are specifying the operations to create / transform various streams as described above, a <code>Topology</code> is constructed implicitly within the <code>StreamsBuilder</code>.
+        Users can generate the constructed topology at any given point in time by calling <code>build</code>:
+    </p>
+
+    <pre class="brush: java;">
+    Topology topology = builder.build();
+    </pre>
+
+    <p>
+        Users can investigate the generated <code>Topology</code> via its <code>describe</code> API, and continue building or modifying the topology until they are satisfied with it.
+        The topology then can be used to execute the application (we will talk about this later in this section).
+    </p>
 
     <h3><a id="streams_interactive_queries" href="#streams_interactive_queries">Interactive Queries</a></h3>
     <p>
@@ -737,7 +752,7 @@
         <code>StateStoreProvider#stores(String storeName, QueryableStoreType&lt;T&gt; queryableStoreType)</code> returns a <code>List</code> of state stores with the given <code>storeName</code> and of the type as defined by <code>queryableStoreType</code>.
     </p>
     <p>
-        An example implemention of the wrapper follows (Java 8+):
+        An example implementation of the wrapper follows (Java 8+):
     </p>
 
     <pre class="brush: java;">
@@ -1064,8 +1079,6 @@
         groupedStream.count(supplier)
     </pre>
 
-
-
     <h4><a id="streams_execute" href="#streams_execute">Executing Your Kafka Streams Application</a></h4>
     <p>
         You can call Kafka Streams from anywhere in your application code.
@@ -1074,9 +1087,8 @@
 
     <p>
         First, you must create an instance of <code>KafkaStreams</code>.
-        The first argument of the <code>KafkaStreams</code> constructor takes a <code>Topology</code>
-        that is a logical topology description (you can create a <code>Topology</code> either directly or use
-        <code>StreamsBuilder</code> to create one).
+        The first argument of the <code>KafkaStreams</code> constructor takes an instance of <code>Topology</code>.
+        This topology can be either created directly following the <code>Processor</code> API or implicitly via the <code>StreamsBuilder</code> in the higher-level Streams DSL.
         The second argument is an instance of <code>StreamsConfig</code> mentioned above.
     </p>
 
