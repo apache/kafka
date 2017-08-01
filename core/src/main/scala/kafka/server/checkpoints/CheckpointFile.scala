@@ -73,7 +73,7 @@ class CheckpointFile[T](val file: File,
       } catch {
         case e: IOException =>
           val msg = s"Error while writing to checkpoint file ${file.getAbsolutePath}"
-          logDirFailureChannel.maybeAddLogFailureEvent(logDir, msg, e)
+          logDirFailureChannel.maybeAddOfflineLogDir(logDir, msg, e)
           throw new KafkaStorageException(msg, e)
       }
     }
@@ -121,7 +121,7 @@ class CheckpointFile[T](val file: File,
       } catch {
         case e: IOException =>
           val msg = s"Error while reading checkpoint file ${file.getAbsolutePath}"
-          logDirFailureChannel.maybeAddLogFailureEvent(logDir, msg, e)
+          logDirFailureChannel.maybeAddOfflineLogDir(logDir, msg, e)
           throw new KafkaStorageException(msg, e)
       }
     }

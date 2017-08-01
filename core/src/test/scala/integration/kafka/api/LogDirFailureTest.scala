@@ -22,6 +22,7 @@ import java.util.concurrent.{ExecutionException, TimeUnit}
 import kafka.controller.{OfflineReplica, PartitionAndReplica}
 import kafka.server.KafkaConfig
 import kafka.utils.{CoreUtils, TestUtils, ZkUtils}
+import kafka.api.LogFailureTest._
 import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
@@ -144,6 +145,9 @@ class LogDirFailureTest extends IntegrationTestHarness {
 
 }
 
-sealed trait LogDirFailureType
-case object Roll extends LogDirFailureType
-case object Checkpoint extends LogDirFailureType
+object LogFailureTest {
+  sealed trait LogDirFailureType
+  case object Roll extends LogDirFailureType
+  case object Checkpoint extends LogDirFailureType
+}
+

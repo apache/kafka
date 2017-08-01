@@ -19,7 +19,7 @@ package kafka.cluster
 import java.util.Properties
 
 import kafka.log.{Log, LogConfig}
-import kafka.server.{BrokerTopicStats, LogOffsetMetadata}
+import kafka.server.{BrokerTopicStats, LogDirFailureChannel, LogOffsetMetadata}
 import kafka.utils.{MockTime, TestUtils}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.OffsetOutOfRangeException
@@ -52,7 +52,7 @@ class ReplicaTest {
       time = time,
       maxProducerIdExpirationMs = 60 * 60 * 1000,
       producerIdExpirationCheckIntervalMs = 10 * 60 * 1000,
-      logDirFailureChannel = null)
+      logDirFailureChannel = new LogDirFailureChannel(10))
 
     replica = new Replica(brokerId = 0,
       topicPartition = new TopicPartition("foo", 0),

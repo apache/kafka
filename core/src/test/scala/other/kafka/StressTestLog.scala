@@ -21,7 +21,7 @@ import java.util.Properties
 import java.util.concurrent.atomic._
 
 import kafka.log._
-import kafka.server.BrokerTopicStats
+import kafka.server.{BrokerTopicStats, LogDirFailureChannel}
 import kafka.utils._
 import org.apache.kafka.clients.consumer.OffsetOutOfRangeException
 import org.apache.kafka.common.record.FileRecords
@@ -52,7 +52,7 @@ object StressTestLog {
       maxProducerIdExpirationMs = 60 * 60 * 1000,
       producerIdExpirationCheckIntervalMs = 10 * 60 * 1000,
       brokerTopicStats = new BrokerTopicStats,
-      logDirFailureChannel = null)
+      logDirFailureChannel = new LogDirFailureChannel(10))
     val writer = new WriterThread(log)
     writer.start()
     val reader = new ReaderThread(log)
