@@ -1187,7 +1187,7 @@ public class StreamThread extends Thread {
                     try {
                         task.close(false);
                     } catch (final Exception f) {
-                        log.error("{} Closing task {} due to suspension error failed again due to the following error:", logPrefix, task.id, f);
+                        log.error("{} After suspending failed, closing the same task {} failed again due to the following error:", logPrefix, task.id, f);
                     }
                     throw e;
                 }
@@ -1203,7 +1203,7 @@ public class StreamThread extends Thread {
                     try {
                         task.close(false);
                     } catch (final Exception f) {
-                        log.error("{} Closing standby task {} due to suspension error failed again due to the following error:", logPrefix, task.id, f);
+                        log.error("{} After suspending failed, closing the same standby task {} failed again due to the following error:", logPrefix, task.id, f);
                     }
                     throw e;
                 }
