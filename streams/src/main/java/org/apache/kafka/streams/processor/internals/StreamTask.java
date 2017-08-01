@@ -113,7 +113,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
                       final ThreadCache cache,
                       final Time time,
                       final Producer<byte[], byte[]> producer) {
-        super(id, applicationId, partitions, topology, consumer, changelogReader, false, stateDirectory, cache, config);
+        super(id, applicationId, partitions, topology, consumer, changelogReader, false, stateDirectory, config);
         streamTimePunctuationQueue = new PunctuationQueue();
         systemTimePunctuationQueue = new PunctuationQueue();
         maxBufferedSize = config.getInt(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG);
@@ -122,7 +122,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         // create queues for each assigned partition and associate them
         // to corresponding source nodes in the processor topology
         final Map<TopicPartition, RecordQueue> partitionQueues = new HashMap<>();
-
 
         // initialize the consumed offset cache
         consumedOffsets = new HashMap<>();
@@ -262,7 +261,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     @Override
     public void commit() {
         commit(true);
-
     }
 
     // visible for testing
@@ -320,7 +318,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
                 try {
                     consumer.commitSync(consumedOffsetsAndMetadata);
                 } catch (final CommitFailedException e) {
-                    log.warn("{} Failed offset commits {}: ", logPrefix, consumedOffsetsAndMetadata, e);
+                    log.warn("{} Failed offset commits {} due to CommitFailedException", logPrefix, consumedOffsetsAndMetadata);
                     throw e;
                 }
             }
@@ -409,7 +407,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             if (firstException == null) {
                 firstException = e;
             }
-            log.error("{} Could not close state manager: ", logPrefix, e);
+            log.error("{} Could not close state manager due to the following error:", logPrefix, e);
         }
 
         try {
@@ -428,7 +426,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
                 try {
                     recordCollector.close();
                 } catch (final Throwable e) {
-                    log.error("{} Failed to close producer: ", logPrefix, e);
+                    log.error("{} Failed to close producer due to the following error:", logPrefix, e);
                 }
             }
         }
@@ -438,20 +436,20 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         }
     }
 
-        /**
-         * <pre>
-         * - {@link #suspend(boolean) suspend(clean)}
-         *   - close topology
-         *   - if (clean) {@link #commit()}
-         *     - flush state and producer
-         *     - commit offsets
-         * - close state
-         *   - if (clean) write checkpoint
-         * - if (eos) close producer
-         * </pre>
-         * @param clean shut down cleanly (ie, incl. flush and commit) if {@code true} --
-         *              otherwise, just close open resources
-         */
+    /**
+     * <pre>
+     * - {@link #suspend(boolean) suspend(clean)}
+     *   - close topology
+     *   - if (clean) {@link #commit()}
+     *     - flush state and producer
+     *     - commit offsets
+     * - close state
+     *   - if (clean) write checkpoint
+     * - if (eos) close producer
+     * </pre>
+     * @param clean shut down cleanly (ie, incl. flush and commit) if {@code true} --
+     *              otherwise, just close open resources
+     */
     @Override
     public void close(boolean clean) {
         log.debug("{} Closing", logPrefix);
@@ -462,7 +460,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         } catch (final RuntimeException e) {
             clean = false;
             firstException = e;
-            log.error("{} Could not close task: ", logPrefix, e);
+            log.error("{} Could not close task due to the following error:", logPrefix, e);
         }
 
         closeSuspended(clean, firstException);
