@@ -50,6 +50,11 @@ import java.util.Set;
  */
 public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, V> {
 
+    // TODO: these two fields can be package-private after KStreamBuilder is removed
+    public static final String SOURCE_NAME = "KTABLE-SOURCE-";
+
+    public static final String STATE_STORE_NAME = "STATE-STORE-";
+
     private static final String FILTER_NAME = "KTABLE-FILTER-";
 
     private static final String FOREACH_NAME = "KTABLE-FOREACH-";
@@ -66,11 +71,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
 
     private static final String SELECT_NAME = "KTABLE-SELECT-";
 
-    public static final String SOURCE_NAME = "KTABLE-SOURCE-";
-
     private static final String TOSTREAM_NAME = "KTABLE-TOSTREAM-";
-
-    public static final String STATE_STORE_NAME = "STATE-STORE-";
 
     private final ProcessorSupplier<?, ?> processorSupplier;
 

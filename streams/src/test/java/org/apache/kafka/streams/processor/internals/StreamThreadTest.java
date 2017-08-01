@@ -47,6 +47,7 @@ import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockStateRestoreListener;
 import org.apache.kafka.test.MockStateStoreSupplier;
 import org.apache.kafka.test.MockTimestampExtractor;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 import org.easymock.EasyMock;
@@ -104,11 +105,7 @@ public class StreamThreadTest {
     public void setUp() throws Exception {
         processId = UUID.randomUUID();
 
-        // TODO: we should refactor this to avoid usage of reflection
-        final Field internalTopologyBuilderField = internalStreamsBuilder.getClass().getDeclaredField("internalTopologyBuilder");
-        internalTopologyBuilderField.setAccessible(true);
-        internalTopologyBuilder = (InternalTopologyBuilder) internalTopologyBuilderField.get(internalStreamsBuilder);
-
+        internalTopologyBuilder = StreamsTestUtils.internalTopologyBuilder(internalStreamsBuilder);
         internalTopologyBuilder.setApplicationId(applicationId);
     }
 

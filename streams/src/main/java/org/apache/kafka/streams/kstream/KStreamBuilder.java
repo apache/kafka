@@ -31,7 +31,6 @@ import org.apache.kafka.streams.kstream.internals.KTableSourceValueGetterSupplie
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.processor.TimestampExtractor;
-import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.streams.state.internals.RocksDBKeyValueStoreSupplier;
@@ -51,17 +50,17 @@ import java.util.regex.Pattern;
  * @deprecated Use {@link org.apache.kafka.streams.StreamsBuilder StreamsBuilder} instead
  */
 @Deprecated
-public class KStreamBuilder extends TopologyBuilder {
+public class KStreamBuilder extends org.apache.kafka.streams.processor.TopologyBuilder {
 
     private final AtomicInteger index = new AtomicInteger(0);
 
     private final InternalStreamsBuilder internalStreamsBuilder = new InternalStreamsBuilder(super.internalTopologyBuilder);
 
-    private Topology.AutoOffsetReset translateAutoOffsetReset(final TopologyBuilder.AutoOffsetReset resetPolicy) {
+    private Topology.AutoOffsetReset translateAutoOffsetReset(final org.apache.kafka.streams.processor.TopologyBuilder.AutoOffsetReset resetPolicy) {
         if (resetPolicy == null) {
             return null;
         }
-        return resetPolicy == TopologyBuilder.AutoOffsetReset.EARLIEST ? Topology.AutoOffsetReset.EARLIEST : Topology.AutoOffsetReset.LATEST;
+        return resetPolicy == org.apache.kafka.streams.processor.TopologyBuilder.AutoOffsetReset.EARLIEST ? Topology.AutoOffsetReset.EARLIEST : Topology.AutoOffsetReset.LATEST;
     }
 
     /**

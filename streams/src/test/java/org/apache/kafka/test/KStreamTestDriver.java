@@ -22,7 +22,6 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
-import org.apache.kafka.streams.kstream.internals.InternalStreamsBuilder;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StreamPartitioner;
@@ -35,7 +34,6 @@ import org.apache.kafka.streams.processor.internals.RecordCollectorImpl;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
 import java.io.File;
-import java.lang.reflect.Field;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -49,18 +47,22 @@ public class KStreamTestDriver {
     private final MockProcessorContext context;
     private final ProcessorTopology globalTopology;
 
+    @Deprecated
     public KStreamTestDriver(final KStreamBuilder builder) {
         this(builder, null, Serdes.ByteArray(), Serdes.ByteArray());
     }
 
+    @Deprecated
     public KStreamTestDriver(final KStreamBuilder builder, final File stateDir) {
         this(builder, stateDir, Serdes.ByteArray(), Serdes.ByteArray());
     }
 
+    @Deprecated
     public KStreamTestDriver(final KStreamBuilder builder, final File stateDir, final long cacheSize) {
         this(builder, stateDir, Serdes.ByteArray(), Serdes.ByteArray(), cacheSize);
     }
 
+    @Deprecated
     public KStreamTestDriver(final KStreamBuilder builder,
                              final File stateDir,
                              final Serde<?> keySerde,
@@ -68,6 +70,7 @@ public class KStreamTestDriver {
         this(builder, stateDir, keySerde, valSerde, DEFAULT_CACHE_SIZE_BYTES);
     }
 
+    @Deprecated
     public KStreamTestDriver(final KStreamBuilder builder,
                              final File stateDir,
                              final Serde<?> keySerde,
@@ -87,22 +90,22 @@ public class KStreamTestDriver {
         initTopology(topology, topology.stateStores());
     }
 
-    public KStreamTestDriver(final StreamsBuilder builder) {
+    public KStreamTestDriver(final StreamsBuilder builder) throws Exception {
         this(builder, null, Serdes.ByteArray(), Serdes.ByteArray());
     }
 
-    public KStreamTestDriver(final StreamsBuilder builder, final File stateDir) {
+    public KStreamTestDriver(final StreamsBuilder builder, final File stateDir) throws Exception {
         this(builder, stateDir, Serdes.ByteArray(), Serdes.ByteArray());
     }
 
-    public KStreamTestDriver(final StreamsBuilder builder, final File stateDir, final long cacheSize) {
+    public KStreamTestDriver(final StreamsBuilder builder, final File stateDir, final long cacheSize) throws Exception {
         this(builder, stateDir, Serdes.ByteArray(), Serdes.ByteArray(), cacheSize);
     }
 
     public KStreamTestDriver(final StreamsBuilder builder,
                              final File stateDir,
                              final Serde<?> keySerde,
-                             final Serde<?> valSerde) {
+                             final Serde<?> valSerde) throws Exception {
         this(builder, stateDir, keySerde, valSerde, DEFAULT_CACHE_SIZE_BYTES);
     }
 
@@ -110,27 +113,17 @@ public class KStreamTestDriver {
                              final File stateDir,
                              final Serde<?> keySerde,
                              final Serde<?> valSerde,
-                             final long cacheSize) {
-        // TODO: we should refactor this to avoid usage of reflection
-        final InternalTopologyBuilder internalTopologyBuilder;
-        try {
-            final Field internalStreamsBuilderField = builder.getClass().getDeclaredField("internalStreamsBuilder");
-            internalStreamsBuilderField.setAccessible(true);
-            final InternalStreamsBuilder internalStreamsBuilder = (InternalStreamsBuilder) internalStreamsBuilderField.get(builder);
-
-            final Field internalTopologyBuilderField = internalStreamsBuilder.getClass().getDeclaredField("internalTopologyBuilder");
-            internalTopologyBuilderField.setAccessible(true);
-            internalTopologyBuilder = (InternalTopologyBuilder) internalTopologyBuilderField.get(internalStreamsBuilder);
-        } catch (final NoSuchFieldException | IllegalAccessException e) {
-            throw new RuntimeException(e);
-        }
+                             final long cacheSize) throws Exception {
+        final InternalTopologyBuilder internalTopologyBuilder = StreamsTestUtils.internalTopologyBuilder(builder);
 
         internalTopologyBuilder.setApplicationId("TestDriver");
         topology = internalTopologyBuilder.build(null);
         globalTopology = internalTopologyBuilder.buildGlobalStateTopology();
+
         final ThreadCache cache = new ThreadCache("testCache", cacheSize, new MockStreamsMetrics(new Metrics()));
         context = new MockProcessorContext(stateDir, keySerde, valSerde, new MockRecordCollector(), cache);
         context.setRecordContext(new ProcessorRecordContext(0, 0, 0, "topic"));
+
         // init global topology first as it will add stores to the
         // store map that are required for joins etc.
         if (globalTopology != null) {
@@ -296,7 +289,7 @@ public class KStreamTestDriver {
                                 final Long timestamp,
                                 final Serializer<K> keySerializer,
                                 final Serializer<V> valueSerializer) {
-        // The serialization is skipped.
+            // The serialization is skipped.
             if (sourceNodeByTopicName(topic) != null) {
                 process(topic, key, value);
             }

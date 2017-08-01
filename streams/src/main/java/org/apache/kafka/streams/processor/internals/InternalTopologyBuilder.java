@@ -909,7 +909,7 @@ public class InternalTopologyBuilder {
 
     public synchronized Pattern earliestResetTopicsPattern() {
         final List<String> topics = maybeDecorateInternalSourceTopics(earliestResetTopics);
-        final Pattern earliestPattern =  buildPatternForOffsetResetTopics(topics, earliestResetPatterns);
+        final Pattern earliestPattern = buildPatternForOffsetResetTopics(topics, earliestResetPatterns);
 
         ensureNoRegexOverlap(earliestPattern, latestResetPatterns, latestResetTopics);
 
@@ -925,6 +925,8 @@ public class InternalTopologyBuilder {
         return  latestPattern;
     }
 
+    // TODO: we should check regex overlap at topology construction time and then throw TopologyException
+    //       instead of at runtime. See KAFKA-5660
     private void ensureNoRegexOverlap(final Pattern builtPattern,
                                       final Set<Pattern> otherPatterns,
                                       final Set<String> otherTopics) {

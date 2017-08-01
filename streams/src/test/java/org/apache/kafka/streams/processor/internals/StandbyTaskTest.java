@@ -40,6 +40,7 @@ import org.apache.kafka.test.MockRestoreConsumer;
 import org.apache.kafka.test.MockStateRestoreListener;
 import org.apache.kafka.test.MockStateStoreSupplier;
 import org.apache.kafka.test.MockTimestampExtractor;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
@@ -332,13 +333,9 @@ public class StandbyTaskTest {
         final InternalStreamsBuilder builder = new InternalStreamsBuilder(new InternalTopologyBuilder());
         builder.stream(null, null, null, null, "topic").groupByKey().count("my-store");
 
-        // TODO: we should refactor this to avoid usage of reflection
-        final Field internalTopologyBuilderField = builder.getClass().getDeclaredField("internalTopologyBuilder");
-        internalTopologyBuilderField.setAccessible(true);
-        final InternalTopologyBuilder internalTopologyBuilder = (InternalTopologyBuilder) internalTopologyBuilderField.get(builder);
-
+        final StreamsConfig config = createConfig(baseDir);
+        final InternalTopologyBuilder internalTopologyBuilder = StreamsTestUtils.internalTopologyBuilder(builder);
         final ProcessorTopology topology = internalTopologyBuilder.setApplicationId(applicationId).build(0);
-        StreamsConfig config = createConfig(baseDir);
 
         new StandbyTask(taskId, applicationId, partitions, topology, consumer, changelogReader, config,
             new MockStreamsMetrics(new Metrics()), stateDirectory);

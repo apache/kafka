@@ -49,6 +49,7 @@ public class StreamsBuilder {
 
     /** The actual topology that is constructed by this StreamsBuilder. */
     private final Topology topology = new Topology();
+
     /** The topology's internal builder. */
     private final InternalTopologyBuilder internalTopologyBuilder = topology.internalTopologyBuilder;
 

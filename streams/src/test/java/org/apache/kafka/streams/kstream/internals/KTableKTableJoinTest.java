@@ -24,6 +24,7 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
@@ -68,24 +69,11 @@ public class KTableKTableJoinTest {
         stateDir = TestUtils.tempDirectory("kafka-test");
     }
 
-    public static Collection<Set<String>> getCopartitionedGroups(StreamsBuilder builder) {
-        // TODO: we should refactor this to avoid usage of reflection
-        try {
-            final Field internalStreamsBuilderField = builder.getClass().getDeclaredField("internalStreamsBuilder");
-            internalStreamsBuilderField.setAccessible(true);
-            final InternalStreamsBuilder internalStreamsBuilder = (InternalStreamsBuilder) internalStreamsBuilderField.get(builder);
-
-            return internalStreamsBuilder.internalTopologyBuilder.copartitionGroups();
-        } catch (final NoSuchFieldException | IllegalAccessException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
     private void doTestJoin(final StreamsBuilder builder,
                             final int[] expectedKeys,
                             final MockProcessorSupplier<Integer, String> processor,
-                            final KTable<Integer, String> joined) {
-        final Collection<Set<String>> copartitionGroups = getCopartitionedGroups(builder);
+                            final KTable<Integer, String> joined) throws Exception {
+        final Collection<Set<String>> copartitionGroups = StreamsTestUtils.getCopartitionedGroups(builder);
 
         assertEquals(1, copartitionGroups.size());
         assertEquals(new HashSet<>(Arrays.asList(topic1, topic2)), copartitionGroups.iterator().next());
