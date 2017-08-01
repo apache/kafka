@@ -21,9 +21,9 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.Reducer;
@@ -51,7 +51,7 @@ import java.util.concurrent.TimeUnit;
  *
  * and at same time the output topic for filtered values :
  *
- * bin/kaftopics.sh --create --zookeeper localhost:2181 --replication-factor 1 --partitions 1 --topic iot-temperature-max
+ * bin/kafka-topics.sh --create --zookeeper localhost:2181 --replication-factor 1 --partitions 1 --topic iot-temperature-max
  *
  * After that, a console consumer can be started in order to read filtered values from the "iot-temperature-max" topic :
  *
@@ -83,7 +83,7 @@ public class TemperatureDemo {
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         props.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
 
-        KStreamBuilder builder = new KStreamBuilder();
+        StreamsBuilder builder = new StreamsBuilder();
 
         KStream<String, String> source = builder.stream("iot-temperature");
 
@@ -121,7 +121,7 @@ public class TemperatureDemo {
         // need to override key serde to Windowed<String> type
         max.to(windowedSerde, Serdes.String(), "iot-temperature-max");
 
-        final KafkaStreams streams = new KafkaStreams(builder, props);
+        final KafkaStreams streams = new KafkaStreams(builder.build(), props);
         final CountDownLatch latch = new CountDownLatch(1);
 
         // attach shutdown handler to catch control-c
