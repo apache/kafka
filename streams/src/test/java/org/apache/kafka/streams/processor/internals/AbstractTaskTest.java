@@ -33,6 +33,7 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.test.MockStateRestoreListener;
+import org.apache.kafka.test.MockStreamsMetrics;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Test;
 

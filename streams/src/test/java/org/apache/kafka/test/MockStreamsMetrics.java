@@ -14,10 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.processor.internals;
+package org.apache.kafka.test;
 
 import java.util.Collections;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.streams.processor.internals.StreamsMetricsImpl;
 
 public class MockStreamsMetrics extends StreamsMetricsImpl {
 

@@ -25,6 +25,7 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.test.MockStateStoreSupplier;
+import org.apache.kafka.test.MockStreamsMetrics;
 import org.junit.Before;
 import org.junit.Test;
 
