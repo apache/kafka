@@ -21,6 +21,7 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.StreamsBuilderTest;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
@@ -90,22 +91,22 @@ public class KStreamTestDriver {
         initTopology(topology, topology.stateStores());
     }
 
-    public KStreamTestDriver(final StreamsBuilder builder) throws Exception {
+    public KStreamTestDriver(final StreamsBuilder builder) {
         this(builder, null, Serdes.ByteArray(), Serdes.ByteArray());
     }
 
-    public KStreamTestDriver(final StreamsBuilder builder, final File stateDir) throws Exception {
+    public KStreamTestDriver(final StreamsBuilder builder, final File stateDir) {
         this(builder, stateDir, Serdes.ByteArray(), Serdes.ByteArray());
     }
 
-    public KStreamTestDriver(final StreamsBuilder builder, final File stateDir, final long cacheSize) throws Exception {
+    public KStreamTestDriver(final StreamsBuilder builder, final File stateDir, final long cacheSize) {
         this(builder, stateDir, Serdes.ByteArray(), Serdes.ByteArray(), cacheSize);
     }
 
     public KStreamTestDriver(final StreamsBuilder builder,
                              final File stateDir,
                              final Serde<?> keySerde,
-                             final Serde<?> valSerde) throws Exception {
+                             final Serde<?> valSerde) {
         this(builder, stateDir, keySerde, valSerde, DEFAULT_CACHE_SIZE_BYTES);
     }
 
@@ -113,8 +114,8 @@ public class KStreamTestDriver {
                              final File stateDir,
                              final Serde<?> keySerde,
                              final Serde<?> valSerde,
-                             final long cacheSize) throws Exception {
-        final InternalTopologyBuilder internalTopologyBuilder = StreamsTestUtils.internalTopologyBuilder(builder);
+                             final long cacheSize) {
+        final InternalTopologyBuilder internalTopologyBuilder = StreamsBuilderTest.internalTopologyBuilder(builder);
 
         internalTopologyBuilder.setApplicationId("TestDriver");
         topology = internalTopologyBuilder.build(null);

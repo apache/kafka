@@ -47,7 +47,7 @@ public class KStreamMapTest {
     }
 
     @Test
-    public void testMap() throws Exception {
+    public void testMap() {
         StreamsBuilder builder = new StreamsBuilder();
 
         KeyValueMapper<Integer, String, KeyValue<String, Integer>> mapper =
@@ -81,7 +81,7 @@ public class KStreamMapTest {
     }
 
     @Test
-    public void testTypeVariance() throws Exception {
+    public void testTypeVariance() {
         KeyValueMapper<Number, Object, KeyValue<Number, String>> stringify = new KeyValueMapper<Number, Object, KeyValue<Number, String>>() {
             @Override
             public KeyValue<Number, String> apply(Number key, Object value) {

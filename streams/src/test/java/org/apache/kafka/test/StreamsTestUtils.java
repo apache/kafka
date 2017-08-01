@@ -16,21 +16,14 @@
  */
 package org.apache.kafka.test;
 
-
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.kstream.internals.InternalStreamsBuilder;
-import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
-import java.lang.reflect.Field;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Properties;
-import java.util.Set;
 import java.util.UUID;
 
 public class StreamsTestUtils {
@@ -70,26 +63,5 @@ public class StreamsTestUtils {
             results.add(iterator.next());
         }
         return results;
-    }
-
-    // TODO: these three static functions are added because some non-TopologyBuilder unit tests need to access the internal topology builder,
-    //       which is usually a bad sign of design patterns between TopologyBuilder and StreamThread. We need to consider getting rid of them later
-    public static InternalTopologyBuilder internalTopologyBuilder(final StreamsBuilder streamsBuilder) throws NoSuchFieldException, IllegalAccessException {
-        final Field internalStreamsBuilderField = streamsBuilder.getClass().getDeclaredField("internalStreamsBuilder");
-        internalStreamsBuilderField.setAccessible(true);
-        final InternalStreamsBuilder internalStreamsBuilder = (InternalStreamsBuilder) internalStreamsBuilderField.get(streamsBuilder);
-
-        return internalTopologyBuilder(internalStreamsBuilder);
-    }
-
-    public static InternalTopologyBuilder internalTopologyBuilder(final InternalStreamsBuilder internalStreamsBuilder) throws NoSuchFieldException, IllegalAccessException {
-        final Field internalTopologyBuilderField = internalStreamsBuilder.getClass().getDeclaredField("internalTopologyBuilder");
-        internalTopologyBuilderField.setAccessible(true);
-        return (InternalTopologyBuilder) internalTopologyBuilderField.get(internalStreamsBuilder);
-    }
-
-    public static Collection<Set<String>> getCopartitionedGroups(final StreamsBuilder builder) throws NoSuchFieldException, IllegalAccessException {
-        final InternalTopologyBuilder internalTopologyBuilder = internalTopologyBuilder(builder);
-        return internalTopologyBuilder.copartitionGroups();
     }
 }

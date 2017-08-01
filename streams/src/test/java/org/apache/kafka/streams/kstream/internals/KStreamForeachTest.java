@@ -51,7 +51,7 @@ public class KStreamForeachTest {
     }
 
     @Test
-    public void testForeach() throws Exception {
+    public void testForeach() {
         // Given
         List<KeyValue<Integer, String>> inputRecords = Arrays.asList(
             new KeyValue<>(0, "zero"),
@@ -96,7 +96,7 @@ public class KStreamForeachTest {
     }
 
     @Test
-    public void testTypeVariance() throws Exception {
+    public void testTypeVariance() {
         ForeachAction<Number, Object> consume = new ForeachAction<Number, Object>() {
             @Override
             public void apply(Number key, Object value) {}

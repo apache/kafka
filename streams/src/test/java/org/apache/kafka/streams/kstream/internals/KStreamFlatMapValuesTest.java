@@ -44,7 +44,7 @@ public class KStreamFlatMapValuesTest {
     }
 
     @Test
-    public void testFlatMapValues() throws Exception {
+    public void testFlatMapValues() {
         StreamsBuilder builder = new StreamsBuilder();
 
         ValueMapper<Number, Iterable<String>> mapper =

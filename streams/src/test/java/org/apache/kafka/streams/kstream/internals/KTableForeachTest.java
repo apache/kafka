@@ -29,7 +29,6 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.io.File;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -48,7 +47,7 @@ public class KTableForeachTest {
     private KStreamTestDriver driver;
 
     @Before
-    public void setUp() throws IOException {
+    public void setUp() {
         stateDir = TestUtils.tempDirectory("kafka-test");
     }
 
@@ -61,7 +60,7 @@ public class KTableForeachTest {
     }
 
     @Test
-    public void testForeach() throws Exception {
+    public void testForeach() {
         // Given
         List<KeyValue<Integer, String>> inputRecords = Arrays.asList(
             new KeyValue<>(0, "zero"),
@@ -107,7 +106,7 @@ public class KTableForeachTest {
     }
 
     @Test
-    public void testTypeVariance() throws Exception {
+    public void testTypeVariance() {
         ForeachAction<Number, Object> consume = new ForeachAction<Number, Object>() {
             @Override
             public void apply(Number key, Object value) {}

@@ -46,7 +46,7 @@ public class KStreamMapValuesTest {
     }
 
     @Test
-    public void testFlatMapValues() throws Exception {
+    public void testFlatMapValues() {
         StreamsBuilder builder = new StreamsBuilder();
 
         ValueMapper<CharSequence, Integer> mapper =
@@ -77,5 +77,4 @@ public class KStreamMapValuesTest {
             assertEquals(expected[i], processor.processed.get(i));
         }
     }
-
 }

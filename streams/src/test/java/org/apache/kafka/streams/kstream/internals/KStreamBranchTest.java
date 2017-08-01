@@ -45,7 +45,7 @@ public class KStreamBranchTest {
 
     @SuppressWarnings("unchecked")
     @Test
-    public void testKStreamBranch() throws Exception {
+    public void testKStreamBranch() {
         final StreamsBuilder builder = new StreamsBuilder();
 
         Predicate<Integer, String> isEven = new Predicate<Integer, String>() {
@@ -95,7 +95,7 @@ public class KStreamBranchTest {
     }
 
     @Test
-    public void testTypeVariance() throws Exception {
+    public void testTypeVariance() {
         Predicate<Number, Object> positive = new Predicate<Number, Object>() {
             @Override
             public boolean test(Number key, Object value) {

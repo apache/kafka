@@ -61,7 +61,7 @@ public class KStreamPrintTest {
     }
     
     @Test
-    public void testPrintKeyValueWithName() throws Exception {
+    public void testPrintKeyValueWithName() {
         KeyValueMapper<Integer, String, String> mapper = new KeyValueMapper<Integer, String, String>() {
             @Override
             public String apply(Integer key, String value) {
@@ -94,7 +94,7 @@ public class KStreamPrintTest {
     }
 
     @Test
-    public void testPrintStreamWithProvidedKeyValueMapper() throws Exception {
+    public void testPrintStreamWithProvidedKeyValueMapper() {
         final KeyValueMapper<Integer, String, String> mapper = new KeyValueMapper<Integer, String, String>() {
             @Override
             public String apply(Integer key, String value) {

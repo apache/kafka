@@ -53,13 +53,13 @@ public class KTableMapValuesTest {
     }
 
     @Before
-    public void setUp() throws Exception {
+    public void setUp() {
         stateDir = TestUtils.tempDirectory("kafka-test");
     }
 
     private void doTestKTable(final StreamsBuilder builder,
                               final String topic1,
-                              final MockProcessorSupplier<String, Integer> proc2) throws Exception {
+                              final MockProcessorSupplier<String, Integer> proc2) {
         driver = new KStreamTestDriver(builder, stateDir, Serdes.String(), Serdes.String());
 
         driver.process(topic1, "A", "1");
@@ -71,7 +71,7 @@ public class KTableMapValuesTest {
     }
 
     @Test
-    public void testKTable() throws Exception {
+    public void testKTable() {
         final StreamsBuilder builder = new StreamsBuilder();
 
         String topic1 = "topic1";
@@ -91,7 +91,7 @@ public class KTableMapValuesTest {
     }
 
     @Test
-    public void testQueryableKTable() throws Exception {
+    public void testQueryableKTable() {
         final StreamsBuilder builder = new StreamsBuilder();
 
         String topic1 = "topic1";
@@ -115,7 +115,7 @@ public class KTableMapValuesTest {
                                    final KTableImpl<String, String, String> table1,
                                    final KTableImpl<String, String, Integer> table2,
                                    final KTableImpl<String, Integer, Integer> table3,
-                                   final KTableImpl<String, String, String> table4) throws Exception {
+                                   final KTableImpl<String, String, String> table4) {
         KTableValueGetterSupplier<String, String> getterSupplier1 = table1.valueGetterSupplier();
         KTableValueGetterSupplier<String, Integer> getterSupplier2 = table2.valueGetterSupplier();
         KTableValueGetterSupplier<String, Integer> getterSupplier3 = table3.valueGetterSupplier();
@@ -212,7 +212,7 @@ public class KTableMapValuesTest {
     }
 
     @Test
-    public void testValueGetter() throws Exception {
+    public void testValueGetter() {
         StreamsBuilder builder = new StreamsBuilder();
 
         String topic1 = "topic1";
@@ -243,7 +243,7 @@ public class KTableMapValuesTest {
     }
 
     @Test
-    public void testQueryableValueGetter() throws Exception {
+    public void testQueryableValueGetter() {
         StreamsBuilder builder = new StreamsBuilder();
 
         String topic1 = "topic1";
@@ -274,7 +274,7 @@ public class KTableMapValuesTest {
     }
 
     @Test
-    public void testNotSendingOldValue() throws Exception {
+    public void testNotSendingOldValue() {
         StreamsBuilder builder = new StreamsBuilder();
 
         String topic1 = "topic1";
@@ -322,7 +322,7 @@ public class KTableMapValuesTest {
     }
 
     @Test
-    public void testSendingOldValue() throws Exception {
+    public void testSendingOldValue() {
         StreamsBuilder builder = new StreamsBuilder();
 
         String topic1 = "topic1";

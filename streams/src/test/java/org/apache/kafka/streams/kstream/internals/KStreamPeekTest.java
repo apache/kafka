@@ -47,7 +47,7 @@ public class KStreamPeekTest {
     }
 
     @Test
-    public void shouldObserveStreamElements() throws Exception {
+    public void shouldObserveStreamElements() {
         final StreamsBuilder builder = new StreamsBuilder();
         final KStream<Integer, String> stream = builder.stream(intSerd, stringSerd, topicName);
         final List<KeyValue<Integer, String>> peekObserved = new ArrayList<>(), streamObserved = new ArrayList<>();

@@ -43,7 +43,7 @@ public class AbstractStreamTest {
     }
 
     @Test
-    public void testShouldBeExtensible() throws Exception {
+    public void testShouldBeExtensible() {
         final StreamsBuilder builder = new StreamsBuilder();
         final int[] expectedKeys = new int[]{1, 2, 3, 4, 5, 6, 7};
         final MockProcessorSupplier<Integer, String> processor = new MockProcessorSupplier<>();

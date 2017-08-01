@@ -29,7 +29,6 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.io.File;
-import java.io.IOException;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
@@ -52,12 +51,12 @@ public class KTableSourceTest {
     }
 
     @Before
-    public void setUp() throws IOException {
+    public void setUp() {
         stateDir = TestUtils.tempDirectory("kafka-test");
     }
 
     @Test
-    public void testKTable() throws Exception {
+    public void testKTable() {
         final StreamsBuilder builder = new StreamsBuilder();
 
         String topic1 = "topic1";
@@ -81,7 +80,7 @@ public class KTableSourceTest {
     }
 
     @Test
-    public void testValueGetter() throws Exception {
+    public void testValueGetter() {
         final StreamsBuilder builder = new StreamsBuilder();
 
         String topic1 = "topic1";
@@ -125,7 +124,7 @@ public class KTableSourceTest {
     }
 
     @Test
-    public void testNotSendingOldValue() throws Exception {
+    public void testNotSendingOldValue() {
         final StreamsBuilder builder = new StreamsBuilder();
 
         String topic1 = "topic1";
@@ -163,7 +162,7 @@ public class KTableSourceTest {
     }
 
     @Test
-    public void testSendingOldValue() throws Exception {
+    public void testSendingOldValue() {
         final StreamsBuilder builder = new StreamsBuilder();
 
         String topic1 = "topic1";

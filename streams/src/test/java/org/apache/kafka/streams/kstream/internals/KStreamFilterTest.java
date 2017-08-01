@@ -49,7 +49,7 @@ public class KStreamFilterTest {
     };
 
     @Test
-    public void testFilter() throws Exception {
+    public void testFilter() {
         StreamsBuilder builder = new StreamsBuilder();
         final int[] expectedKeys = new int[]{1, 2, 3, 4, 5, 6, 7};
 
@@ -69,7 +69,7 @@ public class KStreamFilterTest {
     }
 
     @Test
-    public void testFilterNot() throws Exception {
+    public void testFilterNot() {
         StreamsBuilder builder = new StreamsBuilder();
         final int[] expectedKeys = new int[]{1, 2, 3, 4, 5, 6, 7};
 
@@ -89,7 +89,7 @@ public class KStreamFilterTest {
     }
 
     @Test
-    public void testTypeVariance() throws Exception {
+    public void testTypeVariance() {
         Predicate<Number, Object> numberKeyPredicate = new Predicate<Number, Object>() {
             @Override
             public boolean test(Number key, Object value) {

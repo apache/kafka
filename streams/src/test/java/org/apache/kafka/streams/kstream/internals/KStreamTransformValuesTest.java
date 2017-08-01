@@ -50,7 +50,7 @@ public class KStreamTransformValuesTest {
     }
 
     @Test
-    public void testTransform() throws Exception {
+    public void testTransform() {
         StreamsBuilder builder = new StreamsBuilder();
 
         ValueTransformerSupplier<Number, Integer> valueTransformerSupplier =
