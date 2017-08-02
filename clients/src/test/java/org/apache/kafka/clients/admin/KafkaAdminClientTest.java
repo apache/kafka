@@ -353,7 +353,7 @@ public class KafkaAdminClientTest {
             DescribeConfigsResult result2 = env.adminClient().describeConfigs(Collections.singleton(
                 new ConfigResource(ConfigResource.Type.TOPIC, "foo")));
             time.sleep(5000);
-            result2.values().get(ConfigResource.Type.TOPIC).get();
+            result2.values().get(new ConfigResource(ConfigResource.Type.TOPIC, "foo")).get();
         }
     }
 
