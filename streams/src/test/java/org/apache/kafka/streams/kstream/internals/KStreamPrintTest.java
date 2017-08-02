@@ -121,4 +121,69 @@ public class KStreamPrintTest {
         }
     }
 
+    @Test
+    public void testPrintKeyValueStringBytesArray() {
+        KeyValueMapper<Integer, String, String> mapper = new KeyValueMapper<Integer, String, String>() {
+            @Override
+            public String apply(Integer key, String value) {
+                return String.format("%d, %s", key, value);
+            }
+        };
+        final KStreamPrint<Integer, String> kStreamPrint = new KStreamPrint<>(new PrintForeachAction<>(printWriter, mapper, "test-stream"), intSerd, stringSerd);
+
+        final List<KeyValue<Integer, byte[]>> inputRecords = Arrays.asList(
+                new KeyValue<>(0, stringSerd.serializer().serialize(topicName, "zero")),
+                new KeyValue<>(1, stringSerd.serializer().serialize(topicName, "one")),
+                new KeyValue<>(2, stringSerd.serializer().serialize(topicName, "two")),
+                new KeyValue<>(3, stringSerd.serializer().serialize(topicName, "three")));
+
+        final String[] expectedResult = {"[test-stream]: 0, zero", "[test-stream]: 1, one", "[test-stream]: 2, two", "[test-stream]: 3, three"};
+
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KStream<Integer, String> stream = builder.stream(intSerd, stringSerd, topicName);
+        stream.process(kStreamPrint);
+
+        driver.setUp(builder);
+        for (KeyValue<Integer, byte[]> record: inputRecords) {
+            driver.process(topicName, record.key, record.value);
+        }
+        printWriter.flush();
+        final String[] flushOutDatas = new String(byteOutStream.toByteArray(), Charset.forName("UTF-8")).split("\\r*\\n");
+        for (int i = 0; i < flushOutDatas.length; i++) {
+            assertEquals(expectedResult[i], flushOutDatas[i]);
+        }
+    }
+
+    @Test
+    public void testPrintKeyValueIntegerBytesArray() {
+        KeyValueMapper<Integer, Integer, String> mapper = new KeyValueMapper<Integer, Integer, String>() {
+            @Override
+            public String apply(Integer key, Integer value) {
+                return String.format("%d, %d", key, value);
+            }
+        };
+        final KStreamPrint<Integer, Integer> kStreamPrint = new KStreamPrint<>(new PrintForeachAction<>(printWriter, mapper, "test-stream"), intSerd, intSerd);
+
+        final List<KeyValue<Integer, byte[]>> inputRecords = Arrays.asList(
+                new KeyValue<>(0, intSerd.serializer().serialize(topicName, 0)),
+                new KeyValue<>(1, intSerd.serializer().serialize(topicName,1)),
+                new KeyValue<>(2, intSerd.serializer().serialize(topicName,2)),
+                new KeyValue<>(3, intSerd.serializer().serialize(topicName,3)));
+
+        final String[] expectedResult = {"[test-stream]: 0, 0", "[test-stream]: 1, 1", "[test-stream]: 2, 2", "[test-stream]: 3, 3"};
+
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KStream<Integer, Integer> stream = builder.stream(intSerd, intSerd, topicName);
+        stream.process(kStreamPrint);
+
+        driver.setUp(builder);
+        for (KeyValue<Integer, byte[]> record: inputRecords) {
+            driver.process(topicName, record.key, record.value);
+        }
+        printWriter.flush();
+        final String[] flushOutDatas = new String(byteOutStream.toByteArray(), Charset.forName("UTF-8")).split("\\r*\\n");
+        for (int i = 0; i < flushOutDatas.length; i++) {
+            assertEquals(expectedResult[i], flushOutDatas[i]);
+        }
+    }
 }
