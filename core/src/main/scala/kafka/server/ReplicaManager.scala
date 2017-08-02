@@ -189,7 +189,7 @@ class ReplicaManager(val config: KafkaConfig,
 
   private class LogDirFailureHandler(name: String, haltBrokerOnDirFailure: Boolean) extends ShutdownableThread(name) {
     override def doWork() {
-      val newOfflineLogDir = logDirFailureChannel.takeNextLogFailureEvent()
+      val newOfflineLogDir = logDirFailureChannel.takeNextOfflineLogDir()
       if (haltBrokerOnDirFailure) {
         fatal(s"Halting broker because dir $newOfflineLogDir is offline")
         Exit.halt(1)

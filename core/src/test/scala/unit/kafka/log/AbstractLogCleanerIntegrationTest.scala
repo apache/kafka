@@ -97,7 +97,10 @@ abstract class AbstractLogCleanerIntegrationTest {
         recoveryPoint = 0L,
         scheduler = time.scheduler,
         time = time,
-        brokerTopicStats = new BrokerTopicStats)
+        brokerTopicStats = new BrokerTopicStats,
+        maxProducerIdExpirationMs = 60 * 60 * 1000,
+        producerIdExpirationCheckIntervalMs = 10 * 60 * 1000,
+        logDirFailureChannel = new LogDirFailureChannel(10))
       logMap.put(partition, log)
       this.logs += log
     }
