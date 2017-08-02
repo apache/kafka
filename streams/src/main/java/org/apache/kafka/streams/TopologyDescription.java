@@ -35,8 +35,9 @@ public interface TopologyDescription {
     /**
      * A connected sub-graph of a {@link Topology}.
      * <p>
-     * Nodes of a {@code Subtopology} are connected {@link Topology#addProcessor(String, ProcessorSupplier, String...)
-     * directly} or indirectly via {@link Topology#connectProcessorAndStateStores(String, String...) state stores}
+     * Nodes of a {@code Subtopology} are connected {@link Topology#addProcessor(String,
+     * org.apache.kafka.streams.processor.ProcessorSupplier, String...) directly} or indirectly via
+     * {@link Topology#connectProcessorAndStateStores(String, String...) state stores}
      * (i.e., if multiple processors share the same state).
      */
     interface Subtopology {
@@ -54,7 +55,7 @@ public interface TopologyDescription {
     }
 
     /**
-     * Represents a {@link Topology#addGlobalStore(StateStoreSupplier, String,
+     * Represents a {@link Topology#addGlobalStore(org.apache.kafka.streams.processor.StateStoreSupplier, String,
      * org.apache.kafka.common.serialization.Deserializer, org.apache.kafka.common.serialization.Deserializer, String,
      * String, ProcessorSupplier)} global store}.
      * Adding a global store results in adding a source node and one stateful processor node.

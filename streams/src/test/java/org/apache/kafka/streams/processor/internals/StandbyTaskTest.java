@@ -32,11 +32,12 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
+import org.apache.kafka.streams.kstream.internals.InternalStreamsBuilder;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.test.MockRestoreConsumer;
+import org.apache.kafka.test.MockStateRestoreListener;
 import org.apache.kafka.test.MockStateStoreSupplier;
 import org.apache.kafka.test.MockTimestampExtractor;
 import org.apache.kafka.test.TestUtils;
@@ -46,6 +47,7 @@ import org.junit.Test;
 
 import java.io.File;
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -76,6 +78,7 @@ public class StandbyTaskTest {
 
     private final TopicPartition partition1 = new TopicPartition(storeChangelogTopicName1, 1);
     private final TopicPartition partition2 = new TopicPartition(storeChangelogTopicName2, 1);
+    private final MockStateRestoreListener stateRestoreListener = new MockStateRestoreListener();
 
     private final Set<TopicPartition> topicPartitions = Collections.emptySet();
     private final ProcessorTopology topology = new ProcessorTopology(
@@ -126,7 +129,7 @@ public class StandbyTaskTest {
 
     private final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
     private final MockRestoreConsumer restoreStateConsumer = new MockRestoreConsumer();
-    private final StoreChangelogReader changelogReader = new StoreChangelogReader(restoreStateConsumer, Time.SYSTEM, 5000);
+    private final StoreChangelogReader changelogReader = new StoreChangelogReader(restoreStateConsumer, Time.SYSTEM, 5000, stateRestoreListener);
 
     private final byte[] recordValue = intSerializer.serialize(null, 10);
     private final byte[] recordKey = intSerializer.serialize(null, 1);
@@ -326,9 +329,15 @@ public class StandbyTaskTest {
 
         restoreStateConsumer.updatePartitions(changelogName, Utils.mkList(
                 new PartitionInfo(changelogName, 0, Node.noNode(), new Node[0], new Node[0])));
-        final KStreamBuilder builder = new KStreamBuilder();
-        builder.stream("topic").groupByKey().count("my-store");
-        final ProcessorTopology topology = builder.setApplicationId(applicationId).build(0);
+        final InternalStreamsBuilder builder = new InternalStreamsBuilder(new InternalTopologyBuilder());
+        builder.stream(null, null, null, null, "topic").groupByKey().count("my-store");
+
+        // TODO: we should refactor this to avoid usage of reflection
+        final Field internalTopologyBuilderField = builder.getClass().getDeclaredField("internalTopologyBuilder");
+        internalTopologyBuilderField.setAccessible(true);
+        final InternalTopologyBuilder internalTopologyBuilder = (InternalTopologyBuilder) internalTopologyBuilderField.get(builder);
+
+        final ProcessorTopology topology = internalTopologyBuilder.setApplicationId(applicationId).build(0);
         StreamsConfig config = createConfig(baseDir);
 
         new StandbyTask(taskId, applicationId, partitions, topology, consumer, changelogReader, config,

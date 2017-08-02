@@ -20,11 +20,11 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.Initializer;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Reducer;
@@ -36,11 +36,9 @@ import org.apache.kafka.test.MockInitializer;
 import org.apache.kafka.test.MockKeyValueMapper;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
-
 
 import java.io.File;
 import java.io.IOException;
@@ -53,19 +51,12 @@ public class KTableAggregateTest {
 
     final private Serde<String> stringSerde = Serdes.String();
 
-    private KStreamTestDriver driver = null;
     private File stateDir = null;
 
     @Rule
     public EmbeddedKafkaCluster cluster = null;
-
-    @After
-    public void tearDown() {
-        if (driver != null) {
-            driver.close();
-        }
-        driver = null;
-    }
+    @Rule
+    public final KStreamTestDriver driver = new KStreamTestDriver();
 
     @Before
     public void setUp() throws IOException {
@@ -74,7 +65,7 @@ public class KTableAggregateTest {
 
     @Test
     public void testAggBasic() throws Exception {
-        final KStreamBuilder builder = new KStreamBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
         final MockProcessorSupplier<String, String> proc = new MockProcessorSupplier<>();
 
@@ -90,7 +81,7 @@ public class KTableAggregateTest {
 
         table2.toStream().process(proc);
 
-        driver = new KStreamTestDriver(builder, stateDir);
+        driver.setUp(builder, stateDir);
 
         driver.process(topic1, "A", "1");
         driver.flushState();
@@ -123,7 +114,7 @@ public class KTableAggregateTest {
 
     @Test
     public void testAggCoalesced() throws Exception {
-        final KStreamBuilder builder = new KStreamBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
         final MockProcessorSupplier<String, String> proc = new MockProcessorSupplier<>();
 
@@ -139,7 +130,7 @@ public class KTableAggregateTest {
 
         table2.toStream().process(proc);
 
-        driver = new KStreamTestDriver(builder, stateDir);
+        driver.setUp(builder, stateDir);
 
         driver.process(topic1, "A", "1");
         driver.process(topic1, "A", "3");
@@ -152,7 +143,7 @@ public class KTableAggregateTest {
 
     @Test
     public void testAggRepartition() throws Exception {
-        final KStreamBuilder builder = new KStreamBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
         final MockProcessorSupplier<String, String> proc = new MockProcessorSupplier<>();
 
@@ -181,7 +172,7 @@ public class KTableAggregateTest {
 
         table2.toStream().process(proc);
 
-        driver = new KStreamTestDriver(builder, stateDir);
+        driver.setUp(builder, stateDir);
 
         driver.process(topic1, "A", "1");
         driver.flushState();
@@ -212,8 +203,8 @@ public class KTableAggregateTest {
                 ), proc.processed);
     }
 
-    private void testCountHelper(final KStreamBuilder builder, final String input, final MockProcessorSupplier<String, Long> proc) throws IOException {
-        driver = new KStreamTestDriver(builder, stateDir);
+    private void testCountHelper(final StreamsBuilder builder, final String input, final MockProcessorSupplier<String, Long> proc) throws IOException {
+        driver.setUp(builder, stateDir);
 
         driver.process(input, "A", "green");
         driver.flushState();
@@ -239,7 +230,7 @@ public class KTableAggregateTest {
 
     @Test
     public void testCount() throws IOException {
-        final KStreamBuilder builder = new KStreamBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
         final String input = "count-test-input";
         final MockProcessorSupplier<String, Long> proc = new MockProcessorSupplier<>();
 
@@ -254,7 +245,7 @@ public class KTableAggregateTest {
 
     @Test
     public void testCountWithInternalStore() throws IOException {
-        final KStreamBuilder builder = new KStreamBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
         final String input = "count-test-input";
         final MockProcessorSupplier<String, Long> proc = new MockProcessorSupplier<>();
 
@@ -269,7 +260,7 @@ public class KTableAggregateTest {
 
     @Test
     public void testCountCoalesced() throws IOException {
-        final KStreamBuilder builder = new KStreamBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
         final String input = "count-test-input";
         final MockProcessorSupplier<String, Long> proc = new MockProcessorSupplier<>();
 
@@ -279,7 +270,7 @@ public class KTableAggregateTest {
             .toStream()
             .process(proc);
 
-        driver = new KStreamTestDriver(builder, stateDir);
+        driver.setUp(builder, stateDir);
 
         driver.process(input, "A", "green");
         driver.process(input, "B", "green");
@@ -298,7 +289,7 @@ public class KTableAggregateTest {
     
     @Test
     public void testRemoveOldBeforeAddNew() throws IOException {
-        final KStreamBuilder builder = new KStreamBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
         final String input = "count-test-input";
         final MockProcessorSupplier<String, String> proc = new MockProcessorSupplier<>();
 
@@ -332,7 +323,7 @@ public class KTableAggregateTest {
                 .toStream()
                 .process(proc);
 
-        driver = new KStreamTestDriver(builder, stateDir);
+        driver.setUp(builder, stateDir);
 
         driver.process(input, "11", "A");
         driver.flushState();
@@ -355,7 +346,7 @@ public class KTableAggregateTest {
     public void shouldForwardToCorrectProcessorNodeWhenMultiCacheEvictions() throws Exception {
         final String tableOne = "tableOne";
         final String tableTwo = "tableTwo";
-        final KStreamBuilder builder = new KStreamBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
         final String reduceTopic = "TestDriver-reducer-store-repartition";
         final Map<String, Long> reduceResults = new HashMap<>();
 
@@ -401,7 +392,7 @@ public class KTableAggregateTest {
                     }
                 });
 
-        driver = new KStreamTestDriver(builder, stateDir, 111);
+        driver.setUp(builder, stateDir, 111);
         driver.process(reduceTopic, "1", new Change<>(1L, null));
         driver.process("tableOne", "2", "2");
         // this should trigger eviction on the reducer-store topic

@@ -19,13 +19,13 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
+import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 
 import java.io.File;
@@ -39,17 +39,9 @@ public class KTableSourceTest {
 
     final private Serde<String> stringSerde = Serdes.String();
     final private Serde<Integer> intSerde = Serdes.Integer();
-
-    private KStreamTestDriver driver = null;
+    @Rule
+    public final KStreamTestDriver driver = new KStreamTestDriver();
     private File stateDir = null;
-
-    @After
-    public void tearDown() {
-        if (driver != null) {
-            driver.close();
-        }
-        driver = null;
-    }
 
     @Before
     public void setUp() throws IOException {
@@ -58,7 +50,7 @@ public class KTableSourceTest {
 
     @Test
     public void testKTable() {
-        final KStreamBuilder builder = new KStreamBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
         String topic1 = "topic1";
 
@@ -67,7 +59,7 @@ public class KTableSourceTest {
         MockProcessorSupplier<String, Integer> proc1 = new MockProcessorSupplier<>();
         table1.toStream().process(proc1);
 
-        driver = new KStreamTestDriver(builder, stateDir);
+        driver.setUp(builder, stateDir);
         driver.process(topic1, "A", 1);
         driver.process(topic1, "B", 2);
         driver.process(topic1, "C", 3);
@@ -82,7 +74,7 @@ public class KTableSourceTest {
 
     @Test
     public void testValueGetter() throws IOException {
-        final KStreamBuilder builder = new KStreamBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
         String topic1 = "topic1";
 
@@ -90,7 +82,7 @@ public class KTableSourceTest {
 
         KTableValueGetterSupplier<String, String> getterSupplier1 = table1.valueGetterSupplier();
 
-        driver = new KStreamTestDriver(builder, stateDir, null, null);
+        driver.setUp(builder, stateDir);
         KTableValueGetter<String, String> getter1 = getterSupplier1.get();
         getter1.init(driver.context());
 
@@ -126,7 +118,7 @@ public class KTableSourceTest {
 
     @Test
     public void testNotSendingOldValue() throws IOException {
-        final KStreamBuilder builder = new KStreamBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
         String topic1 = "topic1";
 
@@ -134,9 +126,9 @@ public class KTableSourceTest {
 
         MockProcessorSupplier<String, Integer> proc1 = new MockProcessorSupplier<>();
 
-        builder.addProcessor("proc1", proc1, table1.name);
+        builder.build().addProcessor("proc1", proc1, table1.name);
 
-        driver = new KStreamTestDriver(builder, stateDir, null, null);
+        driver.setUp(builder, stateDir);
         driver.process(topic1, "A", "01");
         driver.process(topic1, "B", "01");
         driver.process(topic1, "C", "01");
@@ -164,7 +156,7 @@ public class KTableSourceTest {
 
     @Test
     public void testSendingOldValue() throws IOException {
-        final KStreamBuilder builder = new KStreamBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
         String topic1 = "topic1";
 
@@ -176,9 +168,9 @@ public class KTableSourceTest {
 
         MockProcessorSupplier<String, Integer> proc1 = new MockProcessorSupplier<>();
 
-        builder.addProcessor("proc1", proc1, table1.name);
+        builder.build().addProcessor("proc1", proc1, table1.name);
 
-        driver = new KStreamTestDriver(builder, stateDir, null, null);
+        driver.setUp(builder, stateDir);
 
         driver.process(topic1, "A", "01");
         driver.process(topic1, "B", "01");

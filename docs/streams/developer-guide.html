@@ -123,14 +123,14 @@
     <h4><a id="streams_processor_topology" href="#streams_processor_topology">Processor Topology</a></h4>
 
     <p>
-        With the customized processors defined in the Processor API, developers can use the <code>TopologyBuilder</code> to build a processor topology
+        With the customized processors defined in the Processor API, developers can use <code>Topology</code> to build a processor topology
         by connecting these processors together:
     </p>
 
     <pre class="brush: java;">
-    TopologyBuilder builder = new TopologyBuilder();
+    Topology topology = new Topology();
 
-    builder.addSource("SOURCE", "src-topic")
+    topology.addSource("SOURCE", "src-topic")
     // add "PROCESS1" node which takes the source processor "SOURCE" as its upstream processor
     .addProcessor("PROCESS1", () -> new MyProcessor1(), "SOURCE")
 
@@ -180,15 +180,15 @@
     </pre>
 
     <p>
-        To take advantage of these state stores, developers can use the <code>TopologyBuilder.addStateStore</code> method when building the
+        To take advantage of these state stores, developers can use the <code>Topology.addStateStore</code> method when building the
         processor topology to create the local state and associate it with the processor nodes that needs to access it; or they can connect a created
-        state store with the existing processor nodes through <code>TopologyBuilder.connectProcessorAndStateStores</code>.
+        state store with the existing processor nodes through <code>Topology.connectProcessorAndStateStores</code>.
     </p>
 
     <pre class="brush: java;">
-    TopologyBuilder builder = new TopologyBuilder();
+    Topology topology = new Topology();
 
-    builder.addSource("SOURCE", "src-topic")
+    topology.addSource("SOURCE", "src-topic")
 
     .addProcessor("PROCESS1", MyProcessor1::new, "SOURCE")
     // add the created state store "COUNTS" associated with processor "PROCESS1"
@@ -204,12 +204,32 @@
     .addSink("SINK3", "sink-topic3", "PROCESS3");
     </pre>
 
+    <h4><a id="streams_processor_describe" href="#streams_processor_describe">Describe a <code>Topology</code></a></h4>
+
+    <p>
+        After a <code>Topology</code> is specified it is possible to retrieve a description of the corresponding DAG via <code>#describe()</code> that returns a <code>TopologyDescription</code>.
+        A <code>TopologyDescription</code> contains all added source, processor, and sink nodes as well as all attached stores.
+        For source and sink nodes one can access the specified input/output topic name/pattern.
+        For processor nodes the attached stores are added to the description.
+        Additionally, all nodes have a list to all their connected successor and predecessor nodes.
+        Thus, <code>TopologyDescritpion</code> allows to retrieve the DAG structure of the specified topology.
+        <br />
+        Note that global stores are listed explicitly as they are accessible by all nodes without the need to explicitly connect them.
+        Furthermore, nodes are grouped by <code>Subtopology</code>.
+        Subtopologies are groups of nodes that are directly connected to each other (i.e., either by a direct connection&mdash;but not a topic&mdash;or by sharing a store).
+        For execution, each <code>Subtopology</code> is executed by <a href="/{{version}}/documentation/streams/architecture#streams_architecture_tasks">one or multiple tasks</a>.
+        Thus, each <code>Subtopology</code> describes an independent unit of works that can be executed by different threads in parallel.
+        <br />
+        Describing a <code>Topology</code> is helpful to reason about tasks and thus maximum parallelism.
+        It is also helpful to get insight into a <code>Topology</code> if it is not specified manually but via Kafka Streams DSL that is described in the next section.
+    </p>
+
     In the next section we present another way to build the processor topology: the Kafka Streams DSL.
     <br>
 
     <h3><a id="streams_dsl" href="#streams_dsl">High-Level Streams DSL</a></h3>
 
-    To build a processor topology using the Streams DSL, developers can apply the <code>KStreamBuilder</code> class, which is extended from the <code>TopologyBuilder</code>.
+    To build a <code>Topology</code> using the Streams DSL, developers can apply the <code>StreamsBuilder</code> class.
     A simple example is included with the source code for Kafka in the <code>streams/examples</code> package. The rest of this section will walk
     through some code to demonstrate the key steps in creating a topology using the Streams DSL, but we recommend developers to read the full example source
     codes for details.
@@ -274,7 +294,7 @@
     </p>
 
     <pre class="brush: java;">
-    KStreamBuilder builder = new KStreamBuilder();
+    StreamsBuilder builder = new StreamsBuilder();
 
     KStream&lt;String, GenericRecord&gt; source1 = builder.stream("topic1", "topic2");
     KTable&lt;String, GenericRecord&gt; source2 = builder.table("topic3", "stateStoreName");
@@ -551,7 +571,7 @@
 
     <pre class="brush: java;">
           StreamsConfig config = ...;
-          KStreamBuilder builder = ...;
+          StreamsBuilder builder = ...;
           KStream&lt;String, String&gt; textLines = ...;
 
           // Define the processing topology (here: WordCount)
@@ -563,7 +583,7 @@
           groupedByWord.count("CountsKeyValueStore");
 
           // Start an instance of the topology
-          KafkaStreams streams = new KafkaStreams(builder, config);
+          KafkaStreams streams = new KafkaStreams(builder.build(), config);
           streams.start();
         </pre>
 
@@ -607,7 +627,7 @@
 
     <pre class="brush: java;">
           StreamsConfig config = ...;
-          KStreamBuilder builder = ...;
+          StreamsBuilder builder = ...;
           KStream&lt;String, String&gt; textLines = ...;
 
           // Define the processing topology (here: WordCount)
@@ -755,19 +775,19 @@
 
     <pre class="brush: java;">
           StreamsConfig config = ...;
-          TopologyBuilder builder = ...;
+          Topology topology = ...;
           ProcessorSupplier processorSuppler = ...;
 
           // Create CustomStoreSupplier for store name the-custom-store
           MyCustomStoreSuppler customStoreSupplier = new MyCustomStoreSupplier("the-custom-store");
           // Add the source topic
-          builder.addSource("input", "inputTopic");
+          topology.addSource("input", "inputTopic");
           // Add a custom processor that reads from the source topic
-          builder.addProcessor("the-processor", processorSupplier, "input");
+          topology.addProcessor("the-processor", processorSupplier, "input");
           // Connect your custom state store to the custom processor above
-          builder.addStateStore(customStoreSupplier, "the-processor");
+          topology.addStateStore(customStoreSupplier, "the-processor");
 
-          KafkaStreams streams = new KafkaStreams(builder, config);
+          KafkaStreams streams = new KafkaStreams(topology, config);
           streams.start();
 
           // Get access to the custom store
@@ -830,7 +850,7 @@
           // ... further settings may follow here ...
 
           StreamsConfig config = new StreamsConfig(props);
-          KStreamBuilder builder = new KStreamBuilder();
+          StreamsBuilder builder = new StreamsBuilder();
 
           KStream&lt;String, String&gt; textLines = builder.stream(stringSerde, stringSerde, "word-count-input");
 
@@ -843,7 +863,7 @@
           groupedByWord.count("word-count");
 
           // Start an instance of the topology
-          KafkaStreams streams = new KafkaStreams(builder, streamsConfiguration);
+          KafkaStreams streams = new KafkaStreams(builder.build(), streamsConfiguration);
           streams.start();
 
           // Then, create and start the actual RPC service for remote access to this
@@ -1053,33 +1073,36 @@
     </p>
 
     <p>
-        First, you must create an instance of <code>KafkaStreams</code>. The first argument of the <code>KafkaStreams</code> constructor takes a topology
-        builder (either <code>KStreamBuilder</code> for the Kafka Streams DSL, or <code>TopologyBuilder</code> for the Processor API)
-        that is used to define a topology; The second argument is an instance of <code>StreamsConfig</code> mentioned above.
+        First, you must create an instance of <code>KafkaStreams</code>.
+        The first argument of the <code>KafkaStreams</code> constructor takes a <code>Topology</code>
+        that is a logical topology description (you can create a <code>Topology</code> either directly or use
+        <code>StreamsBuilder</code> to create one).
+        The second argument is an instance of <code>StreamsConfig</code> mentioned above.
     </p>
 
     <pre class="brush: java;">
     import org.apache.kafka.streams.KafkaStreams;
+    import org.apache.kafka.streams.StreamsBuilder;
     import org.apache.kafka.streams.StreamsConfig;
-    import org.apache.kafka.streams.kstream.KStreamBuilder;
-    import org.apache.kafka.streams.processor.TopologyBuilder;
+    import org.apache.kafka.streams.Topology;
 
     // Use the builders to define the actual processing topology, e.g. to specify
     // from which input topics to read, which stream operations (filter, map, etc.)
     // should be called, and so on.
 
-    KStreamBuilder builder = ...;  // when using the Kafka Streams DSL
+    Topology topology = ...; // when using the Processor API
     //
     // OR
     //
-    TopologyBuilder builder = ...; // when using the Processor API
+    StreamsBuilder builder = ...;  // when using the Kafka Streams DSL
+    Topology topology = builder.build();
 
     // Use the configuration to tell your application where the Kafka cluster is,
     // which serializers/deserializers to use by default, to specify security settings,
     // and so on.
     StreamsConfig config = ...;
 
-    KafkaStreams streams = new KafkaStreams(builder, config);
+    KafkaStreams streams = new KafkaStreams(topology, config);
     </pre>
 
     <p>

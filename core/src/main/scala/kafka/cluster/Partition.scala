@@ -94,6 +94,15 @@ class Partition(val topic: String,
       tags
     )
 
+    newGauge("UnderMinIsr",
+      new Gauge[Int] {
+        def value = {
+          if (isUnderMinIsr) 1 else 0
+        }
+      },
+      tags
+    )
+
     newGauge("ReplicasCount",
       new Gauge[Int] {
         def value = {
@@ -119,6 +128,15 @@ class Partition(val topic: String,
 
   def isUnderReplicated: Boolean =
     isLeaderReplicaLocal && inSyncReplicas.size < assignedReplicas.size
+
+  def isUnderMinIsr: Boolean = {
+    leaderReplicaIfLocal match {
+      case Some(leaderReplica) =>
+        inSyncReplicas.size < leaderReplica.log.get.config.minInSyncReplicas
+      case None =>
+        false
+    }
+  }
 
   def getOrCreateReplica(replicaId: Int = localBrokerId, isNew: Boolean = false): Replica = {
     assignedReplicaMap.getAndMaybePut(replicaId, {
@@ -559,6 +577,7 @@ class Partition(val topic: String,
    */
   def removePartitionMetrics() {
     removeMetric("UnderReplicated", tags)
+    removeMetric("UnderMinIsr", tags)
     removeMetric("InSyncReplicasCount", tags)
     removeMetric("ReplicasCount", tags)
     removeMetric("LastStableOffsetLag", tags)
