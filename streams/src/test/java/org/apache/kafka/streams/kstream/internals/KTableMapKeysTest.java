@@ -32,7 +32,6 @@ import org.junit.Rule;
 import org.junit.Test;
 
 import java.io.File;
-import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -48,7 +47,7 @@ public class KTableMapKeysTest {
 
     
     @Before
-     public void setUp() throws IOException {
+     public void setUp() {
         stateDir = TestUtils.tempDirectory("kafka-test");
     }
 
@@ -78,8 +77,6 @@ public class KTableMapKeysTest {
         final int[] originalKeys = new int[]{1, 2, 3};
         final String[] values = new String[]{"V_ONE", "V_TWO", "V_THREE"};
 
-
-
         MockProcessorSupplier<String, String> processor = new MockProcessorSupplier<>();
 
         convertedStream.process(processor);
@@ -96,7 +93,4 @@ public class KTableMapKeysTest {
             assertEquals(expected[i], processor.processed.get(i));
         }
     }
-
-
-
 }

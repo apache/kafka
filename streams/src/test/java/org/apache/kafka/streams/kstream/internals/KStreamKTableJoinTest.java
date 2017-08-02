@@ -19,6 +19,7 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.StreamsBuilderTest;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.test.KStreamTestDriver;
@@ -69,7 +70,7 @@ public class KStreamKTableJoinTest {
         table = builder.table(intSerde, stringSerde, topic2, "anyStoreName");
         stream.join(table, MockValueJoiner.TOSTRING_JOINER).process(processor);
 
-        final Collection<Set<String>> copartitionGroups = KTableKTableJoinTest.getCopartitionedGroups(builder);
+        final Collection<Set<String>> copartitionGroups = StreamsBuilderTest.getCopartitionedGroups(builder);
 
         assertEquals(1, copartitionGroups.size());
         assertEquals(new HashSet<>(Arrays.asList(topic1, topic2)), copartitionGroups.iterator().next());
@@ -132,6 +133,4 @@ public class KStreamKTableJoinTest {
 
         processor.checkAndClearProcessResult("2:XX2+YY2", "3:XX3+YY3");
     }
-
-
 }

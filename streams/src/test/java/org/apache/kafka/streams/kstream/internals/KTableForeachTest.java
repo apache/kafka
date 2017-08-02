@@ -29,7 +29,6 @@ import org.junit.Rule;
 import org.junit.Test;
 
 import java.io.File;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -37,6 +36,7 @@ import java.util.Locale;
 
 import static org.junit.Assert.assertEquals;
 
+@Deprecated
 public class KTableForeachTest {
 
     final private String topicName = "topic";
@@ -47,7 +47,7 @@ public class KTableForeachTest {
     public final KStreamTestDriver driver = new KStreamTestDriver();
 
     @Before
-    public void setUp() throws IOException {
+    public void setUp() {
         stateDir = TestUtils.tempDirectory("kafka-test");
     }
 
@@ -98,7 +98,7 @@ public class KTableForeachTest {
     }
 
     @Test
-    public void testTypeVariance() throws Exception {
+    public void testTypeVariance() {
         ForeachAction<Number, Object> consume = new ForeachAction<Number, Object>() {
             @Override
             public void apply(Number key, Object value) {}

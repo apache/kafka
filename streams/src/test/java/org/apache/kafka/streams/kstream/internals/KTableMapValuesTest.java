@@ -31,7 +31,6 @@ import org.junit.Rule;
 import org.junit.Test;
 
 import java.io.File;
-import java.io.IOException;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -46,7 +45,7 @@ public class KTableMapValuesTest {
     private File stateDir = null;
 
     @Before
-    public void setUp() throws IOException {
+    public void setUp() {
         stateDir = TestUtils.tempDirectory("kafka-test");
     }
 
@@ -203,7 +202,7 @@ public class KTableMapValuesTest {
     }
 
     @Test
-    public void testValueGetter() throws IOException {
+    public void testValueGetter() {
         StreamsBuilder builder = new StreamsBuilder();
 
         String topic1 = "topic1";
@@ -234,7 +233,7 @@ public class KTableMapValuesTest {
     }
 
     @Test
-    public void testQueryableValueGetter() throws IOException {
+    public void testQueryableValueGetter() {
         StreamsBuilder builder = new StreamsBuilder();
 
         String topic1 = "topic1";
@@ -265,7 +264,7 @@ public class KTableMapValuesTest {
     }
 
     @Test
-    public void testNotSendingOldValue() throws IOException {
+    public void testNotSendingOldValue() {
         StreamsBuilder builder = new StreamsBuilder();
 
         String topic1 = "topic1";
@@ -313,7 +312,7 @@ public class KTableMapValuesTest {
     }
 
     @Test
-    public void testSendingOldValue() throws IOException {
+    public void testSendingOldValue() {
         StreamsBuilder builder = new StreamsBuilder();
 
         String topic1 = "topic1";

@@ -21,8 +21,8 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.StreamsBuilderTest;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
-import org.apache.kafka.streams.kstream.internals.InternalStreamsBuilder;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StreamPartitioner;
@@ -36,7 +36,6 @@ import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.junit.rules.ExternalResource;
 
 import java.io.File;
-import java.lang.reflect.Field;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -50,18 +49,22 @@ public class KStreamTestDriver extends ExternalResource {
     private MockProcessorContext context;
     private ProcessorTopology globalTopology;
 
+    @Deprecated
     public void setUp(final KStreamBuilder builder) {
         setUp(builder, null, Serdes.ByteArray(), Serdes.ByteArray());
     }
 
+    @Deprecated
     public void setUp(final KStreamBuilder builder, final File stateDir) {
         setUp(builder, stateDir, Serdes.ByteArray(), Serdes.ByteArray());
     }
 
+    @Deprecated
     public void setUp(final KStreamBuilder builder, final File stateDir, final long cacheSize) {
         setUp(builder, stateDir, Serdes.ByteArray(), Serdes.ByteArray(), cacheSize);
     }
 
+    @Deprecated
     public void setUp(final KStreamBuilder builder,
                       final File stateDir,
                       final Serde<?> keySerde,
@@ -69,6 +72,7 @@ public class KStreamTestDriver extends ExternalResource {
         setUp(builder, stateDir, keySerde, valSerde, DEFAULT_CACHE_SIZE_BYTES);
     }
 
+    @Deprecated
     public void setUp(final KStreamBuilder builder,
                       final File stateDir,
                       final Serde<?> keySerde,
@@ -112,26 +116,16 @@ public class KStreamTestDriver extends ExternalResource {
                       final Serde<?> keySerde,
                       final Serde<?> valSerde,
                       final long cacheSize) {
-        // TODO: we should refactor this to avoid usage of reflection
-        final InternalTopologyBuilder internalTopologyBuilder;
-        try {
-            final Field internalStreamsBuilderField = builder.getClass().getDeclaredField("internalStreamsBuilder");
-            internalStreamsBuilderField.setAccessible(true);
-            final InternalStreamsBuilder internalStreamsBuilder = (InternalStreamsBuilder) internalStreamsBuilderField.get(builder);
-
-            final Field internalTopologyBuilderField = internalStreamsBuilder.getClass().getDeclaredField("internalTopologyBuilder");
-            internalTopologyBuilderField.setAccessible(true);
-            internalTopologyBuilder = (InternalTopologyBuilder) internalTopologyBuilderField.get(internalStreamsBuilder);
-        } catch (final NoSuchFieldException | IllegalAccessException e) {
-            throw new RuntimeException(e);
-        }
+        final InternalTopologyBuilder internalTopologyBuilder = StreamsBuilderTest.internalTopologyBuilder(builder);
 
         internalTopologyBuilder.setApplicationId("TestDriver");
         topology = internalTopologyBuilder.build(null);
         globalTopology = internalTopologyBuilder.buildGlobalStateTopology();
+
         final ThreadCache cache = new ThreadCache("testCache", cacheSize, new MockStreamsMetrics(new Metrics()));
         context = new MockProcessorContext(stateDir, keySerde, valSerde, new MockRecordCollector(), cache);
         context.setRecordContext(new ProcessorRecordContext(0, 0, 0, "topic"));
+
         // init global topology first as it will add stores to the
         // store map that are required for joins etc.
         if (globalTopology != null) {
@@ -304,7 +298,7 @@ public class KStreamTestDriver extends ExternalResource {
                                 final Long timestamp,
                                 final Serializer<K> keySerializer,
                                 final Serializer<V> valueSerializer) {
-        // The serialization is skipped.
+            // The serialization is skipped.
             if (sourceNodeByTopicName(topic) != null) {
                 process(topic, key, value);
             }

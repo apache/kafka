@@ -73,7 +73,7 @@ public class KStreamMapTest {
     }
 
     @Test
-    public void testTypeVariance() throws Exception {
+    public void testTypeVariance() {
         KeyValueMapper<Number, Object, KeyValue<Number, String>> stringify = new KeyValueMapper<Number, Object, KeyValue<Number, String>>() {
             @Override
             public KeyValue<Number, String> apply(Number key, Object value) {

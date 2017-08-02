@@ -88,7 +88,7 @@ public class KStreamBranchTest {
     }
 
     @Test
-    public void testTypeVariance() throws Exception {
+    public void testTypeVariance() {
         Predicate<Number, Object> positive = new Predicate<Number, Object>() {
             @Override
             public boolean test(Number key, Object value) {

@@ -29,7 +29,6 @@ import org.junit.Rule;
 import org.junit.Test;
 
 import java.io.File;
-import java.io.IOException;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
@@ -44,7 +43,7 @@ public class KTableSourceTest {
     private File stateDir = null;
 
     @Before
-    public void setUp() throws IOException {
+    public void setUp() {
         stateDir = TestUtils.tempDirectory("kafka-test");
     }
 
@@ -73,7 +72,7 @@ public class KTableSourceTest {
     }
 
     @Test
-    public void testValueGetter() throws IOException {
+    public void testValueGetter() {
         final StreamsBuilder builder = new StreamsBuilder();
 
         String topic1 = "topic1";
@@ -117,7 +116,7 @@ public class KTableSourceTest {
     }
 
     @Test
-    public void testNotSendingOldValue() throws IOException {
+    public void testNotSendingOldValue() {
         final StreamsBuilder builder = new StreamsBuilder();
 
         String topic1 = "topic1";
@@ -155,7 +154,7 @@ public class KTableSourceTest {
     }
 
     @Test
-    public void testSendingOldValue() throws IOException {
+    public void testSendingOldValue() {
         final StreamsBuilder builder = new StreamsBuilder();
 
         String topic1 = "topic1";

@@ -41,7 +41,6 @@ import org.junit.Rule;
 import org.junit.Test;
 
 import java.io.File;
-import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -59,12 +58,12 @@ public class KTableAggregateTest {
     public final KStreamTestDriver driver = new KStreamTestDriver();
 
     @Before
-    public void setUp() throws IOException {
+    public void setUp() {
         stateDir = TestUtils.tempDirectory("kafka-test");
     }
 
     @Test
-    public void testAggBasic() throws Exception {
+    public void testAggBasic() {
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
         final MockProcessorSupplier<String, String> proc = new MockProcessorSupplier<>();
@@ -113,7 +112,7 @@ public class KTableAggregateTest {
 
 
     @Test
-    public void testAggCoalesced() throws Exception {
+    public void testAggCoalesced() {
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
         final MockProcessorSupplier<String, String> proc = new MockProcessorSupplier<>();
@@ -142,7 +141,7 @@ public class KTableAggregateTest {
 
 
     @Test
-    public void testAggRepartition() throws Exception {
+    public void testAggRepartition() {
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
         final MockProcessorSupplier<String, String> proc = new MockProcessorSupplier<>();
@@ -203,7 +202,7 @@ public class KTableAggregateTest {
                 ), proc.processed);
     }
 
-    private void testCountHelper(final StreamsBuilder builder, final String input, final MockProcessorSupplier<String, Long> proc) throws IOException {
+    private void testCountHelper(final StreamsBuilder builder, final String input, final MockProcessorSupplier<String, Long> proc) {
         driver.setUp(builder, stateDir);
 
         driver.process(input, "A", "green");
@@ -229,7 +228,7 @@ public class KTableAggregateTest {
     }
 
     @Test
-    public void testCount() throws IOException {
+    public void testCount() {
         final StreamsBuilder builder = new StreamsBuilder();
         final String input = "count-test-input";
         final MockProcessorSupplier<String, Long> proc = new MockProcessorSupplier<>();
@@ -244,7 +243,7 @@ public class KTableAggregateTest {
     }
 
     @Test
-    public void testCountWithInternalStore() throws IOException {
+    public void testCountWithInternalStore() {
         final StreamsBuilder builder = new StreamsBuilder();
         final String input = "count-test-input";
         final MockProcessorSupplier<String, Long> proc = new MockProcessorSupplier<>();
@@ -259,7 +258,7 @@ public class KTableAggregateTest {
     }
 
     @Test
-    public void testCountCoalesced() throws IOException {
+    public void testCountCoalesced() {
         final StreamsBuilder builder = new StreamsBuilder();
         final String input = "count-test-input";
         final MockProcessorSupplier<String, Long> proc = new MockProcessorSupplier<>();
@@ -288,7 +287,7 @@ public class KTableAggregateTest {
     }
     
     @Test
-    public void testRemoveOldBeforeAddNew() throws IOException {
+    public void testRemoveOldBeforeAddNew() {
         final StreamsBuilder builder = new StreamsBuilder();
         final String input = "count-test-input";
         final MockProcessorSupplier<String, String> proc = new MockProcessorSupplier<>();
@@ -343,7 +342,7 @@ public class KTableAggregateTest {
     }
 
     @Test
-    public void shouldForwardToCorrectProcessorNodeWhenMultiCacheEvictions() throws Exception {
+    public void shouldForwardToCorrectProcessorNodeWhenMultiCacheEvictions() {
         final String tableOne = "tableOne";
         final String tableTwo = "tableTwo";
         final StreamsBuilder builder = new StreamsBuilder();
@@ -372,7 +371,7 @@ public class KTableAggregateTest {
                     }
                 }, "reducer-store");
 
-        reduce.foreach(new ForeachAction<String, Long>() {
+        reduce.toStream().foreach(new ForeachAction<String, Long>() {
             @Override
             public void apply(final String key, final Long value) {
                 reduceResults.put(key, value);

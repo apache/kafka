@@ -20,6 +20,7 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.StreamsBuilderTest;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockProcessorSupplier;
@@ -30,8 +31,6 @@ import org.junit.Rule;
 import org.junit.Test;
 
 import java.io.File;
-import java.io.IOException;
-import java.lang.reflect.Field;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashSet;
@@ -56,28 +55,15 @@ public class KTableKTableJoinTest {
     public final KStreamTestDriver driver = new KStreamTestDriver();
 
     @Before
-    public void setUp() throws IOException {
+    public void setUp() {
         stateDir = TestUtils.tempDirectory("kafka-test");
-    }
-
-    public static Collection<Set<String>> getCopartitionedGroups(StreamsBuilder builder) {
-        // TODO: we should refactor this to avoid usage of reflection
-        try {
-            final Field internalStreamsBuilderField = builder.getClass().getDeclaredField("internalStreamsBuilder");
-            internalStreamsBuilderField.setAccessible(true);
-            final InternalStreamsBuilder internalStreamsBuilder = (InternalStreamsBuilder) internalStreamsBuilderField.get(builder);
-
-            return internalStreamsBuilder.internalTopologyBuilder.copartitionGroups();
-        } catch (final NoSuchFieldException | IllegalAccessException e) {
-            throw new RuntimeException(e);
-        }
     }
 
     private void doTestJoin(final StreamsBuilder builder,
                             final int[] expectedKeys,
                             final MockProcessorSupplier<Integer, String> processor,
                             final KTable<Integer, String> joined) {
-        final Collection<Set<String>> copartitionGroups = getCopartitionedGroups(builder);
+        final Collection<Set<String>> copartitionGroups = StreamsBuilderTest.getCopartitionedGroups(builder);
 
         assertEquals(1, copartitionGroups.size());
         assertEquals(new HashSet<>(Arrays.asList(topic1, topic2)), copartitionGroups.iterator().next());
@@ -168,7 +154,7 @@ public class KTableKTableJoinTest {
     }
 
     @Test
-    public void testJoin() throws Exception {
+    public void testJoin() {
         final StreamsBuilder builder = new StreamsBuilder();
 
         final int[] expectedKeys = new int[]{0, 1, 2, 3};
@@ -189,7 +175,7 @@ public class KTableKTableJoinTest {
 
 
     @Test
-    public void testQueryableJoin() throws Exception {
+    public void testQueryableJoin() {
         final StreamsBuilder builder = new StreamsBuilder();
 
         final int[] expectedKeys = new int[]{0, 1, 2, 3};
@@ -215,7 +201,6 @@ public class KTableKTableJoinTest {
                                         final MockProcessorSupplier<Integer, String> proc,
                                         final KTable<Integer, String> joined,
                                         final boolean sendOldValues) {
-
 
         driver.setUp(builder, stateDir, Serdes.Integer(), Serdes.String());
         driver.setTime(0L);
@@ -290,7 +275,7 @@ public class KTableKTableJoinTest {
     }
 
     @Test
-    public void testNotSendingOldValues() throws Exception {
+    public void testNotSendingOldValues() {
         final StreamsBuilder builder = new StreamsBuilder();
 
         final int[] expectedKeys = new int[]{0, 1, 2, 3};
@@ -311,7 +296,7 @@ public class KTableKTableJoinTest {
     }
 
     @Test
-    public void testQueryableNotSendingOldValues() throws Exception {
+    public void testQueryableNotSendingOldValues() {
         final StreamsBuilder builder = new StreamsBuilder();
 
         final int[] expectedKeys = new int[]{0, 1, 2, 3};
@@ -332,7 +317,7 @@ public class KTableKTableJoinTest {
     }
 
     @Test
-    public void testSendingOldValues() throws Exception {
+    public void testSendingOldValues() {
         final StreamsBuilder builder = new StreamsBuilder();
 
         final int[] expectedKeys = new int[]{0, 1, 2, 3};

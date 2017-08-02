@@ -52,7 +52,7 @@ import org.apache.kafka.streams.processor.StreamPartitioner;
  * @param <V> Type of values
  * @see KTable
  * @see KGroupedStream
- * @see org.apache.kafka.streams.StreamsBuilder#stream(String...)
+ * @see StreamsBuilder#stream(String...)
  */
 @InterfaceStability.Evolving
 public interface KStream<K, V> {

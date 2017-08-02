@@ -20,6 +20,7 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.StreamsBuilderTest;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.GlobalKTable;
 import org.apache.kafka.streams.kstream.JoinWindows;
@@ -61,7 +62,7 @@ public class KStreamImplTest {
     }
 
     @Test
-    public void testNumProcesses() throws Exception {
+    public void testNumProcesses() {
         final StreamsBuilder builder = new StreamsBuilder();
 
         KStream<String, String> source1 = builder.stream(stringSerde, stringSerde, "topic-1", "topic-2");
@@ -154,11 +155,11 @@ public class KStreamImplTest {
             1 + // to
             2 + // through
             1, // process
-            InternalStreamsBuilderTest.internalTopologyBuilder(builder).setApplicationId("X").build(null).processors().size());
+            StreamsBuilderTest.internalTopologyBuilder(builder).setApplicationId("X").build(null).processors().size());
     }
 
     @Test
-    public void shouldUseRecordMetadataTimestampExtractorWithThrough() throws Exception {
+    public void shouldUseRecordMetadataTimestampExtractorWithThrough() {
         final StreamsBuilder builder = new StreamsBuilder();
         KStream<String, String> stream1 = builder.stream(stringSerde, stringSerde, "topic-1", "topic-2");
         KStream<String, String> stream2 = builder.stream(stringSerde, stringSerde, "topic-3", "topic-4");
@@ -166,7 +167,7 @@ public class KStreamImplTest {
         stream1.to("topic-5");
         stream2.through("topic-6");
 
-        ProcessorTopology processorTopology = InternalStreamsBuilderTest.internalTopologyBuilder(builder).setApplicationId("X").build(null);
+        ProcessorTopology processorTopology = StreamsBuilderTest.internalTopologyBuilder(builder).setApplicationId("X").build(null);
         assertThat(processorTopology.source("topic-6").getTimestampExtractor(), instanceOf(FailOnInvalidTimestamp.class));
         assertEquals(processorTopology.source("topic-4").getTimestampExtractor(), null);
         assertEquals(processorTopology.source("topic-3").getTimestampExtractor(), null);
@@ -175,6 +176,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    // TODO: this test should be refactored when we removed KStreamBuilder so that the created Topology contains internal topics as well
     public void shouldUseRecordMetadataTimestampExtractorWhenInternalRepartitioningTopicCreated() {
         final KStreamBuilder builder = new KStreamBuilder();
         KStream<String, String> kStream = builder.stream(stringSerde, stringSerde, "topic-1");

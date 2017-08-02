@@ -67,7 +67,9 @@ public class KStreamPeekTest {
         try {
             stream.peek(null);
             fail("expected null action to throw NPE");
-        } catch (NullPointerException expected) { }
+        } catch (NullPointerException expected) {
+            // do nothing
+        }
     }
 
     private static <K, V> ForeachAction<K, V> collect(final List<KeyValue<K, V>> into) {

@@ -21,10 +21,14 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.internals.KStreamImpl;
+import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.junit.Rule;
 import org.junit.Test;
+
+import java.util.Collection;
+import java.util.Set;
 
 import static org.junit.Assert.assertEquals;
 
@@ -113,4 +117,13 @@ public class StreamsBuilderTest {
         builder.stream(Serdes.String(), Serdes.String(), null, null);
     }
 
+    // TODO: these two static functions are added because some non-TopologyBuilder unit tests need to access the internal topology builder,
+    //       which is usually a bad sign of design patterns between TopologyBuilder and StreamThread. We need to consider getting rid of them later
+    public static InternalTopologyBuilder internalTopologyBuilder(final StreamsBuilder builder) {
+        return builder.internalTopologyBuilder;
+    }
+
+    public static Collection<Set<String>> getCopartitionedGroups(final StreamsBuilder builder) {
+        return builder.internalTopologyBuilder.copartitionGroups();
+    }
 }

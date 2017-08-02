@@ -33,6 +33,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.internals.InternalStreamsBuilder;
+import org.apache.kafka.streams.kstream.internals.InternalStreamsBuilderTest;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
@@ -47,7 +48,6 @@ import org.junit.Test;
 
 import java.io.File;
 import java.io.IOException;
-import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -332,13 +332,9 @@ public class StandbyTaskTest {
         final InternalStreamsBuilder builder = new InternalStreamsBuilder(new InternalTopologyBuilder());
         builder.stream(null, null, null, null, "topic").groupByKey().count("my-store");
 
-        // TODO: we should refactor this to avoid usage of reflection
-        final Field internalTopologyBuilderField = builder.getClass().getDeclaredField("internalTopologyBuilder");
-        internalTopologyBuilderField.setAccessible(true);
-        final InternalTopologyBuilder internalTopologyBuilder = (InternalTopologyBuilder) internalTopologyBuilderField.get(builder);
-
+        final StreamsConfig config = createConfig(baseDir);
+        final InternalTopologyBuilder internalTopologyBuilder = InternalStreamsBuilderTest.internalTopologyBuilder(builder);
         final ProcessorTopology topology = internalTopologyBuilder.setApplicationId(applicationId).build(0);
-        StreamsConfig config = createConfig(baseDir);
 
         new StandbyTask(taskId, applicationId, partitions, topology, consumer, changelogReader, config,
             new MockStreamsMetrics(new Metrics()), stateDirectory);

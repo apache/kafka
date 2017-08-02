@@ -19,7 +19,6 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.kstream.GlobalKTable;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
@@ -37,7 +36,6 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.lang.reflect.Field;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -60,20 +58,6 @@ public class InternalStreamsBuilderTest {
     private final InternalStreamsBuilder builder = new InternalStreamsBuilder(new InternalTopologyBuilder());
 
     private KStreamTestDriver driver = null;
-
-    public static InternalTopologyBuilder internalTopologyBuilder(final StreamsBuilder streamsBuilder) throws NoSuchFieldException, IllegalAccessException {
-        final Field internalStreamsBuilderField = streamsBuilder.getClass().getDeclaredField("internalStreamsBuilder");
-        internalStreamsBuilderField.setAccessible(true);
-        final InternalStreamsBuilder internalStreamsBuilder = (InternalStreamsBuilder) internalStreamsBuilderField.get(streamsBuilder);
-
-        return internalTopologyBuilder(internalStreamsBuilder);
-    }
-
-    public static InternalTopologyBuilder internalTopologyBuilder(final InternalStreamsBuilder internalStreamsBuilder) throws NoSuchFieldException, IllegalAccessException {
-        final Field internalTopologyBuilderField = internalStreamsBuilder.getClass().getDeclaredField("internalTopologyBuilder");
-        internalTopologyBuilderField.setAccessible(true);
-        return (InternalTopologyBuilder) internalTopologyBuilderField.get(internalStreamsBuilder);
-    }
 
     @Before
     public void setUp() {
@@ -366,5 +350,11 @@ public class InternalStreamsBuilderTest {
         builder.table(null, new MockTimestampExtractor(), null, null, "topic", "store");
         final ProcessorTopology processorTopology = builder.internalTopologyBuilder.build(null);
         assertThat(processorTopology.source("topic").getTimestampExtractor(), instanceOf(MockTimestampExtractor.class));
+    }
+
+    // TODO: this static functions are added because some non-TopologyBuilder unit tests need to access the internal topology builder,
+    //       which is usually a bad sign of design patterns between TopologyBuilder and StreamThread. We need to consider getting rid of them later
+    public static InternalTopologyBuilder internalTopologyBuilder(final InternalStreamsBuilder internalStreamsBuilder) {
+        return internalStreamsBuilder.internalTopologyBuilder;
     }
 }

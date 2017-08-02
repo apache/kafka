@@ -52,6 +52,13 @@ import java.util.Set;
 
 public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V> {
 
+    // TODO: change to package-private after removing KStreamBuilder
+    public static final String SOURCE_NAME = "KSTREAM-SOURCE-";
+
+    static final String SINK_NAME = "KSTREAM-SINK-";
+
+    static final String REPARTITION_TOPIC_SUFFIX = "-repartition";
+
     private static final String BRANCH_NAME = "KSTREAM-BRANCH-";
 
     private static final String BRANCHCHILD_NAME = "KSTREAM-BRANCHCHILD-";
@@ -88,10 +95,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
     private static final String KEY_SELECT_NAME = "KSTREAM-KEY-SELECT-";
 
-    static final String SINK_NAME = "KSTREAM-SINK-";
-
-    public static final String SOURCE_NAME = "KSTREAM-SOURCE-";
-
     private static final String TRANSFORM_NAME = "KSTREAM-TRANSFORM-";
 
     private static final String TRANSFORMVALUES_NAME = "KSTREAM-TRANSFORMVALUES-";
@@ -99,8 +102,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     private static final String WINDOWED_NAME = "KSTREAM-WINDOWED-";
 
     private static final String FOREACH_NAME = "KSTREAM-FOREACH-";
-
-    static final String REPARTITION_TOPIC_SUFFIX = "-repartition";
 
     private final KeyValueMapper<K, V, String> defaultKeyValueMapper;
 
@@ -439,7 +440,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     @Override
     public void to(final Serde<K> keySerde,
                    final Serde<V> valSerde,
-                   StreamPartitioner<? super K, ? super V> partitioner,
+                   final StreamPartitioner<? super K, ? super V> partitioner,
                    final String topic) {
         Objects.requireNonNull(topic, "topic can't be null");
         final String name = builder.newName(SINK_NAME);
@@ -449,10 +450,11 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
         if (partitioner == null && keySerializer != null && keySerializer instanceof WindowedSerializer) {
             final WindowedSerializer<Object> windowedSerializer = (WindowedSerializer<Object>) keySerializer;
-            partitioner = (StreamPartitioner<K, V>) new WindowedStreamPartitioner<Object, V>(topic, windowedSerializer);
+            final StreamPartitioner<K, V> windowedPartitioner = (StreamPartitioner<K, V>) new WindowedStreamPartitioner<Object, V>(topic, windowedSerializer);
+            builder.internalTopologyBuilder.addSink(name, topic, keySerializer, valSerializer, windowedPartitioner, this.name);
+        } else {
+            builder.internalTopologyBuilder.addSink(name, topic, keySerializer, valSerializer, partitioner, this.name);
         }
-
-        builder.internalTopologyBuilder.addSink(name, topic, keySerializer, valSerializer, partitioner, this.name);
     }
 
     @Override

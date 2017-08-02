@@ -31,7 +31,6 @@ import org.junit.Rule;
 import org.junit.Test;
 
 import java.io.File;
-import java.io.IOException;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
@@ -45,7 +44,7 @@ public class KTableFilterTest {
     private File stateDir = null;
 
     @Before
-    public void setUp() throws IOException {
+    public void setUp() {
         stateDir = TestUtils.tempDirectory("kafka-test");
     }
 
@@ -75,7 +74,7 @@ public class KTableFilterTest {
     public void testKTable() {
         final StreamsBuilder builder = new StreamsBuilder();
 
-        String topic1 = "topic1";
+        final String topic1 = "topic1";
 
         KTable<String, Integer> table1 = builder.table(stringSerde, intSerde, topic1, "anyStoreName");
 
@@ -99,7 +98,7 @@ public class KTableFilterTest {
     public void testQueryableKTable() {
         final StreamsBuilder builder = new StreamsBuilder();
 
-        String topic1 = "topic1";
+        final String topic1 = "topic1";
 
         KTable<String, Integer> table1 = builder.table(stringSerde, intSerde, topic1, "anyStoreName");
 
@@ -122,7 +121,7 @@ public class KTableFilterTest {
     private void doTestValueGetter(final StreamsBuilder builder,
                                    final KTableImpl<String, Integer, Integer> table2,
                                    final KTableImpl<String, Integer, Integer> table3,
-                                   final String topic1) throws IOException {
+                                   final String topic1) {
         KTableValueGetterSupplier<String, Integer> getterSupplier2 = table2.valueGetterSupplier();
         KTableValueGetterSupplier<String, Integer> getterSupplier3 = table3.valueGetterSupplier();
 
@@ -180,7 +179,7 @@ public class KTableFilterTest {
     }
 
     @Test
-    public void testValueGetter() throws IOException {
+    public void testValueGetter() {
         StreamsBuilder builder = new StreamsBuilder();
 
         String topic1 = "topic1";
@@ -206,7 +205,7 @@ public class KTableFilterTest {
     }
 
     @Test
-    public void testQueryableValueGetter() throws IOException {
+    public void testQueryableValueGetter() {
         StreamsBuilder builder = new StreamsBuilder();
 
         String topic1 = "topic1";
@@ -234,7 +233,7 @@ public class KTableFilterTest {
     private void doTestNotSendingOldValue(final StreamsBuilder builder,
                                           final KTableImpl<String, Integer, Integer> table1,
                                           final KTableImpl<String, Integer, Integer> table2,
-                                          final String topic1) throws IOException {
+                                          final String topic1) {
         MockProcessorSupplier<String, Integer> proc1 = new MockProcessorSupplier<>();
         MockProcessorSupplier<String, Integer> proc2 = new MockProcessorSupplier<>();
 
@@ -271,7 +270,7 @@ public class KTableFilterTest {
 
 
     @Test
-    public void testNotSendingOldValue() throws IOException {
+    public void testNotSendingOldValue() {
         StreamsBuilder builder = new StreamsBuilder();
 
         String topic1 = "topic1";
@@ -290,7 +289,7 @@ public class KTableFilterTest {
     }
 
     @Test
-    public void testQueryableNotSendingOldValue() throws IOException {
+    public void testQueryableNotSendingOldValue() {
         StreamsBuilder builder = new StreamsBuilder();
 
         String topic1 = "topic1";
@@ -311,7 +310,7 @@ public class KTableFilterTest {
     private void doTestSendingOldValue(final StreamsBuilder builder,
                                        final KTableImpl<String, Integer, Integer> table1,
                                        final KTableImpl<String, Integer, Integer> table2,
-                                       final String topic1) throws IOException {
+                                       final String topic1) {
         table2.enableSendingOldValues();
 
         MockProcessorSupplier<String, Integer> proc1 = new MockProcessorSupplier<>();
@@ -349,7 +348,7 @@ public class KTableFilterTest {
     }
 
     @Test
-    public void testSendingOldValue() throws IOException {
+    public void testSendingOldValue() {
         StreamsBuilder builder = new StreamsBuilder();
 
         String topic1 = "topic1";
@@ -368,7 +367,7 @@ public class KTableFilterTest {
     }
 
     @Test
-    public void testQueryableSendingOldValue() throws IOException {
+    public void testQueryableSendingOldValue() {
         StreamsBuilder builder = new StreamsBuilder();
 
         String topic1 = "topic1";
@@ -389,7 +388,7 @@ public class KTableFilterTest {
     private void doTestSkipNullOnMaterialization(final StreamsBuilder builder,
                                                  final KTableImpl<String, String, String> table1,
                                                  final KTableImpl<String, String, String> table2,
-                                                 final String topic1) throws IOException {
+                                                 final String topic1) {
         MockProcessorSupplier<String, String> proc1 = new MockProcessorSupplier<>();
         MockProcessorSupplier<String, String> proc2 = new MockProcessorSupplier<>();
 
@@ -407,7 +406,7 @@ public class KTableFilterTest {
     }
 
     @Test
-    public void testSkipNullOnMaterialization() throws IOException {
+    public void testSkipNullOnMaterialization() {
         // Do not explicitly set enableSendingOldValues. Let a further downstream stateful operator trigger it instead.
         StreamsBuilder builder = new StreamsBuilder();
 
@@ -428,7 +427,7 @@ public class KTableFilterTest {
     }
 
     @Test
-    public void testQueryableSkipNullOnMaterialization() throws IOException {
+    public void testQueryableSkipNullOnMaterialization() {
         // Do not explicitly set enableSendingOldValues. Let a further downstream stateful operator trigger it instead.
         StreamsBuilder builder = new StreamsBuilder();
 
@@ -449,7 +448,7 @@ public class KTableFilterTest {
     }
 
     @Test
-    public void testTypeVariance() throws Exception {
+    public void testTypeVariance() {
         Predicate<Number, Object> numberKeyPredicate = new Predicate<Number, Object>() {
             @Override
             public boolean test(Number key, Object value) {

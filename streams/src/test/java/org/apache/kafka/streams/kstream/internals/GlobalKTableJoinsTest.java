@@ -70,7 +70,7 @@ public class GlobalKTableJoinsTest {
     }
 
     @Test
-    public void shouldLeftJoinWithStream() throws Exception {
+    public void shouldLeftJoinWithStream() {
         stream.leftJoin(global, keyValueMapper, MockValueJoiner.TOSTRING_JOINER)
                 .foreach(action);
 
@@ -84,7 +84,7 @@ public class GlobalKTableJoinsTest {
     }
 
     @Test
-    public void shouldInnerJoinWithStream() throws Exception {
+    public void shouldInnerJoinWithStream() {
         stream.join(global, keyValueMapper,  MockValueJoiner.TOSTRING_JOINER)
                 .foreach(action);
 

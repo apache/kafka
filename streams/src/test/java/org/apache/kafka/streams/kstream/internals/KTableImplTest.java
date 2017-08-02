@@ -40,7 +40,6 @@ import org.junit.Rule;
 import org.junit.Test;
 
 import java.io.File;
-import java.io.IOException;
 import java.lang.reflect.Field;
 
 import static org.junit.Assert.assertEquals;
@@ -58,7 +57,7 @@ public class KTableImplTest {
     private KTable<String, String> table;
 
     @Before
-    public void setUp() throws IOException {
+    public void setUp() {
         stateDir = TestUtils.tempDirectory("kafka-test");
         builder = new StreamsBuilder();
         table = builder.table("test", "test");
@@ -122,7 +121,7 @@ public class KTableImplTest {
     }
 
     @Test
-    public void testValueGetter() throws IOException {
+    public void testValueGetter() {
         final StreamsBuilder builder = new StreamsBuilder();
 
         String topic1 = "topic1";
@@ -250,7 +249,7 @@ public class KTableImplTest {
     }
 
     @Test
-    public void testStateStoreLazyEval() throws IOException {
+    public void testStateStoreLazyEval() {
         String topic1 = "topic1";
         String topic2 = "topic2";
         String storeName1 = "storeName1";
@@ -285,7 +284,7 @@ public class KTableImplTest {
     }
 
     @Test
-    public void testStateStore() throws IOException {
+    public void testStateStore() {
         String topic1 = "topic1";
         String topic2 = "topic2";
         String storeName1 = "storeName1";
@@ -328,7 +327,7 @@ public class KTableImplTest {
     }
 
     @Test
-    public void testRepartition() throws Exception {
+    public void testRepartition() throws NoSuchFieldException, IllegalAccessException {
         String topic1 = "topic1";
         String storeName1 = "storeName1";
 
@@ -368,110 +367,110 @@ public class KTableImplTest {
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullSelectorOnToStream() throws Exception {
+    public void shouldNotAllowNullSelectorOnToStream() {
         table.toStream(null);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullTopicOnTo() throws Exception {
+    public void shouldNotAllowNullTopicOnTo() {
         table.to(null);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullPredicateOnFilter() throws Exception {
+    public void shouldNotAllowNullPredicateOnFilter() {
         table.filter(null);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullPredicateOnFilterNot() throws Exception {
+    public void shouldNotAllowNullPredicateOnFilterNot() {
         table.filterNot(null);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullMapperOnMapValues() throws Exception {
+    public void shouldNotAllowNullMapperOnMapValues() {
         table.mapValues(null);
     }
 
     @SuppressWarnings("deprecation")
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullFilePathOnWriteAsText() throws Exception {
+    public void shouldNotAllowNullFilePathOnWriteAsText() {
         table.writeAsText(null);
     }
 
     @SuppressWarnings("deprecation")
     @Test(expected = TopologyException.class)
-    public void shouldNotAllowEmptyFilePathOnWriteAsText() throws Exception {
+    public void shouldNotAllowEmptyFilePathOnWriteAsText() {
         table.writeAsText("\t  \t");
     }
 
     @SuppressWarnings("deprecation")
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullActionOnForEach() throws Exception {
+    public void shouldNotAllowNullActionOnForEach() {
         table.foreach(null);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldAllowNullTopicInThrough() throws Exception {
+    public void shouldAllowNullTopicInThrough() {
         table.through((String) null, "store");
     }
 
     @Test
-    public void shouldAllowNullStoreInThrough() throws Exception {
+    public void shouldAllowNullStoreInThrough() {
         table.through("topic", (String) null);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullSelectorOnGroupBy() throws Exception {
+    public void shouldNotAllowNullSelectorOnGroupBy() {
         table.groupBy(null);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullOtherTableOnJoin() throws Exception {
+    public void shouldNotAllowNullOtherTableOnJoin() {
         table.join(null, MockValueJoiner.TOSTRING_JOINER);
     }
 
     @Test
-    public void shouldAllowNullStoreInJoin() throws Exception {
+    public void shouldAllowNullStoreInJoin() {
         table.join(table, MockValueJoiner.TOSTRING_JOINER, null, null);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullStoreSupplierInJoin() throws Exception {
+    public void shouldNotAllowNullStoreSupplierInJoin() {
         table.join(table, MockValueJoiner.TOSTRING_JOINER, null);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullStoreSupplierInLeftJoin() throws Exception {
+    public void shouldNotAllowNullStoreSupplierInLeftJoin() {
         table.leftJoin(table, MockValueJoiner.TOSTRING_JOINER, null);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullStoreSupplierInOuterJoin() throws Exception {
+    public void shouldNotAllowNullStoreSupplierInOuterJoin() {
         table.outerJoin(table, MockValueJoiner.TOSTRING_JOINER, null);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullJoinerJoin() throws Exception {
+    public void shouldNotAllowNullJoinerJoin() {
         table.join(table, null);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullOtherTableOnOuterJoin() throws Exception {
+    public void shouldNotAllowNullOtherTableOnOuterJoin() {
         table.outerJoin(null, MockValueJoiner.TOSTRING_JOINER);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullJoinerOnOuterJoin() throws Exception {
+    public void shouldNotAllowNullJoinerOnOuterJoin() {
         table.outerJoin(table, null);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullJoinerOnLeftJoin() throws Exception {
+    public void shouldNotAllowNullJoinerOnLeftJoin() {
         table.leftJoin(table, null);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullOtherTableOnLeftJoin() throws Exception {
+    public void shouldNotAllowNullOtherTableOnLeftJoin() {
         table.leftJoin(null, MockValueJoiner.TOSTRING_JOINER);
     }
 

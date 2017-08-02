@@ -75,5 +75,4 @@ public class KStreamFlatMapTest {
             assertEquals(expected[i], processor.processed.get(i));
         }
     }
-
 }

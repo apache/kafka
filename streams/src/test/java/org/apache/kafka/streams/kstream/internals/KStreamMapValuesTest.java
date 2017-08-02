@@ -69,5 +69,4 @@ public class KStreamMapValuesTest {
             assertEquals(expected[i], processor.processed.get(i));
         }
     }
-
 }

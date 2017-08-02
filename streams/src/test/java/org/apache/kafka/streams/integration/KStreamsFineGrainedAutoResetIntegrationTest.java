@@ -248,10 +248,14 @@ public class KStreamsFineGrainedAutoResetIntegrationTest {
         builder.stream(KStreamBuilder.AutoOffsetReset.EARLIEST, Pattern.compile("topic-[A-D]_1"));
         builder.stream(KStreamBuilder.AutoOffsetReset.LATEST, Pattern.compile("topic-[A-D]_1"));
 
+        // TODO: we should check regex overlap at topology construction time and then throw TopologyException
+        //       instead of at runtime. See KAFKA-5660
         try {
             builder.earliestResetTopicsPattern();
             fail("Should have thrown TopologyException");
-        } catch (final TopologyException expected) { }
+        } catch (final TopologyException expected) {
+            // do nothing
+        }
     }
 
     @Test
@@ -263,7 +267,9 @@ public class KStreamsFineGrainedAutoResetIntegrationTest {
         try {
             builder.stream(Topology.AutoOffsetReset.LATEST, TOPIC_A_1, TOPIC_Z_1);
             fail("Should have thrown TopologyException");
-        } catch (final org.apache.kafka.streams.errors.TopologyException expected) { }
+        } catch (final TopologyException expected) {
+            // do nothing
+        }
     }
 
     @Test
