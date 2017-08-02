@@ -348,7 +348,7 @@ class SocketServerTest extends JUnitSuite {
       val channel = overrideServer.requestChannel
       val request = channel.receiveRequest(2000)
 
-      val requestMetrics = RequestMetrics.metricsMap(ApiKeys.forId(request.requestId).name)
+      val requestMetrics = RequestMetrics.metricsMap(ApiKeys.forId(request.header.apiKey).name)
       def totalTimeHistCount(): Long = requestMetrics.totalTimeHist.count
       val expectedTotalTimeCount = totalTimeHistCount() + 1
 
@@ -390,7 +390,7 @@ class SocketServerTest extends JUnitSuite {
       TestUtils.waitUntilTrue(() => overrideServer.processor(request.processor).channel(request.connectionId).isEmpty,
         s"Idle connection `${request.connectionId}` was not closed by selector")
 
-      val requestMetrics = RequestMetrics.metricsMap(ApiKeys.forId(request.requestId).name)
+      val requestMetrics = RequestMetrics.metricsMap(ApiKeys.forId(request.header.apiKey).name)
       def totalTimeHistCount(): Long = requestMetrics.totalTimeHist.count
       val expectedTotalTimeCount = totalTimeHistCount() + 1
 
