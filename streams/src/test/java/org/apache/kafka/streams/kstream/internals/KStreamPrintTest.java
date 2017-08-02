@@ -57,7 +57,7 @@ public class KStreamPrintTest {
 
     @Test
     public void testPrintKeyValueWithName() {
-        KeyValueMapper<Integer, String, String> mapper = new KeyValueMapper<Integer, String, String>() {
+        final KeyValueMapper<Integer, String, String> mapper = new KeyValueMapper<Integer, String, String>() {
             @Override
             public String apply(Integer key, String value) {
                 return String.format("%d, %s", key, value);
@@ -123,7 +123,7 @@ public class KStreamPrintTest {
 
     @Test
     public void testPrintKeyValueStringBytesArray() {
-        KeyValueMapper<Integer, String, String> mapper = new KeyValueMapper<Integer, String, String>() {
+        final KeyValueMapper<Integer, String, String> mapper = new KeyValueMapper<Integer, String, String>() {
             @Override
             public String apply(Integer key, String value) {
                 return String.format("%d, %s", key, value);
@@ -156,7 +156,7 @@ public class KStreamPrintTest {
 
     @Test
     public void testPrintKeyValueIntegerBytesArray() {
-        KeyValueMapper<Integer, Integer, String> mapper = new KeyValueMapper<Integer, Integer, String>() {
+        final KeyValueMapper<Integer, Integer, String> mapper = new KeyValueMapper<Integer, Integer, String>() {
             @Override
             public String apply(Integer key, Integer value) {
                 return String.format("%d, %d", key, value);
