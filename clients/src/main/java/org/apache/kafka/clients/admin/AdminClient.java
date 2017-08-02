@@ -17,6 +17,7 @@
 
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.TopicPartitionReplica;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.annotation.InterfaceStability;
@@ -346,4 +347,52 @@ public abstract class AdminClient implements AutoCloseable {
      * @return                The AlterConfigsResult
      */
     public abstract AlterConfigsResult alterConfigs(Map<ConfigResource, Config> configs, AlterConfigsOptions options);
+
+    /**
+     * Query the log directory information for the specified log directories.
+     * All log directories on a broker are queried if an empty collection of log directories is specified for this broker
+     *
+     * This operation is supported by brokers with version 0.11.1.0 or higher.
+     *
+     * @param logDirsByBroker     A list of log dirs per broker
+     * @return                    The DescribeDirsResult
+     */
+    public DescribeDirsResult describeDirs(Map<Integer, Collection<String>> logDirsByBroker) {
+        return describeDirs(logDirsByBroker, new DescribeDirsOptions());
+    }
+
+    /**
+     * Query the log directory information for the specified log directories.
+     * All log directories on a broker are queried if an empty collection of log directories is specified for this broker
+     *
+     * This operation is supported by brokers with version 0.11.1.0 or higher.
+     *
+     * @param logDirsByBroker     A list of log dirs per broker
+     * @param options             The options to use when querying log dir info
+     * @return                    The DescribeDirsResult
+     */
+    public abstract DescribeDirsResult describeDirs(Map<Integer, Collection<String>> logDirsByBroker, DescribeDirsOptions options);
+
+    /**
+     * Query the replica directory information for the specified replicas.
+     *
+     * This operation is supported by brokers with version 0.11.1.0 or higher.
+     *
+     * @param replicas      The replicas to query
+     * @return              The DescribeReplicaDirResult
+     */
+    public DescribeReplicaDirResult describeReplicaDir(Collection<TopicPartitionReplica> replicas) {
+        return describeReplicaDir(replicas, new DescribeReplicaDirOptions());
+    }
+
+    /**
+     * Query the replica directory information for the specified replicas.
+     *
+     * This operation is supported by brokers with version 0.11.1.0 or higher.
+     *
+     * @param replicas      The replicas to query
+     * @param options       The options to use when querying replica dir info
+     * @return              The DescribeReplicaDirResult
+     */
+    public abstract DescribeReplicaDirResult describeReplicaDir(Collection<TopicPartitionReplica> replicas, DescribeReplicaDirOptions options);
 }

@@ -36,6 +36,8 @@ abstract class BaseRequestTest extends KafkaServerTestHarness {
   // If required, set number of brokers
   protected def numBrokers: Int = 3
 
+  protected def logDirCount: Int = 1
+
   // If required, override properties by mutating the passed Properties object
   protected def propertyOverrides(properties: Properties) {}
 
@@ -43,7 +45,7 @@ abstract class BaseRequestTest extends KafkaServerTestHarness {
     val props = TestUtils.createBrokerConfigs(numBrokers, zkConnect,
       enableControlledShutdown = false, enableDeleteTopic = true,
       interBrokerSecurityProtocol = Some(securityProtocol),
-      trustStoreFile = trustStoreFile, saslProperties = serverSaslProperties)
+      trustStoreFile = trustStoreFile, saslProperties = serverSaslProperties, logDirCount = logDirCount)
     props.foreach(propertyOverrides)
     props.map(KafkaConfig.fromProps)
   }

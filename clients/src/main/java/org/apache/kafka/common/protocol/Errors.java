@@ -24,6 +24,7 @@ import org.apache.kafka.common.errors.ControllerMovedException;
 import org.apache.kafka.common.errors.CoordinatorLoadInProgressException;
 import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
 import org.apache.kafka.common.errors.CorruptRecordException;
+import org.apache.kafka.common.errors.DirNotAvailableException;
 import org.apache.kafka.common.errors.DuplicateSequenceNumberException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.IllegalGenerationException;
@@ -508,7 +509,14 @@ public enum Errors {
             public ApiException build(String message) {
                 return new KafkaStorageException(message);
             }
-    });
+    }),
+    DIR_NOT_AVAILABLE(57, "The user-specified log directory is not found in the broker config.",
+        new ApiExceptionBuilder() {
+            @Override
+            public ApiException build(String message) {
+                return new DirNotAvailableException(message);
+            }
+        });
 
     private interface ApiExceptionBuilder {
         ApiException build(String message);

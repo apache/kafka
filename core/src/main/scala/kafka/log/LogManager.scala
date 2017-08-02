@@ -30,7 +30,8 @@ import kafka.server.{BrokerState, RecoveringFromUncleanShutdown, _}
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.utils.Time
-import org.apache.kafka.common.errors.KafkaStorageException
+import org.apache.kafka.common.errors.{DirNotAvailableException, KafkaStorageException}
+
 import scala.collection.JavaConverters._
 import scala.collection._
 import scala.collection.mutable.ArrayBuffer
@@ -87,6 +88,7 @@ class LogManager(logDirs: Array[File],
     (dir, new OffsetCheckpointFile(new File(dir, LogStartOffsetCheckpointFile), logDirFailureChannel))).toMap
 
   private def offlineLogDirs = logDirs.filterNot(_liveLogDirs.contains)
+  private val preferredLogDirs = new ConcurrentHashMap[TopicPartition, String]()
 
   loadLogs()
 
@@ -525,6 +527,10 @@ class LogManager(logDirs: Array[File],
     }
   }
 
+  def updatePreferredLogDir(topicPartition: TopicPartition, logDir: String): Unit = {
+    preferredLogDirs.put(topicPartition, logDir)
+  }
+
   /**
    * Get the log if it exists, otherwise return None
    */
@@ -545,9 +551,20 @@ class LogManager(logDirs: Array[File],
         if (!isNew && offlineLogDirs.nonEmpty)
           throw new KafkaStorageException(s"Can not create log for $topicPartition because log directories ${offlineLogDirs.mkString(",")} are offline")
 
-        val dataDir = nextLogDir()
+        val logDir = {
+          val preferredLogDir = preferredLogDirs.get(topicPartition)
+          if (preferredLogDir != null)
+            preferredLogDir
+          else
+            nextLogDir().getAbsolutePath
+        }
+        if (!isLogDirOnline(logDir))
+          throw new KafkaStorageException(s"Can not create log for $topicPartition because log directory $logDir is offline")
+        // Do not use the user-specified log directory if the replica is deleted and re-created in the future.
+        preferredLogDirs.remove(topicPartition)
+
         try {
-          val dir = new File(dataDir, topicPartition.topic + "-" + topicPartition.partition)
+          val dir = new File(logDir, topicPartition.topic + "-" + topicPartition.partition)
           Files.createDirectories(dir.toPath)
 
           val log = Log(
@@ -567,13 +584,13 @@ class LogManager(logDirs: Array[File],
           info("Created log for partition [%s,%d] in %s with properties {%s}."
             .format(topicPartition.topic,
               topicPartition.partition,
-              dataDir.getAbsolutePath,
+              logDir,
               config.originals.asScala.mkString(", ")))
           log
         } catch {
           case e: IOException =>
-            val msg = s"Error while creating log for $topicPartition in dir ${dataDir.getAbsolutePath}"
-            logDirFailureChannel.maybeAddOfflineLogDir(dataDir.getAbsolutePath, msg, e)
+            val msg = s"Error while creating log for $topicPartition in dir ${logDir}"
+            logDirFailureChannel.maybeAddOfflineLogDir(logDir, msg, e)
             throw new KafkaStorageException(msg, e)
         }
       }
@@ -705,7 +722,7 @@ class LogManager(logDirs: Array[File],
   // logDir should be an absolute path
   def isLogDirOnline(logDir: String): Boolean = {
     if (!logDirs.exists(_.getAbsolutePath == logDir))
-      throw new RuntimeException(s"Log dir $logDir is not found in the config.")
+      throw new DirNotAvailableException(s"Log dir $logDir is not found in the config.")
 
     _liveLogDirs.contains(new File(logDir))
   }

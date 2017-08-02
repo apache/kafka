@@ -17,6 +17,7 @@
 
 package org.apache.kafka.clients.admin;
 
+import java.util.Set;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.ClientResponse;
@@ -31,7 +32,9 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionInfo;
+import org.apache.kafka.common.TopicPartitionReplica;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.annotation.InterfaceStability;
@@ -58,6 +61,8 @@ import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.AlterConfigsRequest;
 import org.apache.kafka.common.requests.AlterConfigsResponse;
+import org.apache.kafka.common.requests.AlterReplicaDirRequest;
+import org.apache.kafka.common.requests.AlterReplicaDirResponse;
 import org.apache.kafka.common.requests.CreateAclsRequest;
 import org.apache.kafka.common.requests.CreateAclsRequest.AclCreation;
 import org.apache.kafka.common.requests.CreateAclsResponse;
@@ -75,6 +80,8 @@ import org.apache.kafka.common.requests.DescribeAclsResponse;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.requests.DescribeConfigsRequest;
 import org.apache.kafka.common.requests.DescribeConfigsResponse;
+import org.apache.kafka.common.requests.DescribeDirsRequest;
+import org.apache.kafka.common.requests.DescribeDirsResponse;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.Resource;
@@ -1578,5 +1585,191 @@ public class KafkaAdminClient extends AdminClient {
             }
         }, now);
         return new AlterConfigsResult(new HashMap<ConfigResource, KafkaFuture<Void>>(futures));
+    }
+
+    /**
+     * Change the log directory for the specified replicas. This API is currently only useful if it is used
+     * before the replica has been created on the broker. It will support moving replicas that are already created after
+     * KIP-113 is fully implemented.
+     *
+     * Updates are not transactional so they may succeed for some resources while fail for others. The log directory for
+     * a particular replica is updated atomically.
+     *
+     * This operation is supported by brokers with version 0.11.1.0 or higher.
+     *
+     * @param replicaAssignment  The replicas with their log directory absolute path
+     * @param options            The options to use when changing replica dir
+     * @return                   The AlterReplicaDirResult
+     */
+    public AlterReplicaDirResult alterReplicaDir(Map<TopicPartitionReplica, String> replicaAssignment, final AlterReplicaDirOptions options) {
+        final Map<TopicPartitionReplica, KafkaFutureImpl<Void>> futures = new HashMap<>(replicaAssignment.size());
+
+        for (TopicPartitionReplica replica : replicaAssignment.keySet()) {
+            futures.put(replica, new KafkaFutureImpl<Void>());
+        }
+
+        Map<Integer, Map<TopicPartition, String>> replicaAssignmentByBroker = new HashMap<>();
+
+        for (Map.Entry<TopicPartitionReplica, String> entry: replicaAssignment.entrySet()) {
+            TopicPartitionReplica replica = entry.getKey();
+            String logDir = entry.getValue();
+            int brokerId = replica.brokerId();
+            TopicPartition topicPartition = new TopicPartition(replica.topic(), replica.partition());
+            if (!replicaAssignmentByBroker.containsKey(brokerId))
+                replicaAssignmentByBroker.put(brokerId, new HashMap<TopicPartition, String>());
+            replicaAssignmentByBroker.get(brokerId).put(topicPartition, logDir);
+        }
+
+        final long now = time.milliseconds();
+        for (Map.Entry<Integer, Map<TopicPartition, String>> entry: replicaAssignmentByBroker.entrySet()) {
+            final int brokerId = entry.getKey();
+            final Map<TopicPartition, String> assignment = entry.getValue();
+
+            runnable.call(new Call("alterReplicaDir", calcDeadlineMs(now, options.timeoutMs()),
+                new ConstantNodeIdProvider(brokerId)) {
+
+                @Override
+                public AbstractRequest.Builder createRequest(int timeoutMs) {
+                    return new AlterReplicaDirRequest.Builder(assignment);
+                }
+
+                @Override
+                public void handleResponse(AbstractResponse abstractResponse) {
+                    AlterReplicaDirResponse response = (AlterReplicaDirResponse) abstractResponse;
+                    for (Map.Entry<TopicPartition, Errors> responseEntry: response.responses().entrySet()) {
+                        TopicPartition tp = responseEntry.getKey();
+                        Errors error = responseEntry.getValue();
+                        TopicPartitionReplica replica = new TopicPartitionReplica(tp.topic(), tp.partition(), brokerId);
+                        KafkaFutureImpl<Void> future = futures.get(replica);
+                        if (future == null)
+                            continue;
+                        if (error == Errors.NONE) {
+                            future.complete(null);
+                        } else {
+                            future.completeExceptionally(error.exception());
+                        }
+                    }
+                }
+                @Override
+                void handleFailure(Throwable throwable) {
+                    completeAllExceptionally(futures.values(), throwable);
+                }
+            }, now);
+        }
+
+        return new AlterReplicaDirResult(new HashMap<TopicPartitionReplica, KafkaFuture<Void>>(futures));
+    }
+
+    @Override
+    public DescribeDirsResult describeDirs(Map<Integer, Collection<String>> logDirsByBroker, DescribeDirsOptions options) {
+        final Map<Integer, KafkaFutureImpl<Map<String, DescribeDirsResponse.LogDirInfo>>> futures = new HashMap<>(logDirsByBroker.size());
+
+        for (Integer brokerId: logDirsByBroker.keySet()) {
+            futures.put(brokerId, new KafkaFutureImpl<Map<String, DescribeDirsResponse.LogDirInfo>>());
+        }
+
+        final long now = time.milliseconds();
+        for (Map.Entry<Integer, Collection<String>> entry: logDirsByBroker.entrySet()) {
+            final int brokerId = entry.getKey();
+            final Collection<String> logDirs = entry.getValue();
+
+            runnable.call(new Call("describeDirs", calcDeadlineMs(now, options.timeoutMs()),
+                new ConstantNodeIdProvider(brokerId)) {
+
+                @Override
+                public AbstractRequest.Builder createRequest(int timeoutMs) {
+                    // Query selected partitions in all log directories
+                    return new DescribeDirsRequest.Builder(new HashSet<>(logDirs), new HashSet<TopicPartition>());
+                }
+
+                @Override
+                public void handleResponse(AbstractResponse abstractResponse) {
+                    DescribeDirsResponse response = (DescribeDirsResponse) abstractResponse;
+                    KafkaFutureImpl<Map<String, DescribeDirsResponse.LogDirInfo>> future = futures.get(brokerId);
+                    future.complete(response.logDirInfos());
+                }
+                @Override
+                void handleFailure(Throwable throwable) {
+                    completeAllExceptionally(futures.values(), throwable);
+                }
+            }, now);
+        }
+
+        return new DescribeDirsResult(new HashMap<Integer, KafkaFuture<Map<String, DescribeDirsResponse.LogDirInfo>>>(futures));
+    }
+
+    @Override
+    public DescribeReplicaDirResult describeReplicaDir(Collection<TopicPartitionReplica> replicas, DescribeReplicaDirOptions options) {
+        final Map<TopicPartitionReplica, KafkaFutureImpl<DescribeReplicaDirResult.ReplicaDirInfo>> futures = new HashMap<>(replicas.size());
+
+        for (TopicPartitionReplica replica : replicas) {
+            futures.put(replica, new KafkaFutureImpl<DescribeReplicaDirResult.ReplicaDirInfo>());
+        }
+
+        Map<Integer, Set<TopicPartition>> partitionsByBroker = new HashMap<>();
+
+        for (TopicPartitionReplica replica: replicas) {
+            if (!partitionsByBroker.containsKey(replica.brokerId()))
+                partitionsByBroker.put(replica.brokerId(), new HashSet<TopicPartition>());
+            partitionsByBroker.get(replica.brokerId()).add(new TopicPartition(replica.topic(), replica.partition()));
+        }
+
+        final long now = time.milliseconds();
+        for (Map.Entry<Integer, Set<TopicPartition>> entry: partitionsByBroker.entrySet()) {
+            final int brokerId = entry.getKey();
+            final Set<TopicPartition> topicPartitions = entry.getValue();
+            final Map<TopicPartition, DescribeReplicaDirResult.ReplicaDirInfo> replicaDirInfoByPartition = new HashMap<>();
+            for (TopicPartition topicPartition: topicPartitions)
+                replicaDirInfoByPartition.put(topicPartition, new DescribeReplicaDirResult.ReplicaDirInfo());
+
+            runnable.call(new Call("describeReplicaDir", calcDeadlineMs(now, options.timeoutMs()),
+                new ConstantNodeIdProvider(brokerId)) {
+
+                @Override
+                public AbstractRequest.Builder createRequest(int timeoutMs) {
+                    // Query selected partitions in all log directories
+                    return new DescribeDirsRequest.Builder(new HashSet<String>(), topicPartitions);
+                }
+
+                @Override
+                public void handleResponse(AbstractResponse abstractResponse) {
+                    DescribeDirsResponse response = (DescribeDirsResponse) abstractResponse;
+                    for (Map.Entry<String, DescribeDirsResponse.LogDirInfo> responseEntry: response.logDirInfos().entrySet()) {
+                        String logDir = responseEntry.getKey();
+                        DescribeDirsResponse.LogDirInfo logDirInfo = responseEntry.getValue();
+                        if (logDirInfo.error != Errors.NONE)
+                            continue;
+
+                        for (Map.Entry<TopicPartition, DescribeDirsResponse.ReplicaInfo> replicaInfoEntry: logDirInfo.replicaInfos.entrySet()) {
+                            TopicPartition topicPartition = replicaInfoEntry.getKey();
+                            DescribeDirsResponse.ReplicaInfo replicaInfo = replicaInfoEntry.getValue();
+                            DescribeReplicaDirResult.ReplicaDirInfo replicaDirInfo = replicaDirInfoByPartition.get(topicPartition);
+                            if (replicaDirInfo == null)
+                                continue;
+
+                            if (replicaInfo.isTemporary) {
+                                replicaDirInfo.temporaryReplicaDir = logDir;
+                                replicaDirInfo.temporaryReplicaOffsetLag -= replicaInfo.logEndOffset;
+                            } else {
+                                replicaDirInfo.currentReplicaDir = logDir;
+                                replicaDirInfo.temporaryReplicaOffsetLag += replicaInfo.logEndOffset;
+                            }
+                        }
+                    }
+
+                    for (Map.Entry<TopicPartition, DescribeReplicaDirResult.ReplicaDirInfo> entry: replicaDirInfoByPartition.entrySet()) {
+                        TopicPartition tp = entry.getKey();
+                        KafkaFutureImpl<DescribeReplicaDirResult.ReplicaDirInfo> future = futures.get(new TopicPartitionReplica(tp.topic(), tp.partition(), brokerId));
+                        future.complete(entry.getValue());
+                    }
+                }
+                @Override
+                void handleFailure(Throwable throwable) {
+                    completeAllExceptionally(futures.values(), throwable);
+                }
+            }, now);
+        }
+
+        return new DescribeReplicaDirResult(new HashMap<TopicPartitionReplica, KafkaFuture<DescribeReplicaDirResult.ReplicaDirInfo>>(futures));
     }
 }
