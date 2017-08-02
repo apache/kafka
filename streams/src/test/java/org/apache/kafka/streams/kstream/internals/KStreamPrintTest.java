@@ -59,7 +59,7 @@ public class KStreamPrintTest {
     public void testPrintKeyValueWithName() {
         final KeyValueMapper<Integer, String, String> mapper = new KeyValueMapper<Integer, String, String>() {
             @Override
-            public String apply(Integer key, String value) {
+            public String apply(final Integer key, final String value) {
                 return String.format("%d, %s", key, value);
             }
         };
@@ -82,17 +82,14 @@ public class KStreamPrintTest {
             driver.process(topicName, record.key, record.value);
         }
         printWriter.flush();
-        final String[] flushOutDatas = new String(byteOutStream.toByteArray(), Charset.forName("UTF-8")).split("\\r*\\n");
-        for (int i = 0; i < flushOutDatas.length; i++) {
-            assertEquals(expectedResult[i], flushOutDatas[i]);
-        }
+        assertFlushData(expectedResult, byteOutStream);
     }
 
     @Test
     public void testPrintStreamWithProvidedKeyValueMapper() {
         final KeyValueMapper<Integer, String, String> mapper = new KeyValueMapper<Integer, String, String>() {
             @Override
-            public String apply(Integer key, String value) {
+            public String apply(final Integer key, final String value) {
                 return String.format("(%d, %s)", key, value);
             }
         };
@@ -115,17 +112,14 @@ public class KStreamPrintTest {
             driver.process(topicName, record.key, record.value);
         }
         printWriter.flush();
-        final String[] results = new String(byteOutStream.toByteArray(), Charset.forName("UTF-8")).split("\\r*\\n");
-        for (int i = 0; i < results.length; i++) {
-            assertEquals(expectedResult[i], results[i]);
-        }
+        assertFlushData(expectedResult, byteOutStream);
     }
 
     @Test
     public void testPrintKeyValueStringBytesArray() {
         final KeyValueMapper<Integer, String, String> mapper = new KeyValueMapper<Integer, String, String>() {
             @Override
-            public String apply(Integer key, String value) {
+            public String apply(final Integer key, final String value) {
                 return String.format("%d, %s", key, value);
             }
         };
@@ -148,17 +142,14 @@ public class KStreamPrintTest {
             driver.process(topicName, record.key, record.value);
         }
         printWriter.flush();
-        final String[] flushOutDatas = new String(byteOutStream.toByteArray(), Charset.forName("UTF-8")).split("\\r*\\n");
-        for (int i = 0; i < flushOutDatas.length; i++) {
-            assertEquals(expectedResult[i], flushOutDatas[i]);
-        }
+        assertFlushData(expectedResult, byteOutStream);
     }
 
     @Test
     public void testPrintKeyValueIntegerBytesArray() {
         final KeyValueMapper<Integer, Integer, String> mapper = new KeyValueMapper<Integer, Integer, String>() {
             @Override
-            public String apply(Integer key, Integer value) {
+            public String apply(final Integer key, final Integer value) {
                 return String.format("%d, %d", key, value);
             }
         };
@@ -181,6 +172,11 @@ public class KStreamPrintTest {
             driver.process(topicName, record.key, record.value);
         }
         printWriter.flush();
+        assertFlushData(expectedResult, byteOutStream);
+    }
+
+    private void assertFlushData(String[] expectedResult, ByteArrayOutputStream byteOutStream) {
+
         final String[] flushOutDatas = new String(byteOutStream.toByteArray(), Charset.forName("UTF-8")).split("\\r*\\n");
         for (int i = 0; i < flushOutDatas.length; i++) {
             assertEquals(expectedResult[i], flushOutDatas[i]);
