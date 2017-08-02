@@ -23,7 +23,7 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.test.KStreamTestDriver;
-import org.junit.After;
+import org.junit.Rule;
 import org.junit.Test;
 
 import java.util.ArrayList;
@@ -39,16 +39,8 @@ public class KStreamForeachTest {
 
     final private Serde<Integer> intSerde = Serdes.Integer();
     final private Serde<String> stringSerde = Serdes.String();
-
-    private KStreamTestDriver driver = null;
-
-    @After
-    public void cleanup() {
-        if (driver != null) {
-            driver.close();
-        }
-        driver = null;
-    }
+    @Rule
+    public final KStreamTestDriver driver = new KStreamTestDriver();
 
     @Test
     public void testForeach() {
@@ -82,7 +74,7 @@ public class KStreamForeachTest {
         stream.foreach(action);
 
         // Then
-        driver = new KStreamTestDriver(builder);
+        driver.setUp(builder);
         for (KeyValue<Integer, String> record: inputRecords) {
             driver.process(topicName, record.key, record.value);
         }

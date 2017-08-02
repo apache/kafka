@@ -24,7 +24,7 @@ import org.apache.kafka.streams.kstream.internals.KStreamImpl;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockProcessorSupplier;
-import org.junit.After;
+import org.junit.Rule;
 import org.junit.Test;
 
 import java.util.Collection;
@@ -36,15 +36,8 @@ public class StreamsBuilderTest {
 
     private final StreamsBuilder builder = new StreamsBuilder();
 
-    private KStreamTestDriver driver = null;
-
-    @After
-    public void cleanup() {
-        if (driver != null) {
-            driver.close();
-        }
-        driver = null;
-    }
+    @Rule
+    public final KStreamTestDriver driver = new KStreamTestDriver();
 
     @Test(expected = TopologyException.class)
     public void testFrom() {
@@ -62,7 +55,7 @@ public class StreamsBuilderTest {
 
         source.process(processorSupplier);
 
-        driver = new KStreamTestDriver(builder);
+        driver.setUp(builder);
         driver.setTime(0L);
 
         driver.process("topic-source", "A", "aa");
@@ -82,7 +75,7 @@ public class StreamsBuilderTest {
         source.process(sourceProcessorSupplier);
         through.process(throughProcessorSupplier);
 
-        driver = new KStreamTestDriver(builder);
+        driver.setUp(builder);
         driver.setTime(0L);
 
         driver.process("topic-source", "A", "aa");
@@ -103,7 +96,7 @@ public class StreamsBuilderTest {
         final MockProcessorSupplier<String, String> processorSupplier = new MockProcessorSupplier<>();
         merged.process(processorSupplier);
 
-        driver = new KStreamTestDriver(builder);
+        driver.setUp(builder);
         driver.setTime(0L);
 
         driver.process(topic1, "A", "aa");

@@ -23,7 +23,8 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.test.KStreamTestDriver;
-import org.junit.After;
+
+import org.junit.Rule;
 import org.junit.Test;
 
 import java.util.ArrayList;
@@ -37,14 +38,8 @@ public class KStreamPeekTest {
     private final String topicName = "topic";
     private final Serde<Integer> intSerd = Serdes.Integer();
     private final Serde<String> stringSerd = Serdes.String();
-    private KStreamTestDriver driver = null;
-
-    @After
-    public void cleanup() {
-        if (driver != null) {
-            driver.close();
-        }
-    }
+    @Rule
+    public final KStreamTestDriver driver = new KStreamTestDriver();
 
     @Test
     public void shouldObserveStreamElements() {
@@ -53,7 +48,7 @@ public class KStreamPeekTest {
         final List<KeyValue<Integer, String>> peekObserved = new ArrayList<>(), streamObserved = new ArrayList<>();
         stream.peek(collect(peekObserved)).foreach(collect(streamObserved));
 
-        driver = new KStreamTestDriver(builder);
+        driver.setUp(builder);
         final List<KeyValue<Integer, String>> expected = new ArrayList<>();
         for (int key = 0; key < 32; key++) {
             final String value = "V" + key;

@@ -32,8 +32,8 @@ import org.apache.kafka.test.MockInitializer;
 import org.apache.kafka.test.MockProcessorContext;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 
 import java.io.File;
@@ -44,22 +44,13 @@ import static org.junit.Assert.assertEquals;
 public class KStreamWindowAggregateTest {
 
     final private Serde<String> strSerde = Serdes.String();
-
-    private KStreamTestDriver driver = null;
     private File stateDir = null;
-
+    @Rule
+    public final KStreamTestDriver driver = new KStreamTestDriver();
+    
     @Before
     public void setUp() throws IOException {
         stateDir = TestUtils.tempDirectory("kafka-test");
-    }
-
-    @After
-    public void tearDown() throws Exception {
-        if (driver != null) {
-            driver.close();
-            driver = null;
-        }
-        Utils.delete(stateDir);
     }
 
     @Test
@@ -79,7 +70,7 @@ public class KStreamWindowAggregateTest {
         MockProcessorSupplier<Windowed<String>, String> proc2 = new MockProcessorSupplier<>();
         table2.toStream().process(proc2);
 
-        driver = new KStreamTestDriver(builder, stateDir);
+        driver.setUp(builder, stateDir);
 
         setRecordContext(0, topic1);
         driver.process(topic1, "A", "1");
@@ -191,7 +182,7 @@ public class KStreamWindowAggregateTest {
             }
         }).toStream().process(proc3);
 
-        driver = new KStreamTestDriver(builder, stateDir);
+        driver.setUp(builder, stateDir);
 
         setRecordContext(0, topic1);
         driver.process(topic1, "A", "1");
