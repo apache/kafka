@@ -18,8 +18,8 @@ package kafka.cluster
 
 import java.util.Properties
 
-import kafka.log.{Log, LogConfig}
-import kafka.server.{BrokerTopicStats, LogOffsetMetadata}
+import kafka.log.{Log, LogConfig, LogManager}
+import kafka.server.{BrokerTopicStats, LogDirFailureChannel, LogOffsetMetadata}
 import kafka.utils.{MockTime, TestUtils}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.OffsetOutOfRangeException
@@ -49,7 +49,10 @@ class ReplicaTest {
       recoveryPoint = 0L,
       scheduler = time.scheduler,
       brokerTopicStats = brokerTopicStats,
-      time = time)
+      time = time,
+      maxProducerIdExpirationMs = 60 * 60 * 1000,
+      producerIdExpirationCheckIntervalMs = LogManager.ProducerIdExpirationCheckIntervalMs,
+      logDirFailureChannel = new LogDirFailureChannel(10))
 
     replica = new Replica(brokerId = 0,
       topicPartition = new TopicPartition("foo", 0),
@@ -108,7 +111,7 @@ class ReplicaTest {
       assertTrue(replica.logStartOffset <= hw)
 
       // verify that all segments up to the high watermark have been deleted
-      
+
       log.logSegments.headOption.foreach { segment =>
         assertTrue(segment.baseOffset <= hw)
         assertTrue(segment.baseOffset >= replica.logStartOffset)
