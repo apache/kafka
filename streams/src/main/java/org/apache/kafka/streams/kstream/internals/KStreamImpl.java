@@ -223,52 +223,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         Objects.requireNonNull(mapper, "mapper can't be null");
         Objects.requireNonNull(label, "label can't be null");
         String name = topology.newName(PRINTING_NAME);
-<<<<<<< HEAD
-<<<<<<< b2c8e0030d1be0c1ce647e59f6545c87659e3f47
-        topology.addProcessor(name, new KStreamPrint<>(new PrintForeachAction<>(null, mapper, label), keySerde, valSerde), this.name);
-=======
-        streamName = (streamName == null) ? this.name : streamName;
-        topology.addProcessor(name, new KStreamPeek<>(keySerde, valSerde, streamName), this.name);
->>>>>>> replace KeyValuePrinter and KStreamForeach with KStreamPeek
-    }
-
-    @Override
-    public void writeAsText(final String filePath) {
-        writeAsText(filePath, this.name, null, null, defaultKeyValueMapper);
-    }
-
-    @Override
-    public void writeAsText(final String filePath, final String label) {
-        writeAsText(filePath, label, null, null, defaultKeyValueMapper);
-    }
-
-    @Override
-    public void writeAsText(final String filePath, final Serde<K> keySerde, final Serde<V> valSerde) {
-        writeAsText(filePath, this.name, keySerde, valSerde, defaultKeyValueMapper);
-    }
-
-    @Override
-    public void writeAsText(final String filePath, final String label, final Serde<K> keySerde, final Serde<V> valSerde) {
-        writeAsText(filePath, label, keySerde, valSerde, defaultKeyValueMapper);
-    }
-
-    @Override
-    public void writeAsText(final String filePath, final KeyValueMapper<? super K, ? super V, String> mapper) {
-        writeAsText(filePath, this.name, null, null, mapper);
-    }
-
-    @Override
-    public void writeAsText(final String filePath, final String label, final KeyValueMapper<? super K, ? super V, String> mapper) {
-        writeAsText(filePath, label, null, null, mapper);
-    }
-
-    @Override
-    public void writeAsText(final String filePath, final Serde<K> keySerde, final Serde<V> valSerde, final KeyValueMapper<? super K, ? super V, String> mapper) {
-        writeAsText(filePath, this.name, keySerde, valSerde, mapper);
-    }
-
-    @Override
-=======
         topology.addProcessor(name, new KStreamPrint<>(new PrintForeachAction<>(null, mapper, label), keySerde, valSerde), this.name);
     }
 
@@ -308,7 +262,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     }
 
     @Override
->>>>>>> de352f665d15a02102275bcb018152e59bf8a465
     public void writeAsText(final String filePath, final String label, final Serde<K> keySerde, final Serde<V> valSerde, KeyValueMapper<? super K, ? super V, String> mapper) {
         Objects.requireNonNull(filePath, "filePath can't be null");
         Objects.requireNonNull(label, "label can't be null");
@@ -318,19 +271,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         }
         final String name = topology.newName(PRINTING_NAME);
         try {
-<<<<<<< HEAD
-<<<<<<< b2c8e0030d1be0c1ce647e59f6545c87659e3f47
             PrintWriter printWriter = new PrintWriter(filePath, StandardCharsets.UTF_8.name());
             topology.addProcessor(name, new KStreamPrint<>(new PrintForeachAction<>(printWriter, mapper, label), keySerde, valSerde), this.name);
-=======
-            PrintWriter printWriter = null;
-            printWriter = new PrintWriter(filePath, StandardCharsets.UTF_8.name());
-            topology.addProcessor(name, new KStreamPeek<>(printWriter, keySerde, valSerde, streamName), this.name);
->>>>>>> replace KeyValuePrinter and KStreamForeach with KStreamPeek
-=======
-            PrintWriter printWriter = new PrintWriter(filePath, StandardCharsets.UTF_8.name());
-            topology.addProcessor(name, new KStreamPrint<>(new PrintForeachAction<>(printWriter, mapper, label), keySerde, valSerde), this.name);
->>>>>>> de352f665d15a02102275bcb018152e59bf8a465
         } catch (FileNotFoundException | UnsupportedEncodingException e) {
             String message = "Unable to write stream to file at [" + filePath + "] " + e.getMessage();
             throw new TopologyBuilderException(message);

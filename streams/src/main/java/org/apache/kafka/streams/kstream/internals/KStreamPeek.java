@@ -19,124 +19,30 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
-import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.serialization.Serde;
-
-import java.io.PrintWriter;
 
 class KStreamPeek<K, V> implements ProcessorSupplier<K, V> {
 
-<<<<<<< b2c8e0030d1be0c1ce647e59f6545c87659e3f47
     private final boolean forwardDownStream;
     private final ForeachAction<K, V> action;
 
     public KStreamPeek(final ForeachAction<K, V> action, final boolean forwardDownStream) {
         this.action = action;
         this.forwardDownStream = forwardDownStream;
-=======
-    // peek type
-    // 0: peek
-    // 1: foreach
-    // 2: print
-    private final short categories;
-    private ForeachAction<K, V> action;
-    
-    private Serde<?> keySerde;
-    private Serde<?> valueSerde;
-    private String streamName;
-    private PrintWriter writer;
-
-    public KStreamPeek(final ForeachAction<K, V> action, final boolean downStream) {
-        this.action = action;
-        this.categories = (downStream)?(short)0:(short)1;
-    }
-
-    public KStreamPeek(Serde<?> keySerde, Serde<?> valueSerde, String streamName) {
-        this(new PrintWriter(System.out, true), keySerde, valueSerde, streamName);
-    }
-
-    public KStreamPeek(PrintWriter writer, String streamName) {
-        this(writer, null, null, streamName);
-    }
-
-    public KStreamPeek(PrintWriter writer, Serde<?> keySerde, Serde<?> valueSerde, String streamName) {
-        this.writer = writer;
-        this.keySerde = keySerde;
-        this.valueSerde = valueSerde;
-        this.streamName = streamName;
-        this.categories = 2;
->>>>>>> replace KeyValuePrinter and KStreamForeach with KStreamPeek
     }
 
     @Override
     public Processor<K, V> get() {
-        switch(this.categories) {
-            case 0:
-                return new KStreamPeekProcessor(true);
-            case 1:
-                return new KStreamPeekProcessor(false);
-            default:
-                return new KStreamPeekPrinterProcessor();
-        }
+        return new KStreamPeekProcessor();
     }
 
     private class KStreamPeekProcessor extends AbstractProcessor<K, V> {
-        private final boolean downStream;
-        public KStreamPeekProcessor(final boolean downStream) {
-            this.downStream = downStream;
-        } 
         @Override
         public void process(final K key, final V value) {
             action.apply(key, value);
-<<<<<<< b2c8e0030d1be0c1ce647e59f6545c87659e3f47
             if (forwardDownStream) {
                 context().forward(key, value);
             }
-=======
-            if(downStream) {
-                context().forward(key, value);
-            }
-        }
-    }
-
-    private class KStreamPeekPrinterProcessor extends AbstractProcessor<K, V> {
-        private ProcessorContext context;
-        private Deserializer keyDeserializer;
-        private Deserializer valueDeserializer;
-
-        @Override
-        public void init(ProcessorContext context) {
-            this.context = context;
-            if(keySerde == null) {
-                keySerde = context.keySerde();
-            }
-            if(valueSerde == null) {
-                valueSerde = context.valueSerde();
-            }
-            keyDeserializer = keySerde.deserializer();
-            valueDeserializer = valueSerde.deserializer();
-        }
-        
-        @Override
-        public void process(final K key, final V value) {
-            K deKey   = (K) deserialize(key, keyDeserializer);
-            V deValue = (V) deserialize(value, valueDeserializer);
-            writer.println(String.format("[%s]: %s, %s", streamName, deKey, deValue));
-        }
-
-        private Object deserialize(Object value, Deserializer<?> deserializer) {
-            if(value instanceof byte[]) {
-                return deserializer.deserialize(this.context.topic(), (byte[])value);
-            }
-            return value;
-        }
-
-        @Override
-        public void close() {
-            writer.close();
->>>>>>> replace KeyValuePrinter and KStreamForeach with KStreamPeek
         }
     }
 
