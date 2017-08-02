@@ -166,9 +166,9 @@ public class KStreamPrintTest {
 
         final List<KeyValue<Integer, byte[]>> inputRecords = Arrays.asList(
                 new KeyValue<>(0, intSerd.serializer().serialize(topicName, 0)),
-                new KeyValue<>(1, intSerd.serializer().serialize(topicName,1)),
-                new KeyValue<>(2, intSerd.serializer().serialize(topicName,2)),
-                new KeyValue<>(3, intSerd.serializer().serialize(topicName,3)));
+                new KeyValue<>(1, intSerd.serializer().serialize(topicName, 1)),
+                new KeyValue<>(2, intSerd.serializer().serialize(topicName, 2)),
+                new KeyValue<>(3, intSerd.serializer().serialize(topicName, 3)));
 
         final String[] expectedResult = {"[test-stream]: 0, 0", "[test-stream]: 1, 1", "[test-stream]: 2, 2", "[test-stream]: 3, 3"};
 
