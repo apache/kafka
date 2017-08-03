@@ -270,7 +270,7 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, time: Time, met
    * This ensures another controller election will be triggered and there will always be an actively serving controller
    */
   def onControllerFailover() {
-    info("Broker %d starting become controller state transition".format(config.brokerId))
+    info("starting become controller state transition")
     readControllerEpochFromZookeeper()
     incrementControllerEpoch()
     LogDirUtils.deleteLogDirEvents(zkUtils)
@@ -299,7 +299,7 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, time: Time, met
 
     // register the partition change listeners for all existing topics on failover
     controllerContext.allTopics.foreach(topic => registerPartitionModificationsListener(topic))
-    info("Broker %d is ready to serve as the new controller with epoch %d".format(config.brokerId, epoch))
+    info(s"ready to serve as the new controller with epoch $epoch")
     maybeTriggerPartitionReassignment()
     topicDeletionManager.tryTopicDeletion()
     val pendingPreferredReplicaElections = fetchPendingPreferredReplicaElections()
@@ -321,7 +321,7 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, time: Time, met
    * required to clean up internal controller data structures
    */
   def onControllerResignation() {
-    debug("Controller resigning, broker id %d".format(config.brokerId))
+    debug("resigning")
     // de-register listeners
     deregisterIsrChangeNotificationListener()
     deregisterPartitionReassignmentListener()
@@ -351,7 +351,7 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, time: Time, met
 
     resetControllerContext()
 
-    info("Broker %d resigned as the controller".format(config.brokerId))
+    info("resigned as the controller")
   }
 
   /**
@@ -690,7 +690,7 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, time: Time, met
       case oe: Throwable => error("Error while incrementing controller epoch", oe)
 
     }
-    info("Controller %d incremented epoch to %d".format(config.brokerId, controllerContext.epoch))
+    info(s"incremented epoch to ${controllerContext.epoch}")
   }
 
   private def registerSessionExpirationListener() = {
@@ -1531,9 +1531,9 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, time: Time, met
       }
 
       val offlineReplicas = leaderAndIsrResponse.responses().asScala.filter(_._2 == Errors.KAFKA_STORAGE_ERROR).keys.map(
-        tp => TopicAndPartition(tp.topic(), tp.partition())).toSet
+        tp => TopicAndPartition(tp.topic, tp.partition)).toSet
       val onlineReplicas = leaderAndIsrResponse.responses().asScala.filter(_._2 == Errors.NONE).keys.map(
-        tp => TopicAndPartition(tp.topic(), tp.partition())).toSet
+        tp => TopicAndPartition(tp.topic, tp.partition)).toSet
       val previousOfflineReplicas = controllerContext.replicasOnOfflineDirs.getOrElse(brokerId, Set.empty[TopicAndPartition])
       val currentOfflineReplicas = previousOfflineReplicas -- onlineReplicas ++ offlineReplicas
       controllerContext.replicasOnOfflineDirs.put(brokerId, currentOfflineReplicas)
