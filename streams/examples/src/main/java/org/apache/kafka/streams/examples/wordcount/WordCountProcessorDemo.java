@@ -19,15 +19,15 @@ package org.apache.kafka.streams.examples.wordcount;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Exit;
+import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
-import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
@@ -40,7 +40,7 @@ import java.util.concurrent.CountDownLatch;
  * Demonstrates, using the low-level Processor APIs, how to implement the WordCount program
  * that computes a simple word occurrence histogram from an input text.
  *
- * In this example, the input stream reads from a topic named "streams-file-input", where the values of messages
+ * In this example, the input stream reads from a topic named "streams-plaintext-input", where the values of messages
  * represent lines of text; and the histogram output is written to topic "streams-wordcount-processor-output" where each record
  * is an updated count of a single word.
  *
@@ -119,7 +119,7 @@ public class WordCountProcessorDemo {
         // setting offset reset to earliest so that we can re-run the demo code with the same pre-loaded data
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
 
-        TopologyBuilder builder = new TopologyBuilder();
+        Topology builder = new Topology();
 
         builder.addSource("Source", "streams-plaintext-input");
 

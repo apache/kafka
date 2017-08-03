@@ -20,7 +20,7 @@ package kafka.log
 import java.io.File
 import java.util.Properties
 
-import kafka.server.BrokerTopicStats
+import kafka.server.{BrokerTopicStats, LogDirFailureChannel}
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record._
@@ -218,7 +218,7 @@ class LogCleanerManagerTest extends JUnitSuite with Logging {
   private def createCleanerManager(log: Log): LogCleanerManager = {
     val logs = new Pool[TopicPartition, Log]()
     logs.put(new TopicPartition("log", 0), log)
-    val cleanerManager = new LogCleanerManager(Array(logDir), logs)
+    val cleanerManager = new LogCleanerManager(Array(logDir), logs, null)
     cleanerManager
   }
 
@@ -236,13 +236,18 @@ class LogCleanerManagerTest extends JUnitSuite with Logging {
       recoveryPoint = 0L,
       scheduler = time.scheduler,
       time = time,
-      brokerTopicStats = new BrokerTopicStats)
+      brokerTopicStats = new BrokerTopicStats,
+      maxProducerIdExpirationMs = 60 * 60 * 1000,
+      producerIdExpirationCheckIntervalMs = LogManager.ProducerIdExpirationCheckIntervalMs,
+      logDirFailureChannel = new LogDirFailureChannel(10))
     log
   }
 
   private def makeLog(dir: File = logDir, config: LogConfig = logConfig) =
     Log(dir = dir, config = config, logStartOffset = 0L, recoveryPoint = 0L, scheduler = time.scheduler,
-      time = time, brokerTopicStats = new BrokerTopicStats)
+      time = time, brokerTopicStats = new BrokerTopicStats, maxProducerIdExpirationMs = 60 * 60 * 1000,
+      producerIdExpirationCheckIntervalMs = LogManager.ProducerIdExpirationCheckIntervalMs,
+      logDirFailureChannel = new LogDirFailureChannel(10))
 
   private def records(key: Int, value: Int, timestamp: Long) =
     MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord(timestamp, key.toString.getBytes, value.toString.getBytes))

@@ -739,6 +739,11 @@ public class SslTransportLayer implements TransportLayer {
     }
 
     @Override
+    public boolean hasBytesBuffered() {
+        return netReadBuffer.position() != 0 || appReadBuffer.position() != 0;
+    }
+
+    @Override
     public long transferFrom(FileChannel fileChannel, long position, long count) throws IOException {
         return fileChannel.transferTo(position, count, this);
     }

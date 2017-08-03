@@ -35,6 +35,7 @@ class SourceNodeRecordDeserializer implements RecordDeserializer {
         this.deserializationExceptionHandler = deserializationExceptionHandler;
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public ConsumerRecord<Object, Object> deserialize(final ConsumerRecord<byte[], byte[]> rawRecord) {
         final Object key;

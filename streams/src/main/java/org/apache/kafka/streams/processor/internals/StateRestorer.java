@@ -17,30 +17,36 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.streams.processor.StateRestoreCallback;
+import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.processor.StateRestoreListener;
+
+import java.util.Collection;
 
 public class StateRestorer {
+
     static final int NO_CHECKPOINT = -1;
 
     private final Long checkpoint;
     private final long offsetLimit;
     private final boolean persistent;
     private final TopicPartition partition;
-    private final StateRestoreCallback stateRestoreCallback;
-
+    private final String storeName;
+    private final CompositeRestoreListener compositeRestoreListener;
     private long restoredOffset;
     private long startingOffset;
 
     StateRestorer(final TopicPartition partition,
-                  final StateRestoreCallback stateRestoreCallback,
+                  final CompositeRestoreListener compositeRestoreListener,
                   final Long checkpoint,
                   final long offsetLimit,
-                  final boolean persistent) {
+                  final boolean persistent,
+                  final String storeName) {
         this.partition = partition;
-        this.stateRestoreCallback = stateRestoreCallback;
+        this.compositeRestoreListener = compositeRestoreListener;
         this.checkpoint = checkpoint;
         this.offsetLimit = offsetLimit;
         this.persistent = persistent;
+        this.storeName = storeName;
     }
 
     public TopicPartition partition() {
@@ -51,12 +57,28 @@ public class StateRestorer {
         return checkpoint == null ? NO_CHECKPOINT : checkpoint;
     }
 
-    void restore(final byte[] key, final byte[] value) {
-        stateRestoreCallback.restore(key, value);
+    void restoreStarted(long startingOffset, long endingOffset) {
+        compositeRestoreListener.onRestoreStart(partition, storeName, startingOffset, endingOffset);
+    }
+
+    void restoreDone() {
+        compositeRestoreListener.onRestoreEnd(partition, storeName, restoredNumRecords());
+    }
+
+    void restoreBatchCompleted(long currentRestoredOffset, int numRestored) {
+        compositeRestoreListener.onBatchRestored(partition, storeName, currentRestoredOffset, numRestored);
+    }
+
+    void restore(final Collection<KeyValue<byte[], byte[]>> records) {
+        compositeRestoreListener.restoreAll(records);
     }
 
     boolean isPersistent() {
         return persistent;
+    }
+
+    void setGlobalRestoreListener(StateRestoreListener globalStateRestoreListener) {
+        this.compositeRestoreListener.setGlobalRestoreListener(globalStateRestoreListener);
     }
 
     void setRestoredOffset(final long restoredOffset) {

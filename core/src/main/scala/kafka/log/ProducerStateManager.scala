@@ -638,9 +638,13 @@ class ProducerStateManager(val topicPartition: TopicPartition,
   }
 
   private def listSnapshotFiles: List[File] = {
-    if (logDir.exists && logDir.isDirectory)
-      logDir.listFiles.filter(f => f.isFile && isSnapshotFile(f.getName)).toList
-    else
+    if (logDir.exists && logDir.isDirectory) {
+      val files = logDir.listFiles
+      if (files != null)
+        files.filter(f => f.isFile && isSnapshotFile(f.getName)).toList
+      else
+        List.empty[File]
+    } else
       List.empty[File]
   }
 

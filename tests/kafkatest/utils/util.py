@@ -24,9 +24,34 @@ def kafkatest_version():
 
 
 def _kafka_jar_versions(proc_string):
-    """Use a rough heuristic to find all kafka versions explicitly in the process classpath"""
-    versions = re.findall("kafka-[a-z]+-([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)", proc_string)
+    """Use a rough heuristic to find all kafka versions explicitly in the process classpath. We need to handle patterns
+    like:
+        - kafka_2.11-1.0.0-SNAPSHOT.jar
+        - kafka_2.11-0.11.0.0-SNAPSHOT.jar
+        - kafka-1.0.0/bin/../libs/* (i.e. the JARs are not listed explicitly)
+        - kafka-0.11.0.0/bin/../libs/* (i.e. the JARs are not listed explicitly)
+        - kafka-streams-1.0.0-SNAPSHOT.jar
+        - kafka-streams-0.11.0.0-SNAPSHOT.jar
+    """
+
+    # Pattern example: kafka_2.11-1.0.0-SNAPSHOT.jar (we have to be careful not to partially match the 4 segment version string)
+    versions = re.findall("kafka_[0-9]+\.[0-9]+-([0-9]+\.[0-9]+\.[0-9]+)[\.-][a-zA-z]", proc_string)
+
+    # Pattern example: kafka_2.11-0.11.0.0-SNAPSHOT.jar
+    versions.extend(re.findall("kafka_[0-9]+\.[0-9]+-([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)", proc_string))
+
+    # Pattern example: kafka-1.0.0/bin/../libs/* (i.e. the JARs are not listed explicitly, we have to be careful not to
+    # partially match the 4 segment version)
+    versions.extend(re.findall("kafka-([0-9]+\.[0-9]+\.[0-9]+)/", proc_string))
+
+    # Pattern example: kafka-0.11.0.0/bin/../libs/* (i.e. the JARs are not listed explicitly)
     versions.extend(re.findall("kafka-([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)", proc_string))
+
+    # Pattern example: kafka-streams-1.0.0-SNAPSHOT.jar (we have to be careful not to partially match the 4 segment version string)
+    versions.extend(re.findall("kafka-[a-z]+-([0-9]+\.[0-9]+\.[0-9]+)[\.-][a-zA-z]", proc_string))
+
+    # Pattern example: kafka-streams-0.11.0.0-SNAPSHOT.jar
+    versions.extend(re.findall("kafka-[a-z]+-([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)", proc_string))
 
     return set(versions)
 
@@ -37,12 +62,13 @@ def is_version(node, version_list, proc_grep_string="kafka", logger=None):
     """
     lines = [l for l in node.account.ssh_capture("ps ax | grep %s | grep -v grep" % proc_grep_string)]
     assert len(lines) == 1
+    psLine = lines[0]
 
-    versions = _kafka_jar_versions(lines[0])
+    versions = _kafka_jar_versions(psLine)
     r = versions == {str(v) for v in version_list}
     if not r and logger is not None:
-        logger.warning("%s: %s version mismatch: expected %s: actual %s" % \
-                       (str(node), proc_grep_string, version_list, versions))
+        logger.warning("%s: %s version mismatch: expected %s, actual %s, ps line %s" % \
+                       (str(node), proc_grep_string, version_list, versions, psLine))
     return r
 
 
