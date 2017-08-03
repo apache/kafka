@@ -56,36 +56,6 @@ public class KStreamPrintTest {
     }
 
     @Test
-    public void testPrintKeyValueWithName() {
-        final KeyValueMapper<Integer, String, String> mapper = new KeyValueMapper<Integer, String, String>() {
-            @Override
-            public String apply(final Integer key, final String value) {
-                return String.format("%d, %s", key, value);
-            }
-        };
-        final KStreamPrint<Integer, String> kStreamPrint = new KStreamPrint<>(new PrintForeachAction<>(printWriter, mapper, "test-stream"), intSerd, stringSerd);
-
-        final List<KeyValue<Integer, String>> inputRecords = Arrays.asList(
-                new KeyValue<>(0, "zero"),
-                new KeyValue<>(1, "one"),
-                new KeyValue<>(2, "two"),
-                new KeyValue<>(3, "three"));
-        
-        final String[] expectedResult = {"[test-stream]: 0, zero", "[test-stream]: 1, one", "[test-stream]: 2, two", "[test-stream]: 3, three"};
-        
-        final StreamsBuilder builder = new StreamsBuilder();
-        final KStream<Integer, String> stream = builder.stream(intSerd, stringSerd, topicName);
-        stream.process(kStreamPrint);
-        
-        driver.setUp(builder);
-        for (KeyValue<Integer, String> record: inputRecords) {
-            driver.process(topicName, record.key, record.value);
-        }
-        printWriter.flush();
-        assertFlushData(expectedResult, byteOutStream);
-    }
-
-    @Test
     public void testPrintStreamWithProvidedKeyValueMapper() {
         final KeyValueMapper<Integer, String, String> mapper = new KeyValueMapper<Integer, String, String>() {
             @Override
