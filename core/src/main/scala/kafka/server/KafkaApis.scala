@@ -25,7 +25,7 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 
 import kafka.admin.{AdminUtils, RackAwareMode}
-import kafka.api.{ApiVersion, ControlledShutdownRequest, ControlledShutdownResponse, KAFKA_0_11_0_IV0}
+import kafka.api.{ApiVersion, KAFKA_0_11_0_IV0}
 import kafka.cluster.Partition
 import kafka.common.{OffsetAndMetadata, OffsetMetadata, TopicAndPartition}
 import kafka.server.QuotaFactory.{QuotaManagers, UnboundedQuota}
@@ -33,7 +33,7 @@ import kafka.controller.KafkaController
 import kafka.coordinator.group.{GroupCoordinator, JoinGroupResult}
 import kafka.coordinator.transaction.{InitProducerIdResult, TransactionCoordinator}
 import kafka.log.{Log, LogManager, TimestampOffset}
-import kafka.network.{RequestChannel, RequestOrResponseSend}
+import kafka.network.RequestChannel
 import kafka.security.SecurityUtils
 import kafka.security.auth._
 import kafka.utils.{CoreUtils, Logging, ZKGroupTopicDirs, ZkUtils}
@@ -93,7 +93,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     try {
       trace("Handling request:%s from connection %s;securityProtocol:%s,principal:%s".
         format(request.requestDesc(true), request.connectionId, request.securityProtocol, request.session.principal))
-      ApiKeys.forId(request.requestId) match {
+      ApiKeys.forId(request.header.apiKey) match {
         case ApiKeys.PRODUCE => handleProduceRequest(request)
         case ApiKeys.FETCH => handleFetchRequest(request)
         case ApiKeys.LIST_OFFSETS => handleListOffsetRequest(request)
@@ -228,19 +228,17 @@ class KafkaApis(val requestChannel: RequestChannel,
     // ensureTopicExists is only for client facing requests
     // We can't have the ensureTopicExists check here since the controller sends it as an advisory to all brokers so they
     // stop serving data to clients for the topic being deleted
-    val controlledShutdownRequest = request.requestObj.asInstanceOf[ControlledShutdownRequest]
-
+    val controlledShutdownRequest = request.body[ControlledShutdownRequest]
     authorizeClusterAction(request)
 
     def controlledShutdownCallback(controlledShutdownResult: Try[Set[TopicAndPartition]]): Unit = {
       controlledShutdownResult match {
         case Success(partitionsRemaining) =>
-          val controlledShutdownResponse = new ControlledShutdownResponse(controlledShutdownRequest.correlationId,
-            Errors.NONE, partitionsRemaining)
-          sendResponseExemptThrottle(RequestChannel.Response(request,
-            new RequestOrResponseSend(request.connectionId, controlledShutdownResponse)))
+          val controlledShutdownResponse = new ControlledShutdownResponse(Errors.NONE,
+            partitionsRemaining.map(_.asTopicPartition).asJava)
+          sendResponseExemptThrottle(RequestChannel.Response(request, controlledShutdownResponse))
         case Failure(throwable) =>
-          sendResponseExemptThrottle(request, () => controlledShutdownRequest.handleError(throwable, requestChannel, request))
+          sendResponseExemptThrottle(RequestChannel.Response(request, controlledShutdownRequest.getErrorResponse(throwable)))
       }
     }
     controller.shutdownBroker(controlledShutdownRequest.brokerId, controlledShutdownCallback)
@@ -552,16 +550,14 @@ class KafkaApis(val requestChannel: RequestChannel,
             convertedData.put(tp, convertedPartitionData(tp, partitionData))
           }
           val response = new FetchResponse(convertedData, 0)
-          val responseStruct = response.toStruct(versionId)
+          val responseSend = response.toSend(bandwidthThrottleTimeMs + requestThrottleTimeMs, request.connectionId, request.header)
 
-          trace(s"Sending fetch response to client $clientId of ${responseStruct.sizeOf} bytes.")
+          trace(s"Sending fetch response to client $clientId of ${responseSend.size} bytes.")
           response.responseData.asScala.foreach { case (topicPartition, data) =>
             // record the bytes out metrics only when the response is being sent
             brokerTopicStats.updateBytesOut(topicPartition.topic, fetchRequest.isFromFollower, data.records.sizeInBytes)
           }
 
-          val responseSend = response.toSend(responseStruct, bandwidthThrottleTimeMs + requestThrottleTimeMs,
-            request.connectionId, request.header)
           RequestChannel.Response(request, responseSend)
         }
 
@@ -1884,39 +1880,23 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   private def handleError(request: RequestChannel.Request, e: Throwable) {
-    val mayThrottle = e.isInstanceOf[ClusterAuthorizationException] || !ApiKeys.forId(request.requestId).clusterAction
-    if (request.requestObj != null) {
-      def sendResponseCallback(requestThrottleMs: Int) {
-        request.requestObj.handleError(e, requestChannel, request)
-        error("Error when handling request %s".format(request.requestObj), e)
-      }
+    val mayThrottle = e.isInstanceOf[ClusterAuthorizationException] || !ApiKeys.forId(request.header.apiKey).clusterAction
 
-      if (mayThrottle) {
-        val clientId: String = request.requestObj match {
-          case r: ControlledShutdownRequest => r.clientId.getOrElse("")
-          case _ =>
-            throw new IllegalStateException("Old style requests should only be used for ControlledShutdownRequest")
-        }
-        sendResponseMaybeThrottle(request, clientId, sendResponseCallback)
-      } else
-        sendResponseExemptThrottle(request, () => sendResponseCallback(0))
-    } else {
-      def createResponse(requestThrottleMs: Int): RequestChannel.Response = {
-        val response = request.body[AbstractRequest].getErrorResponse(requestThrottleMs, e)
-        /* If request doesn't have a default error response, we just close the connection.
-           For example, when produce request has acks set to 0 */
-        if (response == null)
-          new RequestChannel.Response(request, None, RequestChannel.CloseConnectionAction)
-        else RequestChannel.Response(request, response)
-      }
-      error("Error when handling request %s".format(request.body[AbstractRequest]), e)
-      if (mayThrottle)
-        sendResponseMaybeThrottle(request, request.header.clientId, { requestThrottleMs =>
-          requestChannel.sendResponse(createResponse(requestThrottleMs))
-        })
-      else
-        sendResponseExemptThrottle(createResponse(0))
+    def createResponse(requestThrottleMs: Int): RequestChannel.Response = {
+      val response = request.body[AbstractRequest].getErrorResponse(requestThrottleMs, e)
+      /* If request doesn't have a default error response, we just close the connection.
+         For example, when produce request has acks set to 0 */
+      if (response == null)
+        new RequestChannel.Response(request, None, RequestChannel.CloseConnectionAction)
+      else RequestChannel.Response(request, response)
     }
+    error("Error when handling request %s".format(request.body[AbstractRequest]), e)
+    if (mayThrottle)
+      sendResponseMaybeThrottle(request, request.header.clientId, { requestThrottleMs =>
+        requestChannel.sendResponse(createResponse(requestThrottleMs))
+      })
+    else
+      sendResponseExemptThrottle(createResponse(0))
   }
 
   def handleAlterConfigsRequest(request: RequestChannel.Request): Unit = {
