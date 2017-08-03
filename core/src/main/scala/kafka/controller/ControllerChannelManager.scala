@@ -424,7 +424,7 @@ class ControllerBrokerRequestBatch(controller: KafkaController, stateChangeLogge
       }
 
       // Copy the updateMetadataRequestPartitionInfoMap
-      val partitionStates = Map(updateMetadataRequestPartitionInfoMap.toArray:_*)
+      val partitionStates = Map.empty ++ updateMetadataRequestPartitionInfoMap
       val updateMetadataRequestVersion: Short =
         if (controller.config.interBrokerProtocolVersion >= KAFKA_1_0_IV0) 4
         else if (controller.config.interBrokerProtocolVersion >= KAFKA_0_10_2_IV0) 3
