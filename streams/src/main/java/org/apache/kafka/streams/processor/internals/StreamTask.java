@@ -75,7 +75,8 @@ public class StreamTask extends AbstractTask implements Punctuator {
         TaskMetrics(final StreamsMetrics metrics) {
             final String name = id().toString();
             this.metrics = (StreamsMetricsImpl) metrics;
-            taskCommitTimeSensor = metrics.addLatencyAndThroughputSensor("task", name, "commit", Sensor.RecordingLevel.DEBUG, "streams-task-id", name);
+            taskCommitTimeSensor = metrics.addLatencyAndThroughputSensor("task", name, "commit",
+                    Sensor.RecordingLevel.DEBUG);
         }
 
         void removeAllSensors() {
