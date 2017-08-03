@@ -39,6 +39,8 @@ public class RequestHeader extends AbstractRequestResponse {
     public RequestHeader(Struct struct) {
         apiKey = struct.getShort(API_KEY_FIELD_NAME);
         apiVersion = struct.getShort(API_VERSION_FIELD_NAME);
+
+        // only v0 of the controlled shutdown request is missing the clientId
         if (struct.hasField(CLIENT_ID_FIELD_NAME))
             clientId = struct.getString(CLIENT_ID_FIELD_NAME);
         else
@@ -58,6 +60,8 @@ public class RequestHeader extends AbstractRequestResponse {
         Struct struct = new Struct(schema);
         struct.set(API_KEY_FIELD_NAME, apiKey);
         struct.set(API_VERSION_FIELD_NAME, apiVersion);
+
+        // only v0 of the controlled shutdown request is missing the clientId
         if (struct.hasField(CLIENT_ID_FIELD_NAME))
             struct.set(CLIENT_ID_FIELD_NAME, clientId);
         struct.set(CORRELATION_ID_FIELD_NAME, correlationId);
@@ -103,10 +107,10 @@ public class RequestHeader extends AbstractRequestResponse {
         if (o == null || getClass() != o.getClass()) return false;
 
         RequestHeader that = (RequestHeader) o;
-        if (apiKey != that.apiKey) return false;
-        if (apiVersion != that.apiVersion) return false;
-        if (correlationId != that.correlationId) return false;
-        return clientId == null ? that.clientId == null : clientId.equals(that.clientId);
+        return apiKey == that.apiKey &&
+                apiVersion == that.apiVersion &&
+                correlationId == that.correlationId &&
+                (clientId == null ? that.clientId == null : clientId.equals(that.clientId));
     }
 
     @Override

@@ -963,7 +963,6 @@ public class Protocol {
     public static final Schema CONTROLLED_SHUTDOWN_REQUEST_V1 = CONTROLLED_SHUTDOWN_REQUEST_V0;
     public static final Schema CONTROLLED_SHUTDOWN_RESPONSE_V1 = CONTROLLED_SHUTDOWN_RESPONSE_V0;
 
-    /* V0 is not supported as it would require changes to the request header not to include `clientId` */
     public static final Schema[] CONTROLLED_SHUTDOWN_REQUEST = {CONTROLLED_SHUTDOWN_REQUEST_V0, CONTROLLED_SHUTDOWN_REQUEST_V1};
     public static final Schema[] CONTROLLED_SHUTDOWN_RESPONSE = {CONTROLLED_SHUTDOWN_RESPONSE_V0, CONTROLLED_SHUTDOWN_RESPONSE_V1};
 
@@ -1992,7 +1991,7 @@ public class Protocol {
     
     public static Schema requestHeaderSchema(short apiKey, short version) {
         if (apiKey == ApiKeys.CONTROLLED_SHUTDOWN_KEY.id && version == 0)
-            // TODO: this will be removed once we remove support for v0 of ControlledShutdownRequest, which
+            // This will be removed once we remove support for v0 of ControlledShutdownRequest, which
             // depends on a non-standard request header (it does not have a clientId)
             return CONTROLLED_SHUTDOWN_REQUEST_V0_HEADER;
         return REQUEST_HEADER;

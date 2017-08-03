@@ -68,8 +68,6 @@ object RequestChannel extends Logging {
     @volatile var apiRemoteCompleteTimeNanos = -1L
     @volatile var recordNetworkThreadTimeCallback: Option[Long => Unit] = None
 
-    // if we failed to find a server-side mapping, then try using the
-    // client-side request / response format
     val header: RequestHeader = try {
       RequestHeader.parse(buffer)
     } catch {

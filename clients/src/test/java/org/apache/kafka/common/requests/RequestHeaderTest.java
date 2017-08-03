@@ -22,6 +22,7 @@ import org.junit.Test;
 
 import java.nio.ByteBuffer;
 
+import static org.apache.kafka.test.TestUtils.toBuffer;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 
@@ -45,30 +46,32 @@ public class RequestHeaderTest {
         assertNull(deserialized.clientId());
 
         Struct serialized = deserialized.toStruct();
-        ByteBuffer serializedBuffer = ByteBuffer.allocate(serialized.sizeOf());
-        serialized.writeTo(serializedBuffer);
-        serializedBuffer.flip();
+        ByteBuffer serializedBuffer = toBuffer(serialized);
 
         assertEquals(ApiKeys.CONTROLLED_SHUTDOWN_KEY.id, serializedBuffer.getShort(0));
         assertEquals(0, serializedBuffer.getShort(2));
         assertEquals(correlationId, serializedBuffer.getInt(4));
+        assertEquals(8, serializedBuffer.limit());
     }
 
     @Test
-    public void testSerde() {
-        short apiKey = ApiKeys.FETCH.id;
-        short version = 1;
-        String clientId = "foo";
-        int correlationId = 2342;
+    public void testRequestHeader() {
+        RequestHeader header = new RequestHeader((short) 10, (short) 1, "", 10);
+        ByteBuffer buffer = toBuffer(header.toStruct());
+        RequestHeader deserialized = RequestHeader.parse(buffer);
+        assertEquals(header, deserialized);
+    }
 
-        RequestHeader header = new RequestHeader(apiKey, version, clientId, correlationId);
-        Struct struct = header.toStruct();
-
-        ByteBuffer buffer = ByteBuffer.allocate(struct.sizeOf());
-        struct.writeTo(buffer);
-        buffer.flip();
-
-        assertEquals(header, RequestHeader.parse(buffer));
+    @Test
+    public void testRequestHeaderWithNullClientId() {
+        RequestHeader header = new RequestHeader((short) 10, (short) 1, null, 10);
+        Struct headerStruct = header.toStruct();
+        ByteBuffer buffer = toBuffer(headerStruct);
+        RequestHeader deserialized = RequestHeader.parse(buffer);
+        assertEquals(header.apiKey(), deserialized.apiKey());
+        assertEquals(header.apiVersion(), deserialized.apiVersion());
+        assertEquals(header.correlationId(), deserialized.correlationId());
+        assertEquals("", deserialized.clientId()); // null is defaulted to ""
     }
 
 }
