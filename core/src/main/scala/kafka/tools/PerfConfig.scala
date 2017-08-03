@@ -40,6 +40,10 @@ class PerfConfig(args: Array[String]) {
   val showDetailedStatsOpt = parser.accepts("show-detailed-stats", "If set, stats are reported for each reporting " +
     "interval as configured by reporting-interval")
   val hideHeaderOpt = parser.accepts("hide-header", "If set, skips printing the header for the stats ")
+  val helpOpt = parser.accepts("help", "Print usage.")
+}
+
+class LegacyProducerPerfConfig(args: Array[String]) extends PerfConfig(args) {
   val messageSizeOpt = parser.accepts("message-size", "The size of each message.")
     .withRequiredArg
     .describedAs("size")
@@ -55,5 +59,4 @@ class PerfConfig(args: Array[String]) {
     .describedAs("supported codec: NoCompressionCodec as 0, GZIPCompressionCodec as 1, SnappyCompressionCodec as 2, LZ4CompressionCodec as 3")
     .ofType(classOf[java.lang.Integer])
     .defaultsTo(0)
-  val helpOpt = parser.accepts("help", "Print usage.")
 }

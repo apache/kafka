@@ -70,7 +70,7 @@ object ProducerPerformance extends Logging {
     Exit.exit(0)
   }
 
-  class ProducerPerfConfig(args: Array[String]) extends PerfConfig(args) {
+  class ProducerPerfConfig(args: Array[String]) extends LegacyProducerPerfConfig(args) {
     val brokerListOpt = parser.accepts("broker-list", "REQUIRED: broker info the list of broker host and port for bootstrap.")
       .withRequiredArg
       .describedAs("hostname:port,..,hostname:port")
