@@ -41,7 +41,7 @@ class ZkNodeChangeNotificationListenerTest extends KafkaServerTestHarness {
     val seqNodePath = seqNodeRoot + "/" + seqNodePrefix
     val notificationMessage1 = "message1"
     val notificationMessage2 = "message2"
-    val changeExpirationMs = 100
+    val changeExpirationMs = 1000
 
     val notificationListener = new ZkNodeChangeNotificationListener(zkUtils, seqNodeRoot, seqNodePrefix, notificationHandler, changeExpirationMs)
     notificationListener.init()
@@ -57,5 +57,11 @@ class ZkNodeChangeNotificationListenerTest extends KafkaServerTestHarness {
 
     zkUtils.createSequentialPersistentPath(seqNodePath, notificationMessage2)
     TestUtils.waitUntilTrue(() => invocationCount == 2 && notification == notificationMessage2, "failed to send/process notification message in the timeout period.")
+
+    (3 to 10).map { i =>
+      zkUtils.createSequentialPersistentPath(seqNodePath, "message" + i)
+    }
+
+    TestUtils.waitUntilTrue(() => invocationCount == 10 , "failed to send/process notification message in the timeout period.")
   }
 }
