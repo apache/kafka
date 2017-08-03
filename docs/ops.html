@@ -1239,7 +1239,19 @@
 
   <h4><a id="kafka_streams_monitoring" href="#kafka_streams_monitoring">Streams Monitoring</a></h4>
 
-  A Kafka Streams instance contains all the producer and consumer metrics as well as additional metrics specific to streams. By default Kafka Streams has metrics with two recording levels: debug and info. The debug level records all metrics, while the info level records only the thread-level metrics.  Use the following configuration option to specify which metrics you want collected:
+  A Kafka Streams instance contains all the producer and consumer metrics as well as additional metrics specific to streams.
+  By default Kafka Streams has metrics with two recording levels: debug and info. The debug level records all metrics, while
+  the info level records only the thread-level metrics.
+
+  <p>
+    Note that the metrics have a 3-layer hierarchy. At the top level there are per-thread metrics. Each thread has tasks, with their
+    own metrics. Each task has a number of processor nodes, with their own metrics. Each task also has a number of state stores
+    and record caches, all with their own metrics.
+  </p>
+  
+  Use the following configuration option to specify which metrics
+  you want collected:
+
 <pre>metrics.recording.level="info"</pre>
 
 <h5><a id="kafka_streams_thread_monitoring" href="#kafka_streams_thread_monitoring">Thread Metrics</a></h5>
@@ -1251,30 +1263,80 @@ All the following metrics have a recording level of ``info``:
         <th>Description</th>
         <th>Mbean name</th>
       </tr>
-      <tr>
-        <td>[commit | poll | process | punctuate]-latency-[avg | max]</td>
-        <td>The [average | maximum] execution time in ms, for the respective operation, across all running tasks of this thread.</td>
-        <td>kafka.streams:type=stream-metrics,thread.client-id=([-.\w]+)</td>
-      </tr>
-      <tr>
-        <td>[commit | poll | process | punctuate]-rate</td>
-        <td>The average number of respective operations per second across all tasks.</td>
-        <td>kafka.streams:type=stream-metrics,thread.client-id=([-.\w]+)</td>
+       <tr>
+        <td>commit-latency-avg</td>
+        <td>The average execution time in ms for committing, across all running tasks of this thread.</td>
+        <td>kafka.streams:type=stream-metrics,client-id=([-.\w]+)</td>
+       </tr>
+        <tr>
+        <td>commit-latency-max</td>
+        <td>The maximum execution time in ms for committing across all running tasks of this thread.</td>
+        <td>kafka.streams:type=stream-metrics,client-id=([-.\w]+)</td>
+       </tr>
+       <tr>
+        <td>poll-latency-avg</td>
+        <td>The average execution time in ms for polling, across all running tasks of this thread.</td>
+        <td>kafka.streams:type=stream-metrics,client-id=([-.\w]+)</td>
+       </tr>
+        <tr>
+        <td>poll-latency-max</td>
+        <td>The maximum execution time in ms for polling across all running tasks of this thread.</td>
+        <td>kafka.streams:type=stream-metrics,client-id=([-.\w]+)</td>
+       </tr>
+       <tr>
+        <td>process-latency-avg</td>
+        <td>The average execution time in ms for processing, across all running tasks of this thread.</td>
+        <td>kafka.streams:type=stream-metrics,client-id=([-.\w]+)</td>
+       </tr>
+       <tr>
+        <td>process-latency-max</td>
+        <td>The maximum execution time in ms for processing across all running tasks of this thread.</td>
+        <td>kafka.streams:type=stream-metrics,client-id=([-.\w]+)</td>
+       </tr>
+       <tr>
+        <td>punctuate-latency-avg</td>
+        <td>The average execution time in ms for punctuating, across all running tasks of this thread.</td>
+        <td>kafka.streams:type=stream-metrics,client-id=([-.\w]+)</td>
+       </tr>
+       <tr>
+        <td>punctuate-latency-max</td>
+        <td>The maximum execution time in ms for punctuating across all running tasks of this thread.</td>
+        <td>kafka.streams:type=stream-metrics,client-id=([-.\w]+)</td>
+       </tr>
+       <tr>
+        <td>commit-rate</td>
+        <td>The average number of commits per second across all tasks.</td>
+        <td>kafka.streams:type=stream-metrics,client-id=([-.\w]+)</td>
+       </tr>
+       <tr>
+        <td>poll-rate</td>
+        <td>The average number of polls per second across all tasks.</td>
+        <td>kafka.streams:type=stream-metrics,client-id=([-.\w]+)</td>
+       </tr>
+       <tr>
+        <td>process-rate</td>
+        <td>The average number of process calls per second across all tasks.</td>
+        <td>kafka.streams:type=stream-metrics,client-id=([-.\w]+)</td>
+       </tr>
+       <tr>
+        <td>punctuate-rate</td>
+        <td>The average number of punctuates per second across all tasks.</td>
+        <td>kafka.streams:type=stream-metrics,client-id=([-.\w]+)</td>
       </tr>
       <tr>
         <td>task-created-rate</td>
         <td>The average number of newly created tasks per second.</td>
-        <td>kafka.streams:type=stream-metrics,thread.client-id=([-.\w]+)</td>
+        <td>kafka.streams:type=stream-metrics,client-id=([-.\w]+)</td>
       </tr>
       <tr>
         <td>task-closed-rate</td>
         <td>The average number of tasks closed per second.</td>
-        <td>kafka.streams:type=stream-metrics,thread.client-id=([-.\w]+)</td>
+        <td>kafka.streams:type=stream-metrics,client-id=([-.\w]+)</td>
       </tr>
       <tr>
         <td>skipped-records-rate</td>
         <td>The average number of skipped records per second. </td>
-        <td>kafka.streams:type=stream-metrics,thread.client-id=([-.\w]+)</td>
+        <td>kafka.streams:type=stream-metrics,client-id=([-.\w]+)</td>
       </tr>
  </tbody>
 </table>
@@ -1289,14 +1351,19 @@ All the following metrics have a recording level of ``debug``:
         <th>Mbean name</th>
       </tr>
       <tr>
-        <td>commit-latency-[avg | max]</td>
-        <td>The [average | maximum] commit time in ns for this task. </td>
-        <td>kafka.streams:type=stream-task-metrics,streams-task-id=([-.\w]+)</td>
+        <td>commit-latency-avg</td>
+        <td>The average commit time in ns for this task. </td>
+        <td>kafka.streams:type=stream-task-metrics,client-id=([-.\w]+),task-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>commit-latency-max</td>
+        <td>The maximum commit time in ns for this task. </td>
+        <td>kafka.streams:type=stream-task-metrics,client-id=([-.\w]+),task-id=([-.\w]+)</td>
       </tr>
       <tr>
         <td>commit-rate</td>
         <td>The average number of commit calls per second. </td>
-        <td>kafka.streams:type=stream-task-metrics,streams-task-id=([-.\w]+)</td>
+        <td>kafka.streams:type=stream-task-metrics,client-id=([-.\w]+),task-id=([-.\w]+)</td>
       </tr>
  </tbody>
 </table>
@@ -1311,19 +1378,69 @@ All the following metrics have a recording level of ``debug``:
         <th>Mbean name</th>
       </tr>
       <tr>
-        <td>[process | punctuate | create | destroy]-latency-[avg | max]</td>
-        <td>The [average | maximum] execution time in ns, for the respective operation. </td>
-        <td>kafka.streams:type=stream-processor-node-metrics, processor-node-id=([-.\w]+)</td>
+        <td>process-latency-avg</td>
+        <td>The average process execution time in ns. </td>
+        <td>kafka.streams:type=stream-processor-node-metrics,client-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=([-.\w]+)</td>
       </tr>
       <tr>
-        <td>[process | punctuate | create | destroy]-rate</td>
-        <td>The average number of respective operations per second. </td>
-        <td>kafka.streams:type=stream-processor-node-metrics, processor-node-id=([-.\w]+)</td>
+        <td>process-latency-max</td>
+        <td>The maximum process execution time in ns. </td>
+        <td>kafka.streams:type=stream-processor-node-metrics,client-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>punctuate-latency-avg</td>
+        <td>The average punctuate execution time in ns. </td>
+        <td>kafka.streams:type=stream-processor-node-metrics,client-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>punctuate-latency-max</td>
+        <td>The maximum punctuate execution time in ns. </td>
+        <td>kafka.streams:type=stream-processor-node-metrics,client-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>create-latency-avg</td>
+        <td>The average create execution time in ns. </td>
+        <td>kafka.streams:type=stream-processor-node-metrics,client-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>create-latency-max</td>
+        <td>The maximum create execution time in ns. </td>
+        <td>kafka.streams:type=stream-processor-node-metrics,client-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>destroy-latency-avg</td>
+        <td>The average destroy execution time in ns. </td>
+        <td>kafka.streams:type=stream-processor-node-metrics,client-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>destroy-latency-max</td>
+        <td>The maximum destroy execution time in ns. </td>
+        <td>kafka.streams:type=stream-processor-node-metrics,client-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>process-rate</td>
+        <td>The average number of process operations per second. </td>
+        <td>kafka.streams:type=stream-processor-node-metrics,client-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>punctuate-rate</td>
+        <td>The average number of punctuate operations per second. </td>
+        <td>kafka.streams:type=stream-processor-node-metrics,client-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>create-rate</td>
+        <td>The average number of create operations per second. </td>
+        <td>kafka.streams:type=stream-processor-node-metrics,client-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>destroy-rate</td>
+        <td>The average number of destroy operations per second. </td>
+        <td>kafka.streams:type=stream-processor-node-metrics,client-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=([-.\w]+)</td>
       </tr>
       <tr>
         <td>forward-rate</td>
         <td>The average rate of records being forwarded downstream, from source nodes only, per second. </td>
-        <td>kafka.streams:type=stream-processor-node-metrics, processor-node-id=([-.\w]+)</td>
+        <td>kafka.streams:type=stream-processor-node-metrics,client-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=([-.\w]+)</td>
       </tr>
  </tbody>
  </table>
@@ -1339,16 +1456,140 @@ All the following metrics have a recording level of ``debug``:
         <th>Mbean name</th>
       </tr>
       <tr>
-        <td>[put | put-if-absent | get | delete | put-all | all | range | flush | restore]-latency-[avg | max]</td>
-        <td>The average execution time in ns, for the respective operation. </td>
-        <td>kafka.streams:type=stream-[store-type]-metrics</td>
+        <td>put-latency-avg</td>
+        <td>The average put execution time in ns. </td>
+        <td>kafka.streams:type=stream-[store-type]-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-type]-state-id=([-.\w]+)</td>
       </tr>
-        <tr>
-        <td>[put | put-if-absent | get | delete | put-all | all | range | flush | restore]-rate</td>
-        <td>The average rate of respective operations per second for this store.</td>
-        <td>kafka.streams:type=stream-[store-type]-metrics</td>
+      <tr>
+        <td>put-latency-max</td>
+        <td>The maximum put execution time in ns. </td>
+        <td>kafka.streams:type=stream-[store-type]-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-type]-state-id=([-.\w]+)</td>
       </tr>
-      
+      <tr>
+        <td>put-if-absent-latency-avg</td>
+        <td>The average put-if-absent execution time in ns. </td>
+        <td>kafka.streams:type=stream-[store-type]-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-type]-state-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>put-if-absent-latency-max</td>
+        <td>The maximum put-if-absent execution time in ns. </td>
+        <td>kafka.streams:type=stream-[store-type]-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-type]-state-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>get-latency-avg</td>
+        <td>The average get execution time in ns. </td>
+        <td>kafka.streams:type=stream-[store-type]-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-type]-state-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>get-latency-max</td>
+        <td>The maximum get execution time in ns. </td>
+        <td>kafka.streams:type=stream-[store-type]-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-type]-state-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>delete-latency-avg</td>
+        <td>The average delete execution time in ns. </td>
+        <td>kafka.streams:type=stream-[store-type]-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-type]-state-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>delete-latency-max</td>
+        <td>The maximum delete execution time in ns. </td>
+        <td>kafka.streams:type=stream-[store-type]-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-type]-state-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>put-all-latency-avg</td>
+        <td>The average put-all execution time in ns. </td>
+        <td>kafka.streams:type=stream-[store-type]-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-type]-state-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>put-all-latency-max</td>
+        <td>The maximum put-all execution time in ns. </td>
+        <td>kafka.streams:type=stream-[store-type]-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-type]-state-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>all-latency-avg</td>
+        <td>The average all operation execution time in ns. </td>
+        <td>kafka.streams:type=stream-[store-type]-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-type]-state-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>all-latency-max</td>
+        <td>The maximum all operation execution time in ns. </td>
+        <td>kafka.streams:type=stream-[store-type]-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-type]-state-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>range-latency-avg</td>
+        <td>The average range execution time in ns. </td>
+        <td>kafka.streams:type=stream-[store-type]-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-type]-state-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>range-latency-max</td>
+        <td>The maximum range execution time in ns. </td>
+        <td>kafka.streams:type=stream-[store-type]-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-type]-state-id=([-.\w]+)</td>
+      </tr>
+       <tr>
+        <td>flush-latency-avg</td>
+        <td>The average flush execution time in ns. </td>
+        <td>kafka.streams:type=stream-[store-type]-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-type]-state-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>flush-latency-max</td>
+        <td>The maximum flush execution time in ns. </td>
+        <td>kafka.streams:type=stream-[store-type]-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-type]-state-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>restore-latency-avg</td>
+        <td>The average restore execution time in ns. </td>
+        <td>kafka.streams:type=stream-[store-type]-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-type]-state-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>restore-latency-max</td>
+        <td>The maximum restore execution time in ns. </td>
+        <td>kafka.streams:type=stream-[store-type]-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-type]-state-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>put-rate</td>
+        <td>The average put rate for this store.</td>
+        <td>kafka.streams:type=stream-[store-type]-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-type]-state-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>put-if-absent-rate</td>
+        <td>The average put-if-absent rate for this store.</td>
+        <td>kafka.streams:type=stream-[store-type]-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-type]-state-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>get-rate</td>
+        <td>The average get rate for this store.</td>
+        <td>kafka.streams:type=stream-[store-type]-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-type]-state-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>delete-rate</td>
+        <td>The average delete rate for this store.</td>
+        <td>kafka.streams:type=stream-[store-type]-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-type]-state-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>put-all-rate</td>
+        <td>The average put-all rate for this store.</td>
+        <td>kafka.streams:type=stream-[store-type]-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-type]-state-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>all-rate</td>
+        <td>The average all operation rate for this store.</td>
+        <td>kafka.streams:type=stream-[store-type]-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-type]-state-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>range-rate</td>
+        <td>The average range rate for this store.</td>
+        <td>kafka.streams:type=stream-[store-type]-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-type]-state-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>flush-rate</td>
+        <td>The average flush rate for this store.</td>
+        <td>kafka.streams:type=stream-[store-type]-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-type]-state-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>restore-rate</td>
+        <td>The average restore rate for this store.</td>
+        <td>kafka.streams:type=stream-[store-type]-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-type]-state-id=([-.\w]+)</td>
+      </tr>
     </tbody>
  </table>
 
@@ -1363,9 +1604,19 @@ All the following metrics have a recording level of ``debug``:
         <th>Mbean name</th>
       </tr>
       <tr>
-        <td>hitRatio-[avg | min | max]</td>
-        <td>The cache hit ratio defined as the ratio of cache read hits over the total cache read requests. </td>
-        <td>kafka.streams:type=stream-record-cache-metrics, record-cache-id=([-.\w]+)</td>
+        <td>hitRatio-avg</td>
+        <td>The average cache hit ratio defined as the ratio of cache read hits over the total cache read requests. </td>
+        <td>kafka.streams:type=stream-record-cache-metrics,client-id=([-.\w]+),task-id=([-.\w]+),record-cache-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>hitRatio-min</td>
+        <td>The mininum cache hit ratio. </td>
+        <td>kafka.streams:type=stream-record-cache-metrics,client-id=([-.\w]+),task-id=([-.\w]+),record-cache-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>hitRatio-max</td>
+        <td>The maximum cache hit ratio. </td>
+        <td>kafka.streams:type=stream-record-cache-metrics,client-id=([-.\w]+),task-id=([-.\w]+),record-cache-id=([-.\w]+)</td>
       </tr>
     </tbody>
  </table>
