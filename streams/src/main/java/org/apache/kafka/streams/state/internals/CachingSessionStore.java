@@ -32,6 +32,7 @@ import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.StateSerdes;
 
 import java.util.List;
+import java.util.Objects;
 
 
 class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore implements SessionStore<K, AGG>, CachedStateStore<Windowed<K>, AGG> {
@@ -150,11 +151,14 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore i
 
     @Override
     public KeyValueIterator<Windowed<K>, AGG> fetch(final K key) {
+        Objects.requireNonNull(key, "key cannot be null");
         return findSessions(key, 0, Long.MAX_VALUE);
     }
 
     @Override
     public KeyValueIterator<Windowed<K>, AGG> fetch(K from, K to) {
+        Objects.requireNonNull(from, "from cannot be null");
+        Objects.requireNonNull(to, "to cannot be null");
         return findSessions(from, to, 0, Long.MAX_VALUE);
     }
 

@@ -418,6 +418,33 @@ import java.util.regex.Pattern;
  * to pause the consumption on the specified assigned partitions and resume the consumption
  * on the specified paused partitions respectively in the future {@link #poll(long)} calls.
  *
+ * <h3>Reading Transactional Messages</h3>
+ *
+ * <p>
+ * Transactions were introduced in Kafka 0.11.0 wherein applications can write to multiple topics and partitions atomically.
+ * In order for this to work, consumers reading from these partitions should be configured to only read committed data.
+ * This can be achieved by by setting the <code>isolation.level=read_committed</code> in the consumer's configuration.
+ * </p>
+ *
+ * <p>
+ * In <code>read_committed</code> mode, the consumer will read only those transactional messages which have been
+ * successfully committed. It will continue to read non-transactional messages as before. There is no client-side
+ * buffering in <code>read_committed</code> mode. Instead, the end offset of a partition for a <code>read_committed</code>
+ * consumer would be the offset of the first message in the partition belonging to an open transaction. This offset
+ * is known as the 'Last Stable Offset'(LSO).</p>
+ *
+ * <p>A </p><code>read_committed</code> consumer will only read up till the LSO and filter out any transactional
+ * messages which have been aborted. The LSO also affects the behavior of {@link #seekToEnd(Collection)} and
+ * {@link #endOffsets(Collection)} for <code>read_committed</code> consumers, details of which are in each method's documentation.
+ * Finally, the fetch lag metrics are also adjusted to be relative to the LSO for <code>read_committed</code> consumers.</p>
+ *
+ * <p>Partitions with transactional messages will include commit or abort markers which indicate the result of a transaction.
+ * There markers are not returned to applications, yet have an offset in the log. As a result, applications reading from
+ * topics with transactional messages will see gaps in the consumed offsets. These missing messages would be the transaction
+ * markers, and they are filtered out for consumers in both isolation levels. Additionally, applications using
+ * <code>read_committed</code> consumers may also see gaps due to aborted transactions, since those messages would not
+ * be returned by the consumer and yet would have valid offsets.</p>
+ *
  * <h3><a name="multithreaded">Multi-threaded Processing</a></h3>
  *
  * The Kafka consumer is NOT thread-safe. All network I/O happens in the thread of the application
@@ -659,7 +686,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 this.valueDeserializer = valueDeserializer;
             }
             ClusterResourceListeners clusterResourceListeners = configureClusterResourceListeners(keyDeserializer, valueDeserializer, reporters, interceptorList);
-            this.metadata = new Metadata(retryBackoffMs, config.getLong(ConsumerConfig.METADATA_MAX_AGE_CONFIG), false, clusterResourceListeners);
+            this.metadata = new Metadata(retryBackoffMs, config.getLong(ConsumerConfig.METADATA_MAX_AGE_CONFIG),
+                    true, false, clusterResourceListeners);
             List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(config.getList(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG));
             this.metadata.update(Cluster.bootstrap(addresses), Collections.<String>emptySet(), 0);
             String metricGrpPrefix = "consumer";
@@ -776,7 +804,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @return The set of partitions currently assigned to this consumer
      */
     public Set<TopicPartition> assignment() {
-        acquire();
+        acquireAndEnsureOpen();
         try {
             return Collections.unmodifiableSet(new HashSet<>(this.subscriptions.assignedPartitions()));
         } finally {
@@ -790,7 +818,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @return The set of topics currently subscribed to
      */
     public Set<String> subscription() {
-        acquire();
+        acquireAndEnsureOpen();
         try {
             return Collections.unmodifiableSet(new HashSet<>(this.subscriptions.subscription()));
         } finally {
@@ -829,7 +857,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public void subscribe(Collection<String> topics, ConsumerRebalanceListener listener) {
-        acquire();
+        acquireAndEnsureOpen();
         try {
             if (topics == null) {
                 throw new IllegalArgumentException("Topic collection to subscribe to cannot be null");
@@ -895,15 +923,15 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public void subscribe(Pattern pattern, ConsumerRebalanceListener listener) {
-        acquire();
+        acquireAndEnsureOpen();
         try {
             if (pattern == null)
                 throw new IllegalArgumentException("Topic pattern to subscribe to cannot be null");
             log.debug("Subscribed to pattern: {}", pattern);
             this.subscriptions.subscribe(pattern, listener);
             this.metadata.needMetadataForAllTopics(true);
-            this.metadata.requestUpdate();
             this.coordinator.updatePatternSubscription(metadata.fetch());
+            this.metadata.requestUpdate();
         } finally {
             release();
         }
@@ -914,7 +942,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * also clears any partitions directly assigned through {@link #assign(Collection)}.
      */
     public void unsubscribe() {
-        acquire();
+        acquireAndEnsureOpen();
         try {
             log.debug("Unsubscribed all topics or patterns and assigned partitions");
             this.subscriptions.unsubscribe();
@@ -942,7 +970,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public void assign(Collection<TopicPartition> partitions) {
-        acquire();
+        acquireAndEnsureOpen();
         try {
             if (partitions == null) {
                 throw new IllegalArgumentException("Topic partition collection to assign to cannot be null");
@@ -1000,7 +1028,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public ConsumerRecords<K, V> poll(long timeout) {
-        acquire();
+        acquireAndEnsureOpen();
         try {
             if (timeout < 0)
                 throw new IllegalArgumentException("Timeout must not be negative");
@@ -1106,7 +1134,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public void commitSync() {
-        acquire();
+        acquireAndEnsureOpen();
         try {
             coordinator.commitOffsetsSync(subscriptions.allConsumed(), Long.MAX_VALUE);
         } finally {
@@ -1140,7 +1168,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public void commitSync(final Map<TopicPartition, OffsetAndMetadata> offsets) {
-        acquire();
+        acquireAndEnsureOpen();
         try {
             coordinator.commitOffsetsSync(new HashMap<>(offsets), Long.MAX_VALUE);
         } finally {
@@ -1171,7 +1199,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public void commitAsync(OffsetCommitCallback callback) {
-        acquire();
+        acquireAndEnsureOpen();
         try {
             commitAsync(subscriptions.allConsumed(), callback);
         } finally {
@@ -1196,7 +1224,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public void commitAsync(final Map<TopicPartition, OffsetAndMetadata> offsets, OffsetCommitCallback callback) {
-        acquire();
+        acquireAndEnsureOpen();
         try {
             log.debug("Committing offsets: {} ", offsets);
             coordinator.commitOffsetsAsync(new HashMap<>(offsets), callback);
@@ -1212,11 +1240,11 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public void seek(TopicPartition partition, long offset) {
-        if (offset < 0) {
-            throw new IllegalArgumentException("seek offset must not be a negative number");
-        }
-        acquire();
+        acquireAndEnsureOpen();
         try {
+            if (offset < 0)
+                throw new IllegalArgumentException("seek offset must not be a negative number");
+
             log.debug("Seeking to offset {} for partition {}", offset, partition);
             this.subscriptions.seek(partition, offset);
         } finally {
@@ -1230,7 +1258,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * If no partition is provided, seek to the first offset for all of the currently assigned partitions.
      */
     public void seekToBeginning(Collection<TopicPartition> partitions) {
-        acquire();
+        acquireAndEnsureOpen();
         try {
             Collection<TopicPartition> parts = partitions.size() == 0 ? this.subscriptions.assignedPartitions() : partitions;
             for (TopicPartition tp : parts) {
@@ -1246,9 +1274,12 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * Seek to the last offset for each of the given partitions. This function evaluates lazily, seeking to the
      * final offset in all partitions only when {@link #poll(long)} or {@link #position(TopicPartition)} are called.
      * If no partition is provided, seek to the final offset for all of the currently assigned partitions.
+     *
+     * If <code>isolation.level=read_committed</code>, the end offset will be the Last Stable Offset, ie. the offset
+     * of the first message with an open transaction.
      */
     public void seekToEnd(Collection<TopicPartition> partitions) {
-        acquire();
+        acquireAndEnsureOpen();
         try {
             Collection<TopicPartition> parts = partitions.size() == 0 ? this.subscriptions.assignedPartitions() : partitions;
             for (TopicPartition tp : parts) {
@@ -1276,7 +1307,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors
      */
     public long position(TopicPartition partition) {
-        acquire();
+        acquireAndEnsureOpen();
         try {
             if (!this.subscriptions.isAssigned(partition))
                 throw new IllegalArgumentException("You can only check the position for partitions assigned to this consumer.");
@@ -1310,7 +1341,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public OffsetAndMetadata committed(TopicPartition partition) {
-        acquire();
+        acquireAndEnsureOpen();
         try {
             Map<TopicPartition, OffsetAndMetadata> offsets = coordinator.fetchCommittedOffsets(Collections.singleton(partition));
             return offsets.get(partition);
@@ -1344,7 +1375,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public List<PartitionInfo> partitionsFor(String topic) {
-        acquire();
+        acquireAndEnsureOpen();
         try {
             Cluster cluster = this.metadata.fetch();
             List<PartitionInfo> parts = cluster.partitionsForTopic(topic);
@@ -1352,7 +1383,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 return parts;
 
             Map<String, List<PartitionInfo>> topicMetadata = fetcher.getTopicMetadata(
-                    new MetadataRequest.Builder(Collections.singletonList(topic)), requestTimeoutMs);
+                    new MetadataRequest.Builder(Collections.singletonList(topic), true), requestTimeoutMs);
             return topicMetadata.get(topic);
         } finally {
             release();
@@ -1374,7 +1405,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public Map<String, List<PartitionInfo>> listTopics() {
-        acquire();
+        acquireAndEnsureOpen();
         try {
             return fetcher.getAllTopicMetadata(requestTimeoutMs);
         } finally {
@@ -1391,7 +1422,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public void pause(Collection<TopicPartition> partitions) {
-        acquire();
+        acquireAndEnsureOpen();
         try {
             for (TopicPartition partition: partitions) {
                 log.debug("Pausing partition {}", partition);
@@ -1410,7 +1441,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public void resume(Collection<TopicPartition> partitions) {
-        acquire();
+        acquireAndEnsureOpen();
         try {
             for (TopicPartition partition: partitions) {
                 log.debug("Resuming partition {}", partition);
@@ -1428,7 +1459,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public Set<TopicPartition> paused() {
-        acquire();
+        acquireAndEnsureOpen();
         try {
             return Collections.unmodifiableSet(subscriptions.pausedPartitions());
         } finally {
@@ -1456,14 +1487,19 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(Map<TopicPartition, Long> timestampsToSearch) {
-        for (Map.Entry<TopicPartition, Long> entry : timestampsToSearch.entrySet()) {
-            // we explicitly exclude the earliest and latest offset here so the timestamp in the returned
-            // OffsetAndTimestamp is always positive.
-            if (entry.getValue() < 0)
-                throw new IllegalArgumentException("The target time for partition " + entry.getKey() + " is " +
-                        entry.getValue() + ". The target time cannot be negative.");
+        acquireAndEnsureOpen();
+        try {
+            for (Map.Entry<TopicPartition, Long> entry : timestampsToSearch.entrySet()) {
+                // we explicitly exclude the earliest and latest offset here so the timestamp in the returned
+                // OffsetAndTimestamp is always positive.
+                if (entry.getValue() < 0)
+                    throw new IllegalArgumentException("The target time for partition " + entry.getKey() + " is " +
+                            entry.getValue() + ". The target time cannot be negative.");
+            }
+            return fetcher.getOffsetsByTimes(timestampsToSearch, requestTimeoutMs);
+        } finally {
+            release();
         }
-        return fetcher.getOffsetsByTimes(timestampsToSearch, requestTimeoutMs);
     }
 
     /**
@@ -1479,7 +1515,12 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public Map<TopicPartition, Long> beginningOffsets(Collection<TopicPartition> partitions) {
-        return fetcher.beginningOffsets(partitions, requestTimeoutMs);
+        acquireAndEnsureOpen();
+        try {
+            return fetcher.beginningOffsets(partitions, requestTimeoutMs);
+        } finally {
+            release();
+        }
     }
 
     /**
@@ -1488,6 +1529,11 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * <p>
      * Notice that this method may block indefinitely if the partition does not exist.
      * This method does not change the current consumer position of the partitions.
+     * </p>
+     *
+     * <p>When <code>isolation.level=read_committed</code> the last offset will be the Last Stable Offset (LSO).
+     * This is the offset of the first message with an open transaction. The LSO moves forward as transactions
+     * are completed.</p>
      *
      * @see #seekToEnd(Collection)
      *
@@ -1496,7 +1542,13 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public Map<TopicPartition, Long> endOffsets(Collection<TopicPartition> partitions) {
-        return fetcher.endOffsets(partitions, requestTimeoutMs);
+        acquireAndEnsureOpen();
+        try {
+            return fetcher.endOffsets(partitions, requestTimeoutMs);
+        } finally {
+            release();
+        }
+
     }
 
     /**
@@ -1528,13 +1580,14 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @throws IllegalArgumentException If the <code>timeout</code> is negative.
      */
     public void close(long timeout, TimeUnit timeUnit) {
-        if (closed)
-            return;
         if (timeout < 0)
             throw new IllegalArgumentException("The timeout cannot be negative.");
         acquire();
         try {
-            close(timeUnit.toMillis(timeout), false);
+            if (!closed) {
+                closed = true;
+                close(timeUnit.toMillis(timeout), false);
+            }
         } finally {
             release();
         }
@@ -1563,7 +1616,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     private void close(long timeoutMs, boolean swallowException) {
         log.trace("Closing the Kafka consumer.");
         AtomicReference<Throwable> firstException = new AtomicReference<>();
-        this.closed = true;
         try {
             if (coordinator != null)
                 coordinator.close(Math.min(timeoutMs, requestTimeoutMs));
@@ -1615,23 +1667,25 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         }
     }
 
-    /*
-     * Check that the consumer hasn't been closed.
+    /**
+     * Acquire the light lock and ensure that the consumer hasn't been closed.
+     * @throws IllegalStateException If the consumer has been closed
      */
-    private void ensureNotClosed() {
-        if (this.closed)
+    private void acquireAndEnsureOpen() {
+        acquire();
+        if (this.closed) {
+            release();
             throw new IllegalStateException("This consumer has already been closed.");
+        }
     }
 
     /**
      * Acquire the light lock protecting this consumer from multi-threaded access. Instead of blocking
      * when the lock is not available, however, we just throw an exception (since multi-threaded usage is not
      * supported).
-     * @throws IllegalStateException if the consumer has been closed
      * @throws ConcurrentModificationException if another thread already has the lock
      */
     private void acquire() {
-        ensureNotClosed();
         long threadId = Thread.currentThread().getId();
         if (threadId != currentThread.get() && !currentThread.compareAndSet(NO_CURRENT_THREAD, threadId))
             throw new ConcurrentModificationException("KafkaConsumer is not safe for multi-threaded access");

@@ -31,11 +31,12 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.Windowed;
@@ -158,7 +159,7 @@ public class ResetIntegrationTest {
         TestUtils.waitForCondition(consumerGroupInactive, TIMEOUT_MULTIPLIER * STREAMS_CONSUMER_TIMEOUT,
             "Streams Application consumer group did not time out after " + (TIMEOUT_MULTIPLIER * STREAMS_CONSUMER_TIMEOUT) + " ms.");
 
-        // insert bad record to maks sure intermediate user topic gets seekToEnd()
+        // insert bad record to make sure intermediate user topic gets seekToEnd()
         mockTime.sleep(1);
         IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
                 INTERMEDIATE_USER_TOPIC,
@@ -288,8 +289,8 @@ public class ResetIntegrationTest {
         IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(INPUT_TOPIC, Collections.singleton(new KeyValue<>(1L, "jjj")), producerConfig, mockTime.milliseconds());
     }
 
-    private KStreamBuilder setupTopologyWithIntermediateUserTopic(final String outputTopic2) {
-        final KStreamBuilder builder = new KStreamBuilder();
+    private Topology setupTopologyWithIntermediateUserTopic(final String outputTopic2) {
+        final StreamsBuilder builder = new StreamsBuilder();
 
         final KStream<Long, String> input = builder.stream(INPUT_TOPIC);
 
@@ -316,11 +317,11 @@ public class ResetIntegrationTest {
             })
             .to(Serdes.Long(), Serdes.Long(), outputTopic2);
 
-        return builder;
+        return builder.build();
     }
 
-    private KStreamBuilder setupTopologyWithoutIntermediateUserTopic() {
-        final KStreamBuilder builder = new KStreamBuilder();
+    private Topology setupTopologyWithoutIntermediateUserTopic() {
+        final StreamsBuilder builder = new StreamsBuilder();
 
         final KStream<Long, String> input = builder.stream(INPUT_TOPIC);
 
@@ -332,7 +333,7 @@ public class ResetIntegrationTest {
             }
         }).to(Serdes.Long(), Serdes.Long(), OUTPUT_TOPIC);
 
-        return builder;
+        return builder.build();
     }
 
     private void cleanGlobal(final String intermediateUserTopic) {
@@ -340,7 +341,7 @@ public class ResetIntegrationTest {
         if (intermediateUserTopic != null) {
             parameters = new String[]{
                 "--application-id", APP_ID + testNo,
-                "--bootstrap-server", CLUSTER.bootstrapServers(),
+                "--bootstrap-servers", CLUSTER.bootstrapServers(),
                 "--zookeeper", CLUSTER.zKConnectString(),
                 "--input-topics", INPUT_TOPIC,
                 "--intermediate-topics", INTERMEDIATE_USER_TOPIC
@@ -348,7 +349,7 @@ public class ResetIntegrationTest {
         } else {
             parameters = new String[]{
                 "--application-id", APP_ID + testNo,
-                "--bootstrap-server", CLUSTER.bootstrapServers(),
+                "--bootstrap-servers", CLUSTER.bootstrapServers(),
                 "--zookeeper", CLUSTER.zKConnectString(),
                 "--input-topics", INPUT_TOPIC
             };

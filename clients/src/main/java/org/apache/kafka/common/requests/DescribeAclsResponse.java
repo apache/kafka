@@ -17,54 +17,44 @@
 
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.clients.admin.AccessControlEntry;
-import org.apache.kafka.clients.admin.AclBinding;
-import org.apache.kafka.clients.admin.Resource;
+import org.apache.kafka.common.acl.AccessControlEntry;
+import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.resource.Resource;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 public class DescribeAclsResponse extends AbstractResponse {
-    private final static String ERROR_CODE = "error_code";
-    private final static String ERROR_MESSAGE = "error_message";
     private final static String RESOURCES = "resources";
     private final static String ACLS = "acls";
 
     private final int throttleTimeMs;
-    private final Throwable throwable;
+    private final ApiError error;
     private final Collection<AclBinding> acls;
 
-    public DescribeAclsResponse(int throttleTimeMs, Throwable throwable, Collection<AclBinding> acls) {
+    public DescribeAclsResponse(int throttleTimeMs, ApiError error, Collection<AclBinding> acls) {
         this.throttleTimeMs = throttleTimeMs;
-        this.throwable = throwable;
+        this.error = error;
         this.acls = acls;
     }
 
     public DescribeAclsResponse(Struct struct) {
         this.throttleTimeMs = struct.getInt(THROTTLE_TIME_KEY_NAME);
-        Errors error = Errors.forCode(struct.getShort(ERROR_CODE));
-        if (error != Errors.NONE) {
-            this.throwable = error.exception(struct.getString(ERROR_MESSAGE));
-            this.acls = Collections.emptySet();
-        } else {
-            this.throwable = null;
-            this.acls = new ArrayList<>();
-            for (Object resourceStructObj : struct.getArray(RESOURCES)) {
-                Struct resourceStruct = (Struct) resourceStructObj;
-                Resource resource = RequestUtils.resourceFromStructFields(resourceStruct);
-                for (Object aclDataStructObj : resourceStruct.getArray(ACLS)) {
-                    Struct aclDataStruct = (Struct) aclDataStructObj;
-                    AccessControlEntry entry = RequestUtils.aceFromStructFields(aclDataStruct);
-                    this.acls.add(new AclBinding(resource, entry));
-                }
+        this.error = new ApiError(struct);
+        this.acls = new ArrayList<>();
+        for (Object resourceStructObj : struct.getArray(RESOURCES)) {
+            Struct resourceStruct = (Struct) resourceStructObj;
+            Resource resource = RequestUtils.resourceFromStructFields(resourceStruct);
+            for (Object aclDataStructObj : resourceStruct.getArray(ACLS)) {
+                Struct aclDataStruct = (Struct) aclDataStructObj;
+                AccessControlEntry entry = RequestUtils.aceFromStructFields(aclDataStruct);
+                this.acls.add(new AclBinding(resource, entry));
             }
         }
     }
@@ -73,15 +63,8 @@ public class DescribeAclsResponse extends AbstractResponse {
     protected Struct toStruct(short version) {
         Struct struct = new Struct(ApiKeys.DESCRIBE_ACLS.responseSchema(version));
         struct.set(THROTTLE_TIME_KEY_NAME, throttleTimeMs);
-        if (throwable != null) {
-            Errors errors = Errors.forException(throwable);
-            struct.set(ERROR_CODE, errors.code());
-            struct.set(ERROR_MESSAGE, throwable.getMessage());
-            struct.set(RESOURCES, new Struct[0]);
-            return struct;
-        }
-        struct.set(ERROR_CODE, (short) 0);
-        struct.set(ERROR_MESSAGE, null);
+        error.write(struct);
+
         Map<Resource, List<AccessControlEntry>> resourceToData = new HashMap<>();
         for (AclBinding acl : acls) {
             List<AccessControlEntry> entry = resourceToData.get(acl.resource());
@@ -91,6 +74,7 @@ public class DescribeAclsResponse extends AbstractResponse {
             }
             entry.add(acl.entry());
         }
+
         List<Struct> resourceStructs = new ArrayList<>();
         for (Map.Entry<Resource, List<AccessControlEntry>> tuple : resourceToData.entrySet()) {
             Resource resource = tuple.getKey();
@@ -113,8 +97,8 @@ public class DescribeAclsResponse extends AbstractResponse {
         return throttleTimeMs;
     }
 
-    public Throwable throwable() {
-        return throwable;
+    public ApiError error() {
+        return error;
     }
 
     public Collection<AclBinding> acls() {

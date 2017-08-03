@@ -22,7 +22,6 @@ import kafka.api.ApiUtils._
 import kafka.common.TopicAndPartition
 import kafka.consumer.ConsumerConfig
 import kafka.network.RequestChannel
-import kafka.message.MessageSet
 import java.util.concurrent.atomic.AtomicInteger
 import java.nio.ByteBuffer
 import java.util
@@ -37,6 +36,7 @@ import scala.util.Random
 
 case class PartitionFetchInfo(offset: Long, fetchSize: Int)
 
+@deprecated("This object has been deprecated and will be removed in a future release.", "0.11.0.0")
 object FetchRequest {
 
   private val random = new Random
@@ -90,6 +90,7 @@ object FetchRequest {
 
 }
 
+@deprecated("This class has been deprecated and will be removed in a future release.", "0.11.0.0")
 case class FetchRequest(versionId: Short = FetchRequest.CurrentVersion,
                         correlationId: Int = FetchRequest.DefaultCorrelationId,
                         clientId: String = ConsumerConfig.DefaultClientId,
@@ -227,6 +228,7 @@ case class FetchRequest(versionId: Short = FetchRequest.CurrentVersion,
   }
 }
 
+@deprecated("This class has been deprecated and will be removed in a future release.", "0.11.0.0")
 @nonthreadsafe
 class FetchRequestBuilder() {
   private val correlationId = new AtomicInteger(0)

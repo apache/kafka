@@ -59,6 +59,10 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
             return consumerGroupId;
         }
 
+        public Map<TopicPartition, CommittedOffset> offsets() {
+            return offsets;
+        }
+
         @Override
         public TxnOffsetCommitRequest build(short version) {
             return new TxnOffsetCommitRequest(version, transactionalId, consumerGroupId, producerId, producerEpoch, offsets);
@@ -67,7 +71,8 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
         @Override
         public String toString() {
             StringBuilder bld = new StringBuilder();
-            bld.append("(transactionalId=").append(transactionalId).
+            bld.append("(type=TxnOffsetCommitRequest").
+                    append(", transactionalId=").append(transactionalId).
                     append(", producerId=").append(producerId).
                     append(", producerEpoch=").append(producerEpoch).
                     append(", consumerGroupId=").append(consumerGroupId).

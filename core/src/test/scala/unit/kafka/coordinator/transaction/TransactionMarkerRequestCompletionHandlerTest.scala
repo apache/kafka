@@ -57,7 +57,7 @@ class TransactionMarkerRequestCompletionHandlerTest {
     EasyMock.expect(txnStateManager.partitionFor(transactionalId))
       .andReturn(txnTopicPartition)
       .anyTimes()
-    EasyMock.expect(txnStateManager.getAndMaybeAddTransactionState(EasyMock.eq(transactionalId), EasyMock.anyObject[Option[TransactionMetadata]]()))
+    EasyMock.expect(txnStateManager.getTransactionState(EasyMock.eq(transactionalId)))
       .andReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata))))
       .anyTimes()
     EasyMock.replay(txnStateManager)
@@ -100,7 +100,7 @@ class TransactionMarkerRequestCompletionHandlerTest {
 
   @Test
   def shouldCompleteDelayedOperationWhenNotCoordinator(): Unit = {
-    EasyMock.expect(txnStateManager.getAndMaybeAddTransactionState(EasyMock.eq(transactionalId), EasyMock.anyObject[Option[TransactionMetadata]]()))
+    EasyMock.expect(txnStateManager.getTransactionState(EasyMock.eq(transactionalId)))
       .andReturn(Left(Errors.NOT_COORDINATOR))
       .anyTimes()
     EasyMock.replay(txnStateManager)
@@ -110,7 +110,7 @@ class TransactionMarkerRequestCompletionHandlerTest {
 
   @Test
   def shouldCompleteDelayedOperationWhenCoordinatorLoading(): Unit = {
-    EasyMock.expect(txnStateManager.getAndMaybeAddTransactionState(EasyMock.eq(transactionalId), EasyMock.anyObject[Option[TransactionMetadata]]()))
+    EasyMock.expect(txnStateManager.getTransactionState(EasyMock.eq(transactionalId)))
       .andReturn(Left(Errors.COORDINATOR_LOAD_IN_PROGRESS))
       .anyTimes()
     EasyMock.replay(txnStateManager)
@@ -120,7 +120,7 @@ class TransactionMarkerRequestCompletionHandlerTest {
 
   @Test
   def shouldCompleteDelayedOperationWhenCoordinatorEpochChanged(): Unit = {
-    EasyMock.expect(txnStateManager.getAndMaybeAddTransactionState(EasyMock.eq(transactionalId), EasyMock.anyObject[Option[TransactionMetadata]]()))
+    EasyMock.expect(txnStateManager.getTransactionState(EasyMock.eq(transactionalId)))
       .andReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch+1, txnMetadata))))
       .anyTimes()
     EasyMock.replay(txnStateManager)
@@ -144,7 +144,7 @@ class TransactionMarkerRequestCompletionHandlerTest {
 
   @Test
   def shouldThrowIllegalStateExceptionWhenUnknownError(): Unit = {
-    verifyThrowIllegalStateExceptionOnError(Errors.UNKNOWN)
+    verifyThrowIllegalStateExceptionOnError(Errors.UNKNOWN_SERVER_ERROR)
   }
 
   @Test
@@ -185,6 +185,12 @@ class TransactionMarkerRequestCompletionHandlerTest {
   @Test
   def shouldRetryPartitionWhenNotEnoughReplicasAfterAppendError(): Unit = {
     verifyRetriesPartitionOnError(Errors.NOT_ENOUGH_REPLICAS_AFTER_APPEND)
+  }
+
+  @Test
+  def shouldRemoveTopicPartitionFromWaitingSetOnUnsupportedForMessageFormat(): Unit = {
+    mockCache()
+    verifyCompleteDelayedOperationOnError(Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT)
   }
 
   private def verifyRetriesPartitionOnError(error: Errors) = {

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.utils;
 
+import java.text.DecimalFormat;
 import org.apache.kafka.common.KafkaException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -61,6 +62,11 @@ public class Utils {
     // This matches URIs of formats: host:port and protocol:\\host:port
     // IPv6 is supported with [ip] pattern
     private static final Pattern HOST_PORT_PATTERN = Pattern.compile(".*?\\[?([0-9a-zA-Z\\-%._:]*)\\]?:([0-9]+)");
+
+    // Prints up to 2 decimal digits. Used for human readable printing
+    private static final DecimalFormat TWO_DIGIT_FORMAT = new DecimalFormat("0.##");
+
+    private static final String[] BYTE_SCALE_SUFFIXES = new String[] {"B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"};
 
     public static final String NL = System.getProperty("line.separator");
 
@@ -137,8 +143,8 @@ public class Utils {
     /**
      * Get the minimum of some long values.
      * @param first Used to ensure at least one value
-     * @param rest The rest of longs to compare
-     * @return The minimum of all passed argument.
+     * @param rest The remaining values to compare
+     * @return The minimum of all passed values
      */
     public static long min(long first, long ... rest) {
         long min = first;
@@ -148,6 +154,22 @@ public class Utils {
         }
         return min;
     }
+
+    /**
+     * Get the maximum of some long values.
+     * @param first Used to ensure at least one value
+     * @param rest The remaining values to compare
+     * @return The maximum of all passed values
+     */
+    public static long max(long first, long ... rest) {
+        long max = first;
+        for (long r : rest) {
+            if (r > max)
+                max = r;
+        }
+        return max;
+    }
+
 
     public static short min(short first, short second) {
         return (short) Math.min(first, second);
@@ -363,6 +385,28 @@ public class Utils {
     }
 
     /**
+     * Formats a byte number as a human readable String ("3.2 MB")
+     * @param bytes some size in bytes
+     * @return
+     */
+    public static String formatBytes(long bytes) {
+        if (bytes < 0) {
+            return "" + bytes;
+        }
+        double asDouble = (double) bytes;
+        int ordinal = (int) Math.floor(Math.log(asDouble) / Math.log(1024.0));
+        double scale = Math.pow(1024.0, ordinal);
+        double scaled = asDouble / scale;
+        String formatted = TWO_DIGIT_FORMAT.format(scaled);
+        try {
+            return formatted + " " + BYTE_SCALE_SUFFIXES[ordinal];
+        } catch (IndexOutOfBoundsException e) {
+            //huge number?
+            return "" + asDouble;
+        }
+    }
+
+    /**
      * Create a string representation of an array joined by the given separator
      * @param strs The array of items
      * @param separator The separator
@@ -434,34 +478,6 @@ public class Utils {
         PrintWriter pw = new PrintWriter(sw);
         e.printStackTrace(pw);
         return sw.toString();
-    }
-
-    /**
-     * Create a new thread
-     * @param name The name of the thread
-     * @param runnable The work for the thread to do
-     * @param daemon Should the thread block JVM shutdown?
-     * @return The unstarted thread
-     */
-    public static Thread newThread(String name, Runnable runnable, boolean daemon) {
-        Thread thread = new Thread(runnable, name);
-        thread.setDaemon(daemon);
-        thread.setUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
-            public void uncaughtException(Thread t, Throwable e) {
-                log.error("Uncaught exception in thread '{}':", t.getName(), e);
-            }
-        });
-        return thread;
-    }
-
-    /**
-     * Create a daemon thread
-     * @param name The name of the thread
-     * @param runnable The runnable to execute in the background
-     * @return The unstarted thread
-     */
-    public static Thread daemonThread(String name, Runnable runnable) {
-        return newThread(name, runnable, true);
     }
 
     /**
@@ -625,7 +641,7 @@ public class Utils {
         } catch (IOException outer) {
             try {
                 Files.move(source, target, StandardCopyOption.REPLACE_EXISTING);
-                log.debug("Non-atomic move of {} to {} succeeded after atomic move failed due to {}", source, target, 
+                log.debug("Non-atomic move of {} to {} succeeded after atomic move failed due to {}", source, target,
                         outer.getMessage());
             } catch (IOException inner) {
                 inner.addSuppressed(outer);
@@ -644,7 +660,8 @@ public class Utils {
         IOException exception = null;
         for (Closeable closeable : closeables) {
             try {
-                closeable.close();
+                if (closeable != null)
+                    closeable.close();
             } catch (IOException e) {
                 if (exception != null)
                     exception.addSuppressed(e);
@@ -760,6 +777,31 @@ public class Utils {
             bytesRead = channel.read(destinationBuffer, currentPosition);
             currentPosition += bytesRead;
         } while (bytesRead != -1 && destinationBuffer.hasRemaining());
+    }
+
+    /**
+     * Read data from the input stream to the given byte buffer until there are no bytes remaining in the buffer or the
+     * end of the stream has been reached.
+     *
+     * @param inputStream Input stream to read from
+     * @param destinationBuffer The buffer into which bytes are to be transferred (it must be backed by an array)
+     *
+     * @throws IOException If an I/O error occurs
+     */
+    public static final void readFully(InputStream inputStream, ByteBuffer destinationBuffer) throws IOException {
+        if (!destinationBuffer.hasArray())
+            throw new IllegalArgumentException("destinationBuffer must be backed by an array");
+        int initialOffset = destinationBuffer.arrayOffset() + destinationBuffer.position();
+        byte[] array = destinationBuffer.array();
+        int length = destinationBuffer.remaining();
+        int totalBytesRead = 0;
+        do {
+            int bytesRead = inputStream.read(array, initialOffset + totalBytesRead, length - totalBytesRead);
+            if (bytesRead == -1)
+                break;
+            totalBytesRead += bytesRead;
+        } while (length > totalBytesRead);
+        destinationBuffer.position(destinationBuffer.position() + totalBytesRead);
     }
 
     public static void writeFully(FileChannel channel, ByteBuffer sourceBuffer) throws IOException {

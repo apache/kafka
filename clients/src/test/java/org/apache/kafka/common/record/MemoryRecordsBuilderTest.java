@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.record;
 
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Test;
@@ -232,6 +231,30 @@ public class MemoryRecordsBuilderTest {
     }
 
     @Test
+    public void testEstimatedSizeInBytes() {
+        ByteBuffer buffer = ByteBuffer.allocate(1024);
+        buffer.position(bufferOffset);
+
+        MemoryRecordsBuilder builder = new MemoryRecordsBuilder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, compressionType,
+                TimestampType.CREATE_TIME, 0L, 0L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE,
+                false, false, RecordBatch.NO_PARTITION_LEADER_EPOCH, buffer.capacity());
+
+        int previousEstimate = 0;
+        for (int i = 0; i < 10; i++) {
+            builder.append(new SimpleRecord(i, ("" + i).getBytes()));
+            int currentEstimate = builder.estimatedSizeInBytes();
+            assertTrue(currentEstimate > previousEstimate);
+            previousEstimate = currentEstimate;
+        }
+
+        int bytesWrittenBeforeClose = builder.estimatedSizeInBytes();
+        MemoryRecords records = builder.build();
+        assertEquals(records.sizeInBytes(), builder.estimatedSizeInBytes());
+        if (compressionType == CompressionType.NONE)
+            assertEquals(records.sizeInBytes(), bytesWrittenBeforeClose);
+    }
+
+    @Test
     public void testCompressionRateV1() {
         ByteBuffer buffer = ByteBuffer.allocate(1024);
         buffer.position(bufferOffset);
@@ -351,11 +374,11 @@ public class MemoryRecordsBuilderTest {
                 RecordBatch.NO_SEQUENCE, false, false, RecordBatch.NO_PARTITION_LEADER_EPOCH, writeLimit);
 
         assertFalse(builder.isFull());
-        assertTrue(builder.hasRoomFor(0L, key, value));
+        assertTrue(builder.hasRoomFor(0L, key, value, Record.EMPTY_HEADERS));
         builder.append(0L, key, value);
 
         assertTrue(builder.isFull());
-        assertFalse(builder.hasRoomFor(0L, key, value));
+        assertFalse(builder.hasRoomFor(0L, key, value, Record.EMPTY_HEADERS));
 
         MemoryRecords memRecords = builder.build();
         List<Record> records = TestUtils.toList(memRecords.records());
@@ -379,7 +402,7 @@ public class MemoryRecordsBuilderTest {
         builder.append(0L, "a".getBytes(), "1".getBytes());
         builder.append(1L, "b".getBytes(), "2".getBytes());
 
-        assertFalse(builder.hasRoomFor(2L, "c".getBytes(), "3".getBytes()));
+        assertFalse(builder.hasRoomFor(2L, "c".getBytes(), "3".getBytes(), Record.EMPTY_HEADERS));
         builder.append(2L, "c".getBytes(), "3".getBytes());
         MemoryRecords records = builder.build();
 
@@ -433,7 +456,7 @@ public class MemoryRecordsBuilderTest {
 
         buffer.flip();
 
-        Records records = MemoryRecords.readableRecords(buffer).downConvert(RecordBatch.MAGIC_VALUE_V1);
+        Records records = MemoryRecords.readableRecords(buffer).downConvert(RecordBatch.MAGIC_VALUE_V1, 0);
 
         List<? extends RecordBatch> batches = Utils.toList(records.batches().iterator());
         if (compressionType != CompressionType.NONE) {
@@ -470,39 +493,72 @@ public class MemoryRecordsBuilderTest {
 
         buffer.flip();
 
-        Records records = MemoryRecords.readableRecords(buffer).downConvert(RecordBatch.MAGIC_VALUE_V1);
+        Records records = MemoryRecords.readableRecords(buffer).downConvert(RecordBatch.MAGIC_VALUE_V1, 0);
 
         List<? extends RecordBatch> batches = Utils.toList(records.batches().iterator());
         if (compressionType != CompressionType.NONE) {
             assertEquals(2, batches.size());
             assertEquals(RecordBatch.MAGIC_VALUE_V0, batches.get(0).magic());
+            assertEquals(0, batches.get(0).baseOffset());
             assertEquals(RecordBatch.MAGIC_VALUE_V1, batches.get(1).magic());
+            assertEquals(1, batches.get(1).baseOffset());
         } else {
             assertEquals(3, batches.size());
             assertEquals(RecordBatch.MAGIC_VALUE_V0, batches.get(0).magic());
+            assertEquals(0, batches.get(0).baseOffset());
             assertEquals(RecordBatch.MAGIC_VALUE_V1, batches.get(1).magic());
+            assertEquals(1, batches.get(1).baseOffset());
             assertEquals(RecordBatch.MAGIC_VALUE_V1, batches.get(2).magic());
+            assertEquals(2, batches.get(2).baseOffset());
         }
 
         List<Record> logRecords = Utils.toList(records.records().iterator());
-        assertEquals(ByteBuffer.wrap("1".getBytes()), logRecords.get(0).key());
-        assertEquals(ByteBuffer.wrap("2".getBytes()), logRecords.get(1).key());
-        assertEquals(ByteBuffer.wrap("3".getBytes()), logRecords.get(2).key());
+        assertEquals("1", utf8(logRecords.get(0).key()));
+        assertEquals("2", utf8(logRecords.get(1).key()));
+        assertEquals("3", utf8(logRecords.get(2).key()));
+
+        records = MemoryRecords.readableRecords(buffer).downConvert(RecordBatch.MAGIC_VALUE_V1, 2L);
+
+        batches = Utils.toList(records.batches().iterator());
+        logRecords = Utils.toList(records.records().iterator());
+
+        if (compressionType != CompressionType.NONE) {
+            assertEquals(2, batches.size());
+            assertEquals(RecordBatch.MAGIC_VALUE_V0, batches.get(0).magic());
+            assertEquals(0, batches.get(0).baseOffset());
+            assertEquals(RecordBatch.MAGIC_VALUE_V1, batches.get(1).magic());
+            assertEquals(1, batches.get(1).baseOffset());
+            assertEquals("1", utf8(logRecords.get(0).key()));
+            assertEquals("2", utf8(logRecords.get(1).key()));
+            assertEquals("3", utf8(logRecords.get(2).key()));
+        } else {
+            assertEquals(2, batches.size());
+            assertEquals(RecordBatch.MAGIC_VALUE_V0, batches.get(0).magic());
+            assertEquals(0, batches.get(0).baseOffset());
+            assertEquals(RecordBatch.MAGIC_VALUE_V1, batches.get(1).magic());
+            assertEquals(2, batches.get(1).baseOffset());
+            assertEquals("1", utf8(logRecords.get(0).key()));
+            assertEquals("3", utf8(logRecords.get(1).key()));
+        }
+    }
+
+    private String utf8(ByteBuffer buffer) {
+        return Utils.utf8(buffer, buffer.remaining());
     }
 
     @Test
-    public void shouldThrowKafkaExceptionOnBuildWhenAborted() throws Exception {
+    public void shouldThrowIllegalStateExceptionOnBuildWhenAborted() throws Exception {
         ByteBuffer buffer = ByteBuffer.allocate(128);
         buffer.position(bufferOffset);
 
         MemoryRecordsBuilder builder = new MemoryRecordsBuilder(buffer, RecordBatch.MAGIC_VALUE_V0, compressionType,
-                                                                TimestampType.CREATE_TIME, 0L, 0L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE,
-                                                                false, false, RecordBatch.NO_PARTITION_LEADER_EPOCH, buffer.capacity());
+                TimestampType.CREATE_TIME, 0L, 0L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH,
+                RecordBatch.NO_SEQUENCE, false, false, RecordBatch.NO_PARTITION_LEADER_EPOCH, buffer.capacity());
         builder.abort();
         try {
             builder.build();
             fail("Should have thrown KafkaException");
-        } catch (KafkaException e) {
+        } catch (IllegalStateException e) {
             // ok
         }
     }
@@ -554,7 +610,7 @@ public class MemoryRecordsBuilderTest {
         }
     }
 
-    @Parameterized.Parameters
+    @Parameterized.Parameters(name = "bufferOffset={0}, compression={1}")
     public static Collection<Object[]> data() {
         List<Object[]> values = new ArrayList<>();
         for (int bufferOffset : Arrays.asList(0, 15))

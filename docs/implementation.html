@@ -16,190 +16,100 @@
 -->
 
 <script id="implementation-template" type="text/x-handlebars-template">
-    <h3><a id="apidesign" href="#apidesign">5.1 API Design</a></h3>
-
-    <h4><a id="impl_producer" href="#impl_producer">Producer APIs</a></h4>
-
-    <p>
-    The Producer API that wraps the 2 low-level producers - <code>kafka.producer.SyncProducer</code> and <code>kafka.producer.async.AsyncProducer</code>.
-    <pre>
-    class Producer<T> {
-
-    /* Sends the data, partitioned by key to the topic using either the */
-    /* synchronous or the asynchronous producer */
-    public void send(kafka.javaapi.producer.ProducerData&lt;K,V&gt; producerData);
-
-    /* Sends a list of data, partitioned by key to the topic using either */
-    /* the synchronous or the asynchronous producer */
-    public void send(java.util.List&lt;kafka.javaapi.producer.ProducerData&lt;K,V&gt;&gt; producerData);
-
-    /* Closes the producer and cleans up */
-    public void close();
-
-    }
-    </pre>
-
-    The goal is to expose all the producer functionality through a single API to the client.
-
-    The Kafka producer
-    <ul>
-    <li>can handle queueing/buffering of multiple producer requests and asynchronous dispatch of the batched data:
-    <p><code>kafka.producer.Producer</code> provides the ability to batch multiple produce requests (<code>producer.type=async</code>), before serializing and dispatching them to the appropriate kafka broker partition. The size of the batch can be controlled by a few config parameters. As events enter a queue, they are buffered in a queue, until either <code>queue.time</code> or <code>batch.size</code> is reached. A background thread (<code>kafka.producer.async.ProducerSendThread</code>) dequeues the batch of data and lets the <code>kafka.producer.EventHandler</code> serialize and send the data to the appropriate kafka broker partition. A custom event handler can be plugged in through the <code>event.handler</code> config parameter. At various stages of this producer queue pipeline, it is helpful to be able to inject callbacks, either for plugging in custom logging/tracing code or custom monitoring logic. This is possible by implementing the <code>kafka.producer.async.CallbackHandler</code> interface and setting <code>callback.handler</code> config parameter to that class.
-    </p>
-    </li>
-    <li>handles the serialization of data through a user-specified <code>Encoder</code>:
-    <pre>
-    interface Encoder&lt;T&gt; {
-    public Message toMessage(T data);
-    }
-    </pre>
-    <p>The default is the no-op <code>kafka.serializer.DefaultEncoder</code></p>
-    </li>
-    <li>provides software load balancing through an optionally user-specified <code>Partitioner</code>:
-    <p>
-    The routing decision is influenced by the <code>kafka.producer.Partitioner</code>.
-    <pre>
-    interface Partitioner&lt;T&gt; {
-    int partition(T key, int numPartitions);
-    }
-    </pre>
-    The partition API uses the key and the number of available broker partitions to return a partition id. This id is used as an index into a sorted list of broker_ids and partitions to pick a broker partition for the producer request. The default partitioning strategy is <code>hash(key)%numPartitions</code>. If the key is null, then a random broker partition is picked. A custom partitioning strategy can also be plugged in using the <code>partitioner.class</code> config parameter.
-    </p>
-    </li>
-    </ul>
-    </p>
-
-    <h4><a id="impl_consumer" href="#impl_consumer">Consumer APIs</a></h4>
-    <p>
-    We have 2 levels of consumer APIs. The low-level "simple" API maintains a connection to a single broker and has a close correspondence to the network requests sent to the server. This API is completely stateless, with the offset being passed in on every request, allowing the user to maintain this metadata however they choose.
-    </p>
-    <p>
-    The high-level API hides the details of brokers from the consumer and allows consuming off the cluster of machines without concern for the underlying topology. It also maintains the state of what has been consumed. The high-level API also provides the ability to subscribe to topics that match a filter expression (i.e., either a whitelist or a blacklist regular expression).
-    </p>
-
-    <h5><a id="impl_lowlevel" href="#impl_lowlevel">Low-level API</a></h5>
-    <pre>
-    class SimpleConsumer {
-
-    /* Send fetch request to a broker and get back a set of messages. */
-    public ByteBufferMessageSet fetch(FetchRequest request);
-
-    /* Send a list of fetch requests to a broker and get back a response set. */
-    public MultiFetchResponse multifetch(List&lt;FetchRequest&gt; fetches);
-
-    /**
-    * Get a list of valid offsets (up to maxSize) before the given time.
-    * The result is a list of offsets, in descending order.
-    * @param time: time in millisecs,
-    *              if set to OffsetRequest$.MODULE$.LATEST_TIME(), get from the latest offset available.
-    *              if set to OffsetRequest$.MODULE$.EARLIEST_TIME(), get from the earliest offset available.
-    */
-    public long[] getOffsetsBefore(String topic, int partition, long time, int maxNumOffsets);
-    }
-    </pre>
-
-    The low-level API is used to implement the high-level API as well as being used directly for some of our offline consumers which have particular requirements around maintaining state.
-
-    <h5><a id="impl_highlevel" href="#impl_highlevel">High-level API</a></h5>
-    <pre>
-
-    /* create a connection to the cluster */
-    ConsumerConnector connector = Consumer.create(consumerConfig);
-
-    interface ConsumerConnector {
-
-    /**
-    * This method is used to get a list of KafkaStreams, which are iterators over
-    * MessageAndMetadata objects from which you can obtain messages and their
-    * associated metadata (currently only topic).
-    *  Input: a map of &lt;topic, #streams&gt;
-    *  Output: a map of &lt;topic, list of message streams&gt;
-    */
-    public Map&lt;String,List&lt;KafkaStream&gt;&gt; createMessageStreams(Map&lt;String,Int&gt; topicCountMap);
-
-    /**
-    * You can also obtain a list of KafkaStreams, that iterate over messages
-    * from topics that match a TopicFilter. (A TopicFilter encapsulates a
-    * whitelist or a blacklist which is a standard Java regex.)
-    */
-    public List&lt;KafkaStream&gt; createMessageStreamsByFilter(
-        TopicFilter topicFilter, int numStreams);
-
-    /* Commit the offsets of all messages consumed so far. */
-    public commitOffsets()
-
-    /* Shut down the connector */
-    public shutdown()
-    }
-    </pre>
-    <p>
-    This API is centered around iterators, implemented by the KafkaStream class. Each KafkaStream represents the stream of messages from one or more partitions on one or more servers. Each stream is used for single threaded processing, so the client can provide the number of desired streams in the create call. Thus a stream may represent the merging of multiple server partitions (to correspond to the number of processing threads), but each partition only goes to one stream.
-    </p>
-    <p>
-    The createMessageStreams call registers the consumer for the topic, which results in rebalancing the consumer/broker assignment. The API encourages creating many topic streams in a single call in order to minimize this rebalancing. The createMessageStreamsByFilter call (additionally) registers watchers to discover new topics that match its filter. Note that each stream that createMessageStreamsByFilter returns may iterate over messages from multiple topics (i.e., if multiple topics are allowed by the filter).
-    </p>
-
-    <h3><a id="networklayer" href="#networklayer">5.2 Network Layer</a></h3>
+    <h3><a id="networklayer" href="#networklayer">5.1 Network Layer</a></h3>
     <p>
     The network layer is a fairly straight-forward NIO server, and will not be described in great detail. The sendfile implementation is done by giving the <code>MessageSet</code> interface a <code>writeTo</code> method. This allows the file-backed message set to use the more efficient <code>transferTo</code> implementation instead of an in-process buffered write. The threading model is a single acceptor thread and <i>N</i> processor threads which handle a fixed number of connections each. This design has been pretty thoroughly tested <a href="http://sna-projects.com/blog/2009/08/introducing-the-nio-socketserver-implementation">elsewhere</a> and found to be simple to implement and fast. The protocol is kept quite simple to allow for future implementation of clients in other languages.
     </p>
-    <h3><a id="messages" href="#messages">5.3 Messages</a></h3>
+    <h3><a id="messages" href="#messages">5.2 Messages</a></h3>
     <p>
-    Messages consist of a fixed-size header, a variable length opaque key byte array and a variable length opaque value byte array. The header contains the following fields:
-    <ul>
-        <li> A CRC32 checksum to detect corruption or truncation. <li/>
-        <li> A format version. </li>
-        <li> An attributes identifier </li>
-        <li> A timestamp </li>
-    </ul>
-    Leaving the key and value opaque is the right decision: there is a great deal of progress being made on serialization libraries right now, and any particular choice is unlikely to be right for all uses. Needless to say a particular application using Kafka would likely mandate a particular serialization type as part of its usage. The <code>MessageSet</code> interface is simply an iterator over messages with specialized methods for bulk reading and writing to an NIO <code>Channel</code>.
+    Messages consist of a variable-length header, a variable length opaque key byte array and a variable length opaque value byte array. The format of the header is described in the following section.
+    Leaving the key and value opaque is the right decision: there is a great deal of progress being made on serialization libraries right now, and any particular choice is unlikely to be right for all uses. Needless to say a particular application using Kafka would likely mandate a particular serialization type as part of its usage. The <code>RecordBatch</code> interface is simply an iterator over messages with specialized methods for bulk reading and writing to an NIO <code>Channel</code>.</p>
 
-    <h3><a id="messageformat" href="#messageformat">5.4 Message Format</a></h3>
+    <h3><a id="messageformat" href="#messageformat">5.3 Message Format</a></h3>
+    <p>
+    Messages (aka Records) are always written in batches. The technical term for a batch of messages is a record batch, and a record batch contains one or more records. In the degenerate case, we could have a record batch containing a single record.
+    Record batches and records have their own headers. The format of each is described below for Kafka version 0.11.0 and later (message format version v2, or magic=2). <a href="https://cwiki.apache.org/confluence/display/KAFKA/A+Guide+To+The+Kafka+Protocol#AGuideToTheKafkaProtocol-Messagesets">Click here</a> for details about message formats 0 and 1.</p>
 
-    <pre>
-        /**
-        * 1. 4 byte CRC32 of the message
-        * 2. 1 byte "magic" identifier to allow format changes, value is 0 or 1
-        * 3. 1 byte "attributes" identifier to allow annotations on the message independent of the version
-        *    bit 0 ~ 2 : Compression codec.
-        *      0 : no compression
-        *      1 : gzip
-        *      2 : snappy
-        *      3 : lz4
-        *    bit 3 : Timestamp type
-        *      0 : create time
-        *      1 : log append time
-        *    bit 4 ~ 7 : reserved
-        * 4. (Optional) 8 byte timestamp only if "magic" identifier is greater than 0
-        * 5. 4 byte key length, containing length K
-        * 6. K byte key
-        * 7. 4 byte payload length, containing length V
-        * 8. V byte payload
-        */
-    </pre>
-    </p>
-    <h3><a id="log" href="#log">5.5 Log</a></h3>
+    <h4><a id="recordbatch" href="#recordbatch">5.3.1 Record Batch</a></h4>
+	<p> The following is the on-disk format of a RecordBatch. </p>
+	<p><pre class="brush: java;">
+		baseOffset: int64
+		batchLength: int32
+		partitionLeaderEpoch: int32
+		magic: int8 (current magic value is 2)
+		crc: int32
+		attributes: int16
+			bit 0~2:
+				0: no compression
+				1: gzip
+				2: snappy
+				3: lz4
+			bit 3: timestampType
+			bit 4: isTransactional (0 means not transactional)
+			bit 5: isControlBatch (0 means not a control batch)
+			bit 6~15: unused
+		lastOffsetDelta: int32
+		firstTimestamp: int64
+		maxTimestamp: int64
+		producerId: int64
+		producerEpoch: int16
+		baseSequence: int32
+		records: [Record]
+	</pre></p>
+    <p> Note that when compression is enabled, the compressed record data is serialized directly following the count of the number of records. </p>
+
+    <p>The CRC covers the data from the attributes to the end of the batch (i.e. all the bytes that follow the CRC). It is located after the magic byte, which
+    means that clients must parse the magic byte before deciding how to interpret the bytes between the batch length and the magic byte. The partition leader
+    epoch field is not included in the CRC computation to avoid the need to recompute the CRC when this field is assigned for every batch that is received by
+    the broker. The CRC-32C (Castagnoli) polynomial is used for the computation.</p>
+
+    <p>On compaction: unlike the older message formats, magic v2 and above preserves the first and last offset/sequence numbers from the original batch when the log is cleaned. This is required in order to be able to restore the
+    producer's state when the log is reloaded. If we did not retain the last sequence number, for example, then after a partition leader failure, the producer might see an OutOfSequence error. The base sequence number must
+    be preserved for duplicate checking (the broker checks incoming Produce requests for duplicates by verifying that the first and last sequence numbers of the incoming batch match the last from that producer). As a result,
+    it is possible to have empty batches in the log when all the records in the batch are cleaned but batch is still retained in order to preserve a producer's last sequence number. One oddity here is that the baseTimestamp
+    field is not preserved during compaction, so it will change if the first record in the batch is compacted away.</p>
+
+    <h5><a id="controlbatch" href="#controlbatch">5.3.1.1 Control Batches</a></h5>
+    <p>A control batch contains a single record called the control record. Control records should not be passed on to applications. Instead, they are used by consumers to filter out aborted transactional messages.</p>
+    <p> The key of a control record conforms to the following schema: </p>
+    <p><pre class="brush: java">
+       version: int16 (current version is 0)
+       type: int16 (0 indicates an abort marker, 1 indicates a commit)
+    </pre></p>
+    <p>The schema for the value of a control record is dependent on the type. The value is opaque to clients.</p>
+
+	<h4><a id="record" href="#record">5.3.2 Record</a></h4>
+	<p>Record level headers were introduced in Kafka 0.11.0. The on-disk format of a record with Headers is delineated below. </p>
+	<p><pre class="brush: java;">
+		length: varint
+		attributes: int8
+			bit 0~7: unused
+		timestampDelta: varint
+		offsetDelta: varint
+		keyLength: varint
+		key: byte[]
+		valueLen: varint
+		value: byte[]
+		Headers => [Header]
+	</pre></p>
+	<h5><a id="recordheader" href="#recordheader">5.4.2.1 Record Header</a></h5>
+	<p><pre class="brush: java;">
+		headerKeyLength: varint
+		headerKey: String
+		headerValueLength: varint
+		Value: byte[]
+	</pre></p>
+    <p>We use the the same varint encoding as Protobuf. More information on the latter can be found <a href="https://developers.google.com/protocol-buffers/docs/encoding#varints">here</a>. The count of headers in a record
+    is also encoded as a varint.</p>
+
+    <h3><a id="log" href="#log">5.4 Log</a></h3>
     <p>
     A log for a topic named "my_topic" with two partitions consists of two directories (namely <code>my_topic_0</code> and <code>my_topic_1</code>) populated with data files containing the messages for that topic. The format of the log files is a sequence of "log entries""; each log entry is a 4 byte integer <i>N</i> storing the message length which is followed by the <i>N</i> message bytes. Each message is uniquely identified by a 64-bit integer <i>offset</i> giving the byte position of the start of this message in the stream of all messages ever sent to that topic on that partition. The on-disk format of each message is given below. Each log file is named with the offset of the first message it contains. So the first file created will be 00000000000.kafka, and each additional file will have an integer name roughly <i>S</i> bytes from the previous file where <i>S</i> is the max log file size given in the configuration.
     </p>
     <p>
-    The exact binary format for messages is versioned and maintained as a standard interface so message sets can be transferred between producer, broker, and client without recopying or conversion when desirable. This format is as follows:
+    The exact binary format for records is versioned and maintained as a standard interface so record batches can be transferred between producer, broker, and client without recopying or conversion when desirable. The previous section included details about the on-disk format of records.</p>
     </p>
-    <pre>
-    On-disk format of a message
-
-    offset         : 8 bytes 
-    message length : 4 bytes (value: 4 + 1 + 1 + 8(if magic value > 0) + 4 + K + 4 + V)
-    crc            : 4 bytes
-    magic value    : 1 byte
-    attributes     : 1 byte
-    timestamp      : 8 bytes (Only exists when magic value is greater than zero)
-    key length     : 4 bytes
-    key            : K bytes
-    value length   : 4 bytes
-    value          : V bytes
-    </pre>
-    <p>
+   <p>
     The use of the message offset as the message id is unusual. Our original idea was to use a GUID generated by the producer, and maintain a mapping from GUID to offset on each broker. But since a consumer must maintain an ID for each server, the global uniqueness of the GUID provides no value. Furthermore, the complexity of maintaining the mapping from a random id to an offset requires a heavy weight index structure which must be synchronized with disk, essentially requiring a full persistent random-access data structure. Thus to simplify the lookup structure we decided to use a simple per-partition atomic counter which could be coupled with the partition id and node id to uniquely identify a message; this makes the lookup structure simpler, though multiple seeks per consumer request are still likely. However once we settled on a counter, the jump to directly using the offset seemed natural&mdash;both after all are monotonically increasing integers unique to a partition. Since the offset is hidden from the consumer API this decision is ultimately an implementation detail and we went with the more efficient approach.
     </p>
     <img class="centered" src="/{{version}}/images/kafka_log.png">
@@ -220,7 +130,7 @@
 
     <p> The following is the format of the results sent to the consumer.
 
-    <pre>
+    <pre class="brush: text;">
     MessageSetSend (fetch result)
 
     total length     : 4 bytes
@@ -230,7 +140,7 @@
     message n        : x bytes
     </pre>
 
-    <pre>
+    <pre class="brush: text;">
     MultiMessageSetSend (multiFetch result)
 
     total length       : 4 bytes
@@ -251,7 +161,7 @@
     Note that two kinds of corruption must be handled: truncation in which an unwritten block is lost due to a crash, and corruption in which a nonsense block is ADDED to the file. The reason for this is that in general the OS makes no guarantee of the write order between the file inode and the actual block data so in addition to losing written data the file can gain nonsense data if the inode is updated with a new size but a crash occurs before the block containing that data is written. The CRC detects this corner case, and prevents it from corrupting the log (though the unwritten messages are, of course, lost).
     </p>
 
-    <h3><a id="distributionimpl" href="#distributionimpl">5.6 Distribution</a></h3>
+    <h3><a id="distributionimpl" href="#distributionimpl">5.5 Distribution</a></h3>
     <h4><a id="impl_offsettracking" href="#impl_offsettracking">Consumer Offset Tracking</a></h4>
     <p>
     The high-level consumer tracks the maximum offset it has consumed in each partition and periodically commits its offset vector so that it can resume from those offsets in the event of a restart. Kafka provides the option to store all the offsets for a given consumer group in a designated broker (for that group) called the <i>offset manager</i>. i.e., any consumer instance in that consumer group should send its offset commits and fetches to that offset manager (broker). The high-level consumer handles this automatically. If you use the simple consumer you will need to manage offsets manually. This is currently unsupported in the Java simple consumer which can only commit or fetch offsets in ZooKeeper. If you use the Scala simple consumer you can discover the offset manager and explicitly commit or fetch offsets to the offset manager. A consumer can look up its offset manager by issuing a GroupCoordinatorRequest to any Kafka broker and reading the GroupCoordinatorResponse which will contain the offset manager. The consumer can then proceed to commit or fetch offsets from the offsets manager broker. In case the offset manager moves, the consumer will need to rediscover the offset manager. If you wish to manage your offsets manually, you can take a look at these <a href="https://cwiki.apache.org/confluence/display/KAFKA/Committing+and+fetching+consumer+offsets+in+Kafka">code samples that explain how to issue OffsetCommitRequest and OffsetFetchRequest</a>.
@@ -292,7 +202,7 @@
     </p>
 
     <h4><a id="impl_zkbroker" href="#impl_zkbroker">Broker Node Registry</a></h4>
-    <pre>
+    <pre class="brush: json;">
     /brokers/ids/[0...N] --> {"jmx_port":...,"timestamp":...,"endpoints":[...],"host":...,"version":...,"port":...} (ephemeral node)
     </pre>
     <p>
@@ -302,7 +212,7 @@
     Since the broker registers itself in ZooKeeper using ephemeral znodes, this registration is dynamic and will disappear if the broker is shutdown or dies (thus notifying consumers it is no longer available).
     </p>
     <h4><a id="impl_zktopic" href="#impl_zktopic">Broker Topic Registry</a></h4>
-    <pre>
+    <pre class="brush: json;">
     /brokers/topics/[topic]/partitions/[0...N]/state --> {"controller_epoch":...,"leader":...,"version":...,"leader_epoch":...,"isr":[...]} (ephemeral node)
     </pre>
 
@@ -327,7 +237,7 @@
     <h4><a id="impl_zkconsumerid" href="#impl_zkconsumerid">Consumer Id Registry</a></h4>
     <p>
     In addition to the group_id which is shared by all consumers in a group, each consumer is given a transient, unique consumer_id (of the form hostname:uuid) for identification purposes. Consumer ids are registered in the following directory.
-    <pre>
+    <pre class="brush: json;">
     /consumers/[group_id]/ids/[consumer_id] --> {"version":...,"subscription":{...:...},"pattern":...,"timestamp":...} (ephemeral node)
     </pre>
     Each of the consumers in the group registers under its group and creates a znode with its consumer_id. The value of the znode contains a map of &lt;topic, #streams&gt;. This id is simply used to identify each of the consumers which is currently active within a group. This is an ephemeral node so it will disappear if the consumer process dies.
@@ -337,7 +247,7 @@
     <p>
     Consumers track the maximum offset they have consumed in each partition. This value is stored in a ZooKeeper directory if <code>offsets.storage=zookeeper</code>.
     </p>
-    <pre>
+    <pre class="brush: json;">
     /consumers/[group_id]/offsets/[topic]/[partition_id] --> offset_counter_value (persistent node)
     </pre>
 
@@ -347,7 +257,7 @@
     Each broker partition is consumed by a single consumer within a given consumer group. The consumer must establish its ownership of a given partition before any consumption can begin. To establish its ownership, a consumer writes its own id in an ephemeral node under the particular broker partition it is claiming.
     </p>
 
-    <pre>
+    <pre class="brush: json;">
     /consumers/[group_id]/owners/[topic]/[partition_id] --> consumer_node_id (ephemeral node)
     </pre>
 
@@ -389,7 +299,7 @@
     <p>
     Each consumer does the following during rebalancing:
     </p>
-    <pre>
+    <pre class="brush: text;">
     1. For each topic T that C<sub>i</sub> subscribes to
     2.   let P<sub>T</sub> be all partitions producing topic T
     3.   let C<sub>G</sub> be all consumers in the same group as C<sub>i</sub> that consume topic T

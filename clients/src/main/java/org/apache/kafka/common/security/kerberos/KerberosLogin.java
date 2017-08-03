@@ -27,9 +27,9 @@ import org.apache.kafka.common.security.JaasContext;
 import org.apache.kafka.common.security.JaasUtils;
 import org.apache.kafka.common.security.authenticator.AbstractLogin;
 import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.Shell;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -129,7 +129,7 @@ public class KerberosLogin extends AbstractLogin {
         // TGT's existing expiry date and the configured minTimeBeforeRelogin. For testing and development,
         // you can decrease the interval of expiration of tickets (for example, to 3 minutes) by running:
         //  "modprinc -maxlife 3mins <principal>" in kadmin.
-        t = Utils.newThread(String.format("kafka-kerberos-refresh-thread-%s", principal), new Runnable() {
+        t = KafkaThread.daemon(String.format("kafka-kerberos-refresh-thread-%s", principal), new Runnable() {
             public void run() {
                 log.info("[Principal={}]: TGT refresh thread started.", principal);
                 while (true) {  // renewal thread's main loop. if it exits from here, thread will exit.
@@ -253,7 +253,7 @@ public class KerberosLogin extends AbstractLogin {
                     }
                 }
             }
-        }, true);
+        });
         t.start();
         return loginContext;
     }

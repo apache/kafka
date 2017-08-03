@@ -27,8 +27,8 @@ import org.apache.kafka.streams.processor.internals.InternalTopicManager;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
+import org.apache.kafka.streams.processor.internals.StreamPartitionAssignor.SubscriptionUpdates;
 import org.apache.kafka.streams.state.Stores;
-import org.apache.kafka.streams.processor.internals.StreamPartitionAssignor;
 import org.apache.kafka.streams.state.internals.RocksDBWindowStoreSupplier;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockStateStoreSupplier;
@@ -50,15 +50,15 @@ import java.util.regex.Pattern;
 
 import static org.apache.kafka.common.utils.Utils.mkList;
 import static org.apache.kafka.common.utils.Utils.mkSet;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.fail;
-import static org.junit.Assert.assertThat;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertThat;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
+@SuppressWarnings("deprecation")
 public class TopologyBuilderTest {
-
 
     @Test
     public void shouldAddSourceWithOffsetReset() {
@@ -78,7 +78,7 @@ public class TopologyBuilderTest {
     @Test
     public void shouldAddSourcePatternWithOffsetReset() {
         final TopologyBuilder builder = new TopologyBuilder();
-        
+
         final String earliestTopicPattern = "earliest.*Topic";
         final String latestTopicPattern = "latest.*Topic";
 
@@ -107,7 +107,7 @@ public class TopologyBuilderTest {
         final TopologyBuilder builder = new TopologyBuilder();
         final Serde<String> stringSerde = Serdes.String();
         final Pattern expectedPattern = Pattern.compile("test-.*");
-        
+
         builder.addSource("source", stringSerde.deserializer(), stringSerde.deserializer(), Pattern.compile("test-.*"));
 
         assertEquals(expectedPattern.pattern(), builder.sourceTopicPattern().pattern());
@@ -143,7 +143,7 @@ public class TopologyBuilderTest {
     }
 
 
-    
+
     @Test(expected = TopologyBuilderException.class)
     public void testAddSourceWithSameName() {
         final TopologyBuilder builder = new TopologyBuilder();
@@ -579,7 +579,6 @@ public class TopologyBuilderTest {
         assertEquals(2, properties.size());
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldAddInternalTopicConfigWithCompactForNonWindowStores() throws Exception {
         final TopologyBuilder builder = new TopologyBuilder();
@@ -596,7 +595,6 @@ public class TopologyBuilderTest {
         assertEquals(1, properties.size());
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldAddInternalTopicConfigWithCleanupPolicyDeleteForInternalTopics() throws Exception {
         final TopologyBuilder builder = new TopologyBuilder();
@@ -613,7 +611,7 @@ public class TopologyBuilderTest {
 
 
     @Test(expected = TopologyBuilderException.class)
-    public void shouldThroughOnUnassignedStateStoreAccess() {
+    public void shouldThroughOnUnassignedStateStoreAccess() throws Exception {
         final String sourceNodeName = "source";
         final String goodNodeName = "goodGuy";
         final String badNodeName = "badGuy";
@@ -633,7 +631,7 @@ public class TopologyBuilderTest {
                     goodNodeName)
                 .addProcessor(badNodeName, new LocalMockProcessorSupplier(), sourceNodeName);
 
-            final ProcessorTopologyTestDriver driver = new ProcessorTopologyTestDriver(streamsConfig, builder);
+            final ProcessorTopologyTestDriver driver = new ProcessorTopologyTestDriver(streamsConfig, builder.internalTopologyBuilder);
             driver.process("topic", null, null);
         } catch (final StreamsException e) {
             final Throwable cause = e.getCause();
@@ -681,7 +679,7 @@ public class TopologyBuilderTest {
         builder.addSource("source-2", Pattern.compile("topic-[A-C]"));
         builder.addSource("source-3", Pattern.compile("topic-\\d"));
 
-        StreamPartitionAssignor.SubscriptionUpdates subscriptionUpdates = new StreamPartitionAssignor.SubscriptionUpdates();
+        SubscriptionUpdates subscriptionUpdates = new SubscriptionUpdates();
         Field updatedTopicsField  = subscriptionUpdates.getClass().getDeclaredField("updatedTopicSubscriptions");
         updatedTopicsField.setAccessible(true);
 
@@ -702,7 +700,6 @@ public class TopologyBuilderTest {
 
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldAddTimestampExtractorPerSource() throws Exception {
         final TopologyBuilder builder = new TopologyBuilder();
@@ -711,7 +708,6 @@ public class TopologyBuilderTest {
         assertThat(processorTopology.source("topic").getTimestampExtractor(), instanceOf(MockTimestampExtractor.class));
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldAddTimestampExtractorWithOffsetResetPerSource() throws Exception {
         final TopologyBuilder builder = new TopologyBuilder();
@@ -720,7 +716,6 @@ public class TopologyBuilderTest {
         assertThat(processorTopology.source("topic").getTimestampExtractor(), instanceOf(MockTimestampExtractor.class));
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldAddTimestampExtractorWithPatternPerSource() throws Exception {
         final TopologyBuilder builder = new TopologyBuilder();
@@ -730,7 +725,6 @@ public class TopologyBuilderTest {
         assertThat(processorTopology.source(pattern.pattern()).getTimestampExtractor(), instanceOf(MockTimestampExtractor.class));
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldAddTimestampExtractorWithOffsetResetAndPatternPerSource() throws Exception {
         final TopologyBuilder builder = new TopologyBuilder();
@@ -740,7 +734,6 @@ public class TopologyBuilderTest {
         assertThat(processorTopology.source(pattern.pattern()).getTimestampExtractor(), instanceOf(MockTimestampExtractor.class));
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldAddTimestampExtractorWithOffsetResetAndKeyValSerdesPerSource() throws Exception {
         final TopologyBuilder builder = new TopologyBuilder();
@@ -749,7 +742,6 @@ public class TopologyBuilderTest {
         assertThat(processorTopology.source("topic").getTimestampExtractor(), instanceOf(MockTimestampExtractor.class));
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldAddTimestampExtractorWithOffsetResetAndKeyValSerdesAndPatternPerSource() throws Exception {
         final TopologyBuilder builder = new TopologyBuilder();
@@ -766,7 +758,7 @@ public class TopologyBuilderTest {
                 .addProcessor("my-processor", new MockProcessorSupplier(), "ingest")
                 .addStateStore(new MockStateStoreSupplier("testStateStore", false), "my-processor");
 
-        final StreamPartitionAssignor.SubscriptionUpdates subscriptionUpdates = new StreamPartitionAssignor.SubscriptionUpdates();
+        final SubscriptionUpdates subscriptionUpdates = new SubscriptionUpdates();
         final Field updatedTopicsField  = subscriptionUpdates.getClass().getDeclaredField("updatedTopicSubscriptions");
         updatedTopicsField.setAccessible(true);
 

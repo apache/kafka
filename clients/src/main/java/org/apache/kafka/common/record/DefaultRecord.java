@@ -18,21 +18,20 @@ package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.internals.RecordHeader;
-import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.common.utils.Checksums;
 import org.apache.kafka.common.utils.Crc32C;
 import org.apache.kafka.common.utils.Utils;
 
-import java.io.DataInputStream;
+import java.io.DataInput;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.zip.Checksum;
 
 import static org.apache.kafka.common.record.RecordBatch.MAGIC_VALUE_V2;
-import static org.apache.kafka.common.utils.Utils.wrapNullable;
 
 /**
  * This class implements the inner record format for magic 2 and above. The schema is as follows:
@@ -230,24 +229,6 @@ public class DefaultRecord implements Record {
         return ByteUtils.sizeOfVarint(sizeInBytes) + sizeInBytes;
     }
 
-    /**
-     * Write the record to `out` and return its size.
-     */
-    public static int writeTo(ByteBuffer out,
-                              int offsetDelta,
-                              long timestampDelta,
-                              ByteBuffer key,
-                              ByteBuffer value,
-                              Header[] headers) {
-        try {
-            return writeTo(new DataOutputStream(new ByteBufferOutputStream(out)), offsetDelta, timestampDelta,
-                    key, value, headers);
-        } catch (IOException e) {
-            // cannot actually be raised by ByteBufferOutputStream
-            throw new IllegalStateException("Unexpected exception raised from ByteBufferOutputStream", e);
-        }
-    }
-
     @Override
     public boolean hasMagic(byte magic) {
         return magic >= MAGIC_VALUE_V2;
@@ -303,16 +284,17 @@ public class DefaultRecord implements Record {
         return result;
     }
 
-    public static DefaultRecord readFrom(DataInputStream input,
+    public static DefaultRecord readFrom(DataInput input,
                                          long baseOffset,
                                          long baseTimestamp,
                                          int baseSequence,
                                          Long logAppendTime) throws IOException {
         int sizeOfBodyInBytes = ByteUtils.readVarint(input);
         ByteBuffer recordBuffer = ByteBuffer.allocate(sizeOfBodyInBytes);
-        input.readFully(recordBuffer.array(), recordBuffer.arrayOffset(), sizeOfBodyInBytes);
+        input.readFully(recordBuffer.array(), 0, sizeOfBodyInBytes);
         int totalSizeInBytes = ByteUtils.sizeOfVarint(sizeOfBodyInBytes) + sizeOfBodyInBytes;
-        return readFrom(recordBuffer, totalSizeInBytes, baseOffset, baseTimestamp, baseSequence, logAppendTime);
+        return readFrom(recordBuffer, totalSizeInBytes, sizeOfBodyInBytes, baseOffset, baseTimestamp,
+                baseSequence, logAppendTime);
     }
 
     public static DefaultRecord readFrom(ByteBuffer buffer,
@@ -325,48 +307,69 @@ public class DefaultRecord implements Record {
             return null;
 
         int totalSizeInBytes = ByteUtils.sizeOfVarint(sizeOfBodyInBytes) + sizeOfBodyInBytes;
-        return readFrom(buffer, totalSizeInBytes, baseOffset, baseTimestamp, baseSequence, logAppendTime);
+        return readFrom(buffer, totalSizeInBytes, sizeOfBodyInBytes, baseOffset, baseTimestamp,
+                baseSequence, logAppendTime);
     }
 
     private static DefaultRecord readFrom(ByteBuffer buffer,
                                           int sizeInBytes,
+                                          int sizeOfBodyInBytes,
                                           long baseOffset,
                                           long baseTimestamp,
                                           int baseSequence,
                                           Long logAppendTime) {
-        byte attributes = buffer.get();
-        long timestampDelta = ByteUtils.readVarlong(buffer);
-        long timestamp = baseTimestamp + timestampDelta;
-        if (logAppendTime != null)
-            timestamp = logAppendTime;
+        try {
+            int recordStart = buffer.position();
+            byte attributes = buffer.get();
+            long timestampDelta = ByteUtils.readVarlong(buffer);
+            long timestamp = baseTimestamp + timestampDelta;
+            if (logAppendTime != null)
+                timestamp = logAppendTime;
 
-        int offsetDelta = ByteUtils.readVarint(buffer);
-        long offset = baseOffset + offsetDelta;
-        int sequence = baseSequence >= 0 ? baseSequence + offsetDelta : RecordBatch.NO_SEQUENCE;
+            int offsetDelta = ByteUtils.readVarint(buffer);
+            long offset = baseOffset + offsetDelta;
+            int sequence = baseSequence >= 0 ?
+                    DefaultRecordBatch.incrementSequence(baseSequence, offsetDelta) :
+                    RecordBatch.NO_SEQUENCE;
 
-        ByteBuffer key = null;
-        int keySize = ByteUtils.readVarint(buffer);
-        if (keySize >= 0) {
-            key = buffer.slice();
-            key.limit(keySize);
-            buffer.position(buffer.position() + keySize);
+            ByteBuffer key = null;
+            int keySize = ByteUtils.readVarint(buffer);
+            if (keySize >= 0) {
+                key = buffer.slice();
+                key.limit(keySize);
+                buffer.position(buffer.position() + keySize);
+            }
+
+            ByteBuffer value = null;
+            int valueSize = ByteUtils.readVarint(buffer);
+            if (valueSize >= 0) {
+                value = buffer.slice();
+                value.limit(valueSize);
+                buffer.position(buffer.position() + valueSize);
+            }
+
+            int numHeaders = ByteUtils.readVarint(buffer);
+            if (numHeaders < 0)
+                throw new InvalidRecordException("Found invalid number of record headers " + numHeaders);
+
+            final Header[] headers;
+            if (numHeaders == 0)
+                headers = Record.EMPTY_HEADERS;
+            else
+                headers = readHeaders(buffer, numHeaders);
+
+            // validate whether we have read all header bytes in the current record
+            if (buffer.position() - recordStart != sizeOfBodyInBytes)
+                throw new InvalidRecordException("Invalid record size: expected to read " + sizeOfBodyInBytes +
+                        " bytes in record payload, but instead read " + (buffer.position() - recordStart));
+
+            return new DefaultRecord(sizeInBytes, attributes, offset, timestamp, sequence, key, value, headers);
+        } catch (BufferUnderflowException | IllegalArgumentException e) {
+            throw new InvalidRecordException("Found invalid record structure", e);
         }
+    }
 
-        ByteBuffer value = null;
-        int valueSize = ByteUtils.readVarint(buffer);
-        if (valueSize >= 0) {
-            value = buffer.slice();
-            value.limit(valueSize);
-            buffer.position(buffer.position() + valueSize);
-        }
-
-        int numHeaders = ByteUtils.readVarint(buffer);
-        if (numHeaders < 0)
-            throw new InvalidRecordException("Found invalid number of record headers " + numHeaders);
-
-        if (numHeaders == 0)
-            return new DefaultRecord(sizeInBytes, attributes, offset, timestamp, sequence, key, value, Record.EMPTY_HEADERS);
-
+    private static Header[] readHeaders(ByteBuffer buffer, int numHeaders) {
         Header[] headers = new Header[numHeaders];
         for (int i = 0; i < numHeaders; i++) {
             int headerKeySize = ByteUtils.readVarint(buffer);
@@ -387,14 +390,7 @@ public class DefaultRecord implements Record {
             headers[i] = new RecordHeader(headerKey, headerValue);
         }
 
-        return new DefaultRecord(sizeInBytes, attributes, offset, timestamp, sequence, key, value, headers);
-    }
-
-    public static int sizeInBytes(int offsetDelta,
-                                  long timestampDelta,
-                                  byte[] key,
-                                  byte[] value) {
-        return sizeInBytes(offsetDelta, timestampDelta, wrapNullable(key), wrapNullable(value), Record.EMPTY_HEADERS);
+        return headers;
     }
 
     public static int sizeInBytes(int offsetDelta,

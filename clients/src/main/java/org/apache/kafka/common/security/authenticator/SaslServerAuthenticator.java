@@ -133,9 +133,7 @@ public class SaslServerAuthenticator implements Authenticator {
             callbackHandler = new ScramServerCallbackHandler(credentialCache.cache(mechanism, ScramCredential.class));
         callbackHandler.configure(configs, Mode.SERVER, subject, saslMechanism);
         if (mechanism.equals(SaslConfigs.GSSAPI_MECHANISM)) {
-            if (subject.getPrincipals().isEmpty())
-                throw new IllegalArgumentException("subject must have at least one principal");
-            saslServer = createSaslKerberosServer(callbackHandler, configs);
+            saslServer = createSaslKerberosServer(callbackHandler, configs, subject);
         } else {
             try {
                 saslServer = Subject.doAs(subject, new PrivilegedExceptionAction<SaslServer>() {
@@ -149,12 +147,12 @@ public class SaslServerAuthenticator implements Authenticator {
         }
     }
 
-    private SaslServer createSaslKerberosServer(final AuthCallbackHandler saslServerCallbackHandler, final Map<String, ?> configs) throws IOException {
+    private SaslServer createSaslKerberosServer(final AuthCallbackHandler saslServerCallbackHandler, final Map<String, ?> configs, Subject subject) throws IOException {
         // server is using a JAAS-authenticated subject: determine service principal name and hostname from kafka server's subject.
-        final Principal servicePrincipal = subject.getPrincipals().iterator().next();
+        final String servicePrincipal = SaslClientAuthenticator.firstPrincipal(subject);
         KerberosName kerberosName;
         try {
-            kerberosName = KerberosName.parse(servicePrincipal.getName());
+            kerberosName = KerberosName.parse(servicePrincipal);
         } catch (IllegalArgumentException e) {
             throw new KafkaException("Principal has name with unexpected format " + servicePrincipal);
         }

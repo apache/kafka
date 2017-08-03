@@ -21,7 +21,9 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.kstream.internals.GlobalKTableImpl;
+import org.apache.kafka.streams.kstream.internals.InternalStreamsBuilder;
 import org.apache.kafka.streams.kstream.internals.KStreamImpl;
 import org.apache.kafka.streams.kstream.internals.KTableImpl;
 import org.apache.kafka.streams.kstream.internals.KTableSource;
@@ -29,7 +31,6 @@ import org.apache.kafka.streams.kstream.internals.KTableSourceValueGetterSupplie
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.processor.TimestampExtractor;
-import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.streams.state.internals.RocksDBKeyValueStoreSupplier;
@@ -42,14 +43,25 @@ import java.util.regex.Pattern;
 /**
  * {@code KStreamBuilder} provide the high-level Kafka Streams DSL to specify a Kafka Streams topology.
  *
- * @see TopologyBuilder
+ * @see org.apache.kafka.streams.processor.TopologyBuilder
  * @see KStream
  * @see KTable
  * @see GlobalKTable
+ * @deprecated Use {@link org.apache.kafka.streams.StreamsBuilder StreamsBuilder} instead
  */
-public class KStreamBuilder extends TopologyBuilder {
+@Deprecated
+public class KStreamBuilder extends org.apache.kafka.streams.processor.TopologyBuilder {
 
     private final AtomicInteger index = new AtomicInteger(0);
+
+    private final InternalStreamsBuilder internalStreamsBuilder = new InternalStreamsBuilder(super.internalTopologyBuilder);
+
+    private Topology.AutoOffsetReset translateAutoOffsetReset(final org.apache.kafka.streams.processor.TopologyBuilder.AutoOffsetReset resetPolicy) {
+        if (resetPolicy == null) {
+            return null;
+        }
+        return resetPolicy == org.apache.kafka.streams.processor.TopologyBuilder.AutoOffsetReset.EARLIEST ? Topology.AutoOffsetReset.EARLIEST : Topology.AutoOffsetReset.LATEST;
+    }
 
     /**
      * Create a {@link KStream} from the specified topics.
@@ -89,7 +101,6 @@ public class KStreamBuilder extends TopologyBuilder {
                                        final String... topics) {
         return stream(offsetReset, null, null, null, topics);
     }
-
 
     /**
      * Create a {@link KStream} from the specified topic pattern.
@@ -153,7 +164,6 @@ public class KStreamBuilder extends TopologyBuilder {
         return stream(null, null, keySerde, valSerde, topics);
     }
 
-
     /**
      * Create a {@link KStream} from the specified topics.
      * The default {@link TimestampExtractor} as specified in the {@link StreamsConfig config} is used.
@@ -179,7 +189,6 @@ public class KStreamBuilder extends TopologyBuilder {
                                        final String... topics) {
         return stream(offsetReset, null, keySerde, valSerde, topics);
     }
-
 
     /**
      * Create a {@link KStream} from the specified topics.
@@ -207,7 +216,6 @@ public class KStreamBuilder extends TopologyBuilder {
         return stream(null, timestampExtractor, keySerde, valSerde, topics);
     }
 
-
     /**
      * Create a {@link KStream} from the specified topics.
      * <p>
@@ -233,13 +241,17 @@ public class KStreamBuilder extends TopologyBuilder {
                                        final Serde<K> keySerde,
                                        final Serde<V> valSerde,
                                        final String... topics) {
-        final String name = newName(KStreamImpl.SOURCE_NAME);
+        try {
+            final String name = newName(KStreamImpl.SOURCE_NAME);
 
-        addSource(offsetReset, name, timestampExtractor, keySerde == null ? null : keySerde.deserializer(), valSerde == null ? null : valSerde.deserializer(), topics);
+            internalTopologyBuilder.addSource(translateAutoOffsetReset(offsetReset), name, timestampExtractor,
+                keySerde == null ? null : keySerde.deserializer(), valSerde == null ? null : valSerde.deserializer(), topics);
 
-        return new KStreamImpl<>(this, name, Collections.singleton(name), false);
+            return new KStreamImpl<>(internalStreamsBuilder, name, Collections.singleton(name), false);
+        } catch (final org.apache.kafka.streams.errors.TopologyException e) {
+            throw new org.apache.kafka.streams.errors.TopologyBuilderException(e);
+        }
     }
-
 
     /**
      * Create a {@link KStream} from the specified topic pattern.
@@ -320,7 +332,6 @@ public class KStreamBuilder extends TopologyBuilder {
         return stream(null, timestampExtractor, keySerde, valSerde, topicPattern);
     }
 
-
     /**
      * Create a {@link KStream} from the specified topic pattern.
      * <p>
@@ -347,13 +358,17 @@ public class KStreamBuilder extends TopologyBuilder {
                                        final Serde<K> keySerde,
                                        final Serde<V> valSerde,
                                        final Pattern topicPattern) {
-        final String name = newName(KStreamImpl.SOURCE_NAME);
+        try {
+            final String name = newName(KStreamImpl.SOURCE_NAME);
 
-        addSource(offsetReset, name, timestampExtractor, keySerde == null ? null : keySerde.deserializer(), valSerde == null ? null : valSerde.deserializer(), topicPattern);
+            internalTopologyBuilder.addSource(translateAutoOffsetReset(offsetReset), name, timestampExtractor,
+                keySerde == null ? null : keySerde.deserializer(), valSerde == null ? null : valSerde.deserializer(), topicPattern);
 
-        return new KStreamImpl<>(this, name, Collections.singleton(name), false);
+            return new KStreamImpl<>(internalStreamsBuilder, name, Collections.singleton(name), false);
+        } catch (final org.apache.kafka.streams.errors.TopologyException e) {
+            throw new org.apache.kafka.streams.errors.TopologyBuilderException(e);
+        }
     }
-
 
     /**
      * Create a {@link KTable} for the specified topic.
@@ -373,14 +388,14 @@ public class KStreamBuilder extends TopologyBuilder {
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
      * <pre>{@code
      * KafkaStreams streams = ...
-     * ReadOnlyKeyValueStore<String,Long> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<String, Long>keyValueStore());
+     * ReadOnlyKeyValueStore<String, Long> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<String, Long>keyValueStore());
      * String key = "some-key";
      * Long valueForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
      * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#allMetadata()} to
      * query the value of the key on a parallel running instance of your Kafka Streams application.
      *
-     * @param topic     the topic name; cannot be {@code null}
+     * @param topic              the topic name; cannot be {@code null}
      * @param queryableStoreName the state store name; If {@code null} this is the equivalent of {@link KStreamBuilder#table(String)} ()}.
      * @return a {@link KTable} for the specified topic
      */
@@ -407,14 +422,14 @@ public class KStreamBuilder extends TopologyBuilder {
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
      * <pre>{@code
      * KafkaStreams streams = ...
-     * ReadOnlyKeyValueStore<String,Long> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<String, Long>keyValueStore());
+     * ReadOnlyKeyValueStore<String, Long> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<String, Long>keyValueStore());
      * String key = "some-key";
      * Long valueForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
      * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#allMetadata()} to
      * query the value of the key on a parallel running instance of your Kafka Streams application.
      *
-     * @param topic     the topic name; cannot be {@code null}
+     * @param topic         the topic name; cannot be {@code null}
      * @param storeSupplier user defined state store supplier. Cannot be {@code null}.
      * @return a {@link KTable} for the specified topic
      */
@@ -422,7 +437,6 @@ public class KStreamBuilder extends TopologyBuilder {
                                      final StateStoreSupplier<KeyValueStore> storeSupplier) {
         return table(null, null, null, null, topic, storeSupplier);
     }
-
 
     /**
      * Create a {@link KTable} for the specified topic.
@@ -461,17 +475,17 @@ public class KStreamBuilder extends TopologyBuilder {
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
      * <pre>{@code
      * KafkaStreams streams = ...
-     * ReadOnlyKeyValueStore<String,Long> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<String, Long>keyValueStore());
+     * ReadOnlyKeyValueStore<String, Long> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<String, Long>keyValueStore());
      * String key = "some-key";
      * Long valueForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
      * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#allMetadata()} to
      * query the value of the key on a parallel running instance of your Kafka Streams application.
      *
-     * @param offsetReset the {@code "auto.offset.reset"} policy to use for the specified topic if no valid committed
-     *                    offsets are available
-     * @param topic       the topic name; cannot be {@code null}
-     * @param queryableStoreName   the state store name; If {@code null} this is the equivalent of {@link KStreamBuilder#table(AutoOffsetReset, String)} ()}.
+     * @param offsetReset       the {@code "auto.offset.reset"} policy to use for the specified topic if no valid committed
+     *                          offsets are available
+     * @param topic             the topic name; cannot be {@code null}
+     * @param queryableStoreName the state store name; If {@code null} this is the equivalent of {@link KStreamBuilder#table(AutoOffsetReset, String)} ()}.
      * @return a {@link KTable} for the specified topic
      */
     public <K, V> KTable<K, V> table(final AutoOffsetReset offsetReset,
@@ -498,7 +512,7 @@ public class KStreamBuilder extends TopologyBuilder {
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
      * <pre>{@code
      * KafkaStreams streams = ...
-     * ReadOnlyKeyValueStore<String,Long> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<String, Long>keyValueStore());
+     * ReadOnlyKeyValueStore<String, Long> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<String, Long>keyValueStore());
      * String key = "some-key";
      * Long valueForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
@@ -532,14 +546,13 @@ public class KStreamBuilder extends TopologyBuilder {
      * <p>
      * @param offsetReset the {@code "auto.offset.reset"} policy to use for the specified topic if no valid committed
      *                    offsets are available
-     * @param topic       the topic name; if {@code null} an internal store name will be automatically given.
+     * @param topic       the topic name; cannot be {@code null}
      * @return a {@link KTable} for the specified topic
      */
     public <K, V> KTable<K, V> table(final AutoOffsetReset offsetReset,
                                      final String topic) {
         return table(offsetReset, null, null, null, topic, (String) null);
     }
-
 
     /**
      * Create a {@link KTable} for the specified topic.
@@ -559,7 +572,7 @@ public class KStreamBuilder extends TopologyBuilder {
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
      * <pre>{@code
      * KafkaStreams streams = ...
-     * ReadOnlyKeyValueStore<String,Long> localStore = streams.store(storeName, QueryableStoreTypes.<String, Long>keyValueStore());
+     * ReadOnlyKeyValueStore<String, Long> localStore = streams.store(storeName, QueryableStoreTypes.<String, Long>keyValueStore());
      * String key = "some-key";
      * Long valueForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
@@ -578,7 +591,6 @@ public class KStreamBuilder extends TopologyBuilder {
         return table(null, timestampExtractor, null, null, topic, storeName);
     }
 
-
     /**
      * Create a {@link KTable} for the specified topic.
      * The default key and value deserializers as specified in the {@link StreamsConfig config} are used.
@@ -596,7 +608,7 @@ public class KStreamBuilder extends TopologyBuilder {
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
      * <pre>{@code
      * KafkaStreams streams = ...
-     * ReadOnlyKeyValueStore<String,Long> localStore = streams.store(storeName, QueryableStoreTypes.<String, Long>keyValueStore());
+     * ReadOnlyKeyValueStore<String, Long> localStore = streams.store(storeName, QueryableStoreTypes.<String, Long>keyValueStore());
      * String key = "some-key";
      * Long valueForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
@@ -616,7 +628,6 @@ public class KStreamBuilder extends TopologyBuilder {
         return table(offsetReset, timestampExtractor, null, null, topic, storeName);
     }
 
-
     /**
      * Create a {@link KTable} for the specified topic.
      * The default {@code "auto.offset.reset"} strategy and default {@link TimestampExtractor}
@@ -635,18 +646,18 @@ public class KStreamBuilder extends TopologyBuilder {
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
      * <pre>{@code
      * KafkaStreams streams = ...
-     * ReadOnlyKeyValueStore<String,Long> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<String, Long>keyValueStore());
+     * ReadOnlyKeyValueStore<String, Long> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<String, Long>keyValueStore());
      * String key = "some-key";
      * Long valueForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
      * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#allMetadata()} to
      * query the value of the key on a parallel running instance of your Kafka Streams application.
      *
-     * @param keySerde  key serde used to send key-value pairs,
-     *                  if not specified the default key serde defined in the configuration will be used
-     * @param valSerde  value serde used to send key-value pairs,
-     *                  if not specified the default value serde defined in the configuration will be used
-     * @param topic     the topic name; cannot be {@code null}
+     * @param keySerde           key serde used to send key-value pairs,
+     *                           if not specified the default key serde defined in the configuration will be used
+     * @param valSerde           value serde used to send key-value pairs,
+     *                           if not specified the default value serde defined in the configuration will be used
+     * @param topic              the topic name; cannot be {@code null}
      * @param queryableStoreName the state store name; If {@code null} this is the equivalent of {@link KStreamBuilder#table(Serde, Serde, String)} ()}.
      * @return a {@link KTable} for the specified topic
      */
@@ -675,18 +686,18 @@ public class KStreamBuilder extends TopologyBuilder {
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
      * <pre>{@code
      * KafkaStreams streams = ...
-     * ReadOnlyKeyValueStore<String,Long> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<String, Long>keyValueStore());
+     * ReadOnlyKeyValueStore<String, Long> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<String, Long>keyValueStore());
      * String key = "some-key";
      * Long valueForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
      * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#allMetadata()} to
      * query the value of the key on a parallel running instance of your Kafka Streams application.
      *
-     * @param keySerde  key serde used to send key-value pairs,
-     *                  if not specified the default key serde defined in the configuration will be used
-     * @param valSerde  value serde used to send key-value pairs,
-     *                  if not specified the default value serde defined in the configuration will be used
-     * @param topic     the topic name; cannot be {@code null}
+     * @param keySerde      key serde used to send key-value pairs,
+     *                      if not specified the default key serde defined in the configuration will be used
+     * @param valSerde      value serde used to send key-value pairs,
+     *                      if not specified the default value serde defined in the configuration will be used
+     * @param topic         the topic name; cannot be {@code null}
      * @param storeSupplier user defined state store supplier. Cannot be {@code null}.
      * @return a {@link KTable} for the specified topic
      */
@@ -730,23 +741,29 @@ public class KStreamBuilder extends TopologyBuilder {
                                         final String topic,
                                         final StateStoreSupplier<KeyValueStore> storeSupplier,
                                         final boolean isQueryable) {
-        final String source = newName(KStreamImpl.SOURCE_NAME);
-        final String name = newName(KTableImpl.SOURCE_NAME);
-        final ProcessorSupplier<K, V> processorSupplier = new KTableSource<>(storeSupplier.name());
+        try {
+            final String source = newName(KStreamImpl.SOURCE_NAME);
+            final String name = newName(KTableImpl.SOURCE_NAME);
+            final ProcessorSupplier<K, V> processorSupplier = new KTableSource<>(storeSupplier.name());
 
-        addSource(offsetReset, source, timestampExtractor, keySerde == null ? null : keySerde.deserializer(),
+            internalTopologyBuilder.addSource(translateAutoOffsetReset(offsetReset), source, timestampExtractor,
+                keySerde == null ? null : keySerde.deserializer(),
                 valSerde == null ? null : valSerde.deserializer(),
                 topic);
-        addProcessor(name, processorSupplier, source);
+            internalTopologyBuilder.addProcessor(name, processorSupplier, source);
 
-        final KTableImpl<K, ?, V> kTable = new KTableImpl<>(this, name, processorSupplier,
-                keySerde, valSerde, Collections.singleton(source), storeSupplier.name(), isQueryable);
+            final KTableImpl<K, ?, V> kTable = new KTableImpl<>(internalStreamsBuilder, name, processorSupplier,
+                    keySerde, valSerde, Collections.singleton(source), storeSupplier.name(), isQueryable);
 
-        addStateStore(storeSupplier, name);
-        connectSourceStoreAndTopic(storeSupplier.name(), topic);
+            addStateStore(storeSupplier, name);
+            connectSourceStoreAndTopic(storeSupplier.name(), topic);
 
-        return kTable;
+            return kTable;
+        } catch (final org.apache.kafka.streams.errors.TopologyException e) {
+            throw new org.apache.kafka.streams.errors.TopologyBuilderException(e);
+        }
     }
+
     /**
      * Create a {@link KTable} for the specified topic.
      * Input {@link KeyValue records} with {@code null} key will be dropped.
@@ -763,21 +780,21 @@ public class KStreamBuilder extends TopologyBuilder {
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
      * <pre>{@code
      * KafkaStreams streams = ...
-     * ReadOnlyKeyValueStore<String,Long> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<String, Long>keyValueStore());
+     * ReadOnlyKeyValueStore<String, Long> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<String, Long>keyValueStore());
      * String key = "some-key";
      * Long valueForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
      * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#allMetadata()} to
      * query the value of the key on a parallel running instance of your Kafka Streams application.
      *
-     * @param offsetReset the {@code "auto.offset.reset"} policy to use for the specified topic if no valid committed
-     *                    offsets are available
-     * @param keySerde    key serde used to send key-value pairs,
-     *                    if not specified the default key serde defined in the configuration will be used
-     * @param valSerde    value serde used to send key-value pairs,
-     *                    if not specified the default value serde defined in the configuration will be used
-     * @param topic       the topic name; cannot be {@code null}
-     * @param queryableStoreName   the state store name; If {@code null} this is the equivalent of {@link KStreamBuilder#table(AutoOffsetReset, Serde, Serde, String)} ()} ()}.
+     * @param offsetReset        the {@code "auto.offset.reset"} policy to use for the specified topic if no valid committed
+     *                           offsets are available
+     * @param keySerde           key serde used to send key-value pairs,
+     *                           if not specified the default key serde defined in the configuration will be used
+     * @param valSerde           value serde used to send key-value pairs,
+     *                           if not specified the default value serde defined in the configuration will be used
+     * @param topic              the topic name; cannot be {@code null}
+     * @param queryableStoreName the state store name; If {@code null} this is the equivalent of {@link KStreamBuilder#table(AutoOffsetReset, Serde, Serde, String)} ()} ()}.
      * @return a {@link KTable} for the specified topic
      */
     public <K, V> KTable<K, V> table(final AutoOffsetReset offsetReset,
@@ -787,8 +804,6 @@ public class KStreamBuilder extends TopologyBuilder {
                                      final String queryableStoreName) {
         return table(offsetReset, null, keySerde, valSerde, topic, queryableStoreName);
     }
-
-
 
     /**
      * Create a {@link KTable} for the specified topic.
@@ -807,7 +822,7 @@ public class KStreamBuilder extends TopologyBuilder {
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
      * <pre>{@code
      * KafkaStreams streams = ...
-     * ReadOnlyKeyValueStore<String,Long> localStore = streams.store(storeName, QueryableStoreTypes.<String, Long>keyValueStore());
+     * ReadOnlyKeyValueStore<String, Long> localStore = streams.store(storeName, QueryableStoreTypes.<String, Long>keyValueStore());
      * String key = "some-key";
      * Long valueForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
@@ -832,8 +847,6 @@ public class KStreamBuilder extends TopologyBuilder {
         return table(null, timestampExtractor, keySerde, valSerde, topic, storeName);
     }
 
-
-
     /**
      * Create a {@link KTable} for the specified topic.
      * Input {@link KeyValue} pairs with {@code null} key will be dropped.
@@ -850,7 +863,7 @@ public class KStreamBuilder extends TopologyBuilder {
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
      * <pre>{@code
      * KafkaStreams streams = ...
-     * ReadOnlyKeyValueStore<String,Long> localStore = streams.store(storeName, QueryableStoreTypes.<String, Long>keyValueStore());
+     * ReadOnlyKeyValueStore<String, Long> localStore = streams.store(storeName, QueryableStoreTypes.<String, Long>keyValueStore());
      * String key = "some-key";
      * Long valueForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
@@ -900,11 +913,11 @@ public class KStreamBuilder extends TopologyBuilder {
      * <p>
      * @param offsetReset the {@code "auto.offset.reset"} policy to use for the specified topic if no valid committed
      *                    offsets are available
-     * @param keySerde  key serde used to send key-value pairs,
-     *                  if not specified the default key serde defined in the configuration will be used
-     * @param valSerde  value serde used to send key-value pairs,
-     *                  if not specified the default value serde defined in the configuration will be used
-     * @param topic     the topic name; cannot be {@code null}
+     * @param keySerde    key serde used to send key-value pairs,
+     *                    if not specified the default key serde defined in the configuration will be used
+     * @param valSerde    value serde used to send key-value pairs,
+     *                    if not specified the default value serde defined in the configuration will be used
+     * @param topic       the topic name; cannot be {@code null}
      * @return a {@link KTable} for the specified topic
      */
     public <K, V> KTable<K, V> table(final AutoOffsetReset offsetReset,
@@ -913,6 +926,7 @@ public class KStreamBuilder extends TopologyBuilder {
                                      final String topic) {
         return table(offsetReset, null, keySerde, valSerde, topic, (String) null);
     }
+
     /**
      * Create a {@link KTable} for the specified topic.
      * Input {@link KeyValue records} with {@code null} key will be dropped.
@@ -929,7 +943,7 @@ public class KStreamBuilder extends TopologyBuilder {
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
      * <pre>{@code
      * KafkaStreams streams = ...
-     * ReadOnlyKeyValueStore<String,Long> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<String, Long>keyValueStore());
+     * ReadOnlyKeyValueStore<String, Long> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<String, Long>keyValueStore());
      * String key = "some-key";
      * Long valueForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
@@ -970,7 +984,7 @@ public class KStreamBuilder extends TopologyBuilder {
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
      * <pre>{@code
      * KafkaStreams streams = ...
-     * ReadOnlyKeyValueStore<String,Long> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<String, Long>keyValueStore());
+     * ReadOnlyKeyValueStore<String, Long> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<String, Long>keyValueStore());
      * String key = "some-key";
      * Long valueForKey = localStore.get(key);
      * }</pre>
@@ -1003,9 +1017,8 @@ public class KStreamBuilder extends TopologyBuilder {
      * @return a {@link GlobalKTable} for the specified topic
      */
     public <K, V> GlobalKTable<K, V> globalTable(final String topic) {
-        return globalTable(null, null, null, topic, (String) null);
+        return globalTable(null, null, null, topic, null);
     }
-
 
     /**
      * Create a {@link GlobalKTable} for the specified topic.
@@ -1022,7 +1035,7 @@ public class KStreamBuilder extends TopologyBuilder {
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
      * <pre>{@code
      * KafkaStreams streams = ...
-     * ReadOnlyKeyValueStore<String,Long> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<String, Long>keyValueStore());
+     * ReadOnlyKeyValueStore<String, Long> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<String, Long>keyValueStore());
      * String key = "some-key";
      * Long valueForKey = localStore.get(key);
      * }</pre>
@@ -1037,7 +1050,6 @@ public class KStreamBuilder extends TopologyBuilder {
      * @param queryableStoreName the state store name; If {@code null} this is the equivalent of {@link KStreamBuilder#globalTable(Serde, Serde, String)} ()}
      * @return a {@link GlobalKTable} for the specified topic
      */
-    @SuppressWarnings("unchecked")
     public <K, V> GlobalKTable<K, V> globalTable(final Serde<K> keySerde,
                                                  final Serde<V> valSerde,
                                                  final TimestampExtractor timestampExtractor,
@@ -1066,7 +1078,7 @@ public class KStreamBuilder extends TopologyBuilder {
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
      * <pre>{@code
      * KafkaStreams streams = ...
-     * ReadOnlyKeyValueStore<String,Long> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<String, Long>keyValueStore());
+     * ReadOnlyKeyValueStore<String, Long> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<String, Long>keyValueStore());
      * String key = "some-key";
      * Long valueForKey = localStore.get(key);
      * }</pre>
@@ -1081,14 +1093,13 @@ public class KStreamBuilder extends TopologyBuilder {
      * @param storeSupplier user defined state store supplier. Cannot be {@code null}.
      * @return a {@link GlobalKTable} for the specified topic
      */
-    @SuppressWarnings("unchecked")
     public <K, V> GlobalKTable<K, V> globalTable(final Serde<K> keySerde,
                                                  final Serde<V> valSerde,
                                                  final String topic,
                                                  final StateStoreSupplier<KeyValueStore> storeSupplier) {
         return doGlobalTable(keySerde, valSerde, null, topic, storeSupplier);
     }
-    
+
     /**
      * Create a {@link GlobalKTable} for the specified topic.
      * The default {@link TimestampExtractor} as specified in the {@link StreamsConfig config} is used.
@@ -1103,7 +1114,7 @@ public class KStreamBuilder extends TopologyBuilder {
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
      * <pre>{@code
      * KafkaStreams streams = ...
-     * ReadOnlyKeyValueStore<String,Long> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<String, Long>keyValueStore());
+     * ReadOnlyKeyValueStore<String, Long> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<String, Long>keyValueStore());
      * String key = "some-key";
      * Long valueForKey = localStore.get(key);
      * }</pre>
@@ -1119,7 +1130,6 @@ public class KStreamBuilder extends TopologyBuilder {
      *                           {@link KStreamBuilder#globalTable(Serde, Serde, String)} ()}
      * @return a {@link GlobalKTable} for the specified topic
      */
-    @SuppressWarnings("unchecked")
     public <K, V> GlobalKTable<K, V> globalTable(final Serde<K> keySerde,
                                                  final Serde<V> valSerde,
                                                  final String topic,
@@ -1140,7 +1150,7 @@ public class KStreamBuilder extends TopologyBuilder {
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
      * <pre>{@code
      * KafkaStreams streams = ...
-     * ReadOnlyKeyValueStore<String,Long> localStore = streams.store(storeName, QueryableStoreTypes.<String, Long>keyValueStore());
+     * ReadOnlyKeyValueStore<String, Long> localStore = streams.store(storeName, QueryableStoreTypes.<String, Long>keyValueStore());
      * String key = "some-key";
      * Long valueForKey = localStore.get(key);
      * }</pre>
@@ -1163,17 +1173,20 @@ public class KStreamBuilder extends TopologyBuilder {
                                                     final TimestampExtractor timestampExtractor,
                                                     final String topic,
                                                     final StateStoreSupplier<KeyValueStore> storeSupplier) {
-        Objects.requireNonNull(storeSupplier, "storeSupplier can't be null");
-        final String sourceName = newName(KStreamImpl.SOURCE_NAME);
-        final String processorName = newName(KTableImpl.SOURCE_NAME);
-        final KTableSource<K, V> tableSource = new KTableSource<>(storeSupplier.name());
+        try {
+            Objects.requireNonNull(storeSupplier, "storeSupplier can't be null");
+            final String sourceName = newName(KStreamImpl.SOURCE_NAME);
+            final String processorName = newName(KTableImpl.SOURCE_NAME);
+            final KTableSource<K, V> tableSource = new KTableSource<>(storeSupplier.name());
 
+            final Deserializer<K> keyDeserializer = keySerde == null ? null : keySerde.deserializer();
+            final Deserializer<V> valueDeserializer = valSerde == null ? null : valSerde.deserializer();
 
-        final Deserializer<K> keyDeserializer = keySerde == null ? null : keySerde.deserializer();
-        final Deserializer<V> valueDeserializer = valSerde == null ? null : valSerde.deserializer();
-
-        addGlobalStore(storeSupplier, sourceName, timestampExtractor, keyDeserializer, valueDeserializer, topic, processorName, tableSource);
-        return new GlobalKTableImpl(new KTableSourceValueGetterSupplier<>(storeSupplier.name()));
+            internalTopologyBuilder.addGlobalStore(storeSupplier, sourceName, timestampExtractor, keyDeserializer, valueDeserializer, topic, processorName, tableSource);
+            return new GlobalKTableImpl(new KTableSourceValueGetterSupplier<>(storeSupplier.name()));
+        } catch (final org.apache.kafka.streams.errors.TopologyException e) {
+            throw new org.apache.kafka.streams.errors.TopologyBuilderException(e);
+        }
     }
 
     /**
@@ -1196,7 +1209,6 @@ public class KStreamBuilder extends TopologyBuilder {
      * @param topic     the topic name; cannot be {@code null}
      * @return a {@link GlobalKTable} for the specified topic
      */
-    @SuppressWarnings("unchecked")
     public <K, V> GlobalKTable<K, V> globalTable(final Serde<K> keySerde,
                                                  final Serde<V> valSerde,
                                                  final String topic) {
@@ -1213,7 +1225,11 @@ public class KStreamBuilder extends TopologyBuilder {
      * @return a {@link KStream} containing all records of the given streams
      */
     public <K, V> KStream<K, V> merge(final KStream<K, V>... streams) {
-        return KStreamImpl.merge(this, streams);
+        try {
+            return KStreamImpl.merge(internalStreamsBuilder, streams);
+        } catch (final org.apache.kafka.streams.errors.TopologyException e) {
+            throw new org.apache.kafka.streams.errors.TopologyBuilderException(e);
+        }
     }
 
     /**

@@ -44,6 +44,7 @@ public abstract class AbstractProcessor<K, V> implements Processor<K, V> {
      *
      * @param timestamp the wallclock time when this method is being called
      */
+    @SuppressWarnings("deprecation")
     @Override
     public void punctuate(long timestamp) {
         // do nothing

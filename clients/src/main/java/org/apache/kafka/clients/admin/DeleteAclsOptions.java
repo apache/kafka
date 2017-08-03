@@ -17,18 +17,34 @@
 
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.annotation.InterfaceStability;
+
+import java.util.Collection;
+
 /**
- * Options for the deleteAcls call.
+ * Options for the {@link AdminClient#deleteAcls(Collection)} call.
+ *
+ * The API of this class is evolving, see {@link AdminClient} for details.
  */
+@InterfaceStability.Evolving
 public class DeleteAclsOptions {
     private Integer timeoutMs = null;
 
+    /**
+     * Set the request timeout in milliseconds for this operation or {@code null} if the default request timeout for the
+     * AdminClient should be used.
+     */
     public DeleteAclsOptions timeoutMs(Integer timeoutMs) {
         this.timeoutMs = timeoutMs;
         return this;
     }
 
+    /**
+     * The request timeout in milliseconds for this operation or {@code null} if the default request timeout for the
+     * AdminClient should be used.
+     */
     public Integer timeoutMs() {
         return timeoutMs;
     }
+
 }

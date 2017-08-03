@@ -18,10 +18,12 @@ package org.apache.kafka.clients.producer;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.Metadata;
+import org.apache.kafka.clients.producer.internals.ProducerInterceptors;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
@@ -85,16 +87,13 @@ public class KafkaProducerTest {
 
         final int oldInitCount = MockMetricsReporter.INIT_COUNT.get();
         final int oldCloseCount = MockMetricsReporter.CLOSE_COUNT.get();
-        try {
-            KafkaProducer<byte[], byte[]> producer = new KafkaProducer<byte[], byte[]>(
-                    props, new ByteArraySerializer(), new ByteArraySerializer());
+        try (KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(props, new ByteArraySerializer(), new ByteArraySerializer())) {
+            fail("should have caught an exception and returned");
         } catch (KafkaException e) {
             assertEquals(oldInitCount + 1, MockMetricsReporter.INIT_COUNT.get());
             assertEquals(oldCloseCount + 1, MockMetricsReporter.CLOSE_COUNT.get());
             assertEquals("Failed to construct kafka producer", e.getMessage());
-            return;
         }
-        fail("should have caught an exception and returned");
     }
 
     @Test
@@ -170,9 +169,7 @@ public class KafkaProducerTest {
         config.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         config.put(ProducerConfig.SEND_BUFFER_CONFIG, Selectable.USE_DEFAULT_BUFFER_SIZE);
         config.put(ProducerConfig.RECEIVE_BUFFER_CONFIG, Selectable.USE_DEFAULT_BUFFER_SIZE);
-        KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(
-                config, new ByteArraySerializer(), new ByteArraySerializer());
-        producer.close();
+        new KafkaProducer<>(config, new ByteArraySerializer(), new ByteArraySerializer()).close();
     }
 
     @Test(expected = KafkaException.class)
@@ -325,7 +322,8 @@ public class KafkaProducerTest {
         KafkaProducer<String, String> producer = new KafkaProducer<>(props, new StringSerializer(), new StringSerializer());
         long refreshBackoffMs = 500L;
         long metadataExpireMs = 60000L;
-        final Metadata metadata = new Metadata(refreshBackoffMs, metadataExpireMs, true, new ClusterResourceListeners());
+        final Metadata metadata = new Metadata(refreshBackoffMs, metadataExpireMs, true,
+                true, new ClusterResourceListeners());
         final Time time = new MockTime();
         MemberModifier.field(KafkaProducer.class, "metadata").set(producer, metadata);
         MemberModifier.field(KafkaProducer.class, "time").set(producer, time);
@@ -352,7 +350,7 @@ public class KafkaProducerTest {
         }
         Assert.assertTrue("Topic should still exist in metadata", metadata.containsTopic(topic));
     }
-    
+
     @PrepareOnlyThisForTest(Metadata.class)
     @Test
     public void testHeaders() throws Exception {
@@ -366,8 +364,6 @@ public class KafkaProducerTest {
         MemberModifier.field(KafkaProducer.class, "metadata").set(producer, metadata);
 
         String topic = "topic";
-        Collection<Node> nodes = Collections.singletonList(new Node(0, "host1", 1000));
-
         final Cluster cluster = new Cluster(
                 "dummy",
                 Collections.singletonList(new Node(0, "host1", 1000)),
@@ -392,9 +388,9 @@ public class KafkaProducerTest {
 
         //ensure headers can be mutated pre send.
         record.headers().add(new RecordHeader("test", "header2".getBytes()));
-        
+
         producer.send(record, null);
-        
+
         //ensure headers are closed and cannot be mutated post send
         try {
             record.headers().add(new RecordHeader("test", "test".getBytes()));
@@ -402,7 +398,7 @@ public class KafkaProducerTest {
         } catch (IllegalStateException ise) {
             //expected
         }
-        
+
         //ensure existing headers are not changed, and last header for key is still original value
         assertTrue(Arrays.equals(record.headers().lastHeader("test").value(), "header2".getBytes()));
 
@@ -434,4 +430,38 @@ public class KafkaProducerTest {
         }
     }
 
+    @PrepareOnlyThisForTest(Metadata.class)
+    @Test
+    public void testInterceptorPartitionSetOnTooLargeRecord() throws Exception {
+        Properties props = new Properties();
+        props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        props.setProperty(ProducerConfig.MAX_REQUEST_SIZE_CONFIG, "1");
+        String topic = "topic";
+        ProducerRecord<String, String> record = new ProducerRecord<>(topic, "value");
+
+        KafkaProducer<String, String> producer = new KafkaProducer<>(props, new StringSerializer(),
+                new StringSerializer());
+        Metadata metadata = PowerMock.createNiceMock(Metadata.class);
+        MemberModifier.field(KafkaProducer.class, "metadata").set(producer, metadata);
+        final Cluster cluster = new Cluster(
+            "dummy",
+            Collections.singletonList(new Node(0, "host1", 1000)),
+            Arrays.asList(new PartitionInfo(topic, 0, null, null, null)),
+            Collections.<String>emptySet(),
+            Collections.<String>emptySet());
+        EasyMock.expect(metadata.fetch()).andReturn(cluster).once();
+
+        // Mock interceptors field
+        ProducerInterceptors interceptors = PowerMock.createMock(ProducerInterceptors.class);
+        EasyMock.expect(interceptors.onSend(record)).andReturn(record);
+        interceptors.onSendError(EasyMock.eq(record), EasyMock.<TopicPartition>notNull(), EasyMock.<Exception>notNull());
+        EasyMock.expectLastCall();
+        MemberModifier.field(KafkaProducer.class, "interceptors").set(producer, interceptors);
+
+        PowerMock.replay(metadata);
+        EasyMock.replay(interceptors);
+        producer.send(record);
+
+        EasyMock.verify(interceptors);
+    }
 }

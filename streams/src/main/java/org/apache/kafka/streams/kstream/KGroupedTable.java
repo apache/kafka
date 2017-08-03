@@ -38,7 +38,7 @@ import org.apache.kafka.streams.state.QueryableStoreType;
  * @param <V> Type of values
  * @see KTable
  */
-@InterfaceStability.Unstable
+@InterfaceStability.Evolving
 public interface KGroupedTable<K, V> {
 
     /**
@@ -163,10 +163,11 @@ public interface KGroupedTable<K, V> {
      * <p>
      * Each update to the original {@link KTable} results in a two step update of the result {@link KTable}.
      * The specified {@link Reducer adder} is applied for each update record and computes a new aggregate using the
-     * current aggregate and the record's value by adding the new record to the aggregate.
+     * current aggregate (first argument) and the record's value (second argument) by adding the new record to the
+     * aggregate.
      * The specified {@link Reducer substractor} is applied for each "replaced" record of the original {@link KTable}
-     * and computes a new aggregate using the current aggregate and the record's value by "removing" the "replaced"
-     * record from the aggregate.
+     * and computes a new aggregate using the current aggregate (first argument) and the record's value (second
+     * argument) by "removing" the "replaced" record from the aggregate.
      * If there is no current aggregate the {@link Reducer} is not applied and the new aggregate will be the record's
      * value as-is.
      * Thus, {@code reduce(Reducer, Reducer, String)} can be used to compute aggregate functions like sum.
@@ -290,10 +291,11 @@ public interface KGroupedTable<K, V> {
      * <p>
      * Each update to the original {@link KTable} results in a two step update of the result {@link KTable}.
      * The specified {@link Reducer adder} is applied for each update record and computes a new aggregate using the
-     * current aggregate and the record's value by adding the new record to the aggregate.
+     * current aggregate (first argument) and the record's value (second argument) by adding the new record to the
+     * aggregate.
      * The specified {@link Reducer substractor} is applied for each "replaced" record of the original {@link KTable}
-     * and computes a new aggregate using the current aggregate and the record's value by "removing" the "replaced"
-     * record from the aggregate.
+     * and computes a new aggregate using the current aggregate (first argument) and the record's value (second
+     * argument) by "removing" the "replaced" record from the aggregate.
      * If there is no current aggregate the {@link Reducer} is not applied and the new aggregate will be the record's
      * value as-is.
      * Thus, {@code reduce(Reducer, Reducer, String)} can be used to compute aggregate functions like sum.

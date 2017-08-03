@@ -121,7 +121,7 @@ class KafkaConfigTest {
   }
 
   @Test
-  def testLogRetentionValid {
+  def testLogRetentionValid(): Unit = {
     val props1 = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
     val props2 = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
     val props3 = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
@@ -545,6 +545,7 @@ class KafkaConfigTest {
         case KafkaConfig.NumIoThreadsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
         case KafkaConfig.BackgroundThreadsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
         case KafkaConfig.QueuedMaxRequestsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
+        case KafkaConfig.QueuedMaxBytesProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
         case KafkaConfig.RequestTimeoutMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
 
         case KafkaConfig.AuthorizerClassNameProp => //ignore string
@@ -712,7 +713,6 @@ class KafkaConfigTest {
     assertEquals(12 * 60L * 1000L * 60, config.logRollTimeMillis)
     assertEquals(11 * 60L * 1000L * 60, config.logRollTimeJitterMillis)
     assertEquals(10 * 60L * 1000L * 60, config.logRetentionTimeMillis)
-    assertEquals(config.logRetentionTimeMillis, config.logMessageTimestampDifferenceMaxMs)
     assertEquals(123L, config.logFlushIntervalMs)
     assertEquals(SnappyCompressionCodec, config.offsetsTopicCompressionCodec)
     assertEquals(Sensor.RecordingLevel.DEBUG.toString, config.metricRecordingLevel)

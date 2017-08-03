@@ -22,13 +22,14 @@ from kafkatest.services.streams import StreamsTestBaseService
 class StreamsSimpleBenchmarkService(StreamsTestBaseService):
     """Base class for simple Kafka Streams benchmark"""
 
-    def __init__(self, test_context, kafka, numrecs, load_phase, test_name):
+    def __init__(self, test_context, kafka, numrecs, load_phase, test_name, num_threads):
         super(StreamsSimpleBenchmarkService, self).__init__(test_context,
                                                             kafka,
                                                             "org.apache.kafka.streams.perf.SimpleBenchmark",
                                                             numrecs,
                                                             load_phase,
-                                                            test_name)
+                                                            test_name,
+                                                            num_threads)
 
     def collect_data(self, node, tag = None):
         # Collect the data and return it to the framework

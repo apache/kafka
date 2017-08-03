@@ -26,7 +26,6 @@ import kafka.common.KafkaException
 import kafka.log.LogConfig
 import kafka.message.UncompressedCodec
 import kafka.server.Defaults
-import kafka.utils.CoreUtils.inLock
 import kafka.server.ReplicaManager
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils.{Logging, Pool, Scheduler, ZkUtils}
@@ -65,7 +64,7 @@ class TransactionStateManager(brokerId: Int,
                               config: TransactionConfig,
                               time: Time) extends Logging {
 
-  this.logIdent = "[Transaction Log Manager " + brokerId + "]: "
+  this.logIdent = "[Transaction State Manager " + brokerId + "]: "
 
   type SendTxnMarkersCallback = (String, Int, TransactionResult, TransactionMetadata, TxnTransitMetadata) => Unit
 
@@ -86,6 +85,16 @@ class TransactionStateManager(brokerId: Int,
 
   /** number of partitions for the transaction log topic */
   private val transactionTopicPartitionCount = getTransactionTopicPartitionCount
+
+  // visible for testing only
+  private[transaction] def addLoadingPartition(partitionId: Int, coordinatorEpoch: Int): Unit = {
+    val partitionAndLeaderEpoch = TransactionPartitionAndLeaderEpoch(partitionId, coordinatorEpoch)
+
+    inWriteLock(stateLock) {
+      leavingPartitions.remove(partitionAndLeaderEpoch)
+      loadingPartitions.add(partitionAndLeaderEpoch)
+    }
+  }
 
   // this is best-effort expiration of an ongoing transaction which has been open for more than its
   // txn timeout value, we do not need to grab the lock on the metadata object upon checking its state
@@ -114,8 +123,6 @@ class TransactionStateManager(brokerId: Int,
     }
   }
 
-
-
   def enableTransactionalIdExpiration() {
     scheduler.schedule("transactionalId-expiration", () => {
       val now = time.milliseconds()
@@ -130,7 +137,7 @@ class TransactionStateManager(brokerId: Int,
               txnMetadata.txnLastUpdateTimestamp <= now - config.transactionalIdExpirationMs
             }.map { case (transactionalId, txnMetadata) =>
               val txnMetadataTransition = txnMetadata synchronized {
-                txnMetadata.prepareDead
+                txnMetadata.prepareDead()
               }
               TransactionalIdCoordinatorEpochAndMetadata(transactionalId, entry.coordinatorEpoch, txnMetadataTransition)
             }
@@ -197,6 +204,14 @@ class TransactionStateManager(brokerId: Int,
     }, delay = config.removeExpiredTransactionalIdsIntervalMs, period = config.removeExpiredTransactionalIdsIntervalMs)
   }
 
+  def getTransactionState(transactionalId: String): Either[Errors, Option[CoordinatorEpochAndTxnMetadata]] =
+    getAndMaybeAddTransactionState(transactionalId, None)
+
+  def putTransactionStateIfNotExists(transactionalId: String,
+                                     txnMetadata: TransactionMetadata): Either[Errors, CoordinatorEpochAndTxnMetadata] =
+    getAndMaybeAddTransactionState(transactionalId, Some(txnMetadata))
+      .right.map(_.getOrElse(throw new IllegalStateException(s"Unexpected empty transaction metadata returned while putting $txnMetadata")))
+
   /**
    * Get the transaction metadata associated with the given transactional id, or an error if
    * the coordinator does not own the transaction partition or is still loading it; if not found
@@ -204,40 +219,29 @@ class TransactionStateManager(brokerId: Int,
    *
    * This function is covered by the state read lock
    */
-  def getAndMaybeAddTransactionState(transactionalId: String,
-                                     createdTxnMetadata: Option[TransactionMetadata] = None): Either[Errors, Option[CoordinatorEpochAndTxnMetadata]]
-  = inReadLock(stateLock) {
-    val partitionId = partitionFor(transactionalId)
-
-    if (loadingPartitions.exists(_.txnPartitionId == partitionId))
-      return Left(Errors.COORDINATOR_LOAD_IN_PROGRESS)
-
-    if (leavingPartitions.exists(_.txnPartitionId == partitionId))
-      Right(Errors.NOT_COORDINATOR)
-
-    transactionMetadataCache.get(partitionId) match {
-      case Some(cacheEntry) =>
-        cacheEntry.metadataPerTransactionalId.get(transactionalId) match {
-          case null =>
-            createdTxnMetadata match {
-              case None =>
-                Right(None)
-
-              case Some(txnMetadata) =>
-                val currentTxnMetadata = cacheEntry.metadataPerTransactionalId.putIfNotExists(transactionalId, txnMetadata)
-                if (currentTxnMetadata != null) {
-                  Right(Some(CoordinatorEpochAndTxnMetadata(cacheEntry.coordinatorEpoch, currentTxnMetadata)))
-                } else {
-                  Right(Some(CoordinatorEpochAndTxnMetadata(cacheEntry.coordinatorEpoch, txnMetadata)))
-                }
-            }
-
-          case currentTxnMetadata =>
-            Right(Some(CoordinatorEpochAndTxnMetadata(cacheEntry.coordinatorEpoch, currentTxnMetadata)))
-        }
-
-      case None =>
+  private def getAndMaybeAddTransactionState(transactionalId: String,
+                                             createdTxnMetadataOpt: Option[TransactionMetadata]): Either[Errors, Option[CoordinatorEpochAndTxnMetadata]] = {
+    inReadLock(stateLock) {
+      val partitionId = partitionFor(transactionalId)
+      if (loadingPartitions.exists(_.txnPartitionId == partitionId))
+        Left(Errors.COORDINATOR_LOAD_IN_PROGRESS)
+      else if (leavingPartitions.exists(_.txnPartitionId == partitionId))
         Left(Errors.NOT_COORDINATOR)
+      else {
+        transactionMetadataCache.get(partitionId) match {
+          case Some(cacheEntry) =>
+            val txnMetadata = Option(cacheEntry.metadataPerTransactionalId.get(transactionalId)).orElse {
+              createdTxnMetadataOpt.map { createdTxnMetadata =>
+                Option(cacheEntry.metadataPerTransactionalId.putIfNotExists(transactionalId, createdTxnMetadata))
+                  .getOrElse(createdTxnMetadata)
+              }
+            }
+            Right(txnMetadata.map(CoordinatorEpochAndTxnMetadata(cacheEntry.coordinatorEpoch, _)))
+
+          case None =>
+            Left(Errors.NOT_COORDINATOR)
+        }
+      }
     }
   }
 
@@ -339,11 +343,11 @@ class TransactionStateManager(brokerId: Int,
     if (currentTxnMetadataCacheEntry.isDefined) {
       val coordinatorEpoch = currentTxnMetadataCacheEntry.get.coordinatorEpoch
       val metadataPerTxnId = currentTxnMetadataCacheEntry.get.metadataPerTransactionalId
-      info(s"The metadata cache for txn partition $txnTopicPartition has already exist with epoch $coordinatorEpoch " +
+      val errorMsg = s"The metadata cache for txn partition $txnTopicPartition has already exist with epoch $coordinatorEpoch " +
         s"and ${metadataPerTxnId.size} entries while trying to add to it; " +
-        s"it is likely that another process for loading from the transaction log has just executed earlier before")
-
-      throw new IllegalStateException(s"The metadata cache entry for txn partition $txnTopicPartition has already exist while trying to add to it.")
+        s"this should not happen"
+      fatal(errorMsg)
+      throw new IllegalStateException(errorMsg)
     }
   }
 
@@ -370,27 +374,32 @@ class TransactionStateManager(brokerId: Int,
         if (loadingPartitions.contains(partitionAndLeaderEpoch)) {
           addLoadedTransactionsToCache(topicPartition.partition, coordinatorEpoch, loadedTransactions)
 
+          val transactionsPendingForCompletion = new mutable.ListBuffer[TransactionalIdCoordinatorEpochAndTransitMetadata]
           loadedTransactions.foreach {
             case (transactionalId, txnMetadata) =>
-              val result = txnMetadata synchronized {
+              txnMetadata synchronized {
                 // if state is PrepareCommit or PrepareAbort we need to complete the transaction
                 txnMetadata.state match {
                   case PrepareAbort =>
-                    Some(TransactionResult.ABORT, txnMetadata.prepareComplete(time.milliseconds()))
+                    transactionsPendingForCompletion +=
+                      TransactionalIdCoordinatorEpochAndTransitMetadata(transactionalId, coordinatorEpoch, TransactionResult.ABORT, txnMetadata, txnMetadata.prepareComplete(time.milliseconds()))
                   case PrepareCommit =>
-                    Some(TransactionResult.COMMIT, txnMetadata.prepareComplete(time.milliseconds()))
+                    transactionsPendingForCompletion +=
+                      TransactionalIdCoordinatorEpochAndTransitMetadata(transactionalId, coordinatorEpoch, TransactionResult.COMMIT, txnMetadata, txnMetadata.prepareComplete(time.milliseconds()))
                   case _ =>
                     // nothing need to be done
-                    None
                 }
-              }
-
-              result.foreach { case (command, newMetadata) =>
-                sendTxnMarkers(transactionalId, coordinatorEpoch, command, txnMetadata, newMetadata)
               }
           }
 
+          // we first remove the partition from loading partition then send out the markers for those pending to be
+          // completed transactions, so that when the markers get sent the attempt of appending the complete transaction
+          // log would not be blocked by the coordinator loading error
           loadingPartitions.remove(partitionAndLeaderEpoch)
+
+          transactionsPendingForCompletion.foreach { txnTransitMetadata =>
+            sendTxnMarkers(txnTransitMetadata.transactionalId, txnTransitMetadata.coordinatorEpoch, txnTransitMetadata.result, txnTransitMetadata.txnMetadata, txnTransitMetadata.transitMetadata)
+          }
         }
       }
     }
@@ -442,7 +451,8 @@ class TransactionStateManager(brokerId: Int,
   def appendTransactionToLog(transactionalId: String,
                              coordinatorEpoch: Int,
                              newMetadata: TxnTransitMetadata,
-                             responseCallback: Errors => Unit): Unit = {
+                             responseCallback: Errors => Unit,
+                             retryOnError: Errors => Boolean = _ => false): Unit = {
 
     // generate the message for this transaction metadata
     val keyBytes = TransactionLog.keyToBytes(transactionalId)
@@ -465,8 +475,7 @@ class TransactionStateManager(brokerId: Int,
       var responseError = if (status.error == Errors.NONE) {
         Errors.NONE
       } else {
-        debug(s"Transaction state update $newMetadata for $transactionalId failed when appending to log " +
-          s"due to ${status.error.exceptionName}")
+        debug(s"Appending $transactionalId's new metadata $newMetadata failed due to ${status.error.exceptionName}")
 
         // transform the log append error code to the corresponding coordinator error code
         status.error match {
@@ -474,31 +483,17 @@ class TransactionStateManager(brokerId: Int,
                | Errors.NOT_ENOUGH_REPLICAS
                | Errors.NOT_ENOUGH_REPLICAS_AFTER_APPEND
                | Errors.REQUEST_TIMED_OUT => // note that for timed out request we return NOT_AVAILABLE error code to let client retry
-
-            info(s"Appending transaction message $newMetadata for $transactionalId failed due to " +
-              s"${status.error.exceptionName}, returning ${Errors.COORDINATOR_NOT_AVAILABLE} to the client")
-
             Errors.COORDINATOR_NOT_AVAILABLE
 
-          case Errors.NOT_LEADER_FOR_PARTITION =>
-
-            info(s"Appending transaction message $newMetadata for $transactionalId failed due to " +
-              s"${status.error.exceptionName}, returning ${Errors.NOT_COORDINATOR} to the client")
-
+          case Errors.NOT_LEADER_FOR_PARTITION
+               | Errors.KAFKA_STORAGE_ERROR =>
             Errors.NOT_COORDINATOR
 
           case Errors.MESSAGE_TOO_LARGE
                | Errors.RECORD_LIST_TOO_LARGE =>
-
-            error(s"Appending transaction message $newMetadata for $transactionalId failed due to " +
-              s"${status.error.exceptionName}, returning UNKNOWN error code to the client")
-
-            Errors.UNKNOWN
+            Errors.UNKNOWN_SERVER_ERROR
 
           case other =>
-            error(s"Appending metadata message $newMetadata for $transactionalId failed due to " +
-              s"unexpected error: ${status.error.message}")
-
             other
         }
       }
@@ -506,11 +501,12 @@ class TransactionStateManager(brokerId: Int,
       if (responseError == Errors.NONE) {
         // now try to update the cache: we need to update the status in-place instead of
         // overwriting the whole object to ensure synchronization
-        getAndMaybeAddTransactionState(transactionalId) match {
+        getTransactionState(transactionalId) match {
 
           case Left(err) =>
-            responseCallback(err)
-
+            info(s"Accessing the cached transaction metadata for $transactionalId returns $err error; " +
+              s"aborting transition to the new metadata and setting the error in the callback")
+            responseError = err
           case Right(Some(epochAndMetadata)) =>
             val metadata = epochAndMetadata.transactionMetadata
 
@@ -518,13 +514,12 @@ class TransactionStateManager(brokerId: Int,
               if (epochAndMetadata.coordinatorEpoch != coordinatorEpoch) {
                 // the cache may have been changed due to txn topic partition emigration and immigration,
                 // in this case directly return NOT_COORDINATOR to client and let it to re-discover the transaction coordinator
-                info(s"Updating $transactionalId's transaction state to $newMetadata with coordinator epoch $coordinatorEpoch for $transactionalId failed after the transaction message " +
-                  s"has been appended to the log. The cached coordinator epoch has changed to ${epochAndMetadata.coordinatorEpoch}")
-
+                info(s"The cached coordinator epoch for $transactionalId has changed to ${epochAndMetadata.coordinatorEpoch} after appended its new metadata $newMetadata " +
+                  s"to the transaction log (txn topic partition ${partitionFor(transactionalId)}) while it was $coordinatorEpoch before appending; " +
+                  s"aborting transition to the new metadata and returning ${Errors.NOT_COORDINATOR} in the callback")
                 responseError = Errors.NOT_COORDINATOR
               } else {
                 metadata.completeTransitionTo(newMetadata)
-
                 debug(s"Updating $transactionalId's transaction state to $newMetadata with coordinator epoch $coordinatorEpoch for $transactionalId succeeded")
               }
             }
@@ -532,11 +527,44 @@ class TransactionStateManager(brokerId: Int,
           case Right(None) =>
             // this transactional id no longer exists, maybe the corresponding partition has already been migrated out.
             // return NOT_COORDINATOR to let the client re-discover the transaction coordinator
-            info(s"Updating $transactionalId's transaction state (txn topic partition ${partitionFor(transactionalId)}) to $newMetadata with coordinator epoch $coordinatorEpoch for $transactionalId " +
-              s"failed after the transaction message has been appended to the log since the corresponding metadata does not exist in the cache anymore")
-
+            info(s"The cached coordinator metadata does not exist in the cache anymore for $transactionalId after appended its new metadata $newMetadata " +
+              s"to the transaction log (txn topic partition ${partitionFor(transactionalId)}) while it was $coordinatorEpoch before appending; " +
+              s"aborting transition to the new metadata and returning ${Errors.NOT_COORDINATOR} in the callback")
             responseError = Errors.NOT_COORDINATOR
         }
+      } else {
+        // Reset the pending state when returning an error, since there is no active transaction for the transactional id at this point.
+        getTransactionState(transactionalId) match {
+          case Right(Some(epochAndTxnMetadata)) =>
+            val metadata = epochAndTxnMetadata.transactionMetadata
+            metadata synchronized {
+              if (epochAndTxnMetadata.coordinatorEpoch == coordinatorEpoch) {
+                if (retryOnError(responseError)) {
+                  info(s"TransactionalId ${metadata.transactionalId} append transaction log for $newMetadata transition failed due to $responseError, " +
+                    s"not resetting pending state ${metadata.pendingState} but just returning the error in the callback to let the caller retry")
+                } else {
+                  info(s"TransactionalId ${metadata.transactionalId} append transaction log for $newMetadata transition failed due to $responseError, " +
+                    s"resetting pending state from ${metadata.pendingState}, aborting state transition and returning $responseError in the callback")
+
+                  metadata.pendingState = None
+                }
+              } else {
+                info(s"TransactionalId ${metadata.transactionalId} append transaction log for $newMetadata transition failed due to $responseError, " +
+                  s"aborting state transition and returning the error in the callback since the coordinator epoch has changed from ${epochAndTxnMetadata.coordinatorEpoch} to $coordinatorEpoch")
+              }
+            }
+
+          case Right(None) =>
+            // Do nothing here, since we want to return the original append error to the user.
+            info(s"TransactionalId $transactionalId append transaction log for $newMetadata transition failed due to $responseError, " +
+              s"aborting state transition and returning the error in the callback since metadata is not available in the cache anymore")
+
+          case Left(error) =>
+            // Do nothing here, since we want to return the original append error to the user.
+            info(s"TransactionalId $transactionalId append transaction log for $newMetadata transition failed due to $responseError, " +
+              s"aborting state transition and returning the error in the callback since retrieving metadata returned $error")
+        }
+
       }
 
       responseCallback(responseError)
@@ -548,7 +576,7 @@ class TransactionStateManager(brokerId: Int,
       // returns and before appendRecords() is called, since otherwise entries with a high coordinator epoch could have
       // been appended to the log in between these two events, and therefore appendRecords() would append entries with
       // an old coordinator epoch that can still be successfully replicated on followers and make the log in a bad state.
-      getAndMaybeAddTransactionState(transactionalId) match {
+      getTransactionState(transactionalId) match {
         case Left(err) =>
           responseCallback(err)
 
@@ -576,7 +604,7 @@ class TransactionStateManager(brokerId: Int,
                 updateCacheCallback,
                 delayedProduceLock = Some(newMetadata))
 
-              trace(s"Appended new metadata $newMetadata for transaction id $transactionalId with coordinator epoch $coordinatorEpoch to the local transaction log")
+              trace(s"Appending new metadata $newMetadata for transaction id $transactionalId with coordinator epoch $coordinatorEpoch to the local transaction log")
             }
           }
       }
@@ -611,6 +639,7 @@ private[transaction] case class TransactionConfig(transactionalIdExpirationMs: I
 case class TransactionalIdAndProducerIdEpoch(transactionalId: String, producerId: Long, producerEpoch: Short)
 
 case class TransactionPartitionAndLeaderEpoch(txnPartitionId: Int, coordinatorEpoch: Int)
-case class TransactionalIdCoordinatorEpochAndMetadata(transactionalId: String,
-                                                      coordinatorEpoch: Int,
-                                                      transitMetadata: TxnTransitMetadata)
+
+case class TransactionalIdCoordinatorEpochAndMetadata(transactionalId: String, coordinatorEpoch: Int, transitMetadata: TxnTransitMetadata)
+
+case class TransactionalIdCoordinatorEpochAndTransitMetadata(transactionalId: String, coordinatorEpoch: Int, result: TransactionResult, txnMetadata: TransactionMetadata, transitMetadata: TxnTransitMetadata)

@@ -108,11 +108,11 @@ public class FindCoordinatorResponse extends AbstractResponse {
 
     @Override
     public String toString() {
-        return "FindCoordinatorResponse{" +
+        return "FindCoordinatorResponse(" +
                 "throttleTimeMs=" + throttleTimeMs +
                 ", errorMessage='" + errorMessage + '\'' +
                 ", error=" + error +
                 ", node=" + node +
-                '}';
+                ')';
     }
 }

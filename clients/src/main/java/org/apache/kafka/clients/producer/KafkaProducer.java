@@ -73,6 +73,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
+import static org.apache.kafka.common.serialization.ExtendedSerializer.Wrapper.ensureExtended;
+
 /**
  * A Kafka client that publishes records to the Kafka cluster.
  * <P>
@@ -94,7 +96,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * props.put("value.serializer", "org.apache.kafka.common.serialization.StringSerializer");
  *
  * Producer<String, String> producer = new KafkaProducer<>(props);
- * for(int i = 0; i < 100; i++)
+ * for (int i = 0; i < 100; i++)
  *     producer.send(new ProducerRecord<String, String>("my-topic", Integer.toString(i), Integer.toString(i)));
  *
  * producer.close();
@@ -137,15 +139,95 @@ import java.util.concurrent.atomic.AtomicReference;
  * their <code>ProducerRecord</code> into bytes. You can use the included {@link org.apache.kafka.common.serialization.ByteArraySerializer} or
  * {@link org.apache.kafka.common.serialization.StringSerializer} for simple string or byte types.
  * <p>
+ * From Kafka 0.11, the KafkaProducer supports two additional modes: the idempotent producer and the transactional producer.
+ * The idempotent producer strengthens Kafka's delivery semantics from at least once to exactly once delivery. In particular
+ * producer retries will no longer introduce duplicates. The transactional producer allows an application to send messages
+ * to multiple partitions (and topics!) atomically.
+ * </p>
+ * <p>
+ * To enable idempotence, the <code>enable.idempotence</code> configuration must be set to true. If set, the
+ * <code>retries</code> config will be defaulted to <code>Integer.MAX_VALUE</code>, the
+ * <code>max.inflight.requests.per.connection</code> config will be defaulted to <code>1</code>,
+ * and <code>acks</code> config will be defaulted to <code>all</code>. There are no API changes for the idempotent
+ * producer, so existing applications will not need to be modified to take advantage of this feature.
+ * </p>
+ * <p>
+ * To take advantage of the idempotent producer, it is imperative to avoid application level re-sends since these cannot
+ * be de-duplicated. As such, if an application enables idempotence, it is recommended to leave the <code>retries</code>
+ * config unset, as it will be defaulted to <code>Integer.MAX_VALUE</code>. Additionally, if a {@link #send(ProducerRecord)}
+ * returns an error even with infinite retries (for instance if the message expires in the buffer before being sent),
+ * then it is recommended to shut down the producer and check the contents of the last produced message to ensure that
+ * it is not duplicated. Finally, the producer can only guarantee idempotence for messages sent within a single session.
+ * </p>
+ * <p>To use the transactional producer and the attendant APIs, you must set the <code>transactional.id</code>
+ * configuration property. If the <code>transactional.id</code> is set, idempotence is automatically enabled along with
+ * the producer configs which idempotence depends on. Further, topics which are included in transactions should be configured
+ * for durability. In particular, the <code>replication.factor</code> should be at least <code>3</code>, and the
+ * <code>min.insync.replicas</code> for these topics should be set to 2. Finally, in order for transactional guarantees
+ * to be realized from end-to-end, the consumers must be configured to read only committed messages as well.
+ * </p>
+ * <p>
+ * The purpose of the <code>transactional.id</code> is to enable transaction recovery across multiple sessions of a
+ * single producer instance. It would typically be derived from the shard identifier in a partitioned, stateful, application.
+ * As such, it should be unique to each producer instance running within a partitioned application.
+ * </p>
+ * <p>All the new transactional APIs are blocking and will throw exceptions on failure. The example
+ * below illustrates how the new APIs are meant to be used. It is similar to the example above, except that all
+ * 100 messages are part of a single transaction.
+ * </p>
+ * <p>
+ * <pre>
+ * {@code
+ * Properties props = new Properties();
+ * props.put("bootstrap.servers", "localhost:9092");
+ * props.put("transactional.id", "my-transactional-id");
+ * Producer<String, String> producer = new KafkaProducer<>(props, new StringSerializer(), new StringSerializer());
+ *
+ * producer.initTransactions();
+ *
+ * try {
+ *     producer.beginTransaction();
+ *     for (int i = 0; i < 100; i++)
+ *         producer.send(new ProducerRecord<>("my-topic", Integer.toString(i), Integer.toString(i)));
+ *     producer.commitTransaction();
+ * } catch (ProducerFencedException | OutOfOrderSequenceException | AuthorizationException e) {
+ *     // We can't recover from these exceptions, so our only option is to close the producer and exit.
+ *     producer.close();
+ * } catch (KafkaException e) {
+ *     // For all other exceptions, just abort the transaction and try again.
+ *     producer.abortTransaction();
+ * }
+ * producer.close();
+ * } </pre>
+ * </p>
+ * <p>
+ * As is hinted at in the example, there can be only one open transaction per producer. All messages sent between the
+ * {@link #beginTransaction()} and {@link #commitTransaction()} calls will be part of a single transaction. When the
+ * <code>transactional.id</code> is specified, all messages sent by the producer must be part of a transaction.
+ * </p>
+ * <p>
+ * The transactional producer uses exceptions to communicate error states. In particular, it is not required
+ * to specify callbacks for <code>producer.send()</code> or to call <code>.get()</code> on the returned Future: a
+ * <code>KafkaException</code> would be thrown if any of the
+ * <code>producer.send()</code> or transactional calls hit an irrecoverable error during a transaction. See the {@link #send(ProducerRecord)}
+ * documentation for more details about detecting errors from a transactional send.
+ * </p>
+ * </p>By calling
+ * <code>producer.abortTransaction()</code> upon receiving a <code>KafkaException</code> we can ensure that any
+ * successful writes are marked as aborted, hence keeping the transactional guarantees.
+ * </p>
+ * <p>
  * This client can communicate with brokers that are version 0.10.0 or newer. Older or newer brokers may not support
- * certain client features.  You will receive an UnsupportedVersionException when invoking an API that is not available
- * with the running broker verion.
+ * certain client features.  For instance, the transactional APIs need broker versions 0.11.0 or later. You will receive an
+ * <code>UnsupportedVersionException</code> when invoking an API that is not available in the running broker version.
+ * </p>
  */
 public class KafkaProducer<K, V> implements Producer<K, V> {
 
     private static final Logger log = LoggerFactory.getLogger(KafkaProducer.class);
     private static final AtomicInteger PRODUCER_CLIENT_ID_SEQUENCE = new AtomicInteger(1);
     private static final String JMX_PREFIX = "kafka.producer";
+    public static final String NETWORK_THREAD_PREFIX = "kafka-producer-network-thread";
 
     private String clientId;
     // Visible for testing
@@ -220,7 +302,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 keySerializer, valueSerializer);
     }
 
-    @SuppressWarnings({"unchecked", "deprecation"})
+    @SuppressWarnings("unchecked")
     private KafkaProducer(ProducerConfig config, Serializer<K> keySerializer, Serializer<V> valueSerializer) {
         try {
             log.trace("Starting the Kafka producer");
@@ -257,7 +339,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 config.ignore(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG);
                 this.valueSerializer = ensureExtended(valueSerializer);
             }
-            
 
             // load interceptors and make sure they get clientId
             userProvidedConfigs.put(ProducerConfig.CLIENT_ID_CONFIG, clientId);
@@ -265,7 +346,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                     ProducerInterceptor.class);
             this.interceptors = interceptorList.isEmpty() ? null : new ProducerInterceptors<>(interceptorList);
             ClusterResourceListeners clusterResourceListeners = configureClusterResourceListeners(keySerializer, valueSerializer, interceptorList, reporters);
-            this.metadata = new Metadata(retryBackoffMs, config.getLong(ProducerConfig.METADATA_MAX_AGE_CONFIG), true, clusterResourceListeners);
+            this.metadata = new Metadata(retryBackoffMs, config.getLong(ProducerConfig.METADATA_MAX_AGE_CONFIG),
+                    true, true, clusterResourceListeners);
             this.maxRequestSize = config.getInt(ProducerConfig.MAX_REQUEST_SIZE_CONFIG);
             this.totalMemorySize = config.getLong(ProducerConfig.BUFFER_MEMORY_CONFIG);
             this.compressionType = CompressionType.forName(config.getString(ProducerConfig.COMPRESSION_TYPE_CONFIG));
@@ -319,7 +401,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                     config.getLong(ProducerConfig.RETRY_BACKOFF_MS_CONFIG),
                     this.transactionManager,
                     apiVersions);
-            String ioThreadName = "kafka-producer-network-thread" + (clientId.length() > 0 ? " | " + clientId : "");
+            String ioThreadName = NETWORK_THREAD_PREFIX + (clientId.length() > 0 ? " | " + clientId : "");
             this.ioThread = new KafkaThread(ioThreadName, this.sender, true);
             this.ioThread.start();
             this.errors = this.metrics.sensor("errors");
@@ -332,10 +414,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             // now propagate the exception
             throw new KafkaException("Failed to construct kafka producer", t);
         }
-    }
-
-    private <T> ExtendedSerializer<T> ensureExtended(Serializer<T> serializer) {
-        return serializer instanceof ExtendedSerializer ? (ExtendedSerializer<T>) serializer : new ExtendedSerializer.Wrapper<>(serializer);
     }
 
     private static TransactionManager configureTransactionState(ProducerConfig config) {
@@ -361,7 +439,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         if (idempotenceEnabled) {
             String transactionalId = config.getString(ProducerConfig.TRANSACTIONAL_ID_CONFIG);
             int transactionTimeoutMs = config.getInt(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG);
-            transactionManager = new TransactionManager(transactionalId, transactionTimeoutMs);
+            long retryBackoffMs = config.getLong(ProducerConfig.RETRY_BACKOFF_MS_CONFIG);
+            transactionManager = new TransactionManager(transactionalId, transactionTimeoutMs, retryBackoffMs);
             if (transactionManager.isTransactional())
                 log.info("Instantiated a transactional producer.");
             else
@@ -488,7 +567,11 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     }
 
     /**
-     * Commits the ongoing transaction.
+     * Commits the ongoing transaction. This method will flush any unsent records before actually committing the transaction.
+     *
+     * Further, if any of the {@link #send(ProducerRecord)} calls which were part of the transaction hit irrecoverable
+     * errors, this method will throw the last received exception immediately and the transaction will not be committed.
+     * So all {@link #send(ProducerRecord)} calls in a transaction must succeed in order for this method to succeed.
      *
      * @throws ProducerFencedException if another producer with the same
      *         transactional.id is active.
@@ -496,13 +579,15 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     public void commitTransaction() throws ProducerFencedException {
         if (transactionManager == null)
             throw new IllegalStateException("Cannot commit transaction since transactions are not enabled");
-        TransactionalRequestResult result = transactionManager.beginCommittingTransaction();
+        TransactionalRequestResult result = transactionManager.beginCommit();
         sender.wakeup();
         result.await();
     }
 
     /**
-     * Aborts the ongoing transaction.
+     * Aborts the ongoing transaction. Any unflushed produce messages will be aborted when this call is made.
+     * This call will throw an exception immediately if any prior {@link #send(ProducerRecord)} calls failed with a
+     * {@link ProducerFencedException} or an instance of {@link org.apache.kafka.common.errors.AuthorizationException}.
      *
      * @throws ProducerFencedException if another producer with the same
      *         transactional.id is active.
@@ -510,7 +595,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     public void abortTransaction() throws ProducerFencedException {
         if (transactionManager == null)
             throw new IllegalStateException("Cannot abort transaction since transactions are not enabled.");
-        TransactionalRequestResult result = transactionManager.beginAbortingTransaction();
+        TransactionalRequestResult result = transactionManager.beginAbort();
         sender.wakeup();
         result.await();
     }
@@ -582,6 +667,18 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * }
      * </pre>
      * <p>
+     * When used as part of a transaction, it is not necessary to define a callback or check the result of the future
+     * in order to detect errors from <code>send</code>. If any of the send calls failed with an irrecoverable error,
+     * the final {@link #commitTransaction()} call will fail and throw the exception from the last failed send. When
+     * this happens, your application should call {@link #abortTransaction()} to reset the state and continue to send
+     * data.
+     * </p>
+     * <p>
+     * Some transactional send errors cannot be resolved with a call to {@link #abortTransaction()}.  In particular,
+     * if a transactional send finishes with a {@link ProducerFencedException}, a {@link org.apache.kafka.common.errors.OutOfOrderSequenceException},
+     * or any {@link org.apache.kafka.common.errors.AuthorizationException}, then the only option left is to call {@link #close()}.
+     * </p>
+     * <p>
      * Note that callbacks will generally execute in the I/O thread of the producer and so should be reasonably fast or
      * they will delay the sending of messages from other threads. If you want to execute blocking or computationally
      * expensive callbacks it is recommended to use your own {@link java.util.concurrent.Executor} in the callback body
@@ -608,9 +705,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * Implementation of asynchronously send a record to a topic.
      */
     private Future<RecordMetadata> doSend(ProducerRecord<K, V> record, Callback callback) {
-        if (transactionManager != null)
-            ensureProperTransactionalState();
-
         TopicPartition tp = null;
         try {
             // first make sure the metadata for the topic is available
@@ -634,14 +728,14 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                         " specified in value.serializer");
             }
             int partition = partition(record, serializedKey, serializedValue, cluster);
+            tp = new TopicPartition(record.topic(), partition);
 
             setReadOnly(record.headers());
             Header[] headers = record.headers().toArray();
 
-            int serializedSize = AbstractRecords.sizeInBytesUpperBound(apiVersions.maxUsableProduceMagic(),
-                    serializedKey, serializedValue, headers);
+            int serializedSize = AbstractRecords.estimateSizeInBytesUpperBound(apiVersions.maxUsableProduceMagic(),
+                    compressionType, serializedKey, serializedValue, headers);
             ensureValidRecordSize(serializedSize);
-            tp = new TopicPartition(record.topic(), partition);
             long timestamp = record.timestamp() == null ? time.milliseconds() : record.timestamp();
             log.trace("Sending record {} with callback {} to topic {} partition {}", record, callback, record.topic(), partition);
             // producer callback will make sure to call both 'callback' and interceptor callback
@@ -690,20 +784,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 this.interceptors.onSendError(record, tp, e);
             throw e;
         }
-    }
-
-    private void ensureProperTransactionalState() {
-        if (transactionManager.isTransactional() && !transactionManager.hasProducerId())
-            throw new IllegalStateException("Cannot perform a 'send' before completing a call to initTransactions " +
-                    "when transactions are enabled.");
-
-        if (transactionManager.isInErrorState()) {
-            Exception lastError = transactionManager.lastError();
-            throw new KafkaException("Cannot perform send because at least one previous transactional or " +
-                    "idempotent request has failed with errors.", lastError);
-        }
-        if (transactionManager.isCompletingTransaction())
-            throw new IllegalStateException("Cannot call send while a commit or abort is in progress.");
     }
 
     private void setReadOnly(Headers headers) {
@@ -806,6 +886,12 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      *
      * Note that the above example may drop records if the produce request fails. If we want to ensure that this does not occur
      * we need to set <code>retries=&lt;large_number&gt;</code> in our config.
+     * </p>
+     * <p>
+     * Applications don't need to call this method for transactional producers, since the {@link #commitTransaction()} will
+     * flush all buffered records before performing the commit. This ensures that all the the {@link #send(ProducerRecord)}
+     * calls made since the previous {@link #beginTransaction()} are completed before the commit.
+     * </p>
      *
      * @throws InterruptException If the thread is interrupted while blocked
      */

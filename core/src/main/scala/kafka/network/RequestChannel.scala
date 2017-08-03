@@ -29,9 +29,10 @@ import kafka.server.QuotaId
 import kafka.utils.{Logging, NotNothing}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.InvalidRequestException
+import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.network.{ListenerName, Send}
 import org.apache.kafka.common.protocol.{ApiKeys, Protocol, SecurityProtocol}
-import org.apache.kafka.common.record.{RecordBatch, MemoryRecords}
+import org.apache.kafka.common.record.{MemoryRecords, RecordBatch}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.Time
@@ -41,7 +42,7 @@ import scala.reflect.ClassTag
 
 object RequestChannel extends Logging {
   val AllDone = Request(processor = 1, connectionId = "2", Session(KafkaPrincipal.ANONYMOUS, InetAddress.getLocalHost),
-    buffer = shutdownReceive, startTimeNanos = 0, listenerName = new ListenerName(""),
+    buffer = shutdownReceive, memoryPool = MemoryPool.NONE, startTimeNanos = 0, listenerName = new ListenerName(""),
     securityProtocol = SecurityProtocol.PLAINTEXT)
   private val requestLogger = Logger.getLogger("kafka.request.logger")
 
@@ -56,10 +57,12 @@ object RequestChannel extends Logging {
     val sanitizedUser = QuotaId.sanitize(principal.getName)
   }
 
-  case class Request(processor: Int, connectionId: String, session: Session, private var buffer: ByteBuffer,
-                     startTimeNanos: Long, listenerName: ListenerName, securityProtocol: SecurityProtocol) {
+  case class Request(processor: Int, connectionId: String, session: Session, buffer: ByteBuffer,
+                     private val memoryPool: MemoryPool, startTimeNanos: Long, listenerName: ListenerName, 
+                     securityProtocol: SecurityProtocol) {
     // These need to be volatile because the readers are in the network thread and the writers are in the request
     // handler threads or the purgatory threads
+    @volatile var bufferReference = buffer
     @volatile var requestDequeueTimeNanos = -1L
     @volatile var apiLocalCompleteTimeNanos = -1L
     @volatile var responseCompleteTimeNanos = -1L
@@ -104,7 +107,12 @@ object RequestChannel extends Logging {
       else
         null
 
-    buffer = null
+    //most request types are parsed entirely into objects at this point. for those we can release the underlying buffer.
+    //some (like produce, or any time the schema contains fields of types BYTES or NULLABLE_BYTES) retain a reference
+    //to the buffer. for those requests we cannot release the buffer early, but only when request processing is done.
+    if (!Protocol.requiresDelayedDeallocation(requestId)) {
+      dispose()
+    }
 
     def requestDesc(details: Boolean): String = {
       if (requestObj != null)
@@ -187,10 +195,18 @@ object RequestChannel extends Logging {
         val requestQueueTimeMs = nanosToMs(requestDequeueTimeNanos - startTimeNanos)
         val apiLocalTimeMs = nanosToMs(apiLocalCompleteTimeNanos - requestDequeueTimeNanos)
         val apiRemoteTimeMs = nanosToMs(apiRemoteCompleteTimeNanos - apiLocalCompleteTimeNanos)
+        val apiThrottleTimeMs = nanosToMs(responseCompleteTimeNanos - apiRemoteCompleteTimeNanos)
         val responseQueueTimeMs = nanosToMs(responseDequeueTimeNanos - responseCompleteTimeNanos)
         val responseSendTimeMs = nanosToMs(endTimeNanos - responseDequeueTimeNanos)
-        requestLogger.trace("Completed request:%s from connection %s;totalTime:%f,requestQueueTime:%f,localTime:%f,remoteTime:%f,responseQueueTime:%f,sendTime:%f,securityProtocol:%s,principal:%s,listener:%s"
-          .format(requestDesc(detailsEnabled), connectionId, totalTimeMs, requestQueueTimeMs, apiLocalTimeMs, apiRemoteTimeMs, responseQueueTimeMs, responseSendTimeMs, securityProtocol, session.principal, listenerName.value))
+        requestLogger.debug("Completed request:%s from connection %s;totalTime:%f,requestQueueTime:%f,localTime:%f,remoteTime:%f,throttleTime:%f,responseQueueTime:%f,sendTime:%f,securityProtocol:%s,principal:%s,listener:%s"
+          .format(requestDesc(detailsEnabled), connectionId, totalTimeMs, requestQueueTimeMs, apiLocalTimeMs, apiRemoteTimeMs, apiThrottleTimeMs, responseQueueTimeMs, responseSendTimeMs, securityProtocol, session.principal, listenerName.value))
+      }
+    }
+
+    def dispose(): Unit = {
+      if (bufferReference != null) {
+        memoryPool.release(bufferReference)
+        bufferReference = null
       }
     }
   }

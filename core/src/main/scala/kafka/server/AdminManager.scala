@@ -23,14 +23,14 @@ import kafka.common.TopicAlreadyMarkedForDeletionException
 import kafka.log.LogConfig
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils._
-import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigException}
+import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigException, ConfigResource}
 import org.apache.kafka.common.errors.{ApiException, InvalidRequestException, PolicyViolationException}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.CreateTopicsRequest._
 import org.apache.kafka.common.requests.{AlterConfigsRequest, ApiError, DescribeConfigsResponse, Resource, ResourceType}
-import org.apache.kafka.server.policy.CreateTopicPolicy
+import org.apache.kafka.server.policy.{AlterConfigPolicy, CreateTopicPolicy}
 import org.apache.kafka.server.policy.CreateTopicPolicy.RequestMetadata
 
 import scala.collection._
@@ -46,6 +46,9 @@ class AdminManager(val config: KafkaConfig,
 
   private val createTopicPolicy =
     Option(config.getConfiguredInstance(KafkaConfig.CreateTopicPolicyClassNameProp, classOf[CreateTopicPolicy]))
+
+  private val alterConfigPolicy =
+    Option(config.getConfiguredInstance(KafkaConfig.AlterConfigPolicyClassNameProp, classOf[AlterConfigPolicy]))
 
   def hasDelayedTopicOperations = topicPurgatory.delayed != 0
 
@@ -116,7 +119,7 @@ class AdminManager(val config: KafkaConfig,
             else
               AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils, topic, assignments, configs, update = false)
         }
-        CreateTopicMetadata(topic, assignments, new ApiError(Errors.NONE, null))
+        CreateTopicMetadata(topic, assignments, ApiError.NONE)
       } catch {
         // Log client errors at a lower level than unexpected exceptions
         case e@ (_: PolicyViolationException | _: ApiException) =>
@@ -132,7 +135,7 @@ class AdminManager(val config: KafkaConfig,
     if (timeout <= 0 || validateOnly || !metadata.exists(_.error.is(Errors.NONE))) {
       val results = metadata.map { createTopicMetadata =>
         // ignore topics that already have errors
-        if (createTopicMetadata.error.is(Errors.NONE) && !validateOnly) {
+        if (createTopicMetadata.error.isSuccess() && !validateOnly) {
           (createTopicMetadata.topic, new ApiError(Errors.REQUEST_TIMED_OUT, null))
         } else {
           (createTopicMetadata.topic, createTopicMetadata.error)
@@ -209,7 +212,7 @@ class AdminManager(val config: KafkaConfig,
           new DescribeConfigsResponse.ConfigEntry(name, valueAsString, isSensitive, isDefault(name), isReadOnly)
         }
 
-        new DescribeConfigsResponse.Config(new ApiError(Errors.NONE, null), configEntries.asJava)
+        new DescribeConfigsResponse.Config(ApiError.NONE, configEntries.asJava)
       }
 
       try {
@@ -255,15 +258,29 @@ class AdminManager(val config: KafkaConfig,
         resource.`type` match {
           case ResourceType.TOPIC =>
             val topic = resource.name
+
             val properties = new Properties
             config.entries.asScala.foreach { configEntry =>
               properties.setProperty(configEntry.name(), configEntry.value())
             }
-            if (validateOnly)
-              AdminUtils.validateTopicConfig(zkUtils, topic, properties)
-            else
-              AdminUtils.changeTopicConfig(zkUtils, topic, properties)
-            resource -> new ApiError(Errors.NONE, null)
+
+            alterConfigPolicy match {
+              case Some(policy) =>
+                AdminUtils.validateTopicConfig(zkUtils, topic, properties)
+
+                val configEntriesMap = config.entries.asScala.map(entry => (entry.name, entry.value)).toMap
+                policy.validate(new AlterConfigPolicy.RequestMetadata(
+                  new ConfigResource(ConfigResource.Type.TOPIC, resource.name), configEntriesMap.asJava))
+
+                if (!validateOnly)
+                  AdminUtils.changeTopicConfig(zkUtils, topic, properties)
+              case None =>
+                if (validateOnly)
+                  AdminUtils.validateTopicConfig(zkUtils, topic, properties)
+                else
+                  AdminUtils.changeTopicConfig(zkUtils, topic, properties)
+            }
+            resource -> ApiError.NONE
           case resourceType =>
             throw new InvalidRequestException(s"AlterConfigs is only supported for topics, but resource type is $resourceType")
         }
@@ -274,8 +291,8 @@ class AdminManager(val config: KafkaConfig,
           resource -> ApiError.fromThrowable(new InvalidRequestException(message, e))
         case e: Throwable =>
           // Log client errors at a lower level than unexpected exceptions
-          val message = s"Error processing alter configs request for resource $resource"
-          if (e.isInstanceOf[ApiException])
+          val message = s"Error processing alter configs request for resource $resource, config $config"
+          if (e.isInstanceOf[ApiException] || e.isInstanceOf[PolicyViolationException])
             info(message, e)
           else
             error(message, e)
@@ -287,5 +304,6 @@ class AdminManager(val config: KafkaConfig,
   def shutdown() {
     topicPurgatory.shutdown()
     CoreUtils.swallow(createTopicPolicy.foreach(_.close()))
+    CoreUtils.swallow(alterConfigPolicy.foreach(_.close()))
   }
 }

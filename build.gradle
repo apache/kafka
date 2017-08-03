@@ -309,8 +309,28 @@ subprojects {
       "-feature",
       "-language:postfixOps",
       "-language:implicitConversions",
-      "-language:existentials"
+      "-language:existentials",
+      "-Xlint:by-name-right-associative",
+      "-Xlint:delayedinit-select",
+      "-Xlint:doc-detached",
+      "-Xlint:missing-interpolator",
+      "-Xlint:nullary-override",
+      "-Xlint:nullary-unit",
+      "-Xlint:option-implicit",
+      "-Xlint:package-object-classes",
+      "-Xlint:poly-implicit-overload",
+      "-Xlint:private-shadow",
+      "-Xlint:stars-align",
+      "-Xlint:type-parameter-shadow",
+      "-Xlint:unsound-match",
     ]
+
+    if (versions.baseScala != '2.11') {
+      scalaCompileOptions.additionalParameters += [
+        "-Xlint:constant",
+        "-Xlint:unused"
+      ]
+    }
 
     configure(scalaCompileOptions.forkOptions) {
       memoryMaximumSize = '1g'
@@ -503,13 +523,13 @@ project(':core') {
 
   dependencies {
     compile project(':clients')
+    compile libs.jacksonDatabind
     compile libs.joptSimple
     compile libs.metrics
     compile libs.scala
     compile libs.slf4jlog4j
     compile libs.zkclient
     compile libs.zookeeper
-    compile libs.scalaParserCombinators
 
     testCompile project(':clients').sourceSets.test.output
     testCompile libs.bcpkix
@@ -589,6 +609,13 @@ project(':core') {
     standardOutput = new File(generatedDocsDir, "protocol_messages.html").newOutputStream()
   }
 
+  task genAdminClientConfigDocs(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    main = 'org.apache.kafka.clients.admin.AdminClientConfig'
+    if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
+    standardOutput = new File(generatedDocsDir, "admin_client_config.html").newOutputStream()
+  }
+
   task genProducerConfigDocs(type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     main = 'org.apache.kafka.clients.producer.ProducerConfig'
@@ -625,8 +652,9 @@ project(':core') {
   }
 
   task siteDocsTar(dependsOn: ['genProtocolErrorDocs', 'genProtocolApiKeyDocs', 'genProtocolMessageDocs',
-                               'genProducerConfigDocs', 'genConsumerConfigDocs', 'genKafkaConfigDocs',
-                               'genTopicConfigDocs', ':connect:runtime:genConnectConfigDocs', ':connect:runtime:genConnectTransformationDocs',
+                               'genAdminClientConfigDocs', 'genProducerConfigDocs', 'genConsumerConfigDocs',
+                               'genKafkaConfigDocs', 'genTopicConfigDocs',
+                               ':connect:runtime:genConnectConfigDocs', ':connect:runtime:genConnectTransformationDocs',
                                ':streams:genStreamsConfigDocs', 'genConsumerMetricsDocs'], type: Tar) {
     classifier = 'site-docs'
     compression = Compression.GZIP
@@ -767,13 +795,18 @@ project(':clients') {
   }
 
   javadoc {
+    include "**/org/apache/kafka/clients/admin/*"
     include "**/org/apache/kafka/clients/consumer/*"
     include "**/org/apache/kafka/clients/producer/*"
     include "**/org/apache/kafka/common/*"
+    include "**/org/apache/kafka/common/acl/*"
+    include "**/org/apache/kafka/common/annotation/*"
     include "**/org/apache/kafka/common/errors/*"
     include "**/org/apache/kafka/common/header/*"
+    include "**/org/apache/kafka/common/resource/*"
     include "**/org/apache/kafka/common/serialization/*"
     include "**/org/apache/kafka/common/config/*"
+    include "**/org/apache/kafka/server/policy/*"
   }
 }
 
@@ -824,6 +857,7 @@ project(':streams') {
     testCompile project(':core')
     testCompile project(':core').sourceSets.test.output
     testCompile libs.junit
+    testCompile libs.easymock
 
     testRuntime libs.slf4jlog4j
   }

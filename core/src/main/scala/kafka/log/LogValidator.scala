@@ -35,6 +35,7 @@ private[kafka] object LogValidator extends Logging {
    * 2. When magic value >= 1, inner messages of a compressed message set must have monotonically increasing offsets
    *    starting from 0.
    * 3. When magic value >= 1, validate and maybe overwrite timestamps of messages.
+   * 4. Declared count of records in DefaultRecordBatch must match number of valid records contained therein.
    *
    * This method will convert messages as necessary to the topic's configured message format version. If no format
    * conversion or value overwriting is required for messages, this method will perform in-place operations to
@@ -77,6 +78,9 @@ private[kafka] object LogValidator extends Logging {
 
       if (batch.isControlBatch)
         throw new InvalidRecordException("Clients are not allowed to write control records")
+
+      if (Option(batch.countOrNull).contains(0))
+        throw new InvalidRecordException("Record batches must contain at least one record")
     }
 
     if (batch.isTransactional && toMagic < RecordBatch.MAGIC_VALUE_V2)

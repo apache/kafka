@@ -18,45 +18,37 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.streams.kstream.ForeachAction;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
-import java.util.List;
-import java.util.Locale;
+
+import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.io.File;
-import java.io.IOException;
-
+import java.util.List;
+import java.util.Locale;
 
 import static org.junit.Assert.assertEquals;
 
+@Deprecated
 public class KTableForeachTest {
 
     final private String topicName = "topic";
     private File stateDir = null;
     final private Serde<Integer> intSerde = Serdes.Integer();
     final private Serde<String> stringSerde = Serdes.String();
-
-    private KStreamTestDriver driver;
+    @Rule
+    public final KStreamTestDriver driver = new KStreamTestDriver();
 
     @Before
-    public void setUp() throws IOException {
+    public void setUp() {
         stateDir = TestUtils.tempDirectory("kafka-test");
-    }
-
-    @After
-    public void cleanup() {
-        if (driver != null) {
-            driver.close();
-        }
-        driver = null;
     }
 
     @Test
@@ -86,12 +78,12 @@ public class KTableForeachTest {
             };
 
         // When
-        KStreamBuilder builder = new KStreamBuilder();
+        StreamsBuilder builder = new StreamsBuilder();
         KTable<Integer, String> table = builder.table(intSerde, stringSerde, topicName, "anyStoreName");
         table.foreach(action);
 
         // Then
-        driver = new KStreamTestDriver(builder, stateDir);
+        driver.setUp(builder, stateDir);
         for (KeyValue<Integer, String> record: inputRecords) {
             driver.process(topicName, record.key, record.value);
         }
@@ -106,13 +98,13 @@ public class KTableForeachTest {
     }
 
     @Test
-    public void testTypeVariance() throws Exception {
+    public void testTypeVariance() {
         ForeachAction<Number, Object> consume = new ForeachAction<Number, Object>() {
             @Override
             public void apply(Number key, Object value) {}
         };
 
-        new KStreamBuilder()
+        new StreamsBuilder()
             .<Integer, String>table("emptyTopic", "emptyStore")
             .foreach(consume);
     }

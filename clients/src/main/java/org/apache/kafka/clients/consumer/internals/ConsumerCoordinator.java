@@ -610,7 +610,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 return true;
             }
 
-            if (!future.isRetriable())
+            if (future.failed() && !future.isRetriable())
                 throw future.exception();
 
             time.sleep(retryBackoffMs);

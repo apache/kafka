@@ -22,6 +22,7 @@ import java.nio.ByteBuffer
 
 import joptsimple.OptionParser
 import kafka.coordinator.group.{GroupMetadataKey, GroupMetadataManager, OffsetKey}
+import kafka.coordinator.transaction.TransactionLog
 import kafka.log._
 import kafka.serializer.Decoder
 import kafka.utils._
@@ -37,7 +38,7 @@ import scala.collection.JavaConverters._
 object DumpLogSegments {
 
   def main(args: Array[String]) {
-    val parser = new OptionParser
+    val parser = new OptionParser(false)
     val printOpt = parser.accepts("print-data-log", "if set, printing the messages content when dumping data logs. Automatically set if any decoder option is specified.")
     val verifyOpt = parser.accepts("verify-index-only", "if set, just verify the index log without printing its content.")
     val indexSanityOpt = parser.accepts("index-sanity-check", "if set, just checks the index sanity without printing its content. " +
@@ -60,17 +61,25 @@ object DumpLogSegments {
                                .withOptionalArg()
                                .ofType(classOf[java.lang.String])
                                .defaultsTo("kafka.serializer.StringDecoder")
-    val offsetsOpt = parser.accepts("offsets-decoder", "if set, log data will be parsed as offset data from __consumer_offsets topic.")
+    val offsetsOpt = parser.accepts("offsets-decoder", "if set, log data will be parsed as offset data from the " +
+      "__consumer_offsets topic.")
+    val transactionLogOpt = parser.accepts("transaction-log-decoder", "if set, log data will be parsed as " +
+      "transaction metadata from the __transaction_state topic.")
 
-
-    if(args.length == 0)
-      CommandLineUtils.printUsageAndDie(parser, "Parse a log file and dump its contents to the console, useful for debugging a seemingly corrupt log segment.")
+    val helpOpt = parser.accepts("help", "Print usage information.")
 
     val options = parser.parse(args : _*)
 
+    if(args.length == 0 || options.has(helpOpt))
+      CommandLineUtils.printUsageAndDie(parser, "Parse a log file and dump its contents to the console, useful for debugging a seemingly corrupt log segment.")
+
     CommandLineUtils.checkRequiredArgs(parser, options, filesOpt)
 
-    val printDataLog = options.has(printOpt) || options.has(offsetsOpt) || options.has(valueDecoderOpt) || options.has(keyDecoderOpt)
+    val printDataLog = options.has(printOpt) ||
+      options.has(offsetsOpt) ||
+      options.has(transactionLogOpt) ||
+      options.has(valueDecoderOpt) ||
+      options.has(keyDecoderOpt)
     val verifyOnly = options.has(verifyOpt)
     val indexSanityOnly = options.has(indexSanityOpt)
 
@@ -80,6 +89,8 @@ object DumpLogSegments {
 
     val messageParser = if (options.has(offsetsOpt)) {
       new OffsetsMessageParser
+    } else if (options.has(transactionLogOpt)) {
+      new TransactionLogMessageParser
     } else {
       val valueDecoder: Decoder[_] = CoreUtils.createObject[Decoder[_]](options.valueOf(valueDecoderOpt), new VerifiableProperties)
       val keyDecoder: Decoder[_] = CoreUtils.createObject[Decoder[_]](options.valueOf(keyDecoderOpt), new VerifiableProperties)
@@ -263,6 +274,25 @@ object DumpLogSegments {
     }
   }
 
+  private class TransactionLogMessageParser extends MessageParser[String, String] {
+
+    override def parse(record: Record): (Option[String], Option[String]) = {
+      val txnKey = TransactionLog.readTxnRecordKey(record.key)
+      val txnMetadata = TransactionLog.readTxnRecordValue(txnKey.transactionalId, record.value)
+
+      val keyString = s"transactionalId=${txnKey.transactionalId}"
+      val valueString = s"producerId:${txnMetadata.producerId}," +
+        s"producerEpoch:${txnMetadata.producerEpoch}," +
+        s"state=${txnMetadata.state}," +
+        s"partitions=${txnMetadata.topicPartitions}," +
+        s"txnLastUpdateTimestamp=${txnMetadata.txnLastUpdateTimestamp}," +
+        s"txnTimeoutMs=${txnMetadata.txnTimeoutMs}"
+
+      (Some(keyString), Some(valueString))
+    }
+
+  }
+
   private class OffsetsMessageParser extends MessageParser[String, String] {
     private def hex(bytes: Array[Byte]): String = {
       if (bytes.isEmpty)
@@ -337,8 +367,8 @@ object DumpLogSegments {
     val messageSet = FileRecords.open(file, false)
     var validBytes = 0L
     var lastOffset = -1L
-    val batches = messageSet.batches(maxMessageSize).asScala
-    for (batch <- batches) {
+
+    for (batch <- messageSet.batches.asScala) {
       if (isDeepIteration) {
         for (record <- batch.asScala) {
           if (lastOffset == -1)
@@ -356,7 +386,8 @@ object DumpLogSegments {
             " compresscodec: " + batch.compressionType)
 
           if (batch.magic >= RecordBatch.MAGIC_VALUE_V2) {
-            print(" crc: " + batch.checksum + " sequence: " + record.sequence +
+            print(" producerId: " + batch.producerId + " sequence: " + record.sequence +
+              " isTransactional: " + batch.isTransactional +
               " headerKeys: " + record.headers.map(_.key).mkString("[", ",", "]"))
           } else {
             print(" crc: " + record.checksumOrNull)

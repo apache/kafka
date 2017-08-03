@@ -23,6 +23,7 @@ import org.apache.kafka.common.errors.InvalidMetadataException;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -79,6 +80,7 @@ public class MetadataResponse extends AbstractResponse {
     private static final String LEADER_KEY_NAME = "leader";
     private static final String REPLICAS_KEY_NAME = "replicas";
     private static final String ISR_KEY_NAME = "isr";
+    private static final String OFFLINE_REPLICAS_KEY_NAME = "offline_replicas";
 
     private final int throttleTimeMs;
     private final Collection<Node> brokers;
@@ -148,26 +150,18 @@ public class MetadataResponse extends AbstractResponse {
                 int partition = partitionInfo.getInt(PARTITION_KEY_NAME);
                 int leader = partitionInfo.getInt(LEADER_KEY_NAME);
                 Node leaderNode = leader == -1 ? null : brokers.get(leader);
-                Object[] replicas = (Object[]) partitionInfo.get(REPLICAS_KEY_NAME);
 
-                List<Node> replicaNodes = new ArrayList<>(replicas.length);
-                for (Object replicaNodeId : replicas) {
-                    if (brokers.containsKey(replicaNodeId))
-                        replicaNodes.add(brokers.get(replicaNodeId));
-                    else
-                        replicaNodes.add(new Node((int) replicaNodeId, "", -1));
-                }
+                Object[] replicas = (Object[]) partitionInfo.get(REPLICAS_KEY_NAME);
+                List<Node> replicaNodes = convertToNodes(brokers, replicas);
 
                 Object[] isr = (Object[]) partitionInfo.get(ISR_KEY_NAME);
-                List<Node> isrNodes = new ArrayList<>(isr.length);
-                for (Object isrNode : isr) {
-                    if (brokers.containsKey(isrNode))
-                        isrNodes.add(brokers.get(isrNode));
-                    else
-                        isrNodes.add(new Node((int) isrNode, "", -1));
-                }
+                List<Node> isrNodes = convertToNodes(brokers, isr);
 
-                partitionMetadata.add(new PartitionMetadata(partitionError, partition, leaderNode, replicaNodes, isrNodes));
+                Object[] offlineReplicas = partitionInfo.hasField(OFFLINE_REPLICAS_KEY_NAME) ?
+                    (Object[]) partitionInfo.get(OFFLINE_REPLICAS_KEY_NAME) : new Object[0];
+                List<Node> offlineNodes = convertToNodes(brokers, offlineReplicas);
+
+                partitionMetadata.add(new PartitionMetadata(partitionError, partition, leaderNode, replicaNodes, isrNodes, offlineNodes));
             }
 
             topicMetadata.add(new TopicMetadata(topicError, topic, isInternal, partitionMetadata));
@@ -176,6 +170,16 @@ public class MetadataResponse extends AbstractResponse {
         this.brokers = brokers.values();
         this.controller = getControllerNode(controllerId, brokers.values());
         this.topicMetadata = topicMetadata;
+    }
+
+    private List<Node> convertToNodes(Map<Integer, Node> brokers, Object[] brokerIds) {
+        List<Node> nodes = new ArrayList<>(brokerIds.length);
+        for (Object brokerId : brokerIds)
+            if (brokers.containsKey(brokerId))
+                nodes.add(brokers.get(brokerId));
+            else
+                nodes.add(new Node((int) brokerId, "", -1));
+        return nodes;
     }
 
     private Node getControllerNode(int controllerId, Collection<Node> brokers) {
@@ -255,7 +259,8 @@ public class MetadataResponse extends AbstractResponse {
                             partitionMetadata.partition,
                             partitionMetadata.leader,
                             partitionMetadata.replicas.toArray(new Node[0]),
-                            partitionMetadata.isr.toArray(new Node[0])));
+                            partitionMetadata.isr.toArray(new Node[0]),
+                            partitionMetadata.offlineReplicas.toArray(new Node[0])));
             }
         }
 
@@ -333,23 +338,27 @@ public class MetadataResponse extends AbstractResponse {
 
     }
 
+    // This is used to describe per-partition state in the MetadataResponse
     public static class PartitionMetadata {
         private final Errors error;
         private final int partition;
         private final Node leader;
         private final List<Node> replicas;
         private final List<Node> isr;
+        private final List<Node> offlineReplicas;
 
         public PartitionMetadata(Errors error,
                                  int partition,
                                  Node leader,
                                  List<Node> replicas,
-                                 List<Node> isr) {
+                                 List<Node> isr,
+                                 List<Node> offlineReplicas) {
             this.error = error;
             this.partition = partition;
             this.leader = leader;
             this.replicas = replicas;
             this.isr = isr;
+            this.offlineReplicas = offlineReplicas;
         }
 
         public Errors error() {
@@ -372,6 +381,20 @@ public class MetadataResponse extends AbstractResponse {
             return isr;
         }
 
+        public List<Node> offlineReplicas() {
+            return offlineReplicas;
+        }
+
+        @Override
+        public String toString() {
+            return "(type=PartitionMetadata," +
+                    ", error=" + error +
+                    ", partition=" + partition +
+                    ", leader=" + leader +
+                    ", replicas=" + Utils.join(replicas, ",") +
+                    ", isr=" + Utils.join(isr, ",") +
+                    ", offlineReplicas=" + Utils.join(offlineReplicas, ",") + ')';
+        }
     }
 
     @Override
@@ -423,6 +446,12 @@ public class MetadataResponse extends AbstractResponse {
                 for (Node node : partitionMetadata.isr)
                     isr.add(node.id());
                 partitionData.set(ISR_KEY_NAME, isr.toArray());
+                if (partitionData.hasField(OFFLINE_REPLICAS_KEY_NAME)) {
+                    ArrayList<Integer> offlineReplicas = new ArrayList<>(partitionMetadata.offlineReplicas.size());
+                    for (Node node : partitionMetadata.offlineReplicas)
+                        offlineReplicas.add(node.id());
+                    partitionData.set(OFFLINE_REPLICAS_KEY_NAME, offlineReplicas.toArray());
+                }
                 partitionMetadataArray.add(partitionData);
 
             }

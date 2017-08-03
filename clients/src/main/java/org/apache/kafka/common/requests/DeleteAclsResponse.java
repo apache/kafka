@@ -16,13 +16,11 @@
  */
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.clients.admin.AccessControlEntry;
-import org.apache.kafka.clients.admin.AclBinding;
-import org.apache.kafka.clients.admin.Resource;
-import org.apache.kafka.common.errors.ApiException;
+import org.apache.kafka.common.acl.AccessControlEntry;
+import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.resource.Resource;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,27 +28,28 @@ import org.slf4j.LoggerFactory;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.List;
 
 public class DeleteAclsResponse extends AbstractResponse {
     public static final Logger log = LoggerFactory.getLogger(DeleteAclsResponse.class);
     private final static String FILTER_RESPONSES = "filter_responses";
-    private final static String ERROR_CODE = "error_code";
-    private final static String ERROR_MESSAGE = "error_message";
     private final static String MATCHING_ACLS = "matching_acls";
 
     public static class AclDeletionResult {
-        private final ApiException exception;
+        private final ApiError error;
         private final AclBinding acl;
 
-        public AclDeletionResult(ApiException exception, AclBinding acl) {
-            this.exception = exception;
+        public AclDeletionResult(ApiError error, AclBinding acl) {
+            this.error = error;
             this.acl = acl;
         }
 
-        public ApiException exception() {
-            return exception;
+        public AclDeletionResult(AclBinding acl) {
+            this(ApiError.NONE, acl);
+        }
+
+        public ApiError error() {
+            return error;
         }
 
         public AclBinding acl() {
@@ -59,21 +58,25 @@ public class DeleteAclsResponse extends AbstractResponse {
 
         @Override
         public String toString() {
-            return "(apiException=" + exception + ", acl=" + acl + ")";
+            return "(error=" + error + ", acl=" + acl + ")";
         }
     }
 
     public static class AclFilterResponse {
-        private final Throwable throwable;
+        private final ApiError error;
         private final Collection<AclDeletionResult> deletions;
 
-        public AclFilterResponse(Throwable throwable, Collection<AclDeletionResult> deletions) {
-            this.throwable = throwable;
+        public AclFilterResponse(ApiError error, Collection<AclDeletionResult> deletions) {
+            this.error = error;
             this.deletions = deletions;
         }
 
-        public Throwable throwable() {
-            return throwable;
+        public AclFilterResponse(Collection<AclDeletionResult> deletions) {
+            this(ApiError.NONE, deletions);
+        }
+
+        public ApiError error() {
+            return error;
         }
 
         public Collection<AclDeletionResult> deletions() {
@@ -82,7 +85,7 @@ public class DeleteAclsResponse extends AbstractResponse {
 
         @Override
         public String toString() {
-            return "(throwable=" + throwable + ", deletions=" + Utils.join(deletions, ",") + ")";
+            return "(error=" + error + ", deletions=" + Utils.join(deletions, ",") + ")";
         }
     }
 
@@ -100,29 +103,16 @@ public class DeleteAclsResponse extends AbstractResponse {
         this.responses = new ArrayList<>();
         for (Object responseStructObj : struct.getArray(FILTER_RESPONSES)) {
             Struct responseStruct = (Struct) responseStructObj;
-            short responseErrorCode = responseStruct.getShort(ERROR_CODE);
-            String responseErrorMessage = responseStruct.getString(ERROR_MESSAGE);
-            if (responseErrorCode != 0) {
-                this.responses.add(new AclFilterResponse(
-                    Errors.forCode(responseErrorCode).exception(responseErrorMessage),
-                    Collections.<AclDeletionResult>emptySet()));
-            } else {
-                List<AclDeletionResult> deletions = new ArrayList<>();
-                for (Object matchingAclStructObj : responseStruct.getArray(MATCHING_ACLS)) {
-                    Struct matchingAclStruct = (Struct) matchingAclStructObj;
-                    short matchErrorCode = matchingAclStruct.getShort(ERROR_CODE);
-                    ApiException exception = null;
-                    if (matchErrorCode != 0) {
-                        Errors errors = Errors.forCode(matchErrorCode);
-                        String matchErrorMessage = matchingAclStruct.getString(ERROR_MESSAGE);
-                        exception = errors.exception(matchErrorMessage);
-                    }
-                    AccessControlEntry entry = RequestUtils.aceFromStructFields(matchingAclStruct);
-                    Resource resource = RequestUtils.resourceFromStructFields(matchingAclStruct);
-                    deletions.add(new AclDeletionResult(exception, new AclBinding(resource, entry)));
-                }
-                this.responses.add(new AclFilterResponse(null, deletions));
+            ApiError error = new ApiError(responseStruct);
+            List<AclDeletionResult> deletions = new ArrayList<>();
+            for (Object matchingAclStructObj : responseStruct.getArray(MATCHING_ACLS)) {
+                Struct matchingAclStruct = (Struct) matchingAclStructObj;
+                ApiError matchError = new ApiError(matchingAclStruct);
+                AccessControlEntry entry = RequestUtils.aceFromStructFields(matchingAclStruct);
+                Resource resource = RequestUtils.resourceFromStructFields(matchingAclStruct);
+                deletions.add(new AclDeletionResult(matchError, new AclBinding(resource, entry)));
             }
+            this.responses.add(new AclFilterResponse(error, deletions));
         }
     }
 
@@ -133,29 +123,16 @@ public class DeleteAclsResponse extends AbstractResponse {
         List<Struct> responseStructs = new ArrayList<>();
         for (AclFilterResponse response : responses) {
             Struct responseStruct = struct.instance(FILTER_RESPONSES);
-            if (response.throwable() != null) {
-                Errors error = Errors.forException(response.throwable());
-                responseStruct.set(ERROR_CODE, error.code());
-                responseStruct.set(ERROR_MESSAGE, response.throwable().getMessage());
-                responseStruct.set(MATCHING_ACLS, new Struct[0]);
-            } else {
-                responseStruct.set(ERROR_CODE, (short) 0);
-                List<Struct> deletionStructs = new ArrayList<>();
-                for (AclDeletionResult deletion : response.deletions()) {
-                    Struct deletionStruct = responseStruct.instance(MATCHING_ACLS);
-                    if (deletion.exception() != null) {
-                        Errors error = Errors.forException(deletion.exception);
-                        deletionStruct.set(ERROR_CODE, error.code());
-                        deletionStruct.set(ERROR_MESSAGE, deletion.exception.getMessage());
-                    } else {
-                        deletionStruct.set(ERROR_CODE, (short) 0);
-                    }
-                    RequestUtils.resourceSetStructFields(deletion.acl().resource(), deletionStruct);
-                    RequestUtils.aceSetStructFields(deletion.acl().entry(), deletionStruct);
-                    deletionStructs.add(deletionStruct);
-                }
-                responseStruct.set(MATCHING_ACLS, deletionStructs.toArray(new Struct[0]));
+            response.error.write(responseStruct);
+            List<Struct> deletionStructs = new ArrayList<>();
+            for (AclDeletionResult deletion : response.deletions()) {
+                Struct deletionStruct = responseStruct.instance(MATCHING_ACLS);
+                deletion.error.write(deletionStruct);
+                RequestUtils.resourceSetStructFields(deletion.acl().resource(), deletionStruct);
+                RequestUtils.aceSetStructFields(deletion.acl().entry(), deletionStruct);
+                deletionStructs.add(deletionStruct);
             }
+            responseStruct.set(MATCHING_ACLS, deletionStructs.toArray(new Struct[0]));
             responseStructs.add(responseStruct);
         }
         struct.set(FILTER_RESPONSES, responseStructs.toArray());

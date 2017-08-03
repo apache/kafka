@@ -59,6 +59,7 @@ import scala.collection.JavaConverters._
  *
 */
 
+@deprecated("This class has been deprecated and will be removed in a future release.", "0.11.0.0")
 private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
                                                 val enableFetcher: Boolean) // for testing only
     extends ConsumerConnector {

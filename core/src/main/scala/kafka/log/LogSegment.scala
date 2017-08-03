@@ -20,8 +20,6 @@ import java.io.{File, IOException}
 import java.nio.file.Files
 import java.nio.file.attribute.FileTime
 import java.util.concurrent.TimeUnit
-
-import kafka.common._
 import kafka.metrics.{KafkaMetricsGroup, KafkaTimer}
 import kafka.server.epoch.LeaderEpochCache
 import kafka.server.{FetchDataInfo, LogOffsetMetadata}
@@ -242,19 +240,16 @@ class LogSegment(val log: FileRecords,
      index.fetchUpperBoundOffset(startOffsetPosition, fetchSize).map(_.offset)
 
   /**
-   * Run recovery on the given segment. This will rebuild the index from the log file and lop off any invalid bytes from the end of the log and index.
+   * Run recovery on the given segment. This will rebuild the index from the log file and lop off any invalid bytes
+   * from the end of the log and index.
    *
-   * @param maxMessageSize A bound the memory allocation in the case of a corrupt message size--we will assume any message larger than this
-   * is corrupt.
    * @param producerStateManager Producer state corresponding to the segment's base offset. This is needed to recover
    *                             the transaction index.
    * @param leaderEpochCache Optionally a cache for updating the leader epoch during recovery.
    * @return The number of bytes truncated from the log
    */
   @nonthreadsafe
-  def recover(maxMessageSize: Int,
-              producerStateManager: ProducerStateManager,
-              leaderEpochCache: Option[LeaderEpochCache] = None): Int = {
+  def recover(producerStateManager: ProducerStateManager, leaderEpochCache: Option[LeaderEpochCache] = None): Int = {
     index.truncate()
     index.resize(index.maxIndexSize)
     timeIndex.truncate()
@@ -264,7 +259,7 @@ class LogSegment(val log: FileRecords,
     var lastIndexEntry = 0
     maxTimestampSoFar = RecordBatch.NO_TIMESTAMP
     try {
-      for (batch <- log.batches(maxMessageSize).asScala) {
+      for (batch <- log.batches.asScala) {
         batch.ensureValid()
 
         // The max timestamp is exposed at the batch level, so no need to iterate the records
@@ -296,6 +291,9 @@ class LogSegment(val log: FileRecords,
           .format(log.file.getAbsolutePath, validBytes, e.getMessage))
     }
     val truncated = log.sizeInBytes - validBytes
+    if (truncated > 0)
+      logger.debug(s"Truncated $truncated invalid bytes at the end of segment ${log.file.getAbsoluteFile} during recovery")
+
     log.truncateTo(validBytes)
     index.trimToValidSize()
     // A normally closed segment always appends the biggest timestamp ever seen into log segment, we do this as well.
@@ -383,28 +381,13 @@ class LogSegment(val log: FileRecords,
 
   /**
    * Change the suffix for the index and log file for this log segment
+   * IOException from this method should be handled by the caller
    */
   def changeFileSuffixes(oldSuffix: String, newSuffix: String) {
-
-    def kafkaStorageException(fileType: String, e: IOException) =
-      new KafkaStorageException(s"Failed to change the $fileType file suffix from $oldSuffix to $newSuffix for log segment $baseOffset", e)
-
-    try log.renameTo(new File(CoreUtils.replaceSuffix(log.file.getPath, oldSuffix, newSuffix)))
-    catch {
-      case e: IOException => throw kafkaStorageException("log", e)
-    }
-    try index.renameTo(new File(CoreUtils.replaceSuffix(index.file.getPath, oldSuffix, newSuffix)))
-    catch {
-      case e: IOException => throw kafkaStorageException("index", e)
-    }
-    try timeIndex.renameTo(new File(CoreUtils.replaceSuffix(timeIndex.file.getPath, oldSuffix, newSuffix)))
-    catch {
-      case e: IOException => throw kafkaStorageException("timeindex", e)
-    }
-    try txnIndex.renameTo(new File(CoreUtils.replaceSuffix(txnIndex.file.getPath, oldSuffix, newSuffix)))
-    catch {
-      case e: IOException => throw kafkaStorageException("txnindex", e)
-    }
+    log.renameTo(new File(CoreUtils.replaceSuffix(log.file.getPath, oldSuffix, newSuffix)))
+    index.renameTo(new File(CoreUtils.replaceSuffix(index.file.getPath, oldSuffix, newSuffix)))
+    timeIndex.renameTo(new File(CoreUtils.replaceSuffix(timeIndex.file.getPath, oldSuffix, newSuffix)))
+    txnIndex.renameTo(new File(CoreUtils.replaceSuffix(txnIndex.file.getPath, oldSuffix, newSuffix)))
   }
 
   /**
@@ -481,9 +464,17 @@ class LogSegment(val log: FileRecords,
   }
 
   /**
+    * Close file handlers used by the log segment but don't write to disk. This is used when the disk may have failed
+    */
+  def closeHandlers() {
+    CoreUtils.swallow(index.closeHandler())
+    CoreUtils.swallow(timeIndex.closeHandler())
+    CoreUtils.swallow(log.closeHandlers())
+    CoreUtils.swallow(txnIndex.close())
+  }
+
+  /**
    * Delete this log segment from the filesystem.
-   *
-   * @throws KafkaStorageException if the delete fails.
    */
   def delete() {
     val deletedLog = log.delete()
@@ -491,13 +482,13 @@ class LogSegment(val log: FileRecords,
     val deletedTimeIndex = timeIndex.delete()
     val deletedTxnIndex = txnIndex.delete()
     if (!deletedLog && log.file.exists)
-      throw new KafkaStorageException("Delete of log " + log.file.getName + " failed.")
+      throw new IOException("Delete of log " + log.file.getName + " failed.")
     if (!deletedIndex && index.file.exists)
-      throw new KafkaStorageException("Delete of index " + index.file.getName + " failed.")
+      throw new IOException("Delete of index " + index.file.getName + " failed.")
     if (!deletedTimeIndex && timeIndex.file.exists)
-      throw new KafkaStorageException("Delete of time index " + timeIndex.file.getName + " failed.")
+      throw new IOException("Delete of time index " + timeIndex.file.getName + " failed.")
     if (!deletedTxnIndex && txnIndex.file.exists)
-      throw new KafkaStorageException("Delete of transaction index " + txnIndex.file.getName + " failed.")
+      throw new IOException("Delete of transaction index " + txnIndex.file.getName + " failed.")
   }
 
   /**

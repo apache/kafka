@@ -79,9 +79,9 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
       brokerRequestBatch.newBatch()
       // try to move all partitions in NewPartition or OfflinePartition state to OnlinePartition state except partitions
       // that belong to topics to be deleted
-      for((topicAndPartition, partitionState) <- partitionState
+      for ((topicAndPartition, partitionState) <- partitionState
           if !controller.topicDeletionManager.isTopicQueuedUpForDeletion(topicAndPartition.topic)) {
-        if(partitionState.equals(OfflinePartition) || partitionState.equals(NewPartition))
+        if (partitionState.equals(OfflinePartition) || partitionState.equals(NewPartition))
           handleStateChange(topicAndPartition.topic, topicAndPartition.partition, OnlinePartition, controller.offlinePartitionSelector,
                             (new CallbackBuilder).build)
       }
@@ -111,7 +111,7 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
         handleStateChange(topicAndPartition.topic, topicAndPartition.partition, targetState, leaderSelector, callbacks)
       }
       brokerRequestBatch.sendRequestsToBrokers(controller.epoch)
-    }catch {
+    } catch {
       case e: Throwable => error("Error while moving some partitions to %s state".format(targetState), e)
       // TODO: It is not enough to bail out and log an error, it is important to trigger state changes for those partitions
     }
@@ -200,7 +200,7 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
       controllerContext.partitionLeadershipInfo.get(topicPartition) match {
         case Some(currentLeaderIsrAndEpoch) =>
           // else, check if the leader for partition is alive. If yes, it is in Online state, else it is in Offline state
-          if (controllerContext.liveBrokerIds.contains(currentLeaderIsrAndEpoch.leaderAndIsr.leader))
+          if (controllerContext.isReplicaOnline(currentLeaderIsrAndEpoch.leaderAndIsr.leader, topicPartition))
             // leader is alive
             partitionState.put(topicPartition, OnlinePartition)
           else
@@ -227,7 +227,7 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
    */
   private def initializeLeaderAndIsrForPartition(topicAndPartition: TopicAndPartition) = {
     val replicaAssignment = controllerContext.partitionReplicaAssignment(topicAndPartition).toList
-    val liveAssignedReplicas = replicaAssignment.filter(controllerContext.liveBrokerIds.contains)
+    val liveAssignedReplicas = replicaAssignment.filter(r => controllerContext.isReplicaOnline(r, topicAndPartition))
     liveAssignedReplicas.headOption match {
       case None =>
         val failMsg = s"Controller $controllerId epoch ${controller.epoch} encountered error during state change of " +
@@ -259,7 +259,8 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
             topicAndPartition.topic,
             topicAndPartition.partition,
             leaderIsrAndControllerEpoch,
-            replicaAssignment
+            replicaAssignment,
+            isNew = true
           )
         } catch {
           case _: ZkNodeExistsException =>

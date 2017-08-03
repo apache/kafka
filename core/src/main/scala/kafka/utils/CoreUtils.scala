@@ -32,7 +32,7 @@ import scala.collection._
 import scala.collection.mutable
 import kafka.cluster.EndPoint
 import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.utils.{KafkaThread, Utils}
 
 /**
  * General helper functions!
@@ -66,7 +66,7 @@ object CoreUtils extends Logging {
     * @return The unstarted thread
     */
   def newThread(name: String, daemon: Boolean)(fun: => Unit): Thread =
-    Utils.newThread(name, runnable(fun), daemon)
+    new KafkaThread(name, runnable(fun), daemon)
 
   /**
    * Do the given action and log any exceptions thrown without rethrowing them

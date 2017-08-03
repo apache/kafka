@@ -26,8 +26,8 @@
 	<div class="right">
 		<!--#include virtual="../includes/_docs_banner.htm" -->
     <h1>Documentation</h1>
-    <h3>Kafka 0.10.2 Documentation</h3>
-    Prior releases: <a href="/07/documentation.html">0.7.x</a>, <a href="/08/documentation.html">0.8.0</a>, <a href="/081/documentation.html">0.8.1.X</a>, <a href="/082/documentation.html">0.8.2.X</a>, <a href="/090/documentation.html">0.9.0.X</a>, <a href="/0100/documentation.html">0.10.0.X</a>, <a href="/0101/documentation.html">0.10.1.X</a>.
+    <h3>Kafka 0.11.0 Documentation</h3>
+    Prior releases: <a href="/07/documentation.html">0.7.x</a>, <a href="/08/documentation.html">0.8.0</a>, <a href="/081/documentation.html">0.8.1.X</a>, <a href="/082/documentation.html">0.8.2.X</a>, <a href="/090/documentation.html">0.9.0.X</a>, <a href="/0100/documentation.html">0.10.0.X</a>, <a href="/0101/documentation.html">0.10.1.X</a>, <a href="/0102/documentation.html">0.10.2.X</a>.
 
     <!--#include virtual="toc.html" -->
 
@@ -69,15 +69,15 @@
     <h2><a id="connect" href="#connect">8. Kafka Connect</a></h2>
     <!--#include virtual="connect.html" -->
 
-    <h2><a id="streams" href="/0102/documentation/streams">9. Kafka Streams</a></h2>
+    <h2><a id="streams" href="/0110/documentation/streams">9. Kafka Streams</a></h2>
     <p>
-        Kafka Streams is a client library for processing and analyzing data stored in Kafka and either write the resulting data back to Kafka or send the final output to an external system. It builds upon important stream processing concepts such as properly distinguishing between event time and processing time, windowing support, and simple yet efficient management of application state.
+        Kafka Streams is a client library for processing and analyzing data stored in Kafka. It builds upon important stream processing concepts such as properly distinguishing between event time and processing time, windowing support, exactly-once processing semantics and simple yet efficient management of application state.
     </p>
     <p>
         Kafka Streams has a <b>low barrier to entry</b>: You can quickly write and run a small-scale proof-of-concept on a single machine; and you only need to run additional instances of your application on multiple machines to scale up to high-volume production workloads. Kafka Streams transparently handles the load balancing of multiple instances of the same application by leveraging Kafka's parallelism model.
     </p>
 
-    <p>Learn More about Kafka Streams read <a href="/0102/documentation/streams">this</a> Section.</p>
+    <p>Learn More about Kafka Streams read <a href="/0110/documentation/streams">this</a> Section.</p>
 
 <!--#include virtual="../includes/_footer.htm" -->
 <!--#include virtual="../includes/_docs_footer.htm" -->

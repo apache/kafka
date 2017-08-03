@@ -19,7 +19,7 @@ package kafka.log
 import java.nio.ByteBuffer
 
 import kafka.common.LongRef
-import kafka.message.{DefaultCompressionCodec, GZIPCompressionCodec, NoCompressionCodec, SnappyCompressionCodec}
+import kafka.message.{CompressionCodec, DefaultCompressionCodec, GZIPCompressionCodec, NoCompressionCodec, SnappyCompressionCodec}
 import org.apache.kafka.common.errors.{InvalidTimestampException, UnsupportedForMessageFormatException}
 import org.apache.kafka.common.record._
 import org.apache.kafka.test.TestUtils
@@ -38,7 +38,7 @@ class LogValidatorTest {
   private def checkLogAppendTimeNonCompressed(magic: Byte) {
     val now = System.currentTimeMillis()
     // The timestamps should be overwritten
-    val records = createRecords(magicValue = magic, timestamp = 0L, codec = CompressionType.NONE)
+    val records = createRecords(magicValue = magic, timestamp = 1234L, codec = CompressionType.NONE)
     val validatedResults = LogValidator.validateMessagesAndAssignOffsets(records,
       offsetCounter = new LongRef(0),
       now = now,
@@ -52,7 +52,7 @@ class LogValidatorTest {
       isFromClient = true)
     val validatedRecords = validatedResults.validatedRecords
     assertEquals("message set size should not change", records.records.asScala.size, validatedRecords.records.asScala.size)
-    validatedRecords.batches.asScala.foreach(batch => validateLogAppendTime(now, batch))
+    validatedRecords.batches.asScala.foreach(batch => validateLogAppendTime(now, 1234L, batch))
     assertEquals(s"Max timestamp should be $now", now, validatedResults.maxTimestamp)
     assertEquals(s"The offset of max timestamp should be 0", 0, validatedResults.shallowOffsetOfMaxTimestamp)
     assertFalse("Message size should not have been changed", validatedResults.messageSizeMaybeChanged)
@@ -86,7 +86,7 @@ class LogValidatorTest {
     val validatedRecords = validatedResults.validatedRecords
 
     assertEquals("message set size should not change", records.records.asScala.size, validatedRecords.records.asScala.size)
-    validatedRecords.batches.asScala.foreach(batch => validateLogAppendTime(now, batch))
+    validatedRecords.batches.asScala.foreach(batch => validateLogAppendTime(now, -1, batch))
     assertTrue("MessageSet should still valid", validatedRecords.batches.iterator.next().isValid)
     assertEquals(s"Max timestamp should be $now", now, validatedResults.maxTimestamp)
     assertEquals(s"The offset of max timestamp should be ${records.records.asScala.size - 1}",
@@ -107,7 +107,7 @@ class LogValidatorTest {
   private def checkLogAppendTimeWithoutRecompression(magic: Byte) {
     val now = System.currentTimeMillis()
     // The timestamps should be overwritten
-    val records = createRecords(magicValue = magic, timestamp = 0L, codec = CompressionType.GZIP)
+    val records = createRecords(magicValue = magic, timestamp = 1234L, codec = CompressionType.GZIP)
     val validatedResults = LogValidator.validateMessagesAndAssignOffsets(
       records,
       offsetCounter = new LongRef(0),
@@ -124,7 +124,7 @@ class LogValidatorTest {
 
     assertEquals("message set size should not change", records.records.asScala.size,
       validatedRecords.records.asScala.size)
-    validatedRecords.batches.asScala.foreach(batch => validateLogAppendTime(now, batch))
+    validatedRecords.batches.asScala.foreach(batch => validateLogAppendTime(now, 1234L, batch))
     assertTrue("MessageSet should still valid", validatedRecords.batches.iterator.next().isValid)
     assertEquals(s"Max timestamp should be $now", now, validatedResults.maxTimestamp)
     assertEquals(s"The offset of max timestamp should be ${records.records.asScala.size - 1}",
@@ -176,6 +176,7 @@ class LogValidatorTest {
     for (batch <- validatedRecords.batches.asScala) {
       assertTrue(batch.isValid)
       assertEquals(batch.timestampType, TimestampType.CREATE_TIME)
+      maybeCheckBaseTimestamp(timestampSeq(0), batch)
       assertEquals(batch.maxTimestamp, batch.asScala.map(_.timestamp).max)
       assertEquals(producerEpoch, batch.producerEpoch)
       assertEquals(producerId, batch.producerId)
@@ -237,6 +238,7 @@ class LogValidatorTest {
     for (batch <- validatedRecords.batches.asScala) {
       assertTrue(batch.isValid)
       assertEquals(batch.timestampType, TimestampType.CREATE_TIME)
+      maybeCheckBaseTimestamp(timestampSeq(0), batch)
       assertEquals(batch.maxTimestamp, batch.asScala.map(_.timestamp).max)
       assertEquals(producerEpoch, batch.producerEpoch)
       assertEquals(producerId, batch.producerId)
@@ -280,6 +282,7 @@ class LogValidatorTest {
 
     for (batch <- validatedRecords.batches.asScala) {
       assertTrue(batch.isValid)
+      maybeCheckBaseTimestamp(RecordBatch.NO_TIMESTAMP, batch)
       assertEquals(RecordBatch.NO_TIMESTAMP, batch.maxTimestamp)
       assertEquals(TimestampType.CREATE_TIME, batch.timestampType)
       assertEquals(RecordBatch.NO_PRODUCER_EPOCH, batch.producerEpoch)
@@ -316,6 +319,7 @@ class LogValidatorTest {
 
     for (batch <- validatedRecords.batches.asScala) {
       assertTrue(batch.isValid)
+      maybeCheckBaseTimestamp(timestamp, batch)
       assertEquals(timestamp, batch.maxTimestamp)
       assertEquals(TimestampType.CREATE_TIME, batch.timestampType)
       assertEquals(RecordBatch.NO_PRODUCER_EPOCH, batch.producerEpoch)
@@ -367,6 +371,7 @@ class LogValidatorTest {
     for (batch <- validatedRecords.batches.asScala) {
       assertTrue(batch.isValid)
       assertEquals(batch.timestampType, TimestampType.CREATE_TIME)
+      maybeCheckBaseTimestamp(timestampSeq(0), batch)
       assertEquals(batch.maxTimestamp, batch.asScala.map(_.timestamp).max)
       assertEquals(producerEpoch, batch.producerEpoch)
       assertEquals(producerId, batch.producerId)
@@ -904,6 +909,44 @@ class LogValidatorTest {
       isFromClient = true)
   }
 
+  @Test(expected = classOf[InvalidRecordException])
+  def testCompressedBatchWithoutRecordsNotAllowed(): Unit = {
+    testBatchWithoutRecordsNotAllowed(DefaultCompressionCodec, DefaultCompressionCodec)
+  }
+
+  @Test(expected = classOf[InvalidRecordException])
+  def testUncompressedBatchWithoutRecordsNotAllowed(): Unit = {
+    testBatchWithoutRecordsNotAllowed(NoCompressionCodec, NoCompressionCodec)
+  }
+
+  @Test(expected = classOf[InvalidRecordException])
+  def testRecompressedBatchWithoutRecordsNotAllowed(): Unit = {
+    testBatchWithoutRecordsNotAllowed(NoCompressionCodec, DefaultCompressionCodec)
+  }
+
+  private def testBatchWithoutRecordsNotAllowed(sourceCodec: CompressionCodec, targetCodec: CompressionCodec): Unit = {
+    val offset = 1234567
+    val (producerId, producerEpoch, baseSequence, isTransactional, partitionLeaderEpoch) =
+      (1324L, 10.toShort, 984, true, 40)
+    val buffer = ByteBuffer.allocate(DefaultRecordBatch.RECORD_BATCH_OVERHEAD)
+    DefaultRecordBatch.writeEmptyHeader(buffer, RecordBatch.CURRENT_MAGIC_VALUE, producerId, producerEpoch,
+      baseSequence, 0L, 5L, partitionLeaderEpoch, TimestampType.CREATE_TIME, System.currentTimeMillis(),
+      isTransactional, false)
+    buffer.flip()
+    val records = MemoryRecords.readableRecords(buffer)
+    LogValidator.validateMessagesAndAssignOffsets(records,
+      offsetCounter = new LongRef(offset),
+      now = System.currentTimeMillis(),
+      sourceCodec = sourceCodec,
+      targetCodec = targetCodec,
+      compactedTopic = false,
+      magic = RecordBatch.CURRENT_MAGIC_VALUE,
+      timestampType = TimestampType.CREATE_TIME,
+      timestampDiffMaxMs = 5000L,
+      partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
+      isFromClient = true)
+  }
+
   private def createRecords(magicValue: Byte = RecordBatch.CURRENT_MAGIC_VALUE,
                             timestamp: Long = RecordBatch.NO_TIMESTAMP,
                             codec: CompressionType = CompressionType.NONE): MemoryRecords = {
@@ -945,13 +988,25 @@ class LogValidatorTest {
     builder.build()
   }
 
-  def validateLogAppendTime(now: Long, batch: RecordBatch) {
+  def maybeCheckBaseTimestamp(expected: Long, batch: RecordBatch): Unit = {
+    batch match {
+      case b: DefaultRecordBatch =>
+        assertEquals(s"Unexpected base timestamp of batch $batch", expected, b.firstTimestamp)
+      case _ => // no-op
+    }
+  }
+
+  /**
+    * expectedLogAppendTime is only checked if batch.magic is V2 or higher
+    */
+  def validateLogAppendTime(expectedLogAppendTime: Long, expectedBaseTimestamp: Long, batch: RecordBatch) {
     assertTrue(batch.isValid)
-    assertTrue(batch.timestampType() == TimestampType.LOG_APPEND_TIME)
-    assertEquals(s"Timestamp of message $batch should be $now", now, batch.maxTimestamp)
+    assertTrue(batch.timestampType == TimestampType.LOG_APPEND_TIME)
+    assertEquals(s"Unexpected max timestamp of batch $batch", expectedLogAppendTime, batch.maxTimestamp)
+    maybeCheckBaseTimestamp(expectedBaseTimestamp, batch)
     for (record <- batch.asScala) {
       assertTrue(record.isValid)
-      assertEquals(s"Timestamp of message $record should be $now", now, record.timestamp)
+      assertEquals(s"Unexpected timestamp of record $record", expectedLogAppendTime, record.timestamp)
     }
   }
 

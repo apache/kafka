@@ -17,11 +17,11 @@
 
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.clients.admin.AccessControlEntry;
-import org.apache.kafka.clients.admin.AclBinding;
-import org.apache.kafka.clients.admin.Resource;
+import org.apache.kafka.common.acl.AccessControlEntry;
+import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.resource.Resource;
 import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
@@ -117,9 +117,8 @@ public class CreateAclsRequest extends AbstractRequest {
         switch (versionId) {
             case 0:
                 List<CreateAclsResponse.AclCreationResponse> responses = new ArrayList<>();
-                for (int i = 0; i < aclCreations.size(); i++) {
-                    responses.add(new CreateAclsResponse.AclCreationResponse(throwable));
-                }
+                for (int i = 0; i < aclCreations.size(); i++)
+                    responses.add(new CreateAclsResponse.AclCreationResponse(ApiError.fromThrowable(throwable)));
                 return new CreateAclsResponse(throttleTimeMs, responses);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",

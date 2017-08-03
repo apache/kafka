@@ -32,10 +32,10 @@ class StreamsSimpleBenchmarkTest(Test):
         super(StreamsSimpleBenchmarkTest, self).__init__(test_context)
         self.num_records = 20000000L
         self.replication = 1
-
+        self.num_threads = 1
 
     @cluster(num_nodes=9)
-    @matrix(test=["produce", "consume", "count", "processstream", "processstreamwithsink", "processstreamwithstatestore", "processstreamwithcachedstatestore", "kstreamktablejoin", "kstreamkstreamjoin", "ktablektablejoin"], scale=[1, 3])
+    @matrix(test=["produce", "consume", "count", "processstream", "processstreamwithsink", "processstreamwithstatestore", "processstreamwithcachedstatestore", "kstreamktablejoin", "kstreamkstreamjoin", "ktablektablejoin", "yahoo"], scale=[1, 3])
     def test_simple_benchmark(self, test, scale):
         """
         Run simple Kafka Streams benchmark
@@ -58,15 +58,19 @@ class StreamsSimpleBenchmarkTest(Test):
             'joinSourceTopic1KStreamKTable' : { 'partitions': scale, 'replication-factor': self.replication },
             'joinSourceTopic2KStreamKTable' : { 'partitions': scale, 'replication-factor': self.replication },
             'joinSourceTopic1KTableKTable' : { 'partitions': scale, 'replication-factor': self.replication },
-            'joinSourceTopic2KTableKTable' : { 'partitions': scale, 'replication-factor': self.replication }
+            'joinSourceTopic2KTableKTable' : { 'partitions': scale, 'replication-factor': self.replication },
+            'yahooCampaigns' : { 'partitions': 20, 'replication-factor': self.replication },
+            'yahooEvents' : { 'partitions': 20, 'replication-factor': self.replication }
         })
+        self.kafka.log_level = "INFO"
         self.kafka.start()
  
         ################
         # LOAD PHASE
         ################
         self.load_driver = StreamsSimpleBenchmarkService(self.test_context, self.kafka,
-                                                         self.num_records * scale, "true", test)
+                                                         self.num_records * scale, "true", test,
+                                                         self.num_threads)
         self.load_driver.start()
         self.load_driver.wait()
         self.load_driver.stop()
@@ -76,7 +80,8 @@ class StreamsSimpleBenchmarkTest(Test):
         ################
         for num in range(0, scale):
             self.driver[num] = StreamsSimpleBenchmarkService(self.test_context, self.kafka,
-                                                             self.num_records/(scale), "false", test)
+                                                             self.num_records/(scale), "false", test,
+                                                             self.num_threads)
             self.driver[num].start()
 
         #######################

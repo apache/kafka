@@ -21,6 +21,7 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.internals.WindowedSerializer;
 import org.apache.kafka.streams.kstream.internals.WindowedStreamPartitioner;
@@ -34,7 +35,7 @@ import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
  * {@code KTable} is an abstraction of a <i>changelog stream</i> from a primary-keyed table.
  * Each record in this changelog stream is an update on the primary-keyed table with the record key as the primary key.
  * <p>
- * A {@code KTable} is either {@link KStreamBuilder#table(String, String) defined from a single Kafka topic} that is
+ * A {@code KTable} is either {@link StreamsBuilder#table(String, String) defined from a single Kafka topic} that is
  * consumed message by message or the result of a {@code KTable} transformation.
  * An aggregation of a {@link KStream} also yields a {@code KTable}.
  * <p>
@@ -62,9 +63,9 @@ import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
  * @see KStream
  * @see KGroupedTable
  * @see GlobalKTable
- * @see KStreamBuilder#table(String, String)
+ * @see StreamsBuilder#table(String, String)
  */
-@InterfaceStability.Unstable
+@InterfaceStability.Evolving
 public interface KTable<K, V> {
 
     /**
@@ -415,13 +416,13 @@ public interface KTable<K, V> {
      * Note that {@code print()} is not applied to the internal state store and only called for each new {@code KTable}
      * update record.
      *
-     * @param streamName the name used to label the key/value pairs printed to the console
+     * @param label the name used to label the key/value pairs printed to the console
      * @deprecated Use the Interactive Queries APIs (e.g., {@link KafkaStreams#store(String, QueryableStoreType) }
      * followed by {@link ReadOnlyKeyValueStore#all()}) to iterate over the keys of a KTable. Alternatively
      * convert to a KStream using {@code toStream()} and then use {@link KStream#print(String)} on the result.
      */
     @Deprecated
-    void print(final String streamName);
+    void print(final String label);
 
     /**
      * Print the update records of this {@code KTable} to {@code System.out}.
@@ -462,7 +463,7 @@ public interface KTable<K, V> {
      *
      * @param keySerde   key serde used to deserialize key if type is {@code byte[]},
      * @param valSerde   value serde used to deserialize value if type is {@code byte[]},
-     * @param streamName the name used to label the key/value pairs printed to the console
+     * @param label the name used to label the key/value pairs printed to the console
      * @deprecated Use the Interactive Queries APIs (e.g., {@link KafkaStreams#store(String, QueryableStoreType) }
      * followed by {@link ReadOnlyKeyValueStore#all()}) to iterate over the keys of a KTable. Alternatively
      * convert to a KStream using {@code toStream()} and then use {@link KStream#print(Serde, Serde, String)} on the result.
@@ -470,7 +471,7 @@ public interface KTable<K, V> {
     @Deprecated
     void print(final Serde<K> keySerde,
                final Serde<V> valSerde,
-               final String streamName);
+               final String label);
 
     /**
      * Write the update records of this {@code KTable} to a file at the given path.
@@ -508,14 +509,14 @@ public interface KTable<K, V> {
      * {@code KTable} update record.
      *
      * @param filePath   name of file to write to
-     * @param streamName the name used to label the key/value pairs printed out to the console
+     * @param label the name used to label the key/value pairs printed out to the console
      * @deprecated Use the Interactive Queries APIs (e.g., {@link KafkaStreams#store(String, QueryableStoreType) }
      * followed by {@link ReadOnlyKeyValueStore#all()}) to iterate over the keys of a KTable. Alternatively
      * convert to a KStream using {@code toStream()} and then use {@link KStream#writeAsText(String, String)}} on the result.
      */
     @Deprecated
     void writeAsText(final String filePath,
-                     final String streamName);
+                     final String label);
 
     /**
      * Write the update records of this {@code KTable} to a file at the given path.
@@ -557,7 +558,7 @@ public interface KTable<K, V> {
      * {@code KTable} update record.
      *
      * @param filePath name of file to write to
-     * @param streamName the name used to label the key/value pairs printed to the console
+     * @param label the name used to label the key/value pairs printed to the console
      * @param keySerde key serde used to deserialize key if type is {@code byte[]},
      * @param valSerde value serde used to deserialize value if type is {@code byte[]}
      * @deprecated Use the Interactive Queries APIs (e.g., {@link KafkaStreams#store(String, QueryableStoreType) }
@@ -567,7 +568,7 @@ public interface KTable<K, V> {
      */
     @Deprecated
     void writeAsText(final String filePath,
-                     final String streamName,
+                     final String label,
                      final Serde<K> keySerde,
                      final Serde<V> valSerde);
 
@@ -630,10 +631,10 @@ public interface KTable<K, V> {
      * started).
      * <p>
      * This is equivalent to calling {@link #to(String) #to(someTopicName)} and
-     * {@link KStreamBuilder#table(String, String) KStreamBuilder#table(someTopicName, queryableStoreName)}.
+     * {@link StreamsBuilder#table(String, String) StreamsBuilder#table(someTopicName, queryableStoreName)}.
      * <p>
      * The resulting {@code KTable} will be materialized in a local state store with the given store name (cf.
-     * {@link KStreamBuilder#table(String, String)})
+     * {@link StreamsBuilder#table(String, String)})
      * The store name must be a valid Kafka topic name and cannot contain characters other than ASCII alphanumerics, '.', '_' and '-'.
      *
      * @param topic     the topic name
@@ -651,10 +652,10 @@ public interface KTable<K, V> {
      * started).
      * <p>
      * This is equivalent to calling {@link #to(String) #to(someTopicName)} and
-     * {@link KStreamBuilder#table(String, String) KStreamBuilder#table(someTopicName, queryableStoreName)}.
+     * {@link StreamsBuilder#table(String, String) StreamsBuilder#table(someTopicName, queryableStoreName)}.
      * <p>
      * The resulting {@code KTable} will be materialized in a local state store with the given store name (cf.
-     * {@link KStreamBuilder#table(String, String)})
+     * {@link StreamsBuilder#table(String, String)})
      * The store name must be a valid Kafka topic name and cannot contain characters other than ASCII alphanumerics, '.', '_' and '-'.
      *
      * @param topic     the topic name
@@ -671,10 +672,10 @@ public interface KTable<K, V> {
      * started).
      * <p>
      * This is equivalent to calling {@link #to(String) #to(someTopicName)} and
-     * {@link KStreamBuilder#table(String, String) KStreamBuilder#table(someTopicName)}.
+     * {@link StreamsBuilder#table(String, String) StreamsBuilder#table(someTopicName)}.
      * <p>
      * The resulting {@code KTable} will be materialized in a local state store with an internal store name (cf.
-     * {@link KStreamBuilder#table(String)})
+     * {@link StreamsBuilder#table(String)})
      *
      * @param topic     the topic name
      * @return a {@code KTable} that contains the exact same (and potentially repartitioned) records as this {@code KTable}
@@ -689,10 +690,10 @@ public interface KTable<K, V> {
      * started).
      * <p>
      * This is equivalent to calling {@link #to(StreamPartitioner, String) #to(partitioner, someTopicName)} and
-     * {@link KStreamBuilder#table(String, String) KStreamBuilder#table(someTopicName)}.
+     * {@link StreamsBuilder#table(String, String) StreamsBuilder#table(someTopicName)}.
      * <p>
      * The resulting {@code KTable} will be materialized in a local state store with an internal store name (cf.
-     * {@link KStreamBuilder#table(String)})
+     * {@link StreamsBuilder#table(String)})
      *
      * @param partitioner the function used to determine how records are distributed among partitions of the topic,
      *                    if not specified producer's {@link DefaultPartitioner} will be used
@@ -710,10 +711,10 @@ public interface KTable<K, V> {
      * started).
      * <p>
      * This is equivalent to calling {@link #to(StreamPartitioner, String) #to(partitioner, someTopicName)} and
-     * {@link KStreamBuilder#table(String, String) KStreamBuilder#table(someTopicName, queryableStoreName)}.
+     * {@link StreamsBuilder#table(String, String) StreamsBuilder#table(someTopicName, queryableStoreName)}.
      * <p>
      * The resulting {@code KTable} will be materialized in a local state store with the given store name (cf.
-     * {@link KStreamBuilder#table(String, String)})
+     * {@link StreamsBuilder#table(String, String)})
      *
      * @param partitioner the function used to determine how records are distributed among partitions of the topic,
      *                    if not specified producer's {@link DefaultPartitioner} will be used
@@ -734,10 +735,10 @@ public interface KTable<K, V> {
      * started).
      * <p>
      * This is equivalent to calling {@link #to(StreamPartitioner, String) #to(partitioner, someTopicName)} and
-     * {@link KStreamBuilder#table(String, String) KStreamBuilder#table(someTopicName, queryableStoreName)}.
+     * {@link StreamsBuilder#table(String, String) StreamsBuilder#table(someTopicName, queryableStoreName)}.
      * <p>
      * The resulting {@code KTable} will be materialized in a local state store with the given store name (cf.
-     * {@link KStreamBuilder#table(String, String)})
+     * {@link StreamsBuilder#table(String, String)})
      *
      * @param partitioner the function used to determine how records are distributed among partitions of the topic,
      *                    if not specified producer's {@link DefaultPartitioner} will be used
@@ -758,10 +759,10 @@ public interface KTable<K, V> {
      * used&mdash;otherwise producer's {@link DefaultPartitioner} is used.
      * <p>
      * This is equivalent to calling {@link #to(Serde, Serde, String) #to(keySerde, valueSerde, someTopicName)} and
-     * {@link KStreamBuilder#table(String, String) KStreamBuilder#table(someTopicName, queryableStoreName)}.
+     * {@link StreamsBuilder#table(String, String) StreamsBuilder#table(someTopicName, queryableStoreName)}.
      * <p>
      * The resulting {@code KTable} will be materialized in a local state store with the given store name (cf.
-     * {@link KStreamBuilder#table(String, String)})
+     * {@link StreamsBuilder#table(String, String)})
      *
      * @param keySerde  key serde used to send key-value pairs,
      *                  if not specified the default key serde defined in the configuration will be used
@@ -785,10 +786,10 @@ public interface KTable<K, V> {
      * used&mdash;otherwise producer's {@link DefaultPartitioner} is used.
      * <p>
      * This is equivalent to calling {@link #to(Serde, Serde, String) #to(keySerde, valueSerde, someTopicName)} and
-     * {@link KStreamBuilder#table(String, String) KStreamBuilder#table(someTopicName, queryableStoreName)}.
+     * {@link StreamsBuilder#table(String, String) StreamsBuilder#table(someTopicName, queryableStoreName)}.
      * <p>
      * The resulting {@code KTable} will be materialized in a local state store with the given store name (cf.
-     * {@link KStreamBuilder#table(String, String)})
+     * {@link StreamsBuilder#table(String, String)})
      *
      * @param keySerde  key serde used to send key-value pairs,
      *                  if not specified the default key serde defined in the configuration will be used
@@ -811,10 +812,10 @@ public interface KTable<K, V> {
      * used&mdash;otherwise producer's {@link DefaultPartitioner} is used.
      * <p>
      * This is equivalent to calling {@link #to(Serde, Serde, String) #to(keySerde, valueSerde, someTopicName)} and
-     * {@link KStreamBuilder#table(String) KStreamBuilder#table(someTopicName)}.
+     * {@link StreamsBuilder#table(String) StreamsBuilder#table(someTopicName)}.
      * <p>
      * The resulting {@code KTable} will be materialized in a local state store with an interna; store name (cf.
-     * {@link KStreamBuilder#table(String)})
+     * {@link StreamsBuilder#table(String)})
      *
      * @param keySerde  key serde used to send key-value pairs,
      *                  if not specified the default key serde defined in the configuration will be used
@@ -834,10 +835,10 @@ public interface KTable<K, V> {
      * <p>
      * This is equivalent to calling {@link #to(Serde, Serde, StreamPartitioner, String)
      * #to(keySerde, valueSerde, partitioner, someTopicName)} and
-     * {@link KStreamBuilder#table(String, String) KStreamBuilder#table(someTopicName, queryableStoreName)}.
+     * {@link StreamsBuilder#table(String, String) StreamsBuilder#table(someTopicName, queryableStoreName)}.
      * <p>
      * The resulting {@code KTable} will be materialized in a local state store with the given store name (cf.
-     * {@link KStreamBuilder#table(String, String)})
+     * {@link StreamsBuilder#table(String, String)})
      *
      * @param keySerde    key serde used to send key-value pairs,
      *                    if not specified the default key serde defined in the configuration will be used
@@ -866,10 +867,10 @@ public interface KTable<K, V> {
      * <p>
      * This is equivalent to calling {@link #to(Serde, Serde, StreamPartitioner, String)
      * #to(keySerde, valueSerde, partitioner, someTopicName)} and
-     * {@link KStreamBuilder#table(String, String) KStreamBuilder#table(someTopicName, queryableStoreName)}.
+     * {@link StreamsBuilder#table(String, String) StreamsBuilder#table(someTopicName, queryableStoreName)}.
      * <p>
      * The resulting {@code KTable} will be materialized in a local state store with the given store name (cf.
-     * {@link KStreamBuilder#table(String, String)})
+     * {@link StreamsBuilder#table(String, String)})
      *
      * @param keySerde    key serde used to send key-value pairs,
      *                    if not specified the default key serde defined in the configuration will be used
@@ -897,10 +898,10 @@ public interface KTable<K, V> {
      * <p>
      * This is equivalent to calling {@link #to(Serde, Serde, StreamPartitioner, String)
      * #to(keySerde, valueSerde, partitioner, someTopicName)} and
-     * {@link KStreamBuilder#table(String) KStreamBuilder#table(someTopicName)}.
+     * {@link StreamsBuilder#table(String) StreamsBuilder#table(someTopicName)}.
      * <p>
      * The resulting {@code KTable} will be materialized in a local state store with an internal store name (cf.
-     * {@link KStreamBuilder#table(String)})
+     * {@link StreamsBuilder#table(String)})
      *
      * @param keySerde    key serde used to send key-value pairs,
      *                    if not specified the default key serde defined in the configuration will be used
@@ -917,7 +918,6 @@ public interface KTable<K, V> {
                          final Serde<V> valSerde,
                          final StreamPartitioner<? super K, ? super V> partitioner,
                          final String topic);
-
 
     /**
      * Materialize this changelog stream to a topic using default serializers and deserializers and producer's

@@ -62,7 +62,7 @@ class AsyncProducerTest {
         Thread.sleep(500)
       }
 
-      def close {}
+      def close(): Unit = ()
     }
 
     val props = new Properties()

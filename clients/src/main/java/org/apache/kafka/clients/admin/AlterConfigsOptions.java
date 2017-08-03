@@ -19,25 +19,46 @@ package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
 
-@InterfaceStability.Unstable
+import java.util.Map;
+
+/**
+ * Options for {@link AdminClient#alterConfigs(Map)}.
+ *
+ * The API of this class is evolving, see {@link AdminClient} for details.
+ */
+@InterfaceStability.Evolving
 public class AlterConfigsOptions {
 
     private Integer timeoutMs = null;
     private boolean validateOnly = false;
 
+    /**
+     * Set the request timeout in milliseconds for this operation or {@code null} if the default request timeout for the
+     * AdminClient should be used.
+     */
+    public AlterConfigsOptions timeoutMs(Integer timeoutMs) {
+        this.timeoutMs = timeoutMs;
+        return this;
+    }
+
+    /**
+     * The request timeout in milliseconds for this operation or {@code null} if the default request timeout for the
+     * AdminClient should be used.
+     */
     public Integer timeoutMs() {
         return timeoutMs;
     }
 
-    public boolean isValidateOnly() {
+    /**
+     * Return true if the request should be validated without altering the configs.
+     */
+    public boolean shouldValidateOnly() {
         return validateOnly;
     }
 
-    public AlterConfigsOptions timeoutMs(Integer timeout) {
-        this.timeoutMs = timeout;
-        return this;
-    }
-
+    /**
+     * Set to true if the request should be validated without altering the configs.
+     */
     public AlterConfigsOptions validateOnly(boolean validateOnly) {
         this.validateOnly = validateOnly;
         return this;

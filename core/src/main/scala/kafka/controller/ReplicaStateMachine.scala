@@ -81,13 +81,13 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
    */
   def handleStateChanges(replicas: Set[PartitionAndReplica], targetState: ReplicaState,
                          callbacks: Callbacks = (new CallbackBuilder).build) {
-    if(replicas.nonEmpty) {
+    if (replicas.nonEmpty) {
       info("Invoking state change to %s for replicas %s".format(targetState, replicas.mkString(",")))
       try {
         brokerRequestBatch.newBatch()
         replicas.foreach(r => handleStateChange(r, targetState, callbacks))
         brokerRequestBatch.sendRequestsToBrokers(controller.epoch)
-      }catch {
+      } catch {
         case e: Throwable => error("Error while moving some replicas to %s state".format(targetState), e)
       }
     }
@@ -149,7 +149,7 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
                   .format(replicaId, topicAndPartition) + "state as it is being requested to become leader")
               brokerRequestBatch.addLeaderAndIsrRequestForBrokers(List(replicaId),
                                                                   topic, partition, leaderIsrAndControllerEpoch,
-                                                                  replicaAssignment)
+                                                                  replicaAssignment, isNew = true)
             case None => // new leader request will be sent to this replica when one gets elected
           }
           replicaState.put(partitionAndReplica, NewReplica)
@@ -198,7 +198,7 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
                   stateChangeLogger.trace("Controller %d epoch %d changed state of replica %d for partition %s from %s to %s"
                     .format(controllerId, controller.epoch, replicaId, topicAndPartition, currState, targetState))
                 case None => // that means the partition was never in OnlinePartition state, this means the broker never
-                  // started a log for that partition and does not have a high watermark value for this partition
+                             // started a log for that partition and does not have a high watermark value for this partition
               }
           }
           replicaState.put(partitionAndReplica, OnlineReplica)
@@ -283,7 +283,7 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
       val partition = topicPartition.partition
       assignedReplicas.foreach { replicaId =>
         val partitionAndReplica = PartitionAndReplica(topic, partition, replicaId)
-        if (controllerContext.liveBrokerIds.contains(replicaId))
+        if (controllerContext.isReplicaOnline(replicaId, topicPartition))
           replicaState.put(partitionAndReplica, OnlineReplica)
         else
           // mark replicas on dead brokers as failed for topic deletion, if they belong to a topic to be deleted.
@@ -297,6 +297,7 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
   def partitionsAssignedToBroker(topics: Seq[String], brokerId: Int):Seq[TopicAndPartition] = {
     controllerContext.partitionReplicaAssignment.filter(_._2.contains(brokerId)).keySet.toSeq
   }
+
 }
 
 sealed trait ReplicaState {

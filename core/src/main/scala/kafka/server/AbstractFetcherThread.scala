@@ -18,22 +18,19 @@
 package kafka.server
 
 import java.util.concurrent.locks.ReentrantLock
-
 import kafka.cluster.BrokerEndPoint
-import kafka.consumer.PartitionTopicInfo
 import kafka.utils.{DelayedItem, Pool, ShutdownableThread}
+import org.apache.kafka.common.errors.KafkaStorageException
 import kafka.common.{ClientIdAndBroker, KafkaException}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.CoreUtils.inLock
 import org.apache.kafka.common.errors.CorruptRecordException
 import org.apache.kafka.common.protocol.Errors
 import AbstractFetcherThread._
-
 import scala.collection.{Map, Set, mutable}
 import scala.collection.JavaConverters._
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
-
 import com.yammer.metrics.core.Gauge
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.internals.{FatalExitError, PartitionStates}
@@ -198,7 +195,10 @@ abstract class AbstractFetcherThread(name: String,
                       // 2. If the message is corrupt due to a transient state in the log (truncation, partial writes can cause this), we simply continue and
                       // should get fixed in the subsequent fetches
                       logger.error("Found invalid messages during fetch for partition [" + topic + "," + partitionId + "] offset " + currentPartitionFetchState.fetchOffset  + " error " + ime.getMessage)
-                      updatePartitionsWithError(topicPartition);
+                      updatePartitionsWithError(topicPartition)
+                    case e: KafkaStorageException =>
+                      logger.error(s"Error while processing data for partition $topicPartition", e)
+                      updatePartitionsWithError(topicPartition)
                     case e: Throwable =>
                       throw new KafkaException("error processing data for partition [%s,%d] offset %d"
                         .format(topic, partitionId, currentPartitionFetchState.fetchOffset), e)
@@ -241,7 +241,7 @@ abstract class AbstractFetcherThread(name: String,
         !partitionStates.contains(tp)
       }.map { case (tp, offset) =>
         val fetchState =
-          if (PartitionTopicInfo.isOffsetInvalid(offset))
+          if (offset < 0)
             new PartitionFetchState(handleOffsetOutOfRange(tp), includeLogTruncation)
           else
             new PartitionFetchState(offset, includeLogTruncation)

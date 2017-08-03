@@ -29,9 +29,10 @@ import kafka.server._
 import kafka.consumer._
 import kafka.utils.TestUtils
 
+@deprecated("This test has been deprecated and will be removed in a future release.", "0.11.0.0")
 class FetcherTest extends KafkaServerTestHarness {
   val numNodes = 1
-  def generateConfigs() = TestUtils.createBrokerConfigs(numNodes, zkConnect).map(KafkaConfig.fromProps)
+  def generateConfigs = TestUtils.createBrokerConfigs(numNodes, zkConnect).map(KafkaConfig.fromProps)
 
   val messages = new mutable.HashMap[Int, Seq[Array[Byte]]]
   val topic = "topic"

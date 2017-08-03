@@ -25,6 +25,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.security.JaasContext;
 import org.apache.kafka.common.security.kerberos.KerberosShortNamer;
 import org.apache.kafka.common.security.authenticator.CredentialCache;
@@ -95,11 +96,13 @@ public class SaslChannelBuilder implements ChannelBuilder {
                 this.sslFactory.configure(configs);
             }
         } catch (Exception e) {
+            close();
             throw new KafkaException(e);
         }
     }
 
-    public KafkaChannel buildChannel(String id, SelectionKey key, int maxReceiveSize) throws KafkaException {
+    @Override
+    public KafkaChannel buildChannel(String id, SelectionKey key, int maxReceiveSize, MemoryPool memoryPool) throws KafkaException {
         try {
             SocketChannel socketChannel = (SocketChannel) key.channel();
             TransportLayer transportLayer = buildTransportLayer(id, key, socketChannel);
@@ -113,7 +116,7 @@ public class SaslChannelBuilder implements ChannelBuilder {
                         socketChannel.socket().getInetAddress().getHostName(), clientSaslMechanism, handshakeRequestEnable);
             // Both authenticators don't use `PrincipalBuilder`, so we pass `null` for now. Reconsider if this changes.
             authenticator.configure(transportLayer, null, this.configs);
-            return new KafkaChannel(id, transportLayer, authenticator, maxReceiveSize);
+            return new KafkaChannel(id, transportLayer, authenticator, maxReceiveSize, memoryPool != null ? memoryPool : MemoryPool.NONE);
         } catch (Exception e) {
             log.info("Failed to create channel due to ", e);
             throw new KafkaException(e);
@@ -121,8 +124,10 @@ public class SaslChannelBuilder implements ChannelBuilder {
     }
 
     public void close()  {
-        if (this.loginManager != null)
-            this.loginManager.release();
+        if (loginManager != null) {
+            loginManager.release();
+            loginManager = null;
+        }
     }
 
     protected TransportLayer buildTransportLayer(String id, SelectionKey key, SocketChannel socketChannel) throws IOException {
@@ -132,6 +137,11 @@ public class SaslChannelBuilder implements ChannelBuilder {
         } else {
             return new PlaintextTransportLayer(key);
         }
+    }
+
+    // Package private for testing
+    LoginManager loginManager() {
+        return loginManager;
     }
 
     private static String defaultKerberosRealm() throws ClassNotFoundException, NoSuchMethodException,
