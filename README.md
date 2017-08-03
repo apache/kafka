@@ -133,6 +133,7 @@ may not be dedicated to Kafka's build.
 
 The following options should be set with a `-D` switch, for example `./gradlew -Dorg.gradle.project.maxParallelForks=1 test`.
 
+* `commitId`: sets the build commit ID as .git/HEAD might not be correct if there are local commits added for build purposes.
 * `org.gradle.project.mavenUrl`: sets the URL of the maven deployment repository (`file://path/to/repo` can be used to point to a local repository).
 * `org.gradle.project.maxParallelForks`: limits the maximum number of processes for each task.
 * `org.gradle.project.showStandardStreams`: shows standard out and standard error of the test JVM(s) on the console.
