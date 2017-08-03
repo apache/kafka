@@ -43,6 +43,7 @@
   <allow pkg="org.apache.kafka.common.security" />
   <allow pkg="org.apache.kafka.common.utils" />
   <allow pkg="org.apache.kafka.common.errors" exact-match="true" />
+  <allow pkg="org.apache.kafka.common.memory" />
 
   <subpackage name="common">
     <disallow pkg="org.apache.kafka.clients" />
@@ -64,6 +65,10 @@
     </subpackage>
 
     <subpackage name="metrics">
+      <allow pkg="org.apache.kafka.common.metrics" />
+    </subpackage>
+
+    <subpackage name="memory">
       <allow pkg="org.apache.kafka.common.metrics" />
     </subpackage>
 

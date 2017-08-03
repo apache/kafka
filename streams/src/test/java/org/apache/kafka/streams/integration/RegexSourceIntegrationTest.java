@@ -27,21 +27,24 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.StreamsBuilderTest;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
+import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
+import org.apache.kafka.streams.processor.internals.StateDirectory;
 import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.StreamsMetadataState;
+import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockStateStoreSupplier;
-import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
@@ -139,22 +142,28 @@ public class RegexSourceIntegrationTest {
 
         CLUSTER.createTopic("TEST-TOPIC-1");
 
-        final KStreamBuilder builder = new KStreamBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
         final KStream<String, String> pattern1Stream = builder.stream(Pattern.compile("TEST-TOPIC-\\d"));
 
         pattern1Stream.to(stringSerde, stringSerde, DEFAULT_OUTPUT_TOPIC);
 
-        final KafkaStreams streams = new KafkaStreams(builder, streamsConfiguration);
+        final KafkaStreams streams = new KafkaStreams(builder.build(), streamsConfiguration);
 
         final Field streamThreadsField = streams.getClass().getDeclaredField("threads");
         streamThreadsField.setAccessible(true);
         final StreamThread[] streamThreads = (StreamThread[]) streamThreadsField.get(streams);
         final StreamThread originalThread = streamThreads[0];
 
-        final TestStreamThread testStreamThread = new TestStreamThread(builder, streamsConfig,
+        final TestStreamThread testStreamThread = new TestStreamThread(
+            StreamsBuilderTest.internalTopologyBuilder(builder),
+            streamsConfig,
             new DefaultKafkaClientSupplier(),
-            originalThread.applicationId, originalThread.clientId, originalThread.processId, new Metrics(), Time.SYSTEM);
+            originalThread.applicationId,
+            originalThread.clientId,
+            originalThread.processId,
+            new Metrics(),
+            Time.SYSTEM);
 
         final TestCondition oneTopicAdded = new TestCondition() {
             @Override
@@ -193,22 +202,28 @@ public class RegexSourceIntegrationTest {
 
         CLUSTER.createTopics("TEST-TOPIC-A", "TEST-TOPIC-B");
 
-        final KStreamBuilder builder = new KStreamBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
         final KStream<String, String> pattern1Stream = builder.stream(Pattern.compile("TEST-TOPIC-[A-Z]"));
 
         pattern1Stream.to(stringSerde, stringSerde, DEFAULT_OUTPUT_TOPIC);
 
-        final KafkaStreams streams = new KafkaStreams(builder, streamsConfiguration);
+        final KafkaStreams streams = new KafkaStreams(builder.build(), streamsConfiguration);
 
         final Field streamThreadsField = streams.getClass().getDeclaredField("threads");
         streamThreadsField.setAccessible(true);
         final StreamThread[] streamThreads = (StreamThread[]) streamThreadsField.get(streams);
         final StreamThread originalThread = streamThreads[0];
 
-        final TestStreamThread testStreamThread = new TestStreamThread(builder, streamsConfig,
+        final TestStreamThread testStreamThread = new TestStreamThread(
+            StreamsBuilderTest.internalTopologyBuilder(builder),
+            streamsConfig,
             new DefaultKafkaClientSupplier(),
-            originalThread.applicationId, originalThread.clientId, originalThread.processId, new Metrics(), Time.SYSTEM);
+            originalThread.applicationId,
+            originalThread.clientId,
+            originalThread.processId,
+            new Metrics(),
+            Time.SYSTEM);
 
         streamThreads[0] = testStreamThread;
 
@@ -283,7 +298,7 @@ public class RegexSourceIntegrationTest {
 
         final Serde<String> stringSerde = Serdes.String();
 
-        final KStreamBuilder builder = new KStreamBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
         final KStream<String, String> pattern1Stream = builder.stream(Pattern.compile("topic-\\d"));
         final KStream<String, String> pattern2Stream = builder.stream(Pattern.compile("topic-[A-D]"));
@@ -293,7 +308,7 @@ public class RegexSourceIntegrationTest {
         pattern2Stream.to(stringSerde, stringSerde, DEFAULT_OUTPUT_TOPIC);
         namedTopicsStream.to(stringSerde, stringSerde, DEFAULT_OUTPUT_TOPIC);
 
-        final KafkaStreams streams = new KafkaStreams(builder, streamsConfiguration);
+        final KafkaStreams streams = new KafkaStreams(builder.build(), streamsConfiguration);
         streams.start();
 
         final Properties producerConfig = TestUtils.producerConfig(CLUSTER.bootstrapServers(), StringSerializer.class, StringSerializer.class);
@@ -325,8 +340,8 @@ public class RegexSourceIntegrationTest {
     public void testMultipleConsumersCanReadFromPartitionedTopic() throws Exception {
 
         final Serde<String> stringSerde = Serdes.String();
-        final KStreamBuilder builderLeader = new KStreamBuilder();
-        final KStreamBuilder builderFollower = new KStreamBuilder();
+        final StreamsBuilder builderLeader = new StreamsBuilder();
+        final StreamsBuilder builderFollower = new StreamsBuilder();
         final List<String> expectedAssignment = Arrays.asList(PARTITIONED_TOPIC_1,  PARTITIONED_TOPIC_2);
 
         final KStream<String, String> partitionedStreamLeader = builderLeader.stream(Pattern.compile("partitioned-\\d"));
@@ -336,8 +351,8 @@ public class RegexSourceIntegrationTest {
         partitionedStreamLeader.to(stringSerde, stringSerde, DEFAULT_OUTPUT_TOPIC);
         partitionedStreamFollower.to(stringSerde, stringSerde, DEFAULT_OUTPUT_TOPIC);
 
-        final KafkaStreams partitionedStreamsLeader  = new KafkaStreams(builderLeader, streamsConfiguration);
-        final KafkaStreams partitionedStreamsFollower  = new KafkaStreams(builderFollower, streamsConfiguration);
+        final KafkaStreams partitionedStreamsLeader  = new KafkaStreams(builderLeader.build(), streamsConfiguration);
+        final KafkaStreams partitionedStreamsFollower  = new KafkaStreams(builderFollower.build(), streamsConfiguration);
 
         final StreamsConfig streamsConfig = new StreamsConfig(streamsConfiguration);
 
@@ -347,9 +362,15 @@ public class RegexSourceIntegrationTest {
         final StreamThread[] leaderStreamThreads = (StreamThread[]) leaderStreamThreadsField.get(partitionedStreamsLeader);
         final StreamThread originalLeaderThread = leaderStreamThreads[0];
 
-        final TestStreamThread leaderTestStreamThread = new TestStreamThread(builderLeader, streamsConfig,
-                new DefaultKafkaClientSupplier(),
-                originalLeaderThread.applicationId, originalLeaderThread.clientId, originalLeaderThread.processId, new Metrics(), Time.SYSTEM);
+        final TestStreamThread leaderTestStreamThread = new TestStreamThread(
+            StreamsBuilderTest.internalTopologyBuilder(builderLeader),
+            streamsConfig,
+            new DefaultKafkaClientSupplier(),
+            originalLeaderThread.applicationId,
+            originalLeaderThread.clientId,
+            originalLeaderThread.processId,
+            new Metrics(),
+            Time.SYSTEM);
 
         leaderStreamThreads[0] = leaderTestStreamThread;
 
@@ -367,9 +388,15 @@ public class RegexSourceIntegrationTest {
         final StreamThread[] followerStreamThreads = (StreamThread[]) followerStreamThreadsField.get(partitionedStreamsFollower);
         final StreamThread originalFollowerThread = followerStreamThreads[0];
 
-        final TestStreamThread followerTestStreamThread = new TestStreamThread(builderFollower, streamsConfig,
-                new DefaultKafkaClientSupplier(),
-                originalFollowerThread.applicationId, originalFollowerThread.clientId, originalFollowerThread.processId, new Metrics(), Time.SYSTEM);
+        final TestStreamThread followerTestStreamThread = new TestStreamThread(
+            StreamsBuilderTest.internalTopologyBuilder(builderFollower),
+            streamsConfig,
+            new DefaultKafkaClientSupplier(),
+            originalFollowerThread.applicationId,
+            originalFollowerThread.clientId,
+            originalFollowerThread.processId,
+            new Metrics(),
+            Time.SYSTEM);
 
         followerStreamThreads[0] = followerTestStreamThread;
 
@@ -403,7 +430,7 @@ public class RegexSourceIntegrationTest {
 
         final Serde<String> stringSerde = Serdes.String();
 
-        final KStreamBuilder builder = new KStreamBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
 
         // overlapping patterns here, no messages should be sent as TopologyBuilderException
@@ -416,7 +443,7 @@ public class RegexSourceIntegrationTest {
         pattern1Stream.to(stringSerde, stringSerde, DEFAULT_OUTPUT_TOPIC);
         pattern2Stream.to(stringSerde, stringSerde, DEFAULT_OUTPUT_TOPIC);
 
-        final KafkaStreams streams = new KafkaStreams(builder, streamsConfiguration);
+        final KafkaStreams streams = new KafkaStreams(builder.build(), streamsConfiguration);
         streams.start();
 
         final Properties producerConfig = TestUtils.producerConfig(CLUSTER.bootstrapServers(), StringSerializer.class, StringSerializer.class);
@@ -438,9 +465,9 @@ public class RegexSourceIntegrationTest {
     private class TestStreamThread extends StreamThread {
         public volatile List<String> assignedTopicPartitions = new ArrayList<>();
 
-        public TestStreamThread(final TopologyBuilder builder, final StreamsConfig config, final KafkaClientSupplier clientSupplier, final String applicationId, final String clientId, final UUID processId, final Metrics metrics, final Time time) {
+        public TestStreamThread(final InternalTopologyBuilder builder, final StreamsConfig config, final KafkaClientSupplier clientSupplier, final String applicationId, final String clientId, final UUID processId, final Metrics metrics, final Time time) {
             super(builder, config, clientSupplier, applicationId, clientId, processId, metrics, time, new StreamsMetadataState(builder, StreamsMetadataState.UNKNOWN_HOST),
-                  0);
+                  0, new StateDirectory(applicationId, config.getString(StreamsConfig.STATE_DIR_CONFIG), time));
         }
 
         @Override

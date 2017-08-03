@@ -27,25 +27,38 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.test.MockRestoreCallback;
+import org.apache.kafka.test.MockStateRestoreListener;
 import org.hamcrest.CoreMatchers;
+import org.junit.Before;
 import org.junit.Test;
 
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.kafka.test.MockStateRestoreListener.RESTORE_BATCH;
+import static org.apache.kafka.test.MockStateRestoreListener.RESTORE_END;
+import static org.apache.kafka.test.MockStateRestoreListener.RESTORE_START;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsEqual.equalTo;
 import static org.junit.Assert.fail;
 
 public class StoreChangelogReaderTest {
 
-    private final MockRestoreCallback callback = new MockRestoreCallback();
-    private MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
-    private StoreChangelogReader changelogReader = new StoreChangelogReader(consumer, new MockTime(), 0);
+    private final MockStateRestoreListener callback = new MockStateRestoreListener();
+    private final CompositeRestoreListener restoreListener = new CompositeRestoreListener(callback);
+    private final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
+    private final StateRestoreListener stateRestoreListener = new MockStateRestoreListener();
+    private final StoreChangelogReader changelogReader = new StoreChangelogReader(consumer, new MockTime(), 0, stateRestoreListener);
     private final TopicPartition topicPartition = new TopicPartition("topic", 0);
     private final PartitionInfo partitionInfo = new PartitionInfo(topicPartition.topic(), 0, null, null, null);
+
+    @Before
+    public void setUp() {
+        restoreListener.setGlobalRestoreListener(stateRestoreListener);
+    }
 
     @SuppressWarnings("unchecked")
     @Test
@@ -56,7 +69,7 @@ public class StoreChangelogReaderTest {
                 throw new TimeoutException("KABOOM!");
             }
         };
-        final StoreChangelogReader changelogReader = new StoreChangelogReader(consumer, new MockTime(), 0);
+        final StoreChangelogReader changelogReader = new StoreChangelogReader(consumer, new MockTime(), 0, stateRestoreListener);
         try {
             changelogReader.validatePartitionExists(topicPartition, "store");
             fail("Should have thrown streams exception");
@@ -80,7 +93,8 @@ public class StoreChangelogReaderTest {
             }
         };
 
-        final StoreChangelogReader changelogReader = new StoreChangelogReader(consumer, new MockTime(), 10);
+        final StoreChangelogReader changelogReader = new StoreChangelogReader(consumer, new
+            MockTime(), 10, stateRestoreListener);
         changelogReader.validatePartitionExists(topicPartition, "store");
     }
 
@@ -93,7 +107,8 @@ public class StoreChangelogReaderTest {
                 throw new TimeoutException("KABOOM!");
             }
         };
-        final StoreChangelogReader changelogReader = new StoreChangelogReader(consumer, new MockTime(), 5);
+        final StoreChangelogReader changelogReader = new StoreChangelogReader(consumer, new
+            MockTime(), 5, stateRestoreListener);
         try {
             changelogReader.validatePartitionExists(topicPartition, "store");
             fail("Should have thrown streams exception");
@@ -119,7 +134,7 @@ public class StoreChangelogReaderTest {
         };
 
         consumer.updatePartitions(topicPartition.topic(), Collections.singletonList(partitionInfo));
-        final StoreChangelogReader changelogReader = new StoreChangelogReader(consumer, Time.SYSTEM, 5000);
+        final StoreChangelogReader changelogReader = new StoreChangelogReader(consumer, Time.SYSTEM, 5000, stateRestoreListener);
         changelogReader.validatePartitionExists(topicPartition, "store");
     }
 
@@ -139,7 +154,8 @@ public class StoreChangelogReaderTest {
     public void shouldRestoreAllMessagesFromBeginningWhenCheckpointNull() throws Exception {
         final int messages = 10;
         setupConsumer(messages, topicPartition);
-        changelogReader.register(new StateRestorer(topicPartition, callback, null, Long.MAX_VALUE, true));
+        changelogReader.register(new StateRestorer(topicPartition, restoreListener, null, Long.MAX_VALUE, true,
+                                                   "storeName"));
 
         changelogReader.restore();
         assertThat(callback.restored.size(), equalTo(messages));
@@ -149,7 +165,8 @@ public class StoreChangelogReaderTest {
     public void shouldRestoreMessagesFromCheckpoint() throws Exception {
         final int messages = 10;
         setupConsumer(messages, topicPartition);
-        changelogReader.register(new StateRestorer(topicPartition, callback, 5L, Long.MAX_VALUE, true));
+        changelogReader.register(new StateRestorer(topicPartition, restoreListener, 5L, Long.MAX_VALUE, true,
+                                                   "storeName"));
 
         changelogReader.restore();
         assertThat(callback.restored.size(), equalTo(5));
@@ -159,7 +176,8 @@ public class StoreChangelogReaderTest {
     public void shouldClearAssignmentAtEndOfRestore() throws Exception {
         final int messages = 1;
         setupConsumer(messages, topicPartition);
-        changelogReader.register(new StateRestorer(topicPartition, callback, null, Long.MAX_VALUE, true));
+        changelogReader.register(new StateRestorer(topicPartition, restoreListener, null, Long.MAX_VALUE, true,
+                                                   "storeName"));
 
         changelogReader.restore();
         assertThat(consumer.assignment(), equalTo(Collections.<TopicPartition>emptySet()));
@@ -168,7 +186,8 @@ public class StoreChangelogReaderTest {
     @Test
     public void shouldRestoreToLimitWhenSupplied() throws Exception {
         setupConsumer(10, topicPartition);
-        final StateRestorer restorer = new StateRestorer(topicPartition, callback, null, 3, true);
+        final StateRestorer restorer = new StateRestorer(topicPartition, restoreListener, null, 3, true,
+                                                         "storeName");
         changelogReader.register(restorer);
 
         changelogReader.restore();
@@ -182,13 +201,16 @@ public class StoreChangelogReaderTest {
         final TopicPartition two = new TopicPartition("two", 0);
         final MockRestoreCallback callbackOne = new MockRestoreCallback();
         final MockRestoreCallback callbackTwo = new MockRestoreCallback();
+        final CompositeRestoreListener restoreListener1 = new CompositeRestoreListener(callbackOne);
+        final CompositeRestoreListener restoreListener2 = new CompositeRestoreListener(callbackTwo);
         setupConsumer(10, topicPartition);
         setupConsumer(5, one);
         setupConsumer(3, two);
 
-        changelogReader.register(new StateRestorer(topicPartition, callback, null, Long.MAX_VALUE, true));
-        changelogReader.register(new StateRestorer(one, callbackOne, null, Long.MAX_VALUE, true));
-        changelogReader.register(new StateRestorer(two, callbackTwo, null, Long.MAX_VALUE, true));
+        changelogReader
+            .register(new StateRestorer(topicPartition, restoreListener, null, Long.MAX_VALUE, true, "storeName1"));
+        changelogReader.register(new StateRestorer(one, restoreListener1, null, Long.MAX_VALUE, true, "storeName2"));
+        changelogReader.register(new StateRestorer(two, restoreListener2, null, Long.MAX_VALUE, true, "storeName3"));
 
         changelogReader.restore();
 
@@ -198,8 +220,60 @@ public class StoreChangelogReaderTest {
     }
 
     @Test
+    public void shouldRestoreAndNotifyMultipleStores() throws Exception {
+        final TopicPartition one = new TopicPartition("one", 0);
+        final TopicPartition two = new TopicPartition("two", 0);
+        final MockStateRestoreListener callbackOne = new MockStateRestoreListener();
+        final MockStateRestoreListener callbackTwo = new MockStateRestoreListener();
+        final CompositeRestoreListener restoreListener1 = new CompositeRestoreListener(callbackOne);
+        final CompositeRestoreListener restoreListener2 = new CompositeRestoreListener(callbackTwo);
+        setupConsumer(10, topicPartition);
+        setupConsumer(5, one);
+        setupConsumer(3, two);
+
+        changelogReader
+            .register(new StateRestorer(topicPartition, restoreListener, null, Long.MAX_VALUE, true, "storeName1"));
+        changelogReader.register(new StateRestorer(one, restoreListener1, null, Long.MAX_VALUE, true, "storeName2"));
+        changelogReader.register(new StateRestorer(two, restoreListener2, null, Long.MAX_VALUE, true, "storeName3"));
+
+        changelogReader.restore();
+
+        assertThat(callback.restored.size(), equalTo(10));
+        assertThat(callbackOne.restored.size(), equalTo(5));
+        assertThat(callbackTwo.restored.size(), equalTo(3));
+
+        assertAllCallbackStatesExecuted(callback, "storeName1");
+        assertCorrectOffsetsReportedByListener(callback, 0L, 10L, 10L);
+
+        assertAllCallbackStatesExecuted(callbackOne, "storeName2");
+        assertCorrectOffsetsReportedByListener(callbackOne, 0L, 5L, 5L);
+
+        assertAllCallbackStatesExecuted(callbackTwo, "storeName3");
+        assertCorrectOffsetsReportedByListener(callbackTwo, 0L, 3L, 3L);
+    }
+
+    private void assertAllCallbackStatesExecuted(final MockStateRestoreListener restoreListener,
+                                                 final String storeName) {
+        assertThat(restoreListener.storeNameCalledStates.get(RESTORE_START), equalTo(storeName));
+        assertThat(restoreListener.storeNameCalledStates.get(RESTORE_BATCH), equalTo(storeName));
+        assertThat(restoreListener.storeNameCalledStates.get(RESTORE_END), equalTo(storeName));
+    }
+
+
+    private void assertCorrectOffsetsReportedByListener(final MockStateRestoreListener restoreListener,
+                                                        long startOffset,
+                                                        final long batchOffset, final long endOffset) {
+
+        assertThat(restoreListener.restoreStartOffset, equalTo(startOffset));
+        assertThat(restoreListener.restoredBatchOffset, equalTo(batchOffset));
+        assertThat(restoreListener.restoreEndOffset, equalTo(endOffset));
+    }
+
+    @Test
     public void shouldNotRestoreAnythingWhenPartitionIsEmpty() throws Exception {
-        final StateRestorer restorer = new StateRestorer(topicPartition, callback, null, Long.MAX_VALUE, true);
+        final StateRestorer
+            restorer =
+            new StateRestorer(topicPartition, restoreListener, null, Long.MAX_VALUE, true, "storeName");
         setupConsumer(0, topicPartition);
         changelogReader.register(restorer);
 
@@ -212,7 +286,9 @@ public class StoreChangelogReaderTest {
     public void shouldNotRestoreAnythingWhenCheckpointAtEndOffset() throws Exception {
         final Long endOffset = 10L;
         setupConsumer(endOffset, topicPartition);
-        final StateRestorer restorer = new StateRestorer(topicPartition, callback, endOffset, Long.MAX_VALUE, true);
+        final StateRestorer
+            restorer =
+            new StateRestorer(topicPartition, restoreListener, endOffset, Long.MAX_VALUE, true, "storeName");
 
         changelogReader.register(restorer);
 
@@ -224,7 +300,8 @@ public class StoreChangelogReaderTest {
     @Test
     public void shouldReturnRestoredOffsetsForPersistentStores() throws Exception {
         setupConsumer(10, topicPartition);
-        changelogReader.register(new StateRestorer(topicPartition, callback, null, Long.MAX_VALUE, true));
+        changelogReader.register(new StateRestorer(topicPartition, restoreListener, null, Long.MAX_VALUE, true,
+                                                   "storeName"));
         changelogReader.restore();
         final Map<TopicPartition, Long> restoredOffsets = changelogReader.restoredOffsets();
         assertThat(restoredOffsets, equalTo(Collections.singletonMap(topicPartition, 10L)));
@@ -233,7 +310,8 @@ public class StoreChangelogReaderTest {
     @Test
     public void shouldNotReturnRestoredOffsetsForNonPersistentStore() throws Exception {
         setupConsumer(10, topicPartition);
-        changelogReader.register(new StateRestorer(topicPartition, callback, null, Long.MAX_VALUE, false));
+        changelogReader.register(new StateRestorer(topicPartition, restoreListener, null, Long.MAX_VALUE, false,
+                                                   "storeName"));
         changelogReader.restore();
         final Map<TopicPartition, Long> restoredOffsets = changelogReader.restoredOffsets();
         assertThat(restoredOffsets, equalTo(Collections.<TopicPartition, Long>emptyMap()));
@@ -247,7 +325,8 @@ public class StoreChangelogReaderTest {
         consumer.addRecord(new ConsumerRecord<>(topicPartition.topic(), topicPartition.partition(), 1, (byte[]) null, bytes));
         consumer.addRecord(new ConsumerRecord<>(topicPartition.topic(), topicPartition.partition(), 2, bytes, bytes));
         consumer.assign(Collections.singletonList(topicPartition));
-        changelogReader.register(new StateRestorer(topicPartition, callback, null, Long.MAX_VALUE, false));
+        changelogReader.register(new StateRestorer(topicPartition, restoreListener, null, Long.MAX_VALUE, false,
+                                                   "storeName"));
         changelogReader.restore();
 
         assertThat(callback.restored, CoreMatchers.equalTo(Utils.mkList(KeyValue.pair(bytes, bytes), KeyValue.pair(bytes, bytes))));

@@ -36,6 +36,7 @@ import java.util.Collections;
 import java.util.Random;
 
 import static org.apache.kafka.common.utils.Utils.formatAddress;
+import static org.apache.kafka.common.utils.Utils.formatBytes;
 import static org.apache.kafka.common.utils.Utils.getHost;
 import static org.apache.kafka.common.utils.Utils.getPort;
 import static org.junit.Assert.assertArrayEquals;
@@ -75,6 +76,17 @@ public class UtilsTest {
         assertEquals("mydomain.com:8080", formatAddress("mydomain.com", 8080));
         assertEquals("[::1]:1234", formatAddress("::1", 1234));
         assertEquals("[2001:db8:85a3:8d3:1319:8a2e:370:7348]:5678", formatAddress("2001:db8:85a3:8d3:1319:8a2e:370:7348", 5678));
+    }
+
+    @Test
+    public void testFormatBytes() {
+        assertEquals("-1", formatBytes(-1));
+        assertEquals("1023 B", formatBytes(1023));
+        assertEquals("1 KB", formatBytes(1024));
+        assertEquals("1024 KB", formatBytes((1024 * 1024) - 1));
+        assertEquals("1 MB", formatBytes(1024 * 1024));
+        assertEquals("1.1 MB", formatBytes((long) (1.1 * 1024 * 1024)));
+        assertEquals("10 MB", formatBytes(10 * 1024 * 1024));
     }
 
     @Test

@@ -17,34 +17,36 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.state.RocksDBConfigSetter;
 import org.apache.kafka.test.MockProcessorContext;
 import org.apache.kafka.test.NoOpRecordCollector;
+import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
-
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.rocksdb.Options;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.io.IOException;
-import org.rocksdb.Options;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 public class RocksDBStoreTest {
     private final File tempDir = TestUtils.tempDirectory();
@@ -121,6 +123,38 @@ public class RocksDBStoreTest {
     }
 
     @Test
+    public void shouldTogglePrepareForBulkLoadDuringRestoreCalls() throws Exception {
+        final List<KeyValue<byte[], byte[]>> entries = new ArrayList<>();
+        entries.add(new KeyValue<>("1".getBytes("UTF-8"), "a".getBytes("UTF-8")));
+        entries.add(new KeyValue<>("2".getBytes("UTF-8"), "b".getBytes("UTF-8")));
+        entries.add(new KeyValue<>("3".getBytes("UTF-8"), "c".getBytes("UTF-8")));
+
+        final AtomicReference<Exception> conditionNotMet = new AtomicReference<>();
+        final AtomicInteger conditionCheckCount = new AtomicInteger();
+
+        Thread conditionCheckThread = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                assertRocksDBTurnsOnBulkLoading(conditionCheckCount, conditionNotMet);
+
+                assertRockDBTurnsOffBulkLoad(conditionCheckCount, conditionNotMet);
+            }
+        });
+
+        subject.init(context, subject);
+
+        conditionCheckThread.start();
+        context.restore(subject.name(), entries);
+
+        conditionCheckThread.join(2000);
+
+        assertTrue(conditionNotMet.get() == null);
+        assertTrue(conditionCheckCount.get() == 2);
+    }
+
+
+
+    @Test
     public void shouldThrowNullPointerExceptionOnNullPut() {
         subject.init(context, subject);
         try {
@@ -171,6 +205,36 @@ public class RocksDBStoreTest {
         Utils.delete(dir);
         subject.put("anyKey", "anyValue");
         subject.flush();
+    }
+
+    private void assertRockDBTurnsOffBulkLoad(AtomicInteger conditionCount,
+                                              AtomicReference<Exception> conditionNotMet) {
+        try {
+            TestUtils.waitForCondition(new TestCondition() {
+                @Override
+                public boolean conditionMet() {
+                    return !subject.isPrepareForBulkload();
+                }
+            }, 1000L, "Did not revert bulk load setting");
+            conditionCount.getAndIncrement();
+        } catch (Exception e) {
+            conditionNotMet.set(e);
+        }
+    }
+
+    private void assertRocksDBTurnsOnBulkLoading(AtomicInteger conditionCount,
+                                                 AtomicReference<Exception> conditionNotMet) {
+        try {
+            TestUtils.waitForCondition(new TestCondition() {
+                @Override
+                public boolean conditionMet() {
+                    return subject.isPrepareForBulkload();
+                }
+            }, 1000L, "Did not prepare for bulk load");
+            conditionCount.getAndIncrement();
+        } catch (Exception e) {
+            conditionNotMet.set(e);
+        }
     }
 
     public static class MockRocksDbConfigSetter implements RocksDBConfigSetter {

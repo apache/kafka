@@ -19,7 +19,8 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
+import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.StreamsBuilderTest;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.ValueMapper;
@@ -28,8 +29,8 @@ import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockReducer;
 import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 
 import java.io.File;
@@ -55,17 +56,9 @@ public class KTableKTableLeftJoinTest {
 
     final private Serde<Integer> intSerde = Serdes.Integer();
     final private Serde<String> stringSerde = Serdes.String();
-
-    private KStreamTestDriver driver = null;
     private File stateDir = null;
-
-    @After
-    public void tearDown() {
-        if (driver != null) {
-            driver.close();
-        }
-        driver = null;
-    }
+    @Rule
+    public final KStreamTestDriver driver = new KStreamTestDriver();
 
     @Before
     public void setUp() throws IOException {
@@ -74,7 +67,7 @@ public class KTableKTableLeftJoinTest {
 
     @Test
     public void testJoin() throws Exception {
-        final KStreamBuilder builder = new KStreamBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
         final int[] expectedKeys = new int[]{0, 1, 2, 3};
 
@@ -85,14 +78,14 @@ public class KTableKTableLeftJoinTest {
         processor = new MockProcessorSupplier<>();
         joined.toStream().process(processor);
 
-        Collection<Set<String>> copartitionGroups = builder.copartitionGroups();
+        Collection<Set<String>> copartitionGroups = StreamsBuilderTest.getCopartitionedGroups(builder);
 
         assertEquals(1, copartitionGroups.size());
         assertEquals(new HashSet<>(Arrays.asList(topic1, topic2)), copartitionGroups.iterator().next());
 
         KTableValueGetterSupplier<Integer, String> getterSupplier = ((KTableImpl<Integer, String, String>) joined).valueGetterSupplier();
 
-        driver = new KStreamTestDriver(builder, stateDir);
+        driver.setUp(builder, stateDir);
         driver.setTime(0L);
 
         KTableValueGetter<Integer, String> getter = getterSupplier.get();
@@ -168,7 +161,7 @@ public class KTableKTableLeftJoinTest {
 
     @Test
     public void testNotSendingOldValue() throws Exception {
-        final KStreamBuilder builder = new KStreamBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
         final int[] expectedKeys = new int[]{0, 1, 2, 3};
 
@@ -182,9 +175,9 @@ public class KTableKTableLeftJoinTest {
         joined = table1.leftJoin(table2, MockValueJoiner.TOSTRING_JOINER);
 
         proc = new MockProcessorSupplier<>();
-        builder.addProcessor("proc", proc, ((KTableImpl<?, ?, ?>) joined).name);
+        builder.build().addProcessor("proc", proc, ((KTableImpl<?, ?, ?>) joined).name);
 
-        driver = new KStreamTestDriver(builder, stateDir);
+        driver.setUp(builder, stateDir);
         driver.setTime(0L);
 
         assertTrue(((KTableImpl<?, ?, ?>) table1).sendingOldValueEnabled());
@@ -249,7 +242,7 @@ public class KTableKTableLeftJoinTest {
 
     @Test
     public void testSendingOldValue() throws Exception {
-        final KStreamBuilder builder = new KStreamBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
         final int[] expectedKeys = new int[]{0, 1, 2, 3};
 
@@ -265,9 +258,9 @@ public class KTableKTableLeftJoinTest {
         ((KTableImpl<?, ?, ?>) joined).enableSendingOldValues();
 
         proc = new MockProcessorSupplier<>();
-        builder.addProcessor("proc", proc, ((KTableImpl<?, ?, ?>) joined).name);
+        builder.build().addProcessor("proc", proc, ((KTableImpl<?, ?, ?>) joined).name);
 
-        driver = new KStreamTestDriver(builder, stateDir);
+        driver.setUp(builder, stateDir);
         driver.setTime(0L);
 
         assertTrue(((KTableImpl<?, ?, ?>) table1).sendingOldValueEnabled());
@@ -346,7 +339,7 @@ public class KTableKTableLeftJoinTest {
         final String tableSix = "tableSix";
         final String[] inputs = {agg, tableOne, tableTwo, tableThree, tableFour, tableFive, tableSix};
 
-        final KStreamBuilder builder = new KStreamBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
         final KTable<Long, String> aggTable = builder.table(Serdes.Long(), Serdes.String(), agg, agg)
                 .groupBy(new KeyValueMapper<Long, String, KeyValue<Long, String>>() {
                     @Override
@@ -380,7 +373,7 @@ public class KTableKTableLeftJoinTest {
                 .leftJoin(eight, MockValueJoiner.TOSTRING_JOINER)
                 .mapValues(mapper);
 
-        driver = new KStreamTestDriver(builder, stateDir, 250);
+        driver.setUp(builder, stateDir, 250);
 
         final String[] values = {"a", "AA", "BBB", "CCCC", "DD", "EEEEEEEE", "F", "GGGGGGGGGGGGGGG", "HHH", "IIIIIIIIII",
                                  "J", "KK", "LLLL", "MMMMMMMMMMMMMMMMMMMMMM", "NNNNN", "O", "P", "QQQQQ", "R", "SSSS",

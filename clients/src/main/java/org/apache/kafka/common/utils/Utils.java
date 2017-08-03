@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.utils;
 
+import java.text.DecimalFormat;
 import org.apache.kafka.common.KafkaException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -61,6 +62,11 @@ public class Utils {
     // This matches URIs of formats: host:port and protocol:\\host:port
     // IPv6 is supported with [ip] pattern
     private static final Pattern HOST_PORT_PATTERN = Pattern.compile(".*?\\[?([0-9a-zA-Z\\-%._:]*)\\]?:([0-9]+)");
+
+    // Prints up to 2 decimal digits. Used for human readable printing
+    private static final DecimalFormat TWO_DIGIT_FORMAT = new DecimalFormat("0.##");
+
+    private static final String[] BYTE_SCALE_SUFFIXES = new String[] {"B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"};
 
     public static final String NL = System.getProperty("line.separator");
 
@@ -379,6 +385,28 @@ public class Utils {
     }
 
     /**
+     * Formats a byte number as a human readable String ("3.2 MB")
+     * @param bytes some size in bytes
+     * @return
+     */
+    public static String formatBytes(long bytes) {
+        if (bytes < 0) {
+            return "" + bytes;
+        }
+        double asDouble = (double) bytes;
+        int ordinal = (int) Math.floor(Math.log(asDouble) / Math.log(1024.0));
+        double scale = Math.pow(1024.0, ordinal);
+        double scaled = asDouble / scale;
+        String formatted = TWO_DIGIT_FORMAT.format(scaled);
+        try {
+            return formatted + " " + BYTE_SCALE_SUFFIXES[ordinal];
+        } catch (IndexOutOfBoundsException e) {
+            //huge number?
+            return "" + asDouble;
+        }
+    }
+
+    /**
      * Create a string representation of an array joined by the given separator
      * @param strs The array of items
      * @param separator The separator
@@ -613,7 +641,7 @@ public class Utils {
         } catch (IOException outer) {
             try {
                 Files.move(source, target, StandardCopyOption.REPLACE_EXISTING);
-                log.debug("Non-atomic move of {} to {} succeeded after atomic move failed due to {}", source, target, 
+                log.debug("Non-atomic move of {} to {} succeeded after atomic move failed due to {}", source, target,
                         outer.getMessage());
             } catch (IOException inner) {
                 inner.addSuppressed(outer);
@@ -632,7 +660,8 @@ public class Utils {
         IOException exception = null;
         for (Closeable closeable : closeables) {
             try {
-                closeable.close();
+                if (closeable != null)
+                    closeable.close();
             } catch (IOException e) {
                 if (exception != null)
                     exception.addSuppressed(e);
