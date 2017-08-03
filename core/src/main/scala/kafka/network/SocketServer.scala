@@ -533,10 +533,9 @@ private[kafka] class Processor(val id: Int,
         val openOrClosingChannel = if (openChannel != null) openChannel else selector.closingChannel(receive.source)
         val session = RequestChannel.Session(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, openOrClosingChannel.principal.getName), openOrClosingChannel.socketAddress)
 
-        val req = RequestChannel.Request(processor = id, connectionId = receive.source, session = session,
-          buffer = receive.payload, startTimeNanos = time.nanoseconds,
-          listenerName = listenerName, securityProtocol = securityProtocol,
-          memoryPool = memoryPool)
+        val req = new RequestChannel.Request(processor = id, connectionId = receive.source, session = session,
+          startTimeNanos = time.nanoseconds, listenerName = listenerName, securityProtocol = securityProtocol,
+          memoryPool, receive.payload)
         requestChannel.sendRequest(req)
         selector.mute(receive.source)
       } catch {
