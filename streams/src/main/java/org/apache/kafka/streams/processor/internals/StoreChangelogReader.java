@@ -186,6 +186,12 @@ public class StoreChangelogReader implements ChangelogReader {
         return restoredOffsets;
     }
 
+    @Override
+    public void clear() {
+        partitionInfo.clear();
+        stateRestorers.clear();
+    }
+
     private void restorePartition(final Map<TopicPartition, Long> endOffsets,
                                   final ConsumerRecords<byte[], byte[]> allRecords,
                                   final Iterator<TopicPartition> partitionIterator) {

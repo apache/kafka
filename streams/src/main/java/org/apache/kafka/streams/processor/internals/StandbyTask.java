@@ -133,6 +133,24 @@ public class StandbyTask extends AbstractTask {
         }
     }
 
+    @Override
+    public void closeSuspended(final boolean clean, final RuntimeException e) { }
+
+    @Override
+    public boolean maybePunctuateStreamTime() {
+        return false;
+    }
+
+    @Override
+    public boolean maybePunctuateSystemTime() {
+        return false;
+    }
+
+    @Override
+    public boolean commitNeeded() {
+        return false;
+    }
+
     /**
      * Updates a state store using records from one change log partition
      *
@@ -144,8 +162,18 @@ public class StandbyTask extends AbstractTask {
         return stateMgr.updateStandbyStates(partition, records);
     }
 
-    Map<TopicPartition, Long> checkpointedOffsets() {
+    @Override
+    public int addRecords(final TopicPartition partition, final Iterable<ConsumerRecord<byte[], byte[]>> records) {
+        return 0;
+    }
+
+    public Map<TopicPartition, Long> checkpointedOffsets() {
         return checkpointedOffsets;
+    }
+
+    @Override
+    public boolean process() {
+        return false;
     }
 
 }
