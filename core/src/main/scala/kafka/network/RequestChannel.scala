@@ -41,9 +41,9 @@ import org.apache.log4j.Logger
 import scala.reflect.ClassTag
 
 object RequestChannel extends Logging {
-  val AllDone = Request(processor = 1, connectionId = "2", Session(KafkaPrincipal.ANONYMOUS, InetAddress.getLocalHost),
-    buffer = shutdownReceive, memoryPool = MemoryPool.NONE, startTimeNanos = 0, listenerName = new ListenerName(""),
-    securityProtocol = SecurityProtocol.PLAINTEXT)
+  val AllDone = new Request(processor = 1, connectionId = "2", Session(KafkaPrincipal.ANONYMOUS, InetAddress.getLocalHost),
+    startTimeNanos = 0, listenerName = new ListenerName(""), securityProtocol = SecurityProtocol.PLAINTEXT,
+    MemoryPool.NONE, shutdownReceive)
   private val requestLogger = Logger.getLogger("kafka.request.logger")
 
   private def shutdownReceive: ByteBuffer = {
@@ -57,12 +57,11 @@ object RequestChannel extends Logging {
     val sanitizedUser = QuotaId.sanitize(principal.getName)
   }
 
-  case class Request(processor: Int, connectionId: String, session: Session, buffer: ByteBuffer,
-                     private val memoryPool: MemoryPool, startTimeNanos: Long, listenerName: ListenerName, 
-                     securityProtocol: SecurityProtocol) {
+  class Request(val processor: Int, val connectionId: String, val session: Session, startTimeNanos: Long,
+                val listenerName: ListenerName, val securityProtocol: SecurityProtocol, memoryPool: MemoryPool,
+                @volatile private var buffer: ByteBuffer) {
     // These need to be volatile because the readers are in the network thread and the writers are in the request
     // handler threads or the purgatory threads
-    @volatile var bufferReference = buffer
     @volatile var requestDequeueTimeNanos = -1L
     @volatile var apiLocalCompleteTimeNanos = -1L
     @volatile var responseCompleteTimeNanos = -1L
@@ -204,11 +203,19 @@ object RequestChannel extends Logging {
     }
 
     def dispose(): Unit = {
-      if (bufferReference != null) {
-        memoryPool.release(bufferReference)
-        bufferReference = null
+      if (buffer != null) {
+        memoryPool.release(buffer)
+        buffer = null
       }
     }
+
+    override def toString = s"Request(processor=$processor, " +
+      s"connectionId=$connectionId, " +
+      s"session=$session, " +
+      s"listenerName=$listenerName, " +
+      s"securityProtocol=$securityProtocol, " +
+      s"buffer=$buffer)"
+
   }
 
   object Response {
@@ -227,11 +234,13 @@ object RequestChannel extends Logging {
 
   }
 
-  case class Response(request: Request, responseSend: Option[Send], responseAction: ResponseAction) {
+  class Response(val request: Request, val responseSend: Option[Send], val responseAction: ResponseAction) {
     request.responseCompleteTimeNanos = Time.SYSTEM.nanoseconds
     if (request.apiLocalCompleteTimeNanos == -1L) request.apiLocalCompleteTimeNanos = Time.SYSTEM.nanoseconds
 
     def processor: Int = request.processor
+
+    override def toString = s"Response(request=$request, responseSend=$responseSend, responseAction=$responseAction)"
   }
 
   trait ResponseAction
