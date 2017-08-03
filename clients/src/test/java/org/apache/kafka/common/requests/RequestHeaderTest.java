@@ -24,7 +24,6 @@ import java.nio.ByteBuffer;
 
 import static org.apache.kafka.test.TestUtils.toBuffer;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
 
 public class RequestHeaderTest {
 
@@ -43,7 +42,7 @@ public class RequestHeaderTest {
         assertEquals(ApiKeys.CONTROLLED_SHUTDOWN_KEY.id, deserialized.apiKey());
         assertEquals(0, deserialized.apiVersion());
         assertEquals(correlationId, deserialized.correlationId());
-        assertNull(deserialized.clientId());
+        assertEquals("", deserialized.clientId());
 
         Struct serialized = deserialized.toStruct();
         ByteBuffer serializedBuffer = toBuffer(serialized);
@@ -71,7 +70,7 @@ public class RequestHeaderTest {
         assertEquals(header.apiKey(), deserialized.apiKey());
         assertEquals(header.apiVersion(), deserialized.apiVersion());
         assertEquals(header.correlationId(), deserialized.correlationId());
-        assertEquals("", deserialized.clientId()); // null is defaulted to ""
+        assertEquals("", deserialized.clientId()); // null defaults to ""
     }
 
 }

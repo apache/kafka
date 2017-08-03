@@ -44,14 +44,14 @@ public class RequestHeader extends AbstractRequestResponse {
         if (struct.hasField(CLIENT_ID_FIELD_NAME))
             clientId = struct.getString(CLIENT_ID_FIELD_NAME);
         else
-            clientId = null;
+            clientId = "";
         correlationId = struct.getInt(CORRELATION_ID_FIELD_NAME);
     }
 
-    public RequestHeader(short apiKey, short version, String client, int correlation) {
+    public RequestHeader(short apiKey, short version, String clientId, int correlation) {
         this.apiKey = apiKey;
         this.apiVersion = version;
-        this.clientId = client;
+        this.clientId = clientId;
         this.correlationId = correlation;
     }
 

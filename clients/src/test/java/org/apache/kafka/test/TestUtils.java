@@ -324,7 +324,6 @@ public class TestUtils {
         return list;
     }
 
-
     public static ByteBuffer toBuffer(Struct struct) {
         ByteBuffer buffer = ByteBuffer.allocate(struct.sizeOf());
         struct.writeTo(buffer);
