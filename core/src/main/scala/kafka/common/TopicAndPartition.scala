@@ -35,5 +35,7 @@ case class TopicAndPartition(topic: String, partition: Int) {
 
   def asTuple = (topic, partition)
 
+  def asTopicPartition = new TopicPartition(topic, partition)
+
   override def toString = "[%s,%d]".format(topic, partition)
 }

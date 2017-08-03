@@ -23,7 +23,6 @@ import java.util.Collections
 import java.util.concurrent._
 
 import com.yammer.metrics.core.Gauge
-import kafka.api.{ControlledShutdownRequest, RequestOrResponse}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.QuotaId
 import kafka.utils.{Logging, NotNothing}
@@ -69,56 +68,34 @@ object RequestChannel extends Logging {
     @volatile var apiRemoteCompleteTimeNanos = -1L
     @volatile var recordNetworkThreadTimeCallback: Option[Long => Unit] = None
 
-    val requestId = buffer.getShort()
+    val header: RequestHeader = try {
+      RequestHeader.parse(buffer)
+    } catch {
+      case ex: Throwable =>
+        throw new InvalidRequestException(s"Error parsing request header. Our best guess of the apiKey is: ${buffer.getShort(0)}", ex)
+    }
 
-    // TODO: this will be removed once we remove support for v0 of ControlledShutdownRequest (which
-    // depends on a non-standard request header)
-    val requestObj: RequestOrResponse = if (requestId == ApiKeys.CONTROLLED_SHUTDOWN_KEY.id)
-      ControlledShutdownRequest.readFrom(buffer)
-    else
-      null
-
-    // if we failed to find a server-side mapping, then try using the
-    // client-side request / response format
-    val header: RequestHeader =
-      if (requestObj == null) {
-        buffer.rewind
-        try RequestHeader.parse(buffer)
-        catch {
-          case ex: Throwable =>
-            throw new InvalidRequestException(s"Error parsing request header. Our best guess of the apiKey is: $requestId", ex)
-        }
-      } else
-        null
     val bodyAndSize: RequestAndSize =
-      if (requestObj == null)
-        try {
-          // For unsupported version of ApiVersionsRequest, create a dummy request to enable an error response to be returned later
-          if (header.apiKey == ApiKeys.API_VERSIONS.id && !Protocol.apiVersionSupported(header.apiKey, header.apiVersion)) {
-            new RequestAndSize(new ApiVersionsRequest.Builder().build(), 0)
-          }
-          else
-            AbstractRequest.getRequest(header.apiKey, header.apiVersion, buffer)
-        } catch {
-          case ex: Throwable =>
-            throw new InvalidRequestException(s"Error getting request for apiKey: ${header.apiKey} and apiVersion: ${header.apiVersion}", ex)
+      try {
+        // For unsupported version of ApiVersionsRequest, create a dummy request to enable an error response to be returned later
+        if (header.apiKey == ApiKeys.API_VERSIONS.id && !Protocol.apiVersionSupported(header.apiKey, header.apiVersion)) {
+          new RequestAndSize(new ApiVersionsRequest.Builder().build(), 0)
         }
-      else
-        null
+        else
+          AbstractRequest.getRequest(header.apiKey, header.apiVersion, buffer)
+      } catch {
+        case ex: Throwable =>
+          throw new InvalidRequestException(s"Error getting request for apiKey: ${header.apiKey} and apiVersion: ${header.apiVersion}", ex)
+      }
 
     //most request types are parsed entirely into objects at this point. for those we can release the underlying buffer.
     //some (like produce, or any time the schema contains fields of types BYTES or NULLABLE_BYTES) retain a reference
     //to the buffer. for those requests we cannot release the buffer early, but only when request processing is done.
-    if (!Protocol.requiresDelayedDeallocation(requestId)) {
+    if (!Protocol.requiresDelayedDeallocation(header.apiKey)) {
       dispose()
     }
 
-    def requestDesc(details: Boolean): String = {
-      if (requestObj != null)
-        requestObj.describe(details)
-      else
-        s"$header -- ${body[AbstractRequest].toString(details)}"
-    }
+    def requestDesc(details: Boolean): String = s"$header -- ${body[AbstractRequest].toString(details)}"
 
     def body[T <: AbstractRequest](implicit classTag: ClassTag[T], nn: NotNothing[T]): T = {
       bodyAndSize.request match {
@@ -158,7 +135,7 @@ object RequestChannel extends Logging {
       val responseSendTime = nanosToMs(endTimeNanos - responseDequeueTimeNanos)
       val totalTime = nanosToMs(endTimeNanos - startTimeNanos)
       val fetchMetricNames =
-        if (requestId == ApiKeys.FETCH.id) {
+        if (header.apiKey == ApiKeys.FETCH.id) {
           val isFromFollower = body[FetchRequest].isFromFollower
           Seq(
             if (isFromFollower) RequestMetrics.followFetchMetricName
@@ -166,7 +143,7 @@ object RequestChannel extends Logging {
           )
         }
         else Seq.empty
-      val metricNames = fetchMetricNames :+ ApiKeys.forId(requestId).name
+      val metricNames = fetchMetricNames :+ ApiKeys.forId(header.apiKey).name
       metricNames.foreach { metricName =>
         val m = RequestMetrics.metricsMap(metricName)
         m.requestRate.mark()
