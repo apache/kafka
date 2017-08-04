@@ -23,11 +23,9 @@ import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.PrintForeachAction;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.test.KStreamTestDriver;
 
 import org.easymock.EasyMock;
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
 
 import java.io.ByteArrayOutputStream;
@@ -46,8 +44,6 @@ public class KStreamPrintTest {
     private final Serde<String> stringSerd = Serdes.String();
     private PrintWriter printWriter;
     private ByteArrayOutputStream byteOutStream;
-    @Rule
-    public KStreamTestDriver driver = new KStreamTestDriver();
 
     private KeyValueMapper<Integer, String, String> mapper;
     private KStreamPrint kStreamPrint;
