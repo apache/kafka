@@ -23,8 +23,8 @@ TAGS
 *.iml
 .project
 .settings
-kafka.ipr
-kafka.iws
+*.ipr
+*.iws
 .vagrant
 Vagrantfile.local
 /logs
