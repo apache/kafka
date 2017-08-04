@@ -131,7 +131,21 @@ object ConsumerPerformance {
 
   }
 
-  def consume(consumer: KafkaConsumer[Array[Byte], Array[Byte]], topics: List[String], count: Long, timeout: Long, config: ConsumerPerfConfig, totalMessagesRead: AtomicLong, totalBytesRead: AtomicLong, joinTime: AtomicLong) {
+  private[tools] def printHeader(showDetailedStats: Boolean): Unit = {
+    if (showDetailedStats)
+      println("start.time, end.time, data.consumed.in.MB, MB.sec, data.consumed.in.nMsg, nMsg.sec")
+    else
+      println("time, threadId, data.consumed.in.MB, MB.sec, data.consumed.in.nMsg, nMsg.sec")
+  }
+
+  def consume(consumer: KafkaConsumer[Array[Byte], Array[Byte]],
+              topics: List[String],
+              count: Long,
+              timeout: Long,
+              config: ConsumerPerfConfig,
+              totalMessagesRead: AtomicLong,
+              totalBytesRead: AtomicLong,
+              joinTime: AtomicLong) {
     var bytesRead = 0L
     var messagesRead = 0L
     var lastBytesRead = 0L
@@ -191,8 +205,15 @@ object ConsumerPerformance {
     totalBytesRead.set(bytesRead)
   }
 
-  def printProgressMessage(id: Int, bytesRead: Long, lastBytesRead: Long, messagesRead: Long, lastMessagesRead: Long,
-    startMs: Long, endMs: Long, dateFormat: SimpleDateFormat, joinTimeMs: Option[Long] = None) = {
+  def printProgressMessage(id: Int,
+                           bytesRead: Long,
+                           lastBytesRead: Long,
+                           messagesRead: Long,
+                           lastMessagesRead: Long,
+                           startMs: Long,
+                           endMs: Long,
+                           dateFormat: SimpleDateFormat,
+                           joinTimeMs: Option[Long] = None) = {
     val elapsedMs: Double = endMs - startMs
     val totalMBRead = (bytesRead * 1.0) / (1024 * 1024)
     val mbRead = ((bytesRead - lastBytesRead) * 1.0) / (1024 * 1024)
@@ -304,8 +325,13 @@ object ConsumerPerformance {
     val hideHeader = options.has(hideHeaderOpt)
   }
 
-  class ConsumerPerfThread(threadId: Int, name: String, stream: KafkaStream[Array[Byte], Array[Byte]],
-    config: ConsumerPerfConfig, totalMessagesRead: AtomicLong, totalBytesRead: AtomicLong, consumerTimeout: AtomicBoolean)
+  class ConsumerPerfThread(threadId: Int,
+                           name: String,
+                           stream: KafkaStream[Array[Byte], Array[Byte]],
+                           config: ConsumerPerfConfig,
+                           totalMessagesRead: AtomicLong,
+                           totalBytesRead: AtomicLong,
+                           consumerTimeout: AtomicBoolean)
     extends Thread(name) {
 
     override def run() {
