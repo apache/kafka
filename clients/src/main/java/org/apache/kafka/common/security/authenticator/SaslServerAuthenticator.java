@@ -21,7 +21,6 @@ import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.IllegalSaslStateException;
 import org.apache.kafka.common.errors.UnsupportedSaslMechanismException;
-import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.network.Authenticator;
 import org.apache.kafka.common.network.Mode;
 import org.apache.kafka.common.network.NetworkReceive;
@@ -30,11 +29,13 @@ import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.network.TransportLayer;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.Protocol;
 import org.apache.kafka.common.protocol.types.SchemaException;
-import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.requests.AbstractResponse;
+import org.apache.kafka.common.requests.ApiVersionsRequest;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
+import org.apache.kafka.common.requests.BrokerRequestContext;
+import org.apache.kafka.common.requests.BrokerRequestUtils;
+import org.apache.kafka.common.requests.InboundRequest;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.requests.SaslHandshakeRequest;
 import org.apache.kafka.common.requests.SaslHandshakeResponse;
@@ -86,6 +87,7 @@ public class SaslServerAuthenticator implements Authenticator {
     private final Subject subject;
     private final KerberosShortNamer kerberosNamer;
     private final String host;
+    private final BrokerRequestContext requestContext;
     private final CredentialCache credentialCache;
 
     // Current SASL state
@@ -116,6 +118,7 @@ public class SaslServerAuthenticator implements Authenticator {
         this.kerberosNamer = kerberosNameParser;
         this.host = host;
         this.credentialCache = credentialCache;
+        this.requestContext = new BrokerRequestContext(node, KafkaPrincipal.ANONYMOUS);
     }
 
     public void configure(TransportLayer transportLayer, PrincipalBuilder principalBuilder, Map<String, ?> configs) {
@@ -298,34 +301,25 @@ public class SaslServerAuthenticator implements Authenticator {
         String clientMechanism = null;
         try {
             ByteBuffer requestBuffer = ByteBuffer.wrap(requestBytes);
-            RequestHeader requestHeader = RequestHeader.parse(requestBuffer);
-            ApiKeys apiKey = ApiKeys.forId(requestHeader.apiKey());
+            RequestHeader header = RequestHeader.parse(requestBuffer);
+            ApiKeys apiKey = ApiKeys.forId(header.apiKey());
+
             // A valid Kafka request header was received. SASL authentication tokens are now expected only
             // following a SaslHandshakeRequest since this is not a GSSAPI client token from a Kafka 0.9.0.x client.
             setSaslState(SaslState.HANDSHAKE_REQUEST);
             isKafkaRequest = true;
 
-            if (!Protocol.apiVersionSupported(requestHeader.apiKey(), requestHeader.apiVersion())) {
-                if (apiKey == ApiKeys.API_VERSIONS)
-                    sendKafkaResponse(ApiVersionsResponse.unsupportedVersionSend(node, requestHeader));
-                else
-                    throw new UnsupportedVersionException("Version " + requestHeader.apiVersion() + " is not supported for apiKey " + apiKey);
-            } else {
-                LOG.debug("Handle Kafka request {}", apiKey);
-                switch (apiKey) {
-                    case API_VERSIONS:
-                        handleApiVersionsRequest(requestHeader);
-                        break;
-                    case SASL_HANDSHAKE:
-                        short version = requestHeader.apiVersion();
-                        Struct struct = ApiKeys.SASL_HANDSHAKE.parseRequest(version, requestBuffer);
-                        SaslHandshakeRequest saslHandshakeRequest = new SaslHandshakeRequest(struct, version);
-                        clientMechanism = handleHandshakeRequest(requestHeader, saslHandshakeRequest);
-                        break;
-                    default:
-                        throw new IllegalSaslStateException("Unexpected Kafka request of type " + apiKey + " during SASL handshake.");
-                }
-            }
+            // Raise an error prior to parsing if the api cannot be handled at this layer. This avoids
+            if (apiKey != ApiKeys.API_VERSIONS && apiKey != ApiKeys.SASL_HANDSHAKE)
+                throw new IllegalSaslStateException("Unexpected Kafka request of type " + apiKey + " during SASL handshake.");
+
+            LOG.debug("Handle Kafka request {}", apiKey);
+
+            InboundRequest inboundRequest = BrokerRequestUtils.parseInboundRequest(header, requestBuffer, requestContext);
+            if (apiKey == ApiKeys.API_VERSIONS)
+                handleApiVersionsRequest(inboundRequest.header, (ApiVersionsRequest) inboundRequest.body);
+            else
+                clientMechanism = handleHandshakeRequest(inboundRequest.header, (SaslHandshakeRequest) inboundRequest.body);
         } catch (SchemaException | IllegalArgumentException e) {
             if (saslState == SaslState.GSSAPI_OR_HANDSHAKE_REQUEST) {
                 // SchemaException is thrown if the request is not in Kafka format. IllegalArgumentException is thrown
@@ -368,12 +362,16 @@ public class SaslServerAuthenticator implements Authenticator {
         }
     }
 
-    private void handleApiVersionsRequest(RequestHeader requestHeader) throws IOException, UnsupportedSaslMechanismException {
-        sendKafkaResponse(requestHeader, ApiVersionsResponse.API_VERSIONS_RESPONSE);
+    private void handleApiVersionsRequest(RequestHeader requestHeader, ApiVersionsRequest apiVersionsRequest) throws IOException, UnsupportedSaslMechanismException {
+        if (apiVersionsRequest.hasUnsupportedRequestVersion())
+            sendKafkaResponse(requestHeader, apiVersionsRequest.getErrorResponse(0, Errors.UNSUPPORTED_VERSION.exception()));
+        else
+            sendKafkaResponse(requestHeader, ApiVersionsResponse.API_VERSIONS_RESPONSE);
     }
 
     private void sendKafkaResponse(RequestHeader requestHeader, AbstractResponse response) throws IOException {
-        sendKafkaResponse(response.toSend(node, requestHeader));
+        Send send = BrokerRequestUtils.buildOutboundSend(requestHeader, response, requestContext);
+        sendKafkaResponse(send);
     }
 
     private void sendKafkaResponse(Send send) throws IOException {

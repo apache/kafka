@@ -574,7 +574,7 @@ public class NetworkClient implements KafkaClient {
 
     private static AbstractResponse createResponse(Struct responseStruct, RequestHeader requestHeader) {
         ApiKeys apiKey = ApiKeys.forId(requestHeader.apiKey());
-        return AbstractResponse.getResponse(apiKey, responseStruct);
+        return AbstractResponse.parseResponse(apiKey, responseStruct);
     }
 
     /**

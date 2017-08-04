@@ -71,7 +71,7 @@ class KafkaRequestHandler(id: Int,
         case e: Throwable => error("Exception when handling request", e)
       } finally {
         if (req != null)
-          req.dispose()
+          req.releaseBuffer()
       }
     }
   }

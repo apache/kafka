@@ -27,7 +27,6 @@ import kafka.metrics.KafkaMetricsGroup
 import kafka.server.QuotaId
 import kafka.utils.{Logging, NotNothing}
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.errors.InvalidRequestException
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.network.{ListenerName, Send}
 import org.apache.kafka.common.protocol.{ApiKeys, Protocol, SecurityProtocol}
@@ -68,37 +67,23 @@ object RequestChannel extends Logging {
     @volatile var apiRemoteCompleteTimeNanos = -1L
     @volatile var recordNetworkThreadTimeCallback: Option[Long => Unit] = None
 
-    val header: RequestHeader = try {
-      RequestHeader.parse(buffer)
-    } catch {
-      case ex: Throwable =>
-        throw new InvalidRequestException(s"Error parsing request header. Our best guess of the apiKey is: ${buffer.getShort(0)}", ex)
-    }
+    val request = BrokerRequestUtils.parseInboundRequest(buffer, new BrokerRequestContext(connectionId, session.principal))
 
-    val bodyAndSize: RequestAndSize =
-      try {
-        // For unsupported version of ApiVersionsRequest, create a dummy request to enable an error response to be returned later
-        if (header.apiKey == ApiKeys.API_VERSIONS.id && !Protocol.apiVersionSupported(header.apiKey, header.apiVersion)) {
-          new RequestAndSize(new ApiVersionsRequest.Builder().build(), 0)
-        }
-        else
-          AbstractRequest.getRequest(header.apiKey, header.apiVersion, buffer)
-      } catch {
-        case ex: Throwable =>
-          throw new InvalidRequestException(s"Error getting request for apiKey: ${header.apiKey} and apiVersion: ${header.apiVersion}", ex)
-      }
+    def header: RequestHeader = request.header
+
+    def sizeOfBodyInBytes: Int = request.sizeOfBodyInBytes
 
     //most request types are parsed entirely into objects at this point. for those we can release the underlying buffer.
     //some (like produce, or any time the schema contains fields of types BYTES or NULLABLE_BYTES) retain a reference
     //to the buffer. for those requests we cannot release the buffer early, but only when request processing is done.
     if (!Protocol.requiresDelayedDeallocation(header.apiKey)) {
-      dispose()
+      releaseBuffer()
     }
 
     def requestDesc(details: Boolean): String = s"$header -- ${body[AbstractRequest].toString(details)}"
 
     def body[T <: AbstractRequest](implicit classTag: ClassTag[T], nn: NotNothing[T]): T = {
-      bodyAndSize.request match {
+      request.body match {
         case r: T => r
         case r =>
           throw new ClassCastException(s"Expected request with type ${classTag.runtimeClass}, but found ${r.getClass}")
@@ -121,7 +106,7 @@ object RequestChannel extends Logging {
       if (apiLocalCompleteTimeNanos < 0)
         apiLocalCompleteTimeNanos = responseCompleteTimeNanos
       // If the apiRemoteCompleteTimeNanos is not set (i.e., for requests that do not go through a purgatory), then it is
-      // the same as responseCompleteTimeNans.
+      // the same as responseCompleteTimeNanos.
       if (apiRemoteCompleteTimeNanos < 0)
         apiRemoteCompleteTimeNanos = responseCompleteTimeNanos
 
@@ -179,7 +164,7 @@ object RequestChannel extends Logging {
       }
     }
 
-    def dispose(): Unit = {
+    def releaseBuffer(): Unit = {
       if (buffer != null) {
         memoryPool.release(buffer)
         buffer = null
@@ -192,22 +177,6 @@ object RequestChannel extends Logging {
       s"listenerName=$listenerName, " +
       s"securityProtocol=$securityProtocol, " +
       s"buffer=$buffer)"
-
-  }
-
-  object Response {
-
-    def apply(request: Request, responseSend: Send): Response = {
-      require(request != null, "request should be non null")
-      require(responseSend != null, "responseSend should be non null")
-      new Response(request, Some(responseSend), SendAction)
-    }
-
-    def apply(request: Request, response: AbstractResponse): Response = {
-      require(request != null, "request should be non null")
-      require(response != null, "response should be non null")
-      apply(request, response.toSend(request.connectionId, request.header))
-    }
 
   }
 
@@ -260,6 +229,12 @@ class RequestChannel(val numProcessors: Int, val queueSize: Int) extends KafkaMe
 
   /** Send a response back to the socket server to be sent over the network */
   def sendResponse(response: RequestChannel.Response) {
+    if (isTraceEnabled) {
+      val requestHeader = response.request.header
+      val apiKey = ApiKeys.forId(requestHeader.apiKey)
+      trace(s"Sending $apiKey to client ${requestHeader.clientId} of ${response.responseSend.size} bytes.")
+    }
+
     responseQueues(response.processor).put(response)
     for(onResponse <- responseListeners)
       onResponse(response.processor)
