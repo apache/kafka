@@ -18,7 +18,6 @@ package org.apache.kafka.streams.examples.wordcount;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
@@ -144,8 +143,8 @@ public class WordCountProcessorDemo {
             streams.start();
             latch.await();
         } catch (Throwable e) {
-            Exit.exit(1);
+            System.exit(1);
         }
-        Exit.exit(0);
+        System.exit(0);
     }
 }
