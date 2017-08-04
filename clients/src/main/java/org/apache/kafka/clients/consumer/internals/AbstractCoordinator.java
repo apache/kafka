@@ -982,9 +982,9 @@ public abstract class AbstractCoordinator implements Closeable {
                     }
                 }
             } catch (InterruptedException | InterruptException e) {
-                Thread.interrupted();
                 log.error("Unexpected interrupt received in heartbeat thread for group {}", groupId, e);
                 this.failed.set(new RuntimeException(e));
+                Thread.currentThread().interrupt();
             } catch (RuntimeException e) {
                 log.error("Heartbeat thread for group {} failed due to unexpected error", groupId, e);
                 this.failed.set(e);
