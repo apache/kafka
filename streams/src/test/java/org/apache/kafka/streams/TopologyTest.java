@@ -280,6 +280,7 @@ public class TopologyTest {
                 @Override
                 public void process(Object key, Object value) { }
 
+                @SuppressWarnings("deprecation")
                 @Override
                 public void punctuate(long timestamp) { }
 

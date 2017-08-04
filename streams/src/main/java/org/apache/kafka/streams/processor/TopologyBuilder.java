@@ -20,7 +20,6 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
-import org.apache.kafka.streams.errors.TopologyBuilderException;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
@@ -149,7 +148,7 @@ public class TopologyBuilder {
         try {
             internalTopologyBuilder.addSource(null, name, null, null, null, topics);
         } catch (final TopologyException e) {
-            throw new TopologyBuilderException(e);
+            throw new org.apache.kafka.streams.errors.TopologyBuilderException(e);
         }
         return this;
     }
@@ -173,7 +172,7 @@ public class TopologyBuilder {
         try {
             internalTopologyBuilder.addSource(translateAutoOffsetReset(offsetReset), name, null, null, null, topics);
         } catch (final TopologyException e) {
-            throw new TopologyBuilderException(e);
+            throw new org.apache.kafka.streams.errors.TopologyBuilderException(e);
         }
         return this;
     }
@@ -197,7 +196,7 @@ public class TopologyBuilder {
         try {
             internalTopologyBuilder.addSource(null, name, timestampExtractor, null, null, topics);
         } catch (final TopologyException e) {
-            throw new TopologyBuilderException(e);
+            throw new org.apache.kafka.streams.errors.TopologyBuilderException(e);
         }
         return this;
     }
@@ -224,7 +223,7 @@ public class TopologyBuilder {
         try {
             internalTopologyBuilder.addSource(translateAutoOffsetReset(offsetReset), name, timestampExtractor, null, null, topics);
         } catch (final TopologyException e) {
-            throw new TopologyBuilderException(e);
+            throw new org.apache.kafka.streams.errors.TopologyBuilderException(e);
         }
         return this;
     }
@@ -247,7 +246,7 @@ public class TopologyBuilder {
         try {
             internalTopologyBuilder.addSource(null, name, null, null, null, topicPattern);
         } catch (final TopologyException e) {
-            throw new TopologyBuilderException(e);
+            throw new org.apache.kafka.streams.errors.TopologyBuilderException(e);
         }
         return this;
     }
@@ -272,7 +271,7 @@ public class TopologyBuilder {
         try {
             internalTopologyBuilder.addSource(translateAutoOffsetReset(offsetReset), name, null, null, null, topicPattern);
         } catch (final TopologyException e) {
-            throw new TopologyBuilderException(e);
+            throw new org.apache.kafka.streams.errors.TopologyBuilderException(e);
         }
         return this;
     }
@@ -298,7 +297,7 @@ public class TopologyBuilder {
         try {
             internalTopologyBuilder.addSource(null, name, timestampExtractor, null, null, topicPattern);
         } catch (final TopologyException e) {
-            throw new TopologyBuilderException(e);
+            throw new org.apache.kafka.streams.errors.TopologyBuilderException(e);
         }
         return this;
     }
@@ -326,7 +325,7 @@ public class TopologyBuilder {
         try {
             internalTopologyBuilder.addSource(translateAutoOffsetReset(offsetReset), name, timestampExtractor, null, null, topicPattern);
         } catch (final TopologyException e) {
-            throw new TopologyBuilderException(e);
+            throw new org.apache.kafka.streams.errors.TopologyBuilderException(e);
         }
         return this;
     }
@@ -344,7 +343,7 @@ public class TopologyBuilder {
      *                           if not specified the default value deserializer defined in the configs will be used
      * @param topics             the name of one or more Kafka topics that this source is to consume
      * @return this builder instance so methods can be chained together; never null
-     * @throws TopologyBuilderException if processor is already added or if topics have already been registered by another source
+     * @throws org.apache.kafka.streams.errors.TopologyBuilderException if processor is already added or if topics have already been registered by another source
      */
     public synchronized final TopologyBuilder addSource(final String name,
                                                         final Deserializer keyDeserializer,
@@ -353,7 +352,7 @@ public class TopologyBuilder {
         try {
             internalTopologyBuilder.addSource(null, name, null, keyDeserializer, valDeserializer, topics);
         } catch (final TopologyException e) {
-            throw new TopologyBuilderException(e);
+            throw new org.apache.kafka.streams.errors.TopologyBuilderException(e);
         }
         return this;
     }
@@ -374,7 +373,7 @@ public class TopologyBuilder {
      *                           if not specified the default value deserializer defined in the configs will be used
      * @param topics             the name of one or more Kafka topics that this source is to consume
      * @return this builder instance so methods can be chained together; never null
-     * @throws TopologyBuilderException if processor is already added or if topics have already been registered by another source
+     * @throws org.apache.kafka.streams.errors.TopologyBuilderException if processor is already added or if topics have already been registered by another source
      */
     public synchronized final TopologyBuilder addSource(final AutoOffsetReset offsetReset,
                                                         final String name,
@@ -385,7 +384,7 @@ public class TopologyBuilder {
         try {
             internalTopologyBuilder.addSource(translateAutoOffsetReset(offsetReset), name, timestampExtractor, keyDeserializer, valDeserializer, topics);
         } catch (final TopologyException e) {
-            throw new TopologyBuilderException(e);
+            throw new org.apache.kafka.streams.errors.TopologyBuilderException(e);
         }
         return this;
     }
@@ -422,7 +421,7 @@ public class TopologyBuilder {
         try {
             internalTopologyBuilder.addGlobalStore(storeSupplier, sourceName, null, keyDeserializer, valueDeserializer, topic, processorName, stateUpdateSupplier);
         } catch (final TopologyException e) {
-            throw new TopologyBuilderException(e);
+            throw new org.apache.kafka.streams.errors.TopologyBuilderException(e);
         }
         return this;
     }
@@ -461,7 +460,7 @@ public class TopologyBuilder {
         try {
             internalTopologyBuilder.addGlobalStore(storeSupplier, sourceName, timestampExtractor, keyDeserializer, valueDeserializer, topic, processorName, stateUpdateSupplier);
         } catch (final TopologyException e) {
-            throw new TopologyBuilderException(e);
+            throw new org.apache.kafka.streams.errors.TopologyBuilderException(e);
         }
         return this;
     }
@@ -482,7 +481,7 @@ public class TopologyBuilder {
      *                           if not specified the default value deserializer defined in the configs will be used
      * @param topicPattern       regular expression pattern to match Kafka topics that this source is to consume
      * @return this builder instance so methods can be chained together; never null
-     * @throws TopologyBuilderException if processor is already added or if topics have already been registered by name
+     * @throws org.apache.kafka.streams.errors.TopologyBuilderException if processor is already added or if topics have already been registered by name
      */
     public synchronized final TopologyBuilder addSource(final String name,
                                                         final Deserializer keyDeserializer,
@@ -491,7 +490,7 @@ public class TopologyBuilder {
         try {
             internalTopologyBuilder.addSource(null, name, null, keyDeserializer, valDeserializer, topicPattern);
         } catch (final TopologyException e) {
-            throw new TopologyBuilderException(e);
+            throw new org.apache.kafka.streams.errors.TopologyBuilderException(e);
         }
         return this;
     }
@@ -515,7 +514,7 @@ public class TopologyBuilder {
      *                           if not specified the default value deserializer defined in the configs will be used
      * @param topicPattern       regular expression pattern to match Kafka topics that this source is to consume
      * @return this builder instance so methods can be chained together; never null
-     * @throws TopologyBuilderException if processor is already added or if topics have already been registered by name
+     * @throws org.apache.kafka.streams.errors.TopologyBuilderException if processor is already added or if topics have already been registered by name
      */
     public synchronized final TopologyBuilder addSource(final AutoOffsetReset offsetReset,
                                                         final String name,
@@ -526,7 +525,7 @@ public class TopologyBuilder {
         try {
             internalTopologyBuilder.addSource(translateAutoOffsetReset(offsetReset), name, timestampExtractor, keyDeserializer, valDeserializer, topicPattern);
         } catch (final TopologyException e) {
-            throw new TopologyBuilderException(e);
+            throw new org.apache.kafka.streams.errors.TopologyBuilderException(e);
         }
         return this;
     }
@@ -548,7 +547,7 @@ public class TopologyBuilder {
      *                           if not specified the default value deserializer defined in the configs will be used
      * @param topicPattern       regular expression pattern to match Kafka topics that this source is to consume
      * @return this builder instance so methods can be chained together; never null
-     * @throws TopologyBuilderException if processor is already added or if topics have already been registered by name
+     * @throws org.apache.kafka.streams.errors.TopologyBuilderException if processor is already added or if topics have already been registered by name
      */
     public synchronized final TopologyBuilder addSource(final AutoOffsetReset offsetReset,
                                                         final String name,
@@ -558,7 +557,7 @@ public class TopologyBuilder {
         try {
             internalTopologyBuilder.addSource(translateAutoOffsetReset(offsetReset), name, null, keyDeserializer, valDeserializer, topicPattern);
         } catch (final TopologyException e) {
-            throw new TopologyBuilderException(e);
+            throw new org.apache.kafka.streams.errors.TopologyBuilderException(e);
         }
         return this;
     }
@@ -584,7 +583,7 @@ public class TopologyBuilder {
         try {
             internalTopologyBuilder.addSink(name, topic, null, null, null, predecessorNames);
         } catch (final TopologyException e) {
-            throw new TopologyBuilderException(e);
+            throw new org.apache.kafka.streams.errors.TopologyBuilderException(e);
         }
         return this;
     }
@@ -619,7 +618,7 @@ public class TopologyBuilder {
         try {
             internalTopologyBuilder.addSink(name, topic, null, null, partitioner, predecessorNames);
         } catch (final TopologyException e) {
-            throw new TopologyBuilderException(e);
+            throw new org.apache.kafka.streams.errors.TopologyBuilderException(e);
         }
         return this;
     }
@@ -651,7 +650,7 @@ public class TopologyBuilder {
         try {
             internalTopologyBuilder.addSink(name, topic, keySerializer, valSerializer, null, predecessorNames);
         } catch (final TopologyException e) {
-            throw new TopologyBuilderException(e);
+            throw new org.apache.kafka.streams.errors.TopologyBuilderException(e);
         }
         return this;
     }
@@ -675,7 +674,7 @@ public class TopologyBuilder {
      * @see #addSink(String, String, String...)
      * @see #addSink(String, String, StreamPartitioner, String...)
      * @see #addSink(String, String, Serializer, Serializer, String...)
-     * @throws TopologyBuilderException if predecessor is not added yet, or if this processor's name is equal to the predecessor's name
+     * @throws org.apache.kafka.streams.errors.TopologyBuilderException if predecessor is not added yet, or if this processor's name is equal to the predecessor's name
      */
     public synchronized final <K, V> TopologyBuilder addSink(final String name,
                                                              final String topic,
@@ -686,7 +685,7 @@ public class TopologyBuilder {
         try {
             internalTopologyBuilder.addSink(name, topic, keySerializer, valSerializer, partitioner, predecessorNames);
         } catch (final TopologyException e) {
-            throw new TopologyBuilderException(e);
+            throw new org.apache.kafka.streams.errors.TopologyBuilderException(e);
         }
         return this;
     }
@@ -699,7 +698,7 @@ public class TopologyBuilder {
      * @param predecessorNames the name of one or more source or processor nodes whose output records this processor should receive
      * and process
      * @return this builder instance so methods can be chained together; never null
-     * @throws TopologyBuilderException if predecessor is not added yet, or if this processor's name is equal to the predecessor's name
+     * @throws org.apache.kafka.streams.errors.TopologyBuilderException if predecessor is not added yet, or if this processor's name is equal to the predecessor's name
      */
     public synchronized final TopologyBuilder addProcessor(final String name,
                                                            final ProcessorSupplier supplier,
@@ -707,7 +706,7 @@ public class TopologyBuilder {
         try {
             internalTopologyBuilder.addProcessor(name, supplier, predecessorNames);
         } catch (final TopologyException e) {
-            throw new TopologyBuilderException(e);
+            throw new org.apache.kafka.streams.errors.TopologyBuilderException(e);
         }
         return this;
     }
@@ -717,14 +716,14 @@ public class TopologyBuilder {
      *
      * @param supplier the supplier used to obtain this state store {@link StateStore} instance
      * @return this builder instance so methods can be chained together; never null
-     * @throws TopologyBuilderException if state store supplier is already added
+     * @throws org.apache.kafka.streams.errors.TopologyBuilderException if state store supplier is already added
      */
     public synchronized final TopologyBuilder addStateStore(final StateStoreSupplier supplier,
                                                             final String... processorNames) {
         try {
             internalTopologyBuilder.addStateStore(supplier, processorNames);
         } catch (final TopologyException e) {
-            throw new TopologyBuilderException(e);
+            throw new org.apache.kafka.streams.errors.TopologyBuilderException(e);
         }
         return this;
     }
@@ -742,7 +741,7 @@ public class TopologyBuilder {
             try {
                 internalTopologyBuilder.connectProcessorAndStateStores(processorName, stateStoreNames);
             } catch (final TopologyException e) {
-                throw new TopologyBuilderException(e);
+                throw new org.apache.kafka.streams.errors.TopologyBuilderException(e);
             }
         }
         return this;
@@ -769,7 +768,7 @@ public class TopologyBuilder {
      *
      * @param processorNames the name of the processors
      * @return this builder instance so methods can be chained together; never null
-     * @throws TopologyBuilderException if less than two processors are specified, or if one of the processors is not added yet
+     * @throws org.apache.kafka.streams.errors.TopologyBuilderException if less than two processors are specified, or if one of the processors is not added yet
      */
     public synchronized final TopologyBuilder connectProcessors(final String... processorNames) {
         internalTopologyBuilder.connectProcessors(processorNames);

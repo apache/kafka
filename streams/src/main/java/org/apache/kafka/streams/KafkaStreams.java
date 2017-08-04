@@ -33,13 +33,11 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StreamPartitioner;
-import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.apache.kafka.streams.processor.internals.GlobalStreamThread;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
@@ -89,8 +87,9 @@ import static org.apache.kafka.streams.StreamsConfig.PROCESSING_GUARANTEE_CONFIG
  * A Kafka client that allows for performing continuous computation on input coming from one or more input topics and
  * sends output to zero, one, or more output topics.
  * <p>
- * The computational logic can be specified either by using the {@link TopologyBuilder} to define a DAG topology of
- * {@link Processor}s or by using the {@link KStreamBuilder} which provides the high-level DSL to define transformations.
+ * The computational logic can be specified either by using the {@link Topology} to define a DAG topology of
+ * {@link Processor}s or by using the {@link StreamsBuilder} which provides the high-level DSL to define
+ * transformations.
  * <p>
  * One {@code KafkaStreams} instance can contain one or more threads specified in the configs for the processing work.
  * <p>
@@ -121,8 +120,8 @@ import static org.apache.kafka.streams.StreamsConfig.PROCESSING_GUARANTEE_CONFIG
  * streams.start();
  * }</pre>
  *
- * @see KStreamBuilder
- * @see Topology
+ * @see org.apache.kafka.streams.StreamsBuilder
+ * @see org.apache.kafka.streams.Topology
  */
 @InterfaceStability.Evolving
 public class KafkaStreams {
@@ -145,7 +144,6 @@ public class KafkaStreams {
     private final String logPrefix;
     private final StreamsMetadataState streamsMetadataState;
     private final StreamsConfig config;
-    private StateRestoreListener stateRestoreListener;
     private final StateDirectory stateDirectory;
 
     // container states
@@ -406,7 +404,7 @@ public class KafkaStreams {
      * @deprecated use {@link #KafkaStreams(Topology, Properties)} instead
      */
     @Deprecated
-    public KafkaStreams(final TopologyBuilder builder,
+    public KafkaStreams(final org.apache.kafka.streams.processor.TopologyBuilder builder,
                         final Properties props) {
         this(builder.internalTopologyBuilder, new StreamsConfig(props), new DefaultKafkaClientSupplier());
     }
@@ -415,7 +413,7 @@ public class KafkaStreams {
      * @deprecated use {@link #KafkaStreams(Topology, StreamsConfig)} instead
      */
     @Deprecated
-    public KafkaStreams(final TopologyBuilder builder,
+    public KafkaStreams(final org.apache.kafka.streams.processor.TopologyBuilder builder,
                         final StreamsConfig config) {
         this(builder.internalTopologyBuilder, config, new DefaultKafkaClientSupplier());
     }
@@ -424,7 +422,7 @@ public class KafkaStreams {
      * @deprecated use {@link #KafkaStreams(Topology, StreamsConfig, KafkaClientSupplier)} instead
      */
     @Deprecated
-    public KafkaStreams(final TopologyBuilder builder,
+    public KafkaStreams(final org.apache.kafka.streams.processor.TopologyBuilder builder,
                         final StreamsConfig config,
                         final KafkaClientSupplier clientSupplier) {
         this(builder.internalTopologyBuilder, config, clientSupplier);
@@ -739,7 +737,7 @@ public class KafkaStreams {
     /**
      * Produce a string representation containing useful information about this {@code KafkaStream} instance such as
      * thread IDs, task IDs, and a representation of the topology DAG including {@link StateStore}s (cf.
-     * {@link TopologyBuilder} and {@link KStreamBuilder}).
+     * {@link Topology} and {@link StreamsBuilder}).
      *
      * @return A string representation of the Kafka Streams instance.
      */
@@ -751,7 +749,7 @@ public class KafkaStreams {
     /**
      * Produce a string representation containing useful information about this {@code KafkaStream} instance such as
      * thread IDs, task IDs, and a representation of the topology DAG including {@link StateStore}s (cf.
-     * {@link TopologyBuilder} and {@link KStreamBuilder}).
+     * {@link Topology} and {@link StreamsBuilder}).
      *
      * @param indent the top-level indent for each line
      * @return A string representation of the Kafka Streams instance.
@@ -882,7 +880,7 @@ public class KafkaStreams {
      * If a {@link StreamPartitioner custom partitioner} has been
      * {@link ProducerConfig#PARTITIONER_CLASS_CONFIG configured} via {@link StreamsConfig},
      * {@link KStream#through(StreamPartitioner, String)}, or {@link KTable#through(StreamPartitioner, String, String)},
-     * or if the original {@link KTable}'s input {@link KStreamBuilder#table(String, String) topic} is partitioned
+     * or if the original {@link KTable}'s input {@link StreamsBuilder#table(String, String) topic} is partitioned
      * differently, please use {@link #metadataForKey(String, Object, StreamPartitioner)}.
      * <p>
      * Note:

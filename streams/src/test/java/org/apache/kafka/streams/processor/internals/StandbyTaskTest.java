@@ -32,7 +32,8 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
+import org.apache.kafka.streams.kstream.internals.InternalStreamsBuilder;
+import org.apache.kafka.streams.kstream.internals.InternalStreamsBuilderTest;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
@@ -328,10 +329,12 @@ public class StandbyTaskTest {
 
         restoreStateConsumer.updatePartitions(changelogName, Utils.mkList(
                 new PartitionInfo(changelogName, 0, Node.noNode(), new Node[0], new Node[0])));
-        final KStreamBuilder builder = new KStreamBuilder();
-        builder.stream("topic").groupByKey().count("my-store");
-        final ProcessorTopology topology = builder.setApplicationId(applicationId).build(0);
-        StreamsConfig config = createConfig(baseDir);
+        final InternalStreamsBuilder builder = new InternalStreamsBuilder(new InternalTopologyBuilder());
+        builder.stream(null, null, null, null, "topic").groupByKey().count("my-store");
+
+        final StreamsConfig config = createConfig(baseDir);
+        final InternalTopologyBuilder internalTopologyBuilder = InternalStreamsBuilderTest.internalTopologyBuilder(builder);
+        final ProcessorTopology topology = internalTopologyBuilder.setApplicationId(applicationId).build(0);
 
         new StandbyTask(taskId, applicationId, partitions, topology, consumer, changelogReader, config,
             new MockStreamsMetrics(new Metrics()), stateDirectory);

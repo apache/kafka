@@ -68,6 +68,7 @@ import java.util.Set;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
+import static org.apache.kafka.test.TestUtils.toBuffer;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -242,17 +243,6 @@ public class RequestResponseTest {
     }
 
     @Test
-    public void testRequestHeader() {
-        RequestHeader header = createRequestHeader();
-        ByteBuffer buffer = toBuffer(header.toStruct());
-        RequestHeader deserialized = RequestHeader.parse(buffer);
-        assertEquals(header.apiVersion(), deserialized.apiVersion());
-        assertEquals(header.apiKey(), deserialized.apiKey());
-        assertEquals(header.clientId(), deserialized.clientId());
-        assertEquals(header.correlationId(), deserialized.correlationId());
-    }
-
-    @Test
     public void testResponseHeader() {
         ResponseHeader header = createResponseHeader();
         ByteBuffer buffer = toBuffer(header.toStruct());
@@ -293,13 +283,6 @@ public class RequestResponseTest {
         ByteBuffer buffer = toBuffer(struct);
         Method deserializer = req.getClass().getDeclaredMethod("parse", ByteBuffer.class, Short.TYPE);
         return (AbstractRequestResponse) deserializer.invoke(null, buffer, version);
-    }
-
-    private ByteBuffer toBuffer(Struct struct) {
-        ByteBuffer buffer = ByteBuffer.allocate(struct.sizeOf());
-        struct.writeTo(buffer);
-        buffer.rewind();
-        return buffer;
     }
 
     @Test(expected = UnsupportedVersionException.class)
@@ -508,18 +491,6 @@ public class RequestResponseTest {
         assertEquals(response.partitionsRemaining(), deserialized.partitionsRemaining());
     }
 
-    @Test
-    public void testRequestHeaderWithNullClientId() {
-        RequestHeader header = new RequestHeader((short) 10, (short) 1, null, 10);
-        Struct headerStruct = header.toStruct();
-        ByteBuffer buffer = toBuffer(headerStruct);
-        RequestHeader deserialized = RequestHeader.parse(buffer);
-        assertEquals(header.apiKey(), deserialized.apiKey());
-        assertEquals(header.apiVersion(), deserialized.apiVersion());
-        assertEquals(header.correlationId(), deserialized.correlationId());
-        assertEquals("", deserialized.clientId()); // null is defaulted to ""
-    }
-
     @Test(expected = UnsupportedVersionException.class)
     public void testCreateTopicRequestV0FailsIfValidateOnly() {
         createCreateTopicRequest(0, true);
@@ -562,10 +533,6 @@ public class RequestResponseTest {
                 singletonList(new TopicPartition("test11", 1))).toString();
         assertTrue(string.contains("test11"));
         assertTrue(string.contains("group1"));
-    }
-
-    private RequestHeader createRequestHeader() {
-        return new RequestHeader((short) 10, (short) 1, "", 10);
     }
 
     private ResponseHeader createResponseHeader() {

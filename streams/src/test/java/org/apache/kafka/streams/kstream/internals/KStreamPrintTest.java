@@ -19,19 +19,19 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.PrintForeachAction;
-import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.test.KStreamTestDriver;
 
 import org.junit.Before;
-import org.junit.After;
+import org.junit.Rule;
 import org.junit.Test;
 
-import java.io.PrintWriter;
 import java.io.ByteArrayOutputStream;
 import java.io.OutputStreamWriter;
+import java.io.PrintWriter;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
@@ -46,8 +46,8 @@ public class KStreamPrintTest {
     private final Serde<String> stringSerd = Serdes.String();
     private PrintWriter printWriter;
     private ByteArrayOutputStream byteOutStream;
-    private KStreamTestDriver driver = null;
-
+    @Rule
+    public KStreamTestDriver driver = new KStreamTestDriver();
 
     @Before
     public void setUp() {
@@ -55,13 +55,6 @@ public class KStreamPrintTest {
         printWriter = new PrintWriter(new OutputStreamWriter(byteOutStream, StandardCharsets.UTF_8));
     }
 
-    @After
-    public void cleanup() {
-        if (driver != null) {
-            driver.close();
-        }
-    }
-    
     @Test
     public void testPrintKeyValueWithName() {
         KeyValueMapper<Integer, String, String> mapper = new KeyValueMapper<Integer, String, String>() {
@@ -80,11 +73,11 @@ public class KStreamPrintTest {
         
         final String[] expectedResult = {"[test-stream]: 0, zero", "[test-stream]: 1, one", "[test-stream]: 2, two", "[test-stream]: 3, three"};
         
-        final KStreamBuilder builder = new KStreamBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
         final KStream<Integer, String> stream = builder.stream(intSerd, stringSerd, topicName);
         stream.process(kStreamPrint);
         
-        driver = new KStreamTestDriver(builder);
+        driver.setUp(builder);
         for (KeyValue<Integer, String> record: inputRecords) {
             driver.process(topicName, record.key, record.value);
         }
@@ -113,11 +106,11 @@ public class KStreamPrintTest {
 
         final String[] expectedResult = {"[test-stream]: (0, zero)", "[test-stream]: (1, one)", "[test-stream]: (2, two)", "[test-stream]: (3, three)"};
 
-        final KStreamBuilder builder = new KStreamBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
         final KStream<Integer, String> stream = builder.stream(intSerd, stringSerd, topicName);
         stream.process(kStreamPrint);
 
-        driver = new KStreamTestDriver(builder);
+        driver.setUp(builder);
         for (KeyValue<Integer, String> record: inputRecords) {
             driver.process(topicName, record.key, record.value);
         }

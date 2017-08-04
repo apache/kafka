@@ -396,7 +396,8 @@ class KafkaApisTest {
     val header = new RequestHeader(builder.apiKey.id, request.version, "", 0)
     val buffer = request.serialize(header)
     val session = Session(KafkaPrincipal.ANONYMOUS, InetAddress.getLocalHost)
-    (request, RequestChannel.Request(1, "1", session, buffer, MemoryPool.NONE, 0, new ListenerName(""), SecurityProtocol.PLAINTEXT))
+    (request, new RequestChannel.Request(1, "1", session, 0, new ListenerName(""), SecurityProtocol.PLAINTEXT,
+      MemoryPool.NONE, buffer))
   }
 
   private def readResponse(api: ApiKeys, request: AbstractRequest, capturedResponse: Capture[RequestChannel.Response]): AbstractResponse = {
