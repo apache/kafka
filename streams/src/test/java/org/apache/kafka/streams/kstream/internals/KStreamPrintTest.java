@@ -113,6 +113,7 @@ public class KStreamPrintTest {
         }
     }
 
+    @SuppressWarnings("unchecked")
     private <K, V> void doTest(final List<KeyValue<K, V>> inputRecords, final String[] expectedResult) {
 
         for (KeyValue<K, V> record: inputRecords) {
