@@ -27,15 +27,15 @@ TC_PATHS="tests/kafkatest/tests/streams tests/kafkatest/tests/tools" bash tests/
 ```
 * Run a specific tests file
 ```
-TC_PATHS="tests/kafkatest/tests/core/transactions_test.py" bash tests/docker/run_tests.sh
+TC_PATHS="tests/kafkatest/tests/client/pluggable_test.py" bash tests/docker/run_tests.sh
 ```
 * Run a specific test class
 ```
-TC_PATHS="tests/kafkatest/tests/core/transactions_test.py::TransactionsTest" bash tests/docker/run_tests.sh
+TC_PATHS="tests/kafkatest/tests/client/pluggable_test.py::PluggableConsumerTest" bash tests/docker/run_tests.sh
 ```
 * Run a specific test method
 ```
-TC_PATHS="tests/kafkatest/tests/core/transactions_test.py::TransactionsTest.test_transactions" bash tests/docker/run_tests.sh
+TC_PATHS="tests/kafkatest/tests/client/pluggable_test.py::PluggableConsumerTest.test_start_stop" bash tests/docker/run_tests.sh
 ```
 
 * Notes
