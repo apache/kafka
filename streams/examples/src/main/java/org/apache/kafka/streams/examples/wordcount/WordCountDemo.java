@@ -25,6 +25,7 @@ import org.apache.kafka.streams.kstream.GlobalKTable;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
+import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
 
 import java.util.Arrays;
@@ -80,7 +81,19 @@ public class WordCountDemo {
         // need to override value serde to Long type
         counts.to(Serdes.String(), Serdes.Long(), "streams-wordcount-output");
 
-        GlobalKTable<String, Long> global = builder.globalTable("topicN", "storeN");
+        GlobalKTable<String, Long> gTable = builder.globalTable("topicN", "storeN");
+
+        source.join(gTable, new KeyValueMapper<String, String, String>() {
+            @Override
+            public String apply(String key, String value) {
+                return key;
+            }
+        }, new ValueJoiner<String, Long, String>() {
+            @Override
+            public String apply(final String value1, final Long value2) {
+                return value1 + value2;
+            }
+        });
 
         System.out.println(builder.build().describe());
 
