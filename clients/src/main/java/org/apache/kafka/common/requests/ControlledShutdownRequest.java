@@ -31,7 +31,11 @@ public class ControlledShutdownRequest extends AbstractRequest {
         private final int brokerId;
 
         public Builder(int brokerId) {
-            super(ApiKeys.CONTROLLED_SHUTDOWN_KEY);
+            this(brokerId, null);
+        }
+
+        public Builder(int brokerId, Short desiredVersion) {
+            super(ApiKeys.CONTROLLED_SHUTDOWN_KEY, desiredVersion);
             this.brokerId = brokerId;
         }
 

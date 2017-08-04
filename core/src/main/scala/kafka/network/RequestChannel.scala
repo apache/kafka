@@ -23,7 +23,6 @@ import java.util.Collections
 import java.util.concurrent._
 
 import com.yammer.metrics.core.Gauge
-import kafka.api.{ControlledShutdownRequest, RequestOrResponse}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.QuotaId
 import kafka.utils.{Logging, NotNothing}
@@ -41,9 +40,9 @@ import org.apache.log4j.Logger
 import scala.reflect.ClassTag
 
 object RequestChannel extends Logging {
-  val AllDone = Request(processor = 1, connectionId = "2", Session(KafkaPrincipal.ANONYMOUS, InetAddress.getLocalHost),
-    buffer = shutdownReceive, memoryPool = MemoryPool.NONE, startTimeNanos = 0, listenerName = new ListenerName(""),
-    securityProtocol = SecurityProtocol.PLAINTEXT)
+  val AllDone = new Request(processor = 1, connectionId = "2", Session(KafkaPrincipal.ANONYMOUS, InetAddress.getLocalHost),
+    startTimeNanos = 0, listenerName = new ListenerName(""), securityProtocol = SecurityProtocol.PLAINTEXT,
+    MemoryPool.NONE, shutdownReceive)
   private val requestLogger = Logger.getLogger("kafka.request.logger")
 
   private def shutdownReceive: ByteBuffer = {
@@ -57,12 +56,11 @@ object RequestChannel extends Logging {
     val sanitizedUser = QuotaId.sanitize(principal.getName)
   }
 
-  case class Request(processor: Int, connectionId: String, session: Session, buffer: ByteBuffer,
-                     private val memoryPool: MemoryPool, startTimeNanos: Long, listenerName: ListenerName, 
-                     securityProtocol: SecurityProtocol) {
+  class Request(val processor: Int, val connectionId: String, val session: Session, startTimeNanos: Long,
+                val listenerName: ListenerName, val securityProtocol: SecurityProtocol, memoryPool: MemoryPool,
+                @volatile private var buffer: ByteBuffer) {
     // These need to be volatile because the readers are in the network thread and the writers are in the request
     // handler threads or the purgatory threads
-    @volatile var bufferReference = buffer
     @volatile var requestDequeueTimeNanos = -1L
     @volatile var apiLocalCompleteTimeNanos = -1L
     @volatile var responseCompleteTimeNanos = -1L
@@ -70,56 +68,34 @@ object RequestChannel extends Logging {
     @volatile var apiRemoteCompleteTimeNanos = -1L
     @volatile var recordNetworkThreadTimeCallback: Option[Long => Unit] = None
 
-    val requestId = buffer.getShort()
+    val header: RequestHeader = try {
+      RequestHeader.parse(buffer)
+    } catch {
+      case ex: Throwable =>
+        throw new InvalidRequestException(s"Error parsing request header. Our best guess of the apiKey is: ${buffer.getShort(0)}", ex)
+    }
 
-    // TODO: this will be removed once we remove support for v0 of ControlledShutdownRequest (which
-    // depends on a non-standard request header)
-    val requestObj: RequestOrResponse = if (requestId == ApiKeys.CONTROLLED_SHUTDOWN_KEY.id)
-      ControlledShutdownRequest.readFrom(buffer)
-    else
-      null
-
-    // if we failed to find a server-side mapping, then try using the
-    // client-side request / response format
-    val header: RequestHeader =
-      if (requestObj == null) {
-        buffer.rewind
-        try RequestHeader.parse(buffer)
-        catch {
-          case ex: Throwable =>
-            throw new InvalidRequestException(s"Error parsing request header. Our best guess of the apiKey is: $requestId", ex)
-        }
-      } else
-        null
     val bodyAndSize: RequestAndSize =
-      if (requestObj == null)
-        try {
-          // For unsupported version of ApiVersionsRequest, create a dummy request to enable an error response to be returned later
-          if (header.apiKey == ApiKeys.API_VERSIONS.id && !Protocol.apiVersionSupported(header.apiKey, header.apiVersion)) {
-            new RequestAndSize(new ApiVersionsRequest.Builder().build(), 0)
-          }
-          else
-            AbstractRequest.getRequest(header.apiKey, header.apiVersion, buffer)
-        } catch {
-          case ex: Throwable =>
-            throw new InvalidRequestException(s"Error getting request for apiKey: ${header.apiKey} and apiVersion: ${header.apiVersion}", ex)
+      try {
+        // For unsupported version of ApiVersionsRequest, create a dummy request to enable an error response to be returned later
+        if (header.apiKey == ApiKeys.API_VERSIONS.id && !Protocol.apiVersionSupported(header.apiKey, header.apiVersion)) {
+          new RequestAndSize(new ApiVersionsRequest.Builder().build(), 0)
         }
-      else
-        null
+        else
+          AbstractRequest.getRequest(header.apiKey, header.apiVersion, buffer)
+      } catch {
+        case ex: Throwable =>
+          throw new InvalidRequestException(s"Error getting request for apiKey: ${header.apiKey} and apiVersion: ${header.apiVersion}", ex)
+      }
 
     //most request types are parsed entirely into objects at this point. for those we can release the underlying buffer.
     //some (like produce, or any time the schema contains fields of types BYTES or NULLABLE_BYTES) retain a reference
     //to the buffer. for those requests we cannot release the buffer early, but only when request processing is done.
-    if (!Protocol.requiresDelayedDeallocation(requestId)) {
+    if (!Protocol.requiresDelayedDeallocation(header.apiKey)) {
       dispose()
     }
 
-    def requestDesc(details: Boolean): String = {
-      if (requestObj != null)
-        requestObj.describe(details)
-      else
-        s"$header -- ${body[AbstractRequest].toString(details)}"
-    }
+    def requestDesc(details: Boolean): String = s"$header -- ${body[AbstractRequest].toString(details)}"
 
     def body[T <: AbstractRequest](implicit classTag: ClassTag[T], nn: NotNothing[T]): T = {
       bodyAndSize.request match {
@@ -159,7 +135,7 @@ object RequestChannel extends Logging {
       val responseSendTime = nanosToMs(endTimeNanos - responseDequeueTimeNanos)
       val totalTime = nanosToMs(endTimeNanos - startTimeNanos)
       val fetchMetricNames =
-        if (requestId == ApiKeys.FETCH.id) {
+        if (header.apiKey == ApiKeys.FETCH.id) {
           val isFromFollower = body[FetchRequest].isFromFollower
           Seq(
             if (isFromFollower) RequestMetrics.followFetchMetricName
@@ -167,7 +143,7 @@ object RequestChannel extends Logging {
           )
         }
         else Seq.empty
-      val metricNames = fetchMetricNames :+ ApiKeys.forId(requestId).name
+      val metricNames = fetchMetricNames :+ ApiKeys.forId(header.apiKey).name
       metricNames.foreach { metricName =>
         val m = RequestMetrics.metricsMap(metricName)
         m.requestRate.mark()
@@ -204,11 +180,19 @@ object RequestChannel extends Logging {
     }
 
     def dispose(): Unit = {
-      if (bufferReference != null) {
-        memoryPool.release(bufferReference)
-        bufferReference = null
+      if (buffer != null) {
+        memoryPool.release(buffer)
+        buffer = null
       }
     }
+
+    override def toString = s"Request(processor=$processor, " +
+      s"connectionId=$connectionId, " +
+      s"session=$session, " +
+      s"listenerName=$listenerName, " +
+      s"securityProtocol=$securityProtocol, " +
+      s"buffer=$buffer)"
+
   }
 
   object Response {
@@ -227,11 +211,13 @@ object RequestChannel extends Logging {
 
   }
 
-  case class Response(request: Request, responseSend: Option[Send], responseAction: ResponseAction) {
+  class Response(val request: Request, val responseSend: Option[Send], val responseAction: ResponseAction) {
     request.responseCompleteTimeNanos = Time.SYSTEM.nanoseconds
     if (request.apiLocalCompleteTimeNanos == -1L) request.apiLocalCompleteTimeNanos = Time.SYSTEM.nanoseconds
 
     def processor: Int = request.processor
+
+    override def toString = s"Response(request=$request, responseSend=$responseSend, responseAction=$responseAction)"
   }
 
   trait ResponseAction

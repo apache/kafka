@@ -239,7 +239,11 @@ public class FetchResponse extends AbstractResponse {
         return toSend(toStruct(requestHeader.apiVersion()), throttleTimeMs, dest, requestHeader);
     }
 
-    public Send toSend(Struct responseStruct, int throttleTimeMs, String dest, RequestHeader requestHeader) {
+    public Send toSend(int throttleTimeMs, String dest, RequestHeader requestHeader) {
+        return toSend(toStruct(requestHeader.apiVersion()), throttleTimeMs, dest, requestHeader);
+    }
+
+    private Send toSend(Struct responseStruct, int throttleTimeMs, String dest, RequestHeader requestHeader) {
         Struct responseHeader = new ResponseHeader(requestHeader.correlationId()).toStruct();
 
         // write the total size and the response header
