@@ -202,10 +202,9 @@ public class ProducerPerformance {
 
         parser.addArgument("--bootstrap-server")
                 .action(store())
-                .required(true)
                 .type(String.class)
                 .dest("bootstrapServer")
-                .help("REQUIRED: The server to connect to");
+                .help("The server to connect to");
 
         parser.addArgument("--topic")
                 .action(store())
