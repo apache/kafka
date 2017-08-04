@@ -23,6 +23,7 @@ import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.kstream.GlobalKTable;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
@@ -62,7 +63,7 @@ public class WordCountDemo {
 
         StreamsBuilder builder = new StreamsBuilder();
 
-        KStream<String, String> source = builder.stream("streams-wordcount-input");
+        KStream<String, String> source = builder.stream("streams-wordcount-input", "dummy");
 
         KTable<String, Long> counts = source
                 .flatMapValues(new ValueMapper<String, Iterable<String>>() {
@@ -82,6 +83,11 @@ public class WordCountDemo {
         // need to override value serde to Long type
         counts.to(Serdes.String(), Serdes.Long(), "streams-wordcount-output");
 
+        GlobalKTable<String, Long> global = builder.globalTable("topicN", "storeN");
+
+        System.out.println(builder.build().describe());
+
+        /*
         final KafkaStreams streams = new KafkaStreams(builder.build(), props);
         final CountDownLatch latch = new CountDownLatch(1);
 
@@ -101,5 +107,6 @@ public class WordCountDemo {
             Exit.exit(1);
         }
         Exit.exit(0);
+        */
     }
 }
