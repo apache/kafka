@@ -32,6 +32,7 @@ import org.apache.kafka.streams.state.internals.WindowStoreSupplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -1087,7 +1088,7 @@ public class InternalTopologyBuilder {
         return false;
     }
 
-    private static class NodeComparator implements Comparator<org.apache.kafka.streams.TopologyDescription.Node> {
+    private static class NodeComparator implements Comparator<org.apache.kafka.streams.TopologyDescription.Node>, Serializable {
 
         @Override
         public int compare(final org.apache.kafka.streams.TopologyDescription.Node node1,
@@ -1488,7 +1489,7 @@ public class InternalTopologyBuilder {
         }
     }
 
-    private static class GlobalStoreComparator implements Comparator<org.apache.kafka.streams.TopologyDescription.GlobalStore> {
+    private static class GlobalStoreComparator implements Comparator<org.apache.kafka.streams.TopologyDescription.GlobalStore>, Serializable {
         @Override
         public int compare(final org.apache.kafka.streams.TopologyDescription.GlobalStore globalStore1,
                            final org.apache.kafka.streams.TopologyDescription.GlobalStore globalStore2) {
@@ -1498,7 +1499,7 @@ public class InternalTopologyBuilder {
 
     private final static GlobalStoreComparator GLOBALSTORE_COMPARATOR = new GlobalStoreComparator();
 
-    private static class SubtopologyComparator implements Comparator<org.apache.kafka.streams.TopologyDescription.Subtopology> {
+    private static class SubtopologyComparator implements Comparator<org.apache.kafka.streams.TopologyDescription.Subtopology>, Serializable {
         @Override
         public int compare(final org.apache.kafka.streams.TopologyDescription.Subtopology subtopology1,
                            final org.apache.kafka.streams.TopologyDescription.Subtopology subtopology2) {
