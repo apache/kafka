@@ -18,8 +18,6 @@ package org.apache.kafka.streams.examples.wordcount;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.common.utils.Exit;
-import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
@@ -32,7 +30,6 @@ import org.apache.kafka.streams.kstream.ValueMapper;
 import java.util.Arrays;
 import java.util.Locale;
 import java.util.Properties;
-import java.util.concurrent.CountDownLatch;
 
 /**
  * Demonstrates, using the high-level KStream DSL, how to implement the WordCount program
