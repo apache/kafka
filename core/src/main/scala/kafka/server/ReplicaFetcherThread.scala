@@ -18,16 +18,13 @@
 package kafka.server
 
 import java.util
-
 import kafka.admin.AdminUtils
 import kafka.api.{FetchRequest => _, _}
 import kafka.cluster.{BrokerEndPoint, Replica}
-import kafka.common.KafkaStorageException
 import kafka.log.LogConfig
 import kafka.server.ReplicaFetcherThread._
 import kafka.server.epoch.LeaderEpochCache
 import org.apache.kafka.common.requests.EpochEndOffset._
-import kafka.utils.Exit
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.metrics.Metrics
@@ -35,7 +32,6 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.requests.{EpochEndOffset, FetchResponse, ListOffsetRequest, ListOffsetResponse, OffsetsForLeaderEpochRequest, OffsetsForLeaderEpochResponse, FetchRequest => JFetchRequest}
 import org.apache.kafka.common.utils.Time
-
 import scala.collection.JavaConverters._
 import scala.collection.{Map, mutable}
 
@@ -83,41 +79,35 @@ class ReplicaFetcherThread(name: String,
 
   // process fetched data
   def processPartitionData(topicPartition: TopicPartition, fetchOffset: Long, partitionData: PartitionData) {
-    try {
-      val replica = replicaMgr.getReplica(topicPartition).get
-      val records = partitionData.toRecords
+    val replica = replicaMgr.getReplica(topicPartition).get
+    val records = partitionData.toRecords
 
-      maybeWarnIfOversizedRecords(records, topicPartition)
+    maybeWarnIfOversizedRecords(records, topicPartition)
 
-      if (fetchOffset != replica.logEndOffset.messageOffset)
-        throw new RuntimeException("Offset mismatch for partition %s: fetched offset = %d, log end offset = %d.".format(topicPartition, fetchOffset, replica.logEndOffset.messageOffset))
-      if (logger.isTraceEnabled)
-        trace("Follower %d has replica log end offset %d for partition %s. Received %d messages and leader hw %d"
-          .format(replica.brokerId, replica.logEndOffset.messageOffset, topicPartition, records.sizeInBytes, partitionData.highWatermark))
+    if (fetchOffset != replica.logEndOffset.messageOffset)
+      throw new RuntimeException("Offset mismatch for partition %s: fetched offset = %d, log end offset = %d.".format(topicPartition, fetchOffset, replica.logEndOffset.messageOffset))
+    if (logger.isTraceEnabled)
+      trace("Follower %d has replica log end offset %d for partition %s. Received %d messages and leader hw %d"
+        .format(replica.brokerId, replica.logEndOffset.messageOffset, topicPartition, records.sizeInBytes, partitionData.highWatermark))
 
-      // Append the leader's messages to the log
-      replica.log.get.appendAsFollower(records)
+    // Append the leader's messages to the log
+    replica.log.get.appendAsFollower(records)
 
-      if (logger.isTraceEnabled)
-        trace("Follower %d has replica log end offset %d after appending %d bytes of messages for partition %s"
-          .format(replica.brokerId, replica.logEndOffset.messageOffset, records.sizeInBytes, topicPartition))
-      val followerHighWatermark = replica.logEndOffset.messageOffset.min(partitionData.highWatermark)
-      val leaderLogStartOffset = partitionData.logStartOffset
-      // for the follower replica, we do not need to keep
-      // its segment base offset the physical position,
-      // these values will be computed upon making the leader
-      replica.highWatermark = new LogOffsetMetadata(followerHighWatermark)
-      replica.maybeIncrementLogStartOffset(leaderLogStartOffset)
-      if (logger.isTraceEnabled)
-        trace(s"Follower ${replica.brokerId} set replica high watermark for partition $topicPartition to $followerHighWatermark")
-      if (quota.isThrottled(topicPartition))
-        quota.record(records.sizeInBytes)
-      replicaMgr.brokerTopicStats.updateReplicationBytesIn(records.sizeInBytes)
-    } catch {
-      case e: KafkaStorageException =>
-        fatal(s"Disk error while replicating data for $topicPartition", e)
-        Exit.halt(1)
-    }
+    if (logger.isTraceEnabled)
+      trace("Follower %d has replica log end offset %d after appending %d bytes of messages for partition %s"
+        .format(replica.brokerId, replica.logEndOffset.messageOffset, records.sizeInBytes, topicPartition))
+    val followerHighWatermark = replica.logEndOffset.messageOffset.min(partitionData.highWatermark)
+    val leaderLogStartOffset = partitionData.logStartOffset
+    // for the follower replica, we do not need to keep
+    // its segment base offset the physical position,
+    // these values will be computed upon making the leader
+    replica.highWatermark = new LogOffsetMetadata(followerHighWatermark)
+    replica.maybeIncrementLogStartOffset(leaderLogStartOffset)
+    if (logger.isTraceEnabled)
+      trace(s"Follower ${replica.brokerId} set replica high watermark for partition $topicPartition to $followerHighWatermark")
+    if (quota.isThrottled(topicPartition))
+      quota.record(records.sizeInBytes)
+    replicaMgr.brokerTopicStats.updateReplicationBytesIn(records.sizeInBytes)
   }
 
   def maybeWarnIfOversizedRecords(records: MemoryRecords, topicPartition: TopicPartition): Unit = {

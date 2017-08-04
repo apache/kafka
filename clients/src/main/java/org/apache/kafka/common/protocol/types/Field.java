@@ -70,4 +70,9 @@ public class Field {
         return schema;
     }
 
+
+    @Override
+    public String toString() {
+        return name + ":" + type;
+    }
 }

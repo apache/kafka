@@ -139,9 +139,7 @@ public class Schema extends Type {
         StringBuilder b = new StringBuilder();
         b.append('{');
         for (int i = 0; i < this.fields.length; i++) {
-            b.append(this.fields[i].name);
-            b.append(':');
-            b.append(this.fields[i].type());
+            b.append(this.fields[i].toString());
             if (i < this.fields.length - 1)
                 b.append(',');
         }

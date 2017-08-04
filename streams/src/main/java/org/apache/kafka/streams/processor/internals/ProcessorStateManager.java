@@ -171,10 +171,11 @@ public class ProcessorStateManager implements StateManager {
         } else {
             log.trace("{} Restoring state store {} from changelog topic {}", logPrefix, store.name(), topic);
             final StateRestorer restorer = new StateRestorer(storePartition,
-                                                             stateRestoreCallback,
+                                                             new CompositeRestoreListener(stateRestoreCallback),
                                                              checkpointedOffsets.get(storePartition),
                                                              offsetLimit(storePartition),
-                                                             store.persistent());
+                                                             store.persistent(),
+                                                             store.name());
             changelogReader.register(restorer);
         }
 

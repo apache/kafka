@@ -45,7 +45,7 @@ public class MergedSortedCacheWrappedWindowStoreIteratorTest {
 
     private final List<KeyValue<Long, byte[]>> windowStoreKvPairs = new ArrayList<>();
     private final ThreadCache cache = new ThreadCache("testCache", 1000000L,  new MockStreamsMetrics(new Metrics()));
-    private final String namespace = "one";
+    private final String namespace = "0.0-one";
     private final StateSerdes<String, String> stateSerdes = new StateSerdes<>("foo", Serdes.String(), Serdes.String());
 
     @Test
@@ -80,6 +80,7 @@ public class MergedSortedCacheWrappedWindowStoreIteratorTest {
             assertArrayEquals(expected.value, next.value);
             assertEquals(expected.key, next.key);
         }
+        iterator.close();
     }
 
     @Test
@@ -98,6 +99,7 @@ public class MergedSortedCacheWrappedWindowStoreIteratorTest {
         assertThat(iterator.peekNextKey(), equalTo(0L));
         iterator.next();
         assertThat(iterator.peekNextKey(), equalTo(10L));
+        iterator.close();
     }
 
     @Test
@@ -112,5 +114,6 @@ public class MergedSortedCacheWrappedWindowStoreIteratorTest {
         assertThat(iterator.peekNextKey(), equalTo(0L));
         iterator.next();
         assertThat(iterator.peekNextKey(), equalTo(10L));
+        iterator.close();
     }
 }

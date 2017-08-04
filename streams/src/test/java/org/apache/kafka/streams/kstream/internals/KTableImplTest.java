@@ -19,16 +19,14 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.streams.errors.TopologyBuilderException;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
+import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
-import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.processor.internals.SinkNode;
 import org.apache.kafka.streams.processor.internals.SourceNode;
-import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockAggregator;
 import org.apache.kafka.test.MockInitializer;
@@ -37,13 +35,12 @@ import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockReducer;
 import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 
-import java.lang.reflect.Field;
 import java.io.File;
-import java.io.IOException;
+import java.lang.reflect.Field;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
@@ -53,30 +50,22 @@ import static org.junit.Assert.assertTrue;
 public class KTableImplTest {
 
     final private Serde<String> stringSerde = Serdes.String();
-
-    private KStreamTestDriver driver = null;
+    @Rule
+    public final KStreamTestDriver driver = new KStreamTestDriver();
     private File stateDir = null;
-    private KStreamBuilder builder;
+    private StreamsBuilder builder;
     private KTable<String, String> table;
 
-    @After
-    public void tearDown() {
-        if (driver != null) {
-            driver.close();
-        }
-        driver = null;
-    }
-
     @Before
-    public void setUp() throws IOException {
+    public void setUp() {
         stateDir = TestUtils.tempDirectory("kafka-test");
-        builder = new KStreamBuilder();
+        builder = new StreamsBuilder();
         table = builder.table("test", "test");
     }
 
     @Test
     public void testKTable() {
-        final KStreamBuilder builder = new KStreamBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
         String topic1 = "topic1";
         String topic2 = "topic2";
@@ -113,7 +102,7 @@ public class KTableImplTest {
         MockProcessorSupplier<String, String> proc4 = new MockProcessorSupplier<>();
         table4.toStream().process(proc4);
 
-        driver = new KStreamTestDriver(builder, stateDir);
+        driver.setUp(builder, stateDir);
 
         driver.process(topic1, "A", "01");
         driver.flushState();
@@ -132,8 +121,8 @@ public class KTableImplTest {
     }
 
     @Test
-    public void testValueGetter() throws IOException {
-        final KStreamBuilder builder = new KStreamBuilder();
+    public void testValueGetter() {
+        final StreamsBuilder builder = new StreamsBuilder();
 
         String topic1 = "topic1";
         String topic2 = "topic2";
@@ -164,7 +153,7 @@ public class KTableImplTest {
         KTableValueGetterSupplier<String, Integer> getterSupplier3 = table3.valueGetterSupplier();
         KTableValueGetterSupplier<String, String> getterSupplier4 = table4.valueGetterSupplier();
 
-        driver = new KStreamTestDriver(builder, stateDir, null, null);
+        driver.setUp(builder, stateDir, null, null);
 
         // two state store should be created
         assertEquals(2, driver.allStateStores().size());
@@ -260,18 +249,17 @@ public class KTableImplTest {
     }
 
     @Test
-    public void testStateStoreLazyEval() throws IOException {
+    public void testStateStoreLazyEval() {
         String topic1 = "topic1";
         String topic2 = "topic2";
         String storeName1 = "storeName1";
         String storeName2 = "storeName2";
 
-        final KStreamBuilder builder = new KStreamBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
         KTableImpl<String, String, String> table1 =
                 (KTableImpl<String, String, String>) builder.table(stringSerde, stringSerde, topic1, storeName1);
-        KTableImpl<String, String, String> table2 =
-                (KTableImpl<String, String, String>) builder.table(stringSerde, stringSerde, topic2, storeName2);
+        builder.table(stringSerde, stringSerde, topic2, storeName2);
 
         KTableImpl<String, String, Integer> table1Mapped = (KTableImpl<String, String, Integer>) table1.mapValues(
                 new ValueMapper<String, Integer>() {
@@ -280,7 +268,7 @@ public class KTableImplTest {
                         return new Integer(value);
                     }
                 });
-        KTableImpl<String, Integer, Integer> table1MappedFiltered = (KTableImpl<String, Integer, Integer>) table1Mapped.filter(
+        table1Mapped.filter(
                 new Predicate<String, Integer>() {
                     @Override
                     public boolean test(String key, Integer value) {
@@ -288,7 +276,7 @@ public class KTableImplTest {
                     }
                 });
 
-        driver = new KStreamTestDriver(builder, stateDir, null, null);
+        driver.setUp(builder, stateDir, null, null);
         driver.setTime(0L);
 
         // two state stores should be created
@@ -296,13 +284,13 @@ public class KTableImplTest {
     }
 
     @Test
-    public void testStateStore() throws IOException {
+    public void testStateStore() {
         String topic1 = "topic1";
         String topic2 = "topic2";
         String storeName1 = "storeName1";
         String storeName2 = "storeName2";
 
-        final KStreamBuilder builder = new KStreamBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
         KTableImpl<String, String, String> table1 =
                 (KTableImpl<String, String, String>) builder.table(stringSerde, stringSerde, topic1, storeName1);
@@ -331,7 +319,7 @@ public class KTableImplTest {
                     }
                 });
 
-        driver = new KStreamTestDriver(builder, stateDir, null, null);
+        driver.setUp(builder, stateDir, null, null);
         driver.setTime(0L);
 
         // two state store should be created
@@ -339,25 +327,23 @@ public class KTableImplTest {
     }
 
     @Test
-    public void testRepartition() throws Exception {
+    public void testRepartition() throws NoSuchFieldException, IllegalAccessException {
         String topic1 = "topic1";
         String storeName1 = "storeName1";
 
-        final KStreamBuilder builder = new KStreamBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
         KTableImpl<String, String, String> table1 =
                 (KTableImpl<String, String, String>) builder.table(stringSerde, stringSerde, topic1, storeName1);
 
-        KTableImpl<String, String, String> table1Aggregated = (KTableImpl<String, String, String>) table1
-                .groupBy(MockKeyValueMapper.<String, String>NoOpKeyValueMapper())
-                .aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, MockAggregator.TOSTRING_REMOVER, "mock-result1");
+        table1.groupBy(MockKeyValueMapper.<String, String>NoOpKeyValueMapper())
+            .aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, MockAggregator.TOSTRING_REMOVER, "mock-result1");
 
 
-        KTableImpl<String, String, String> table1Reduced = (KTableImpl<String, String, String>) table1
-                .groupBy(MockKeyValueMapper.<String, String>NoOpKeyValueMapper())
-                .reduce(MockReducer.STRING_ADDER, MockReducer.STRING_REMOVER, "mock-result2");
+        table1.groupBy(MockKeyValueMapper.<String, String>NoOpKeyValueMapper())
+            .reduce(MockReducer.STRING_ADDER, MockReducer.STRING_REMOVER, "mock-result2");
 
-        driver = new KStreamTestDriver(builder, stateDir, stringSerde, stringSerde);
+        driver.setUp(builder, stateDir, stringSerde, stringSerde);
         driver.setTime(0L);
 
         // three state store should be created, one for source, one for aggregate and one for reduce
@@ -381,107 +367,110 @@ public class KTableImplTest {
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullSelectorOnToStream() throws Exception {
+    public void shouldNotAllowNullSelectorOnToStream() {
         table.toStream(null);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullTopicOnTo() throws Exception {
+    public void shouldNotAllowNullTopicOnTo() {
         table.to(null);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullPredicateOnFilter() throws Exception {
+    public void shouldNotAllowNullPredicateOnFilter() {
         table.filter(null);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullPredicateOnFilterNot() throws Exception {
+    public void shouldNotAllowNullPredicateOnFilterNot() {
         table.filterNot(null);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullMapperOnMapValues() throws Exception {
+    public void shouldNotAllowNullMapperOnMapValues() {
         table.mapValues(null);
     }
 
+    @SuppressWarnings("deprecation")
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullFilePathOnWriteAsText() throws Exception {
+    public void shouldNotAllowNullFilePathOnWriteAsText() {
         table.writeAsText(null);
     }
 
-    @Test(expected = TopologyBuilderException.class)
-    public void shouldNotAllowEmptyFilePathOnWriteAsText() throws Exception {
+    @SuppressWarnings("deprecation")
+    @Test(expected = TopologyException.class)
+    public void shouldNotAllowEmptyFilePathOnWriteAsText() {
         table.writeAsText("\t  \t");
     }
 
+    @SuppressWarnings("deprecation")
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullActionOnForEach() throws Exception {
+    public void shouldNotAllowNullActionOnForEach() {
         table.foreach(null);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldAllowNullTopicInThrough() throws Exception {
+    public void shouldAllowNullTopicInThrough() {
         table.through((String) null, "store");
     }
 
     @Test
-    public void shouldAllowNullStoreInThrough() throws Exception {
+    public void shouldAllowNullStoreInThrough() {
         table.through("topic", (String) null);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullSelectorOnGroupBy() throws Exception {
+    public void shouldNotAllowNullSelectorOnGroupBy() {
         table.groupBy(null);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullOtherTableOnJoin() throws Exception {
+    public void shouldNotAllowNullOtherTableOnJoin() {
         table.join(null, MockValueJoiner.TOSTRING_JOINER);
     }
 
     @Test
-    public void shouldAllowNullStoreInJoin() throws Exception {
-        table.join(table, MockValueJoiner.TOSTRING_JOINER, null, (String) null);
+    public void shouldAllowNullStoreInJoin() {
+        table.join(table, MockValueJoiner.TOSTRING_JOINER, null, null);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullStoreSupplierInJoin() throws Exception {
-        table.join(table, MockValueJoiner.TOSTRING_JOINER, (StateStoreSupplier<KeyValueStore>) null);
+    public void shouldNotAllowNullStoreSupplierInJoin() {
+        table.join(table, MockValueJoiner.TOSTRING_JOINER, null);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullStoreSupplierInLeftJoin() throws Exception {
-        table.leftJoin(table, MockValueJoiner.TOSTRING_JOINER, (StateStoreSupplier<KeyValueStore>) null);
+    public void shouldNotAllowNullStoreSupplierInLeftJoin() {
+        table.leftJoin(table, MockValueJoiner.TOSTRING_JOINER, null);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullStoreSupplierInOuterJoin() throws Exception {
-        table.outerJoin(table, MockValueJoiner.TOSTRING_JOINER, (StateStoreSupplier<KeyValueStore>) null);
+    public void shouldNotAllowNullStoreSupplierInOuterJoin() {
+        table.outerJoin(table, MockValueJoiner.TOSTRING_JOINER, null);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullJoinerJoin() throws Exception {
+    public void shouldNotAllowNullJoinerJoin() {
         table.join(table, null);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullOtherTableOnOuterJoin() throws Exception {
+    public void shouldNotAllowNullOtherTableOnOuterJoin() {
         table.outerJoin(null, MockValueJoiner.TOSTRING_JOINER);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullJoinerOnOuterJoin() throws Exception {
+    public void shouldNotAllowNullJoinerOnOuterJoin() {
         table.outerJoin(table, null);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullJoinerOnLeftJoin() throws Exception {
+    public void shouldNotAllowNullJoinerOnLeftJoin() {
         table.leftJoin(table, null);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullOtherTableOnLeftJoin() throws Exception {
+    public void shouldNotAllowNullOtherTableOnLeftJoin() {
         table.leftJoin(null, MockValueJoiner.TOSTRING_JOINER);
     }
 

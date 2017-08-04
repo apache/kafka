@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.integration.utils;
 
-import kafka.api.PartitionStateInfo;
 import kafka.api.Request;
 import kafka.server.KafkaServer;
 import kafka.server.MetadataCache;
@@ -30,6 +29,7 @@ import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.requests.UpdateMetadataRequest;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
@@ -225,13 +225,13 @@ public class IntegrationTestUtils {
             public boolean conditionMet() {
                 for (final KafkaServer server : servers) {
                     final MetadataCache metadataCache = server.apis().metadataCache();
-                    final Option<PartitionStateInfo> partitionInfo =
+                    final Option<UpdateMetadataRequest.PartitionState> partitionInfo =
                             metadataCache.getPartitionInfo(topic, partition);
                     if (partitionInfo.isEmpty()) {
                         return false;
                     }
-                    final PartitionStateInfo partitionStateInfo = partitionInfo.get();
-                    if (!Request.isValidBrokerId(partitionStateInfo.leaderIsrAndControllerEpoch().leaderAndIsr().leader())) {
+                    final UpdateMetadataRequest.PartitionState metadataPartitionState = partitionInfo.get();
+                    if (!Request.isValidBrokerId(metadataPartitionState.basePartitionState.leader)) {
                         return false;
                     }
                 }

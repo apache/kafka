@@ -203,7 +203,7 @@ public class FetchResponse extends AbstractResponse {
                 long logStartOffset = INVALID_LOG_START_OFFSET;
                 if (partitionResponseHeader.hasField(LOG_START_OFFSET_KEY_NAME))
                     logStartOffset = partitionResponseHeader.getLong(LOG_START_OFFSET_KEY_NAME);
-                
+
                 Records records = partitionResponse.getRecords(RECORD_SET_KEY_NAME);
 
                 List<AbortedTransaction> abortedTransactions = null;
@@ -239,7 +239,11 @@ public class FetchResponse extends AbstractResponse {
         return toSend(toStruct(requestHeader.apiVersion()), throttleTimeMs, dest, requestHeader);
     }
 
-    public Send toSend(Struct responseStruct, int throttleTimeMs, String dest, RequestHeader requestHeader) {
+    public Send toSend(int throttleTimeMs, String dest, RequestHeader requestHeader) {
+        return toSend(toStruct(requestHeader.apiVersion()), throttleTimeMs, dest, requestHeader);
+    }
+
+    private Send toSend(Struct responseStruct, int throttleTimeMs, String dest, RequestHeader requestHeader) {
         Struct responseHeader = new ResponseHeader(requestHeader.correlationId()).toStruct();
 
         // write the total size and the response header
@@ -326,10 +330,17 @@ public class FetchResponse extends AbstractResponse {
             List<Struct> partitionArray = new ArrayList<>();
             for (Map.Entry<Integer, PartitionData> partitionEntry : topicEntry.partitions.entrySet()) {
                 PartitionData fetchPartitionData = partitionEntry.getValue();
+                short errorCode = fetchPartitionData.error.code();
+                // If consumer sends FetchRequest V5 or earlier, the client library is not guaranteed to recognize the error code
+                // for KafkaStorageException. In this case the client library will translate KafkaStorageException to
+                // UnknownServerException which is not retriable. We can ensure that consumer will update metadata and retry
+                // by converting the KafkaStorageException to NotLeaderForPartitionException in the response if FetchRequest version <= 5
+                if (errorCode == Errors.KAFKA_STORAGE_ERROR.code() && version <= 5)
+                    errorCode = Errors.NOT_LEADER_FOR_PARTITION.code();
                 Struct partitionData = topicData.instance(PARTITIONS_KEY_NAME);
                 Struct partitionDataHeader = partitionData.instance(PARTITION_HEADER_KEY_NAME);
                 partitionDataHeader.set(PARTITION_KEY_NAME, partitionEntry.getKey());
-                partitionDataHeader.set(ERROR_CODE_KEY_NAME, fetchPartitionData.error.code());
+                partitionDataHeader.set(ERROR_CODE_KEY_NAME, errorCode);
                 partitionDataHeader.set(HIGH_WATERMARK_KEY_NAME, fetchPartitionData.highWatermark);
 
                 if (partitionDataHeader.hasField(LAST_STABLE_OFFSET_KEY_NAME)) {

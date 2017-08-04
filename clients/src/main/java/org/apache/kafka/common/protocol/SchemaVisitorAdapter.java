@@ -1,11 +1,11 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * 
+ * the License. You may obtain a copy of the License at
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -14,14 +14,25 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.kafka.common.protocol;
 
-package kafka.network
+import org.apache.kafka.common.protocol.types.ArrayOf;
+import org.apache.kafka.common.protocol.types.Schema;
+import org.apache.kafka.common.protocol.types.Type;
 
-trait ConnectionConfig {
-  val host: String
-  val port: Int
-  val sendBufferSize: Int = -1
-  val receiveBufferSize: Int = -1
-  val tcpNoDelay = true
-  val keepAlive = false  
+public abstract class SchemaVisitorAdapter implements SchemaVisitor {
+    @Override
+    public void visit(Schema schema) {
+        //nop
+    }
+
+    @Override
+    public void visit(ArrayOf array) {
+        //nop
+    }
+
+    @Override
+    public void visit(Type field) {
+        //nop
+    }
 }

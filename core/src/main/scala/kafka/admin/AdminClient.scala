@@ -66,7 +66,7 @@ class AdminClient(val time: Time,
       } finally {
         pendingFutures.asScala.foreach { future =>
           try {
-            future.raise(Errors.UNKNOWN)
+            future.raise(Errors.UNKNOWN_SERVER_ERROR)
           } catch {
             case _: IllegalStateException => // It is OK if the future has been completed
           }

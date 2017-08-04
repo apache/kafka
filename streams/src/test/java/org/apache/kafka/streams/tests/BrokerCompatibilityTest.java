@@ -28,8 +28,8 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.test.TestUtils;
 
 import java.io.File;
@@ -70,10 +70,10 @@ public class BrokerCompatibilityTest {
         streamsProperties.put(StreamsConfig.REQUEST_TIMEOUT_MS_CONFIG, timeout + 1);
 
 
-        final KStreamBuilder builder = new KStreamBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
         builder.stream(SOURCE_TOPIC).to(SINK_TOPIC);
 
-        final KafkaStreams streams = new KafkaStreams(builder, streamsProperties);
+        final KafkaStreams streams = new KafkaStreams(builder.build(), streamsProperties);
         streams.setUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
             @Override
             public void uncaughtException(final Thread t, final Throwable e) {
@@ -101,6 +101,7 @@ public class BrokerCompatibilityTest {
 
 
         System.out.println("close Kafka Streams");
+        producer.close();
         streams.close();
     }
 

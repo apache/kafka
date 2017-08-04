@@ -42,12 +42,14 @@ import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
+import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.state.internals.InMemoryKeyValueStore;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.test.MockProcessorNode;
 import org.apache.kafka.test.MockSourceNode;
+import org.apache.kafka.test.MockStateRestoreListener;
 import org.apache.kafka.test.MockTimestampExtractor;
 import org.apache.kafka.test.NoOpProcessorContext;
 import org.apache.kafka.test.NoOpRecordCollector;
@@ -62,6 +64,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
@@ -107,7 +110,8 @@ public class StreamTaskTest {
     private final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
     private final MockProducer<byte[], byte[]> producer = new MockProducer<>(false, bytesSerializer, bytesSerializer);
     private final MockConsumer<byte[], byte[]> restoreStateConsumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
-    private final StoreChangelogReader changelogReader = new StoreChangelogReader(restoreStateConsumer, Time.SYSTEM, 5000);
+    private final StateRestoreListener stateRestoreListener = new MockStateRestoreListener();
+    private final StoreChangelogReader changelogReader = new StoreChangelogReader(restoreStateConsumer, Time.SYSTEM, 5000, stateRestoreListener);
     private final byte[] recordValue = intSerializer.serialize(null, 10);
     private final byte[] recordKey = intSerializer.serialize(null, 1);
     private final String applicationId = "applicationId";
@@ -216,26 +220,30 @@ public class StreamTaskTest {
         assertEquals(3, source2.numReceived);
     }
 
+
+    private void testSpecificMetrics(final String operation, final String groupName, final Map<String, String> tags) {
+        assertNotNull(metrics.metrics().get(metrics.metricName(operation + "-latency-avg", groupName,
+                "The average latency of " + operation + " operation.", tags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName(operation + "-latency-max", groupName,
+                "The max latency of " + operation + " operation.", tags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName(operation + "-rate", groupName,
+                "The average number of occurrence of " + operation + " operation per second.", tags)));
+    }
+
+
     @Test
     public void testMetrics() throws Exception {
         final String name = task.id().toString();
-        final String[] entities = {"all", name};
+        final Map<String, String> metricTags = new LinkedHashMap<>();
+        metricTags.put("task-id", name);
         final String operation = "commit";
 
         final String groupName = "stream-task-metrics";
-        final Map<String, String> tags = Collections.singletonMap("streams-task-id", name);
 
         assertNotNull(metrics.getSensor(operation));
-        assertNotNull(metrics.getSensor(name + "-" + operation));
-
-        for (final String entity : entities) {
-            assertNotNull(metrics.metrics().get(metrics.metricName(entity + "-" + operation + "-latency-avg", groupName,
-                "The average latency in milliseconds of " + entity + " " + operation + " operation.", tags)));
-            assertNotNull(metrics.metrics().get(metrics.metricName(entity + "-" + operation + "-latency-max", groupName,
-                "The max latency in milliseconds of " + entity + " " + operation + " operation.", tags)));
-            assertNotNull(metrics.metrics().get(metrics.metricName(entity + "-" + operation + "-rate", groupName,
-                "The average number of occurrence of " + entity + " " + operation + " operation per second.", tags)));
-        }
+        testSpecificMetrics(operation, groupName, metricTags);
+        metricTags.put("task-id", "all");
+        testSpecificMetrics(operation, groupName, metricTags);
     }
 
     @SuppressWarnings("unchecked")
@@ -724,7 +732,6 @@ public class StreamTaskTest {
         });
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldThrowExceptionIfAnyExceptionsRaisedDuringCloseButStillCloseAllProcessorNodesTopology() throws Exception {
         task.close(true);

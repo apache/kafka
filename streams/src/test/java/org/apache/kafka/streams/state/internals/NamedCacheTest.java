@@ -42,11 +42,12 @@ public class NamedCacheTest {
 
     private NamedCache cache;
     private MockStreamsMetrics streamMetrics;
-
+    private final String taskIDString = "0.0";
+    private final String underlyingStoreName = "storeName";
     @Before
     public void setUp() throws Exception {
         streamMetrics = new MockStreamsMetrics(new Metrics());
-        cache = new NamedCache("name", streamMetrics);
+        cache = new NamedCache(taskIDString + "-" + underlyingStoreName, streamMetrics);
     }
 
     @Test
@@ -72,28 +73,33 @@ public class NamedCacheTest {
         }
     }
 
+    private void testSpecificMetrics(final String groupName, final String entityName, final String opName,
+                                     final Map<String, String> metricTags) {
+        assertNotNull(streamMetrics.registry().metrics().get(streamMetrics.registry().metricName(opName + "-avg",
+                groupName, "The average cache hit ratio of " + entityName, metricTags)));
+        assertNotNull(streamMetrics.registry().metrics().get(streamMetrics.registry().metricName(opName + "-min",
+                groupName, "The minimum cache hit ratio of " + entityName, metricTags)));
+        assertNotNull(streamMetrics.registry().metrics().get(streamMetrics.registry().metricName(opName + "-max",
+                groupName, "The maximum cache hit ratio of " + entityName, metricTags)));
+    }
     @Test
     public void testMetrics() throws Exception {
         final String scope = "record-cache";
         final String entityName = cache.name();
         final String opName = "hitRatio";
         final String tagKey = "record-cache-id";
-        final String tagValue = cache.name();
+        final String tagValue = underlyingStoreName;
         final String groupName = "stream-" + scope + "-metrics";
         final Map<String, String> metricTags = new LinkedHashMap<>();
         metricTags.put(tagKey, tagValue);
+        metricTags.put("task-id", taskIDString);
 
-        assertNotNull(streamMetrics.registry().getSensor(entityName + "-" + opName));
-        assertNotNull(streamMetrics.registry().metrics().get(streamMetrics.registry().metricName(entityName +
-            "-" + opName + "-avg", groupName, "The current count of " + entityName + " " + opName +
-            " operation.", metricTags)));
-        assertNotNull(streamMetrics.registry().metrics().get(streamMetrics.registry().metricName(entityName +
-            "-" + opName + "-min", groupName, "The current count of " + entityName + " " + opName +
-            " operation.", metricTags)));
-        assertNotNull(streamMetrics.registry().metrics().get(streamMetrics.registry().metricName(entityName +
-            "-" + opName + "-max", groupName, "The current count of " + entityName + " " + opName +
-            " operation.", metricTags)));
+        assertNotNull(streamMetrics.registry().getSensor(opName));
+        testSpecificMetrics(groupName, entityName, opName, metricTags);
 
+        // test "all"
+        metricTags.put(tagKey, "all");
+        testSpecificMetrics(groupName, entityName, opName, metricTags);
     }
 
     @Test

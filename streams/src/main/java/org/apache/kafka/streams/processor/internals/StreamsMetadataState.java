@@ -23,7 +23,6 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StreamPartitioner;
-import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.apache.kafka.streams.state.HostInfo;
 import org.apache.kafka.streams.state.StreamsMetadata;
 
@@ -44,14 +43,14 @@ import java.util.Set;
  */
 public class StreamsMetadataState {
     public static final HostInfo UNKNOWN_HOST = new HostInfo("unknown", -1);
-    private final TopologyBuilder builder;
+    private final InternalTopologyBuilder builder;
     private final List<StreamsMetadata> allMetadata = new ArrayList<>();
     private final Set<String> globalStores;
     private final HostInfo thisHost;
     private Cluster clusterMetadata;
     private StreamsMetadata myMetadata;
 
-    public StreamsMetadataState(final TopologyBuilder builder, final HostInfo thisHost) {
+    public StreamsMetadataState(final InternalTopologyBuilder builder, final HostInfo thisHost) {
         this.builder = builder;
         this.globalStores = builder.globalStateStores().keySet();
         this.thisHost = thisHost;

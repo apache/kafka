@@ -25,12 +25,12 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.test.IntegrationTest;
@@ -68,7 +68,7 @@ public class JoinIntegrationTest {
     private final static Properties RESULT_CONSUMER_CONFIG = new Properties();
     private final static Properties STREAMS_CONFIG = new Properties();
 
-    private KStreamBuilder builder;
+    private StreamsBuilder builder;
     private KStream<Long, String> leftStream;
     private KStream<Long, String> rightStream;
     private KTable<Long, String> leftTable;
@@ -127,7 +127,7 @@ public class JoinIntegrationTest {
     public void prepareTopology() throws Exception {
         CLUSTER.createTopics(INPUT_TOPIC_1, INPUT_TOPIC_2, OUTPUT_TOPIC);
 
-        builder = new KStreamBuilder();
+        builder = new StreamsBuilder();
         leftTable = builder.table(INPUT_TOPIC_1, "leftTable");
         rightTable = builder.table(INPUT_TOPIC_2, "rightTable");
         leftStream = leftTable.toStream();
@@ -154,7 +154,7 @@ public class JoinIntegrationTest {
         assert expectedResult.size() == input.size();
 
         IntegrationTestUtils.purgeLocalStreamsState(STREAMS_CONFIG);
-        final KafkaStreams streams = new KafkaStreams(builder, STREAMS_CONFIG);
+        final KafkaStreams streams = new KafkaStreams(builder.build(), STREAMS_CONFIG);
         try {
             streams.start();
 

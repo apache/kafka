@@ -28,8 +28,10 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.errors.TopologyBuilderException;
+import org.apache.kafka.streams.Topology;
+import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.KStream;
@@ -56,6 +58,7 @@ import java.util.regex.Pattern;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.junit.Assert.assertThat;
+import static org.junit.Assert.fail;
 
 @Category({IntegrationTest.class})
 public class KStreamsFineGrainedAutoResetIntegrationTest {
@@ -181,10 +184,10 @@ public class KStreamsFineGrainedAutoResetIntegrationTest {
         final String outputTopic,
         final List<String> expectedReceivedValues) throws Exception {
 
-        final KStreamBuilder builder = new KStreamBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
-        final KStream<String, String> pattern1Stream = builder.stream(KStreamBuilder.AutoOffsetReset.EARLIEST, Pattern.compile("topic-\\d" + topicSuffix));
-        final KStream<String, String> pattern2Stream = builder.stream(KStreamBuilder.AutoOffsetReset.LATEST, Pattern.compile("topic-[A-D]" + topicSuffix));
+        final KStream<String, String> pattern1Stream = builder.stream(Topology.AutoOffsetReset.EARLIEST, Pattern.compile("topic-\\d" + topicSuffix));
+        final KStream<String, String> pattern2Stream = builder.stream(Topology.AutoOffsetReset.LATEST, Pattern.compile("topic-[A-D]" + topicSuffix));
         final KStream<String, String> namedTopicsStream = builder.stream(topicY, topicZ);
 
         pattern1Stream.to(stringSerde, stringSerde, outputTopic);
@@ -202,7 +205,7 @@ public class KStreamsFineGrainedAutoResetIntegrationTest {
 
         final Properties consumerConfig = TestUtils.consumerConfig(CLUSTER.bootstrapServers(), StringDeserializer.class, StringDeserializer.class);
 
-        final KafkaStreams streams = new KafkaStreams(builder, streamsConfiguration);
+        final KafkaStreams streams = new KafkaStreams(builder.build(), streamsConfiguration);
         streams.start();
 
         final List<KeyValue<String, String>> receivedKeyValues = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(consumerConfig, outputTopic, expectedReceivedValues.size());
@@ -238,26 +241,35 @@ public class KStreamsFineGrainedAutoResetIntegrationTest {
         consumer.close();
     }
 
-    @Test(expected = TopologyBuilderException.class)
+    @Test
     public void shouldThrowExceptionOverlappingPattern() throws  Exception {
         final KStreamBuilder builder = new KStreamBuilder();
         //NOTE this would realistically get caught when building topology, the test is for completeness
         builder.stream(KStreamBuilder.AutoOffsetReset.EARLIEST, Pattern.compile("topic-[A-D]_1"));
         builder.stream(KStreamBuilder.AutoOffsetReset.LATEST, Pattern.compile("topic-[A-D]_1"));
-        builder.stream(TOPIC_Y_1, TOPIC_Z_1);
 
-        builder.earliestResetTopicsPattern();
+        // TODO: we should check regex overlap at topology construction time and then throw TopologyException
+        //       instead of at runtime. See KAFKA-5660
+        try {
+            builder.earliestResetTopicsPattern();
+            fail("Should have thrown TopologyException");
+        } catch (final TopologyException expected) {
+            // do nothing
+        }
     }
 
-    @Test(expected = TopologyBuilderException.class)
+    @Test
     public void shouldThrowExceptionOverlappingTopic() throws  Exception {
-        final KStreamBuilder builder = new KStreamBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
         //NOTE this would realistically get caught when building topology, the test is for completeness
-        builder.stream(KStreamBuilder.AutoOffsetReset.EARLIEST, Pattern.compile("topic-[A-D]_1"));
-        builder.stream(KStreamBuilder.AutoOffsetReset.LATEST, Pattern.compile("topic-\\d_1"));
-        builder.stream(KStreamBuilder.AutoOffsetReset.LATEST, TOPIC_A_1, TOPIC_Z_1);
+        builder.stream(Topology.AutoOffsetReset.EARLIEST, Pattern.compile("topic-[A-D]_1"));
 
-        builder.latestResetTopicsPattern();
+        try {
+            builder.stream(Topology.AutoOffsetReset.LATEST, TOPIC_A_1, TOPIC_Z_1);
+            fail("Should have thrown TopologyException");
+        } catch (final TopologyException expected) {
+            // do nothing
+        }
     }
 
     @Test
@@ -272,12 +284,12 @@ public class KStreamsFineGrainedAutoResetIntegrationTest {
                 STRING_SERDE_CLASSNAME,
                 props);
 
-        final KStreamBuilder builder = new KStreamBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
         final KStream<String, String> exceptionStream = builder.stream(NOOP);
 
         exceptionStream.to(stringSerde, stringSerde, DEFAULT_OUTPUT_TOPIC);
 
-        KafkaStreams streams = new KafkaStreams(builder, localConfig);
+        KafkaStreams streams = new KafkaStreams(builder.build(), localConfig);
 
         final TestingUncaughtExceptionHandler uncaughtExceptionHandler = new TestingUncaughtExceptionHandler();
 
