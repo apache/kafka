@@ -18,6 +18,7 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
+import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.test.NoOpReadOnlyStore;
@@ -28,11 +29,13 @@ import org.junit.Test;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.NoSuchElementException;
 
 import static org.apache.kafka.test.StreamsTestUtils.toList;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 public class CompositeReadOnlyKeyValueStoreTest {
 
@@ -43,7 +46,6 @@ public class CompositeReadOnlyKeyValueStoreTest {
     private KeyValueStore<String, String>
         otherUnderlyingStore;
 
-    @SuppressWarnings("unchecked")
     @Before
     public void before() {
         final StateStoreProviderStub stubProviderOne = new StateStoreProviderStub(false);
@@ -69,6 +71,21 @@ public class CompositeReadOnlyKeyValueStoreTest {
         assertNull(theStore.get("whatever"));
     }
 
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerExceptionOnGetNullKey() throws Exception {
+        theStore.get(null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerExceptionOnRangeNullFromKey() throws Exception {
+        theStore.range(null, "to");
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerExceptionOnRangeNullToKey() throws Exception {
+        theStore.range("from", null);
+    }
+
     @Test
     public void shouldReturnValueIfExists() throws Exception {
         stubOneUnderlying.put("key", "value");
@@ -81,7 +98,48 @@ public class CompositeReadOnlyKeyValueStoreTest {
         assertNull(theStore.get("otherKey"));
     }
 
-    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldThrowNoSuchElementExceptionWhileNext() {
+        stubOneUnderlying.put("a", "1");
+        KeyValueIterator<String, String> keyValueIterator = theStore.range("a", "b");
+        keyValueIterator.next();
+        try {
+            keyValueIterator.next();
+            fail("Should have thrown NoSuchElementException with next()");
+        } catch (NoSuchElementException e) { }
+    }
+
+    @Test
+    public void shouldThrowNoSuchElementExceptionWhilePeekNext() {
+        stubOneUnderlying.put("a", "1");
+        KeyValueIterator<String, String> keyValueIterator = theStore.range("a", "b");
+        keyValueIterator.next();
+        try {
+            keyValueIterator.peekNextKey();
+            fail("Should have thrown NoSuchElementException with peekNextKey()");
+        } catch (NoSuchElementException e) { }
+    }
+
+    @Test
+    public void shouldThrowUnsupportedOperationExceptionWhileRemove() {
+        KeyValueIterator<String, String> keyValueIterator = theStore.all();
+        try {
+            keyValueIterator.remove();
+            fail("Should have thrown UnsupportedOperationException");
+        } catch (UnsupportedOperationException e) { }
+    }
+
+    @Test
+    public void shouldThrowUnsupportedOperationExceptionWhileRange() {
+        stubOneUnderlying.put("a", "1");
+        stubOneUnderlying.put("b", "1");
+        KeyValueIterator<String, String> keyValueIterator = theStore.range("a", "b");
+        try {
+            keyValueIterator.remove();
+            fail("Should have thrown UnsupportedOperationException");
+        } catch (UnsupportedOperationException e) { }
+    }
+
     @Test
     public void shouldFindValueForKeyWhenMultiStores() throws Exception {
         final KeyValueStore<String, String> cache = newStoreInstance();
@@ -106,7 +164,6 @@ public class CompositeReadOnlyKeyValueStoreTest {
         assertEquals(2, results.size());
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldSupportRangeAcrossMultipleKVStores() throws Exception {
         final KeyValueStore<String, String> cache = newStoreInstance();
@@ -156,6 +213,10 @@ public class CompositeReadOnlyKeyValueStoreTest {
         rebalancing().get("anything");
     }
 
+    @Test(expected = InvalidStateStoreException.class)
+    public void shouldThrowInvalidStoreExceptionOnApproximateNumEntriesDuringRebalance() throws Exception {
+        rebalancing().approximateNumEntries();
+    }
 
     @Test(expected = InvalidStateStoreException.class)
     public void shouldThrowInvalidStoreExceptionOnRangeDuringRebalance() throws Exception {

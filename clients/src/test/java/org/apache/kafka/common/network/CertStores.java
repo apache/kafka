@@ -17,6 +17,7 @@
 package org.apache.kafka.common.network;
 
 import java.io.File;
+import java.net.InetAddress;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -27,11 +28,23 @@ public class CertStores {
 
     private final Map<String, Object> sslConfig;
 
-    public CertStores(boolean server, String host) throws Exception {
+    public CertStores(boolean server, String hostName) throws Exception {
+        this(server, hostName, new TestSslUtils.CertificateBuilder());
+    }
+
+    public CertStores(boolean server, String commonName, String sanHostName) throws Exception {
+        this(server, commonName, new TestSslUtils.CertificateBuilder().sanDnsName(sanHostName));
+    }
+
+    public CertStores(boolean server, String commonName, InetAddress hostAddress) throws Exception {
+        this(server, commonName, new TestSslUtils.CertificateBuilder().sanIpAddress(hostAddress));
+    }
+
+    private CertStores(boolean server, String commonName, TestSslUtils.CertificateBuilder certBuilder) throws Exception {
         String name = server ? "server" : "client";
         Mode mode = server ? Mode.SERVER : Mode.CLIENT;
         File truststoreFile = File.createTempFile(name + "TS", ".jks");
-        sslConfig = TestSslUtils.createSslConfig(!server, true, mode, truststoreFile, name, host);
+        sslConfig = TestSslUtils.createSslConfig(!server, true, mode, truststoreFile, name, commonName, certBuilder);
         if (server)
             sslConfig.put(SslConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, Class.forName(SslConfigs.DEFAULT_PRINCIPAL_BUILDER_CLASS));
     }

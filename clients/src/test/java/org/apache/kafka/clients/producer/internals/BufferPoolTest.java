@@ -48,11 +48,10 @@ import static org.easymock.EasyMock.anyDouble;
 import static org.easymock.EasyMock.expectLastCall;
 import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.anyString;
-
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
-import static org.junit.Assert.assertEquals;
 
 
 @RunWith(PowerMockRunner.class)
@@ -345,10 +344,30 @@ public class BufferPoolTest {
         assertEquals(20_000_000_000L, pool.availableMemory());
     }
 
+    @Test
+    public void outOfMemoryOnAllocation() {
+        BufferPool bufferPool = new BufferPool(1024, 1024, metrics, time, metricGroup) {
+            @Override
+            protected ByteBuffer allocateByteBuffer(int size) {
+                throw new OutOfMemoryError();
+            }
+        };
+
+        try {
+            bufferPool.allocateByteBuffer(1024);
+            // should not reach here
+            fail("Should have thrown OutOfMemoryError");
+        } catch (OutOfMemoryError ignored) {
+
+        }
+
+        assertEquals(bufferPool.availableMemory(), 1024);
+    }
+
     public static class StressTestThread extends Thread {
         private final int iterations;
         private final BufferPool pool;
-        private final long maxBlockTimeMs =  2000;
+        private final long maxBlockTimeMs =  20_000;
         public final AtomicBoolean success = new AtomicBoolean(false);
 
         public StressTestThread(BufferPool pool, int iterations) {

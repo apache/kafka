@@ -58,7 +58,6 @@ public class ProcessorStateManager implements StateManager {
     private final Map<TopicPartition, Long> checkpointedOffsets;
     private final Map<String, StateRestoreCallback> restoreCallbacks; // used for standby tasks, keyed by state topic name
     private final Map<String, String> storeToChangelogTopic;
-    private final boolean eosEnabled;
 
     // TODO: this map does not work with customized grouper where multiple partitions
     // of the same topic can be assigned to the same topic.
@@ -93,7 +92,6 @@ public class ProcessorStateManager implements StateManager {
         this.isStandby = isStandby;
         restoreCallbacks = isStandby ? new HashMap<String, StateRestoreCallback>() : null;
         this.storeToChangelogTopic = storeToChangelogTopic;
-        this.eosEnabled = eosEnabled;
 
         if (!stateDirectory.lock(taskId, 5)) {
             throw new LockException(String.format("%s Failed to lock the state directory for task %s",
@@ -119,7 +117,7 @@ public class ProcessorStateManager implements StateManager {
             checkpoint = null;
         }
 
-        log.info("{} Created state store manager for task {} with the acquired state dir lock", logPrefix, taskId);
+        log.debug("{} Created state store manager for task {} with the acquired state dir lock", logPrefix, taskId);
     }
 
 
@@ -173,10 +171,11 @@ public class ProcessorStateManager implements StateManager {
         } else {
             log.trace("{} Restoring state store {} from changelog topic {}", logPrefix, store.name(), topic);
             final StateRestorer restorer = new StateRestorer(storePartition,
-                                                             stateRestoreCallback,
+                                                             new CompositeRestoreListener(stateRestoreCallback),
                                                              checkpointedOffsets.get(storePartition),
                                                              offsetLimit(storePartition),
-                                                             store.persistent());
+                                                             store.persistent(),
+                                                             store.name());
             changelogReader.register(restorer);
         }
 
@@ -286,7 +285,7 @@ public class ProcessorStateManager implements StateManager {
                         if (firstException == null) {
                             firstException = new ProcessorStateException(String.format("%s Failed to close state store %s", logPrefix, entry.getKey()), e);
                         }
-                        log.error("{} Failed to close state store {} due to {}", logPrefix, entry.getKey(), e);
+                        log.error("{} Failed to close state store {}: ", logPrefix, entry.getKey(), e);
                     }
                 }
 
@@ -303,7 +302,7 @@ public class ProcessorStateManager implements StateManager {
                 if (firstException == null) {
                     firstException = new ProcessorStateException(String.format("%s Failed to release state dir lock", logPrefix), e);
                 }
-                log.error("{} Failed to release state dir lock due to {}", logPrefix, e);
+                log.error("{} Failed to release state dir lock: ", logPrefix, e);
             }
         }
 
@@ -339,7 +338,7 @@ public class ProcessorStateManager implements StateManager {
             }
             checkpoint.write(checkpointedOffsets);
         } catch (final IOException e) {
-            log.warn("Failed to write checkpoint file to {}", new File(baseDir, CHECKPOINT_FILE_NAME), e);
+            log.warn("Failed to write checkpoint file to {}:", new File(baseDir, CHECKPOINT_FILE_NAME), e);
         }
     }
 
@@ -349,7 +348,7 @@ public class ProcessorStateManager implements StateManager {
     }
 
     void registerGlobalStateStores(final List<StateStore> stateStores) {
-        log.info("{} Register global stores {}", logPrefix, stateStores);
+        log.debug("{} Register global stores {}", logPrefix, stateStores);
         for (final StateStore stateStore : stateStores) {
             globalStores.put(stateStore.name(), stateStore);
         }

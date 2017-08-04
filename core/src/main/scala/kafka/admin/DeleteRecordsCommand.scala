@@ -28,8 +28,6 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.clients.CommonClientConfigs
 import joptsimple._
 
-import scala.util.{Failure, Success}
-
 /**
  * A command for delete records of the given partitions down to the specified offset.
  */
@@ -40,21 +38,15 @@ object DeleteRecordsCommand {
   }
 
   def parseOffsetJsonStringWithoutDedup(jsonData: String): Seq[(TopicPartition, Long)] = {
-    Json.parseFull(jsonData) match {
-      case Some(m) =>
-        m.asInstanceOf[Map[String, Any]].get("partitions") match {
-          case Some(partitionsSeq) =>
-            partitionsSeq.asInstanceOf[Seq[Map[String, Any]]].map(p => {
-              val topic = p.get("topic").get.asInstanceOf[String]
-              val partition = p.get("partition").get.asInstanceOf[Int]
-              val offset = p.get("offset").get.asInstanceOf[Int].toLong
-              new TopicPartition(topic, partition) -> offset
-            })
-          case None =>
-            Seq.empty
-        }
-      case None =>
-        Seq.empty
+    Json.parseFull(jsonData).toSeq.flatMap { js =>
+      js.asJsonObject.get("partitions").toSeq.flatMap { partitionsJs =>
+        partitionsJs.asJsonArray.iterator.map(_.asJsonObject).map { partitionJs =>
+          val topic = partitionJs("topic").to[String]
+          val partition = partitionJs("partition").to[Int]
+          val offset = partitionJs("offset").to[Long]
+          new TopicPartition(topic, partition) -> offset
+        }.toBuffer
+      }
     }
   }
 

@@ -172,6 +172,13 @@ public class FileRecords extends AbstractRecords implements Closeable {
     }
 
     /**
+     * Close file handlers used by the FileChannel but don't write to disk. This is used when the disk may have failed
+     */
+    public void closeHandlers() throws IOException {
+        channel.close();
+    }
+
+    /**
      * Delete this message set from the filesystem
      * @return True iff this message set was deleted.
      */
@@ -230,7 +237,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
     }
 
     @Override
-    public Records downConvert(byte toMagic) {
+    public Records downConvert(byte toMagic, long firstOffset) {
         List<? extends RecordBatch> batches = Utils.toList(batches().iterator());
         if (batches.isEmpty()) {
             // This indicates that the message is too large, which means that the buffer is not large
@@ -242,7 +249,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
             // one full message, even if it requires exceeding the max fetch size requested by the client.
             return this;
         } else {
-            return downConvert(batches, toMagic);
+            return downConvert(batches, toMagic, firstOffset);
         }
     }
 

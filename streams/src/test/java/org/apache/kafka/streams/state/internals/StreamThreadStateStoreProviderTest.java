@@ -40,6 +40,7 @@ import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.MockClientSupplier;
 import org.apache.kafka.test.MockProcessorSupplier;
+import org.apache.kafka.test.MockStateRestoreListener;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
@@ -113,16 +114,16 @@ public class StreamThreadStateStoreProviderTest {
         storesAvailable = true;
         provider = new StreamThreadStateStoreProvider(
             new StreamThread(
-                builder,
-                streamsConfig,
-                clientSupplier,
-                applicationId,
-                "clientId",
-                UUID.randomUUID(),
-                new Metrics(),
-                Time.SYSTEM,
-                new StreamsMetadataState(builder, StreamsMetadataState.UNKNOWN_HOST),
-                0) {
+                    builder.internalTopologyBuilder,
+                    streamsConfig,
+                    clientSupplier,
+                    applicationId,
+                    "clientId",
+                    UUID.randomUUID(),
+                    new Metrics(),
+                    Time.SYSTEM,
+                    new StreamsMetadataState(builder.internalTopologyBuilder, StreamsMetadataState.UNKNOWN_HOST),
+                    0, stateDirectory) {
 
                 @Override
                 public Map<TaskId, StreamTask> tasks() {
@@ -198,7 +199,7 @@ public class StreamThreadStateStoreProviderTest {
             Collections.singletonList(new TopicPartition(topicName, taskId.partition)),
             topology,
             clientSupplier.consumer,
-            new StoreChangelogReader(clientSupplier.restoreConsumer, Time.SYSTEM, 5000),
+            new StoreChangelogReader(clientSupplier.restoreConsumer, Time.SYSTEM, 5000, new MockStateRestoreListener()),
             streamsConfig,
             new MockStreamsMetrics(new Metrics()),
             stateDirectory,

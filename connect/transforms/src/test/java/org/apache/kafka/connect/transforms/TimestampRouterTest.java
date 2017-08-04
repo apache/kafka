@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.transforms;
 
 import org.apache.kafka.connect.source.SourceRecord;
+import org.junit.After;
 import org.junit.Test;
 
 import java.util.Collections;
@@ -24,10 +25,15 @@ import java.util.Collections;
 import static org.junit.Assert.assertEquals;
 
 public class TimestampRouterTest {
+    private final TimestampRouter<SourceRecord> xform = new TimestampRouter<>();
+
+    @After
+    public void teardown() {
+        xform.close();
+    }
 
     @Test
     public void defaultConfiguration() {
-        final TimestampRouter<SourceRecord> xform = new TimestampRouter<>();
         xform.configure(Collections.<String, Object>emptyMap()); // defaults
         final SourceRecord record = new SourceRecord(
                 null, null,

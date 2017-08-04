@@ -17,17 +17,33 @@
 
 package org.apache.kafka.common.acl;
 
+import org.apache.kafka.common.annotation.InterfaceStability;
+
 import java.util.Objects;
 
 /**
  * Represents a filter which matches access control entries.
+ *
+ * The API for this class is still evolving and we may break compatibility in minor releases, if necessary.
  */
+@InterfaceStability.Evolving
 public class AccessControlEntryFilter {
     private final AccessControlEntryData data;
 
+    /**
+     * Matches any access control entry.
+     */
     public static final AccessControlEntryFilter ANY =
         new AccessControlEntryFilter(null, null, AclOperation.ANY, AclPermissionType.ANY);
 
+    /**
+     * Create an instance of an access control entry filter with the provided parameters.
+     *
+     * @param principal the principal or null
+     * @param host the host or null
+     * @param operation non-null operation
+     * @param permissionType non-null permission type
+     */
     public AccessControlEntryFilter(String principal, String host, AclOperation operation, AclPermissionType permissionType) {
         Objects.requireNonNull(operation);
         Objects.requireNonNull(permissionType);
@@ -43,18 +59,30 @@ public class AccessControlEntryFilter {
         this.data = data;
     }
 
+    /**
+     * Return the principal or null.
+     */
     public String principal() {
         return data.principal();
     }
 
+    /**
+     * Return the host or null. The value `*` means any host.
+     */
     public String host() {
         return data.host();
     }
 
+    /**
+     * Return the AclOperation.
+     */
     public AclOperation operation() {
         return data.operation();
     }
 
+    /**
+     * Return the AclPermissionType.
+     */
     public AclPermissionType permissionType() {
         return data.permissionType();
     }
@@ -67,8 +95,8 @@ public class AccessControlEntryFilter {
     /**
      * Return true if there are any UNKNOWN components.
      */
-    public boolean unknown() {
-        return data.unknown();
+    public boolean isUnknown() {
+        return data.isUnknown();
     }
 
     /**
@@ -87,7 +115,7 @@ public class AccessControlEntryFilter {
     }
 
     /**
-     * Returns true if this filter could only match one ACE-- in other words, if
+     * Returns true if this filter could only match one ACE -- in other words, if
      * there are no ANY or UNKNOWN fields.
      */
     public boolean matchesAtMostOne() {

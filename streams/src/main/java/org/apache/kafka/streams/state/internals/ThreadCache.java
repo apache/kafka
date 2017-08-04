@@ -39,7 +39,7 @@ import java.util.NoSuchElementException;
 public class ThreadCache {
     private static final Logger log = LoggerFactory.getLogger(ThreadCache.class);
 
-    private final String name;
+    private final String logPrefix;
     private final long maxCacheSizeBytes;
     private final StreamsMetrics metrics;
     private final Map<String, NamedCache> caches = new HashMap<>();
@@ -54,8 +54,8 @@ public class ThreadCache {
         void apply(final List<DirtyEntry> dirty);
     }
 
-    public ThreadCache(final String name, long maxCacheSizeBytes, final StreamsMetrics metrics) {
-        this.name = name;
+    public ThreadCache(final String logPrefix, long maxCacheSizeBytes, final StreamsMetrics metrics) {
+        this.logPrefix = logPrefix;
         this.maxCacheSizeBytes = maxCacheSizeBytes;
         this.metrics = metrics;
     }
@@ -77,6 +77,38 @@ public class ThreadCache {
     }
 
     /**
+     * The thread cache maintains a set of {@link NamedCache}s whose names are a concatenation of the task ID and the
+     * underlying store name. This method creates those names.
+     * @param taskIDString Task ID
+     * @param underlyingStoreName Underlying store name
+     * @return
+     */
+    public static String nameSpaceFromTaskIdAndStore(final String taskIDString, final String underlyingStoreName) {
+        return taskIDString + "-" + underlyingStoreName;
+    }
+
+    /**
+     * Given a cache name of the form taskid-storename, return the task ID.
+     * @param cacheName
+     * @return
+     */
+    public static String taskIDfromCacheName(final String cacheName) {
+        String[] tokens = cacheName.split("-");
+        return tokens[0];
+    }
+
+    /**
+     * Given a cache name of the form taskid-storename, return the store name.
+     * @param cacheName
+     * @return
+     */
+    public static String underlyingStoreNamefromCacheName(final String cacheName) {
+        String[] tokens = cacheName.split("-");
+        return tokens[1];
+    }
+
+
+    /**
      * Add a listener that is called each time an entry is evicted from the cache or an explicit flush is called
      *
      * @param namespace
@@ -96,8 +128,10 @@ public class ThreadCache {
         }
         cache.flush();
 
-        log.trace("Thread {} cache stats on flush: #puts={}, #gets={}, #evicts={}, #flushes={}",
-                  name, puts(), gets(), evicts(), flushes());
+        if (log.isTraceEnabled()) {
+            log.trace("{} Cache stats on flush: #puts={}, #gets={}, #evicts={}, #flushes={}",
+                logPrefix, puts(), gets(), evicts(), flushes());
+        }
     }
 
     public LRUCacheEntry get(final String namespace, Bytes key) {
@@ -201,6 +235,7 @@ public class ThreadCache {
     }
 
     private void maybeEvict(final String namespace) {
+        int numEvicted = 0;
         while (sizeBytes() > maxCacheSizeBytes) {
             final NamedCache cache = getOrCreateCache(namespace);
             // we abort here as the put on this cache may have triggered
@@ -210,9 +245,12 @@ public class ThreadCache {
             if (cache.size() == 0) {
                 return;
             }
-            log.trace("Thread {} evicting cache {}", name, namespace);
             cache.evict();
             numEvicts++;
+            numEvicted++;
+        }
+        if (log.isTraceEnabled()) {
+            log.trace("{} Evicted {} entries from cache {}", logPrefix, numEvicted, namespace);
         }
     }
 

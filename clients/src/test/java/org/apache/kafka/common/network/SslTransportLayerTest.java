@@ -34,10 +34,12 @@ import java.util.Map;
 
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLEngine;
+import javax.net.ssl.SSLParameters;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.types.Password;
+import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.security.TestSecurityConfig;
 import org.apache.kafka.common.security.ssl.SslFactory;
 import org.apache.kafka.common.metrics.Metrics;
@@ -68,8 +70,8 @@ public class SslTransportLayerTest {
     @Before
     public void setup() throws Exception {
         // Create certificates for use by client and server. Add server cert to client truststore and vice versa.
-        serverCertStores = new CertStores(true, "localhost");
-        clientCertStores = new CertStores(false, "localhost");
+        serverCertStores = new CertStores(true, "server",  "localhost");
+        clientCertStores = new CertStores(false, "client", "localhost");
         sslServerConfigs = serverCertStores.getTrustingConfig(clientCertStores);
         sslClientConfigs = clientCertStores.getTrustingConfig(serverCertStores);
         this.channelBuilder = new SslChannelBuilder(Mode.CLIENT);
@@ -86,14 +88,122 @@ public class SslTransportLayerTest {
     }
 
     /**
-     * Tests that server certificate with valid IP address is accepted by
-     * a client that validates server endpoint.
+     * Tests that server certificate with SubjectAltName containing the valid hostname
+     * is accepted by a client that connects using the hostname and validates server endpoint.
      */
     @Test
-    public void testValidEndpointIdentification() throws Exception {
+    public void testValidEndpointIdentificationSanDns() throws Exception {
         String node = "0";
         server = createEchoServer(SecurityProtocol.SSL);
         sslClientConfigs.put(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, "HTTPS");
+        createSelector(sslClientConfigs);
+        InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
+        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
+
+        NetworkTestUtils.checkClientConnection(selector, node, 100, 10);
+    }
+
+    /**
+     * Tests that server certificate with SubjectAltName containing valid IP address
+     * is accepted by a client that connects using IP address and validates server endpoint.
+     */
+    @Test
+    public void testValidEndpointIdentificationSanIp() throws Exception {
+        String node = "0";
+        serverCertStores = new CertStores(true, "server", InetAddress.getByName("127.0.0.1"));
+        clientCertStores = new CertStores(false, "client", InetAddress.getByName("127.0.0.1"));
+        sslServerConfigs = serverCertStores.getTrustingConfig(clientCertStores);
+        sslClientConfigs = clientCertStores.getTrustingConfig(serverCertStores);
+        server = createEchoServer(SecurityProtocol.SSL);
+        sslClientConfigs.put(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, "HTTPS");
+        createSelector(sslClientConfigs);
+        InetSocketAddress addr = new InetSocketAddress("127.0.0.1", server.port());
+        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
+
+        NetworkTestUtils.checkClientConnection(selector, node, 100, 10);
+    }
+
+    /**
+     * Tests that server certificate with CN containing valid hostname
+     * is accepted by a client that connects using hostname and validates server endpoint.
+     */
+    @Test
+    public void testValidEndpointIdentificationCN() throws Exception {
+        String node = "0";
+        serverCertStores = new CertStores(true, "localhost");
+        clientCertStores = new CertStores(false, "localhost");
+        sslServerConfigs = serverCertStores.getTrustingConfig(clientCertStores);
+        sslClientConfigs = clientCertStores.getTrustingConfig(serverCertStores);
+        server = createEchoServer(SecurityProtocol.SSL);
+        sslClientConfigs.put(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, "HTTPS");
+        createSelector(sslClientConfigs);
+        InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
+        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
+
+        NetworkTestUtils.checkClientConnection(selector, node, 100, 10);
+    }
+
+    /**
+     * Tests that hostname verification is performed on the host name or address
+     * specified by the client without using reverse DNS lookup. Certificate is
+     * created with hostname, client connection uses IP address. Endpoint validation
+     * must fail.
+     */
+    @Test
+    public void testEndpointIdentificationNoReverseLookup() throws Exception {
+        String node = "0";
+        server = createEchoServer(SecurityProtocol.SSL);
+        sslClientConfigs.put(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, "HTTPS");
+        createSelector(sslClientConfigs);
+        InetSocketAddress addr = new InetSocketAddress("127.0.0.1", server.port());
+        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
+
+        NetworkTestUtils.waitForChannelClose(selector, node, ChannelState.AUTHENTICATE);
+    }
+
+    /**
+     * According to RFC 2818:
+     * <blockquote>Typically, the server has no external knowledge of what the client's
+     * identity ought to be and so checks (other than that the client has a
+     * certificate chain rooted in an appropriate CA) are not possible. If a
+     * server has such knowledge (typically from some source external to
+     * HTTP or TLS) it SHOULD check the identity as described above.</blockquote>
+     *
+     * However, Java SSL engine does not perform any endpoint validation for client IP address.
+     * Hence it is safe to avoid reverse DNS lookup while creating the SSL engine. This test checks
+     * that client validation does not fail even if the client certificate has an invalid hostname.
+     * This test is to ensure that if client endpoint validation is added to Java in future, we can detect
+     * and update Kafka SSL code to enable validation on the server-side and provide hostname if required.
+     */
+    @Test
+    public void testClientEndpointNotValidated() throws Exception {
+        String node = "0";
+
+        // Create client certificate with an invalid hostname
+        clientCertStores = new CertStores(false, "non-existent.com");
+        serverCertStores = new CertStores(true, "localhost");
+        sslServerConfigs = serverCertStores.getTrustingConfig(clientCertStores);
+        sslClientConfigs = clientCertStores.getTrustingConfig(serverCertStores);
+
+        // Create a server with endpoint validation enabled on the server SSL engine
+        SslChannelBuilder serverChannelBuilder = new SslChannelBuilder(Mode.SERVER) {
+            @Override
+            protected SslTransportLayer buildTransportLayer(SslFactory sslFactory, String id, SelectionKey key, String host) throws IOException {
+                SocketChannel socketChannel = (SocketChannel) key.channel();
+                SSLEngine sslEngine = sslFactory.createSslEngine(host, socketChannel.socket().getPort());
+                SSLParameters sslParams = sslEngine.getSSLParameters();
+                sslParams.setEndpointIdentificationAlgorithm("HTTPS");
+                sslEngine.setSSLParameters(sslParams);
+                TestSslTransportLayer transportLayer = new TestSslTransportLayer(id, key, sslEngine, BUFFER_SIZE, BUFFER_SIZE, BUFFER_SIZE);
+                transportLayer.startHandshake();
+                return transportLayer;
+            }
+        };
+        serverChannelBuilder.configure(sslServerConfigs);
+        server = new NioEchoServer(ListenerName.forSecurityProtocol(SecurityProtocol.SSL), SecurityProtocol.SSL,
+                new TestSecurityConfig(sslServerConfigs), "localhost", serverChannelBuilder);
+        server.start();
+
         createSelector(sslClientConfigs);
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
@@ -109,8 +219,8 @@ public class SslTransportLayerTest {
     @Test
     public void testInvalidEndpointIdentification() throws Exception {
         String node = "0";
-        serverCertStores = new CertStores(true, "notahost");
-        clientCertStores = new CertStores(false, "localhost");
+        serverCertStores = new CertStores(true, "server", "notahost");
+        clientCertStores = new CertStores(false, "client", "localhost");
         sslServerConfigs = serverCertStores.getTrustingConfig(clientCertStores);
         sslClientConfigs = clientCertStores.getTrustingConfig(serverCertStores);
         sslClientConfigs.put(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, "HTTPS");
@@ -132,7 +242,7 @@ public class SslTransportLayerTest {
         String serverHost = InetAddress.getLocalHost().getHostAddress();
         SecurityProtocol securityProtocol = SecurityProtocol.SSL;
         server = new NioEchoServer(ListenerName.forSecurityProtocol(securityProtocol), securityProtocol,
-                new TestSecurityConfig(sslServerConfigs), serverHost);
+                new TestSecurityConfig(sslServerConfigs), serverHost, null);
         server.start();
         sslClientConfigs.remove(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG);
         createSelector(sslClientConfigs);
@@ -471,7 +581,7 @@ public class SslTransportLayerTest {
     public void testNetworkThreadTimeRecorded() throws Exception {
         selector.close();
         this.selector = new Selector(NetworkReceive.UNLIMITED, 5000, new Metrics(), Time.SYSTEM,
-                "MetricGroup", new HashMap<String, String>(), false, true, channelBuilder);
+                "MetricGroup", new HashMap<String, String>(), false, true, channelBuilder, MemoryPool.NONE);
 
         String node = "0";
         server = createEchoServer(SecurityProtocol.SSL);
@@ -551,10 +661,9 @@ public class SslTransportLayerTest {
         this.channelBuilder = new SslChannelBuilder(Mode.CLIENT) {
 
             @Override
-            protected SslTransportLayer buildTransportLayer(SslFactory sslFactory, String id, SelectionKey key) throws IOException {
+            protected SslTransportLayer buildTransportLayer(SslFactory sslFactory, String id, SelectionKey key, String host) throws IOException {
                 SocketChannel socketChannel = (SocketChannel) key.channel();
-                SSLEngine sslEngine = sslFactory.createSslEngine(socketChannel.socket().getInetAddress().getHostName(),
-                                socketChannel.socket().getPort());
+                SSLEngine sslEngine = sslFactory.createSslEngine(host, socketChannel.socket().getPort());
                 TestSslTransportLayer transportLayer = new TestSslTransportLayer(id, key, sslEngine, netReadBufSize, netWriteBufSize, appBufSize);
                 transportLayer.startHandshake();
                 return transportLayer;

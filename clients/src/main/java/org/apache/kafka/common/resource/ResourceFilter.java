@@ -17,27 +17,47 @@
 
 package org.apache.kafka.common.resource;
 
+import org.apache.kafka.common.annotation.InterfaceStability;
+
 import java.util.Objects;
 
 /**
  * A filter which matches Resource objects.
+ *
+ * The API for this class is still evolving and we may break compatibility in minor releases, if necessary.
  */
+@InterfaceStability.Evolving
 public class ResourceFilter {
     private final ResourceType resourceType;
     private final String name;
 
+    /**
+     * Matches any resource.
+     */
     public static final ResourceFilter ANY = new ResourceFilter(ResourceType.ANY, null);
 
+    /**
+     * Create an instance of this class with the provided parameters.
+     *
+     * @param resourceType non-null resource type
+     * @param name resource name or null
+     */
     public ResourceFilter(ResourceType resourceType, String name) {
         Objects.requireNonNull(resourceType);
         this.resourceType = resourceType;
         this.name = name;
     }
 
+    /**
+     * Return the resource type.
+     */
     public ResourceType resourceType() {
         return resourceType;
     }
 
+    /**
+     * Return the resource name or null.
+     */
     public String name() {
         return name;
     }
@@ -50,8 +70,8 @@ public class ResourceFilter {
     /**
      * Return true if this ResourceFilter has any UNKNOWN components.
      */
-    public boolean unknown() {
-        return resourceType.unknown();
+    public boolean isUnknown() {
+        return resourceType.isUnknown();
     }
 
     @Override
@@ -67,6 +87,9 @@ public class ResourceFilter {
         return Objects.hash(resourceType, name);
     }
 
+    /**
+     * Return true if this filter matches the given Resource.
+     */
     public boolean matches(Resource other) {
         if ((name != null) && (!name.equals(other.name())))
             return false;
@@ -75,10 +98,16 @@ public class ResourceFilter {
         return true;
     }
 
+    /**
+     * Return true if this filter could only match one ACE. In other words, if there are no ANY or UNKNOWN fields.
+     */
     public boolean matchesAtMostOne() {
         return findIndefiniteField() == null;
     }
 
+    /**
+     * Return a string describing an ANY or UNKNOWN field, or null if there is no such field.
+     */
     public String findIndefiniteField() {
         if (resourceType == ResourceType.ANY)
             return "Resource type is ANY.";

@@ -59,7 +59,7 @@ public class StandbyTask extends AbstractTask {
                 final StreamsConfig config,
                 final StreamsMetrics metrics,
                 final StateDirectory stateDirectory) {
-        super(id, applicationId, partitions, topology, consumer, changelogReader, true, stateDirectory, null, config);
+        super(id, applicationId, partitions, topology, consumer, changelogReader, true, stateDirectory, config);
 
         // initialize the topology with its own context
         processorContext = new StandbyContextImpl(id, applicationId, config, stateMgr, metrics);
@@ -77,7 +77,7 @@ public class StandbyTask extends AbstractTask {
      */
     @Override
     public void resume() {
-        log.debug("{} " + "Resuming", logPrefix);
+        log.debug("{} Resuming", logPrefix);
         updateOffsetLimits();
     }
 
@@ -91,8 +91,7 @@ public class StandbyTask extends AbstractTask {
     @Override
     public void commit() {
         log.trace("{} Committing", logPrefix);
-        stateMgr.flush();
-        stateMgr.checkpoint(Collections.<TopicPartition, Long>emptyMap());
+        flushAndCheckpointState();
         // reinitialize offset limits
         updateOffsetLimits();
     }
@@ -106,6 +105,10 @@ public class StandbyTask extends AbstractTask {
     @Override
     public void suspend() {
         log.debug("{} Suspending", logPrefix);
+        flushAndCheckpointState();
+    }
+
+    private void flushAndCheckpointState() {
         stateMgr.flush();
         stateMgr.checkpoint(Collections.<TopicPartition, Long>emptyMap());
     }
@@ -137,7 +140,7 @@ public class StandbyTask extends AbstractTask {
      */
     public List<ConsumerRecord<byte[], byte[]>> update(final TopicPartition partition,
                                                        final List<ConsumerRecord<byte[], byte[]>> records) {
-        log.debug("{} Updating standby replicas of its state store for partition [{}]", logPrefix, partition);
+        log.trace("{} Updating standby replicas of its state store for partition [{}]", logPrefix, partition);
         return stateMgr.updateStandbyStates(partition, records);
     }
 

@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package kafka.consumer
 
 import kafka.common.{OffsetAndMetadata, TopicAndPartition}
@@ -26,8 +27,9 @@ import kafka.serializer._
 /**
  *  Main interface for consumer
  */
+@deprecated("This trait has been deprecated and will be removed in a future release.", "0.11.0.0")
 trait ConsumerConnector {
-  
+
   /**
    *  Create a list of MessageStreams for each topic.
    *
@@ -37,7 +39,7 @@ trait ConsumerConnector {
    *          an iterator over message/metadata pairs.
    */
   def createMessageStreams(topicCountMap: Map[String,Int]): Map[String, List[KafkaStream[Array[Byte],Array[Byte]]]]
-  
+
   /**
    *  Create a list of MessageStreams for each topic.
    *
@@ -52,7 +54,7 @@ trait ConsumerConnector {
                                 keyDecoder: Decoder[K],
                                 valueDecoder: Decoder[V])
     : Map[String,List[KafkaStream[K,V]]]
-  
+
   /**
    *  Create a list of message streams for all topics that match a given filter.
    *
@@ -73,11 +75,11 @@ trait ConsumerConnector {
    *  Commit the offsets of all broker partitions connected by this connector.
    */
   def commitOffsets(retryOnFailure: Boolean)
-  
+
   /**
    * KAFKA-1743: This method added for backward compatibility.
    */
-  def commitOffsets
+  def commitOffsets()
 
   /**
    * Commit offsets from an external offsets map.
@@ -90,13 +92,15 @@ trait ConsumerConnector {
    * @param listener The consumer rebalance listener to wire in
    */
   def setConsumerRebalanceListener(listener: ConsumerRebalanceListener)
-  
+
   /**
    *  Shut down the connector
    */
   def shutdown()
 }
 
+@deprecated("This object has been deprecated and will be removed in a future release. " +
+            "Please use org.apache.kafka.clients.consumer.Consumer instead.", "0.11.0.0")
 object Consumer extends Logging {
   /**
    *  Create a ConsumerConnector

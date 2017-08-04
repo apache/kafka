@@ -58,13 +58,7 @@ object ConsumerPerformance {
     val fetchTimeInMs = new AtomicLong(0)
 
     if (!config.hideHeader) {
-      if (!config.showDetailedStats) {
-        println("start.time, end.time, data.consumed.in.MB, MB.sec, data.consumed.in.nMsg, nMsg.sec" +
-          s"${if (!config.useOldConsumer) ", rebalance.time.ms, fetch.time.ms, fetch.MB.sec, fetch.nMsg.sec" else ""}"
-        )
-      } else
-        println("time, data.consumed.in.MB, MB.sec, data.consumed.in.nMsg, nMsg.sec" +
-          s"${if (!config.useOldConsumer) ", rebalance.time.ms, fetch.time.ms, fetch.MB.sec, fetch.nMsg.sec" else ""}")
+      printHeader(config.showDetailedStats, config.useOldConsumer)
     }
 
     var startMs, endMs = 0L
@@ -131,11 +125,15 @@ object ConsumerPerformance {
 
   }
 
-  private[tools] def printHeader(showDetailedStats: Boolean): Unit = {
-    if (showDetailedStats)
-      println("start.time, end.time, data.consumed.in.MB, MB.sec, data.consumed.in.nMsg, nMsg.sec")
-    else
-      println("time, threadId, data.consumed.in.MB, MB.sec, data.consumed.in.nMsg, nMsg.sec")
+  private[tools] def printHeader(showDetailedStats: Boolean, useOldConsumer: Boolean): Unit = {
+    if (!showDetailedStats) {
+        println("start.time, end.time, data.consumed.in.MB, MB.sec, data.consumed.in.nMsg, nMsg.sec" +
+          s"${if (!useOldConsumer) ", rebalance.time.ms, fetch.time.ms, fetch.MB.sec, fetch.nMsg.sec" else ""}"
+        )
+      } else {
+        println("time, data.consumed.in.MB, MB.sec, data.consumed.in.nMsg, nMsg.sec" +
+          s"${if (!useOldConsumer) ", rebalance.time.ms, fetch.time.ms, fetch.MB.sec, fetch.nMsg.sec" else ""}")
+    }
   }
 
   def consume(consumer: KafkaConsumer[Array[Byte], Array[Byte]],

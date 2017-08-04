@@ -20,12 +20,12 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.KGroupedTable;
+import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -49,12 +49,12 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
     protected final Serde<? extends V> valSerde;
     private boolean isQueryable = true;
 
-    public KGroupedTableImpl(final KStreamBuilder topology,
+    public KGroupedTableImpl(final InternalStreamsBuilder builder,
                              final String name,
                              final String sourceName,
                              final Serde<? extends K> keySerde,
                              final Serde<? extends V> valSerde) {
-        super(topology, name, Collections.singleton(sourceName));
+        super(builder, name, Collections.singleton(sourceName));
         this.keySerde = keySerde;
         this.valSerde = valSerde;
         this.isQueryable = true;
@@ -81,7 +81,7 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
                                       final Aggregator<? super K, ? super V, T> adder,
                                       final Aggregator<? super K, ? super V, T> subtractor,
                                       final Serde<T> aggValueSerde) {
-        return aggregate(initializer, adder, subtractor, aggValueSerde, (String) null);
+        return aggregate(initializer, adder, subtractor, aggValueSerde, null);
     }
 
     @Override
@@ -116,9 +116,9 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
     private <T> KTable<K, T> doAggregate(final ProcessorSupplier<K, Change<V>> aggregateSupplier,
                                          final String functionName,
                                          final StateStoreSupplier<KeyValueStore> storeSupplier) {
-        String sinkName = topology.newName(KStreamImpl.SINK_NAME);
-        String sourceName = topology.newName(KStreamImpl.SOURCE_NAME);
-        String funcName = topology.newName(functionName);
+        String sinkName = builder.newName(KStreamImpl.SINK_NAME);
+        String sourceName = builder.newName(KStreamImpl.SOURCE_NAME);
+        String funcName = builder.newName(functionName);
 
         String topic = storeSupplier.name() + KStreamImpl.REPARTITION_TOPIC_SUFFIX;
 
@@ -131,18 +131,18 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
         ChangedDeserializer<? extends V> changedValueDeserializer = new ChangedDeserializer<>(valueDeserializer);
 
         // send the aggregate key-value pairs to the intermediate topic for partitioning
-        topology.addInternalTopic(topic);
-        topology.addSink(sinkName, topic, keySerializer, changedValueSerializer, this.name);
+        builder.internalTopologyBuilder.addInternalTopic(topic);
+        builder.internalTopologyBuilder.addSink(sinkName, topic, keySerializer, changedValueSerializer, null, this.name);
 
-        // read the intermediate topic
-        topology.addSource(sourceName, keyDeserializer, changedValueDeserializer, topic);
+        // read the intermediate topic with RecordMetadataTimestampExtractor
+        builder.internalTopologyBuilder.addSource(null, sourceName, new FailOnInvalidTimestamp(), keyDeserializer, changedValueDeserializer, topic);
 
         // aggregate the values with the aggregator and local store
-        topology.addProcessor(funcName, aggregateSupplier, sourceName);
-        topology.addStateStore(storeSupplier, funcName);
+        builder.internalTopologyBuilder.addProcessor(funcName, aggregateSupplier, sourceName);
+        builder.internalTopologyBuilder.addStateStore(storeSupplier, funcName);
 
         // return the KTable representation with the intermediate topic as the sources
-        return new KTableImpl<>(topology, funcName, aggregateSupplier, Collections.singleton(sourceName), storeSupplier.name(), isQueryable);
+        return new KTableImpl<>(builder, funcName, aggregateSupplier, Collections.singleton(sourceName), storeSupplier.name(), isQueryable);
     }
 
     @Override

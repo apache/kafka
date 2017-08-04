@@ -56,6 +56,7 @@ public interface ReadOnlyWindowStore<K, V> {
      *
      * @return an iterator over key-value pairs {@code <timestamp, value>}
      * @throws InvalidStateStoreException if the store is not initialized
+     * @throws NullPointerException If null is used for key.
      */
     WindowStoreIterator<V> fetch(K key, long timeFrom, long timeTo);
 
@@ -69,6 +70,7 @@ public interface ReadOnlyWindowStore<K, V> {
      * @param timeTo    time range end (inclusive)
      * @return an iterator over windowed key-value pairs {@code <Windowed<K>, value>}
      * @throws InvalidStateStoreException if the store is not initialized
+     * @throws NullPointerException If null is used for any key.
      */
     KeyValueIterator<Windowed<K>, V> fetch(K from, K to, long timeFrom, long timeTo);
 }

@@ -17,8 +17,16 @@
 
 package org.apache.kafka.common.config;
 
+import java.util.Objects;
+
+/**
+ * A class representing resources that have configs.
+ */
 public final class ConfigResource {
 
+    /**
+     * Type of resource.
+     */
     public enum Type {
         BROKER, TOPIC, UNKNOWN;
     }
@@ -26,15 +34,29 @@ public final class ConfigResource {
     private final Type type;
     private final String name;
 
+    /**
+     * Create an instance of this class with the provided parameters.
+     *
+     * @param type a non-null resource type
+     * @param name a non-null resource name
+     */
     public ConfigResource(Type type, String name) {
+        Objects.requireNonNull(type, "type should not be null");
+        Objects.requireNonNull(name, "name should not be null");
         this.type = type;
         this.name = name;
     }
 
+    /**
+     * Return the resource type.
+     */
     public Type type() {
         return type;
     }
 
+    /**
+     * Return the resource name.
+     */
     public String name() {
         return name;
     }

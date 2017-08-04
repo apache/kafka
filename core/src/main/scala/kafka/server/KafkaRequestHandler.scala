@@ -24,7 +24,7 @@ import java.util.concurrent.{CountDownLatch, TimeUnit}
 
 import com.yammer.metrics.core.Meter
 import org.apache.kafka.common.internals.FatalExitError
-import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.common.utils.{KafkaThread, Time}
 
 /**
  * A thread that answers kafka requests.
@@ -40,9 +40,9 @@ class KafkaRequestHandler(id: Int,
   private val latch = new CountDownLatch(1)
 
   def run() {
-    while (true) {
+    while(true) {
+      var req: RequestChannel.Request = null
       try {
-        var req : RequestChannel.Request = null
         while (req == null) {
           // We use a single meter for aggregate idle percentage for the thread pool.
           // Since meter is calculated as total_recorded_value / time_window and
@@ -69,6 +69,9 @@ class KafkaRequestHandler(id: Int,
           latch.countDown()
           Exit.exit(e.statusCode)
         case e: Throwable => error("Exception when handling request", e)
+      } finally {
+        if (req != null)
+          req.dispose()
       }
     }
   }
@@ -92,7 +95,7 @@ class KafkaRequestHandlerPool(val brokerId: Int,
   val runnables = new Array[KafkaRequestHandler](numThreads)
   for(i <- 0 until numThreads) {
     runnables(i) = new KafkaRequestHandler(i, brokerId, aggregateIdleMeter, numThreads, requestChannel, apis, time)
-    Utils.daemonThread("kafka-request-handler-" + i, runnables(i)).start()
+    KafkaThread.daemon("kafka-request-handler-" + i, runnables(i)).start()
   }
 
   def shutdown() {

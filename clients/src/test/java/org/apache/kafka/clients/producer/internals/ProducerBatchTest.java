@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
+import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.LegacyRecord;
@@ -29,6 +31,7 @@ import org.junit.Test;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Deque;
+import java.util.concurrent.ExecutionException;
 
 import static org.apache.kafka.common.record.RecordBatch.MAGIC_VALUE_V0;
 import static org.apache.kafka.common.record.RecordBatch.MAGIC_VALUE_V1;
@@ -38,6 +41,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 public class ProducerBatchTest {
 
@@ -52,6 +56,69 @@ public class ProducerBatchTest {
         FutureRecordMetadata future = batch.tryAppend(now, null, new byte[10], Record.EMPTY_HEADERS, null, now);
         assertNotNull(future);
         assertNull(future.checksumOrNull());
+    }
+
+    @Test
+    public void testBatchAbort() throws Exception {
+        ProducerBatch batch = new ProducerBatch(new TopicPartition("topic", 1), memoryRecordsBuilder, now);
+        FutureRecordMetadata future = batch.tryAppend(now, null, new byte[10], Record.EMPTY_HEADERS, null, now);
+
+        KafkaException exception = new KafkaException();
+        batch.abort(exception);
+        assertTrue(future.isDone());
+
+        // subsequent completion should be ignored
+        batch.done(500L, 2342342341L, null);
+        batch.done(-1, -1, new KafkaException());
+
+        assertTrue(future.isDone());
+        try {
+            future.get();
+            fail("Future should have thrown");
+        } catch (ExecutionException e) {
+            assertEquals(exception, e.getCause());
+        }
+    }
+
+    @Test
+    public void testBatchCannotAbortTwice() throws Exception {
+        ProducerBatch batch = new ProducerBatch(new TopicPartition("topic", 1), memoryRecordsBuilder, now);
+        FutureRecordMetadata future = batch.tryAppend(now, null, new byte[10], Record.EMPTY_HEADERS, null, now);
+        KafkaException exception = new KafkaException();
+        batch.abort(exception);
+
+        try {
+            batch.abort(new KafkaException());
+            fail("Expected exception from abort");
+        } catch (IllegalStateException e) {
+            // expected
+        }
+
+        assertTrue(future.isDone());
+        try {
+            future.get();
+            fail("Future should have thrown");
+        } catch (ExecutionException e) {
+            assertEquals(exception, e.getCause());
+        }
+    }
+
+    @Test
+    public void testBatchCannotCompleteTwice() throws Exception {
+        ProducerBatch batch = new ProducerBatch(new TopicPartition("topic", 1), memoryRecordsBuilder, now);
+        FutureRecordMetadata future = batch.tryAppend(now, null, new byte[10], Record.EMPTY_HEADERS, null, now);
+        batch.done(500L, 10L, null);
+
+        try {
+            batch.done(1000L, 20L, null);
+            fail("Expected exception from done");
+        } catch (IllegalStateException e) {
+            // expected
+        }
+
+        RecordMetadata recordMetadata = future.get();
+        assertEquals(500L, recordMetadata.offset());
+        assertEquals(10L, recordMetadata.timestamp());
     }
 
     @Test
@@ -148,9 +215,9 @@ public class ProducerBatchTest {
         ProducerBatch batch = new ProducerBatch(new TopicPartition("topic", 1), memoryRecordsBuilder, now);
         FutureRecordMetadata result0 = batch.tryAppend(now, null, new byte[10], Record.EMPTY_HEADERS, null, now);
         assertNotNull(result0);
-        assertTrue(memoryRecordsBuilder.hasRoomFor(now, null, new byte[10]));
+        assertTrue(memoryRecordsBuilder.hasRoomFor(now, null, new byte[10], Record.EMPTY_HEADERS));
         memoryRecordsBuilder.closeForRecordAppends();
-        assertFalse(memoryRecordsBuilder.hasRoomFor(now, null, new byte[10]));
+        assertFalse(memoryRecordsBuilder.hasRoomFor(now, null, new byte[10], Record.EMPTY_HEADERS));
         assertEquals(null, batch.tryAppend(now + 1, null, new byte[10], Record.EMPTY_HEADERS, null, now + 1));
     }
 }

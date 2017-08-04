@@ -29,6 +29,8 @@ import org.apache.kafka.common.protocol.types.Struct;
  */
 public class ApiError {
 
+    public static final ApiError NONE = new ApiError(Errors.NONE, null);
+
     private static final String CODE_KEY_NAME = "error_code";
     private static final String MESSAGE_KEY_NAME = "error_message";
 
@@ -65,6 +67,14 @@ public class ApiError {
 
     public boolean is(Errors error) {
         return this.error == error;
+    }
+
+    public boolean isFailure() {
+        return !isSuccess();
+    }
+
+    public boolean isSuccess() {
+        return is(Errors.NONE);
     }
 
     public Errors error() {

@@ -44,6 +44,7 @@ public class OffsetCommitResponse extends AbstractResponse {
      * Possible error codes:
      *
      * UNKNOWN_TOPIC_OR_PARTITION (3)
+     * REQUEST_TIMED_OUT (7)
      * OFFSET_METADATA_TOO_LARGE (12)
      * COORDINATOR_LOAD_IN_PROGRESS (14)
      * GROUP_COORDINATOR_NOT_AVAILABLE (15)

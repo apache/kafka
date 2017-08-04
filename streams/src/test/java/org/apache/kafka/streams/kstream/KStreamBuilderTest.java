@@ -31,8 +31,8 @@ import org.apache.kafka.test.MockKeyValueMapper;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.MockTimestampExtractor;
-import org.junit.After;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 
 import java.util.HashSet;
@@ -49,25 +49,18 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThat;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
 
+@SuppressWarnings("deprecation")
 public class KStreamBuilderTest {
 
     private static final String APP_ID = "app-id";
 
     private final KStreamBuilder builder = new KStreamBuilder();
-
-    private KStreamTestDriver driver = null;
+    @Rule
+    public final KStreamTestDriver driver = new KStreamTestDriver();
 
     @Before
     public void setUp() {
         builder.setApplicationId(APP_ID);
-    }
-
-    @After
-    public void cleanup() {
-        if (driver != null) {
-            driver.close();
-        }
-        driver = null;
     }
 
     @Test(expected = TopologyBuilderException.class)
@@ -92,7 +85,7 @@ public class KStreamBuilderTest {
 
 
     @Test
-    public void shouldNotTryProcessingFromSinkTopic() {
+    public void shouldProcessFromSinkTopic() {
         final KStream<String, String> source = builder.stream("topic-source");
         source.to("topic-sink");
 
@@ -100,7 +93,7 @@ public class KStreamBuilderTest {
 
         source.process(processorSupplier);
 
-        driver = new KStreamTestDriver(builder);
+        driver.setUp(builder);
         driver.setTime(0L);
 
         driver.process("topic-source", "A", "aa");
@@ -110,7 +103,7 @@ public class KStreamBuilderTest {
     }
 
     @Test
-    public void shouldTryProcessingFromThoughTopic() {
+    public void shouldProcessViaThroughTopic() {
         final KStream<String, String> source = builder.stream("topic-source");
         final KStream<String, String> through = source.through("topic-sink");
 
@@ -120,7 +113,7 @@ public class KStreamBuilderTest {
         source.process(sourceProcessorSupplier);
         through.process(throughProcessorSupplier);
 
-        driver = new KStreamTestDriver(builder);
+        driver.setUp(builder);
         driver.setTime(0L);
 
         driver.process("topic-source", "A", "aa");
@@ -154,7 +147,7 @@ public class KStreamBuilderTest {
         final MockProcessorSupplier<String, String> processorSupplier = new MockProcessorSupplier<>();
         merged.process(processorSupplier);
 
-        driver = new KStreamTestDriver(builder);
+        driver.setUp(builder);
         driver.setTime(0L);
 
         driver.process(topic1, "A", "aa");
@@ -310,15 +303,15 @@ public class KStreamBuilderTest {
         final KStream<String, String> mapped = playEvents.map(MockKeyValueMapper.<String, String>SelectValueKeyValueMapper());
         mapped.leftJoin(table, MockValueJoiner.TOSTRING_JOINER).groupByKey().count("count");
         assertEquals(Collections.singletonList("table-topic"), builder.stateStoreNameToSourceTopics().get("table-store"));
-        assertEquals(Collections.singletonList(APP_ID + "-KSTREAM-MAP-0000000003-repartition"), builder.stateStoreNameToSourceTopics().get("count"));
+        assertEquals(Collections.singletonList(APP_ID + "-KSTREAM-MAP-0000000000-repartition"), builder.stateStoreNameToSourceTopics().get("count"));
     }
 
     @Test
     public void shouldAddTopicToEarliestAutoOffsetResetList() {
         final String topicName = "topic-1";
-        
+
         builder.stream(TopologyBuilder.AutoOffsetReset.EARLIEST, topicName);
-        
+
         assertTrue(builder.earliestResetTopicsPattern().matcher(topicName).matches());
         assertFalse(builder.latestResetTopicsPattern().matcher(topicName).matches());
     }
@@ -373,7 +366,7 @@ public class KStreamBuilderTest {
         final String topic = "topic-5";
 
         builder.stream(topicPattern);
-        
+
         assertFalse(builder.latestResetTopicsPattern().matcher(topic).matches());
         assertFalse(builder.earliestResetTopicsPattern().matcher(topic).matches());
 
@@ -401,7 +394,6 @@ public class KStreamBuilderTest {
         assertFalse(builder.earliestResetTopicsPattern().matcher(topicTwo).matches());
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void kStreamTimestampExtractorShouldBeNull() throws Exception {
         builder.stream("topic");
@@ -409,7 +401,6 @@ public class KStreamBuilderTest {
         assertNull(processorTopology.source("topic").getTimestampExtractor());
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldAddTimestampExtractorToStreamWithKeyValSerdePerSource() throws Exception {
         builder.stream(new MockTimestampExtractor(), null, null, "topic");
@@ -419,7 +410,6 @@ public class KStreamBuilderTest {
         }
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldAddTimestampExtractorToStreamWithOffsetResetPerSource() throws Exception {
         builder.stream(null, new MockTimestampExtractor(), null, null, "topic");
@@ -427,7 +417,6 @@ public class KStreamBuilderTest {
         assertThat(processorTopology.source("topic").getTimestampExtractor(), instanceOf(MockTimestampExtractor.class));
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldAddTimestampExtractorToTablePerSource() throws Exception {
         builder.table("topic", "store");
@@ -435,7 +424,6 @@ public class KStreamBuilderTest {
         assertNull(processorTopology.source("topic").getTimestampExtractor());
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void kTableTimestampExtractorShouldBeNull() throws Exception {
         builder.table("topic", "store");
@@ -443,7 +431,6 @@ public class KStreamBuilderTest {
         assertNull(processorTopology.source("topic").getTimestampExtractor());
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldAddTimestampExtractorToTableWithKeyValSerdePerSource() throws Exception {
         builder.table(null, new MockTimestampExtractor(), null, null, "topic", "store");

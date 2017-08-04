@@ -35,7 +35,7 @@ import java.util.zip.GZIPOutputStream;
 public enum CompressionType {
     NONE(0, "none", 1.0f) {
         @Override
-        public OutputStream wrapForOutput(ByteBufferOutputStream buffer, byte messageVersion, int bufferSize) {
+        public OutputStream wrapForOutput(ByteBufferOutputStream buffer, byte messageVersion) {
             return buffer;
         }
 
@@ -47,9 +47,10 @@ public enum CompressionType {
 
     GZIP(1, "gzip", 1.0f) {
         @Override
-        public OutputStream wrapForOutput(ByteBufferOutputStream buffer, byte messageVersion, int bufferSize) {
+        public OutputStream wrapForOutput(ByteBufferOutputStream buffer, byte messageVersion) {
             try {
-                return new GZIPOutputStream(buffer, bufferSize);
+                // GZIPOutputStream has a default buffer size of 512 bytes, which is too small
+                return new GZIPOutputStream(buffer, 8 * 1024);
             } catch (Exception e) {
                 throw new KafkaException(e);
             }
@@ -67,9 +68,9 @@ public enum CompressionType {
 
     SNAPPY(2, "snappy", 1.0f) {
         @Override
-        public OutputStream wrapForOutput(ByteBufferOutputStream buffer, byte messageVersion, int bufferSize) {
+        public OutputStream wrapForOutput(ByteBufferOutputStream buffer, byte messageVersion) {
             try {
-                return (OutputStream) SnappyConstructors.OUTPUT.invoke(buffer, bufferSize);
+                return (OutputStream) SnappyConstructors.OUTPUT.invoke(buffer);
             } catch (Throwable e) {
                 throw new KafkaException(e);
             }
@@ -87,7 +88,7 @@ public enum CompressionType {
 
     LZ4(3, "lz4", 1.0f) {
         @Override
-        public OutputStream wrapForOutput(ByteBufferOutputStream buffer, byte messageVersion, int bufferSize) {
+        public OutputStream wrapForOutput(ByteBufferOutputStream buffer, byte messageVersion) {
             try {
                 return new KafkaLZ4BlockOutputStream(buffer, messageVersion == RecordBatch.MAGIC_VALUE_V0);
             } catch (Throwable e) {
@@ -124,7 +125,7 @@ public enum CompressionType {
      * write to the underlying buffer in the given {@link ByteBufferOutputStream} after the compressed data has been written.
      * In the event that the buffer needs to be expanded while writing the data, access to the underlying buffer needs to be preserved.
      */
-    public abstract OutputStream wrapForOutput(ByteBufferOutputStream bufferStream, byte messageVersion, int bufferSize);
+    public abstract OutputStream wrapForOutput(ByteBufferOutputStream bufferStream, byte messageVersion);
 
     /**
      * Wrap buffer with an InputStream that will decompress data with this CompressionType.
@@ -178,7 +179,7 @@ public enum CompressionType {
         static final MethodHandle INPUT = findConstructor("org.xerial.snappy.SnappyInputStream",
                 MethodType.methodType(void.class, InputStream.class));
         static final MethodHandle OUTPUT = findConstructor("org.xerial.snappy.SnappyOutputStream",
-                MethodType.methodType(void.class, OutputStream.class, Integer.TYPE));
+                MethodType.methodType(void.class, OutputStream.class));
     }
 
     private static MethodHandle findConstructor(String className, MethodType methodType) {

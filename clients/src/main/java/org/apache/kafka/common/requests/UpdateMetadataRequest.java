@@ -27,6 +27,7 @@ import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -71,6 +72,33 @@ public class UpdateMetadataRequest extends AbstractRequest {
                 append(", liveBrokers=").append(Utils.join(liveBrokers, ", ")).
                 append(")");
             return bld.toString();
+        }
+    }
+
+    public static final class PartitionState {
+        public final BasePartitionState basePartitionState;
+        public final List<Integer> offlineReplicas;
+
+        public PartitionState(int controllerEpoch,
+                              int leader,
+                              int leaderEpoch,
+                              List<Integer> isr,
+                              int zkVersion,
+                              List<Integer> replicas,
+                              List<Integer> offlineReplicas) {
+            this.basePartitionState = new BasePartitionState(controllerEpoch, leader, leaderEpoch, isr, zkVersion, replicas);
+            this.offlineReplicas = offlineReplicas;
+        }
+
+        @Override
+        public String toString() {
+            return "PartitionState(controllerEpoch=" + basePartitionState.controllerEpoch +
+                ", leader=" + basePartitionState.leader +
+                ", leaderEpoch=" + basePartitionState.leaderEpoch +
+                ", isr=" + Arrays.toString(basePartitionState.isr.toArray()) +
+                ", zkVersion=" + basePartitionState.zkVersion +
+                ", replicas=" + Arrays.toString(basePartitionState.replicas.toArray()) +
+                ", offlineReplicas=" + Arrays.toString(offlineReplicas.toArray()) + ")";
         }
     }
 
@@ -129,6 +157,7 @@ public class UpdateMetadataRequest extends AbstractRequest {
     private static final String ISR_KEY_NAME = "isr";
     private static final String ZK_VERSION_KEY_NAME = "zk_version";
     private static final String REPLICAS_KEY_NAME = "replicas";
+    private static final String OFFLINE_REPLICAS_KEY_NAME = "offline_replicas";
 
     // Broker key names
     private static final String BROKER_ID_KEY_NAME = "id";
@@ -146,8 +175,8 @@ public class UpdateMetadataRequest extends AbstractRequest {
     private final Map<TopicPartition, PartitionState> partitionStates;
     private final Set<Broker> liveBrokers;
 
-    private UpdateMetadataRequest(short version, int controllerId, int controllerEpoch, Map<TopicPartition,
-            PartitionState> partitionStates, Set<Broker> liveBrokers) {
+    private UpdateMetadataRequest(short version, int controllerId, int controllerEpoch,
+                                  Map<TopicPartition, PartitionState> partitionStates, Set<Broker> liveBrokers) {
         super(version);
         this.controllerId = controllerId;
         this.controllerEpoch = controllerEpoch;
@@ -174,13 +203,20 @@ public class UpdateMetadataRequest extends AbstractRequest {
             int zkVersion = partitionStateData.getInt(ZK_VERSION_KEY_NAME);
 
             Object[] replicasArray = partitionStateData.getArray(REPLICAS_KEY_NAME);
-            Set<Integer> replicas = new HashSet<>(replicasArray.length);
+            List<Integer> replicas = new ArrayList<>(replicasArray.length);
             for (Object r : replicasArray)
                 replicas.add((Integer) r);
 
-            PartitionState partitionState = new PartitionState(controllerEpoch, leader, leaderEpoch, isr, zkVersion, replicas);
-            partitionStates.put(new TopicPartition(topic, partition), partitionState);
+            List<Integer> offlineReplicas = new ArrayList<>();
+            if (partitionStateData.hasField(OFFLINE_REPLICAS_KEY_NAME)) {
+                Object[] offlineReplicasArray = partitionStateData.getArray(OFFLINE_REPLICAS_KEY_NAME);
+                for (Object r : offlineReplicasArray)
+                    offlineReplicas.add((Integer) r);
+            }
 
+            PartitionState partitionState =
+                new PartitionState(controllerEpoch, leader, leaderEpoch, isr, zkVersion, replicas, offlineReplicas);
+            partitionStates.put(new TopicPartition(topic, partition), partitionState);
         }
 
         Set<Broker> liveBrokers = new HashSet<>();
@@ -239,12 +275,14 @@ public class UpdateMetadataRequest extends AbstractRequest {
             partitionStateData.set(TOPIC_KEY_NAME, topicPartition.topic());
             partitionStateData.set(PARTITION_KEY_NAME, topicPartition.partition());
             PartitionState partitionState = entry.getValue();
-            partitionStateData.set(CONTROLLER_EPOCH_KEY_NAME, partitionState.controllerEpoch);
-            partitionStateData.set(LEADER_KEY_NAME, partitionState.leader);
-            partitionStateData.set(LEADER_EPOCH_KEY_NAME, partitionState.leaderEpoch);
-            partitionStateData.set(ISR_KEY_NAME, partitionState.isr.toArray());
-            partitionStateData.set(ZK_VERSION_KEY_NAME, partitionState.zkVersion);
-            partitionStateData.set(REPLICAS_KEY_NAME, partitionState.replicas.toArray());
+            partitionStateData.set(CONTROLLER_EPOCH_KEY_NAME, partitionState.basePartitionState.controllerEpoch);
+            partitionStateData.set(LEADER_KEY_NAME, partitionState.basePartitionState.leader);
+            partitionStateData.set(LEADER_EPOCH_KEY_NAME, partitionState.basePartitionState.leaderEpoch);
+            partitionStateData.set(ISR_KEY_NAME, partitionState.basePartitionState.isr.toArray());
+            partitionStateData.set(ZK_VERSION_KEY_NAME, partitionState.basePartitionState.zkVersion);
+            partitionStateData.set(REPLICAS_KEY_NAME, partitionState.basePartitionState.replicas.toArray());
+            if (partitionStateData.hasField(OFFLINE_REPLICAS_KEY_NAME))
+              partitionStateData.set(OFFLINE_REPLICAS_KEY_NAME, partitionState.offlineReplicas.toArray());
             partitionStatesData.add(partitionStateData);
         }
         struct.set(PARTITION_STATES_KEY_NAME, partitionStatesData.toArray());
@@ -286,7 +324,7 @@ public class UpdateMetadataRequest extends AbstractRequest {
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         short versionId = version();
-        if (versionId <= 3)
+        if (versionId <= 4)
             return new UpdateMetadataResponse(Errors.forException(e));
         else
             throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",

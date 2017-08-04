@@ -20,7 +20,7 @@ import java.util.{Map => JMap}
 
 import kafka.admin.AdminUtils
 import kafka.server.KafkaConfig._
-import kafka.server.{BlockingSend, KafkaConfig, KafkaServer, ReplicaFetcherBlockingSend}
+import kafka.server.{BlockingSend, KafkaServer, ReplicaFetcherBlockingSend}
 import kafka.utils.TestUtils._
 import kafka.utils.{Logging, TestUtils}
 import kafka.zk.ZooKeeperTestHarness
@@ -219,10 +219,10 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
     new ReplicaFetcherBlockingSend(endPoint, from.config, new Metrics(), new SystemTime(), 42, "TestFetcher")
   }
 
-  private def waitForEpochChangeTo(topic: String, partition: Int, epoch: Int): Boolean = {
+  private def waitForEpochChangeTo(topic: String, partition: Int, epoch: Int): Unit = {
     TestUtils.waitUntilTrue(() => {
       brokers(0).metadataCache.getPartitionInfo(topic, partition) match {
-        case Some(m) => m.leaderIsrAndControllerEpoch.leaderAndIsr.leaderEpoch == epoch
+        case Some(m) => m.basePartitionState.leaderEpoch == epoch
         case None => false
       }
     }, "Epoch didn't change")
@@ -263,7 +263,7 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
   /**
     * Simulates how the Replica Fetcher Thread requests leader offsets for epochs
     */
-  private class TestFetcherThread(sender: BlockingSend) extends Logging {
+  private[epoch] class TestFetcherThread(sender: BlockingSend) extends Logging {
 
     def leaderOffsetsFor(partitions: Map[TopicPartition, Int]): Map[TopicPartition, EpochEndOffset] = {
       val request = new OffsetsForLeaderEpochRequest.Builder(toJavaFormat(partitions))

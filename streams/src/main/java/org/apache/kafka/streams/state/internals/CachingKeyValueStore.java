@@ -30,6 +30,7 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StateSerdes;
 
 import java.util.List;
+import java.util.Objects;
 
 class CachingKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore implements KeyValueStore<K, V>, CachedStateStore<K, V> {
 
@@ -52,7 +53,6 @@ class CachingKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore im
         this.valueSerde = valueSerde;
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public void init(final ProcessorContext context, final StateStore root) {
         underlying.init(context, root);
@@ -69,8 +69,8 @@ class CachingKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore im
                                         keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
                                         valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
 
-        this.cacheName = context.taskId() + "-" + underlying.name();
         this.cache = this.context.getCache();
+        this.cacheName = ThreadCache.nameSpaceFromTaskIdAndStore(context.taskId().toString(), underlying.name());
         cache.addDirtyEntryFlushListener(cacheName, new ThreadCache.DirtyEntryFlushListener() {
             @Override
             public void apply(final List<ThreadCache.DirtyEntry> entries) {
@@ -128,9 +128,8 @@ class CachingKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore im
     @Override
     public synchronized V get(final K key) {
         validateStoreOpen();
-        if (key == null) {
-            return null;
-        }
+        Objects.requireNonNull(key);
+
         final byte[] rawKey = serdes.rawKey(key);
         return get(rawKey);
     }
@@ -184,11 +183,13 @@ class CachingKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore im
 
     @Override
     public synchronized void put(final K key, final V value) {
+        Objects.requireNonNull(key, "key cannot be null");
         validateStoreOpen();
         put(serdes.rawKey(key), value);
     }
 
     private synchronized void put(final byte[] rawKey, final V value) {
+        Objects.requireNonNull(rawKey, "key cannot be null");
         final byte[] rawValue = serdes.rawValue(value);
         cache.put(cacheName, Bytes.wrap(rawKey), new LRUCacheEntry(rawValue, true, context.offset(),
                   context.timestamp(), context.partition(), context.topic()));
@@ -196,6 +197,7 @@ class CachingKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore im
 
     @Override
     public synchronized V putIfAbsent(final K key, final V value) {
+        Objects.requireNonNull(key, "key cannot be null");
         validateStoreOpen();
         final byte[] rawKey = serdes.rawKey(key);
         final V v = get(rawKey);
@@ -215,6 +217,7 @@ class CachingKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore im
     @Override
     public synchronized V delete(final K key) {
         validateStoreOpen();
+        Objects.requireNonNull(key);
         final byte[] rawKey = serdes.rawKey(key);
         final Bytes bytesKey = Bytes.wrap(rawKey);
         final V v = get(rawKey);

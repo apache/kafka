@@ -26,8 +26,9 @@ import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import kafka.integration.KafkaServerTestHarness
 
 
+@deprecated("This test has been deprecated and will be removed in a future release.", "0.11.0.0")
 class DeleteConsumerGroupTest extends KafkaServerTestHarness {
-  def generateConfigs() = TestUtils.createBrokerConfigs(3, zkConnect, false, true).map(KafkaConfig.fromProps)
+  def generateConfigs = TestUtils.createBrokerConfigs(3, zkConnect, false, true).map(KafkaConfig.fromProps)
 
   @Test
   def testGroupWideDeleteInZK() {
@@ -162,7 +163,11 @@ class DeleteConsumerGroupTest extends KafkaServerTestHarness {
       "Consumer group info on related topics should be deleted by DeleteAllConsumerGroupInfoForTopicInZK")
     //produce events
     val producer = TestUtils.createNewProducer(brokerList)
-    produceEvents(producer, topic, List.fill(10)("test"))
+    try {
+      produceEvents(producer, topic, List.fill(10)("test"))
+    } finally {
+      producer.close()
+    }
 
     //consume events
     val consumerProps = TestUtils.createConsumerProperties(zkConnect, group, "consumer")
@@ -172,11 +177,13 @@ class DeleteConsumerGroupTest extends KafkaServerTestHarness {
     consumerProps.put("fetch.wait.max.ms", "0")
     val consumerConfig = new ConsumerConfig(consumerProps)
     val consumerConnector: ConsumerConnector = Consumer.create(consumerConfig)
-    val messageStream = consumerConnector.createMessageStreams(Map(topic -> 1))(topic).head
-    consumeEvents(messageStream, 5)
-    consumerConnector.commitOffsets(false)
-    producer.close()
-    consumerConnector.shutdown()
+    try {
+      val messageStream = consumerConnector.createMessageStreams(Map(topic -> 1))(topic).head
+      consumeEvents(messageStream, 5)
+      consumerConnector.commitOffsets(false)
+    } finally {
+      consumerConnector.shutdown()
+    }
 
     TestUtils.waitUntilTrue(() => groupTopicOffsetAndOwnerDirsExist(dir),
       "Consumer group info should exist after consuming from a recreated topic")

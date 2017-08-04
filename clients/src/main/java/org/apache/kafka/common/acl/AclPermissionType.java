@@ -17,12 +17,17 @@
 
 package org.apache.kafka.common.acl;
 
+import org.apache.kafka.common.annotation.InterfaceStability;
+
 import java.util.HashMap;
 import java.util.Locale;
 
 /**
  * Represents whether an ACL grants or denies permissions.
+ *
+ * The API for this class is still evolving and we may break compatibility in minor releases, if necessary.
  */
+@InterfaceStability.Evolving
 public enum AclPermissionType {
     /**
      * Represents any AclPermissionType which this client cannot understand,
@@ -68,6 +73,9 @@ public enum AclPermissionType {
         }
     }
 
+    /**
+     * Return the AclPermissionType with the provided code or `AclPermissionType.UNKNOWN` if one cannot be found.
+     */
     public static AclPermissionType fromCode(byte code) {
         AclPermissionType permissionType = CODE_TO_VALUE.get(code);
         if (permissionType == null) {
@@ -82,11 +90,17 @@ public enum AclPermissionType {
         this.code = code;
     }
 
+    /**
+     * Return the code of this permission type.
+     */
     public byte code() {
         return code;
     }
 
-    public boolean unknown() {
+    /**
+     * Return true if this permission type is UNKNOWN.
+     */
+    public boolean isUnknown() {
         return this == UNKNOWN;
     }
 }

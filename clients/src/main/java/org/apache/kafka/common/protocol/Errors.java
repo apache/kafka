@@ -44,6 +44,7 @@ import org.apache.kafka.common.errors.InvalidTimestampException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.InvalidTxnStateException;
 import org.apache.kafka.common.errors.InvalidTxnTimeoutException;
+import org.apache.kafka.common.errors.KafkaStorageException;
 import org.apache.kafka.common.errors.LeaderNotAvailableException;
 import org.apache.kafka.common.errors.NetworkException;
 import org.apache.kafka.common.errors.NotControllerException;
@@ -53,6 +54,7 @@ import org.apache.kafka.common.errors.NotEnoughReplicasException;
 import org.apache.kafka.common.errors.NotLeaderForPartitionException;
 import org.apache.kafka.common.errors.OffsetMetadataTooLarge;
 import org.apache.kafka.common.errors.OffsetOutOfRangeException;
+import org.apache.kafka.common.errors.OperationNotAttemptedException;
 import org.apache.kafka.common.errors.OutOfOrderSequenceException;
 import org.apache.kafka.common.errors.PolicyViolationException;
 import org.apache.kafka.common.errors.ProducerFencedException;
@@ -83,10 +85,15 @@ import java.util.Map;
  * This class contains all the client-server errors--those errors that must be sent from the server to the client. These
  * are thus part of the protocol. The names can be changed but the error code cannot.
  *
+ * Note that client library will convert an unknown error code to the non-retriable UnknownServerException if the client library
+ * version is old and does not recognize the newly-added error code. Therefore when a new server-side error is added,
+ * we may need extra logic to convert the new error code to another existing error code before sending the response back to
+ * the client if the request version suggests that the client may not recognize the new error code.
+ *
  * Do not add exceptions that occur only on the client or only on the server here.
  */
 public enum Errors {
-    UNKNOWN(-1, "The server experienced an unexpected error when processing the request",
+    UNKNOWN_SERVER_ERROR(-1, "The server experienced an unexpected error when processing the request",
         new ApiExceptionBuilder() {
             @Override
             public ApiException build(String message) {
@@ -486,8 +493,23 @@ public enum Errors {
         public ApiException build(String message) {
             return new SecurityDisabledException(message);
         }
+    }),
+    OPERATION_NOT_ATTEMPTED(55, "The broker did not attempt to execute this operation. This may happen for batched RPCs " +
+            "where some operations in the batch failed, causing the broker to respond without trying the rest.",
+        new ApiExceptionBuilder() {
+            @Override
+            public ApiException build(String message) {
+                return new OperationNotAttemptedException(message);
+            }
+    }),
+    KAFKA_STORAGE_ERROR(56, "Disk error when trying to access log file on the disk.",
+        new ApiExceptionBuilder() {
+            @Override
+            public ApiException build(String message) {
+                return new KafkaStorageException(message);
+            }
     });
-             
+
     private interface ApiExceptionBuilder {
         ApiException build(String message);
     }
@@ -579,7 +601,7 @@ public enum Errors {
             return error;
         } else {
             log.warn("Unexpected error code: {}.", code);
-            return UNKNOWN;
+            return UNKNOWN_SERVER_ERROR;
         }
     }
 
@@ -595,7 +617,7 @@ public enum Errors {
                 return error;
             clazz = clazz.getSuperclass();
         }
-        return UNKNOWN;
+        return UNKNOWN_SERVER_ERROR;
     }
 
     private static String toHtml() {

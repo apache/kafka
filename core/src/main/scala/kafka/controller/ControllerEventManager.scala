@@ -24,13 +24,16 @@ import scala.collection._
 import kafka.metrics.KafkaTimer
 import kafka.utils.ShutdownableThread
 
+object ControllerEventManager {
+  val ControllerEventThreadName = "controller-event-thread"
+}
 class ControllerEventManager(rateAndTimeMetrics: Map[ControllerState, KafkaTimer],
                              eventProcessedListener: ControllerEvent => Unit) {
 
   @volatile private var _state: ControllerState = ControllerState.Idle
 
   private val queue = new LinkedBlockingQueue[ControllerEvent]
-  private val thread = new ControllerEventThread("controller-event-thread")
+  private val thread = new ControllerEventThread(ControllerEventManager.ControllerEventThreadName)
 
   def state: ControllerState = _state
 

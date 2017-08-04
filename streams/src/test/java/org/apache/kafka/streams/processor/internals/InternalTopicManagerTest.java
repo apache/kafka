@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.MetadataResponse;
@@ -81,6 +82,31 @@ public class InternalTopicManagerTest {
         Assert.assertTrue(exceptionWasThrown);
     }
 
+    @Test
+    public void shouldNotThrowExceptionIfExistsWithDifferentReplication() throws Exception {
+
+        // create topic the first time with replication 2
+        InternalTopicManager internalTopicManager = new InternalTopicManager(streamsKafkaClient, 2,
+            WINDOW_CHANGE_LOG_ADDITIONAL_RETENTION_DEFAULT, time);
+        internalTopicManager.makeReady(Collections.singletonMap(new InternalTopicConfig(topic, Collections.singleton(InternalTopicConfig.CleanupPolicy.compact), null), 1));
+
+        // attempt to create it again with replication 1
+        InternalTopicManager internalTopicManager2 = new InternalTopicManager(streamsKafkaClient, 1,
+            WINDOW_CHANGE_LOG_ADDITIONAL_RETENTION_DEFAULT, time);
+        try {
+            internalTopicManager2.makeReady(Collections.singletonMap(new InternalTopicConfig(topic, Collections.singleton(InternalTopicConfig.CleanupPolicy.compact), null), 1));
+        } catch (StreamsException e) {
+            Assert.fail("did not expect an exception since topic is already there.");
+        }
+    }
+
+    @Test
+    public void shouldNotThrowExceptionForEmptyTopicMap() throws Exception {
+        InternalTopicManager internalTopicManager = new InternalTopicManager(streamsKafkaClient, 1,
+            WINDOW_CHANGE_LOG_ADDITIONAL_RETENTION_DEFAULT, time);
+        internalTopicManager.makeReady(Collections.EMPTY_MAP);
+    }
+
     private Properties configProps() {
         return new Properties() {
             {
@@ -95,7 +121,7 @@ public class InternalTopicManagerTest {
     private class MockStreamKafkaClient extends StreamsKafkaClient {
 
         MockStreamKafkaClient(final StreamsConfig streamsConfig) {
-            super(streamsConfig);
+            super(StreamsKafkaClient.Config.fromStreamsConfig(streamsConfig), new MockClient(new MockTime()), Collections.EMPTY_LIST);
         }
 
         @Override
@@ -107,7 +133,7 @@ public class InternalTopicManagerTest {
         @Override
         public MetadataResponse fetchMetadata() {
             Node node = new Node(1, "host1", 1001);
-            MetadataResponse.PartitionMetadata partitionMetadata = new MetadataResponse.PartitionMetadata(Errors.NONE, 1, node, new ArrayList<Node>(), new ArrayList<Node>());
+            MetadataResponse.PartitionMetadata partitionMetadata = new MetadataResponse.PartitionMetadata(Errors.NONE, 1, node, new ArrayList<Node>(), new ArrayList<Node>(), new ArrayList<Node>());
             MetadataResponse.TopicMetadata topicMetadata = new MetadataResponse.TopicMetadata(Errors.NONE, topic, true, Collections.singletonList(partitionMetadata));
             MetadataResponse response = new MetadataResponse(Collections.<Node>singletonList(node), null, MetadataResponse.NO_CONTROLLER_ID,
                 Collections.singletonList(topicMetadata));

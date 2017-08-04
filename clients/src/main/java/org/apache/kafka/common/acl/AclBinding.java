@@ -17,17 +17,27 @@
 
 package org.apache.kafka.common.acl;
 
+import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.resource.Resource;
 
 import java.util.Objects;
 
 /**
  * Represents a binding between a resource and an access control entry.
+ *
+ * The API for this class is still evolving and we may break compatibility in minor releases, if necessary.
  */
+@InterfaceStability.Evolving
 public class AclBinding {
     private final Resource resource;
     private final AccessControlEntry entry;
 
+    /**
+     * Create an instance of this class with the provided parameters.
+     *
+     * @param resource non-null resource
+     * @param entry non-null entry
+     */
     public AclBinding(Resource resource, AccessControlEntry entry) {
         Objects.requireNonNull(resource);
         this.resource = resource;
@@ -38,14 +48,20 @@ public class AclBinding {
     /**
      * Return true if this binding has any UNKNOWN components.
      */
-    public boolean unknown() {
-        return resource.unknown() || entry.unknown();
+    public boolean isUnknown() {
+        return resource.isUnknown() || entry.isUnknown();
     }
 
+    /**
+     * Return the resource for this binding.
+     */
     public Resource resource() {
         return resource;
     }
 
+    /**
+     * Return the access control entry for this binding.
+     */
     public final AccessControlEntry entry() {
         return entry;
     }

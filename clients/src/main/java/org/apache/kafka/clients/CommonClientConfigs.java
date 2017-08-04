@@ -16,16 +16,22 @@
  */
 package org.apache.kafka.clients;
 
+import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.protocol.SecurityProtocol;
 import org.apache.kafka.common.utils.Utils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Some configurations shared by both producer and consumer
  */
 public class CommonClientConfigs {
+    private static final Logger log = LoggerFactory.getLogger(CommonClientConfigs.class);
 
     /*
      * NOTE: DO NOT CHANGE EITHER CONFIG NAMES AS THESE ARE PART OF THE PUBLIC API AND CHANGE WILL BREAK USER CODE.
@@ -90,4 +96,25 @@ public class CommonClientConfigs {
         return names;
     }
 
+
+    /**
+     * Postprocess the configuration so that exponential backoff is disabled when reconnect backoff
+     * is explicitly configured but the maximum reconnect backoff is not cexplicitly onfigured.
+     *
+     * @param config                    The config object.
+     * @param parsedValues              The parsedValues as provided to postProcessParsedConfig.
+     *
+     * @return                          The new values which have been set as described in postProcessParsedConfig.
+     */
+    public static Map<String, Object> postProcessReconnectBackoffConfigs(AbstractConfig config,
+                                                    Map<String, Object> parsedValues) {
+        HashMap<String, Object> rval = new HashMap<>();
+        if ((!config.originals().containsKey(RECONNECT_BACKOFF_MAX_MS_CONFIG)) &&
+                config.originals().containsKey(RECONNECT_BACKOFF_MS_CONFIG)) {
+            log.debug("Disabling exponential reconnect backoff because " + RECONNECT_BACKOFF_MS_CONFIG +
+                " is set, but " + RECONNECT_BACKOFF_MAX_MS_CONFIG + " is not.");
+            rval.put(RECONNECT_BACKOFF_MAX_MS_CONFIG, parsedValues.get(RECONNECT_BACKOFF_MS_CONFIG));
+        }
+        return rval;
+    }
 }

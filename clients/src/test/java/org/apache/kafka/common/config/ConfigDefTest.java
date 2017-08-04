@@ -28,14 +28,17 @@ import org.junit.Test;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 
 import static java.util.Arrays.asList;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.fail;
 
 public class ConfigDefTest {
@@ -359,6 +362,45 @@ public class ConfigDefTest {
         assertFalse(configDef.toRst().contains("my.config"));
     }
 
+    @Test
+    public void testNames() {
+        final ConfigDef configDef = new ConfigDef()
+                .define("a", Type.STRING, Importance.LOW, "docs")
+                .define("b", Type.STRING, Importance.LOW, "docs");
+        Set<String> names = configDef.names();
+        assertEquals(new HashSet<>(Arrays.asList("a", "b")), names);
+        // should be unmodifiable
+        try {
+            names.add("new");
+            fail();
+        } catch (UnsupportedOperationException e) {
+            // expected
+        }
+    }
+
+    @Test(expected = ConfigException.class)
+    public void testMissingDependentConfigs() {
+        // Should not be possible to parse a config if a dependent config has not been defined
+        final ConfigDef configDef = new ConfigDef()
+                .define("parent", Type.STRING, Importance.HIGH, "parent docs", "group", 1, Width.LONG, "Parent", Collections.singletonList("child"));
+        configDef.parse(Collections.emptyMap());
+    }
+
+    @Test
+    public void testBaseConfigDefDependents() {
+        // Creating a ConfigDef based on another should compute the correct number of configs with no parent, even
+        // if the base ConfigDef has already computed its parentless configs
+        final ConfigDef baseConfigDef = new ConfigDef().define("a", Type.STRING, Importance.LOW, "docs");
+        assertEquals(new HashSet<>(Arrays.asList("a")), baseConfigDef.getConfigsWithNoParent());
+
+        final ConfigDef configDef = new ConfigDef(baseConfigDef)
+                .define("parent", Type.STRING, Importance.HIGH, "parent docs", "group", 1, Width.LONG, "Parent", Collections.singletonList("child"))
+                .define("child", Type.STRING, Importance.HIGH, "docs");
+
+        assertEquals(new HashSet<>(Arrays.asList("a", "parent")), configDef.getConfigsWithNoParent());
+    }
+
+
     private static class IntegerRecommender implements ConfigDef.Recommender {
 
         private boolean hasParent;
@@ -502,42 +544,50 @@ public class ConfigDefTest {
     @Test
     public void testConvertValueToStringBoolean() {
         assertEquals("true", ConfigDef.convertToString(true, Type.BOOLEAN));
+        assertNull(ConfigDef.convertToString(null, Type.BOOLEAN));
     }
 
     @Test
     public void testConvertValueToStringShort() {
         assertEquals("32767", ConfigDef.convertToString(Short.MAX_VALUE, Type.SHORT));
+        assertNull(ConfigDef.convertToString(null, Type.SHORT));
     }
 
     @Test
     public void testConvertValueToStringInt() {
         assertEquals("2147483647", ConfigDef.convertToString(Integer.MAX_VALUE, Type.INT));
+        assertNull(ConfigDef.convertToString(null, Type.INT));
     }
 
     @Test
     public void testConvertValueToStringLong() {
         assertEquals("9223372036854775807", ConfigDef.convertToString(Long.MAX_VALUE, Type.LONG));
+        assertNull(ConfigDef.convertToString(null, Type.LONG));
     }
 
     @Test
     public void testConvertValueToStringDouble() {
         assertEquals("3.125", ConfigDef.convertToString(3.125, Type.DOUBLE));
+        assertNull(ConfigDef.convertToString(null, Type.DOUBLE));
     }
 
     @Test
     public void testConvertValueToStringString() {
         assertEquals("foobar", ConfigDef.convertToString("foobar", Type.STRING));
+        assertNull(ConfigDef.convertToString(null, Type.STRING));
     }
 
     @Test
     public void testConvertValueToStringPassword() {
         assertEquals(Password.HIDDEN, ConfigDef.convertToString(new Password("foobar"), Type.PASSWORD));
         assertEquals("foobar", ConfigDef.convertToString("foobar", Type.PASSWORD));
+        assertNull(ConfigDef.convertToString(null, Type.PASSWORD));
     }
 
     @Test
     public void testConvertValueToStringList() {
         assertEquals("a,bc,d", ConfigDef.convertToString(Arrays.asList("a", "bc", "d"), Type.LIST));
+        assertNull(ConfigDef.convertToString(null, Type.LIST));
     }
 
     @Test
@@ -546,6 +596,7 @@ public class ConfigDefTest {
         assertEquals("org.apache.kafka.common.config.ConfigDefTest", actual);
         // Additionally validate that we can look up this class by this name
         assertEquals(ConfigDefTest.class, Class.forName(actual));
+        assertNull(ConfigDef.convertToString(null, Type.CLASS));
     }
 
     @Test

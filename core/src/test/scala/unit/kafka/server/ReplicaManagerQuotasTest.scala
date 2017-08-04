@@ -16,6 +16,7 @@
   */
 package kafka.server
 
+import java.io.File
 import java.util.Properties
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -42,7 +43,7 @@ class ReplicaManagerQuotasTest {
   val topicPartition1 = new TopicPartition("test-topic", 1)
   val topicPartition2 = new TopicPartition("test-topic", 2)
   val fetchInfo = Seq(topicPartition1 -> new PartitionData(0, 0, 100), topicPartition2 -> new PartitionData(0, 0, 100))
-  var replicaManager: ReplicaManager = null
+  var replicaManager: ReplicaManager = _
 
   @Test
   def shouldExcludeSubsequentThrottledPartitions(): Unit = {
@@ -61,7 +62,8 @@ class ReplicaManagerQuotasTest {
       fetchMaxBytes = Int.MaxValue,
       hardMaxBytesLimit = false,
       readPartitionInfo = fetchInfo,
-      quota = quota)
+      quota = quota,
+      isolationLevel = IsolationLevel.READ_UNCOMMITTED)
     assertEquals("Given two partitions, with only one throttled, we should get the first", 1,
       fetch.find(_._1 == topicPartition1).get._2.info.records.batches.asScala.size)
 
@@ -86,7 +88,8 @@ class ReplicaManagerQuotasTest {
       fetchMaxBytes = Int.MaxValue,
       hardMaxBytesLimit = false,
       readPartitionInfo = fetchInfo,
-      quota = quota)
+      quota = quota,
+      isolationLevel = IsolationLevel.READ_UNCOMMITTED)
     assertEquals("Given two partitions, with both throttled, we should get no messages", 0,
       fetch.find(_._1 == topicPartition1).get._2.info.records.batches.asScala.size)
     assertEquals("Given two partitions, with both throttled, we should get no messages", 0,
@@ -110,7 +113,8 @@ class ReplicaManagerQuotasTest {
       fetchMaxBytes = Int.MaxValue,
       hardMaxBytesLimit = false,
       readPartitionInfo = fetchInfo,
-      quota = quota)
+      quota = quota,
+      isolationLevel = IsolationLevel.READ_UNCOMMITTED)
     assertEquals("Given two partitions, with both non-throttled, we should get both messages", 1,
       fetch.find(_._1 == topicPartition1).get._2.info.records.batches.asScala.size)
     assertEquals("Given two partitions, with both non-throttled, we should get both messages", 1,
@@ -134,7 +138,8 @@ class ReplicaManagerQuotasTest {
       fetchMaxBytes = Int.MaxValue,
       hardMaxBytesLimit = false,
       readPartitionInfo = fetchInfo,
-      quota = quota)
+      quota = quota,
+      isolationLevel = IsolationLevel.READ_UNCOMMITTED)
     assertEquals("Given two partitions, with only one throttled, we should get the first", 1,
       fetch.find(_._1 == topicPartition1).get._2.info.records.batches.asScala.size)
 
@@ -153,14 +158,16 @@ class ReplicaManagerQuotasTest {
     expect(log.logEndOffsetMetadata).andReturn(new LogOffsetMetadata(20L)).anyTimes()
 
     //if we ask for len 1 return a message
-    expect(log.read(anyObject(), geq(1), anyObject(), anyObject(), anyObject())).andReturn(
+    expect(log.read(anyObject(), geq(1), anyObject(), anyObject(),
+      EasyMock.eq(IsolationLevel.READ_UNCOMMITTED))).andReturn(
       FetchDataInfo(
         new LogOffsetMetadata(0L, 0L, 0),
         MemoryRecords.withRecords(CompressionType.NONE, record)
       )).anyTimes()
 
     //if we ask for len = 0, return 0 messages
-    expect(log.read(anyObject(), EasyMock.eq(0), anyObject(), anyObject(), anyObject())).andReturn(
+    expect(log.read(anyObject(), EasyMock.eq(0), anyObject(), anyObject(),
+      EasyMock.eq(IsolationLevel.READ_UNCOMMITTED))).andReturn(
       FetchDataInfo(
         new LogOffsetMetadata(0L, 0L, 0),
         MemoryRecords.EMPTY
@@ -172,19 +179,20 @@ class ReplicaManagerQuotasTest {
 
     //Return the same log for each partition as it doesn't matter
     expect(logManager.getLog(anyObject())).andReturn(Some(log)).anyTimes()
+    expect(logManager.liveLogDirs).andReturn(Array.empty[File]).anyTimes()
     replay(logManager)
 
     replicaManager = new ReplicaManager(configs.head, metrics, time, zkUtils, scheduler, logManager,
       new AtomicBoolean(false), QuotaFactory.instantiate(configs.head, metrics, time).follower,
-      new BrokerTopicStats, new MetadataCache(configs.head.brokerId))
+      new BrokerTopicStats, new MetadataCache(configs.head.brokerId), new LogDirFailureChannel(configs.head.logDirs.size))
 
     //create the two replicas
     for ((p, _) <- fetchInfo) {
       val partition = replicaManager.getOrCreatePartition(p)
-      val leaderReplica = new Replica(configs.head.brokerId, partition, time, 0, Some(log))
+      val leaderReplica = new Replica(configs.head.brokerId, p, time, 0, Some(log))
       leaderReplica.highWatermark = new LogOffsetMetadata(5)
       partition.leaderReplicaIdOpt = Some(leaderReplica.brokerId)
-      val followerReplica = new Replica(configs.last.brokerId, partition, time, 0, Some(log))
+      val followerReplica = new Replica(configs.last.brokerId, p, time, 0, Some(log))
       val allReplicas = Set(leaderReplica, followerReplica)
       allReplicas.foreach(partition.addReplicaIfNotExists)
       if (bothReplicasInSync) {

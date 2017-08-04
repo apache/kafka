@@ -24,7 +24,6 @@ import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NetworkClient;
-import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.admin.DeleteAclsResult.FilterResult;
 import org.apache.kafka.clients.admin.DeleteAclsResult.FilterResults;
 import org.apache.kafka.common.Cluster;
@@ -59,8 +58,6 @@ import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.AlterConfigsRequest;
 import org.apache.kafka.common.requests.AlterConfigsResponse;
-import org.apache.kafka.common.requests.ApiVersionsRequest;
-import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.requests.CreateAclsRequest;
 import org.apache.kafka.common.requests.CreateAclsRequest.AclCreation;
 import org.apache.kafka.common.requests.CreateAclsResponse;
@@ -92,13 +89,13 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.TreeMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -106,17 +103,14 @@ import java.util.concurrent.atomic.AtomicLong;
 import static org.apache.kafka.common.utils.Utils.closeQuietly;
 
 /**
- * An administrative client for Kafka which supports managing and inspecting topics, brokers,
- * and configurations.
+ * The default implementation of {@link AdminClient}. An instance of this class is created by invoking one of the
+ * {@code create()} methods in {@code AdminClient}. Users should not refer to this class directly.
+ *
+ * The API of this class is evolving, see {@link AdminClient} for details.
  */
-@InterfaceStability.Unstable
+@InterfaceStability.Evolving
 public class KafkaAdminClient extends AdminClient {
     private static final Logger log = LoggerFactory.getLogger(KafkaAdminClient.class);
-
-    /**
-     * The maximum number of times to retry a call before failing it.
-     */
-    private static final int MAX_CALL_RETRIES = 5;
 
     /**
      * The next integer to use to name a KafkaAdminClient which the user hasn't specified an explicit name for.
@@ -178,6 +172,13 @@ public class KafkaAdminClient extends AdminClient {
      * and force the RPC thread to exit.  If the admin client is not closing, this will be 0.
      */
     private final AtomicLong hardShutdownTimeMs = new AtomicLong(INVALID_SHUTDOWN_TIME);
+
+    /**
+     * A factory which creates TimeoutProcessors for the RPC thread.
+     */
+    private final TimeoutProcessorFactory timeoutProcessorFactory;
+
+    private final int maxRetries;
 
     /**
      * Get or create a list value from a map.
@@ -270,8 +271,7 @@ public class KafkaAdminClient extends AdminClient {
         return throwable.getClass().getSimpleName();
     }
 
-    static KafkaAdminClient createInternal(AdminClientConfig config) {
-        Metadata metadata = null;
+    static KafkaAdminClient createInternal(AdminClientConfig config, TimeoutProcessorFactory timeoutProcessorFactory) {
         Metrics metrics = null;
         NetworkClient networkClient = null;
         Time time = Time.SYSTEM;
@@ -281,8 +281,10 @@ public class KafkaAdminClient extends AdminClient {
         ApiVersions apiVersions = new ApiVersions();
 
         try {
-            metadata = new Metadata(config.getLong(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG),
-                    config.getLong(AdminClientConfig.METADATA_MAX_AGE_CONFIG), false);
+            // Since we only request node information, it's safe to pass true for allowAutoTopicCreation (and it
+            // simplifies communication with older brokers)
+            Metadata metadata = new Metadata(config.getLong(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG),
+                    config.getLong(AdminClientConfig.METADATA_MAX_AGE_CONFIG), true);
             List<MetricsReporter> reporters = config.getConfiguredInstances(AdminClientConfig.METRIC_REPORTER_CLASSES_CONFIG,
                 MetricsReporter.class);
             Map<String, String> metricTags = Collections.singletonMap("client-id", clientId);
@@ -309,8 +311,8 @@ public class KafkaAdminClient extends AdminClient {
                 time,
                 true,
                 apiVersions);
-            channelBuilder = null;
-            return new KafkaAdminClient(config, clientId, time, metadata, metrics, networkClient);
+            return new KafkaAdminClient(config, clientId, time, metadata, metrics, networkClient,
+                timeoutProcessorFactory);
         } catch (Throwable exc) {
             closeQuietly(metrics, "Metrics");
             closeQuietly(networkClient, "NetworkClient");
@@ -327,7 +329,7 @@ public class KafkaAdminClient extends AdminClient {
 
         try {
             metrics = new Metrics(new MetricConfig(), new LinkedList<MetricsReporter>(), time);
-            return new KafkaAdminClient(config, clientId, time, metadata, metrics, client);
+            return new KafkaAdminClient(config, clientId, time, metadata, metrics, client, null);
         } catch (Throwable exc) {
             closeQuietly(metrics, "Metrics");
             throw new KafkaException("Failed create new KafkaAdminClient", exc);
@@ -335,7 +337,7 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     private KafkaAdminClient(AdminClientConfig config, String clientId, Time time, Metadata metadata,
-                     Metrics metrics, KafkaClient client) {
+                     Metrics metrics, KafkaClient client, TimeoutProcessorFactory timeoutProcessorFactory) {
         this.defaultTimeoutMs = config.getInt(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG);
         this.clientId = clientId;
         this.time = time;
@@ -348,6 +350,9 @@ public class KafkaAdminClient extends AdminClient {
         this.runnable = new AdminClientRunnable();
         String threadName = "kafka-admin-client-thread" + (clientId.length() > 0 ? " | " + clientId : "");
         this.thread = new KafkaThread(threadName, runnable, false);
+        this.timeoutProcessorFactory = (timeoutProcessorFactory == null) ?
+            new TimeoutProcessorFactory() : timeoutProcessorFactory;
+        this.maxRetries = config.getInt(AdminClientConfig.RETRIES_CONFIG);
         config.logUnused();
         log.debug("Created Kafka admin client {}", this.clientId);
         thread.start();
@@ -412,22 +417,6 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     /**
-     * Provides a constant node which is known at construction time.
-     */
-    private static class ConstantNodeProvider implements NodeProvider {
-        private final Node node;
-
-        ConstantNodeProvider(Node node) {
-            this.node = node;
-        }
-
-        @Override
-        public Node provide() {
-            return node;
-        }
-    }
-
-    /**
      * Provides the controller node.
      */
     private class ControllerNodeProvider implements NodeProvider {
@@ -447,7 +436,7 @@ public class KafkaAdminClient extends AdminClient {
         }
     }
 
-    private abstract class Call {
+    abstract class Call {
         private final String callName;
         private final long deadlineMs;
         private final NodeProvider nodeProvider;
@@ -497,7 +486,7 @@ public class KafkaAdminClient extends AdminClient {
                 return;
             }
             // If we are out of retries, fail.
-            if (tries > MAX_CALL_RETRIES) {
+            if (tries > maxRetries) {
                 if (log.isDebugEnabled()) {
                     log.debug("{} failed after {} attempt(s)", this, tries,
                         new Exception(prettyPrintException(throwable)));
@@ -555,6 +544,79 @@ public class KafkaAdminClient extends AdminClient {
         }
     }
 
+    static class TimeoutProcessorFactory {
+        TimeoutProcessor create(long now) {
+            return new TimeoutProcessor(now);
+        }
+    }
+
+    static class TimeoutProcessor {
+        /**
+         * The current time in milliseconds.
+         */
+        private final long now;
+
+        /**
+         * The number of milliseconds until the next timeout.
+         */
+        private int nextTimeoutMs;
+
+        /**
+         * Create a new timeout processor.
+         *
+         * @param now           The current time in milliseconds since the epoch.
+         */
+        TimeoutProcessor(long now) {
+            this.now = now;
+            this.nextTimeoutMs = Integer.MAX_VALUE;
+        }
+
+        /**
+         * Check for calls which have timed out.
+         * Timed out calls will be removed and failed.
+         * The remaining milliseconds until the next timeout will be updated.
+         *
+         * @param calls         The collection of calls.
+         *
+         * @return              The number of calls which were timed out.
+         */
+        int handleTimeouts(Collection<Call> calls, String msg) {
+            int numTimedOut = 0;
+            for (Iterator<Call> iter = calls.iterator(); iter.hasNext(); ) {
+                Call call = iter.next();
+                int remainingMs = calcTimeoutMsRemainingAsInt(now, call.deadlineMs);
+                if (remainingMs < 0) {
+                    call.fail(now, new TimeoutException(msg));
+                    iter.remove();
+                    numTimedOut++;
+                } else {
+                    nextTimeoutMs = Math.min(nextTimeoutMs, remainingMs);
+                }
+            }
+            return numTimedOut;
+        }
+
+        /**
+         * Check whether a call should be timed out.
+         * The remaining milliseconds until the next timeout will be updated.
+         *
+         * @param call      The call.
+         *
+         * @return          True if the call should be timed out.
+         */
+        boolean callHasExpired(Call call) {
+            int remainingMs = calcTimeoutMsRemainingAsInt(now, call.deadlineMs);
+            if (remainingMs < 0)
+                return true;
+            nextTimeoutMs = Math.min(nextTimeoutMs, remainingMs);
+            return false;
+        }
+
+        int nextTimeoutMs() {
+            return nextTimeoutMs;
+        }
+    }
+
     private final class AdminClientRunnable implements Runnable {
         /**
          * Pending calls.  Protected by the object monitor.
@@ -588,73 +650,6 @@ public class KafkaAdminClient extends AdminClient {
                 log.trace("{}: metadata is now ready.", clientId);
             }
             return null;
-        }
-
-        private class TimeoutProcessor {
-            /**
-             * The current time in milliseconds.
-             */
-            private final long now;
-
-            /**
-             * The number of milliseconds until the next timeout.
-             */
-            private int nextTimeoutMs;
-
-            /**
-             * Create a new timeout processor.
-             *
-             * @param now           The current time in milliseconds since the epoch.
-             */
-            TimeoutProcessor(long now) {
-                this.now = now;
-                this.nextTimeoutMs = Integer.MAX_VALUE;
-            }
-
-            /**
-             * Check for calls which have timed out.
-             * Timed out calls will be removed and failed.
-             * The remaining milliseconds until the next timeout will be updated.
-             *
-             * @param calls         The collection of calls.
-             *
-             * @return              The number of calls which were timed out.
-             */
-            int handleTimeouts(Collection<Call> calls, String msg) {
-                int numTimedOut = 0;
-                for (Iterator<Call> iter = calls.iterator(); iter.hasNext(); ) {
-                    Call call = iter.next();
-                    int remainingMs = calcTimeoutMsRemainingAsInt(now, call.deadlineMs);
-                    if (remainingMs < 0) {
-                        call.fail(now, new TimeoutException(msg));
-                        iter.remove();
-                        numTimedOut++;
-                    } else {
-                        nextTimeoutMs = Math.min(nextTimeoutMs, remainingMs);
-                    }
-                }
-                return numTimedOut;
-            }
-
-            /**
-             * Check whether a call should be timed out.
-             * The remaining milliseconds until the next timeout will be updated.
-             *
-             * @param call      The call.
-             *
-             * @return          True if the call should be timed out.
-             */
-            boolean callHasExpired(Call call) {
-                int remainingMs = calcTimeoutMsRemainingAsInt(now, call.deadlineMs);
-                if (remainingMs < 0)
-                    return true;
-                nextTimeoutMs = Math.min(nextTimeoutMs, remainingMs);
-                return false;
-            }
-
-            int nextTimeoutMs() {
-                return nextTimeoutMs;
-            }
         }
 
         /**
@@ -798,7 +793,7 @@ public class KafkaAdminClient extends AdminClient {
                 Call call = contexts.get(0);
                 if (processor.callHasExpired(call)) {
                     log.debug("{}: Closing connection to {} to time out {}", clientId, nodeId, call);
-                    client.close(nodeId);
+                    client.disconnect(nodeId);
                     numTimedOut++;
                     // We don't remove anything from the callsInFlight data structure.  Because the connection
                     // has been closed, the calls should be returned by the next client#poll(),
@@ -827,8 +822,9 @@ public class KafkaAdminClient extends AdminClient {
                     // If the server returns information about a correlation ID we didn't use yet,
                     // an internal server error has occurred.  Close the connection and log an error message.
                     log.error("Internal server error on {}: server returned information about unknown " +
-                        "correlation ID {}", response.destination(), correlationId);
-                    client.close(response.destination());
+                        "correlation ID {}.  requestHeader = {}", response.destination(), correlationId,
+                        response.requestHeader());
+                    client.disconnect(response.destination());
                     continue;
                 }
 
@@ -906,7 +902,7 @@ public class KafkaAdminClient extends AdminClient {
                     break;
 
                 // Handle timeouts.
-                TimeoutProcessor timeoutProcessor = new TimeoutProcessor(now);
+                TimeoutProcessor timeoutProcessor = timeoutProcessorFactory.create(now);
                 timeoutNewCalls(timeoutProcessor);
                 timeoutCallsToSend(timeoutProcessor, callsToSend);
                 timeoutCallsInFlight(timeoutProcessor, callsInFlight);
@@ -1015,7 +1011,7 @@ public class KafkaAdminClient extends AdminClient {
 
             @Override
             public AbstractRequest.Builder createRequest(int timeoutMs) {
-                return new CreateTopicsRequest.Builder(topicsMap, timeoutMs, options.validateOnly());
+                return new CreateTopicsRequest.Builder(topicsMap, timeoutMs, options.shouldValidateOnly());
             }
 
             @Override
@@ -1125,7 +1121,7 @@ public class KafkaAdminClient extends AdminClient {
                 Map<String, TopicListing> topicListing = new HashMap<>();
                 for (String topicName : cluster.topics()) {
                     boolean internal = cluster.internalTopics().contains(topicName);
-                    if (!internal || options.listInternal())
+                    if (!internal || options.shouldListInternal())
                         topicListing.put(topicName, new TopicListing(topicName, internal));
                 }
                 topicListingFuture.complete(topicListing);
@@ -1181,17 +1177,29 @@ public class KafkaAdminClient extends AdminClient {
                         continue;
                     }
                     boolean isInternal = cluster.internalTopics().contains(topicName);
-                    TreeMap<Integer, TopicPartitionInfo> partitions = new TreeMap<>();
                     List<PartitionInfo> partitionInfos = cluster.partitionsForTopic(topicName);
+                    List<TopicPartitionInfo> partitions = new ArrayList<>(partitionInfos.size());
                     for (PartitionInfo partitionInfo : partitionInfos) {
                         TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(
-                            partitionInfo.partition(), partitionInfo.leader(), Arrays.asList(partitionInfo.replicas()),
+                            partitionInfo.partition(), leader(partitionInfo), Arrays.asList(partitionInfo.replicas()),
                             Arrays.asList(partitionInfo.inSyncReplicas()));
-                        partitions.put(partitionInfo.partition(), topicPartitionInfo);
+                        partitions.add(topicPartitionInfo);
                     }
+                    Collections.sort(partitions, new Comparator<TopicPartitionInfo>() {
+                        @Override
+                        public int compare(TopicPartitionInfo tp1, TopicPartitionInfo tp2) {
+                            return Integer.compare(tp1.partition(), tp2.partition());
+                        }
+                    });
                     TopicDescription topicDescription = new TopicDescription(topicName, isInternal, partitions);
                     future.complete(topicDescription);
                 }
+            }
+
+            private Node leader(PartitionInfo partitionInfo) {
+                if (partitionInfo.leader() == null || partitionInfo.leader().id() == Node.noNode().id())
+                    return null;
+                return partitionInfo.leader();
             }
 
             @Override
@@ -1222,15 +1230,23 @@ public class KafkaAdminClient extends AdminClient {
 
             @Override
             AbstractRequest.Builder createRequest(int timeoutMs) {
-                return new MetadataRequest.Builder(Collections.<String>emptyList(), false);
+                // Since this only requests node information, it's safe to pass true for allowAutoTopicCreation (and it
+                // simplifies communication with older brokers)
+                return new MetadataRequest.Builder(Collections.<String>emptyList(), true);
             }
 
             @Override
             void handleResponse(AbstractResponse abstractResponse) {
                 MetadataResponse response = (MetadataResponse) abstractResponse;
                 describeClusterFuture.complete(response.brokers());
-                controllerFuture.complete(response.controller());
+                controllerFuture.complete(controller(response));
                 clusterIdFuture.complete(response.clusterId());
+            }
+
+            private Node controller(MetadataResponse response) {
+                if (response.controller() == null || response.controller().id() == MetadataResponse.NO_CONTROLLER_ID)
+                    return null;
+                return response.controller();
             }
 
             @Override
@@ -1242,38 +1258,6 @@ public class KafkaAdminClient extends AdminClient {
         }, now);
 
         return new DescribeClusterResult(describeClusterFuture, controllerFuture, clusterIdFuture);
-    }
-
-    @Override
-    public ApiVersionsResult apiVersions(Collection<Node> nodes, ApiVersionsOptions options) {
-        final long now = time.milliseconds();
-        final long deadlineMs = calcDeadlineMs(now, options.timeoutMs());
-        Map<Node, KafkaFuture<NodeApiVersions>> nodeFutures = new HashMap<>();
-        for (final Node node : nodes) {
-            if (nodeFutures.get(node) != null)
-                continue;
-            final KafkaFutureImpl<NodeApiVersions> nodeFuture = new KafkaFutureImpl<>();
-            nodeFutures.put(node, nodeFuture);
-            runnable.call(new Call("apiVersions", deadlineMs, new ConstantNodeProvider(node)) {
-                    @Override
-                    public AbstractRequest.Builder createRequest(int timeoutMs) {
-                        return new ApiVersionsRequest.Builder();
-                    }
-
-                    @Override
-                    public void handleResponse(AbstractResponse abstractResponse) {
-                        ApiVersionsResponse response = (ApiVersionsResponse) abstractResponse;
-                        nodeFuture.complete(new NodeApiVersions(response.apiVersions()));
-                    }
-
-                    @Override
-                    public void handleFailure(Throwable throwable) {
-                        nodeFuture.completeExceptionally(throwable);
-                    }
-                }, now);
-        }
-        return new ApiVersionsResult(nodeFutures);
-
     }
 
     @Override
@@ -1291,8 +1275,8 @@ public class KafkaAdminClient extends AdminClient {
             @Override
             void handleResponse(AbstractResponse abstractResponse) {
                 DescribeAclsResponse response = (DescribeAclsResponse) abstractResponse;
-                if (response.throwable() != null) {
-                    future.completeExceptionally(response.throwable());
+                if (response.error().isFailure()) {
+                    future.completeExceptionally(response.error().exception());
                 } else {
                     future.complete(response.acls());
                 }
@@ -1344,8 +1328,8 @@ public class KafkaAdminClient extends AdminClient {
                             "The broker reported no creation result for the given ACL."));
                     } else {
                         AclCreationResponse creation = iter.next();
-                        if (creation.throwable() != null) {
-                            future.completeExceptionally(creation.throwable());
+                        if (creation.error().isFailure()) {
+                            future.completeExceptionally(creation.error().exception());
                         } else {
                             future.complete(null);
                         }
@@ -1392,12 +1376,12 @@ public class KafkaAdminClient extends AdminClient {
                             "The broker reported no deletion result for the given filter."));
                     } else {
                         AclFilterResponse deletion = iter.next();
-                        if (deletion.throwable() != null) {
-                            future.completeExceptionally(deletion.throwable());
+                        if (deletion.error().isFailure()) {
+                            future.completeExceptionally(deletion.error().exception());
                         } else {
                             List<FilterResult> filterResults = new ArrayList<>();
                             for (AclDeletionResult deletionResult : deletion.deletions()) {
-                                filterResults.add(new FilterResult(deletionResult.acl(), deletionResult.exception()));
+                                filterResults.add(new FilterResult(deletionResult.acl(), deletionResult.error().exception()));
                             }
                             future.complete(new FilterResults(filterResults));
                         }
@@ -1447,7 +1431,7 @@ public class KafkaAdminClient extends AdminClient {
                     ConfigResource configResource = entry.getKey();
                     KafkaFutureImpl<Config> future = entry.getValue();
                     DescribeConfigsResponse.Config config = response.config(configResourceToResource(configResource));
-                    if (!config.error().is(Errors.NONE)) {
+                    if (config.error().isFailure()) {
                         future.completeExceptionally(config.error().exception());
                         continue;
                     }
@@ -1483,7 +1467,7 @@ public class KafkaAdminClient extends AdminClient {
                     DescribeConfigsResponse response = (DescribeConfigsResponse) abstractResponse;
                     DescribeConfigsResponse.Config config = response.configs().get(resource);
 
-                    if (!config.error().is(Errors.NONE))
+                    if (config.error().isFailure())
                         brokerFuture.completeExceptionally(config.error().exception());
                     else {
                         List<ConfigEntry> configEntries = new ArrayList<>();
@@ -1544,7 +1528,7 @@ public class KafkaAdminClient extends AdminClient {
 
             @Override
             public AbstractRequest.Builder createRequest(int timeoutMs) {
-                return new AlterConfigsRequest.Builder(requestMap, options.isValidateOnly());
+                return new AlterConfigsRequest.Builder(requestMap, options.shouldValidateOnly());
             }
 
             @Override

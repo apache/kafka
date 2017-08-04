@@ -49,7 +49,6 @@ public class TopicAdminTest {
     @Test
     public void returnNullWithApiVersionMismatch() {
         final NewTopic newTopic = TopicAdmin.defineTopic("myTopic").partitions(1).compacted().build();
-        boolean internal = false;
         Cluster cluster = createCluster(1);
         try (MockKafkaAdminClientEnv env = new MockKafkaAdminClientEnv(cluster)) {
             env.kafkaClient().setNode(cluster.controller());
