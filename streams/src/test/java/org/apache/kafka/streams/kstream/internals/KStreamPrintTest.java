@@ -19,12 +19,13 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.StreamsBuilder;
-import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.PrintForeachAction;
+import org.apache.kafka.streams.processor.Processor;
+import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.test.KStreamTestDriver;
 
+import org.easymock.EasyMock;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -41,7 +42,6 @@ import static org.junit.Assert.assertEquals;
 
 public class KStreamPrintTest {
 
-    private final String topicName = "topic";
     private final Serde<Integer> intSerd = Serdes.Integer();
     private final Serde<String> stringSerd = Serdes.String();
     private PrintWriter printWriter;
@@ -50,7 +50,7 @@ public class KStreamPrintTest {
     public KStreamTestDriver driver = new KStreamTestDriver();
 
     private KeyValueMapper<Integer, String, String> mapper;
-    private KStreamPrint<Integer, String> kStreamPrint;
+    private KStreamPrint kStreamPrint;
 
     @Before
     public void setUp() {
@@ -78,13 +78,13 @@ public class KStreamPrintTest {
 
         final String[] expectedResult = {"[test-stream]: 0, zero", "[test-stream]: 1, one", "[test-stream]: 2, two", "[test-stream]: 3, three"};
 
-        final StreamsBuilder builder = new StreamsBuilder();
-        final KStream<Integer, String> stream = builder.stream(intSerd, stringSerd, topicName);
-        stream.process(kStreamPrint);
+        Processor printProcessor = kStreamPrint.get();
+        ProcessorContext processorContext = EasyMock.createNiceMock(ProcessorContext.class);
+        EasyMock.replay(processorContext);
 
-        driver.setUp(builder);
+        printProcessor.init(processorContext);
         for (KeyValue<Integer, String> record: inputRecords) {
-            driver.process(topicName, record.key, record.value);
+            printProcessor.process(record.key, record.value);
         }
         printWriter.flush();
         assertFlushData(expectedResult, byteOutStream);
@@ -93,21 +93,22 @@ public class KStreamPrintTest {
     @Test
     public void testPrintKeyValueStringBytesArray() {
 
+        // we don't have a topic name because we don't need it for the test at this level
         final List<KeyValue<Integer, byte[]>> inputRecords = Arrays.asList(
-                new KeyValue<>(0, stringSerd.serializer().serialize(topicName, "zero")),
-                new KeyValue<>(1, stringSerd.serializer().serialize(topicName, "one")),
-                new KeyValue<>(2, stringSerd.serializer().serialize(topicName, "two")),
-                new KeyValue<>(3, stringSerd.serializer().serialize(topicName, "three")));
+                new KeyValue<>(0, stringSerd.serializer().serialize(null, "zero")),
+                new KeyValue<>(1, stringSerd.serializer().serialize(null, "one")),
+                new KeyValue<>(2, stringSerd.serializer().serialize(null, "two")),
+                new KeyValue<>(3, stringSerd.serializer().serialize(null, "three")));
 
         final String[] expectedResult = {"[test-stream]: 0, zero", "[test-stream]: 1, one", "[test-stream]: 2, two", "[test-stream]: 3, three"};
 
-        final StreamsBuilder builder = new StreamsBuilder();
-        final KStream<Integer, String> stream = builder.stream(intSerd, stringSerd, topicName);
-        stream.process(kStreamPrint);
+        Processor printProcessor = kStreamPrint.get();
+        ProcessorContext processorContext = EasyMock.createNiceMock(ProcessorContext.class);
+        EasyMock.replay(processorContext);
 
-        driver.setUp(builder);
+        printProcessor.init(processorContext);
         for (KeyValue<Integer, byte[]> record: inputRecords) {
-            driver.process(topicName, record.key, record.value);
+            printProcessor.process(record.key, record.value);
         }
         printWriter.flush();
         assertFlushData(expectedResult, byteOutStream);
