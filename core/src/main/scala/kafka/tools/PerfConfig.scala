@@ -42,21 +42,3 @@ class PerfConfig(args: Array[String]) {
   val hideHeaderOpt = parser.accepts("hide-header", "If set, skips printing the header for the stats ")
   val helpOpt = parser.accepts("help", "Print usage.")
 }
-
-class LegacyProducerPerfConfig(args: Array[String]) extends PerfConfig(args) {
-  val messageSizeOpt = parser.accepts("message-size", "The size of each message.")
-    .withRequiredArg
-    .describedAs("size")
-    .ofType(classOf[java.lang.Integer])
-    .defaultsTo(100)
-  val batchSizeOpt = parser.accepts("batch-size", "Number of messages to write in a single batch.")
-    .withRequiredArg
-    .describedAs("size")
-    .ofType(classOf[java.lang.Integer])
-    .defaultsTo(200)
-  val compressionCodecOpt = parser.accepts("compression-codec", "If set, messages are sent compressed")
-    .withRequiredArg
-    .describedAs("supported codec: NoCompressionCodec as 0, GZIPCompressionCodec as 1, SnappyCompressionCodec as 2, LZ4CompressionCodec as 3")
-    .ofType(classOf[java.lang.Integer])
-    .defaultsTo(0)
-}
