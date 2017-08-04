@@ -20,9 +20,9 @@
 ext {
   versions = [:]
   libs = [:]
-  
-  // Enabled by default when commands like `testAll` are invoked
-  defaultScalaVersions = [ '2.11' ]
+
+  // The scala versions supported before Java 8.
+  scalaVersionsBeforeJava8 = [ '2.11' ]
   // Available if -PscalaVersion is used, this is necessary because Scala 2.12 requires Java 8 while Kafka is usually
   // built with Java 7
   availableScalaVersions = [ '2.11', '2.12' ]
