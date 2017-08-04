@@ -1095,6 +1095,8 @@ public class InternalTopologyBuilder {
             final int size1 = ((AbstractNode) node1).size;
             final int size2 = ((AbstractNode) node2).size;
 
+            // it is possible that two nodes have the same sub-tree size (think two nodes connected via state stores)
+            // in this case default to processor name string
             if (size1 != size2)
                 return size2 - size1;
             else
