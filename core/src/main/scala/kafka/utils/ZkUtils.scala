@@ -29,7 +29,7 @@ import kafka.server.ConfigType
 import kafka.utils.ZkUtils._
 import org.I0Itec.zkclient.exception.{ZkBadVersionException, ZkException, ZkMarshallingError, ZkNoNodeException, ZkNodeExistsException}
 import org.I0Itec.zkclient.serialize.ZkSerializer
-import org.I0Itec.zkclient.{ZkClient, ZkConnection}
+import org.I0Itec.zkclient.{ZkClient, ZkConnection, IZkDataListener, IZkChildListener, IZkStateListener}
 import org.apache.kafka.common.config.ConfigException
 import org.apache.zookeeper.AsyncCallback.{DataCallback, StringCallback}
 import org.apache.zookeeper.KeeperException.Code
@@ -612,6 +612,30 @@ class ZkUtils(val zkClient: ZkClient,
 
   def deletePathRecursive(path: String) {
     zkClient.deleteRecursive(path)
+  }
+
+  def subscribeDataChanges(path: String, listener: IZkDataListener): Unit = {
+    zkClient.subscribeDataChanges(path, listener)
+  }
+
+  def unsubscribeDataChanges(path: String, dataListener: IZkDataListener): Unit = {
+    zkClient.unsubscribeDataChanges(path, dataListener)
+  }
+
+  def subscribeStateChanges(listener: IZkStateListener): Unit = {
+    zkClient.subscribeStateChanges(listener)
+  }
+
+  def subscribeChildChanges(path: String, listener: IZkChildListener): Seq[String] = {
+    zkClient.subscribeChildChanges(path, listener).asScala
+  }
+
+  def unsubscribeChildChanges(path: String, childListener: IZkChildListener): Unit = {
+    zkClient.unsubscribeChildChanges(path, childListener)
+  }
+
+  def unsubscribeAll(): Unit = {
+    zkClient.unsubscribeAll()
   }
 
   def readData(path: String): (String, Stat) = {

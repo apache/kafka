@@ -40,7 +40,7 @@ trait NotificationHandler {
  * notificationHandler's processNotification() method with the child's data as argument. As part of processing these changes it also
  * purges any children with currentTime - createTime > changeExpirationMs.
  *
- * The caller/user of this class should ensure that they use zkClient.subscribeStateChanges and call processAllNotifications
+ * The caller/user of this class should ensure that they use zkUtils.subscribeStateChanges and call processAllNotifications
  * method of this class from ZkStateChangeListener's handleNewSession() method. This is necessary to ensure that if zk session
  * is terminated and reestablished any missed notification will be processed immediately.
  * @param zkUtils
@@ -64,8 +64,8 @@ class ZkNodeChangeNotificationListener(private val zkUtils: ZkUtils,
    */
   def init() {
     zkUtils.makeSurePersistentPathExists(seqNodeRoot)
-    zkUtils.zkClient.subscribeChildChanges(seqNodeRoot, NodeChangeListener)
-    zkUtils.zkClient.subscribeStateChanges(ZkStateChangeListener)
+    zkUtils.subscribeChildChanges(seqNodeRoot, NodeChangeListener)
+    zkUtils.subscribeStateChanges(ZkStateChangeListener)
     processAllNotifications()
   }
 
