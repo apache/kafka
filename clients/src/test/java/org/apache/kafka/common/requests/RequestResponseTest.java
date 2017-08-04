@@ -87,6 +87,7 @@ public class RequestResponseTest {
         checkRequest(createControlledShutdownRequest());
         checkResponse(createControlledShutdownResponse(), 1);
         checkErrorResponse(createControlledShutdownRequest(), new UnknownServerException());
+        checkErrorResponse(createControlledShutdownRequest(0), new UnknownServerException());
         checkRequest(createFetchRequest(4));
         checkResponse(createFetchResponse(), 4);
         checkErrorResponse(createFetchRequest(4), new UnknownServerException());
@@ -760,6 +761,10 @@ public class RequestResponseTest {
 
     private ControlledShutdownRequest createControlledShutdownRequest() {
         return new ControlledShutdownRequest.Builder(10).build();
+    }
+
+    private ControlledShutdownRequest createControlledShutdownRequest(int version) {
+        return new ControlledShutdownRequest.Builder(10).build((short) version);
     }
 
     private ControlledShutdownResponse createControlledShutdownResponse() {
