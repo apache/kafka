@@ -61,7 +61,9 @@ versions += [
   junit: "4.12",
   lz4: "1.4",
   metrics: "2.2.0",
-  powermock: "1.7.0",
+  // A few connect tests fail with powermock 1.6.5 due to https://github.com/powermock/powermock/issues/828, which
+  // is easy to workaround. However, WorkerTest also fails and it seems to be for a different reason.
+  powermock: "1.6.4",
   reflections: "0.9.11",
   rocksDB: "5.3.6",
   scalatest: "3.0.3",
