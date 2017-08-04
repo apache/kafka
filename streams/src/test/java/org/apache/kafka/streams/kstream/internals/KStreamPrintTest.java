@@ -51,6 +51,7 @@ public class KStreamPrintTest {
 
     private KeyValueMapper<Integer, String, String> mapper;
     private KStreamPrint kStreamPrint;
+    private Processor printProcessor;
 
     @Before
     public void setUp() {
@@ -65,9 +66,16 @@ public class KStreamPrintTest {
         };
 
         kStreamPrint = new KStreamPrint<>(new PrintForeachAction<>(printWriter, mapper, "test-stream"), intSerd, stringSerd);
+
+        printProcessor = kStreamPrint.get();
+        ProcessorContext processorContext = EasyMock.createNiceMock(ProcessorContext.class);
+        EasyMock.replay(processorContext);
+
+        printProcessor.init(processorContext);
     }
 
     @Test
+    @SuppressWarnings("unchecked")
     public void testPrintStreamWithProvidedKeyValueMapper() {
 
         final List<KeyValue<Integer, String>> inputRecords = Arrays.asList(
@@ -78,40 +86,23 @@ public class KStreamPrintTest {
 
         final String[] expectedResult = {"[test-stream]: 0, zero", "[test-stream]: 1, one", "[test-stream]: 2, two", "[test-stream]: 3, three"};
 
-        Processor printProcessor = kStreamPrint.get();
-        ProcessorContext processorContext = EasyMock.createNiceMock(ProcessorContext.class);
-        EasyMock.replay(processorContext);
-
-        printProcessor.init(processorContext);
-        for (KeyValue<Integer, String> record: inputRecords) {
-            printProcessor.process(record.key, record.value);
-        }
-        printWriter.flush();
-        assertFlushData(expectedResult, byteOutStream);
+        doTest(inputRecords, expectedResult);
     }
 
     @Test
+    @SuppressWarnings("unchecked")
     public void testPrintKeyValueStringBytesArray() {
 
         // we don't have a topic name because we don't need it for the test at this level
-        final List<KeyValue<Integer, byte[]>> inputRecords = Arrays.asList(
-                new KeyValue<>(0, stringSerd.serializer().serialize(null, "zero")),
-                new KeyValue<>(1, stringSerd.serializer().serialize(null, "one")),
-                new KeyValue<>(2, stringSerd.serializer().serialize(null, "two")),
-                new KeyValue<>(3, stringSerd.serializer().serialize(null, "three")));
+        final List<KeyValue<byte[], byte[]>> inputRecords = Arrays.asList(
+                new KeyValue<>(intSerd.serializer().serialize(null, 0), stringSerd.serializer().serialize(null, "zero")),
+                new KeyValue<>(intSerd.serializer().serialize(null, 1), stringSerd.serializer().serialize(null, "one")),
+                new KeyValue<>(intSerd.serializer().serialize(null, 2), stringSerd.serializer().serialize(null, "two")),
+                new KeyValue<>(intSerd.serializer().serialize(null, 3), stringSerd.serializer().serialize(null, "three")));
 
         final String[] expectedResult = {"[test-stream]: 0, zero", "[test-stream]: 1, one", "[test-stream]: 2, two", "[test-stream]: 3, three"};
 
-        Processor printProcessor = kStreamPrint.get();
-        ProcessorContext processorContext = EasyMock.createNiceMock(ProcessorContext.class);
-        EasyMock.replay(processorContext);
-
-        printProcessor.init(processorContext);
-        for (KeyValue<Integer, byte[]> record: inputRecords) {
-            printProcessor.process(record.key, record.value);
-        }
-        printWriter.flush();
-        assertFlushData(expectedResult, byteOutStream);
+        doTest(inputRecords, expectedResult);
     }
 
     private void assertFlushData(final String[] expectedResult, final ByteArrayOutputStream byteOutStream) {
@@ -120,5 +111,14 @@ public class KStreamPrintTest {
         for (int i = 0; i < flushOutDatas.length; i++) {
             assertEquals(expectedResult[i], flushOutDatas[i]);
         }
+    }
+
+    private <K, V> void doTest(final List<KeyValue<K, V>> inputRecords, final String[] expectedResult) {
+
+        for (KeyValue<K, V> record: inputRecords) {
+            printProcessor.process(record.key, record.value);
+        }
+        printWriter.flush();
+        assertFlushData(expectedResult, byteOutStream);
     }
 }
