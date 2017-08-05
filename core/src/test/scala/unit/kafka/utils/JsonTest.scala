@@ -18,11 +18,13 @@ package kafka.utils
 
 import java.nio.charset.StandardCharsets
 
-import org.junit.Assert._
-import org.junit.Test
+import com.fasterxml.jackson.annotation.JsonProperty
+import com.fasterxml.jackson.core.JsonParseException
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.node._
 import kafka.utils.json.JsonValue
+import org.junit.Assert._
+import org.junit.Test
 
 import scala.collection.JavaConverters._
 import scala.collection.Map
@@ -125,5 +127,26 @@ class JsonTest {
     assertEquals(""""str1\\,str2"""", new String(Json.encodeAsBytes("""str1\,str2"""), StandardCharsets.UTF_8))
     assertEquals(""""\"quoted\""""", new String(Json.encodeAsBytes(""""quoted""""), StandardCharsets.UTF_8))
   }
-  
+
+  @Test
+  def testParseTo() = {
+    val foo = "baz"
+    val bar = 1
+
+    val result = Json.parseTo(s"""{"foo": "$foo", "bar": $bar}""", classOf[TestObject])
+
+    assertTrue(result.isRight)
+    assertEquals(TestObject(foo, bar), result.right.get)
+  }
+
+  @Test
+  def testParseTo_invalidJson() = {
+    val result = Json.parseTo("{invalid json}", classOf[TestObject])
+
+    assertTrue(result.isLeft)
+    assertEquals(classOf[JsonParseException], result.left.get.getClass)
+  }
+
 }
+
+case class TestObject(@JsonProperty("foo") foo: String, @JsonProperty("bar") bar: Int)

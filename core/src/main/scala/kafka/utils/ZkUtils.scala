@@ -20,6 +20,7 @@ package kafka.utils
 import java.nio.charset.StandardCharsets
 import java.util.concurrent.CountDownLatch
 
+import com.fasterxml.jackson.annotation.JsonProperty
 import kafka.admin._
 import kafka.api.{ApiVersion, KAFKA_0_10_0_IV1, LeaderAndIsr}
 import kafka.cluster._
@@ -142,19 +143,19 @@ object ZkUtils {
   def getDeleteTopicPath(topic: String): String =
     DeleteTopicsPath + "/" + topic
 
-  // Parses without deduplicating keys so the data can be checked before allowing reassignment to proceed
   def parsePartitionReassignmentData(jsonData: String): Map[TopicAndPartition, Seq[Int]] = {
+    val parseResult = Json.parseTo(jsonData, classOf[PartitionAssignment])
+
+    if (parseResult.isLeft)
+      throw new ConfigException(s"Invalid reassignment config: ${parseResult.left}")
+
+    val assignments = parseResult.right
     val seq = for {
-      js <- Json.parseFull(jsonData).toSeq
-      partitionsSeq <- js.asJsonObject.get("partitions").toSeq
-      p <- partitionsSeq.asJsonArray.iterator
+      assignment <- assignments.get.partitions.asScala
     } yield {
-      val partitionFields = p.asJsonObject
-      val topic = partitionFields("topic").to[String]
-      val partition = partitionFields("partition").to[Int]
-      val newReplicas = partitionFields("replicas").to[Seq[Int]]
-      TopicAndPartition(topic, partition) -> newReplicas
+      (TopicAndPartition(assignment.topic, assignment.partitions), assignment.replicas.asScala)
     }
+
     seq.toMap
   }
 
@@ -1204,3 +1205,25 @@ class ZKCheckedEphemeral(path: String,
     }
   }
 }
+
+// Case classes for JSON deserialization
+
+/**
+  * Deserialized representation of a partition assignment.
+  *
+  * An assignment consists of a `version` and a list of `partitions`, which represent the assignment
+  * of topic-partitions to brokers.
+  */
+case class PartitionAssignment(@JsonProperty("version") version: Int,
+                               @JsonProperty("partitions") partitions: java.util.List[ReplicaAssignment])
+
+/**
+  * Deserialized representation of a replica assignment for a `TopicPartition`, i.e. the assignment
+  * of brokers for a given `TopicPartition`.
+  *
+  * A replica assignment consists of a `topic`, `partition` and a list of `replicas`, which
+  * represent the broker ids that the `TopicPartition` is assigned to.
+  */
+case class ReplicaAssignment(@JsonProperty("topic") topic: String,
+                             @JsonProperty("partition") partitions: Int,
+                             @JsonProperty("replicas") replicas: java.util.List[Int])
