@@ -24,7 +24,6 @@ import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Deserializer;
@@ -191,7 +190,7 @@ public class ProcessorTopologyTestDriver {
         consumer.assign(offsetsByTopicPartition.keySet());
 
         final StateDirectory stateDirectory = new StateDirectory(APPLICATION_ID, TestUtils.tempDirectory().getPath(), Time.SYSTEM);
-        final StreamsMetrics streamsMetrics = new MockStreamsMetrics(new Metrics());
+        final StreamsMetrics streamsMetrics = new MockStreamsMetrics();
         final ThreadCache cache = new ThreadCache("mock", 1024 * 1024, streamsMetrics);
 
         if (globalTopology != null) {

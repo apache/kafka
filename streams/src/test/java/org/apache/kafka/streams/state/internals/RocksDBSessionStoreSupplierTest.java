@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.StreamsMetrics;
@@ -45,7 +44,7 @@ public class RocksDBSessionStoreSupplierTest {
 
     private static final String STORE_NAME = "name";
     private final List<ProducerRecord> logged = new ArrayList<>();
-    private final ThreadCache cache = new ThreadCache("test", 1024, new MockStreamsMetrics(new Metrics()));
+    private final ThreadCache cache = new ThreadCache("test", 1024, new MockStreamsMetrics());
     private final MockProcessorContext context = new MockProcessorContext(TestUtils.tempDirectory(),
         Serdes.String(),
         Serdes.String(),

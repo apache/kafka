@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Utils;
@@ -63,7 +62,7 @@ public class RocksDBStoreTest {
             Serdes.String(),
             Serdes.String(),
             new NoOpRecordCollector(),
-            new ThreadCache("testCache", 0, new MockStreamsMetrics(new Metrics())));
+            new ThreadCache("testCache", 0, new MockStreamsMetrics()));
     }
 
     @After
@@ -100,7 +99,7 @@ public class RocksDBStoreTest {
             Serdes.String(),
             Serdes.Long(),
             new NoOpRecordCollector(),
-            new ThreadCache("testCache", 0, new MockStreamsMetrics(new Metrics())));
+            new ThreadCache("testCache", 0, new MockStreamsMetrics()));
         tmpDir.setReadOnly();
 
         subject.openDB(tmpContext);

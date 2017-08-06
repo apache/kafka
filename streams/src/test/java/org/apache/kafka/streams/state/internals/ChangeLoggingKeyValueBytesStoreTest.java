@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
@@ -68,7 +67,7 @@ public class ChangeLoggingKeyValueBytesStoreTest {
             Serdes.String(),
             Serdes.Long(),
             collector,
-            new ThreadCache("testCache", 0, new MockStreamsMetrics(new Metrics())));
+            new ThreadCache("testCache", 0, new MockStreamsMetrics()));
         context.setTime(0);
         store.init(context, store);
     }

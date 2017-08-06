@@ -201,7 +201,7 @@ public class StreamThreadStateStoreProviderTest {
             clientSupplier.consumer,
             new StoreChangelogReader(clientSupplier.restoreConsumer, Time.SYSTEM, 5000, new MockStateRestoreListener()),
             streamsConfig,
-            new MockStreamsMetrics(new Metrics()),
+            new MockStreamsMetrics(),
             stateDirectory,
             null,
             new MockTime(),

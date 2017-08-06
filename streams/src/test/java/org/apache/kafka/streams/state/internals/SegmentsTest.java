@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.test.MockStreamsMetrics;
 import org.apache.kafka.test.MockProcessorContext;
@@ -46,7 +45,7 @@ public class SegmentsTest {
                                            Serdes.String(),
                                            Serdes.Long(),
                                            new NoOpRecordCollector(),
-                                           new ThreadCache("testCache", 0, new MockStreamsMetrics(new Metrics())));
+                                           new ThreadCache("testCache", 0, new MockStreamsMetrics()));
         segments = new Segments("test", 4 * 60 * 1000, NUM_SEGMENTS);
     }
 

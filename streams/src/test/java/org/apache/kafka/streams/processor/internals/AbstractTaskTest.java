@@ -24,7 +24,6 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.AuthorizationException;
 import org.apache.kafka.common.errors.WakeupException;
-import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
@@ -82,7 +81,7 @@ public class AbstractTaskTest {
                                 new StoreChangelogReader(consumer, Time.SYSTEM, 5000, new MockStateRestoreListener()),
                                 false,
                                 new StateDirectory("app", TestUtils.tempDirectory().getPath(), time),
-                                new ThreadCache("testCache", 0, new MockStreamsMetrics(new Metrics())),
+                                new ThreadCache("testCache", 0, new MockStreamsMetrics()),
                                 config) {
             @Override
             public void resume() {}

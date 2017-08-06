@@ -23,7 +23,6 @@ import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
@@ -330,7 +329,7 @@ public class StandbyTaskTest {
         StreamsConfig config = createConfig(baseDir);
 
         new StandbyTask(taskId, applicationId, partitions, topology, consumer, changelogReader, config,
-            new MockStreamsMetrics(new Metrics()), stateDirectory);
+            new MockStreamsMetrics(), stateDirectory);
     }
 
     @Test

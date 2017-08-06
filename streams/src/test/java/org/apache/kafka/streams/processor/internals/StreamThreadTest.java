@@ -702,7 +702,7 @@ public class StreamThreadTest {
                         clientSupplier.getProducer(new HashMap<String, Object>()),
                         restoreConsumer,
                         config,
-                        new MockStreamsMetrics(new Metrics()),
+                        new MockStreamsMetrics(),
                         stateDirectory);
                 }
             };
@@ -946,7 +946,7 @@ public class StreamThreadTest {
                 clientSupplier.getProducer(new HashMap<String, Object>()),
                 clientSupplier.restoreConsumer,
                 config,
-                new MockStreamsMetrics(new Metrics()),
+                new MockStreamsMetrics(),
                 new StateDirectory(applicationId, config.getString(StreamsConfig.STATE_DIR_CONFIG), mockTime));
 
         final StreamThread thread = new StreamThread(
@@ -1157,7 +1157,7 @@ public class StreamThreadTest {
                     clientSupplier.getProducer(new HashMap<String, Object>()),
                     restoreConsumer,
                     config,
-                    new MockStreamsMetrics(new Metrics()),
+                    new MockStreamsMetrics(),
                     stateDirectory);
                 createdTasks.put(partitions, task);
                 return task;
@@ -1356,7 +1356,7 @@ public class StreamThreadTest {
             clientSupplier.getProducer(new HashMap<String, Object>()),
             clientSupplier.restoreConsumer,
             config,
-            new MockStreamsMetrics(new Metrics()),
+            new MockStreamsMetrics(),
             new StateDirectory(applicationId, config.getString(StreamsConfig.STATE_DIR_CONFIG), mockTime)) {
 
             @Override
@@ -1411,7 +1411,7 @@ public class StreamThreadTest {
             clientSupplier.getProducer(new HashMap<String, Object>()),
             clientSupplier.restoreConsumer,
             config,
-            new MockStreamsMetrics(metrics),
+            new MockStreamsMetrics(),
             new StateDirectory(applicationId, config.getString(StreamsConfig.STATE_DIR_CONFIG), mockTime)) {
 
             @Override
@@ -1478,7 +1478,7 @@ public class StreamThreadTest {
             clientSupplier.getProducer(new HashMap<String, Object>()),
             clientSupplier.restoreConsumer,
             config,
-            new MockStreamsMetrics(new Metrics()),
+            new MockStreamsMetrics(),
             new StateDirectory(applicationId, config.getString(StreamsConfig.STATE_DIR_CONFIG), mockTime)) {
 
             @Override
@@ -1538,7 +1538,7 @@ public class StreamThreadTest {
             clientSupplier.getProducer(new HashMap<String, Object>()),
             clientSupplier.restoreConsumer,
             config,
-            new MockStreamsMetrics(new Metrics()),
+            new MockStreamsMetrics(),
             new StateDirectory(applicationId, config.getString(StreamsConfig.STATE_DIR_CONFIG), mockTime)) {
 
             @Override
@@ -1717,7 +1717,7 @@ public class StreamThreadTest {
             clientSupplier.getProducer(new HashMap<String, Object>()),
             clientSupplier.restoreConsumer,
             config,
-            new MockStreamsMetrics(new Metrics()),
+            new MockStreamsMetrics(),
             stateDirectory) {
 
             @Override
@@ -1950,7 +1950,7 @@ public class StreamThreadTest {
                     clientSupplier.getProducer(new HashMap()),
                     restoreConsumer,
                     config,
-                    new MockStreamsMetrics(new Metrics()),
+                    new MockStreamsMetrics(),
                     stateDirectory);
             }
         };

@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.test.MockStreamsMetrics;
@@ -45,7 +44,7 @@ public class NamedCacheTest {
 
     @Before
     public void setUp() throws Exception {
-        streamMetrics = new MockStreamsMetrics(new Metrics());
+        streamMetrics = new MockStreamsMetrics();
         cache = new NamedCache("name", streamMetrics);
     }
 

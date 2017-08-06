@@ -32,13 +32,7 @@ import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.internals.CompositeRestoreListener;
-import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
-import org.apache.kafka.streams.processor.internals.ProcessorNode;
-import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
-import org.apache.kafka.streams.processor.internals.RecordCollector;
-import org.apache.kafka.streams.processor.internals.RecordContext;
-import org.apache.kafka.streams.processor.internals.WrappedBatchingStateRestoreCallback;
+import org.apache.kafka.streams.processor.internals.*;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
@@ -97,7 +91,8 @@ public class MockProcessorContext implements InternalProcessorContext, RecordCol
         recordCollectorSupplier = collectorSupplier;
         metrics = new Metrics(new MetricConfig(), Collections.singletonList((MetricsReporter) new JmxReporter()), new MockTime(), true);
         this.cache = cache;
-        streamsMetrics = new MockStreamsMetrics(metrics);
+        streamsMetrics = new StreamsMetricsImpl(metrics, "mock-stream-metrics",
+                Collections.<String, String>emptyMap());
     }
 
     @Override
@@ -147,7 +142,8 @@ public class MockProcessorContext implements InternalProcessorContext, RecordCol
     }
 
     @Override
-    public void initialized() {}
+    public void initialized() {
+    }
 
     @Override
     public File stateDir() {
@@ -174,7 +170,8 @@ public class MockProcessorContext implements InternalProcessorContext, RecordCol
         return storeMap.get(name);
     }
 
-    @Override public Cancellable schedule(long interval, PunctuationType type, Punctuator callback) {
+    @Override
+    public Cancellable schedule(long interval, PunctuationType type, Punctuator callback) {
         throw new UnsupportedOperationException("schedule() not supported.");
     }
 

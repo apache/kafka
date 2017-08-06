@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.PunctuationType;
@@ -37,7 +36,7 @@ import static org.junit.Assert.fail;
 
 public class AbstractProcessorContextTest {
 
-    private final MockStreamsMetrics metrics = new MockStreamsMetrics(new Metrics());
+    private final MockStreamsMetrics metrics = new MockStreamsMetrics();
     private final AbstractProcessorContext context = new TestProcessorContext(metrics);
     private final MockStateStoreSupplier.MockStateStore stateStore = new MockStateStoreSupplier.MockStateStore("store", false);
     private final RecordContext recordContext = new RecordContextStub(10, System.currentTimeMillis(), 1, "foo");
