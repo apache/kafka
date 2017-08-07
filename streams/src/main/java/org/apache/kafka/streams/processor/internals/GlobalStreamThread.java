@@ -72,23 +72,21 @@ public class GlobalStreamThread extends Thread {
      *          |           v
      *          |     +-----+-------+
      *          +---> | Pending     |
-     *          |     | Shutdown    |
-     *          |     +-----+-------+
-     *          |           |
-     *          |           v
-     *          |     +-----+-------+
-     *          +---> | Dead        |
+     *                | Shutdown    |
+     *                +-----+-------+
+     *                      |
+     *                      v
+     *                +-----+-------+
+     *                | Dead        |
      *                +-------------+
      * </pre>
      *
      * Note the following:
-     * - Any state can go to PENDING_SHUTDOWN. That is because streams can be closed at any time.
-     * - Any state can go to DEAD. That is because exceptions can happen at any other state,
-     *   leading to the stream thread terminating.
+     * - Any state can go to PENDING_SHUTDOWN and subsequently to DEAD
      *
      */
     public enum State implements ThreadStateTransitionValidator {
-        CREATED(1, 2, 3), RUNNING(2, 3), PENDING_SHUTDOWN(3), DEAD;
+        CREATED(1, 2), RUNNING(2), PENDING_SHUTDOWN(3), DEAD;
 
         private final Set<Integer> validTransitions = new HashSet<>();
 
@@ -254,8 +252,9 @@ public class GlobalStreamThread extends Thread {
             log.debug("Shutting down GlobalStreamThread at user request");
         } finally {
             try {
-                setState(DEAD, false);
+                setState(PENDING_SHUTDOWN, true);
                 stateConsumer.close();
+                setState(DEAD, false);
             } catch (IOException e) {
                 log.error("Failed to cleanly shutdown GlobalStreamThread", e);
             }

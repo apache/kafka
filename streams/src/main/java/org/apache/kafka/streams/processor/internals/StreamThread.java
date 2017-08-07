@@ -105,25 +105,23 @@ public class StreamThread extends Thread {
      *          |           v
      *          |     +-----+-------+
      *          +---> | Pending     |
-     *          |     | Shutdown    |
-     *          |     +-----+-------+
-     *          |           |
-     *          |           v
-     *          |     +-----+-------+
-     *          +---> | Dead        |
+     *                | Shutdown    |
+     *                +-----+-------+
+     *                      |
+     *                      v
+     *                +-----+-------+
+     *                | Dead        |
      *                +-------------+
      * </pre>
      *
      * Note the following:
-     * - Any state can go to PENDING_SHUTDOWN. That is because streams can be closed at any time.
-     * - Any state can go to DEAD. That is because exceptions can happen at any other state,
-     *   leading to the stream thread terminating.
+     * - Any state can go to PENDING_SHUTDOWN followed by a subsequent transition to DEAD.
      * - A streams thread can stay in PARTITIONS_REVOKED indefinitely, in the corner case when
      *   the coordinator repeatedly fails in-between revoking partitions and assigning new partitions.
      *
      */
     public enum State implements ThreadStateTransitionValidator {
-        CREATED(1, 4, 5), RUNNING(2, 4, 5), PARTITIONS_REVOKED(2, 3, 4, 5), ASSIGNING_PARTITIONS(1, 4, 5), PENDING_SHUTDOWN(5), DEAD;
+        CREATED(1, 4), RUNNING(2, 4), PARTITIONS_REVOKED(2, 3, 4), ASSIGNING_PARTITIONS(1, 4), PENDING_SHUTDOWN(5), DEAD;
 
         private final Set<Integer> validTransitions = new HashSet<>();
 
@@ -993,20 +991,14 @@ public class StreamThread extends Thread {
         }
     }
 
-    private synchronized void setStateWhenNotInPendingShutdown(final State newState) {
-        if (state == State.PENDING_SHUTDOWN) {
-            return;
-        }
-        setState(newState);
-    }
-
     /**
      * Sets the state
      * @param newState New state
      */
     void setState(final State newState) {
+        State oldState;
         synchronized (stateLock) {
-            final State oldState = state;
+            oldState = state;
 
             // there are cases when we shouldn't check if a transition is valid, e.g.,
             // when, for testing, a thread is closed multiple times. We could either
@@ -1025,9 +1017,9 @@ public class StreamThread extends Thread {
             }
 
             state = newState;
-            if (stateListener != null) {
-                stateListener.onChange(this, state, oldState);
-            }
+        }
+        if (stateListener != null) {
+            stateListener.onChange(this, state, oldState);
         }
     }
 
@@ -1083,6 +1075,7 @@ public class StreamThread extends Thread {
 
     private void shutdown(final boolean cleanRun) {
         log.info("{} Shutting down", logPrefix);
+        setState(State.PENDING_SHUTDOWN);
         shutdownTasksAndState(cleanRun);
 
         // close all embedded clients
