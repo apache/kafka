@@ -87,8 +87,7 @@ class NewShinyConsumer(topic: Option[String], partitionId: Option[Int], offset: 
 
     // check if the requested partition exists for the topic
     val availablePartitions = consumer.partitionsFor(topic).asScala
-    val partitionInfo = availablePartitions.find(_.partition() == partitionId)
-    if (partitionInfo.isEmpty)
+    if (availablePartitions.exists(_.partition() == partitionId))
       throw new IllegalArgumentException("An invalid partition is provided.")
 
     val topicPartition = new TopicPartition(topic, partitionId)
