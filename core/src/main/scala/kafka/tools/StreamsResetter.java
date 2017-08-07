@@ -244,7 +244,7 @@ public class StreamsResetter {
 
             if (!dryRun) {
                 for (final TopicPartition p : partitions) {
-                    client.position(p);
+                    client.position(p, Long.MAX_VALUE);
                 }
                 client.commitSync();
             }

@@ -116,9 +116,9 @@ public interface Consumer<K, V> extends Closeable {
     public void seekToEnd(Collection<TopicPartition> partitions);
 
     /**
-     * @see KafkaConsumer#position(TopicPartition)
+     * @see KafkaConsumer#position(TopicPartition, long)
      */
-    public long position(TopicPartition partition);
+    public long position(TopicPartition partition, long timeout);
 
     /**
      * @see KafkaConsumer#committed(TopicPartition)

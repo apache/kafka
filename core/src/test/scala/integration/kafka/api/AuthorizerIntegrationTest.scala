@@ -784,21 +784,21 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   @Test(expected = classOf[AuthorizationException])
   def testOffsetFetchWithNoAccess() {
     this.consumers.head.assign(List(tp).asJava)
-    this.consumers.head.position(tp)
+    this.consumers.head.position(tp, Long.MaxValue)
   }
 
   @Test(expected = classOf[GroupAuthorizationException])
   def testOffsetFetchWithNoGroupAccess() {
     addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Read)), topicResource)
     this.consumers.head.assign(List(tp).asJava)
-    this.consumers.head.position(tp)
+    this.consumers.head.position(tp, Long.MaxValue)
   }
 
   @Test(expected = classOf[KafkaException])
   def testOffsetFetchWithNoTopicAccess() {
     addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Read)), groupResource)
     this.consumers.head.assign(List(tp).asJava)
-    this.consumers.head.position(tp)
+    this.consumers.head.position(tp, Long.MaxValue)
   }
 
   @Test
@@ -834,7 +834,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Read)), groupResource)
     addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Describe)), topicResource)
     this.consumers.head.assign(List(tp).asJava)
-    this.consumers.head.position(tp)
+    this.consumers.head.position(tp, Long.MaxValue)
   }
 
   @Test
@@ -842,7 +842,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Read)), groupResource)
     addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Read)), topicResource)
     this.consumers.head.assign(List(tp).asJava)
-    this.consumers.head.position(tp)
+    this.consumers.head.position(tp, Long.MaxValue)
   }
 
   @Test

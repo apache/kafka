@@ -1436,7 +1436,7 @@ object TestUtils extends Logging {
   def consumerPositions(consumer: KafkaConsumer[Array[Byte], Array[Byte]]) : Map[TopicPartition, OffsetAndMetadata]  = {
     val offsetsToCommit = new mutable.HashMap[TopicPartition, OffsetAndMetadata]()
     consumer.assignment.foreach{ topicPartition =>
-      offsetsToCommit.put(topicPartition, new OffsetAndMetadata(consumer.position(topicPartition)))
+      offsetsToCommit.put(topicPartition, new OffsetAndMetadata(consumer.position(topicPartition, Long.MaxValue)))
     }
     offsetsToCommit.toMap
   }

@@ -247,8 +247,8 @@ public class KafkaBasedLogTest {
         store.start();
 
         assertEquals(CONSUMER_ASSIGNMENT, consumer.assignment());
-        assertEquals(7L, consumer.position(TP0));
-        assertEquals(7L, consumer.position(TP1));
+        assertEquals(7L, consumer.position(TP0, Long.MAX_VALUE));
+        assertEquals(7L, consumer.position(TP1, Long.MAX_VALUE));
 
         store.stop();
 
@@ -283,8 +283,8 @@ public class KafkaBasedLogTest {
         consumer.updateEndOffsets(endOffsets);
         store.start();
         assertEquals(CONSUMER_ASSIGNMENT, consumer.assignment());
-        assertEquals(0L, consumer.position(TP0));
-        assertEquals(0L, consumer.position(TP1));
+        assertEquals(0L, consumer.position(TP0, Long.MAX_VALUE));
+        assertEquals(0L, consumer.position(TP1, Long.MAX_VALUE));
 
         // Set some keys
         final AtomicInteger invoked = new AtomicInteger(0);
@@ -412,7 +412,7 @@ public class KafkaBasedLogTest {
         store.start();
         assertTrue(finishedLatch.await(10000, TimeUnit.MILLISECONDS));
         assertEquals(CONSUMER_ASSIGNMENT, consumer.assignment());
-        assertEquals(1L, consumer.position(TP0));
+        assertEquals(1L, consumer.position(TP0, Long.MAX_VALUE));
 
         store.stop();
 
@@ -439,8 +439,8 @@ public class KafkaBasedLogTest {
         consumer.updateEndOffsets(endOffsets);
         store.start();
         assertEquals(CONSUMER_ASSIGNMENT, consumer.assignment());
-        assertEquals(0L, consumer.position(TP0));
-        assertEquals(0L, consumer.position(TP1));
+        assertEquals(0L, consumer.position(TP0, Long.MAX_VALUE));
+        assertEquals(0L, consumer.position(TP1, Long.MAX_VALUE));
 
         final AtomicReference<Throwable> setException = new AtomicReference<>();
         store.send(TP0_KEY, TP0_VALUE, new org.apache.kafka.clients.producer.Callback() {

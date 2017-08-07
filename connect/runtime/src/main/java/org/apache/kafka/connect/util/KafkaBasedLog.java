@@ -275,7 +275,7 @@ public class KafkaBasedLog<K, V> {
             Iterator<Map.Entry<TopicPartition, Long>> it = endOffsets.entrySet().iterator();
             while (it.hasNext()) {
                 Map.Entry<TopicPartition, Long> entry = it.next();
-                if (consumer.position(entry.getKey()) >= entry.getValue())
+                if (consumer.position(entry.getKey(), Long.MAX_VALUE) >= entry.getValue())
                     it.remove();
                 else {
                     poll(Integer.MAX_VALUE);

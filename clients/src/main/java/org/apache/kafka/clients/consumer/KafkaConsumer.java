@@ -1079,8 +1079,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
         // fetch positions if we have partitions we're subscribed to that we
         // don't know the offset for
+        //TODO we need to clarify this
         if (!subscriptions.hasAllFetchPositions())
-            updateFetchPositions(this.subscriptions.missingFetchPositions());
+            updateFetchPositions(this.subscriptions.missingFetchPositions(), timeout);
 
         // if data is available already, return it immediately
         Map<TopicPartition, List<ConsumerRecord<K, V>>> records = fetcher.fetchedRecords();
@@ -1295,6 +1296,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * Get the offset of the <i>next record</i> that will be fetched (if a record with that offset exists).
      *
      * @param partition The partition to get the position for
+     * @param timeout The amount of time to wait for the offset
      * @return The offset
      * @throws org.apache.kafka.clients.consumer.InvalidOffsetException if no offset is currently defined for
      *             the partition
@@ -1305,8 +1307,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic or to the
      *             configured groupId
      * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors
+     *
+     * @throws org.apache.kafka.common.errors.TimeoutException: if the given partition is not available
      */
-    public long position(TopicPartition partition) {
+    public long position(TopicPartition partition, long timeout) {
         acquireAndEnsureOpen();
         try {
             if (!this.subscriptions.isAssigned(partition))
@@ -1314,7 +1318,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             Long offset = this.subscriptions.position(partition);
             if (offset == null) {
                 // batch update fetch positions for any partitions without a valid position
-                updateFetchPositions(subscriptions.assignedPartitions());
+                updateFetchPositions(subscriptions.assignedPartitions(), timeout);
                 offset = this.subscriptions.position(partition);
             }
             return offset;
@@ -1645,15 +1649,18 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * or reset it using the offset reset policy the user has configured.
      *
      * @param partitions The partitions that needs updating fetch positions
+     * @param timeout The amount of time to wait for the offset
      * @throws NoOffsetForPartitionException If no offset is stored for a given partition and no offset reset policy is
      *             defined
+     *
+     * @throws org.apache.kafka.common.errors.TimeoutException: if one of the given partition is not available
      */
-    private void updateFetchPositions(Set<TopicPartition> partitions) {
+    private void updateFetchPositions(Set<TopicPartition> partitions, long timeout) {
         // lookup any positions for partitions which are awaiting reset (which may be the
         // case if the user called seekToBeginning or seekToEnd. We do this check first to
         // avoid an unnecessary lookup of committed offsets (which typically occurs when
         // the user is manually assigning partitions and managing their own offsets).
-        fetcher.resetOffsetsIfNeeded(partitions);
+        fetcher.resetOffsetsIfNeeded(partitions, timeout);
 
         if (!subscriptions.hasAllFetchPositions(partitions)) {
             // if we still don't have offsets for the given partitions, then we should either

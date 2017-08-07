@@ -340,8 +340,8 @@ public class WorkerSinkTaskTest {
         sinkTask.close(new HashSet<>(partitions));
         EasyMock.expectLastCall();
 
-        EasyMock.expect(consumer.position(TOPIC_PARTITION)).andReturn(FIRST_OFFSET);
-        EasyMock.expect(consumer.position(TOPIC_PARTITION2)).andReturn(FIRST_OFFSET);
+        EasyMock.expect(consumer.position(TOPIC_PARTITION, Long.MAX_VALUE)).andReturn(FIRST_OFFSET);
+        EasyMock.expect(consumer.position(TOPIC_PARTITION2, Long.MAX_VALUE)).andReturn(FIRST_OFFSET);
 
         sinkTask.open(partitions);
         EasyMock.expectLastCall();
@@ -722,8 +722,8 @@ public class WorkerSinkTaskTest {
         sinkTask.preCommit(EasyMock.<Map<TopicPartition, OffsetAndMetadata>>anyObject());
         EasyMock.expectLastCall().andReturn(Collections.emptyMap());
 
-        EasyMock.expect(consumer.position(TOPIC_PARTITION)).andReturn(FIRST_OFFSET);
-        EasyMock.expect(consumer.position(TOPIC_PARTITION2)).andReturn(FIRST_OFFSET);
+        EasyMock.expect(consumer.position(TOPIC_PARTITION, Long.MAX_VALUE)).andReturn(FIRST_OFFSET);
+        EasyMock.expect(consumer.position(TOPIC_PARTITION2, Long.MAX_VALUE)).andReturn(FIRST_OFFSET);
 
         sinkTask.open(partitions);
         EasyMock.expectLastCall().andThrow(e);
@@ -752,8 +752,8 @@ public class WorkerSinkTaskTest {
                 return ConsumerRecords.empty();
             }
         });
-        EasyMock.expect(consumer.position(TOPIC_PARTITION)).andReturn(FIRST_OFFSET);
-        EasyMock.expect(consumer.position(TOPIC_PARTITION2)).andReturn(FIRST_OFFSET);
+        EasyMock.expect(consumer.position(TOPIC_PARTITION, Long.MAX_VALUE)).andReturn(FIRST_OFFSET);
+        EasyMock.expect(consumer.position(TOPIC_PARTITION2, Long.MAX_VALUE)).andReturn(FIRST_OFFSET);
 
         sinkTask.put(Collections.<SinkRecord>emptyList());
         EasyMock.expectLastCall();

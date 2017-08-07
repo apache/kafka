@@ -183,7 +183,7 @@ public class TransactionalMessageCopier {
     private static Map<TopicPartition, OffsetAndMetadata> consumerPositions(KafkaConsumer<String, String> consumer) {
         Map<TopicPartition, OffsetAndMetadata> positions = new HashMap<>();
         for (TopicPartition topicPartition : consumer.assignment()) {
-            positions.put(topicPartition, new OffsetAndMetadata(consumer.position(topicPartition), null));
+            positions.put(topicPartition, new OffsetAndMetadata(consumer.position(topicPartition, Long.MAX_VALUE), null));
         }
         return positions;
     }
@@ -199,7 +199,7 @@ public class TransactionalMessageCopier {
     }
 
     private static long messagesRemaining(KafkaConsumer<String, String> consumer, TopicPartition partition) {
-        long currentPosition = consumer.position(partition);
+        long currentPosition = consumer.position(partition, Long.MAX_VALUE);
         Map<TopicPartition, Long> endOffsets = consumer.endOffsets(singleton(partition));
         if (endOffsets.containsKey(partition)) {
             return endOffsets.get(partition) - currentPosition;

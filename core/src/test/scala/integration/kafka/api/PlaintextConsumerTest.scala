@@ -190,7 +190,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
           // than session timeout and then try a commit. We should still be in the group,
           // so the commit should succeed
           Utils.sleep(1500)
-          committedPosition = consumer0.position(tp)
+          committedPosition = consumer0.position(tp, Long.MaxValue)
           consumer0.commitSync(Map(tp -> new OffsetAndMetadata(committedPosition)).asJava)
           commitCompleted = true
         }
@@ -583,15 +583,15 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     consumer.assign(List(tp).asJava)
 
     consumer.seekToEnd(List(tp).asJava)
-    assertEquals(totalRecords, consumer.position(tp))
+    assertEquals(totalRecords, consumer.position(tp, Long.MaxValue))
     assertFalse(consumer.poll(totalRecords).iterator().hasNext)
 
     consumer.seekToBeginning(List(tp).asJava)
-    assertEquals(0, consumer.position(tp), 0)
+    assertEquals(0, consumer.position(tp, Long.MaxValue), 0)
     consumeAndVerifyRecords(consumer, numRecords = 1, startingOffset = 0)
 
     consumer.seek(tp, mid)
-    assertEquals(mid, consumer.position(tp))
+    assertEquals(mid, consumer.position(tp, Long.MaxValue))
 
     consumeAndVerifyRecords(consumer, numRecords = 1, startingOffset = mid.toInt, startingKeyAndValueIndex = mid.toInt,
       startingTimestamp = mid.toLong)
@@ -601,15 +601,15 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     consumer.assign(List(tp2).asJava)
 
     consumer.seekToEnd(List(tp2).asJava)
-    assertEquals(totalRecords, consumer.position(tp2))
+    assertEquals(totalRecords, consumer.position(tp2, Long.MaxValue))
     assertFalse(consumer.poll(totalRecords).iterator().hasNext)
 
     consumer.seekToBeginning(List(tp2).asJava)
-    assertEquals(0, consumer.position(tp2), 0)
+    assertEquals(0, consumer.position(tp2, Long.MaxValue), 0)
     consumeAndVerifyRecords(consumer, numRecords = 1, startingOffset = 0, tp = tp2)
 
     consumer.seek(tp2, mid)
-    assertEquals(mid, consumer.position(tp2))
+    assertEquals(mid, consumer.position(tp2, Long.MaxValue))
     consumeAndVerifyRecords(consumer, numRecords = 1, startingOffset = mid.toInt, startingKeyAndValueIndex = mid.toInt,
       startingTimestamp = mid.toLong, tp = tp2)
   }
@@ -634,17 +634,17 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     // position() on a partition that we aren't subscribed to throws an exception
     intercept[IllegalArgumentException] {
-      this.consumers.head.position(new TopicPartition(topic, 15))
+      this.consumers.head.position(new TopicPartition(topic, 15), Long.MaxValue)
     }
 
     this.consumers.head.assign(List(tp).asJava)
 
-    assertEquals("position() on a partition that we are subscribed to should reset the offset", 0L, this.consumers.head.position(tp))
+    assertEquals("position() on a partition that we are subscribed to should reset the offset", 0L, this.consumers.head.position(tp, Long.MaxValue))
     this.consumers.head.commitSync()
     assertEquals(0L, this.consumers.head.committed(tp).offset)
 
     consumeAndVerifyRecords(consumer = this.consumers.head, numRecords = 5, startingOffset = 0)
-    assertEquals("After consuming 5 records, position should be 5", 5L, this.consumers.head.position(tp))
+    assertEquals("After consuming 5 records, position should be 5", 5L, this.consumers.head.position(tp, Long.MaxValue))
     this.consumers.head.commitSync()
     assertEquals("Committed offset should be returned", 5L, this.consumers.head.committed(tp).offset)
 
@@ -1309,15 +1309,15 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     // Need to poll to join the group
     this.consumers.head.poll(50)
-    val pos1 = this.consumers.head.position(tp)
-    val pos2 = this.consumers.head.position(tp2)
+    val pos1 = this.consumers.head.position(tp, Long.MaxValue)
+    val pos2 = this.consumers.head.position(tp2, Long.MaxValue)
     this.consumers.head.commitSync(Map[TopicPartition, OffsetAndMetadata]((tp, new OffsetAndMetadata(3L))).asJava)
     assertEquals(3, this.consumers.head.committed(tp).offset)
     assertNull(this.consumers.head.committed(tp2))
 
     // Positions should not change
-    assertEquals(pos1, this.consumers.head.position(tp))
-    assertEquals(pos2, this.consumers.head.position(tp2))
+    assertEquals(pos1, this.consumers.head.position(tp, Long.MaxValue))
+    assertEquals(pos2, this.consumers.head.position(tp2, Long.MaxValue))
     this.consumers.head.commitSync(Map[TopicPartition, OffsetAndMetadata]((tp2, new OffsetAndMetadata(5L))).asJava)
     assertEquals(3, this.consumers.head.committed(tp).offset)
     assertEquals(5, this.consumers.head.committed(tp2).offset)
