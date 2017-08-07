@@ -29,7 +29,6 @@ import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.state.RocksDBConfigSetter;
 import org.apache.kafka.test.MockProcessorContext;
 import org.apache.kafka.test.NoOpRecordCollector;
-import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
@@ -42,8 +41,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -145,6 +142,7 @@ public class RocksDBStoreTest {
 
         subject.init(context, subject);
         context.restore(subject.name(), entries);
+
         assertEquals(subject.get("1"), "a");
         assertEquals(subject.get("2"), "b");
         assertEquals(subject.get("3"), "c");
@@ -203,36 +201,6 @@ public class RocksDBStoreTest {
         Utils.delete(dir);
         subject.put("anyKey", "anyValue");
         subject.flush();
-    }
-
-    private void assertRockDBTurnsOffBulkLoad(AtomicInteger conditionCount,
-                                              AtomicReference<Exception> conditionNotMet) {
-        try {
-            TestUtils.waitForCondition(new TestCondition() {
-                @Override
-                public boolean conditionMet() {
-                    return !subject.isPrepareForBulkload();
-                }
-            }, 1000L, "Did not revert bulk load setting");
-            conditionCount.getAndIncrement();
-        } catch (Exception e) {
-            conditionNotMet.set(e);
-        }
-    }
-
-    private void assertRocksDBTurnsOnBulkLoading(AtomicInteger conditionCount,
-                                                 AtomicReference<Exception> conditionNotMet) {
-        try {
-            TestUtils.waitForCondition(new TestCondition() {
-                @Override
-                public boolean conditionMet() {
-                    return subject.isPrepareForBulkload();
-                }
-            }, 1000L, "Did not prepare for bulk load");
-            conditionCount.getAndIncrement();
-        } catch (Exception e) {
-            conditionNotMet.set(e);
-        }
     }
 
     public static class MockRocksDbConfigSetter implements RocksDBConfigSetter {

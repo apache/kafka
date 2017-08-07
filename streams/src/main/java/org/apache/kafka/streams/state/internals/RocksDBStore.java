@@ -102,7 +102,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
     private volatile boolean prepareForBulkload = false;
     private ProcessorContext internalProcessorContext;
-
+    // visible for testing
     volatile BatchingStateRestoreCallback batchingStateRestoreCallback = null;
 
     protected volatile boolean open = false;
