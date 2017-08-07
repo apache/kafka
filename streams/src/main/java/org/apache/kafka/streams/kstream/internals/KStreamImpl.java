@@ -103,8 +103,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
     private static final String FOREACH_NAME = "KSTREAM-FOREACH-";
 
-    private final KeyValueMapper<K, V, String> defaultKeyValueMapper;
-
     private final boolean repartitionRequired;
 
     public KStreamImpl(final InternalStreamsBuilder builder,
@@ -113,12 +111,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                        final boolean repartitionRequired) {
         super(builder, name, sourceNodes);
         this.repartitionRequired = repartitionRequired;
-        this.defaultKeyValueMapper = new KeyValueMapper<K, V, String>() {
-            @Override
-            public String apply(K key, V value) {
-                return String.format("%s, %s", key, value);
-            }
-        };
     }
 
     @Override
@@ -187,25 +179,25 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
     @Override
     public void print() {
-        print(defaultKeyValueMapper, null, null, this.name);
+        print(null, null, null, this.name);
     }
 
     @Override
     public void print(final String label) {
-        print(defaultKeyValueMapper, null, null, label);
+        print(null, null, null, label);
     }
 
     @Override
     public void print(final Serde<K> keySerde,
                       final Serde<V> valSerde) {
-        print(defaultKeyValueMapper, keySerde, valSerde, this.name);
+        print(null, keySerde, valSerde, this.name);
     }
 
     @Override
     public void print(final Serde<K> keySerde,
                       final Serde<V> valSerde,
                       final String label) {
-        print(defaultKeyValueMapper, keySerde, valSerde, label);
+        print(null, keySerde, valSerde, label);
     }
 
     @Override
@@ -231,28 +223,27 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                       final Serde<K> keySerde,
                       final Serde<V> valSerde,
                       final String label) {
-        Objects.requireNonNull(mapper, "mapper can't be null");
         Objects.requireNonNull(label, "label can't be null");
         String name = builder.newName(PRINTING_NAME);
-        builder.internalTopologyBuilder.addProcessor(name, new KStreamPrint<>(new PrintForeachAction<>(null, mapper, label), keySerde, valSerde), this.name);
+        builder.internalTopologyBuilder.addProcessor(name, new KStreamPrint<>(new PrintForeachAction<K, V>(null, label), keySerde, valSerde, mapper), this.name);
     }
 
     @Override
     public void writeAsText(final String filePath) {
-        writeAsText(filePath, this.name, null, null, defaultKeyValueMapper);
+        writeAsText(filePath, this.name, null, null, null);
     }
 
     @Override
     public void writeAsText(final String filePath,
                             final String label) {
-        writeAsText(filePath, label, null, null, defaultKeyValueMapper);
+        writeAsText(filePath, label, null, null, null);
     }
 
     @Override
     public void writeAsText(final String filePath,
                             final Serde<K> keySerde,
                             final Serde<V> valSerde) {
-        writeAsText(filePath, this.name, keySerde, valSerde, defaultKeyValueMapper);
+        writeAsText(filePath, this.name, keySerde, valSerde, null);
     }
 
     @Override
@@ -260,7 +251,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                             final String label,
                             final Serde<K> keySerde,
                             final Serde<V> valSerde) {
-        writeAsText(filePath, label, keySerde, valSerde, defaultKeyValueMapper);
+        writeAsText(filePath, label, keySerde, valSerde, null);
     }
 
     @Override
@@ -291,14 +282,13 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                             final Serde<V> valSerde, KeyValueMapper<? super K, ? super V, String> mapper) {
         Objects.requireNonNull(filePath, "filePath can't be null");
         Objects.requireNonNull(label, "label can't be null");
-        Objects.requireNonNull(mapper, "mapper can't be null");
         if (filePath.trim().isEmpty()) {
             throw new TopologyException("filePath can't be an empty string");
         }
         final String name = builder.newName(PRINTING_NAME);
         try {
             PrintWriter printWriter = new PrintWriter(filePath, StandardCharsets.UTF_8.name());
-            builder.internalTopologyBuilder.addProcessor(name, new KStreamPrint<>(new PrintForeachAction<>(printWriter, mapper, label), keySerde, valSerde), this.name);
+            builder.internalTopologyBuilder.addProcessor(name, new KStreamPrint<>(new PrintForeachAction<K, V>(printWriter, label), keySerde, valSerde, mapper), this.name);
         } catch (FileNotFoundException | UnsupportedEncodingException e) {
             throw new TopologyException("Unable to write stream to file at [" + filePath + "] " + e.getMessage());
         }

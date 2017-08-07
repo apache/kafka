@@ -17,24 +17,24 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.kstream.ForeachAction;
+import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.PrintForeachAction;
 import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 
-public class KStreamPrint<K, V> implements ProcessorSupplier<K, V> {
+public class KStreamPrint<K, V> extends KStreamPeek<K, V> {
 
     private final Serde<?> keySerde;
     private final Serde<?> valueSerde;
-    private final ForeachAction<K, V> action;
+    private KeyValueMapper<? super K, ? super V, String> mapper;
     
-    public KStreamPrint(final ForeachAction<K, V> action, final Serde<?> keySerde, final Serde<?> valueSerde) {
-        this.action = action;
+    public KStreamPrint(final ForeachAction<K, V> action, final Serde<?> keySerde, final Serde<?> valueSerde, final KeyValueMapper<? super K, ? super V, String> mapper) {
+        super(action, false);
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
+        this.mapper = mapper;
     }
 
     @Override
@@ -42,7 +42,7 @@ public class KStreamPrint<K, V> implements ProcessorSupplier<K, V> {
         return new KStreamPrintProcessor(keySerde, valueSerde);
     }
 
-    private class KStreamPrintProcessor extends AbstractProcessor<K, V> {
+    private class KStreamPrintProcessor extends KStreamPeek.KStreamPeekProcessor {
         
         private Serde<?> keySerde;
         private Serde<?> valueSerde;
@@ -62,13 +62,19 @@ public class KStreamPrint<K, V> implements ProcessorSupplier<K, V> {
             if (valueSerde == null) {
                 this.valueSerde = context.valueSerde();
             }
-        }
 
-        @Override
-        public void process(final K key, final V value) {
-            final K deKey = (K) maybeDeserialize(key, keySerde.deserializer());
-            final V deValue = (V) maybeDeserialize(value, valueSerde.deserializer());
-            action.apply(deKey, deValue);
+            // no mapper provided, using a default one which takes care of checking byte[] for deserialization
+            if (mapper == null) {
+                mapper = new KeyValueMapper<K, V, String>() {
+                    @Override
+                    public String apply(K key, V value) {
+                        final K deKey = (K) maybeDeserialize(key, keySerde.deserializer());
+                        final V deValue = (V) maybeDeserialize(value, valueSerde.deserializer());
+                        return String.format("%s, %s", deKey, deValue);
+                    }
+                };
+            }
+            ((PrintForeachAction<K, V>) action).setMapper(mapper);
         }
 
         private Object maybeDeserialize(final Object keyOrValue, final Deserializer<?> deserializer) {

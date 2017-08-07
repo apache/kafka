@@ -22,7 +22,7 @@ public class PrintForeachAction<K, V> implements ForeachAction<K, V> {
 
     private final String label;
     private final PrintWriter printWriter;
-    private final KeyValueMapper<? super K, ? super V, String> mapper;
+    private KeyValueMapper<? super K, ? super V, String> mapper;
     /**
      * Print customized output with given writer. The PrintWriter can be null in order to
      * distinguish between {@code System.out} and the others. If the PrintWriter is {@code PrintWriter(System.out)},
@@ -31,12 +31,10 @@ public class PrintForeachAction<K, V> implements ForeachAction<K, V> {
      * Afterall, not to pass in {@code PrintWriter(System.out)} but {@code null} instead.
      *
      * @param printWriter Use {@code System.out.println} if {@code null}.
-     * @param mapper The mapper which can allow user to customize output will be printed.
      * @param label The given name will be printed.
      */
-    public PrintForeachAction(final PrintWriter printWriter, final KeyValueMapper<? super K, ? super V, String> mapper, final String label) {
+    public PrintForeachAction(final PrintWriter printWriter, final String label) {
         this.printWriter = printWriter;
-        this.mapper = mapper;
         this.label = label;
     }
 
@@ -58,4 +56,12 @@ public class PrintForeachAction<K, V> implements ForeachAction<K, V> {
         }
     }
 
+    /**
+     * Set the mapper which can allow user to customize output will be printed
+     *
+     * @param mapper The mapper which can allow user to customize output will be printed.
+     */
+    public void setMapper(final KeyValueMapper<? super K, ? super V, String> mapper) {
+        this.mapper = mapper;
+    }
 }
