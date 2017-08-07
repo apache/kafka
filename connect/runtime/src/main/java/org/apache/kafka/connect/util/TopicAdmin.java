@@ -233,8 +233,9 @@ public class TopicAdmin implements AutoCloseable {
                     continue;
                 }
                 if (cause instanceof UnsupportedVersionException) {
-                    log.error("Unable to use Kafka admin client to create topic descriptions for '{}' using the brokers at {}", topicNameList, bootstrapServers);
-                    throw (UnsupportedVersionException) cause;
+                    log.debug("Unable to use Kafka admin client to create topic descriptions for '{}' using the brokers at {}," +
+                                      "falling back to assume topic(s) exist or will be auto-created by the broker", topicNameList, bootstrapServers);
+                    return Collections.emptySet();
                 }
                 if (cause instanceof TimeoutException) {
                     // Timed out waiting for the operation to complete
