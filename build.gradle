@@ -81,8 +81,9 @@ ext {
   buildVersionFileName = "kafka-version.properties"
 
   maxPermSizeArgs = []
-  if (!JavaVersion.current().isJava8Compatible())
+  if (!JavaVersion.current().isJava8Compatible()) {
     maxPermSizeArgs = ['-XX:MaxPermSize=512m']
+  }
 
   userMaxForks = project.hasProperty('maxParallelForks') ? maxParallelForks.toInteger() : null
 
@@ -405,8 +406,8 @@ def fineTuneEclipseClasspathFile(eclipse, project) {
       if (project.name.equals('core')) {
         cp.entries.findAll { it.kind == "src" && it.path.equals("src/test/scala") }*.excludes = ["integration/", "other/", "unit/"]
       }
-      /* 
-       * Set all eclipse build output to go to 'build_eclipse' directory. This is to ensure that gradle and eclipse use different 
+      /*
+       * Set all eclipse build output to go to 'build_eclipse' directory. This is to ensure that gradle and eclipse use different
        * build output directories, and also avoid using the eclpise default of 'bin' which clashes with some of our script directories.
        * https://discuss.gradle.org/t/eclipse-generated-files-should-be-put-in-the-same-place-as-the-gradle-generated-files/6986/2
        */
@@ -495,26 +496,31 @@ for ( sv in availableScalaVersions ) {
 def connectPkgs = ['connect:api', 'connect:runtime', 'connect:transforms', 'connect:json', 'connect:file']
 def pkgs = ['clients', 'examples', 'log4j-appender', 'tools', 'streams', 'streams:examples'] + connectPkgs
 
-/** Create one task per default Scala version */
-def withDefScalaVersions(taskName) {
-  defaultScalaVersions.collect { taskName + '_' + it.replaceAll('\\.', '_') }
+/** Create one task for available Scala versions */
+def withAvailableScalaVersions(taskName) {
+  def oldJava = JavaVersion.current().compareTo(JavaVersion.VERSION_1_8) < 0
+  def scalaVersionToUse = oldJava ? scalaVersionsBeforeJava8 : availableScalaVersions
+  if (oldJava) {
+    println "Cannot only build project with scala version " + scalaVersionToUse + " because current Java version is " + JavaVersion.current()
+  }
+  scalaVersionToUse.collect { taskName + '_' + it.replaceAll('\\.', '_') }
 }
 
 tasks.create(name: "jarConnect", dependsOn: connectPkgs.collect { it + ":jar" }) {}
-tasks.create(name: "jarAll", dependsOn: withDefScalaVersions('jar_core') + pkgs.collect { it + ":jar" }) { }
+tasks.create(name: "jarAll", dependsOn: withAvailableScalaVersions('jar_core') + pkgs.collect { it + ":jar" }) { }
 
-tasks.create(name: "srcJarAll", dependsOn: withDefScalaVersions('srcJar') + pkgs.collect { it + ":srcJar" }) { }
+tasks.create(name: "srcJarAll", dependsOn: withAvailableScalaVersions('srcJar') + pkgs.collect { it + ":srcJar" }) { }
 
-tasks.create(name: "docsJarAll", dependsOn: withDefScalaVersions('docsJar') + pkgs.collect { it + ":docsJar" }) { }
+tasks.create(name: "docsJarAll", dependsOn: withAvailableScalaVersions('docsJar') + pkgs.collect { it + ":docsJar" }) { }
 
 tasks.create(name: "testConnect", dependsOn: connectPkgs.collect { it + ":test" }) {}
-tasks.create(name: "testAll", dependsOn: withDefScalaVersions('test_core') + pkgs.collect { it + ":test" }) { }
+tasks.create(name: "testAll", dependsOn: withAvailableScalaVersions('test_core') + pkgs.collect { it + ":test" }) { }
 
-tasks.create(name: "installAll", dependsOn: withDefScalaVersions('install') + pkgs.collect { it + ":install" }) { }
+tasks.create(name: "installAll", dependsOn: withAvailableScalaVersions('install') + pkgs.collect { it + ":install" }) { }
 
-tasks.create(name: "releaseTarGzAll", dependsOn: withDefScalaVersions('releaseTarGz')) { }
+tasks.create(name: "releaseTarGzAll", dependsOn: withAvailableScalaVersions('releaseTarGz')) { }
 
-tasks.create(name: "uploadArchivesAll", dependsOn: withDefScalaVersions('uploadCoreArchives') + pkgs.collect { it + ":uploadArchives" }) { }
+tasks.create(name: "uploadArchivesAll", dependsOn: withAvailableScalaVersions('uploadCoreArchives') + pkgs.collect { it + ":uploadArchives" }) { }
 
 project(':core') {
   println "Building project 'core' with Scala version ${versions.scala}"
