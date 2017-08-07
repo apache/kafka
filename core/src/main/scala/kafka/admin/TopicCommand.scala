@@ -335,8 +335,6 @@ object TopicCommand extends Logging {
 
     val disableRackAware = parser.accepts("disable-rack-aware", "Disable rack aware replica assignment")
 
-    val forceOpt = parser.accepts("force", "Suppress console prompts")
-
     val options = parser.parse(args : _*)
 
     val allTopicLevelOpts: Set[OptionSpec[_]] = Set(alterOpt, createOpt, describeOpt, listOpt, deleteOpt)
