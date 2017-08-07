@@ -845,7 +845,7 @@ public class KafkaAdminClient extends AdminClient {
                 correlationIdToCall.remove(correlationId);
                 List<Call> calls = callsInFlight.get(response.destination());
                 if ((calls == null) || (!calls.remove(call))) {
-                    log.error("Internal server error on {}: found call {} in correlationIdToCall " +
+                    log.error("Internal server error on {}: ignoring call {} in correlationIdToCall " +
                         "that did not exist in callsInFlight", response.destination(), call);
                     continue;
                 }

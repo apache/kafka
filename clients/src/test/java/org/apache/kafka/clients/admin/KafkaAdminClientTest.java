@@ -340,7 +340,7 @@ public class KafkaAdminClientTest {
                 public boolean conditionMet() {
                     return result.listings().isDone();
                 }
-            }, "Timed out waiting for inFlightRequests");
+            }, "Timed out waiting for listTopics to complete");
             assertFutureError(result.listings(), TimeoutException.class);
             log.info("Verified the error result of AdminClient#listTopics");
 
