@@ -24,9 +24,9 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
-import org.apache.kafka.streams.processor.AbstractNotifyingBatchingRestoreCallback;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
+import org.apache.kafka.test.MockBatchingStateRestoreListener;
 import org.apache.kafka.test.MockChangelogReader;
 import org.apache.kafka.test.MockStateStoreSupplier;
 import org.apache.kafka.test.TestUtils;
@@ -40,8 +40,6 @@ import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
 import java.nio.charset.Charset;
 import java.nio.file.StandardOpenOption;
-import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -100,7 +98,7 @@ public class ProcessorStateManagerTest {
     @Test
     public void shouldRestoreStoreWithBatchingRestoreSpecification() throws Exception {
         final TaskId taskId = new TaskId(0, 2);
-        final MockBatchingRestoreCallback batchingRestoreCallback = new MockBatchingRestoreCallback();
+        final MockBatchingStateRestoreListener batchingRestoreCallback = new MockBatchingStateRestoreListener();
 
         final KeyValue<byte[], byte[]> expectedKeyValue = KeyValue.pair(key, value);
 
@@ -110,8 +108,8 @@ public class ProcessorStateManagerTest {
         try {
             stateMgr.register(persistentStore, true, batchingRestoreCallback);
             stateMgr.updateStandbyStates(persistentStorePartition, Collections.singletonList(consumerRecord));
-            assertThat(batchingRestoreCallback.restoredRecords.size(), is(1));
-            assertTrue(batchingRestoreCallback.restoredRecords.contains(expectedKeyValue));
+            assertThat(batchingRestoreCallback.getRestoredRecords().size(), is(1));
+            assertTrue(batchingRestoreCallback.getRestoredRecords().contains(expectedKeyValue));
         } finally {
             stateMgr.close(Collections.<TopicPartition, Long>emptyMap());
         }
@@ -363,7 +361,6 @@ public class ProcessorStateManagerTest {
             false);
         stateMgr.register(persistentStore, true, persistentStore.stateRestoreCallback);
 
-
         stateMgr.checkpoint(Collections.singletonMap(persistentStorePartition, 10L));
         final Map<TopicPartition, Long> read = checkpoint.read();
         assertThat(read, equalTo(Collections.singletonMap(persistentStorePartition, 11L)));
@@ -573,16 +570,6 @@ public class ProcessorStateManagerTest {
 
     private MockStateStoreSupplier.MockStateStore getPersistentStore() {
         return new MockStateStoreSupplier.MockStateStore("persistentStore", true);
-    }
-
-    private static class MockBatchingRestoreCallback extends AbstractNotifyingBatchingRestoreCallback {
-
-        final Collection<KeyValue<byte[], byte[]>> restoredRecords = new ArrayList<>();
-
-        @Override
-        public void restoreAll(Collection<KeyValue<byte[], byte[]>> records) {
-            restoredRecords.addAll(records);
-        }
     }
 
 }

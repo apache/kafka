@@ -215,11 +215,7 @@ public class ProcessorStateManager implements StateManager {
         int count = 0;
         for (final ConsumerRecord<byte[], byte[]> record : records) {
             if (record.offset() < limit) {
-                try {
-                    restoreRecords.add(KeyValue.pair(record.key(), record.value()));
-                } catch (final Exception e) {
-                    throw new ProcessorStateException(String.format("%s exception caught while trying to restore state from %s", logPrefix, storePartition), e);
-                }
+                restoreRecords.add(KeyValue.pair(record.key(), record.value()));
                 lastOffset = record.offset();
             } else {
                 if (remainingRecords == null) {
@@ -232,7 +228,11 @@ public class ProcessorStateManager implements StateManager {
         }
 
         if (!restoreRecords.isEmpty()) {
-            restoreCallback.restoreAll(restoreRecords);
+            try {
+                restoreCallback.restoreAll(restoreRecords);
+            } catch (final Exception e) {
+                throw new ProcessorStateException(String.format("%s exception caught while trying to restore state from %s", logPrefix, storePartition), e);
+            }
         }
 
         // record the restored offset for its change log partition
