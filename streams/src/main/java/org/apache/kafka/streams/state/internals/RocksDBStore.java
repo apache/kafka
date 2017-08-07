@@ -530,23 +530,27 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
         private final RocksDBStore rocksDBStore;
 
-        RocksDBBatchingRestoreCallback(RocksDBStore rocksDBStore) {
+        RocksDBBatchingRestoreCallback(final RocksDBStore rocksDBStore) {
             this.rocksDBStore = rocksDBStore;
         }
 
         @Override
-        public void restoreAll(Collection<KeyValue<byte[], byte[]>> records) {
+        public void restoreAll(final Collection<KeyValue<byte[], byte[]>> records) {
             rocksDBStore.restoreAllInternal(records);
         }
 
         @Override
-        public void onRestoreStart(TopicPartition topicPartition, String storeName, long startingOffset,
-                                   long endingOffset) {
+        public void onRestoreStart(final TopicPartition topicPartition,
+                                   final String storeName,
+                                   final long startingOffset,
+                                   final long endingOffset) {
             rocksDBStore.toggleDbForBulkLoading(true);
         }
 
         @Override
-        public void onRestoreEnd(TopicPartition topicPartition, String storeName, long totalRestored) {
+        public void onRestoreEnd(final TopicPartition topicPartition,
+                                 final String storeName,
+                                 final long totalRestored) {
             rocksDBStore.toggleDbForBulkLoading(false);
         }
     }
