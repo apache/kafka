@@ -334,7 +334,8 @@ You set the <code>org.apache.kafka.streams.processor.StateRestoreListener</code>
 <h4><a id="connecting-processors-and-state-stores" href="#connecting-processors-state-stores">Connecting Processors and State Stores</a></h4>
 
 <p>
-Now that we have defined a processor &lt;streams_developer-guide_stream-processor&gt; (WordCountProcessor) and the state stores, we can now construct the processor topology by connecting these processors and state stores together by using the <code>TopologyBuilder</code> instance. In addition, users can add <em>source processors</em> with the specified Kafka topics to generate input data streams into the topology, and <em>sink processors</em> with the specified Kafka topics to generate output data streams out of the topology.
+Now that we have defined a processor (WordCountProcessor) and the state stores, we can now construct the processor topology by connecting these processors and state stores together by using the <code>TopologyBuilder</code> instance. 
+In addition, users can add <em>source processors</em> with the specified Kafka topics to generate input data streams into the topology, and <em>sink processors</em> with the specified Kafka topics to generate output data streams out of the topology.
 </p>
 
 <pre class="brush: java;">
@@ -363,7 +364,9 @@ Now that we have defined a processor &lt;streams_developer-guide_stream-processo
 </ul>
 
 <p>
-In this topology, the &quot;Process&quot; stream processor node is considered a downstream processor of the &quot;Source&quot; node, and an upstream processor of the &quot;Sink&quot; node. As a result, whenever the &quot;Source&quot; node forward a newly fetched record from Kafka to its downstream &quot;Process&quot; node, <code>WordCountProcessor#process()</code> method is triggered to process the record and update the associated state store; and whenever <code>context#forward()</code> is called in the <code>WordCountProcessor#punctuate()</code> method, the aggregate key-value pair will be sent via the &quot;Sink&quot; processor node to the Kafka topic &quot;sink-topic&quot;. Note that in the <code>WordCountProcessor</code> implementation, users need to refer to the same store name &quot;Counts&quot; when accessing the key-value store; otherwise an exception will be thrown at runtime, indicating that the state store cannot be found; also, if the state store itself is not associated with the processor in the <code>TopologyBuilder</code> code, accessing it in the processor's <code>init()</code> method will also throw an exception at runtime, indicating the state store is not accessible from this processor.
+In this topology, the &quot;Process&quot; stream processor node is considered a downstream processor of the &quot;Source&quot; node, and an upstream processor of the &quot;Sink&quot; node. 
+As a result, whenever the &quot;Source&quot; node forward a newly fetched record from Kafka to its downstream &quot;Process&quot; node, <code>WordCountProcessor#process()</code> method is triggered to process the record and update the associated state store; and whenever <code>context#forward()</code> is called in the <code>WordCountProcessor#punctuate()</code> method, the aggregate key-value pair will be sent via the &quot;Sink&quot; processor node to the Kafka topic &quot;sink-topic&quot;. 
+Note that in the <code>WordCountProcessor</code> implementation, users need to refer to the same store name &quot;Counts&quot; when accessing the key-value store; otherwise an exception will be thrown at runtime, indicating that the state store cannot be found; also, if the state store itself is not associated with the processor in the <code>TopologyBuilder</code> code, accessing it in the processor's <code>init()</code> method will also throw an exception at runtime, indicating the state store is not accessible from this processor.
 </p>
 
 
