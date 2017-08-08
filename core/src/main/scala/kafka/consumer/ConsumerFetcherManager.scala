@@ -17,21 +17,20 @@
 
 package kafka.consumer
 
-import kafka.server.{AbstractFetcherManager, AbstractFetcherThread, BrokerAndInitialOffset}
+import kafka.client.ClientUtils
 import kafka.cluster.{BrokerEndPoint, Cluster}
+import kafka.server.{AbstractFetcherManager, AbstractFetcherThread, BrokerAndInitialOffset}
+import kafka.utils.CoreUtils.inLock
+import kafka.utils.{ShutdownableThread, ZkUtils}
+
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.utils.Time
 
-import scala.collection.immutable
 import collection.mutable.HashMap
+import scala.collection.immutable
 import scala.collection.mutable
-import java.util.concurrent.locks.ReentrantLock
-
-import kafka.utils.CoreUtils.inLock
-import kafka.utils.ZkUtils
-import kafka.utils.ShutdownableThread
-import kafka.client.ClientUtils
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.locks.ReentrantLock
 
 /**
  *  Usage:
@@ -63,7 +62,7 @@ class ConsumerFetcherManager(private val consumerIdString: String,
         }
 
         trace("Partitions without leader %s".format(noLeaderPartitionSet))
-        val brokers = ClientUtils.getPlaintextBrokerEndPoints(zkUtils)
+        val brokers = BrokerEndPoint.getPlaintextBrokerEndPoints(zkUtils)
         val topicsMetadata = ClientUtils.fetchTopicMetadata(noLeaderPartitionSet.map(m => m.topic).toSet,
                                                             brokers,
                                                             config.clientId,

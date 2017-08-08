@@ -18,16 +18,19 @@
 package kafka.tools
 
 import joptsimple._
-import kafka.utils._
-import kafka.consumer._
-import kafka.client.ClientUtils
-import kafka.api.{FetchRequestBuilder, OffsetRequest, Request}
-import kafka.cluster.BrokerEndPoint
 
-import scala.collection.JavaConverters._
+import kafka.api.{FetchRequestBuilder, OffsetRequest, Request}
+import kafka.client.ClientUtils
+import kafka.cluster.BrokerEndPoint
+import kafka.consumer._
 import kafka.common.{MessageFormatter, TopicAndPartition}
+import kafka.utils._
+
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.utils.{KafkaThread, Utils}
+import org.apache.kafka.common.Node
+
+import scala.collection.JavaConverters._
 
 /**
  * Command line program to dump out messages to standard out using the simple consumer
@@ -131,33 +134,33 @@ object SimpleConsumerShell extends Logging {
     info("Getting topic metadata...")
     val brokerList = options.valueOf(brokerListOpt)
     ToolsUtils.validatePortOrDie(parser,brokerList)
-    val metadataTargetBrokers = ClientUtils.parseBrokerList(brokerList)
-    val topicsMetadata = ClientUtils.fetchTopicMetadata(Set(topic), metadataTargetBrokers, clientId, maxWaitMs).topicsMetadata
+    val metadataTargetBrokers = BrokerEndPoint.parseBrokerList(brokerList)
+    val topicsMetadata = ClientUtils.fetchMetadata(Set(topic), metadataTargetBrokers).topicMetadata.asScala
     if(topicsMetadata.size != 1 || !topicsMetadata.head.topic.equals(topic)) {
       System.err.println(("Error: no valid topic metadata for topic: %s, " + "what we get from server is only: %s").format(topic, topicsMetadata))
       Exit.exit(1)
     }
 
     // validating partition id
-    val partitionsMetadata = topicsMetadata.head.partitionsMetadata
-    val partitionMetadataOpt = partitionsMetadata.find(p => p.partitionId == partitionId)
+    val partitionsMetadata = topicsMetadata.head.partitionMetadata.asScala
+    val partitionMetadataOpt = partitionsMetadata.find(p => p.partition == partitionId)
     if (partitionMetadataOpt.isEmpty) {
       System.err.println("Error: partition %d does not exist for topic %s".format(partitionId, topic))
       Exit.exit(1)
     }
 
     // validating replica id and initializing target broker
-    var fetchTargetBroker: BrokerEndPoint = null
-    var replicaOpt: Option[BrokerEndPoint] = null
+    var fetchTargetBroker: Node = null
+    var replicaOpt: Option[Node] = null
     if (replicaId == UseLeaderReplica) {
-      replicaOpt = partitionMetadataOpt.get.leader
+      replicaOpt = Some(partitionMetadataOpt.get.leader)
       if (replicaOpt.isEmpty) {
         System.err.println("Error: user specifies to fetch from leader for partition (%s, %d) which has not been elected yet".format(topic, partitionId))
         Exit.exit(1)
       }
     }
     else {
-      val replicasForPartition = partitionMetadataOpt.get.replicas
+      val replicasForPartition = partitionMetadataOpt.get.replicas.asScala
       replicaOpt = replicasForPartition.find(r => r.id == replicaId)
       if(replicaOpt.isEmpty) {
         System.err.println("Error: replica %d does not exist for partition (%s, %d)".format(replicaId, topic, partitionId))

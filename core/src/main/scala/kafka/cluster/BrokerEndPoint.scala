@@ -19,7 +19,11 @@ package kafka.cluster
 import java.nio.ByteBuffer
 
 import kafka.api.ApiUtils._
+import kafka.common.BrokerEndPointNotAvailableException
 import kafka.common.KafkaException
+import kafka.utils.{CoreUtils, ZkUtils}
+
+import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.kafka.common.utils.Utils._
 
 object BrokerEndPoint {
@@ -36,7 +40,7 @@ object BrokerEndPoint {
       case _ => None
     }
   }
-  
+
   /**
    * BrokerEndPoint URI is host:port or [ipv6_host]:port
    * Note that unlike EndPoint (or listener) this URI has no security information.
@@ -47,11 +51,33 @@ object BrokerEndPoint {
     }
   }
 
+   /**
+    * Returns the first end point from each broker with the PLAINTEXT security protocol.
+    */
+  def getPlaintextBrokerEndPoints(zkUtils: ZkUtils): Seq[BrokerEndPoint] = {
+    zkUtils.getAllBrokersInCluster().map { broker =>
+      broker.endPoints.collectFirst {
+        case endPoint if endPoint.securityProtocol == SecurityProtocol.PLAINTEXT =>
+          new BrokerEndPoint(broker.id, endPoint.host, endPoint.port)
+      }.getOrElse(throw new BrokerEndPointNotAvailableException(s"End point with security protocol PLAINTEXT not found for broker ${broker.id}"))
+    }
+  }
+
   def readFrom(buffer: ByteBuffer): BrokerEndPoint = {
     val brokerId = buffer.getInt()
     val host = readShortString(buffer)
     val port = buffer.getInt()
     BrokerEndPoint(brokerId, host, port)
+  }
+
+  /**
+   * Parse a list of broker urls in the form host1:port1, host2:port2, ...
+   */
+  def parseBrokerList(brokerListStr: String): Seq[BrokerEndPoint] = {
+    val brokersStr = CoreUtils.parseCsvList(brokerListStr)
+    brokersStr.zipWithIndex.map { case (address, brokerId) =>
+      BrokerEndPoint.createBrokerEndPoint(brokerId, address)
+    }
   }
 }
 

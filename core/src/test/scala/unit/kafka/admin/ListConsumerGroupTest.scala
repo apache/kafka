@@ -19,6 +19,7 @@ package kafka.admin
 import java.util.Properties
 
 import org.easymock.EasyMock
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
@@ -95,7 +96,7 @@ class ListConsumerGroupTest extends KafkaServerTestHarness {
     val opts = new ConsumerGroupCommandOptions(Array("--bootstrap-server", brokerList))
     val consumerGroupCommand = new KafkaConsumerGroupService(opts)
     try {
-      assert(consumerGroupCommand.listGroups().isEmpty)
+      assertTrue(consumerGroupCommand.listGroups().isEmpty)
     } finally {
       consumerGroupCommand.close()
     }
