@@ -508,22 +508,13 @@ class ConnectDistributedTest(Test):
     @parametrize(broker_version=str(LATEST_0_11_0), auto_create_topics=False, security_protocol=SecurityConfig.PLAINTEXT)
     @parametrize(broker_version=str(LATEST_0_10_2), auto_create_topics=False, security_protocol=SecurityConfig.PLAINTEXT)
     @parametrize(broker_version=str(LATEST_0_10_1), auto_create_topics=False, security_protocol=SecurityConfig.PLAINTEXT)
-    @cluster(num_nodes=5)
-    @parametrize(broker_version=str(DEV_BRANCH), auto_create_topics=True, security_protocol=SecurityConfig.PLAINTEXT)
-    @parametrize(broker_version=str(LATEST_0_11_0), auto_create_topics=True, security_protocol=SecurityConfig.PLAINTEXT)
     @parametrize(broker_version=str(LATEST_0_10_0), auto_create_topics=True, security_protocol=SecurityConfig.PLAINTEXT)
     @parametrize(broker_version=str(LATEST_0_9), auto_create_topics=True, security_protocol=SecurityConfig.PLAINTEXT)
-    @cluster(num_nodes=6)
-    @parametrize(broker_version=str(DEV_BRANCH), auto_create_topics=False, security_protocol=SecurityConfig.SASL_SSL)
-    @parametrize(broker_version=str(DEV_BRANCH), auto_create_topics=True, security_protocol=SecurityConfig.SASL_SSL)
-    @parametrize(broker_version=str(LATEST_0_11_0), auto_create_topics=False, security_protocol=SecurityConfig.SASL_SSL)
-    @parametrize(broker_version=str(LATEST_0_11_0), auto_create_topics=True, security_protocol=SecurityConfig.SASL_SSL)
     def test_broker_compatibility(self, broker_version, auto_create_topics, security_protocol):
         """
         Verify that Connect will start up with various broker versions with various configurations. 
         When Connect distributed starts up, it either creates internal topics (v0.10.1.0 and after) 
         or relies upon the broker to auto-create the topics (v0.10.0.x and before).
-        Also verify that Connect can read the internal topics upon restart.
         """
         self.setup_services(broker_version=broker_version, auto_create_topics=auto_create_topics, security_protocol=security_protocol)
         self.cc.set_configs(lambda node: self.render("connect-distributed.properties", node=node))
@@ -540,14 +531,6 @@ class ConnectDistributedTest(Test):
         for node in self.cc.nodes:
             node.account.ssh("echo -e -n " + repr(self.FIRST_INPUTS) + " >> " + self.INPUT_FILE)
         wait_until(lambda: self._validate_file_output(self.FIRST_INPUT_LIST), timeout_sec=70, err_msg="Data added to input file was not seen in the output file in a reasonable amount of time.")
-
-        # Restarting both should result in them picking up where they left off,
-        # only processing new data.
-        self.cc.restart()
-
-        for node in self.cc.nodes:
-            node.account.ssh("echo -e -n " + repr(self.SECOND_INPUTS) + " >> " + self.INPUT_FILE)
-        wait_until(lambda: self._validate_file_output(self.FIRST_INPUT_LIST + self.SECOND_INPUT_LIST), timeout_sec=70, err_msg="Sink output file never converged to the same state as the input file")
 
     def _validate_file_output(self, input):
         input_set = set(input)

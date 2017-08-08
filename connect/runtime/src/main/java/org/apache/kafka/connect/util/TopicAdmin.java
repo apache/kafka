@@ -195,13 +195,14 @@ public class TopicAdmin implements AutoCloseable {
      * are excluded from the result.
      * <p>
      * If multiple topic definitions have the same topic name, the last one with that name will be used.
-     * </p>
+     * <p>
+     * Apache Kafka added support for creating topics in 0.10.1.0, so this method works as expected with that and later versions.
+     * With brokers older than 0.10.1.0, this method is unable to create topics and always returns an empty set.
      *
      * @param topics the specifications of the topics
      * @return the names of the topics that were created by this operation; never null but possibly empty
      * @throws ConnectException            if an error occurs, the operation takes too long, or the thread is interrupted while
      *                                     attempting to perform this operation
-     * @throws UnsupportedVersionException if the broker does not support the necessary APIs to perform this request
      */
     public Set<String> createTopics(NewTopic... topics) {
         Map<String, NewTopic> topicsByName = new HashMap<>();
