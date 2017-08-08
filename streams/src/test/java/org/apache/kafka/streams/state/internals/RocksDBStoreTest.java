@@ -207,6 +207,44 @@ public class RocksDBStoreTest {
         assertEquals(subject.get("3"), "c");
     }
 
+    @Test
+    public void shouldRestoreThenDeleteOnRestoreAll() throws Exception {
+
+        final List<KeyValue<byte[], byte[]>> entries = new ArrayList<>();
+        entries.add(new KeyValue<>("1".getBytes("UTF-8"), "a".getBytes("UTF-8")));
+        entries.add(new KeyValue<>("2".getBytes("UTF-8"), "b".getBytes("UTF-8")));
+        entries.add(new KeyValue<>("3".getBytes("UTF-8"), "c".getBytes("UTF-8")));
+
+        subject.init(context, subject);
+        
+        context.restore(subject.name(), entries);
+
+        assertEquals(subject.get("1"), "a");
+        assertEquals(subject.get("2"), "b");
+        assertEquals(subject.get("3"), "c");
+
+        entries.clear();
+
+        entries.add(new KeyValue<>("2".getBytes("UTF-8"), "b".getBytes("UTF-8")));
+        entries.add(new KeyValue<>("3".getBytes("UTF-8"), "c".getBytes("UTF-8")));
+        entries.add(new KeyValue<>("1".getBytes("UTF-8"), (byte[]) null));
+
+        context.restore(subject.name(), entries);
+
+        final KeyValueIterator<String, String> iterator = subject.all();
+        final List<String> keys = new ArrayList<>();
+
+        while (iterator.hasNext()) {
+            keys.add(iterator.next().key);
+        }
+
+        assertTrue(keys.size() == 2);
+
+        assertTrue(keys.contains("2"));
+        assertTrue(keys.contains("3"));
+        assertFalse(keys.contains("1"));
+    }
+
 
 
     @Test
