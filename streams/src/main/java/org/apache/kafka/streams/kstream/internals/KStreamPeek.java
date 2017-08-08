@@ -24,6 +24,7 @@ import org.apache.kafka.streams.processor.ProcessorSupplier;
 class KStreamPeek<K, V> implements ProcessorSupplier<K, V> {
 
     private final boolean forwardDownStream;
+    // it's protected for having it available from derived classes (i.e. KStreamPrint)
     protected final ForeachAction<K, V> action;
 
     public KStreamPeek(final ForeachAction<K, V> action, final boolean forwardDownStream) {
@@ -36,6 +37,7 @@ class KStreamPeek<K, V> implements ProcessorSupplier<K, V> {
         return new KStreamPeekProcessor();
     }
 
+    // it's package-private to be visible for inheritance (i.e. KStreamPrintProcessor)
     class KStreamPeekProcessor extends AbstractProcessor<K, V> {
         @Override
         public void process(final K key, final V value) {
