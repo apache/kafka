@@ -26,6 +26,7 @@ import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
+import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.RocksDBConfigSetter;
 import org.apache.kafka.test.MockProcessorContext;
 import org.apache.kafka.test.NoOpRecordCollector;
@@ -144,6 +145,64 @@ public class RocksDBStoreTest {
         context.restore(subject.name(), entries);
 
         assertEquals(subject.get("1"), "a");
+        assertEquals(subject.get("2"), "b");
+        assertEquals(subject.get("3"), "c");
+    }
+
+
+    @Test
+    public void shouldHandleDeletesOnRestoreAll() throws Exception {
+        final List<KeyValue<byte[], byte[]>> entries = new ArrayList<>();
+        entries.add(new KeyValue<>("1".getBytes("UTF-8"), "a".getBytes("UTF-8")));
+        entries.add(new KeyValue<>("2".getBytes("UTF-8"), "b".getBytes("UTF-8")));
+        entries.add(new KeyValue<>("3".getBytes("UTF-8"), "c".getBytes("UTF-8")));
+        entries.add(new KeyValue<>("1".getBytes("UTF-8"), (byte[]) null));
+
+        subject.init(context, subject);
+        context.restore(subject.name(), entries);
+
+        final KeyValueIterator<String, String> iterator = subject.all();
+        final List<String> keys = new ArrayList<>();
+
+        while (iterator.hasNext()) {
+            keys.add(iterator.next().key);
+        }
+
+        assertTrue(keys.size() == 2);
+
+        assertTrue(keys.contains("2"));
+        assertTrue(keys.contains("3"));
+        assertFalse(keys.contains("1"));
+    }
+
+    @Test
+    public void shouldHandleDeletesAndPutbackOnRestoreAll() throws Exception {
+        final List<KeyValue<byte[], byte[]>> entries = new ArrayList<>();
+        entries.add(new KeyValue<>("1".getBytes("UTF-8"), "a".getBytes("UTF-8")));
+        entries.add(new KeyValue<>("2".getBytes("UTF-8"), "b".getBytes("UTF-8")));
+        // this will be deleted
+        entries.add(new KeyValue<>("1".getBytes("UTF-8"), (byte[]) null));
+        entries.add(new KeyValue<>("3".getBytes("UTF-8"), "c".getBytes("UTF-8")));
+        // this will restore key "1" as WriteBatch applies updates in order
+        entries.add(new KeyValue<>("1".getBytes("UTF-8"), "restored".getBytes("UTF-8")));
+
+        subject.init(context, subject);
+        context.restore(subject.name(), entries);
+
+        final KeyValueIterator<String, String> iterator = subject.all();
+        final List<String> keys = new ArrayList<>();
+
+        while (iterator.hasNext()) {
+            keys.add(iterator.next().key);
+        }
+
+        assertTrue(keys.size() == 3);
+
+        assertTrue(keys.contains("1"));
+        assertTrue(keys.contains("2"));
+        assertTrue(keys.contains("3"));
+
+        assertEquals(subject.get("1"), "restored");
         assertEquals(subject.get("2"), "b");
         assertEquals(subject.get("3"), "c");
     }
