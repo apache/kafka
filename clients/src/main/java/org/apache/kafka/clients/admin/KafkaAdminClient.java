@@ -830,7 +830,7 @@ public class KafkaAdminClient extends AdminClient {
 
                 // Stop tracking this call.
                 correlationIdToCall.remove(correlationId);
-                getOrCreateListValue(callsInFlight, response.requestHeader().clientId()).remove(call);
+                getOrCreateListValue(callsInFlight, response.destination()).remove(call);
 
                 // Handle the result of the call.  This may involve retrying the call, if we got a
                 // retryible exception.
