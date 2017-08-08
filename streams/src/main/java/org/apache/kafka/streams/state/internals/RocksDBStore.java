@@ -26,6 +26,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.AbstractNotifyingBatchingRestoreCallback;
+import org.apache.kafka.streams.processor.BatchingStateRestoreCallback;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
@@ -101,6 +102,8 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
     private volatile boolean prepareForBulkload = false;
     private ProcessorContext internalProcessorContext;
+    // visible for testing
+    volatile BatchingStateRestoreCallback batchingStateRestoreCallback = null;
 
     protected volatile boolean open = false;
 
@@ -180,27 +183,11 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         // open the DB dir
         this.internalProcessorContext = context;
         openDB(context);
+        this.batchingStateRestoreCallback = new RocksDBBatchingRestoreCallback(this);
 
         // value getter should always read directly from rocksDB
         // since it is only for values that are already flushed
-        context.register(root, false, new AbstractNotifyingBatchingRestoreCallback() {
-            @Override
-            public void restoreAll(Collection<KeyValue<byte[], byte[]>> records) {
-                restoreAllInternal(records);
-            }
-
-            @Override
-            public void onRestoreStart(TopicPartition topicPartition, String storeName,
-                                       long startingOffset, long endingOffset) {
-                toggleDbForBulkLoading(true);
-            }
-
-            @Override
-            public void onRestoreEnd(TopicPartition topicPartition, String storeName,
-                                     long totalRestored) {
-                toggleDbForBulkLoading(false);
-            }
-        });
+        context.register(root, false, this.batchingStateRestoreCallback);
 
         open = true;
     }
@@ -536,6 +523,35 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         @Override
         public synchronized boolean hasNext() {
             return super.hasNext() && comparator.compare(super.peekRawKey(), this.rawToKey) <= 0;
+        }
+    }
+
+    private static class RocksDBBatchingRestoreCallback extends AbstractNotifyingBatchingRestoreCallback {
+
+        private final RocksDBStore rocksDBStore;
+
+        RocksDBBatchingRestoreCallback(final RocksDBStore rocksDBStore) {
+            this.rocksDBStore = rocksDBStore;
+        }
+
+        @Override
+        public void restoreAll(final Collection<KeyValue<byte[], byte[]>> records) {
+            rocksDBStore.restoreAllInternal(records);
+        }
+
+        @Override
+        public void onRestoreStart(final TopicPartition topicPartition,
+                                   final String storeName,
+                                   final long startingOffset,
+                                   final long endingOffset) {
+            rocksDBStore.toggleDbForBulkLoading(true);
+        }
+
+        @Override
+        public void onRestoreEnd(final TopicPartition topicPartition,
+                                 final String storeName,
+                                 final long totalRestored) {
+            rocksDBStore.toggleDbForBulkLoading(false);
         }
     }
 }
