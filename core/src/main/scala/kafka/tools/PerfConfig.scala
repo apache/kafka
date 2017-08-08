@@ -37,8 +37,6 @@ class PerfConfig(args: Array[String]) {
     .describedAs("date format")
     .ofType(classOf[String])
     .defaultsTo("yyyy-MM-dd HH:mm:ss:SSS")
-  val showDetailedStatsOpt = parser.accepts("show-detailed-stats", "If set, stats are reported for each reporting " +
-    "interval as configured by reporting-interval")
   val hideHeaderOpt = parser.accepts("hide-header", "If set, skips printing the header for the stats ")
   val helpOpt = parser.accepts("help", "Print usage.")
 }
