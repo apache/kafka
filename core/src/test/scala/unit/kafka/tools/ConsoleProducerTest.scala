@@ -40,6 +40,8 @@ class ConsoleProducerTest {
     "t3"
   )
 
+  val invalidParseArgs: Array[String] = validArgs :+ "--key-serializer" :+ "org.apache.kafka.common.serialization.StringSerializer"
+
   @Test
   def testValidConfigsNewProducer() {
     val config = new ConsoleProducer.ProducerConfig(validArgs)
@@ -63,6 +65,16 @@ class ConsoleProducerTest {
       Assert.fail("Should have thrown an UnrecognizedOptionException")
     } catch {
       case _: joptsimple.OptionException => // expected exception
+    }
+  }
+
+  @Test
+  def testInvalidSerializer() {
+    try {
+      new ConsoleProducer.ProducerConfig(invalidParseArgs)
+      Assert.fail("Should have thrown a KafkaException")
+    } catch {
+      case _: kafka.common.KafkaException => // expected exception
     }
   }
 
