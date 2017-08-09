@@ -320,7 +320,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
                 Objects.requireNonNull(entry.key, "key cannot be null");
                 final byte[] rawKey = serdes.rawKey(entry.key);
                 if (entry.value == null) {
-                    db.delete(rawKey);
+                    batch.remove(rawKey);
                 } else {
                     final byte[] value = serdes.rawValue(entry.value);
                     batch.put(rawKey, value);

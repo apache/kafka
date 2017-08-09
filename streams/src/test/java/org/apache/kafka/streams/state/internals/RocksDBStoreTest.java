@@ -40,11 +40,15 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
+import static org.hamcrest.CoreMatchers.equalTo;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -190,13 +194,13 @@ public class RocksDBStoreTest {
         context.restore(subject.name(), entries);
 
         final KeyValueIterator<String, String> iterator = subject.all();
-        final List<String> keys = new ArrayList<>();
+        final Set<String> keys = new HashSet<>();
 
         while (iterator.hasNext()) {
             keys.add(iterator.next().key);
         }
 
-        assertTrue(keys.size() == 3);
+        assertThat(keys, equalTo(Utils.mkSet("1", "2", "3")));
 
         assertTrue(keys.contains("1"));
         assertTrue(keys.contains("2"));
@@ -232,13 +236,13 @@ public class RocksDBStoreTest {
         context.restore(subject.name(), entries);
 
         final KeyValueIterator<String, String> iterator = subject.all();
-        final List<String> keys = new ArrayList<>();
+        final Set<String> keys = new HashSet<>();
 
         while (iterator.hasNext()) {
             keys.add(iterator.next().key);
         }
 
-        assertTrue(keys.size() == 2);
+        assertThat(keys, equalTo(Utils.mkSet("2", "3")));
 
         assertTrue(keys.contains("2"));
         assertTrue(keys.contains("3"));
