@@ -112,7 +112,7 @@ class WorkerSinkTask extends WorkerTask {
             this.consumer = createConsumer();
             this.context = new WorkerSinkTaskContext(consumer);
         } catch (Throwable t) {
-            log.error("{} Task {} failed initialization and will not be started.", this, t);
+            log.error("{} Task failed initialization and will not be started.", this, t);
             onFailure(t);
         }
     }
@@ -197,9 +197,7 @@ class WorkerSinkTask extends WorkerTask {
 
     private void onCommitCompleted(Throwable error, long seqno) {
         if (commitSeqno != seqno) {
-            log.debug("{} Got callback for timed out commit: {}, but most recent commit is {}",
-                    this,
-                    seqno, commitSeqno);
+            log.debug("{} Got callback for timed out commit: {}, but most recent commit is {}", this, seqno, commitSeqno);
         } else {
             if (error != null) {
                 log.error("{} Commit of offsets threw an unexpected exception: ", this, error);
@@ -456,9 +454,9 @@ class WorkerSinkTask extends WorkerTask {
             pauseAll();
             // Let this exit normally, the batch will be reprocessed on the next loop.
         } catch (Throwable t) {
-            log.error("{} Task threw an uncaught and unrecoverable exception", this, t);
-            log.error("{} Task is being killed and will not recover until manually restarted", this);
-            throw new ConnectException("Exiting WorkerSinkTask due to unrecoverable exception.");
+            log.error("{} Task threw an uncaught and unrecoverable exception. Task is being killed and will not "
+                    + "recover until manually restarted.", this, t);
+            throw new ConnectException("Exiting WorkerSinkTask due to unrecoverable exception.", t);
         }
     }
 

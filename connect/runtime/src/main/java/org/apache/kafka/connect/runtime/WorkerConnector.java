@@ -84,7 +84,7 @@ public class WorkerConnector {
                 }
             });
         } catch (Throwable t) {
-            log.error("{} Error initializing connector", t);
+            log.error("{} Error initializing connector", this, t);
             onFailure(t);
         }
     }
