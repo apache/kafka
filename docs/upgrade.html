@@ -58,6 +58,8 @@
         whether there is offline log directory. </li>
     <li>Added KafkaStorageException which is a retriable exception. KafkaStorageException will be converted to NotLeaderForPartitionException in the response
         if the version of client's FetchRequest or ProducerRequest does not support KafkaStorageException. </li>
+    <li>-XX:+DisableExplicitGC was replaced by -XX:+ExplicitGCInvokesConcurrent in the default JVM settings. This helps
+        avoid out of memory exceptions during allocation of native memory by direct buffers in some cases.</li>
 </ul>
 
 <h5><a id="upgrade_100_new_protocols" href="#upgrade_100_new_protocols">New Protocol Versions</a></h5>
