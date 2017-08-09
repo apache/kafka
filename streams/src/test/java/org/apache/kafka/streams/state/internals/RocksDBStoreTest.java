@@ -166,13 +166,13 @@ public class RocksDBStoreTest {
         context.restore(subject.name(), entries);
 
         final KeyValueIterator<String, String> iterator = subject.all();
-        final List<String> keys = new ArrayList<>();
+        final Set<String> keys = new HashSet<>();
 
         while (iterator.hasNext()) {
             keys.add(iterator.next().key);
         }
 
-        assertTrue(keys.size() == 2);
+        assertThat(keys, equalTo(Utils.mkSet("2", "3")));
 
         assertTrue(keys.contains("2"));
         assertTrue(keys.contains("3"));
