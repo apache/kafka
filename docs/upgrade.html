@@ -58,6 +58,8 @@
         whether there is offline log directory. </li>
     <li>Added KafkaStorageException which is a retriable exception. KafkaStorageException will be converted to NotLeaderForPartitionException in the response
         if the version of client's FetchRequest or ProducerRequest does not support KafkaStorageException. </li>
+    <li>The default for console consumer's <code>enable.auto.commit</code> property when no <code>group.id</code> is provided is now set to <code>false</code>.
+        This is to avoid polluting the consumer coordinator cache as the auto-generated group is not likely to be used by other consumers.
 </ul>
 
 <h5><a id="upgrade_100_new_protocols" href="#upgrade_100_new_protocols">New Protocol Versions</a></h5>

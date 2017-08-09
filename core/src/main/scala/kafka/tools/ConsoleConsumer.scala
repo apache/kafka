@@ -412,6 +412,10 @@ object ConsoleConsumer extends Logging {
     //Provide the consumer with a randomly assigned group id
     if (!consumerProps.containsKey(ConsumerConfig.GROUP_ID_CONFIG)) {
       consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, s"console-consumer-${new Random().nextInt(100000)}")
+      // By default, avoid polluting the coordinator cache since the auto-generated group
+      // and its offsets won't likely be used again
+      if (!consumerProps.containsKey(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG))
+        consumerProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
       groupIdPassed = false
     }
 
