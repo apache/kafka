@@ -23,6 +23,7 @@ import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
+import org.apache.kafka.clients.producer.RecordMetadata;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -121,7 +122,7 @@ public class VerifiableSourceTask extends SourceTask {
     }
 
     @Override
-    public void commitRecord(SourceRecord record) throws InterruptedException {
+    public void commitRecord(SourceRecord record, RecordMetadata recordMetadata) throws InterruptedException {
         Map<String, Object> data = new HashMap<>();
         data.put("name", name);
         data.put("task", id);
