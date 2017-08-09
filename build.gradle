@@ -24,10 +24,10 @@ buildscript {
 
   dependencies {
     // For Apache Rat plugin to ignore non-Git files
-    classpath "org.ajoberstar:grgit:1.9.2"
-    classpath 'com.github.ben-manes:gradle-versions-plugin:0.14.0'
+    classpath "org.ajoberstar:grgit:1.9.3"
+    classpath 'com.github.ben-manes:gradle-versions-plugin:0.15.0'
     classpath 'org.scoverage:gradle-scoverage:2.1.0'
-    classpath 'com.github.jengelman.gradle.plugins:shadow:1.2.4'
+    classpath 'com.github.jengelman.gradle.plugins:shadow:2.0.1'
   }
 }
 
@@ -77,7 +77,7 @@ allprojects {
 }
 
 ext {
-  gradleVersion = "3.5"
+  gradleVersion = "4.1"
   buildVersionFileName = "kafka-version.properties"
 
   maxPermSizeArgs = []
@@ -548,7 +548,7 @@ project(':core') {
     testCompile libs.apachedsMavibotPartition
     testCompile libs.apachedsJdbmPartition
     testCompile libs.junit
-    testCompile libs.scalaTest
+    testCompile libs.scalatest
     testCompile libs.jfreechart
 
     scoverage libs.scoveragePlugin
@@ -935,11 +935,11 @@ project(':jmh-benchmarks') {
   }
 
   dependencies {
-      compile project(':clients')
-      compile project(':streams')
-      compile 'org.openjdk.jmh:jmh-core:1.18'
-      compile 'org.openjdk.jmh:jmh-generator-annprocess:1.18'
-      compile 'org.openjdk.jmh:jmh-core-benchmarks:1.18'
+    compile project(':clients')
+    compile project(':streams')
+    compile libs.jmhCore
+    compile libs.jmhGeneratorAnnProcess
+    compile libs.jmhCoreBenchmarks
   }
 
   jar {
