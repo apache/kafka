@@ -26,6 +26,7 @@ import kafka.network.RequestChannel.Response
 import kafka.utils.Logging
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 
+@deprecated("This object has been deprecated and will be removed in a future release.", "1.0.0")
 object OffsetFetchRequest extends Logging {
   val CurrentVersion: Short = 2
   val DefaultClientId = ""
@@ -51,6 +52,7 @@ object OffsetFetchRequest extends Logging {
   }
 }
 
+@deprecated("This object has been deprecated and will be removed in a future release.", "1.0.0")
 case class OffsetFetchRequest(groupId: String,
                               requestInfo: Seq[TopicAndPartition],
                               versionId: Short = OffsetFetchRequest.CurrentVersion,
