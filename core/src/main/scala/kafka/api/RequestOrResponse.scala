@@ -36,6 +36,8 @@ abstract class RequestOrResponse(val requestId: Option[Short] = None) extends Lo
   
   def writeTo(buffer: ByteBuffer): Unit
 
+  def handleError(e: Throwable, requestChannel: RequestChannel, request: RequestChannel.Request): Unit = {}
+
   /* The purpose of this API is to return a string description of the Request mainly for the purpose of request logging.
   *  This API has no meaning for a Response object.
    * @param details If this is false, omit the parts of the request description that are proportional to the number of
