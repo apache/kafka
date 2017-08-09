@@ -137,16 +137,13 @@ public class StreamTask extends AbstractTask implements Punctuator {
         // initialize the topology with its own context
         processorContext = new ProcessorContextImpl(id, this, config, recordCollector, stateMgr, metrics, cache);
         this.time = time;
-        log.debug("{} Initializing", logPrefix);
-        initializeStateStores();
+
         stateMgr.registerGlobalStateStores(topology.globalStateStores());
         if (eosEnabled) {
             this.producer.initTransactions();
             this.producer.beginTransaction();
             transactionInFlight = true;
         }
-        initTopology();
-        processorContext.initialized();
     }
 
     /**
@@ -157,7 +154,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
      */
     @Override
     public void resume() {
-        log.debug("{} Resuming", logPrefix);
+        log.debug("{} Resuming {}", logPrefix, id);
         if (eosEnabled) {
             producer.beginTransaction();
             transactionInFlight = true;
@@ -323,7 +320,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
         }
     }
 
-    private void initTopology() {
+    void initTopology() {
         // initialize the task by initializing all its processor nodes in the topology
         log.trace("{} Initializing processor nodes of the topology", logPrefix);
         for (final ProcessorNode node : topology.processors()) {
@@ -550,6 +547,13 @@ public class StreamTask extends AbstractTask implements Punctuator {
     // visible for testing only
     RecordCollector createRecordCollector() {
         return new RecordCollectorImpl(producer, id.toString());
+    }
+
+    public boolean initialize() {
+        initializeStateStores();
+        initTopology();
+        processorContext.initialized();
+        return topology.stateStores().isEmpty();
     }
 
 }
