@@ -488,6 +488,16 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.logger.info("Leader for topic %s and partition %d is now: %d" % (topic, partition, leader_idx))
         return self.get_node(leader_idx)
 
+    def cluster_id(self):
+        """ Get the current cluster id
+        """
+        self.logger.debug("Querying ZooKeeper to retrieve cluster id")
+        cluster = json.loads(self.zk.query("/cluster/id"))
+        if cluster is None:
+            raise Exception("Error querying ZK for cluster id.")
+
+        return cluster['id']
+
     def list_consumer_groups(self, node=None, new_consumer=True, command_config=None):
         """ Get list of consumer groups.
         """

@@ -19,6 +19,8 @@ package org.apache.kafka.clients.producer.internals;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.header.Header;
+import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.LegacyRecord;
 import org.apache.kafka.common.record.MemoryRecords;
@@ -31,6 +33,7 @@ import org.junit.Test;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Deque;
+import java.util.Iterator;
 import java.util.concurrent.ExecutionException;
 
 import static org.apache.kafka.common.record.RecordBatch.MAGIC_VALUE_V0;
@@ -135,6 +138,43 @@ public class ProducerBatchTest {
             byte attributes = LegacyRecord.computeAttributes(magic, CompressionType.NONE, TimestampType.CREATE_TIME);
             long expectedChecksum = LegacyRecord.computeChecksum(magic, attributes, now, key, value);
             assertEquals(expectedChecksum, future.checksumOrNull().longValue());
+        }
+    }
+
+    @Test
+    public void testSplitPreservesHeaders() {
+        for (CompressionType compressionType : CompressionType.values()) {
+            MemoryRecordsBuilder builder = MemoryRecords.builder(
+                    ByteBuffer.allocate(1024),
+                    MAGIC_VALUE_V2,
+                    compressionType,
+                    TimestampType.CREATE_TIME,
+                    0L);
+            ProducerBatch batch = new ProducerBatch(new TopicPartition("topic", 1), builder, now);
+            Header header = new RecordHeader("header-key", "header-value".getBytes());
+
+            while (true) {
+                FutureRecordMetadata future = batch.tryAppend(
+                        now, "hi".getBytes(), "there".getBytes(),
+                        new Header[]{header}, null, now);
+                if (future == null) {
+                    break;
+                }
+            }
+            Deque<ProducerBatch> batches = batch.split(200);
+            assertTrue("This batch should be split to multiple small batches.", batches.size() >= 2);
+
+            for (ProducerBatch splitProducerBatch : batches) {
+                for (RecordBatch splitBatch : splitProducerBatch.records().batches()) {
+                    Iterator<Record> iter = splitBatch.iterator();
+                    while (iter.hasNext()) {
+                        Record record = iter.next();
+                        assertTrue("Header size should be 1.", record.headers().length == 1);
+                        assertTrue("Header key should be 'header-key'.", record.headers()[0].key().equals("header-key"));
+                        assertTrue("Header value should be 'header-value'.", new String(record.headers()[0].value()).equals("header-value"));
+                    }
+                }
+            }
         }
     }
 
