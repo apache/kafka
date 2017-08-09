@@ -173,10 +173,6 @@ public class RocksDBStoreTest {
         }
 
         assertThat(keys, equalTo(Utils.mkSet("2", "3")));
-
-        assertTrue(keys.contains("2"));
-        assertTrue(keys.contains("3"));
-        assertFalse(keys.contains("1"));
     }
 
     @Test
@@ -201,10 +197,6 @@ public class RocksDBStoreTest {
         }
 
         assertThat(keys, equalTo(Utils.mkSet("1", "2", "3")));
-
-        assertTrue(keys.contains("1"));
-        assertTrue(keys.contains("2"));
-        assertTrue(keys.contains("3"));
 
         assertEquals(subject.get("1"), "restored");
         assertEquals(subject.get("2"), "b");
@@ -243,10 +235,6 @@ public class RocksDBStoreTest {
         }
 
         assertThat(keys, equalTo(Utils.mkSet("2", "3")));
-
-        assertTrue(keys.contains("2"));
-        assertTrue(keys.contains("3"));
-        assertFalse(keys.contains("1"));
     }
 
 
