@@ -449,7 +449,7 @@ object ConsumerGroupCommand extends Logging {
 
             val rowsWithoutConsumer = offsets.filterNot {
               case (topicPartition, offset) => assignedTopicPartitions.contains(topicPartition)
-              }.flatMap {
+              }.toSeq.sortBy(_._1.partition()).toMap.flatMap {
                 case (topicPartition, offset) =>
                   val topicAndPartition = new TopicAndPartition(topicPartition)
                   collectConsumerAssignment(group, Some(consumerGroupSummary.coordinator), Seq(topicAndPartition),
