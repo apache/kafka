@@ -26,6 +26,14 @@
 
     <name>Kafka Streams :: Quickstart</name>
 
+    <distributionManagement>
+        <repository>
+            <id>apache-central-staging</id>
+            <name>Apache Maven Staging Repository</name>
+            <url>https://repository.apache.org/service/local/staging/deploy/maven2</url>
+        </repository>
+    </distributionManagement>
+
     <modules>
         <module>java</module>
     </modules>
