@@ -12,7 +12,9 @@ Docker containers can be used for running kafka system tests locally.
 * Requirements
   - Docker 1.12.3 is installed and running on the machine.
   - Test require a single kafka_*SNAPSHOT.tgz to be present in core/build/distributions.
-   This can be done by running ./gradlew clean releaseTarGz  
+   This can be done by running ./gradlew clean releaseTarGz
+  - Test also require that the system libs be present.
+   This can be done by running ./gradlew systemTestLibs
 * Run all tests
 ```
 bash tests/docker/run_tests.sh
