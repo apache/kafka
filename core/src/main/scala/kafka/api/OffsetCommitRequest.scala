@@ -28,6 +28,7 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 
 import scala.collection._
 
+@deprecated("This object has been deprecated and will be removed in a future release.", "0.11.0.0")
 object OffsetCommitRequest extends Logging {
   val CurrentVersion: Short = 2
   val DefaultClientId = ""
@@ -88,6 +89,7 @@ object OffsetCommitRequest extends Logging {
   }
 }
 
+@deprecated("This object has been deprecated and will be removed in a future release.", "0.11.0.0")
 case class OffsetCommitRequest(groupId: String,
                                requestInfo: immutable.Map[TopicAndPartition, OffsetAndMetadata],
                                versionId: Short = OffsetCommitRequest.CurrentVersion,

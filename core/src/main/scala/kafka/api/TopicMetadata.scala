@@ -23,6 +23,7 @@ import kafka.api.ApiUtils._
 import kafka.utils.Logging
 import org.apache.kafka.common.protocol.Errors
 
+@deprecated("This object has been deprecated and will be removed in a future release.", "0.11.0.0")
 object TopicMetadata {
 
   val NoLeaderNodeId = -1
@@ -40,6 +41,7 @@ object TopicMetadata {
   }
 }
 
+@deprecated("This object has been deprecated and will be removed in a future release.", "0.11.0.0")
 case class TopicMetadata(topic: String, partitionsMetadata: Seq[PartitionMetadata], error: Errors = Errors.NONE) extends Logging {
   def sizeInBytes: Int = {
     2 /* error code */ +

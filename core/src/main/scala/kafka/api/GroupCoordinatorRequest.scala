@@ -23,6 +23,7 @@ import kafka.network.{RequestOrResponseSend, RequestChannel}
 import kafka.network.RequestChannel.Response
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 
+@deprecated("This object has been deprecated and will be removed in a future release.", "0.11.0.0")
 object GroupCoordinatorRequest {
   val CurrentVersion = 0.shortValue
   val DefaultClientId = ""
@@ -40,6 +41,7 @@ object GroupCoordinatorRequest {
 
 }
 
+@deprecated("This object has been deprecated and will be removed in a future release.", "0.11.0.0")
 case class GroupCoordinatorRequest(group: String,
                                    versionId: Short = GroupCoordinatorRequest.CurrentVersion,
                                    correlationId: Int = 0,
