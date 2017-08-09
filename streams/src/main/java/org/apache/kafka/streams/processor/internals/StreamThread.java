@@ -1004,11 +1004,16 @@ public class StreamThread extends Thread {
             // when, for testing, a thread is closed multiple times. We could either
             // check here and immediately return for those cases, or add them to the transition
             // diagram (but then the diagram would be confusing and have transitions like
-            // PENDING_SHUTDOWN->PENDING_SHUTDOWN).
-            if (newState != State.DEAD && (state == State.PENDING_SHUTDOWN || state == State.DEAD)) {
+            // PENDING_SHUTDOWN->PENDING_SHUTDOWN). These cases include:
+            // - normal close() sequence. State is set to PENDING_SHUTDOWN in close() as well as in shutdown().
+            // - calling close() on the thread after an exception within the thread has already called shutdown().
+
+            // note we could be going from PENDING_SHUTDOWN to DEAD, and we obviously want to allow that
+            // transition, hence the check newState != DEAD.
+            if (newState != State.DEAD &&
+                    (state == State.PENDING_SHUTDOWN || state == State.DEAD)) {
                 return;
             }
-
             if (!state.isValidTransition(newState)) {
                 log.warn("{} Unexpected state transition from {} to {}.", logPrefix, oldState, newState);
                 throw new StreamsException(logPrefix + " Unexpected state transition from " + oldState + " to " + newState);

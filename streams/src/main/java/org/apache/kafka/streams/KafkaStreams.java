@@ -251,8 +251,14 @@ public class KafkaStreams {
             // when, for testing, Kafka Streams is closed multiple times. We could either
             // check here and immediately return for those cases, or add them to the transition
             // diagram (but then the diagram would be confusing and have transitions like
-            // NOT_RUNNING->NOT_RUNNING).
-            if (newState != NOT_RUNNING && (state == State.NOT_RUNNING || state == PENDING_SHUTDOWN)) {
+            // NOT_RUNNING->NOT_RUNNING). These cases include:
+            // - calling close() multiple times. Would mean going from NOT_RUNNING -> PENDING_SHUTDOWN
+            // - calling start() after close(). Would mean going from PENDING_SHUTDOWN (or NOT_RUNNING) -> RUNNING
+
+            // note we could be going from PENDING_SHUTDOWN to NOT_RUNNING, and we obviously want to allow that
+            // transition, hence the check newState != NOT_RUNNING.
+            if (newState != NOT_RUNNING &&
+                    (state == State.NOT_RUNNING || state == PENDING_SHUTDOWN)) {
                 return false;
             }
 
