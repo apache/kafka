@@ -921,16 +921,12 @@ public class StreamThread extends Thread {
         setState(State.PENDING_SHUTDOWN);
     }
 
-    public synchronized boolean isInitialized() {
-        synchronized (stateLock) {
-            return state == State.RUNNING;
-        }
+    public boolean isInitialized() {
+        return state == State.RUNNING;
     }
 
-    public synchronized boolean stillRunning() {
-        synchronized (stateLock) {
-            return state.isRunning();
-        }
+    public boolean stillRunning() {
+        return state.isRunning();
     }
 
     public Map<TaskId, StreamTask> tasks() {
@@ -986,9 +982,7 @@ public class StreamThread extends Thread {
      * @return The state this instance is in
      */
     public State state() {
-        synchronized (stateLock) {
-            return state;
-        }
+        return state;
     }
 
     /**

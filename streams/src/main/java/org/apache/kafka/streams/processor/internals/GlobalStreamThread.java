@@ -136,8 +136,9 @@ public class GlobalStreamThread extends Thread {
      *                                            a conditional set, under the stateLock lock.
      */
     void setState(final State newState, boolean ignoreWhenShuttingDownOrDead) {
+        State oldState;
         synchronized (stateLock) {
-            final State oldState = state;
+            oldState = state;
 
             if (ignoreWhenShuttingDownOrDead) {
                 if (state == PENDING_SHUTDOWN || state == DEAD) {
@@ -153,9 +154,9 @@ public class GlobalStreamThread extends Thread {
             }
 
             state = newState;
-            if (stateListener != null) {
-                stateListener.onChange(this, state, oldState);
-            }
+        }
+        if (stateListener != null) {
+            stateListener.onChange(this, state, oldState);
         }
     }
 
