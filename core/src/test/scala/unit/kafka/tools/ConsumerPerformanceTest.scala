@@ -30,7 +30,7 @@ class ConsumerPerformanceTest {
   @Test
   def testHeaderMatchBody(): Unit = {
     Console.withOut(outContent) {
-      ConsumerPerformance.printHeader(true)
+      ConsumerPerformance.printHeader(true, false)
       ConsumerPerformance.printProgressMessage(1, 1024 * 1024, 0, 1, 0, 0, 1,
         new SimpleDateFormat("yyyy-MM-dd HH:mm:ss:SSS")
       )
