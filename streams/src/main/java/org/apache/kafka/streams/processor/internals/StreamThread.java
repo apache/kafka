@@ -66,7 +66,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static java.util.Collections.singleton;
 
-public class StreamThread extends Thread implements StreamPartitionAssignor.ThreadDataProvider {
+public class StreamThread extends Thread implements ThreadDataProvider {
 
     private static final Logger log = LoggerFactory.getLogger(StreamThread.class);
     private static final AtomicInteger STREAM_THREAD_ID_SEQUENCE = new AtomicInteger(1);
@@ -232,13 +232,6 @@ public class StreamThread extends Thread implements StreamPartitionAssignor.Thre
         }
     }
 
-    private void clearStandbyRecords() {
-        standbyRecords.clear();
-    }
-
-    private void refreshMetadataState() {
-        streamsMetadataState.onChange(partitionAssignor.getPartitionsByHostState(), partitionAssignor.clusterMetadata());
-    }
 
     static abstract class AbstractTaskCreator {
         final static long MAX_BACKOFF_TIME_MS = 1000L;
@@ -288,6 +281,7 @@ public class StreamThread extends Thread implements StreamPartitionAssignor.Thre
                     try {
                         final Task task = createTask(consumer, taskId, partitions);
                         if (task != null) {
+                            log.trace("{} Created task {} with assigned partitions {}", logPrefix, taskId, partitions);
                             createdTasks.put(task, partitions);
                         }
                         it.remove();
@@ -361,23 +355,21 @@ public class StreamThread extends Thread implements StreamPartitionAssignor.Thre
         @Override
         StreamTask createTask(final Consumer<byte[], byte[]> consumer, final TaskId taskId, final Set<TopicPartition> partitions) {
             taskCreatedSensor.record();
-            try {
-                return new StreamTask(
-                        taskId,
-                        applicationId,
-                        partitions,
-                        builder.build(taskId.topicGroupId),
-                        consumer,
-                        storeChangelogReader,
-                        config,
-                        streamsMetrics,
-                        stateDirectory,
-                        cache,
-                        time,
-                        createProducer(taskId));
-            } finally {
-                log.trace("{} Created active task {} with assigned partitions {}", logPrefix, taskId, partitions);
-            }
+
+            return new StreamTask(
+                    taskId,
+                    applicationId,
+                    partitions,
+                    builder.build(taskId.topicGroupId),
+                    consumer,
+                    storeChangelogReader,
+                    config,
+                    streamsMetrics,
+                    stateDirectory,
+                    cache,
+                    time,
+                    createProducer(taskId));
+
         }
 
         @Override
@@ -433,11 +425,7 @@ public class StreamThread extends Thread implements StreamPartitionAssignor.Thre
             final ProcessorTopology topology = builder.build(taskId.topicGroupId);
 
             if (!topology.stateStores().isEmpty()) {
-                try {
-                    return new StandbyTask(taskId, applicationId, partitions, topology, consumer, storeChangelogReader, config, streamsMetrics, stateDirectory);
-                } finally {
-                    log.trace("{} Created standby task {} with assigned partitions {}", logPrefix, taskId, partitions);
-                }
+                return new StandbyTask(taskId, applicationId, partitions, topology, consumer, storeChangelogReader, config, streamsMetrics, stateDirectory);
             } else {
                 log.trace("{} Skipped standby task {} with assigned partitions {} since it does not have any state stores to materialize", logPrefix, taskId, partitions);
 
@@ -520,7 +508,7 @@ public class StreamThread extends Thread implements StreamPartitionAssignor.Thre
 
     private long lastCommitMs;
     private String originalReset;
-    private StreamPartitionAssignor partitionAssignor;
+    private ThreadMetadataProvider metadataProvider;
     private boolean processStandbyRecords = false;
     private Throwable rebalanceException;
     private Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> standbyRecords = new HashMap<>();
@@ -1278,9 +1266,9 @@ public class StreamThread extends Thread implements StreamPartitionAssignor.Thre
         return getName();
     }
 
-    public void setPartitionAssignor(final StreamPartitionAssignor partitionAssignor) {
-        this.partitionAssignor = partitionAssignor;
-        taskManager.setTaskIdToPartitionsProvider(partitionAssignor);
+    public void setThreadMetadataProvider(final ThreadMetadataProvider metadataProvider) {
+        this.metadataProvider = metadataProvider;
+        taskManager.setThreadMetadataProvider(metadataProvider);
     }
 
     private void shutdown(final boolean cleanRun) {
@@ -1300,11 +1288,6 @@ public class StreamThread extends Thread implements StreamPartitionAssignor.Thre
         } catch (final Throwable e) {
             log.error("{} Failed to close restore consumer due to the following error:", logPrefix, e);
         }
-        try {
-            partitionAssignor.close();
-        } catch (final Throwable e) {
-            log.error("{} Failed to close KafkaStreamClient due to the following error:", logPrefix, e);
-        }
 
         taskManager.removeTasks();
         log.info("{} Stream thread shutdown complete", logPrefix);
@@ -1322,5 +1305,13 @@ public class StreamThread extends Thread implements StreamPartitionAssignor.Thre
             return e;
         }
         return null;
+    }
+
+    private void clearStandbyRecords() {
+        standbyRecords.clear();
+    }
+
+    private void refreshMetadataState() {
+        streamsMetadataState.onChange(metadataProvider.getPartitionsByHostState(), metadataProvider.clusterMetadata());
     }
 }

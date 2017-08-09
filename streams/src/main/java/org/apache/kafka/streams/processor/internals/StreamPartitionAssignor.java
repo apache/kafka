@@ -28,7 +28,6 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.TaskAssignmentException;
-import org.apache.kafka.streams.processor.PartitionGrouper;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.assignment.AssignmentInfo;
 import org.apache.kafka.streams.processor.internals.assignment.ClientState;
@@ -54,7 +53,7 @@ import static org.apache.kafka.common.utils.Utils.getHost;
 import static org.apache.kafka.common.utils.Utils.getPort;
 import static org.apache.kafka.streams.processor.internals.InternalTopicManager.WINDOW_CHANGE_LOG_ADDITIONAL_RETENTION_DEFAULT;
 
-public class StreamPartitionAssignor implements PartitionAssignor, Configurable, TaskIdToPartitionsProvider {
+public class StreamPartitionAssignor implements PartitionAssignor, Configurable, ThreadMetadataProvider {
 
     private static final Logger log = LoggerFactory.getLogger(StreamPartitionAssignor.class);
     private Time time = Time.SYSTEM;
@@ -62,18 +61,6 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable,
     public final static int NOT_AVAILABLE = -2;
 
     private String logPrefix;
-
-    // interface to get info about the StreamThread
-    interface ThreadDataProvider {
-        InternalTopologyBuilder builder();
-        String name();
-        Set<TaskId> prevActiveTasks();
-        Set<TaskId> cachedTasks();
-        UUID processId();
-        StreamsConfig config();
-        PartitionGrouper partitionGrouper();
-        void setPartitionAssignor(final StreamPartitionAssignor assignor);
-    }
 
     private static class AssignedPartition implements Comparable<AssignedPartition> {
         public final TaskId taskId;
@@ -227,7 +214,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable,
         }
 
         threadDataProvider = (ThreadDataProvider) o;
-        threadDataProvider.setPartitionAssignor(this);
+        threadDataProvider.setThreadMetadataProvider(this);
 
         logPrefix = String.format("stream-thread [%s]", threadDataProvider.name());
 
@@ -715,14 +702,14 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable,
         }
     }
 
-    Map<HostInfo, Set<TopicPartition>> getPartitionsByHostState() {
+    public Map<HostInfo, Set<TopicPartition>> getPartitionsByHostState() {
         if (partitionsByHostState == null) {
             return Collections.emptyMap();
         }
         return Collections.unmodifiableMap(partitionsByHostState);
     }
 
-    Cluster clusterMetadata() {
+    public Cluster clusterMetadata() {
         if (metadataWithInternalTopics == null) {
             return Cluster.empty();
         }

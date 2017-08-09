@@ -261,7 +261,7 @@ public class StreamThreadTest {
         final StreamThread thread = getStreamThread();
 
         final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
-        thread.setPartitionAssignor(new StreamPartitionAssignor() {
+        thread.setThreadMetadataProvider(new StreamPartitionAssignor() {
             @Override
             public Map<TaskId, Set<TopicPartition>> activeTasks() {
                 return activeTasks;
@@ -358,7 +358,7 @@ public class StreamThreadTest {
         final StreamThread thread = getStreamThread();
 
         final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
-        thread.setPartitionAssignor(new StreamPartitionAssignor() {
+        thread.setThreadMetadataProvider(new StreamPartitionAssignor() {
             @Override
             public Map<TaskId, Set<TopicPartition>> activeTasks() {
                 return activeTasks;
@@ -514,8 +514,8 @@ public class StreamThreadTest {
         final Map<TaskId, Set<TopicPartition>> thread1Assignment = new HashMap<>(task0);
         final Map<TaskId, Set<TopicPartition>> thread2Assignment = new HashMap<>(task1);
 
-        thread1.setPartitionAssignor(new MockStreamsPartitionAssignor(thread1Assignment));
-        thread2.setPartitionAssignor(new MockStreamsPartitionAssignor(thread2Assignment));
+        thread1.setThreadMetadataProvider(new MockStreamsPartitionAssignor(thread1Assignment));
+        thread2.setThreadMetadataProvider(new MockStreamsPartitionAssignor(thread2Assignment));
 
 
         thread1.start();
@@ -737,7 +737,7 @@ public class StreamThreadTest {
         final Map<TaskId, Set<TopicPartition>> assignment = new HashMap<>();
         assignment.put(new TaskId(0, 0), Collections.singleton(new TopicPartition("someTopic", 0)));
         assignment.put(new TaskId(0, 1), Collections.singleton(new TopicPartition("someTopic", 1)));
-        thread.setPartitionAssignor(new MockStreamsPartitionAssignor(assignment));
+        thread.setThreadMetadataProvider(new MockStreamsPartitionAssignor(assignment));
 
         thread.setState(StreamThread.State.RUNNING);
         thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
@@ -762,7 +762,7 @@ public class StreamThreadTest {
         assignment.put(new TaskId(0, 0), Collections.singleton(new TopicPartition("someTopic", 0)));
         assignment.put(new TaskId(0, 1), Collections.singleton(new TopicPartition("someTopic", 1)));
         assignment.put(new TaskId(0, 2), Collections.singleton(new TopicPartition("someTopic", 2)));
-        thread.setPartitionAssignor(new MockStreamsPartitionAssignor(assignment));
+        thread.setThreadMetadataProvider(new MockStreamsPartitionAssignor(assignment));
 
         final Set<TopicPartition> assignedPartitions = new HashSet<>();
         Collections.addAll(assignedPartitions, new TopicPartition("someTopic", 0), new TopicPartition("someTopic", 2));
@@ -788,7 +788,7 @@ public class StreamThreadTest {
         final Map<TaskId, Set<TopicPartition>> assignment = new HashMap<>();
         assignment.put(new TaskId(0, 0), Collections.singleton(new TopicPartition("someTopic", 0)));
         assignment.put(new TaskId(0, 1), Collections.singleton(new TopicPartition("someTopic", 1)));
-        thread.setPartitionAssignor(new MockStreamsPartitionAssignor(assignment));
+        thread.setThreadMetadataProvider(new MockStreamsPartitionAssignor(assignment));
 
         thread.setState(StreamThread.State.RUNNING);
         thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
@@ -839,7 +839,7 @@ public class StreamThreadTest {
 
         final StreamThread thread = createStreamThread(clientId, config, false);
 
-        thread.setPartitionAssignor(new StreamPartitionAssignor() {
+        thread.setThreadMetadataProvider(new StreamPartitionAssignor() {
             @Override
             public Map<TaskId, Set<TopicPartition>> standbyTasks() {
                 return Collections.singletonMap(new TaskId(0, 0), Utils.mkSet(new TopicPartition("topic", 0)));
@@ -886,7 +886,7 @@ public class StreamThreadTest {
         final TopicPartition t2 = new TopicPartition("t2", 0);
         activeTasks.put(new TaskId(1, 0), Utils.mkSet(t2));
 
-        thread.setPartitionAssignor(new StreamPartitionAssignor() {
+        thread.setThreadMetadataProvider(new StreamPartitionAssignor() {
             @Override
             public Map<TaskId, Set<TopicPartition>> standbyTasks() {
                 return standbyTasks;
@@ -925,7 +925,7 @@ public class StreamThreadTest {
         final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
         activeTasks.put(task1, task0Assignment);
 
-        thread.setPartitionAssignor(new MockStreamsPartitionAssignor(activeTasks));
+        thread.setThreadMetadataProvider(new MockStreamsPartitionAssignor(activeTasks));
 
         thread.start();
         TestUtils.waitForCondition(new TestCondition() {
@@ -1008,7 +1008,7 @@ public class StreamThreadTest {
         final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
         activeTasks.put(task1, task0Assignment);
 
-        thread.setPartitionAssignor(new MockStreamsPartitionAssignor(activeTasks));
+        thread.setThreadMetadataProvider(new MockStreamsPartitionAssignor(activeTasks));
 
         thread.setState(StreamThread.State.RUNNING);
         thread.rebalanceListener.onPartitionsRevoked(null);
@@ -1040,7 +1040,7 @@ public class StreamThreadTest {
         configurationMap.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 0);
         partitionAssignor.configure(configurationMap);
 
-        thread.setPartitionAssignor(partitionAssignor);
+        thread.setThreadMetadataProvider(partitionAssignor);
 
         final Field nodeToSourceTopicsField =
             internalTopologyBuilder.getClass().getDeclaredField("nodeToSourceTopics");

@@ -65,7 +65,7 @@ public class TaskManagerTest {
     @Mock(type = MockType.NICE)
     private StreamThread.AbstractTaskCreator standbyTaskCreator;
     @Mock(type = MockType.NICE)
-    private TaskIdToPartitionsProvider taskIdToPartitionsProvider;
+    private ThreadMetadataProvider threadMetadataProvider;
     @Mock(type = MockType.NICE)
     private Task firstTask;
 
@@ -75,7 +75,7 @@ public class TaskManagerTest {
     @Before
     public void setUp() throws Exception {
         taskManager = new TaskManager(changeLogReader, time, "", restoreConsumer, activeTaskCreator, standbyTaskCreator);
-        taskManager.setTaskIdToPartitionsProvider(taskIdToPartitionsProvider);
+        taskManager.setThreadMetadataProvider(threadMetadataProvider);
         taskManager.setConsumer(consumer);
     }
 
@@ -91,13 +91,13 @@ public class TaskManagerTest {
                                                            EasyMock.eq(time.milliseconds())))
                 .andReturn(Collections.singletonMap(firstTask, secondPartitionAssignment));
 
-        expect(taskIdToPartitionsProvider.activeTasks())
+        expect(threadMetadataProvider.activeTasks())
                 .andReturn(secondAssignment);
 
         firstTask.closeSuspended(true, null);
         expectLastCall();
 
-        replay(taskIdToPartitionsProvider, activeTaskCreator, standbyTaskCreator, firstTask);
+        replay(threadMetadataProvider, activeTaskCreator, standbyTaskCreator, firstTask);
 
         taskManager.createTasks(taskId0Partitions);
         taskManager.suspendTasksAndState();
@@ -128,7 +128,7 @@ public class TaskManagerTest {
         mockStandbyTaskExpectations(Collections.singletonMap(t1p0, 0L));
         restoreConsumer.assign(EasyMock.eq(taskId0Partitions));
         expectLastCall();
-        replay(taskIdToPartitionsProvider, firstTask, activeTaskCreator, standbyTaskCreator, restoreConsumer);
+        replay(threadMetadataProvider, firstTask, activeTaskCreator, standbyTaskCreator, restoreConsumer);
 
         taskManager.createTasks(Collections.<TopicPartition>emptySet());
 
@@ -138,14 +138,14 @@ public class TaskManagerTest {
     @Test
     public void shouldNotCloseSuspendedTasksTwice() {
         mockSingleActiveTask();
-        expect(taskIdToPartitionsProvider.activeTasks())
+        expect(threadMetadataProvider.activeTasks())
                 .andReturn(Collections.<TaskId, Set<TopicPartition>>emptyMap());
         firstTask.suspend();
         expectLastCall();
         firstTask.closeSuspended(true, null);
         expectLastCall();
 
-        replay(taskIdToPartitionsProvider, activeTaskCreator, standbyTaskCreator, firstTask);
+        replay(threadMetadataProvider, activeTaskCreator, standbyTaskCreator, firstTask);
 
         taskManager.createTasks(taskId0Partitions);
         taskManager.suspendTasksAndState();
@@ -162,7 +162,7 @@ public class TaskManagerTest {
         firstTask.suspend();
         expectLastCall().andThrow(new CommitFailedException());
 
-        replay(taskIdToPartitionsProvider, firstTask, activeTaskCreator, standbyTaskCreator);
+        replay(threadMetadataProvider, firstTask, activeTaskCreator, standbyTaskCreator);
 
         taskManager.createTasks(taskId0Partitions);
 
@@ -173,10 +173,10 @@ public class TaskManagerTest {
 
     @SuppressWarnings("unchecked")
     private void mockStandbyTaskExpectations(final Map<TopicPartition, Long> checkpoint) {
-        expect(taskIdToPartitionsProvider.standbyTasks())
+        expect(threadMetadataProvider.standbyTasks())
                 .andReturn(taskId0Assignment)
                 .anyTimes();
-        expect(taskIdToPartitionsProvider.activeTasks())
+        expect(threadMetadataProvider.activeTasks())
                 .andStubReturn(Collections.<TaskId, Set<TopicPartition>>emptyMap());
 
         expect(standbyTaskCreator.retryWithBackoff(EasyMock.anyObject(Consumer.class),
@@ -193,10 +193,10 @@ public class TaskManagerTest {
 
     @SuppressWarnings("unchecked")
     private void mockSingleActiveTask() {
-        expect(taskIdToPartitionsProvider.standbyTasks())
+        expect(threadMetadataProvider.standbyTasks())
                 .andReturn(Collections.<TaskId, Set<TopicPartition>>emptyMap())
                 .anyTimes();
-        expect(taskIdToPartitionsProvider.activeTasks())
+        expect(threadMetadataProvider.activeTasks())
                 .andReturn(taskId0Assignment);
 
         expect(activeTaskCreator.retryWithBackoff(EasyMock.anyObject(Consumer.class),
@@ -215,7 +215,7 @@ public class TaskManagerTest {
         expectLastCall().andThrow(new RuntimeException("KABOOM!"));
         firstTask.close(false);
         expectLastCall();
-        replay(taskIdToPartitionsProvider, firstTask, activeTaskCreator, standbyTaskCreator);
+        replay(threadMetadataProvider, firstTask, activeTaskCreator, standbyTaskCreator);
 
         taskManager.createTasks(assignment);
 

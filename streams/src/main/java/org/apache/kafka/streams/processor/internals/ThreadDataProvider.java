@@ -16,13 +16,21 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.processor.PartitionGrouper;
 import org.apache.kafka.streams.processor.TaskId;
 
-import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 
-public interface TaskIdToPartitionsProvider {
-    Map<TaskId, Set<TopicPartition>> standbyTasks();
-    Map<TaskId, Set<TopicPartition>> activeTasks();
+// interface to get info about the StreamThread
+interface ThreadDataProvider {
+    InternalTopologyBuilder builder();
+    String name();
+    Set<TaskId> prevActiveTasks();
+    Set<TaskId> cachedTasks();
+    UUID processId();
+    StreamsConfig config();
+    PartitionGrouper partitionGrouper();
+    void setThreadMetadataProvider(final ThreadMetadataProvider provider);
 }

@@ -107,7 +107,7 @@ public class StreamPartitionAssignorTest {
     private final MockClientSupplier mockClientSupplier = new MockClientSupplier();
     private final InternalTopologyBuilder builder = new InternalTopologyBuilder();
     private final StreamsConfig config = new StreamsConfig(configProps());
-    private final StreamPartitionAssignor.ThreadDataProvider threadDataProvider = EasyMock.createNiceMock(StreamPartitionAssignor.ThreadDataProvider.class);
+    private final ThreadDataProvider threadDataProvider = EasyMock.createNiceMock(ThreadDataProvider.class);
     private final Map<String, Object> configurationMap = new HashMap<>();
     private final DefaultPartitionGrouper defaultPartitionGrouper = new DefaultPartitionGrouper();
     private final SingleGroupPartitionGrouperStub stubPartitionGrouper = new SingleGroupPartitionGrouperStub();

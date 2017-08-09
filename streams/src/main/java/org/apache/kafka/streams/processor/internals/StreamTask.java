@@ -41,7 +41,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -440,7 +439,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
 
     @Override
     public Map<TopicPartition, Long> checkpointedOffsets() {
-        return Collections.emptyMap();
+        throw new UnsupportedOperationException("checkpointedOffsets is not supported by StreamTasks");
     }
 
     /**

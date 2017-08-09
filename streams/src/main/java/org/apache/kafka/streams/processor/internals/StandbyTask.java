@@ -134,16 +134,18 @@ public class StandbyTask extends AbstractTask {
     }
 
     @Override
-    public void closeSuspended(final boolean clean, final RuntimeException e) { }
+    public void closeSuspended(final boolean clean, final RuntimeException e) {
+        throw new UnsupportedOperationException("closeSuspended not supported by StandbyTask");
+    }
 
     @Override
     public boolean maybePunctuateStreamTime() {
-        return false;
+        throw new UnsupportedOperationException("maybePunctuateStreamTime not supported by StandbyTask");
     }
 
     @Override
     public boolean maybePunctuateSystemTime() {
-        return false;
+        throw new UnsupportedOperationException("maybePunctuateSystemTime not supported by StandbyTask");
     }
 
     @Override
@@ -164,7 +166,7 @@ public class StandbyTask extends AbstractTask {
 
     @Override
     public int addRecords(final TopicPartition partition, final Iterable<ConsumerRecord<byte[], byte[]>> records) {
-        return 0;
+        throw new UnsupportedOperationException("addRecords not supported by StandbyTask");
     }
 
     public Map<TopicPartition, Long> checkpointedOffsets() {
@@ -173,7 +175,7 @@ public class StandbyTask extends AbstractTask {
 
     @Override
     public boolean process() {
-        return false;
+        throw new UnsupportedOperationException("process not supported by StandbyTask");
     }
 
 }

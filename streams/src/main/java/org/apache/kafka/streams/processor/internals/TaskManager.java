@@ -58,7 +58,7 @@ class TaskManager {
     private final Consumer<byte[], byte[]> restoreConsumer;
     private final StreamThread.AbstractTaskCreator taskCreator;
     private final StreamThread.AbstractTaskCreator standbyTaskCreator;
-    private TaskIdToPartitionsProvider taskIdToPartitionsProvider;
+    private ThreadMetadataProvider threadMetadataProvider;
     private Consumer<byte[], byte[]> consumer;
 
     TaskManager(final ChangelogReader changelogReader,
@@ -76,7 +76,7 @@ class TaskManager {
     }
 
     void createTasks(final Collection<TopicPartition> assignment) {
-        if (taskIdToPartitionsProvider == null) {
+        if (threadMetadataProvider == null) {
             throw new IllegalStateException(logPrefix + " taskIdProvider has not been initialized while adding stream tasks. This should not happen.");
         }
         if (consumer == null) {
@@ -88,19 +88,19 @@ class TaskManager {
         // do this first as we may have suspended standby tasks that
         // will become active or vice versa
         closeNonAssignedSuspendedStandbyTasks();
-        Map<TaskId, Set<TopicPartition>> assignedActiveTasks = taskIdToPartitionsProvider.activeTasks();
+        Map<TaskId, Set<TopicPartition>> assignedActiveTasks = threadMetadataProvider.activeTasks();
         closeNonAssignedSuspendedTasks(assignedActiveTasks);
         addStreamTasks(assignment, assignedActiveTasks, start);
         changelogReader.restore();
         addStandbyTasks(start);
     }
 
-    void setTaskIdToPartitionsProvider(final TaskIdToPartitionsProvider taskIdToPartitionsProvider) {
-        this.taskIdToPartitionsProvider = taskIdToPartitionsProvider;
+    void setThreadMetadataProvider(final ThreadMetadataProvider threadMetadataProvider) {
+        this.threadMetadataProvider = threadMetadataProvider;
     }
 
     private void closeNonAssignedSuspendedStandbyTasks() {
-        final Set<TaskId> currentSuspendedTaskIds = taskIdToPartitionsProvider.standbyTasks().keySet();
+        final Set<TaskId> currentSuspendedTaskIds = threadMetadataProvider.standbyTasks().keySet();
         final Iterator<Map.Entry<TaskId, Task>> standByTaskIterator = suspendedStandbyTasks.entrySet().iterator();
         while (standByTaskIterator.hasNext()) {
             final Map.Entry<TaskId, Task> suspendedTask = standByTaskIterator.next();
@@ -191,7 +191,7 @@ class TaskManager {
 
         final Map<TaskId, Set<TopicPartition>> newStandbyTasks = new HashMap<>();
 
-        Map<TaskId, Set<TopicPartition>> assignedStandbyTasks = taskIdToPartitionsProvider.standbyTasks();
+        Map<TaskId, Set<TopicPartition>> assignedStandbyTasks = threadMetadataProvider.standbyTasks();
         log.debug("{} Adding assigned standby tasks {}", logPrefix, assignedStandbyTasks);
         // collect newly assigned standby tasks and reopen re-assigned standby tasks
         for (final Map.Entry<TaskId, Set<TopicPartition>> entry : assignedStandbyTasks.entrySet()) {
@@ -457,7 +457,11 @@ class TaskManager {
                           e);
             }
         }
-
+        try {
+            threadMetadataProvider.close();
+        } catch (final Throwable e) {
+            log.error("{} Failed to close KafkaStreamClient due to the following error:", logPrefix, e);
+        }
         // remove the changelog partitions from restore consumer
         unAssignChangeLogPartitions();
 
