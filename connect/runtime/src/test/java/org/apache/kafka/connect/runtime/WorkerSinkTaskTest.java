@@ -461,6 +461,8 @@ public class WorkerSinkTaskTest {
 
         sinkTask.preCommit(workerCurrentOffsets);
         EasyMock.expectLastCall().andReturn(taskOffsets);
+        // Expect extra invalid topic partition to be filtered, which causes the consumer assignment to be logged
+        EasyMock.expect(consumer.assignment()).andReturn(workerCurrentOffsets.keySet());
         final Capture<OffsetCommitCallback> callback = EasyMock.newCapture();
         consumer.commitAsync(EasyMock.eq(committableOffsets), EasyMock.capture(callback));
         EasyMock.expectLastCall().andAnswer(new IAnswer<Void>() {
