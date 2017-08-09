@@ -20,7 +20,7 @@ package kafka.api
 import kafka.cluster.BrokerEndPoint
 import java.nio.ByteBuffer
 
-@deprecated("This object has been deprecated and will be removed in a future release.", "0.11.0.0")
+@deprecated("This object has been deprecated and will be removed in a future release.", "1.0.0")
 object TopicMetadataResponse {
 
   def readFrom(buffer: ByteBuffer): TopicMetadataResponse = {
@@ -34,7 +34,7 @@ object TopicMetadataResponse {
   }
 }
 
-@deprecated("This object has been deprecated and will be removed in a future release.", "0.11.0.0")
+@deprecated("This object has been deprecated and will be removed in a future release.", "1.0.0")
 case class TopicMetadataResponse(brokers: Seq[BrokerEndPoint],
                                  topicsMetadata: Seq[TopicMetadata],
                                  correlationId: Int)
