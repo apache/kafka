@@ -826,10 +826,7 @@ public class StreamThread extends Thread {
         }
     }
 
-    /**
-     * Commit the states of all its tasks
-     */
-    private void commitAll() {
+    private void commitAllActiveTasks() {
         final RuntimeException e = performOnStreamTasks(new StreamTaskAction() {
             @Override
             public String name() {
@@ -844,11 +841,36 @@ public class StreamThread extends Thread {
         if (e != null) {
             throw e;
         }
+    }
 
+    private void commitAllStandbyTasks() {
+        RuntimeException e = null;
         for (final StandbyTask task : standbyTasks.values()) {
-            commitOne(task);
+            try {
+                commitOne(task);
+            } catch (final RuntimeException t) {
+                log.error("{} Failed to commit standby stream task {}: ",
+                        logPrefix,
+                        task.id(),
+                        t);
+                if (e == null) {
+                    e = t;
+                }
+            }
+        }
+        if (e != null) {
+            throw e;
         }
     }
+
+    /**
+     * Commit the states of all its tasks
+     */
+    private void commitAll() {
+        commitAllActiveTasks();
+        commitAllStandbyTasks();
+    }
+
 
     /**
      * Commit the state of a task
