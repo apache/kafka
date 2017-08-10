@@ -26,6 +26,7 @@ import kafka.network.RequestChannel.Response
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 
 
+@deprecated("This object has been deprecated and will be removed in a future release.", "1.0.0")
 object OffsetRequest {
   val CurrentVersion = 0.shortValue
   val DefaultClientId = ""
@@ -57,6 +58,7 @@ object OffsetRequest {
 
 case class PartitionOffsetRequestInfo(time: Long, maxNumOffsets: Int)
 
+@deprecated("This object has been deprecated and will be removed in a future release.", "1.0.0")
 case class OffsetRequest(requestInfo: Map[TopicAndPartition, PartitionOffsetRequestInfo],
                          versionId: Short = OffsetRequest.CurrentVersion,
                          correlationId: Int = 0,

@@ -25,11 +25,13 @@ import kafka.network.RequestChannel.Response
 import kafka.utils.Logging
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 
+@deprecated("This object has been deprecated and will be removed in a future release.", "1.0.0")
 object TopicMetadataRequest extends Logging {
   val CurrentVersion = 0.shortValue
   val DefaultClientId = ""
 }
 
+@deprecated("This object has been deprecated and will be removed in a future release.", "1.0.0")
 case class TopicMetadataRequest(versionId: Short,
                                 correlationId: Int,
                                 clientId: String,
