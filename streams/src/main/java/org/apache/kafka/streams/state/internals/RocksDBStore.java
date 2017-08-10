@@ -283,7 +283,11 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     private void restoreAllInternal(Collection<KeyValue<byte[], byte[]>> records) {
         try (WriteBatch batch = new WriteBatch()) {
             for (KeyValue<byte[], byte[]> record : records) {
-                batch.put(record.key, record.value);
+                if (record.value == null) {
+                    batch.remove(record.key);
+                } else {
+                    batch.put(record.key, record.value);
+                }
             }
             db.write(wOptions, batch);
         } catch (RocksDBException e) {
@@ -316,7 +320,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
                 Objects.requireNonNull(entry.key, "key cannot be null");
                 final byte[] rawKey = serdes.rawKey(entry.key);
                 if (entry.value == null) {
-                    db.delete(rawKey);
+                    batch.remove(rawKey);
                 } else {
                     final byte[] value = serdes.rawValue(entry.value);
                     batch.put(rawKey, value);
