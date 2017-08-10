@@ -60,10 +60,10 @@
         if the version of client's FetchRequest or ProducerRequest does not support KafkaStorageException. </li>
     <li>-XX:+DisableExplicitGC was replaced by -XX:+ExplicitGCInvokesConcurrent in the default JVM settings. This helps
         avoid out of memory exceptions during allocation of native memory by direct buffers in some cases.</li>
-    <li>The overridden <code>handleError</code> method implementations have been removed from the following deprecated classes from
+    <li>The overridden <code>handleError</code> method implementations have been removed from the following deprecated classes in
         the <code>kafka.api</code> package: <code>FetchRequest</code>, <code>GroupCoordinatorRequest</code>, <code>OffsetCommitRequest</code>,
         <code>OffsetFetchRequest</code>, <code>OffsetRequest</code>, <code>ProducerRequest</code>, and <code>TopicMetadataRequest</code>.
-        This was only intended for use on the broker, but it no longer in use and the implementations have not been maintained.
+        This was only intended for use on the broker, but it is no longer in use and the implementations have not been maintained.
         A stub implementation has been retained for binary compatibility.</li>
 </ul>
 
