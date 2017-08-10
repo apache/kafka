@@ -31,7 +31,7 @@ import java.util.concurrent.CountDownLatch;
 
 /**
  * In this example, we implement a simple WordCount program using the high-level Streams DSL
- * that reads from a source topic "streams-plaintext-input", where the values of messages represent lines of text;
+ * that reads from a source topic "streams-plaintext-input", where the values of messages represent lines of text,
  * split each text line into words and then compute the word occurence histogram, write the continuous updated histogram
  * into a topic "streams-wordcount-output" where each record is an updated count of a single word.
  */
@@ -63,7 +63,7 @@ public class WordCount {
                .to(Serdes.String(), Serdes.Long(), "streams-wordcount-output");
 
 
-        /* ------- in Java 8 -------
+        /* ------- use the code below for Java 8 and uncomment the above ----
 
         builder.stream("streams-plaintext-input")
                .flatMapValues(value -> Arrays.asList(value.toLowerCase(Locale.getDefault()).split("\\W+")))
@@ -71,7 +71,7 @@ public class WordCount {
                .count("Counts")
                .to(Serdes.String(), Serdes.Long(), "streams-wordcount-output");
 
-           ------- --------- ------- */
+           ----------------------------------------------------------------- */
 
         final Topology topology = builder.build();
         final KafkaStreams streams = new KafkaStreams(topology, props);

@@ -27,7 +27,7 @@ import java.util.concurrent.CountDownLatch;
 
 /**
  * In this example, we implement a simple LineSplit program using the high-level Streams DSL
- * that reads from a source topic "streams-plaintext-input", where the values of messages represent lines of text;
+ * that reads from a source topic "streams-plaintext-input", where the values of messages represent lines of text,
  * and writes the messages as-is into a sink topic "streams-pipe-output".
  */
 public class Pipe {

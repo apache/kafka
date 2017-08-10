@@ -30,8 +30,8 @@ import java.util.concurrent.CountDownLatch;
 /**
  * In this example, we implement a simple LineSplit program using the high-level Streams DSL
  * that reads from a source topic "streams-plaintext-input", where the values of messages represent lines of text;
- * split each text line in string into words and then write back into a sink topic "streams-linesplit-output" where
- * each each record represent a single word.
+ * the code split each text line in string into words and then write back into a sink topic "streams-linesplit-output" where
+ * each record represents a single word.
  */
 public class LineSplit {
 
@@ -53,13 +53,13 @@ public class LineSplit {
                 })
                .to("streams-linesplit-output");
 
-        /* ------- in Java 8 -------
+        /* ------- use the code below for Java 8 and uncomment the above ----
 
         builder.stream("streams-plaintext-input")
                .flatMapValues(value -> Arrays.asList(value.split("\\W+")))
                .to("streams-linesplit-output");
 
-           ------- --------- ------- */
+           ----------------------------------------------------------------- */
 
 
         final Topology topology = builder.build();
