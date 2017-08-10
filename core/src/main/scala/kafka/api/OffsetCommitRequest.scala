@@ -21,10 +21,8 @@ import java.nio.ByteBuffer
 
 import kafka.api.ApiUtils._
 import kafka.common.{OffsetAndMetadata, TopicAndPartition}
-import kafka.network.{RequestOrResponseSend, RequestChannel}
-import kafka.network.RequestChannel.Response
 import kafka.utils.Logging
-import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.protocol.ApiKeys
 
 import scala.collection._
 
@@ -161,14 +159,6 @@ case class OffsetCommitRequest(groupId: String,
         shortStringLength(offsetAndMetadata._2.metadata)
       })
     })
-
-  override def handleError(e: Throwable, requestChannel: RequestChannel, request: RequestChannel.Request): Unit = {
-    val error = Errors.forException(e)
-    val commitStatus = requestInfo.mapValues(_ => error)
-    val commitResponse = OffsetCommitResponse(commitStatus, correlationId)
-
-    requestChannel.sendResponse(Response(request, new RequestOrResponseSend(request.connectionId, commitResponse)))
-  }
 
   override def describe(details: Boolean): String = {
     val offsetCommitRequest = new StringBuilder
