@@ -68,7 +68,7 @@ public class WordCount {
         builder.stream("streams-plaintext-input")
                .flatMapValues(value -> Arrays.asList(value.toLowerCase(Locale.getDefault()).split("\\W+")))
                .groupBy((key, value) -> value)
-               .count("Counts");
+               .count("Counts")
                .to(Serdes.String(), Serdes.Long(), "streams-wordcount-output");
 
            ------- --------- ------- */
