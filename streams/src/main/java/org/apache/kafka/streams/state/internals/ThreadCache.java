@@ -249,7 +249,7 @@ public class ThreadCache {
             numEvicted++;
         }
 
-        log.debug("{} Evicted {} entries from cache {}", logPrefix, numEvicted, namespace);
+        log.trace("{} Evicted {} entries from cache {}", logPrefix, numEvicted, namespace);
     }
 
     private synchronized NamedCache getCache(final String namespace) {
