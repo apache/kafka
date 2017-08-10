@@ -1749,10 +1749,10 @@ public class KafkaAdminClient extends AdminClient {
 
                             if (replicaInfo.isTemporary) {
                                 replicaDirInfo.temporaryReplicaDir = logDir;
-                                replicaDirInfo.temporaryReplicaOffsetLag -= replicaInfo.logEndOffset;
+                                replicaDirInfo.temporaryReplicaOffsetLag -= replicaInfo.offsetLag;
                             } else {
                                 replicaDirInfo.currentReplicaDir = logDir;
-                                replicaDirInfo.temporaryReplicaOffsetLag += replicaInfo.logEndOffset;
+                                replicaDirInfo.temporaryReplicaOffsetLag += replicaInfo.offsetLag;
                             }
                         }
                     }

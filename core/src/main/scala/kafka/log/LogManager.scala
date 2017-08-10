@@ -560,7 +560,7 @@ class LogManager(logDirs: Array[File],
         }
         if (!isLogDirOnline(logDir))
           throw new KafkaStorageException(s"Can not create log for $topicPartition because log directory $logDir is offline")
-        // Do not use the user-specified log directory if the replica is deleted and re-created in the future.
+        // Do not re-use the user-specified log directory if the replica is deleted and re-created in the future.
         preferredLogDirs.remove(topicPartition)
 
         try {

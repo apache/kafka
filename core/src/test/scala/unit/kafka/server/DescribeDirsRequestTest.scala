@@ -57,7 +57,7 @@ class DescribeDirsRequestTest extends BaseRequestTest {
     assertFalse(logDirInfos.get(onlineDir).replicaInfos.containsKey(tp1))
     assertEquals(servers.head.logManager.getLog(tp0).get.size, replicaInfo0.size)
     assertTrue(servers.head.logManager.getLog(tp0).get.logEndOffset > 0)
-    assertEquals(servers.head.logManager.getLog(tp0).get.logEndOffset, replicaInfo0.logEndOffset)
+    assertEquals(servers.head.replicaManager.getLogEndOffsetLag(tp0), replicaInfo0.offsetLag)
   }
 
   @Test
@@ -81,8 +81,8 @@ class DescribeDirsRequestTest extends BaseRequestTest {
     assertEquals(servers.head.logManager.getLog(tp0).get.size, replicaInfo0.size)
     assertEquals(servers.head.logManager.getLog(tp1).get.size, replicaInfo1.size)
     assertTrue(servers.head.logManager.getLog(tp0).get.logEndOffset > 0)
-    assertEquals(servers.head.logManager.getLog(tp0).get.logEndOffset, replicaInfo0.logEndOffset)
-    assertEquals(servers.head.logManager.getLog(tp1).get.logEndOffset, replicaInfo1.logEndOffset)
+    assertEquals(servers.head.replicaManager.getLogEndOffsetLag(tp0), replicaInfo0.offsetLag)
+    assertEquals(servers.head.replicaManager.getLogEndOffsetLag(tp1), replicaInfo1.offsetLag)
   }
 
   private def sendDescribeDirsRequest(logDirs: Set[String],

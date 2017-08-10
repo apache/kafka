@@ -1873,7 +1873,8 @@ public class Protocol {
                     new Field("partitions", new ArrayOf(new Schema(
                         new Field("partition", INT32, "The id of the partition."),
                         new Field("size", INT64, "The size of the remaining log segments of the partition in bytes."),
-                        new Field("log_end_offset", INT64, "The log end offset of the partition"),
+                        new Field("offset_lag", INT64,
+                            "The lag of the replica's LEO w.r.t. partition's HW (if it is a primary replica) or primary replica's LEO (if it is a temporary replica)"),
                         new Field("is_temporary", BOOLEAN, "True if this is a temporary log created by AlterReplicaDirRequest.")
                     )))
                 )))

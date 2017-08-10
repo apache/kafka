@@ -585,8 +585,8 @@ class ReplicaManager(val config: KafkaConfig,
    *
    * Each LogDirInfo specifies the following information for a given log directory:
    * 1) Error of the log directory, e.g. whether the log is online or offline
-   * 2) size and logEndOffset for all primary and temporary logs in the given log directory.
-   *    There may be temporary logs on the broker after KIP-113 is implemented.
+   * 2) size and lag of primary and temporary logs in the given log directory. A replica is included only if
+   *    its partition is queried. There may be temporary logs on the broker after KIP-113 is implemented.
    */
   def describeDirs(requestedDirs: Set[String], partitions: Set[TopicPartition]): Map[String, LogDirInfo] = {
     val logDirs = {
@@ -606,7 +606,7 @@ class ReplicaManager(val config: KafkaConfig,
           case Some(logs) =>
             val replicaInfos = logs.filter(log =>
               partitions.isEmpty || partitions.contains(log.topicPartition)
-            ).map(log => log.topicPartition -> new ReplicaInfo(log.size, log.logEndOffset, false)).toMap
+            ).map(log => log.topicPartition -> new ReplicaInfo(log.size, getLogEndOffsetLag(log.topicPartition), false)).toMap
 
             (dir, new LogDirInfo(Errors.NONE, replicaInfos.asJava))
           case None =>
@@ -622,6 +622,22 @@ class ReplicaManager(val config: KafkaConfig,
           (dir, new LogDirInfo(Errors.forException(t), Map.empty[TopicPartition, ReplicaInfo].asJava))
       }
     }.toMap
+  }
+
+  // Return -1L to indicate that the LEO lag is not available if broker is not the follower/leader of this partition
+  // or if the HW is 0. Otherwise, return max(0, HW - LEO)
+  def getLogEndOffsetLag(topicPartition: TopicPartition): Long = {
+    getReplica(topicPartition) match {
+      case Some(replica) =>
+        // return -1L if the high watermark is 0
+        if (replica.highWatermark.messageOffset == 0)
+          -1L
+        else
+          math.max(replica.highWatermark.messageOffset - replica.log.get.logEndOffset, 0)
+      case None =>
+        // return -1L if the broker is neither follower or leader of this partition
+        -1L
+    }
   }
 
   def deleteRecords(timeout: Long,

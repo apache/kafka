@@ -71,7 +71,7 @@ object LogDirsCommand {
                                 Map(
                                     "partition" -> topicPartition.toString,
                                     "size" -> replicaInfo.size,
-                                    "logEndOffset" -> replicaInfo.logEndOffset,
+                                    "offsetLag" -> replicaInfo.offsetLag,
                                     "isTemporary" -> replicaInfo.isTemporary
                                 )
                             }

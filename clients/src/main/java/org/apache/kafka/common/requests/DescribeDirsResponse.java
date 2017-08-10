@@ -46,7 +46,7 @@ public class DescribeDirsResponse extends AbstractResponse {
     // partition level key names
     private static final String PARTITION_KEY_NAME = "partition";
     private static final String SIZE_KEY_NAME = "size";
-    private static final String LOG_END_OFFSET_KEY_NAME = "log_end_offset";
+    private static final String OFFSET_LAG_KEY_NAME = "offset_lag";
     private static final String IS_TEMPORARY_KEY_NAME = "is_temporary";
 
     private final int throttleTimeMs;
@@ -70,9 +70,9 @@ public class DescribeDirsResponse extends AbstractResponse {
                     Struct partitionStruct = (Struct) partitionStructObj;
                     int partition = partitionStruct.getInt(PARTITION_KEY_NAME);
                     long size = partitionStruct.getLong(SIZE_KEY_NAME);
-                    long logEndOffset = partitionStruct.getLong(LOG_END_OFFSET_KEY_NAME);
+                    long offsetLag = partitionStruct.getLong(OFFSET_LAG_KEY_NAME);
                     boolean isTemporary = partitionStruct.getBoolean(IS_TEMPORARY_KEY_NAME);
-                    ReplicaInfo replicaInfo = new ReplicaInfo(size, logEndOffset, isTemporary);
+                    ReplicaInfo replicaInfo = new ReplicaInfo(size, offsetLag, isTemporary);
                     replicaInfos.put(new TopicPartition(topic, partition), replicaInfo);
                 }
             }
@@ -112,7 +112,7 @@ public class DescribeDirsResponse extends AbstractResponse {
                     ReplicaInfo replicaInfo = replicaInfosByPartitionEntry.getValue();
                     partitionStruct.set(PARTITION_KEY_NAME, replicaInfosByPartitionEntry.getKey());
                     partitionStruct.set(SIZE_KEY_NAME, replicaInfo.size);
-                    partitionStruct.set(LOG_END_OFFSET_KEY_NAME, replicaInfo.logEndOffset);
+                    partitionStruct.set(OFFSET_LAG_KEY_NAME, replicaInfo.offsetLag);
                     partitionStruct.set(IS_TEMPORARY_KEY_NAME, replicaInfo.isTemporary);
                     partitionStructArray.add(partitionStruct);
                 }
@@ -158,12 +158,12 @@ public class DescribeDirsResponse extends AbstractResponse {
     static public class ReplicaInfo {
 
         public final long size;
-        public final long logEndOffset;
+        public final long offsetLag;
         public final boolean isTemporary;
 
-        public ReplicaInfo(long size, long logEndOffset, boolean isTemporary) {
+        public ReplicaInfo(long size, long offsetLag, boolean isTemporary) {
             this.size = size;
-            this.logEndOffset = logEndOffset;
+            this.offsetLag = offsetLag;
             this.isTemporary = isTemporary;
         }
 
@@ -172,8 +172,8 @@ public class DescribeDirsResponse extends AbstractResponse {
             StringBuilder builder = new StringBuilder();
             builder.append("ReplicaInfo(size=")
                 .append(size)
-                .append(", logEndOffset=")
-                .append(logEndOffset)
+                .append(", offsetLag=")
+                .append(offsetLag)
                 .append(", isTemporary=")
                 .append(isTemporary)
                 .append(")");

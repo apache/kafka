@@ -88,12 +88,12 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
 
     //When we move the replica on 100 to broker 101
     val topicJson: String = s"""{"version":1,"partitions":[{"topic":"$topicName","partition":0,"replicas":[101],"log_dirs":["$expectedLogDir"]}]}"""
-    ReassignPartitionsCommand.executeAssignment(zkUtils, adminClient, topicJson, NoThrottle)
+    ReassignPartitionsCommand.executeAssignment(zkUtils, Some(adminClient), topicJson, NoThrottle)
     waitForReassignmentToComplete()
 
     //Then the replica should be on 101
     assertEquals(Seq(101), zkUtils.getPartitionAssignmentForTopics(Seq(topicName)).get(topicName).get(partition))
-    // The replica should be in the expected log directory on broker 101
+    // The replica should be in the expected log directory on broker 102
     val replica = new TopicPartitionReplica(topicName, 0, 101)
     assertEquals(expectedLogDir, adminClient.describeReplicaDir(Collections.singleton(replica)).all().get.get(replica).currentReplicaDir)
   }
@@ -118,7 +118,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     val partition = newAssignment.find { case (replica, brokerIds) => brokerIds.contains(102)}.get._1.partition
     val replica = new TopicPartitionReplica(topicName, partition, 102)
     val newReplicaAssignment = Map(replica -> expectedLogDir)
-    ReassignPartitionsCommand.executeAssignment(zkUtils, adminClient,
+    ReassignPartitionsCommand.executeAssignment(zkUtils, Some(adminClient),
       ReassignPartitionsCommand.formatAsReassignmentJson(newAssignment, newReplicaAssignment), NoThrottle)
     waitForReassignmentToComplete()
 
@@ -142,7 +142,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
 
     //When rebalancing
     val newAssignment = generateAssignment(zkUtils, Array(100, 101), json(topicName), true)._1
-    ReassignPartitionsCommand.executeAssignment(zkUtils, null,
+    ReassignPartitionsCommand.executeAssignment(zkUtils, None,
       ReassignPartitionsCommand.formatAsReassignmentJson(newAssignment, Map.empty), NoThrottle)
     waitForReassignmentToComplete()
 
@@ -183,7 +183,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     )
 
     //When rebalancing
-    ReassignPartitionsCommand.executeAssignment(zkUtils, adminClient,
+    ReassignPartitionsCommand.executeAssignment(zkUtils, Some(adminClient),
       ReassignPartitionsCommand.formatAsReassignmentJson(proposed, proposedReplicaAssignment), NoThrottle)
     waitForReassignmentToComplete()
 
@@ -224,7 +224,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     val newAssignment = generateAssignment(zkUtils, Array(101, 102), json(topicName), true)._1
 
     val start = System.currentTimeMillis()
-    ReassignPartitionsCommand.executeAssignment(zkUtils, null,
+    ReassignPartitionsCommand.executeAssignment(zkUtils, None,
       ReassignPartitionsCommand.formatAsReassignmentJson(newAssignment, Map.empty), initialThrottle)
 
     //Check throttle config. Should be throttling replica 0 on 100 and 102 only.
@@ -277,7 +277,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
       TopicAndPartition("topic1", 2) -> Seq(103, 104), //didn't move
       TopicAndPartition("topic2", 2) -> Seq(103, 104)  //didn't move
     )
-    ReassignPartitionsCommand.executeAssignment(zkUtils, null,
+    ReassignPartitionsCommand.executeAssignment(zkUtils, None,
       ReassignPartitionsCommand.formatAsReassignmentJson(newAssignment, Map.empty), Throttle(throttle))
 
     //Check throttle config. Should be throttling specific replicas for each topic.
@@ -307,14 +307,14 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     //Start rebalance
     val newAssignment = generateAssignment(zkUtils, Array(101, 102), json(topicName), true)._1
 
-    ReassignPartitionsCommand.executeAssignment(zkUtils, null,
+    ReassignPartitionsCommand.executeAssignment(zkUtils, None,
       ReassignPartitionsCommand.formatAsReassignmentJson(newAssignment, Map.empty), Throttle(initialThrottle))
 
     //Check throttle config
     checkThrottleConfigAddedToZK(initialThrottle, servers, topicName, "0:100,0:101", "0:102")
 
     //Ensure that running Verify, whilst the command is executing, should have no effect
-    verifyAssignment(zkUtils, null, ReassignPartitionsCommand.formatAsReassignmentJson(newAssignment, Map.empty))
+    verifyAssignment(zkUtils, None, ReassignPartitionsCommand.formatAsReassignmentJson(newAssignment, Map.empty))
 
     //Check throttle config again
     checkThrottleConfigAddedToZK(initialThrottle, servers, topicName, "0:100,0:101", "0:102")
@@ -322,7 +322,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     //Now re-run the same assignment with a larger throttle, which should only act to increase the throttle and make progress
     val newThrottle = initialThrottle * 1000
 
-    ReassignPartitionsCommand.executeAssignment(zkUtils, null,
+    ReassignPartitionsCommand.executeAssignment(zkUtils, None,
       ReassignPartitionsCommand.formatAsReassignmentJson(newAssignment, Map.empty), Throttle(newThrottle))
 
     //Check throttle was changed
@@ -332,7 +332,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     waitForReassignmentToComplete()
 
     //Verify should remove the throttle
-    verifyAssignment(zkUtils, null, ReassignPartitionsCommand.formatAsReassignmentJson(newAssignment, Map.empty))
+    verifyAssignment(zkUtils, None, ReassignPartitionsCommand.formatAsReassignmentJson(newAssignment, Map.empty))
 
     //Check removed
     checkThrottleConfigRemovedFromZK(topicName, servers)
@@ -350,7 +350,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
 
     //When we execute an assignment that includes an invalid partition (1:101 in this case)
     val topicJson = s"""{"version":1,"partitions":[{"topic":"$topicName","partition":1,"replicas":[101]}]}"""
-    ReassignPartitionsCommand.executeAssignment(zkUtils, null, topicJson, NoThrottle)
+    ReassignPartitionsCommand.executeAssignment(zkUtils, None, topicJson, NoThrottle)
   }
 
   @Test(expected = classOf[AdminCommandFailedException])
@@ -361,7 +361,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
 
     //When we execute an assignment that specifies an empty replica list (0: empty list in this case)
     val topicJson = s"""{"version":1,"partitions":[{"topic":"$topicName","partition":0,"replicas":[]}]}"""
-    ReassignPartitionsCommand.executeAssignment(zkUtils, null, topicJson, NoThrottle)
+    ReassignPartitionsCommand.executeAssignment(zkUtils, None, topicJson, NoThrottle)
   }
 
   @Test(expected = classOf[AdminCommandFailedException])
@@ -372,7 +372,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
 
     //When we execute an assignment that specifies an invalid brokerID (102: invalid broker ID in this case)
     val topicJson = s"""{"version":1,"partitions":[{"topic":"$topicName","partition":0,"replicas":[101, 102]}]}"""
-    ReassignPartitionsCommand.executeAssignment(zkUtils, null, topicJson, NoThrottle)
+    ReassignPartitionsCommand.executeAssignment(zkUtils, None, topicJson, NoThrottle)
   }
 
   @Test(expected = classOf[AdminCommandFailedException])
@@ -384,7 +384,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
 
     //When we execute an assignment that specifies an invalid brokerID (102: invalid broker ID in this case)
     val topicJson: String = s"""{"version":1,"partitions":[{"topic":"$topicName","partition":0,"replicas":[101],"log_dirs":["invalidDir"]}]}"""
-    ReassignPartitionsCommand.executeAssignment(zkUtils, adminClient, topicJson, NoThrottle)
+    ReassignPartitionsCommand.executeAssignment(zkUtils, Some(adminClient), topicJson, NoThrottle)
   }
 
   @Test(expected = classOf[AdminCommandFailedException])
@@ -397,7 +397,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
 
     //When we execute an assignment that specifies an invalid brokerID (102: invalid broker ID in this case)
     val topicJson: String = s"""{"version":1,"partitions":[{"topic":"$topicName","partition":0,"replicas":[100],"log_dirs":["$logDir"]}]}"""
-    ReassignPartitionsCommand.executeAssignment(zkUtils, adminClient, topicJson, NoThrottle)
+    ReassignPartitionsCommand.executeAssignment(zkUtils, Some(adminClient), topicJson, NoThrottle)
   }
 
   @Test
@@ -422,7 +422,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     )
 
     //When we run a throttled reassignment
-    new ReassignPartitionsCommand(zkUtils, null, move).reassignPartitions(throttle)
+    new ReassignPartitionsCommand(zkUtils, None, move).reassignPartitions(throttle)
 
     waitForReassignmentToComplete()
 

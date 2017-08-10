@@ -243,7 +243,7 @@ class ReassignPartitionsCommandTest extends Logging {
     val zk = stubZK(existing)
     val admin = createMock(classOf[AdminUtilities])
     val propsCapture: Capture[Properties] = newCapture(CaptureType.ALL)
-    val assigner = new ReassignPartitionsCommand(zk, null, proposed, Map.empty, admin)
+    val assigner = new ReassignPartitionsCommand(zk, None, proposed, Map.empty, admin)
     expect(admin.fetchEntityConfig(is(zk), anyString(), anyString())).andStubReturn(new Properties)
     expect(admin.changeBrokerConfig(is(zk), anyObject().asInstanceOf[List[Int]], capture(propsCapture))).anyTimes()
     replay(admin)
@@ -269,7 +269,7 @@ class ReassignPartitionsCommandTest extends Logging {
     val zk = stubZK(existing)
     val admin = createMock(classOf[AdminUtilities])
     val propsCapture: Capture[Properties] = newCapture(CaptureType.ALL)
-    val assigner = new ReassignPartitionsCommand(zk, null, proposed, Map.empty, admin)
+    val assigner = new ReassignPartitionsCommand(zk, None, proposed, Map.empty, admin)
     expect(admin.changeBrokerConfig(is(zk), anyObject().asInstanceOf[List[Int]], capture(propsCapture))).anyTimes()
 
     //Expect the existing broker config to be changed from 10/100 to 1000
@@ -303,7 +303,7 @@ class ReassignPartitionsCommandTest extends Logging {
     val zk = stubZK(existing)
     val admin = createMock(classOf[AdminUtilities])
     val propsCapture: Capture[Properties] = newCapture(CaptureType.ALL)
-    val assigner = new ReassignPartitionsCommand(zk, null, proposed, Map.empty, admin)
+    val assigner = new ReassignPartitionsCommand(zk, None, proposed, Map.empty, admin)
     expect(admin.changeBrokerConfig(is(zk), anyObject().asInstanceOf[List[Int]], capture(propsCapture))).anyTimes()
 
     //Given there is some existing config
