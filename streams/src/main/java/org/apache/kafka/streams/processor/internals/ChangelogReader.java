@@ -49,4 +49,9 @@ public interface ChangelogReader {
      * @return the restored offsets for all persistent stores.
      */
     Map<TopicPartition, Long> restoredOffsets();
+
+    /**
+     * Clear out any internal state so this can be re-used
+     */
+    void clear();
 }

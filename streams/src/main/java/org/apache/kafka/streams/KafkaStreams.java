@@ -21,6 +21,7 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.metrics.JmxReporter;
@@ -145,6 +146,29 @@ public class KafkaStreams {
     private final StreamsMetadataState streamsMetadataState;
     private final StreamsConfig config;
     private final StateDirectory stateDirectory;
+    private StateRestoreListener globalStateRestoreListener;
+    private final StateRestoreListener delegatingStateRestoreListener = new StateRestoreListener() {
+        @Override
+        public void onRestoreStart(final TopicPartition topicPartition, final String storeName, final long startingOffset, final long endingOffset) {
+            if (globalStateRestoreListener != null) {
+                globalStateRestoreListener.onRestoreStart(topicPartition, storeName, startingOffset, endingOffset);
+            }
+        }
+
+        @Override
+        public void onBatchRestored(final TopicPartition topicPartition, final String storeName, final long batchEndOffset, final long numRestored) {
+            if (globalStateRestoreListener != null) {
+                globalStateRestoreListener.onBatchRestored(topicPartition, storeName, batchEndOffset, numRestored);
+            }
+        }
+
+        @Override
+        public void onRestoreEnd(final TopicPartition topicPartition, final String storeName, final long totalRestored) {
+            if (globalStateRestoreListener != null) {
+                globalStateRestoreListener.onRestoreEnd(topicPartition, storeName, totalRestored);
+            }
+        }
+    };
 
     // container states
     /**
@@ -525,18 +549,19 @@ public class KafkaStreams {
             globalThreadState = globalStreamThread.state();
         }
 
+
         for (int i = 0; i < threads.length; i++) {
-            threads[i] = new StreamThread(internalTopologyBuilder,
-                                          config,
-                                          clientSupplier,
-                                          applicationId,
-                                          clientId,
-                                          processId,
-                                          metrics,
-                                          time,
-                                          streamsMetadataState,
-                                          cacheSizeBytes,
-                                          stateDirectory);
+            threads[i] = StreamThread.create(internalTopologyBuilder,
+                                             config,
+                                             clientSupplier,
+                                             processId,
+                                             clientId,
+                                             metrics,
+                                             time,
+                                             streamsMetadataState,
+                                             cacheSizeBytes,
+                                             stateDirectory,
+                                             delegatingStateRestoreListener);
             threadState.put(threads[i].getId(), threads[i].state());
             storeProviders.add(new StreamThreadStateStoreProvider(threads[i]));
         }
@@ -823,9 +848,7 @@ public class KafkaStreams {
     public void setGlobalStateRestoreListener(final StateRestoreListener globalStateRestoreListener) {
         synchronized (stateLock) {
             if (state == State.CREATED) {
-                for (StreamThread thread : threads) {
-                    thread.setGlobalStateRestoreListener(globalStateRestoreListener);
-                }
+                this.globalStateRestoreListener = globalStateRestoreListener;
             } else {
                 throw new IllegalStateException("Can only set the GlobalRestoreListener in the CREATED state");
             }
