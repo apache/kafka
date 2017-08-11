@@ -125,7 +125,7 @@
     </p>
 
     <pre class="brush: java;">
-        final StreamsBuilder builder = new StreamsBuilder();
+        final KStreamBuilder builder = new KStreamBuilder();
     </pre>
 
     <p>
@@ -155,54 +155,13 @@
     </pre>
 
     <p>
-        We can inspect what kind of <code>topology</code> is created from this builder by doing the following:
-    </p>
-
-    <pre class="brush: java;">
-        final Topology topology = builder.build();
-    </pre>
-
-    <p>
-        And print its description to standard output as:
-    </p>
-
-    <pre class="brush: java;">
-        System.out.println(topology.describe());
-    </pre>
-
-    <p>
-        If we just stop here, compile and run the program, it will output the following information:
-    </p>
-
-    <pre class="brush: bash;">
-        &gt; mvn clean package
-        &gt; mvn exec:java -Dexec.mainClass=myapps.Pipe
-        Sub-topologies:
-          Sub-topology: 0
-            Source: KSTREAM-SOURCE-0000000000(topics: streams-plaintext-input) --> KSTREAM-SINK-0000000001
-            Sink: KSTREAM-SINK-0000000001(topic: streams-pipe-output) <-- KSTREAM-SOURCE-0000000000
-        Global Stores:
-          none
-    </pre>
-
-    <p>
-        As shown above, it illustrate that the constructed topology has two processor nodes, a source node <code>KSTREAM-SOURCE-0000000000</code> and a sink node <code>KSTREAM-SINK-0000000001</code>.
-        <code>KSTREAM-SOURCE-0000000000</code> continuously read records from Kafka topic <code>streams-plaintext-input</code> and pipe them to its downstream node <code>KSTREAM-SINK-0000000001</code>;
-        <code>KSTREAM-SINK-0000000001</code> will write each of its received record in order to another Kafka topic <code>streams-pipe-output</code>
-        (the <code>--&gt;</code> and <code>&lt;--</code> arrows dictates the downstream and upstream processor nodes of this node, i.e. "children" and "parents" within the topology graph).
-        It also illustrates that this simple topology has no global state stores associated with it (we will talk about state stores more in the following sections).
-    </p>
-
-    <p>
-        Note that we can always describe the topology as we did above at any given point while we are building it in the code, so as a user you can interactively "try and taste" your computational logic defined in the topology until you are happy with it.
-        Suppose we are already done with this simple topology that just pipes data from one Kafka topic to another in an endless streaming manner,
-        we can now construct the Streams client with the two components we have just constructed above: the configuration map and the topology object
+        we can now construct the Streams client with the two components we have just constructed above: the configuration map and the topology builder object
         (one can also construct a <code>StreamsConfig</code> object from the <code>props</code> map and then pass that object to the constructor,
         <code>KafkaStreams</code> have overloaded constructor functions to takes either type).
     </p>
 
     <pre class="brush: java;">
-        final KafkaStreams streams = new KafkaStreams(topology, props);
+        final KafkaStreams streams = new KafkaStreams(builder, props);
     </pre>
 
     <p>
@@ -241,9 +200,8 @@
 
         import org.apache.kafka.common.serialization.Serdes;
         import org.apache.kafka.streams.KafkaStreams;
-        import org.apache.kafka.streams.StreamsBuilder;
         import org.apache.kafka.streams.StreamsConfig;
-        import org.apache.kafka.streams.Topology;
+        import org.apache.kafka.streams.kstream.KStreamBuilder;
 
         import java.util.Properties;
         import java.util.concurrent.CountDownLatch;
@@ -261,9 +219,7 @@
 
                 builder.stream("streams-plaintext-input").to("streams-pipe-output");
 
-                final Topology topology = builder.build();
-
-                final KafkaStreams streams = new KafkaStreams(topology, props);
+                final KafkaStreams streams = new KafkaStreams(builder, props);
                 final CountDownLatch latch = new CountDownLatch(1);
 
                 // attach shutdown handler to catch control-c
@@ -370,30 +326,6 @@
     </pre>
 
     <p>
-        If we now describe this augmented topology as <code>System.out.println(topology.describe())</code>, we will get the following:
-    </p>
-
-    <pre class="brush: bash;">
-        &gt; mvn clean package
-        &gt; mvn exec:java -Dexec.mainClass=myapps.LineSplit
-        Sub-topologies:
-          Sub-topology: 0
-            Source: KSTREAM-SOURCE-0000000000(topics: streams-plaintext-input) --> KSTREAM-FLATMAPVALUES-0000000001
-            Processor: KSTREAM-FLATMAPVALUES-0000000001(stores: []) --> KSTREAM-SINK-0000000002 <-- KSTREAM-SOURCE-0000000000
-            Sink: KSTREAM-SINK-0000000002(topic: streams-linesplit-output) <-- KSTREAM-FLATMAPVALUES-0000000001
-          Global Stores:
-            none
-    </pre>
-
-    <p>
-        As we can see above, a new processor node <code>KSTREAM-FLATMAPVALUES-0000000001</code> is injected into the topology between the original source and sink nodes.
-        It takes the source node as its parent and the sink node as its child.
-        In other words, each record fetched by the source node will first traverse to the newly added <code>KSTREAM-FLATMAPVALUES-0000000001</code> node to be processed,
-        and one or more new records will be generated as a result. They will continue traverse down to the sink node to be written back to Kafka.
-        Note this processor node is "stateless" as it is not associated with any stores (i.e. <code>(stores: [])</code>).
-    </p>
-
-    <p>
         The complete code looks like this (assuming lambda expression is used):
     </p>
 
@@ -402,9 +334,9 @@
 
         import org.apache.kafka.common.serialization.Serdes;
         import org.apache.kafka.streams.KafkaStreams;
-        import org.apache.kafka.streams.StreamsBuilder;
         import org.apache.kafka.streams.StreamsConfig;
-        import org.apache.kafka.streams.Topology;
+        import org.apache.kafka.streams.kstream.KStreamBuilder;
+        import org.apache.kafka.streams.kstream.ValueMapper;
 
         import java.util.Arrays;
         import java.util.Properties;
@@ -419,14 +351,13 @@
                 props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
                 props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
 
-                final StreamsBuilder builder = new StreamsBuilder();
+                final KStreamBuilder builder = new KStreamBuilder();
 
                 KStream&lt;String, String&gt; source = builder.stream("streams-plaintext-input");
                 source.flatMapValues(value -> Arrays.asList(value.split("\\W+")))
                       .to("streams-linesplit-output");
 
-                final Topology topology = builder.build();
-                final KafkaStreams streams = new KafkaStreams(topology, props);
+                final KafkaStreams streams = new KafkaStreams(builder, props);
                 final CountDownLatch latch = new CountDownLatch(1);
 
                 // ... same as Pipe.java below
@@ -519,42 +450,6 @@
     </pre>
 
     <p>
-        If we again describe this augmented topology as <code>System.out.println(topology.describe())</code>, we will get the following:
-    </p>
-
-    <pre class="brush: bash;">
-        &gt; mvn clean package
-        &gt; mvn exec:java -Dexec.mainClass=myapps.WordCount
-        Sub-topologies:
-          Sub-topology: 0
-            Source: KSTREAM-SOURCE-0000000000(topics: streams-plaintext-input) --> KSTREAM-FLATMAPVALUES-0000000001
-            Processor: KSTREAM-FLATMAPVALUES-0000000001(stores: []) --> KSTREAM-KEY-SELECT-0000000002 <-- KSTREAM-SOURCE-0000000000
-            Processor: KSTREAM-KEY-SELECT-0000000002(stores: []) --> KSTREAM-FILTER-0000000005 <-- KSTREAM-FLATMAPVALUES-0000000001
-            Processor: KSTREAM-FILTER-0000000005(stores: []) --> KSTREAM-SINK-0000000004 <-- KSTREAM-KEY-SELECT-0000000002
-            Sink: KSTREAM-SINK-0000000004(topic: Counts-repartition) <-- KSTREAM-FILTER-0000000005
-          Sub-topology: 1
-            Source: KSTREAM-SOURCE-0000000006(topics: Counts-repartition) --> KSTREAM-AGGREGATE-0000000003
-            Processor: KSTREAM-AGGREGATE-0000000003(stores: [Counts]) --> KTABLE-TOSTREAM-0000000007 <-- KSTREAM-SOURCE-0000000006
-            Processor: KTABLE-TOSTREAM-0000000007(stores: []) --> KSTREAM-SINK-0000000008 <-- KSTREAM-AGGREGATE-0000000003
-            Sink: KSTREAM-SINK-0000000008(topic: streams-wordcount-output) <-- KTABLE-TOSTREAM-0000000007
-        Global Stores:
-          none
-    </pre>
-
-    <p>
-        As we can see above, the topology now contains two disconnected sub-topologies.
-        The first sub-topology's sink node <code>KSTREAM-SINK-0000000004</code> will write to a repartition topic <code>Counts-repartition</code>,
-        which will be read by the second sub-topology's source node <code>KSTREAM-SOURCE-0000000006</code>.
-        The repartition topic is used to "shuffle" the source stream by its aggregation key, which is in this case the value string.
-        In addition, inside the first sub-topology a stateless <code>KSTREAM-FILTER-0000000005</code> node is injected between the grouping <code>KSTREAM-KEY-SELECT-0000000002</code> node and the sink node to filter out any intermediate record whose aggregate key is empty.
-    </p>
-    <p>
-        In the second sub-topology, the aggregation node <code>KSTREAM-AGGREGATE-0000000003</code> is associated with a state store named <code>Counts</code> (the name is specified by the user in the <code>count</code> operator).
-        Upon receiving each record from its upcoming stream source node, the aggregation processor will first query its associated <code>Counts</code> store to get the current count for that key, augment by one, and then write the new count back to the store.
-        Each updated count for the key will also be piped downstream to the <code>KTABLE-TOSTREAM-0000000007</code> node, which interpret this update stream as a record stream before further piping to the sink node <code>KSTREAM-SINK-0000000008</code> for writing back to Kafka.
-    </p>
-
-    <p>
         The complete code looks like this (assuming lambda expression is used):
     </p>
 
@@ -563,11 +458,13 @@
 
         import org.apache.kafka.common.serialization.Serdes;
         import org.apache.kafka.streams.KafkaStreams;
-        import org.apache.kafka.streams.StreamsBuilder;
         import org.apache.kafka.streams.StreamsConfig;
-        import org.apache.kafka.streams.Topology;
+        import org.apache.kafka.streams.kstream.KeyValueMapper;
+        import org.apache.kafka.streams.kstream.KStreamBuilder;
+        import org.apache.kafka.streams.kstream.ValueMapper;
 
         import java.util.Arrays;
+        import java.util.Locale;
         import java.util.Properties;
         import java.util.concurrent.CountDownLatch;
 
@@ -580,7 +477,7 @@
                 props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
                 props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
 
-                final StreamsBuilder builder = new StreamsBuilder();
+                final KStreamBuilder builder = new KStreamBuilder();
 
                 KStream&lt;String, String&gt; source = builder.stream("streams-plaintext-input");
                 source.flatMapValues(value -> Arrays.asList(value.toLowerCase(Locale.getDefault()).split("\\W+")))
@@ -588,8 +485,7 @@
                       .count("Counts")
                       .to(Serdes.String(), Serdes.Long(), "streams-wordcount-output");
 
-                final Topology topology = builder.build();
-                final KafkaStreams streams = new KafkaStreams(topology, props);
+                final KafkaStreams streams = new KafkaStreams(builder, props);
                 final CountDownLatch latch = new CountDownLatch(1);
 
                 // ... same as Pipe.java below
