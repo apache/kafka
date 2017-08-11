@@ -207,8 +207,8 @@
 
     <p>
         By calling its <code>start()</code> function we can trigger the execution of this client.
-        The execution will not stop until another <code>close()</code> function is called on this client.
-        We can, for example, add a shutdown hook with a shutdown latch to capture a user interrupt and close the client upon terminating this program:
+        The execution won't stop until <code>close()</code> is called on this client.
+        We can, for example, add a shutdown hook with a countdown latch to capture a user interrupt and close the client upon terminating this program:
     </p>
 
     <pre class="brush: java;">
@@ -359,8 +359,8 @@
     </pre>
 
     <p>
-        And finally we can write the splited word stream back into another Kafka topic, say <code>streams-linesplit-output</code>.
-        Again, this two steps can be concatenated as the following (assuming lambda expression is used):
+        And finally we can write the word stream back into another Kafka topic, say <code>streams-linesplit-output</code>.
+        Again, these two steps can be concatenated as the following (assuming lambda expression is used):
     </p>
 
     <pre class="brush: java;">
@@ -394,7 +394,7 @@
     </p>
 
     <p>
-        The complete code will looks like this (assuming lambda expression is used):
+        The complete code looks like this (assuming lambda expression is used):
     </p>
 
     <pre class="brush: java;">
@@ -467,7 +467,7 @@
 
     <p>
         In order to do the counting aggregation we have to first specify that we want to key the stream on the value string, i.e. the lower cased word, with a <code>groupBy</code> operator.
-        This operator generate a new grouped stream, which can then be aggregated by a <code>count</code> operator, which generates a running count on each of the grouped key:
+        This operator generate a new grouped stream, which can then be aggregated by a <code>count</code> operator, which generates a running count on each of the grouped keys:
     </p>
 
     <pre class="brush: java;">
@@ -494,9 +494,9 @@
     </p>
 
     <p>
-        We can also write the resulted <code>counts</code> KTable's underlying changelog stream back into another Kafka topic, say <code>streams-wordcount-output</code>.
+        We can also write the <code>counts</code> KTable's changelog stream back into another Kafka topic, say <code>streams-wordcount-output</code>.
         Note that this time the value type is no longer <code>String</code> but <code>Long</code>, so the default serialization classes are not viable for writing it to Kafka anymore.
-        We need to provide overridden serialization nanners for <code>Long</code> types, otherwise a runtime exception will be thrown:
+        We need to provide overridden serialization methods for <code>Long</code> types, otherwise a runtime exception will be thrown:
     </p>
 
     <pre class="brush: java;">
@@ -504,6 +504,9 @@
     </pre>
 
     <p>
+        Note that in order to read the changelog stream from topic <code>streams-wordcount-output</code>,
+        one needs to set the value deserialization as <code>org.apache.kafka.common.serialization.LongDeserializer</code>.
+        Details of this can be found in the <a href="/{{version}}/documentation/streams/quickstart">Play with a Streams Application</a> section.
         Assuming lambda expression from JDK 8 can be used, the above code can be simplified as:
     </p>
 
@@ -552,7 +555,7 @@
     </p>
 
     <p>
-        The complete code will looks like this (assuming lambda expression is used):
+        The complete code looks like this (assuming lambda expression is used):
     </p>
 
     <pre class="brush: java;">
