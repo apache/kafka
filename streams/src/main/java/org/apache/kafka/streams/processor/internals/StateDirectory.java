@@ -102,6 +102,7 @@ public class StateDirectory {
     private String logPrefix() {
         return String.format("stream-thread [%s]", Thread.currentThread().getName());
     }
+
     /**
      * Get the lock for the {@link TaskId}s directory if it is available
      * @param taskId
@@ -196,7 +197,7 @@ public class StateDirectory {
      * @param taskId
      * @throws IOException
      */
-    synchronized void unlock(final TaskId taskId) throws IOException {
+    synchronized boolean unlock(final TaskId taskId) throws IOException {
         final LockAndOwner lockAndOwner = locks.get(taskId);
         if (lockAndOwner != null && lockAndOwner.owningThread.equals(Thread.currentThread().getName())) {
             locks.remove(taskId);
@@ -207,7 +208,9 @@ public class StateDirectory {
             if (fileChannel != null) {
                 fileChannel.close();
             }
+            return true;
         }
+        return false;
     }
 
     /**

@@ -300,7 +300,7 @@ public class StateDirectoryTest {
             @Override
             public void run() {
                 try {
-                    directory.lock(taskId, 1);
+                    assertTrue(directory.lock(taskId, 1));
                     lockLatch.countDown();
                     unlockLatch.await();
                     directory.unlock(taskId);
@@ -313,7 +313,7 @@ public class StateDirectoryTest {
         lockLatch.await(5, TimeUnit.SECONDS);
 
         assertNull("should not have had an exception on other thread", exceptionOnThread.get());
-        directory.unlock(taskId);
+        assertFalse(directory.unlock(taskId));
         assertFalse(directory.lock(taskId, 1));
 
         unlockLatch.countDown();

@@ -1845,7 +1845,7 @@ public class StreamThreadTest {
         final StateDirectory stateDirMock = EasyMock.createNiceMock(StateDirectory.class);
         EasyMock.expect(stateDirMock.lock(EasyMock.eq(taskId), EasyMock.anyInt())).andReturn(true);
         EasyMock.expect(stateDirMock.directoryForTask(taskId)).andReturn(new File(stateDir));
-        stateDirMock.unlock(taskId);
+        EasyMock.expect(stateDirMock.unlock(taskId)).andReturn(true);
         EasyMock.expectLastCall();
         EasyMock.replay(stateDirMock);
         return stateDirMock;
