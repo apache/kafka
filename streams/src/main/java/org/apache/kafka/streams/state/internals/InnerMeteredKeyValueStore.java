@@ -38,6 +38,7 @@ class InnerMeteredKeyValueStore<K, IK, V, IV> extends WrappedStateStore.Abstract
 
     private final KeyValueStore<IK, IV> inner;
     private final String metricScope;
+    // convert types from outer store type to inner store type
     private final TypeConverter<K, IK, V, IV> typeConverter;
     protected final Time time;
     private Sensor putTime;
@@ -52,6 +53,17 @@ class InnerMeteredKeyValueStore<K, IK, V, IV> extends WrappedStateStore.Abstract
     private ProcessorContext context;
     private StateStore root;
 
+    /**
+     * For a period of time we will have 2 store hierarchies. 1 which is built by a
+     * {@link org.apache.kafka.streams.processor.StateStoreSupplier} where the outer most store will be of user defined
+     * type, i.e, &lt;String,Integer&gt;, and another where the outermost store will be of type &lt;Bytes,byte[]&gt;
+     * This interface is so we don't need to have 2 complete implementations for collecting the metrics, rather
+     * we just provide an instance of this to do the type conversions from the outer store types to the inner store types.
+     * @param <K>  key type of the outer store
+     * @param <IK> key type of the inner store
+     * @param <V>  value type of the outer store
+     * @param <IV> value type of the inner store
+     */
     interface TypeConverter<K, IK, V, IV> {
         IK innerKey(final K key);
         IV innerValue(final V value);
@@ -155,7 +167,7 @@ class InnerMeteredKeyValueStore<K, IK, V, IV> extends WrappedStateStore.Abstract
         return inner.approximateNumEntries();
     }
 
-    interface Action<V> {
+    private interface Action<V> {
         V execute();
     }
 

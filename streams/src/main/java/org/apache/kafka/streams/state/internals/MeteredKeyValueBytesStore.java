@@ -33,7 +33,8 @@ import java.util.List;
 /**
  * A Metered {@link KeyValueStore} wrapper that is used for recording operation metrics, and hence its
  * inner KeyValueStore implementation do not need to provide its own metrics collecting functionality.
- *
+ * The inner {@link KeyValueStore} of this class is of type &lt;Bytes,byte[]&gt;, hence we use {@link Serde}s
+ * to convert from &lt;K,V&gt; to &lt;Bytes,byte[]&gt;
  * @param <K>
  * @param <V>
  */
@@ -42,7 +43,7 @@ public class MeteredKeyValueBytesStore<K, V> extends WrappedStateStore.AbstractS
     private final Serde<K> keySerde;
     private final Serde<V> valueSerde;
     private StateSerdes<K, V> serdes;
-    private InnerMeteredKeyValueStore<K, Bytes, V, byte[]> innerMetered;
+    private final InnerMeteredKeyValueStore<K, Bytes, V, byte[]> innerMetered;
 
     // always wrap the store with the metered store
     public MeteredKeyValueBytesStore(final KeyValueStore<Bytes, byte[]> inner,
@@ -61,6 +62,9 @@ public class MeteredKeyValueBytesStore<K, V> extends WrappedStateStore.AbstractS
 
             @Override
             public byte[] innerValue(final V value) {
+                if (value == null) {
+                    return null;
+                }
                 return serdes.rawValue(value);
             }
 
