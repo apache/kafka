@@ -109,6 +109,17 @@ public class KafkaStreamsTest {
     }
 
     @Test
+    public void testStreamsCloseOnStateChange() throws Exception {
+        final KStreamBuilder builder = new KStreamBuilder();
+        final KafkaStreams streams = new KafkaStreams(builder, props);
+
+        StateListenerStub stateListener = new StateListenerStub(true, streams);
+        streams.setStateListener(stateListener);
+        streams.close();
+        Assert.assertEquals(streams.state(), KafkaStreams.State.NOT_RUNNING);
+    }
+
+    @Test
     public void testStateThreadClose() throws Exception {
         final int numThreads = 2;
         final KStreamBuilder builder = new KStreamBuilder();
@@ -424,6 +435,23 @@ public class KafkaStreamsTest {
         public KafkaStreams.State oldState;
         public KafkaStreams.State newState;
         public Map<KafkaStreams.State, Long> mapStates = new HashMap<>();
+        private final boolean closeOnChange;
+        private final KafkaStreams streams;
+
+        public StateListenerStub() {
+            this.closeOnChange = false;
+            this.streams = null;
+        }
+
+        /**
+         * For testing only, we might want to test closing streams on a transition change
+         * @param closeOnChange
+         * @param streams
+         */
+        public StateListenerStub(final boolean closeOnChange, final KafkaStreams streams) {
+            this.closeOnChange = closeOnChange;
+            this.streams = streams;
+        }
 
         @Override
         public void onChange(final KafkaStreams.State newState, final KafkaStreams.State oldState) {
@@ -432,6 +460,10 @@ public class KafkaStreamsTest {
             this.oldState = oldState;
             this.newState = newState;
             this.mapStates.put(newState, prevCount + 1);
+            if (this.closeOnChange) {
+                streams.close();
+            }
         }
+
     }
 }
