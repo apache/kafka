@@ -74,7 +74,7 @@ import java.util.Set;
 public class SaslServerAuthenticator implements Authenticator {
 
     // GSSAPI limits requests to 64K, but we allow a bit extra for custom SASL mechanisms
-    private static final int MAX_RECEIVE_SIZE = 524288;
+    static final int MAX_RECEIVE_SIZE = 524288;
     private static final Logger LOG = LoggerFactory.getLogger(SaslServerAuthenticator.class);
 
     public enum SaslState {
@@ -85,7 +85,6 @@ public class SaslServerAuthenticator implements Authenticator {
     private final JaasContext jaasContext;
     private final Subject subject;
     private final KerberosShortNamer kerberosNamer;
-    private final int maxReceiveSize;
     private final String host;
     private final CredentialCache credentialCache;
 
@@ -107,7 +106,7 @@ public class SaslServerAuthenticator implements Authenticator {
     private Send netOutBuffer;
 
     public SaslServerAuthenticator(String node, JaasContext jaasContext, final Subject subject,
-                                   KerberosShortNamer kerberosNameParser, String host, int maxReceiveSize,
+                                   KerberosShortNamer kerberosNameParser, String host,
                                    CredentialCache credentialCache) throws IOException {
         if (subject == null)
             throw new IllegalArgumentException("subject cannot be null");
@@ -115,7 +114,6 @@ public class SaslServerAuthenticator implements Authenticator {
         this.jaasContext = jaasContext;
         this.subject = subject;
         this.kerberosNamer = kerberosNameParser;
-        this.maxReceiveSize = Math.min(maxReceiveSize, MAX_RECEIVE_SIZE);
         this.host = host;
         this.credentialCache = credentialCache;
     }
@@ -213,7 +211,7 @@ public class SaslServerAuthenticator implements Authenticator {
             return;
         }
 
-        if (netInBuffer == null) netInBuffer = new NetworkReceive(maxReceiveSize, node);
+        if (netInBuffer == null) netInBuffer = new NetworkReceive(MAX_RECEIVE_SIZE, node);
 
         netInBuffer.readFrom(transportLayer);
 
