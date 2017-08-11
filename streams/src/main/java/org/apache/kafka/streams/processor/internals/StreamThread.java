@@ -230,6 +230,8 @@ public class StreamThread extends Thread {
                 // suspend active tasks
                 suspendTasksAndState();
             } catch (final Throwable t) {
+                // TODO: when this happens, we should still make sure the standby / active tasks list gets updated before returning
+                //       and later on when close these suspended tasks we should not pass in clean for closing the task manager.
                 rebalanceException = t;
                 throw t;
             } finally {
@@ -529,6 +531,8 @@ public class StreamThread extends Thread {
             cleanRun = true;
         } catch (final KafkaException e) {
             // just re-throw the exception as it should be logged already
+            // TODO: this is not true since task.update() call may throw ProcessorStateException
+            //       which is a KafkaException but it never get logged.
             throw e;
         } catch (final Exception e) {
             // we have caught all Kafka related exceptions, and other runtime exceptions
@@ -585,6 +589,8 @@ public class StreamThread extends Thread {
             resetInvalidOffsets(e);
         }
 
+        // TODO: some of the exceptions already get logged, but it may affect whether we pass in "clean" into close
+        //       call later, which is not handled properly.
         if (rebalanceException != null) {
             if (!(rebalanceException instanceof ProducerFencedException)) {
                 throw new StreamsException(logPrefix + " Failed to rebalance.", rebalanceException);
@@ -700,6 +706,9 @@ public class StreamThread extends Thread {
         } while (totalProcessedEachRound != 0);
 
         // go over the tasks again to punctuate or commit
+        // TODO: the thrown exception could be ProducerFenced, and hence need to be handled on the task that throws it
+        //       also we should not keep the exception and only throw it after looping through the tasks, but should throw
+        //       it the first time encountered
         final RuntimeException e = performOnStreamTasks(new StreamTaskAction() {
             private String name;
             @Override
@@ -747,6 +756,9 @@ public class StreamThread extends Thread {
     }
 
     private void maybePunctuateSystemTime() {
+        // TODO: the thrown exception could be ProducerFenced, and hence need to be handled on the task that throws it
+        //       also we should not keep the exception and only throw it after looping through the tasks, but should throw
+        //       it the first time encountered
         final RuntimeException e = performOnStreamTasks(new StreamTaskAction() {
             @Override
             public String name() {
