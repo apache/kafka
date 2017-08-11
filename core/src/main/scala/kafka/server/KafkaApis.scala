@@ -996,7 +996,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     def createResponse(requestThrottleMs: Int): AbstractResponse = {
       val offsetFetchResponse =
         // reject the request if not authorized to the group
-        if (!authorize(request.session, Read, new Resource(Group, offsetFetchRequest.groupId)))
+        if (!authorize(request.session, Describe, new Resource(Group, offsetFetchRequest.groupId)))
           offsetFetchRequest.getErrorResponse(requestThrottleMs, Errors.GROUP_AUTHORIZATION_FAILED)
         else {
           if (header.apiVersion == 0) {
