@@ -18,9 +18,8 @@ package ${package};
 
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KafkaStreams;
-import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.Topology;
+import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.ValueMapper;
 
 import java.util.Arrays;
@@ -42,7 +41,7 @@ public class LineSplit {
         props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
 
-        final StreamsBuilder builder = new StreamsBuilder();
+        final KStreamBuilder builder = new KStreamBuilder();
 
         builder.<String, String>stream("streams-plaintext-input")
                .flatMapValues(new ValueMapper<String, Iterable<String>>() {
@@ -62,8 +61,7 @@ public class LineSplit {
            ----------------------------------------------------------------- */
 
 
-        final Topology topology = builder.build();
-        final KafkaStreams streams = new KafkaStreams(topology, props);
+        final KafkaStreams streams = new KafkaStreams(builder, props);
         final CountDownLatch latch = new CountDownLatch(1);
 
         // attach shutdown handler to catch control-c
