@@ -31,6 +31,7 @@ import java.util.Random;
 import java.util.Set;
 
 import org.apache.kafka.clients.consumer.internals.PartitionAssignor.Subscription;
+import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.CollectionUtils;
 import org.apache.kafka.common.utils.Utils;
@@ -44,7 +45,7 @@ public class StickyAssignorTest {
     public void testOneConsumerNoTopic() {
         String consumerId = "consumer";
 
-        Map<String, Integer> partitionsPerTopic = new HashMap<>();
+        Map<String, List<PartitionInfo>> partitionsPerTopic = new HashMap<>();
         Map<String, Subscription> subscriptions =
                 Collections.singletonMap(consumerId, new Subscription(Collections.<String>emptyList()));
 
@@ -61,8 +62,8 @@ public class StickyAssignorTest {
         String topic = "topic";
         String consumerId = "consumer";
 
-        Map<String, Integer> partitionsPerTopic = new HashMap<>();
-        partitionsPerTopic.put(topic, 0);
+        Map<String, List<PartitionInfo>> partitionsPerTopic = new HashMap<>();
+        partitionsPerTopic.put(topic, Collections.<PartitionInfo>emptyList());
         Map<String, Subscription> subscriptions = Collections.singletonMap(consumerId, new Subscription(topics(topic)));
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
@@ -79,8 +80,12 @@ public class StickyAssignorTest {
         String topic = "topic";
         String consumerId = "consumer";
 
-        Map<String, Integer> partitionsPerTopic = new HashMap<>();
-        partitionsPerTopic.put(topic, 3);
+        Map<String, List<PartitionInfo>> partitionsPerTopic = new HashMap<>();
+        List<PartitionInfo> partitionInfos = new ArrayList<>(3);
+        for (int i = 0; i < 3; ++i) {
+            partitionInfos.add(new PartitionInfo(topic, i, null, null, null));
+        }
+        partitionsPerTopic.put(topic, partitionInfos);
         Map<String, Subscription> subscriptions = Collections.singletonMap(consumerId, new Subscription(topics(topic)));
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
@@ -96,9 +101,15 @@ public class StickyAssignorTest {
         String otherTopic = "other";
         String consumerId = "consumer";
 
-        Map<String, Integer> partitionsPerTopic = new HashMap<>();
-        partitionsPerTopic.put(topic, 3);
-        partitionsPerTopic.put(otherTopic, 3);
+        Map<String, List<PartitionInfo>> partitionsPerTopic = new HashMap<>();
+        List<PartitionInfo> partitionInfos1 = new ArrayList<>(3);
+        List<PartitionInfo> partitionInfos2 = new ArrayList<>(3);
+        for (int i = 0; i < 3; ++i) {
+            partitionInfos1.add(new PartitionInfo(topic, i, null, null, null));
+            partitionInfos2.add(new PartitionInfo(otherTopic, i, null, null, null));
+        }
+        partitionsPerTopic.put(topic, partitionInfos1);
+        partitionsPerTopic.put(otherTopic, partitionInfos1);
         Map<String, Subscription> subscriptions = Collections.singletonMap(consumerId, new Subscription(topics(topic)));
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
@@ -114,9 +125,15 @@ public class StickyAssignorTest {
         String topic2 = "topic2";
         String consumerId = "consumer";
 
-        Map<String, Integer> partitionsPerTopic = new HashMap<>();
-        partitionsPerTopic.put(topic1, 1);
-        partitionsPerTopic.put(topic2, 2);
+        Map<String, List<PartitionInfo>> partitionsPerTopic = new HashMap<>();
+        List<PartitionInfo> partitionInfos1 = new ArrayList<>(1);
+        partitionInfos1.add(new PartitionInfo(topic1, 0, null, null, null));
+        List<PartitionInfo> partitionInfos2 = new ArrayList<>(2);
+        for (int i = 0; i < 2; ++i) {
+            partitionInfos2.add(new PartitionInfo(topic2, i, null, null, null));
+        }
+        partitionsPerTopic.put(topic1, partitionInfos1);
+        partitionsPerTopic.put(topic2, partitionInfos2);
         Map<String, Subscription> subscriptions = Collections.singletonMap(consumerId, new Subscription(topics(topic1, topic2)));
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
@@ -132,8 +149,10 @@ public class StickyAssignorTest {
         String consumer1 = "consumer1";
         String consumer2 = "consumer2";
 
-        Map<String, Integer> partitionsPerTopic = new HashMap<>();
-        partitionsPerTopic.put(topic, 1);
+        Map<String, List<PartitionInfo>> partitionsPerTopic = new HashMap<>();
+        List<PartitionInfo> partitionInfos = new ArrayList<>(1);
+        partitionInfos.add(new PartitionInfo(topic, 0, null, null, null));
+        partitionsPerTopic.put(topic, partitionInfos);
 
         Map<String, Subscription> subscriptions = new HashMap<>();
         subscriptions.put(consumer1, new Subscription(topics(topic)));
@@ -153,8 +172,12 @@ public class StickyAssignorTest {
         String consumer1 = "consumer1";
         String consumer2 = "consumer2";
 
-        Map<String, Integer> partitionsPerTopic = new HashMap<>();
-        partitionsPerTopic.put(topic, 2);
+        Map<String, List<PartitionInfo>> partitionsPerTopic = new HashMap<>();
+        List<PartitionInfo> partitionInfos = new ArrayList<>(2);
+        for (int i = 0; i < 2; ++i) {
+            partitionInfos.add(new PartitionInfo(topic, i, null, null, null));
+        }
+        partitionsPerTopic.put(topic, partitionInfos);
 
         Map<String, Subscription> subscriptions = new HashMap<>();
         subscriptions.put(consumer1, new Subscription(topics(topic)));
@@ -176,9 +199,18 @@ public class StickyAssignorTest {
         String consumer2 = "consumer2";
         String consumer3 = "consumer3";
 
-        Map<String, Integer> partitionsPerTopic = new HashMap<>();
-        partitionsPerTopic.put(topic1, 3);
-        partitionsPerTopic.put(topic2, 2);
+        Map<String, List<PartitionInfo>> partitionsPerTopic = new HashMap<>();
+        List<PartitionInfo> partitionInfos1 = new ArrayList<>(3);
+        List<PartitionInfo> partitionInfos2 = new ArrayList<>(2);
+        for (int i = 0; i < 3; ++i) {
+            partitionInfos1.add(new PartitionInfo(topic1, i, null, null, null));
+            if (i != 2) {
+                partitionInfos2.add(new PartitionInfo(topic2, i, null, null, null));
+            }
+        }
+
+        partitionsPerTopic.put(topic1, partitionInfos1);
+        partitionsPerTopic.put(topic2, partitionInfos2);
 
         Map<String, Subscription> subscriptions = new HashMap<>();
         subscriptions.put(consumer1, new Subscription(topics(topic1)));
@@ -195,15 +227,60 @@ public class StickyAssignorTest {
     }
 
     @Test
+    public void testAssignForTopicsWithNonZeroBasedPartitions() {
+        String topic1 = "topic1";
+        String topic2 = "topic2";
+        String consumer1 = "consumer1";
+        String consumer2 = "consumer2";
+        int[] partitionIdsForTopic1 = {4, 5, 3};
+        int[] partitionIdsForTopic2 = {102, 101, 100};
+
+        Map<String, List<PartitionInfo>> partitionsPerTopic = new HashMap<>();
+        List<PartitionInfo> partitionInfos1 = new ArrayList<>(3);
+        List<PartitionInfo> partitionInfos2 = new ArrayList<>(3);
+        for (int i = 0; i < 3; ++i) {
+            partitionInfos1.add(new PartitionInfo(topic1, partitionIdsForTopic1[i], null, null, null));
+            partitionInfos2.add(new PartitionInfo(topic2, partitionIdsForTopic2[i], null, null, null));
+        }
+
+        partitionsPerTopic.put(topic1, partitionInfos1);
+        partitionsPerTopic.put(topic2, partitionInfos2);
+
+        Map<String, Subscription> subscriptions = new HashMap<>();
+        subscriptions.put(consumer1, new Subscription(topics(topic1, topic2)));
+        subscriptions.put(consumer2, new Subscription(topics(topic1, topic2)));
+
+        // adjust back the partitions by an ascending order
+        Arrays.sort(partitionIdsForTopic1);
+        Arrays.sort(partitionIdsForTopic2);
+
+        Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
+        assertEquals(partitions(tp(topic1, partitionIdsForTopic1[0]), tp(topic1, partitionIdsForTopic1[2]),
+                tp(topic2, partitionIdsForTopic2[1])), assignment.get(consumer1));
+        assertEquals(partitions(tp(topic1, partitionIdsForTopic1[1]), tp(topic2, partitionIdsForTopic2[0]),
+                tp(topic2, partitionIdsForTopic2[2])), assignment.get(consumer2));
+
+        verifyValidityAndBalance(subscriptions, assignment);
+        assertTrue(isFullyBalanced(assignment));
+    }
+
+    @Test
     public void testTwoConsumersTwoTopicsSixPartitions() {
         String topic1 = "topic1";
         String topic2 = "topic2";
         String consumer1 = "consumer1";
         String consumer2 = "consumer2";
 
-        Map<String, Integer> partitionsPerTopic = new HashMap<>();
-        partitionsPerTopic.put(topic1, 3);
-        partitionsPerTopic.put(topic2, 3);
+        Map<String, List<PartitionInfo>> partitionsPerTopic = new HashMap<>();
+        List<PartitionInfo> partitionInfos1 = new ArrayList<>(3);
+        List<PartitionInfo> partitionInfos2 = new ArrayList<>(3);
+        for (int i = 0; i < 3; ++i) {
+            partitionInfos1.add(new PartitionInfo(topic1, i, null, null, null));
+            partitionInfos2.add(new PartitionInfo(topic2, i, null, null, null));
+        }
+
+        partitionsPerTopic.put(topic1, partitionInfos1);
+        partitionsPerTopic.put(topic2, partitionInfos2);
 
         Map<String, Subscription> subscriptions = new HashMap<>();
         subscriptions.put(consumer1, new Subscription(topics(topic1, topic2)));
@@ -222,8 +299,13 @@ public class StickyAssignorTest {
         String topic = "topic";
         String consumer1 = "consumer";
 
-        Map<String, Integer> partitionsPerTopic = new HashMap<>();
-        partitionsPerTopic.put(topic, 3);
+        Map<String, List<PartitionInfo>> partitionsPerTopic = new HashMap<>();
+        List<PartitionInfo> partitionInfos = new ArrayList<>(3);
+        for (int i = 0; i < 3; i++) {
+            partitionInfos.add(new PartitionInfo(topic, i, null, null, null));
+        }
+
+        partitionsPerTopic.put(topic, partitionInfos);
         Map<String, Subscription> subscriptions = new HashMap<>();
         subscriptions.put(consumer1, new Subscription(topics(topic)));
 
@@ -279,9 +361,15 @@ public class StickyAssignorTest {
      */
     @Test
     public void testPoorRoundRobinAssignmentScenario() {
-        Map<String, Integer> partitionsPerTopic = new HashMap<>();
-        for (int i = 1; i <= 5; i++)
-            partitionsPerTopic.put(String.format("topic%d", i), (i % 2) + 1);
+        Map<String, List<PartitionInfo>> partitionsPerTopic = new HashMap<>();
+        for (int i = 1; i <= 5; i++) {
+            int numPartitions = (i % 2) + 1;
+            List<PartitionInfo> partitionInfos = new ArrayList<>(numPartitions);
+            for (int j = 0; j < numPartitions; j++) {
+                partitionInfos.add(new PartitionInfo(String.format("topic%d", i), j, null, null, null));
+            }
+            partitionsPerTopic.put(String.format("topic%d", i), partitionInfos);
+        }
 
         Map<String, Subscription> subscriptions = new HashMap<>();
         subscriptions.put("consumer1", new Subscription(topics("topic1", "topic2", "topic3", "topic4", "topic5")));
@@ -299,8 +387,13 @@ public class StickyAssignorTest {
         String consumer1 = "consumer";
         String consumer2 = "consumer2";
 
-        Map<String, Integer> partitionsPerTopic = new HashMap<>();
-        partitionsPerTopic.put(topic, 3);
+        Map<String, List<PartitionInfo>> partitionsPerTopic = new HashMap<>();
+        List<PartitionInfo> partitionInfos1 = new ArrayList<>(3);
+        for (int i = 0; i < 3; ++i) {
+            partitionInfos1.add(new PartitionInfo(topic, i, null, null, null));
+        }
+
+        partitionsPerTopic.put(topic, partitionInfos1);
         Map<String, Subscription> subscriptions = new HashMap<>();
         subscriptions.put(consumer1, new Subscription(topics(topic)));
         subscriptions.put(consumer2, new Subscription(topics(topic)));
@@ -316,7 +409,11 @@ public class StickyAssignorTest {
                    (consumer1Assignment1.size() == 2 && consumer2Assignment1.size() == 1));
 
         String topic2 = "topic2";
-        partitionsPerTopic.put(topic2, 3);
+        List<PartitionInfo> partitionInfos2 = new ArrayList<>(3);
+        for (int i = 0; i < 3; ++i) {
+            partitionInfos2.add(new PartitionInfo(topic2, i, null, null, null));
+        }
+        partitionsPerTopic.put(topic2, partitionInfos2);
         subscriptions.put(consumer1,
                 new Subscription(topics(topic, topic2), StickyAssignor.serializeTopicPartitionAssignment(assignment.get(consumer1))));
         subscriptions.put(consumer2,
@@ -354,9 +451,15 @@ public class StickyAssignorTest {
 
     @Test
     public void testReassignmentAfterOneConsumerLeaves() {
-        Map<String, Integer> partitionsPerTopic = new HashMap<>();
-        for (int i = 1; i < 20; i++)
-            partitionsPerTopic.put(getTopicName(i, 20), i);
+        Map<String, List<PartitionInfo>> partitionsPerTopic = new HashMap<>();
+        for (int i = 1; i < 20; i++) {
+            String topic = getTopicName(i, 20);
+            List<PartitionInfo> partitionInfos = new ArrayList<>(i);
+            for (int j = 0; j < i; ++j) {
+                partitionInfos.add(new PartitionInfo(topic, j, null, null, null));
+            }
+            partitionsPerTopic.put(topic, partitionInfos);
+        }
 
         Map<String, Subscription> subscriptions = new HashMap<>();
         for (int i = 1; i < 20; i++) {
@@ -383,8 +486,12 @@ public class StickyAssignorTest {
 
     @Test
     public void testReassignmentAfterOneConsumerAdded() {
-        Map<String, Integer> partitionsPerTopic = new HashMap<>();
-        partitionsPerTopic.put("topic", 20);
+        Map<String, List<PartitionInfo>> partitionsPerTopic = new HashMap<>();
+        List<PartitionInfo> partitionInfos = new ArrayList<>(20);
+        for (int i = 0; i < 20; ++i) {
+            partitionInfos.add(new PartitionInfo("topic", i, null, null, null));
+        }
+        partitionsPerTopic.put("topic", partitionInfos);
 
         Map<String, Subscription> subscriptions = new HashMap<>();
         for (int i = 1; i < 10; i++)
@@ -403,9 +510,15 @@ public class StickyAssignorTest {
 
     @Test
     public void testSameSubscriptions() {
-        Map<String, Integer> partitionsPerTopic = new HashMap<>();
-        for (int i = 1; i < 15; i++)
-            partitionsPerTopic.put(getTopicName(i, 15), i);
+        Map<String, List<PartitionInfo>> partitionsPerTopic = new HashMap<>();
+        for (int i = 1; i < 15; i++) {
+            String topic = getTopicName(i, 15);
+            List<PartitionInfo> partitionInfos = new ArrayList<>();
+            for (int j = 0; j < i; ++j) {
+                partitionInfos.add(new PartitionInfo(topic, j, null, null, null));
+            }
+            partitionsPerTopic.put(topic, partitionInfos);
+        }
 
         Map<String, Subscription> subscriptions = new HashMap<>();
         for (int i = 1; i < 9; i++) {
@@ -436,9 +549,16 @@ public class StickyAssignorTest {
         int topicCount = 40;
         int consumerCount = 200;
 
-        Map<String, Integer> partitionsPerTopic = new HashMap<>();
-        for (int i = 0; i < topicCount; i++)
-            partitionsPerTopic.put(getTopicName(i, topicCount), rand.nextInt(10) + 1);
+        Map<String, List<PartitionInfo>> partitionsPerTopic = new HashMap<>();
+        for (int i = 0; i < topicCount; i++) {
+            String topic = getTopicName(i, topicCount);
+            List<PartitionInfo> partitionInfos = new ArrayList<>();
+            int numPartitions = rand.nextInt(10) + 1;
+            for (int j = 0; j < numPartitions; ++j) {
+                partitionInfos.add(new PartitionInfo(topic, j, null, null, null));
+            }
+            partitionsPerTopic.put(topic, partitionInfos);
+        }
 
         Map<String, Subscription> subscriptions = new HashMap<>();
         for (int i = 0; i < consumerCount; i++) {
@@ -468,9 +588,13 @@ public class StickyAssignorTest {
 
     @Test
     public void testNewSubscription() {
-        Map<String, Integer> partitionsPerTopic = new HashMap<>();
-        for (int i = 1; i < 5; i++)
-            partitionsPerTopic.put(getTopicName(i, 5), 1);
+        Map<String, List<PartitionInfo>> partitionsPerTopic = new HashMap<>();
+        for (int i = 1; i < 5; i++) {
+            String topic = getTopicName(i, 5);
+            List<PartitionInfo> partitionInfos = new ArrayList<>(1);
+            partitionInfos.add(new PartitionInfo(topic, 0, null, null, null));
+            partitionsPerTopic.put(topic, partitionInfos);
+        }
 
         Map<String, Subscription> subscriptions = new HashMap<>();
         for (int i = 0; i < 3; i++) {
@@ -504,9 +628,15 @@ public class StickyAssignorTest {
             for (int i = 0; i < numTopics; ++i)
                 topics.add(getTopicName(i, maxNumTopics));
 
-            Map<String, Integer> partitionsPerTopic = new HashMap<>();
-            for (int i = 0; i < numTopics; ++i)
-                partitionsPerTopic.put(getTopicName(i, maxNumTopics), i + 1);
+            Map<String, List<PartitionInfo>> partitionsPerTopic = new HashMap<>();
+            for (int i = 0; i < numTopics; ++i) {
+                String topic = getTopicName(i, maxNumTopics);
+                List<PartitionInfo> partitionInfos = new ArrayList<>(i + 1);
+                for (int j = 0; j < i + 1; ++j) {
+                    partitionInfos.add(new PartitionInfo(topic, j, null, null, null));
+                }
+                partitionsPerTopic.put(topic, partitionInfos);
+            }
 
             int numConsumers = minNumConsumers + new Random().nextInt(maxNumConsumers - minNumConsumers);
 
@@ -537,9 +667,13 @@ public class StickyAssignorTest {
 
     @Test
     public void testMoveExistingAssignments() {
-        Map<String, Integer> partitionsPerTopic = new HashMap<>();
-        for (int i = 1; i <= 6; i++)
-            partitionsPerTopic.put(String.format("topic%02d", i), 1);
+        Map<String, List<PartitionInfo>> partitionsPerTopic = new HashMap<>();
+        for (int i = 1; i <= 6; i++) {
+            String topic = String.format("topic%02d", i);
+            List<PartitionInfo> partitionInfos = new ArrayList<>(1);
+            partitionInfos.add(new PartitionInfo(topic, 0, null, null, null));
+            partitionsPerTopic.put(topic, partitionInfos);
+        }
 
         Map<String, Subscription> subscriptions = new HashMap<>();
         subscriptions.put("consumer01",
@@ -558,8 +692,12 @@ public class StickyAssignorTest {
 
     @Test
     public void testStickiness() {
-        Map<String, Integer> partitionsPerTopic = new HashMap<>();
-        partitionsPerTopic.put("topic01", 3);
+        Map<String, List<PartitionInfo>> partitionsPerTopic = new HashMap<>();
+        List<PartitionInfo> partitionInfos = new ArrayList<>(3);
+        for (int i = 0; i < 3; ++i) {
+            partitionInfos.add(new PartitionInfo("topic01", i, null, null, null));
+        }
+        partitionsPerTopic.put("topic01", partitionInfos);
         Map<String, Subscription> subscriptions = new HashMap<>();
         subscriptions.put("consumer01", new Subscription(topics("topic01")));
         subscriptions.put("consumer02", new Subscription(topics("topic01")));
@@ -676,7 +814,7 @@ public class StickyAssignorTest {
      * - there is no topic partition that can be moved from one consumer to another with 2+ fewer topic partitions
      *
      * @param subscriptions: topic subscriptions of each consumer
-     * @param assignment: given assignment for balance check
+     * @param assignments: given assignment for balance check
      */
     private static void verifyValidityAndBalance(Map<String, Subscription> subscriptions, Map<String, List<TopicPartition>> assignments) {
         int size = subscriptions.size();

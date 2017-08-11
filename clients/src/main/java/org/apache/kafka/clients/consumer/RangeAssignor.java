@@ -17,10 +17,12 @@
 package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.clients.consumer.internals.AbstractPartitionAssignor;
+import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -56,7 +58,7 @@ public class RangeAssignor extends AbstractPartitionAssignor {
     }
 
     @Override
-    public Map<String, List<TopicPartition>> assign(Map<String, Integer> partitionsPerTopic,
+    public Map<String, List<TopicPartition>> assign(Map<String, List<PartitionInfo>> partitionsPerTopic,
                                                     Map<String, Subscription> subscriptions) {
         Map<String, List<String>> consumersPerTopic = consumersPerTopic(subscriptions);
         Map<String, List<TopicPartition>> assignment = new HashMap<>();
@@ -67,16 +69,31 @@ public class RangeAssignor extends AbstractPartitionAssignor {
             String topic = topicEntry.getKey();
             List<String> consumersForTopic = topicEntry.getValue();
 
-            Integer numPartitionsForTopic = partitionsPerTopic.get(topic);
-            if (numPartitionsForTopic == null)
+            List<PartitionInfo> partitionInfos = partitionsPerTopic.get(topic);
+            if (partitionInfos == null || partitionInfos.isEmpty()) {
                 continue;
-
+            }
+            Collections.sort(partitionInfos, new Comparator<PartitionInfo>() {
+                @Override
+                public int compare(PartitionInfo o1, PartitionInfo o2) {
+                    if (o1 == null || o2 == null) {
+                        return -1;
+                    } else if (o1.partition() < o2.partition()) {
+                        return -1;
+                    } else if (o1.partition() == o2.partition()) {
+                        return 0;
+                    } else {
+                        return 1;
+                    }
+                }
+            });
             Collections.sort(consumersForTopic);
 
-            int numPartitionsPerConsumer = numPartitionsForTopic / consumersForTopic.size();
-            int consumersWithExtraPartition = numPartitionsForTopic % consumersForTopic.size();
+            int totalPartitions = partitionInfos.size();
+            int numPartitionsPerConsumer = totalPartitions / consumersForTopic.size();
+            int consumersWithExtraPartition = totalPartitions % consumersForTopic.size();
 
-            List<TopicPartition> partitions = AbstractPartitionAssignor.partitions(topic, numPartitionsForTopic);
+            List<TopicPartition> partitions = AbstractPartitionAssignor.partitions(partitionInfos);
             for (int i = 0, n = consumersForTopic.size(); i < n; i++) {
                 int start = numPartitionsPerConsumer * i + Math.min(i, consumersWithExtraPartition);
                 int length = numPartitionsPerConsumer + (i + 1 > consumersWithExtraPartition ? 0 : 1);

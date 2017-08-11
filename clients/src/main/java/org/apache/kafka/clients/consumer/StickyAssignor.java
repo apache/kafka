@@ -32,6 +32,7 @@ import java.util.Set;
 import java.util.TreeSet;
 
 import org.apache.kafka.clients.consumer.internals.AbstractPartitionAssignor;
+import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.Field;
@@ -189,7 +190,7 @@ public class StickyAssignor extends AbstractPartitionAssignor {
     private List<TopicPartition> memberAssignment = null;
     private PartitionMovements partitionMovements;
 
-    public Map<String, List<TopicPartition>> assign(Map<String, Integer> partitionsPerTopic,
+    public Map<String, List<TopicPartition>> assign(Map<String, List<PartitionInfo>> partitionsPerTopic,
                                                     Map<String, Subscription> subscriptions) {
         Map<String, List<TopicPartition>> currentAssignment = new HashMap<>();
         partitionMovements = new PartitionMovements();
@@ -203,17 +204,49 @@ public class StickyAssignor extends AbstractPartitionAssignor {
         final Map<String, List<TopicPartition>> consumer2AllPotentialPartitions = new HashMap<>();
 
         // initialize partition2AllPotentialConsumers and consumer2AllPotentialPartitions in the following two for loops
-        for (Entry<String, Integer> entry: partitionsPerTopic.entrySet()) {
-            for (int i = 0; i < entry.getValue(); ++i)
-                partition2AllPotentialConsumers.put(new TopicPartition(entry.getKey(), i), new ArrayList<String>());
+        for (Entry<String, List<PartitionInfo>> entry: partitionsPerTopic.entrySet()) {
+            List<PartitionInfo> partitionInfos = entry.getValue();
+            Collections.sort(partitionInfos, new Comparator<PartitionInfo>() {
+                @Override
+                public int compare(PartitionInfo o1, PartitionInfo o2) {
+                    if (o1 == null || o2 == null) {
+                        return -1;
+                    } else if (o1.partition() < o2.partition()) {
+                        return -1;
+                    } else if (o1.partition() == o2.partition()) {
+                        return 0;
+                    } else {
+                        return 1;
+                    }
+                }
+            });
+            for (PartitionInfo partitionInfo : partitionInfos) {
+                partition2AllPotentialConsumers.put(
+                        new TopicPartition(entry.getKey(), partitionInfo.partition()), new ArrayList<String>());
+            }
         }
 
         for (Entry<String, Subscription> entry: subscriptions.entrySet()) {
             String consumer = entry.getKey();
             consumer2AllPotentialPartitions.put(consumer, new ArrayList<TopicPartition>());
             for (String topic: entry.getValue().topics()) {
-                for (int i = 0; i < partitionsPerTopic.get(topic); ++i) {
-                    TopicPartition topicPartition = new TopicPartition(topic, i);
+                List<PartitionInfo> partitionInfos = partitionsPerTopic.get(topic);
+                Collections.sort(partitionInfos, new Comparator<PartitionInfo>() {
+                    @Override
+                    public int compare(PartitionInfo o1, PartitionInfo o2) {
+                        if (o1 == null || o2 == null) {
+                            return -1;
+                        } else if (o1.partition() < o2.partition()) {
+                            return -1;
+                        } else if (o1.partition() == o2.partition()) {
+                            return 0;
+                        } else {
+                            return 1;
+                        }
+                    }
+                });
+                for (PartitionInfo partitionInfo: partitionInfos) {
+                    TopicPartition topicPartition = new TopicPartition(topic, partitionInfo.partition());
                     consumer2AllPotentialPartitions.get(consumer).add(topicPartition);
                     partition2AllPotentialConsumers.get(topicPartition).add(consumer);
                 }

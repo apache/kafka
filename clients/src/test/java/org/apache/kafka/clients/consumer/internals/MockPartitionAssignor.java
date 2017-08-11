@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 
 import java.util.List;
@@ -26,7 +27,7 @@ public class MockPartitionAssignor extends AbstractPartitionAssignor {
     private Map<String, List<TopicPartition>> result = null;
 
     @Override
-    public Map<String, List<TopicPartition>> assign(Map<String, Integer> partitionsPerTopic,
+    public Map<String, List<TopicPartition>> assign(Map<String, List<PartitionInfo>> partitionsPerTopic,
                                                     Map<String, Subscription> subscriptions) {
         if (result == null)
             throw new IllegalStateException("Call to assign with no result prepared");
