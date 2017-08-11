@@ -94,9 +94,9 @@ class MetadataCacheTest {
           assertEquals(partitionId, partitionMetadata.partition)
           val leader = partitionMetadata.leader
           val partitionState = topicPartitionStates(new TopicPartition(topic, partitionId))
-          assertEquals(partitionState.leader, leader.id)
-          assertEquals(partitionState.isr, partitionMetadata.isr.asScala.map(_.id).asJava)
-          assertEquals(partitionState.replicas, partitionMetadata.replicas.asScala.map(_.id).asJava)
+          assertEquals(partitionState.basePartitionState.leader, leader.id)
+          assertEquals(partitionState.basePartitionState.isr, partitionMetadata.isr.asScala.map(_.id).asJava)
+          assertEquals(partitionState.basePartitionState.replicas, partitionMetadata.replicas.asScala.map(_.id).asJava)
           val endPoint = endPoints(partitionMetadata.leader.id).find(_.listenerName == listenerName).get
           assertEquals(endPoint.host, leader.host)
           assertEquals(endPoint.port, leader.port)

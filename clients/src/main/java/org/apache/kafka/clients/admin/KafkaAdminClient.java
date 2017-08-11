@@ -322,9 +322,8 @@ public class KafkaAdminClient extends AdminClient {
         }
     }
 
-    static KafkaAdminClient createInternal(AdminClientConfig config, KafkaClient client, Metadata metadata) {
+    static KafkaAdminClient createInternal(AdminClientConfig config, KafkaClient client, Metadata metadata, Time time) {
         Metrics metrics = null;
-        Time time = Time.SYSTEM;
         String clientId = generateClientId(config);
 
         try {
@@ -441,6 +440,7 @@ public class KafkaAdminClient extends AdminClient {
         private final long deadlineMs;
         private final NodeProvider nodeProvider;
         private int tries = 0;
+        private boolean aborted = false;
 
         Call(String callName, long deadlineMs, NodeProvider nodeProvider) {
             this.callName = callName;
@@ -459,6 +459,14 @@ public class KafkaAdminClient extends AdminClient {
          * @param throwable     The failure exception.
          */
         final void fail(long now, Throwable throwable) {
+            if (aborted) {
+                if (log.isDebugEnabled()) {
+                    log.debug("{} aborted at {} after {} attempt(s)", this, now, tries,
+                        new Exception(prettyPrintException(throwable)));
+                }
+                handleFailure(new TimeoutException("Aborted due to timeout."));
+                return;
+            }
             // If this is an UnsupportedVersionException that we can retry, do so.
             if ((throwable instanceof UnsupportedVersionException) &&
                      handleUnsupportedVersionException((UnsupportedVersionException) throwable)) {
@@ -792,12 +800,17 @@ public class KafkaAdminClient extends AdminClient {
                 // only one we need to check the timeout for.
                 Call call = contexts.get(0);
                 if (processor.callHasExpired(call)) {
-                    log.debug("{}: Closing connection to {} to time out {}", clientId, nodeId, call);
-                    client.disconnect(nodeId);
-                    numTimedOut++;
-                    // We don't remove anything from the callsInFlight data structure.  Because the connection
-                    // has been closed, the calls should be returned by the next client#poll(),
-                    // and handled at that point.
+                    if (call.aborted) {
+                        log.warn("{}: aborted call {} is still in callsInFlight.", clientId, call);
+                    } else {
+                        log.debug("{}: Closing connection to {} to time out {}", clientId, nodeId, call);
+                        call.aborted = true;
+                        client.disconnect(nodeId);
+                        numTimedOut++;
+                        // We don't remove anything from the callsInFlight data structure.  Because the connection
+                        // has been closed, the calls should be returned by the next client#poll(),
+                        // and handled at that point.
+                    }
                 }
             }
             if (numTimedOut > 0)
@@ -830,7 +843,12 @@ public class KafkaAdminClient extends AdminClient {
 
                 // Stop tracking this call.
                 correlationIdToCall.remove(correlationId);
-                getOrCreateListValue(callsInFlight, response.requestHeader().clientId()).remove(call);
+                List<Call> calls = callsInFlight.get(response.destination());
+                if ((calls == null) || (!calls.remove(call))) {
+                    log.error("Internal server error on {}: ignoring call {} in correlationIdToCall " +
+                        "that did not exist in callsInFlight", response.destination(), call);
+                    continue;
+                }
 
                 // Handle the result of the call.  This may involve retrying the call, if we got a
                 // retryible exception.

@@ -18,29 +18,35 @@
 
 package kafka.server
 
+import java.io.IOException
 import java.util.concurrent.{ArrayBlockingQueue, ConcurrentHashMap}
 
+import kafka.utils.Logging
+
 /*
- * LogDirFailureChannel allows an external thread to block waiting for new offline log dir.
+ * LogDirFailureChannel allows an external thread to block waiting for new offline log dirs.
  *
- * LogDirFailureChannel should be a singleton object which can be accessed by any class that does disk-IO operation.
- * If IOException is encountered while accessing a log directory, the corresponding class can insert the the log directory name
- * to the LogDirFailureChannel using maybeAddLogFailureEvent(). Then a thread which is blocked waiting for new offline log directories
- * can take the name of the new offline log directory out of the LogDirFailureChannel and handles the log failure properly.
+ * There should be a single instance of LogDirFailureChannel accessible by any class that does disk-IO operation.
+ * If IOException is encountered while accessing a log directory, the corresponding class can add the log directory name
+ * to the LogDirFailureChannel using maybeAddOfflineLogDir(). Each log directory will be added only once. After a log
+ * directory is added for the first time, a thread which is blocked waiting for new offline log directories
+ * can take the name of the new offline log directory out of the LogDirFailureChannel and handle the log failure properly.
+ * An offline log directory will stay offline until the broker is restarted.
  *
  */
-class LogDirFailureChannel(logDirNum: Int) {
+class LogDirFailureChannel(logDirNum: Int) extends Logging {
 
   private val offlineLogDirs = new ConcurrentHashMap[String, String]
-  private val logDirFailureEvent = new ArrayBlockingQueue[String](logDirNum)
+  private val offlineLogDirQueue = new ArrayBlockingQueue[String](logDirNum)
 
   /*
    * If the given logDir is not already offline, add it to the
    * set of offline log dirs and enqueue it to the logDirFailureEvent queue
    */
-  def maybeAddLogFailureEvent(logDir: String): Unit = {
+  def maybeAddOfflineLogDir(logDir: String, msg: => String, e: IOException): Unit = {
+    error(msg, e)
     if (offlineLogDirs.putIfAbsent(logDir, logDir) == null) {
-      logDirFailureEvent.add(logDir)
+      offlineLogDirQueue.add(logDir)
     }
   }
 
@@ -48,8 +54,6 @@ class LogDirFailureChannel(logDirNum: Int) {
    * Get the next offline log dir from logDirFailureEvent queue.
    * The method will wait if necessary until a new offline log directory becomes available
    */
-  def takeNextLogFailureEvent(): String = {
-    logDirFailureEvent.take()
-  }
+  def takeNextOfflineLogDir(): String = offlineLogDirQueue.take()
 
 }

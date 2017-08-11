@@ -56,20 +56,17 @@ object Acl {
     if (aclJson == null || aclJson.isEmpty)
       return collection.immutable.Set.empty[Acl]
 
-    Json.parseFull(aclJson).toSet[Any].flatMap { m =>
-      val aclMap = m.asInstanceOf[Map[String, Any]]
+    Json.parseFull(aclJson).map(_.asJsonObject).map { js =>
       //the acl json version.
-      require(aclMap(VersionKey) == CurrentVersion)
-      val aclSet = aclMap(AclsKey).asInstanceOf[List[Map[String, Any]]]
-      aclSet.map { item =>
-        val principal = KafkaPrincipal.fromString(item(PrincipalKey).asInstanceOf[String])
-        val permissionType = PermissionType.fromString(item(PermissionTypeKey).asInstanceOf[String])
-        val operation = Operation.fromString(item(OperationKey).asInstanceOf[String])
-        val host = item(HostsKey).asInstanceOf[String]
+      require(js(VersionKey).to[Int] == CurrentVersion)
+      js(AclsKey).asJsonArray.iterator.map(_.asJsonObject).map { itemJs =>
+        val principal = KafkaPrincipal.fromString(itemJs(PrincipalKey).to[String])
+        val permissionType = PermissionType.fromString(itemJs(PermissionTypeKey).to[String])
+        val host = itemJs(HostsKey).to[String]
+        val operation = Operation.fromString(itemJs(OperationKey).to[String])
         new Acl(principal, permissionType, host, operation)
-      }
-    }
-
+      }.toSet
+    }.getOrElse(Set.empty)
   }
 
   def toJsonCompatibleMap(acls: Set[Acl]): Map[String, Any] = {
