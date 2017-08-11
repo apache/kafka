@@ -90,14 +90,7 @@ public abstract class AbstractPartitionAssignor implements PartitionAssignor {
         }
         list.add(value);
     }
-
-    protected static List<TopicPartition> partitions(String topic, int numPartitions) {
-        List<TopicPartition> partitions = new ArrayList<>(numPartitions);
-        for (int i = 0; i < numPartitions; i++)
-            partitions.add(new TopicPartition(topic, i));
-        return partitions;
-    }
-
+    
     protected static List<TopicPartition> partitions(List<PartitionInfo> partitionInfos) {
         if (partitionInfos == null || partitionInfos.isEmpty()) {
             return Collections.emptyList();
