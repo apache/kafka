@@ -24,7 +24,6 @@ import org.apache.kafka.common.utils.Utils;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -86,20 +85,7 @@ public class RoundRobinAssignor extends AbstractPartitionAssignor {
         for (String topic : topics) {
             List<PartitionInfo> partitionInfos = partitionsPerTopic.get(topic);
             if (partitionInfos != null && !partitionInfos.isEmpty()) {
-                Collections.sort(partitionInfos, new Comparator<PartitionInfo>() {
-                    @Override
-                    public int compare(PartitionInfo o1, PartitionInfo o2) {
-                        if (o1 == null || o2 == null) {
-                            return -1;
-                        } else if (o1.partition() < o2.partition()) {
-                            return -1;
-                        } else if (o1.partition() == o2.partition()) {
-                            return 0;
-                        } else {
-                            return 1;
-                        }
-                    }
-                });
+                Collections.sort(partitionInfos);
                 allPartitions.addAll(AbstractPartitionAssignor.partitions(partitionInfos));
             }
         }

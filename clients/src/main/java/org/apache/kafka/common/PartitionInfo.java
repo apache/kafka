@@ -19,7 +19,7 @@ package org.apache.kafka.common;
 /**
  * This is used to describe per-partition state in the MetadataResponse.
  */
-public class PartitionInfo {
+public class PartitionInfo implements Comparable<PartitionInfo> {
 
     private final String topic;
     private final int partition;
@@ -108,4 +108,8 @@ public class PartitionInfo {
         return b.toString();
     }
 
+    @Override
+    public int compareTo(PartitionInfo o) {
+        return partition - o.partition();
+    }
 }

@@ -206,20 +206,7 @@ public class StickyAssignor extends AbstractPartitionAssignor {
         // initialize partition2AllPotentialConsumers and consumer2AllPotentialPartitions in the following two for loops
         for (Entry<String, List<PartitionInfo>> entry: partitionsPerTopic.entrySet()) {
             List<PartitionInfo> partitionInfos = entry.getValue();
-            Collections.sort(partitionInfos, new Comparator<PartitionInfo>() {
-                @Override
-                public int compare(PartitionInfo o1, PartitionInfo o2) {
-                    if (o1 == null || o2 == null) {
-                        return -1;
-                    } else if (o1.partition() < o2.partition()) {
-                        return -1;
-                    } else if (o1.partition() == o2.partition()) {
-                        return 0;
-                    } else {
-                        return 1;
-                    }
-                }
-            });
+            Collections.sort(partitionInfos);
             for (PartitionInfo partitionInfo : partitionInfos) {
                 partition2AllPotentialConsumers.put(
                         new TopicPartition(entry.getKey(), partitionInfo.partition()), new ArrayList<String>());
@@ -231,20 +218,7 @@ public class StickyAssignor extends AbstractPartitionAssignor {
             consumer2AllPotentialPartitions.put(consumer, new ArrayList<TopicPartition>());
             for (String topic: entry.getValue().topics()) {
                 List<PartitionInfo> partitionInfos = partitionsPerTopic.get(topic);
-                Collections.sort(partitionInfos, new Comparator<PartitionInfo>() {
-                    @Override
-                    public int compare(PartitionInfo o1, PartitionInfo o2) {
-                        if (o1 == null || o2 == null) {
-                            return -1;
-                        } else if (o1.partition() < o2.partition()) {
-                            return -1;
-                        } else if (o1.partition() == o2.partition()) {
-                            return 0;
-                        } else {
-                            return 1;
-                        }
-                    }
-                });
+                Collections.sort(partitionInfos);
                 for (PartitionInfo partitionInfo: partitionInfos) {
                     TopicPartition topicPartition = new TopicPartition(topic, partitionInfo.partition());
                     consumer2AllPotentialPartitions.get(consumer).add(topicPartition);

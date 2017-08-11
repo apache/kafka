@@ -22,7 +22,6 @@ import org.apache.kafka.common.TopicPartition;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -73,20 +72,7 @@ public class RangeAssignor extends AbstractPartitionAssignor {
             if (partitionInfos == null || partitionInfos.isEmpty()) {
                 continue;
             }
-            Collections.sort(partitionInfos, new Comparator<PartitionInfo>() {
-                @Override
-                public int compare(PartitionInfo o1, PartitionInfo o2) {
-                    if (o1 == null || o2 == null) {
-                        return -1;
-                    } else if (o1.partition() < o2.partition()) {
-                        return -1;
-                    } else if (o1.partition() == o2.partition()) {
-                        return 0;
-                    } else {
-                        return 1;
-                    }
-                }
-            });
+            Collections.sort(partitionInfos);
             Collections.sort(consumersForTopic);
 
             int totalPartitions = partitionInfos.size();
