@@ -75,9 +75,9 @@ public class InMemoryKeyValueStore<K, V> implements KeyValueStore<K, V> {
             context.register(root, true, new StateRestoreCallback() {
                 @Override
                 public void restore(byte[] key, byte[] value) {
-                    // check value for null, to avoid  deserialization error.
+                    // this is a delete
                     if (value == null) {
-                        put(serdes.keyFrom(key), null);
+                        delete(serdes.keyFrom(key));
                     } else {
                         put(serdes.keyFrom(key), serdes.valueFrom(value));
                     }
