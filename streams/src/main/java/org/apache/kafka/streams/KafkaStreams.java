@@ -210,11 +210,9 @@ public class KafkaStreams {
     }
 
     private final Object stateLock = new Object();
-
     private volatile State state = State.CREATED;
-
     private KafkaStreams.StateListener stateListener = null;
-
+    private boolean inTheMiddleOfStateChange = false;
 
     /**
      * Listen to {@link State} change events.
@@ -373,6 +371,7 @@ public class KafkaStreams {
         public synchronized void onChange(final Thread thread,
                                           final ThreadStateTransitionValidator abstractNewState,
                                           final ThreadStateTransitionValidator abstractOldState) {
+            inTheMiddleOfStateChange = true; // fence any circular calls to close() within this method
             // StreamThreads first
             if (thread instanceof StreamThread) {
                 StreamThread.State newState = (StreamThread.State) abstractNewState;
@@ -396,6 +395,7 @@ public class KafkaStreams {
                     maybeSetErrorSinceGlobalStreamThreadIsDead();
                 }
             }
+            inTheMiddleOfStateChange = false;
         }
     }
 
@@ -598,6 +598,7 @@ public class KafkaStreams {
 
     private void closeGlobalStreamThread() {
         if (globalStreamThread != null) {
+            globalStreamThread.setStateListener(null);
             globalStreamThread.close();
             if (!globalStreamThread.stillRunning()) {
                 try {
@@ -622,6 +623,16 @@ public class KafkaStreams {
      */
     public synchronized boolean close(final long timeout, final TimeUnit timeUnit) {
         log.debug("{} Stopping Kafka Stream process.", logPrefix);
+
+        // do not close during state changes, e.g., there are corner cases when all
+        // threads die and the final thread to die calls onChange() is called to set the instances state.
+        // Within the instance callback, the user might call close() on the instance, which will attempt to join()
+        // the thread that started. So we have a circular loop (deadlock). We cannot stop the user from calling close()
+        // however we can prevent it from occurring.
+        if (inTheMiddleOfStateChange) {
+            log.warn("{} Calling close() during the state change callback is discouraged and will have no effect.", logPrefix);
+            return true;
+        }
 
         // only clean up once
         if (!checkFirstTimeClosing()) {

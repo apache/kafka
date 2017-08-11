@@ -108,28 +108,7 @@ public class KafkaStreamsTest {
         Assert.assertEquals(streams.state(), KafkaStreams.State.NOT_RUNNING);
     }
 
-    @Test
-    public void testStreamsCloseOnStateChange() throws Exception {
-        final KStreamBuilder builder = new KStreamBuilder();
-        final KafkaStreams streams = new KafkaStreams(builder, props);
-
-        StateListenerStub stateListener = new StateListenerStub(true, streams);
-        streams.setStateListener(stateListener);
-        streams.close();
-        Assert.assertEquals(streams.state(), KafkaStreams.State.NOT_RUNNING);
-    }
-
-    @Test
-    public void testStateThreadClose() throws Exception {
-        final int numThreads = 2;
-        final KStreamBuilder builder = new KStreamBuilder();
-        // make sure we have the global state thread running too
-        builder.globalTable("anyTopic");
-        props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, numThreads);
-        final KafkaStreams streams = new KafkaStreams(builder, props);
-
-
-
+    private void testStateThreadCloseHelper(final int numThreads) throws Exception {
         final java.lang.reflect.Field threadsField = streams.getClass().getDeclaredField("threads");
         threadsField.setAccessible(true);
         final StreamThread[] threads = (StreamThread[]) threadsField.get(streams);
@@ -174,6 +153,33 @@ public class KafkaStreamsTest {
         globalThreadField.setAccessible(true);
         GlobalStreamThread globalStreamThread = (GlobalStreamThread) globalThreadField.get(streams);
         assertEquals(globalStreamThread, null);
+    }
+
+    @Test
+    public void testStateThreadClose() throws Exception {
+        final int numThreads = 2;
+        final KStreamBuilder builder = new KStreamBuilder();
+        // make sure we have the global state thread running too
+        builder.globalTable("anyTopic");
+        props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, numThreads);
+        final KafkaStreams streams = new KafkaStreams(builder, props);
+
+        testStateThreadCloseHelper(numThreads);
+    }
+
+    @Test
+    public void testNoDeadlockWhenCloseIsCalledInCallback() throws Exception {
+        final int numThreads = 2;
+        final KStreamBuilder builder = new KStreamBuilder();
+        // make sure we have the global state thread running too
+        builder.globalTable("anyTopic");
+        props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, numThreads);
+        final KafkaStreams streams = new KafkaStreams(builder, props);
+        StateListenerStub stateListener = new StateListenerStub(true, streams);
+        streams.setStateListener(stateListener);
+
+
+        testStateThreadCloseHelper(numThreads);
     }
 
     @Test
@@ -460,7 +466,8 @@ public class KafkaStreamsTest {
             this.oldState = oldState;
             this.newState = newState;
             this.mapStates.put(newState, prevCount + 1);
-            if (this.closeOnChange) {
+            if (this.closeOnChange &&
+                    (newState == KafkaStreams.State.NOT_RUNNING || newState == KafkaStreams.State.ERROR)) {
                 streams.close();
             }
         }
