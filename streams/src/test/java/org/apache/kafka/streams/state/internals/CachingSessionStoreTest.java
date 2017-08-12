@@ -1,20 +1,19 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.metrics.Metrics;
@@ -23,6 +22,8 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.kstream.internals.CacheFlushListener;
+import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.kstream.internals.SessionKeySerde;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
@@ -52,6 +53,7 @@ public class CachingSessionStoreTest {
     private static final int MAX_CACHE_SIZE_BYTES = 600;
     private final StateSerdes<String, Long> serdes =
             new StateSerdes<>("name", Serdes.String(), Serdes.Long());
+    private MockProcessorContext context;
     private RocksDBSegmentedBytesStore underlying;
     private CachingSessionStore<String, Long> cachingStore;
     private ThreadCache cache;
@@ -59,19 +61,26 @@ public class CachingSessionStoreTest {
 
     @Before
     public void setUp() throws Exception {
-        underlying = new RocksDBSegmentedBytesStore("test", 60000, 3, new SessionKeySchema());
+        final SessionKeySchema schema = new SessionKeySchema();
+        schema.init("topic");
+        final int retention = 60000;
+        final int numSegments = 3;
+        underlying = new RocksDBSegmentedBytesStore("test", retention, numSegments, schema);
         final RocksDBSessionStore<Bytes, byte[]> sessionStore = new RocksDBSessionStore<>(underlying, Serdes.Bytes(), Serdes.ByteArray());
         cachingStore = new CachingSessionStore<>(sessionStore,
                                                  Serdes.String(),
-                                                 Serdes.Long());
+                                                 Serdes.Long(),
+                                                 Segments.segmentInterval(retention, numSegments)
+                                                 );
         cache = new ThreadCache("testCache", MAX_CACHE_SIZE_BYTES, new MockStreamsMetrics(new Metrics()));
-        final MockProcessorContext context = new MockProcessorContext(TestUtils.tempDirectory(), null, null, (RecordCollector) null, cache);
+        context = new MockProcessorContext(TestUtils.tempDirectory(), null, null, (RecordCollector) null, cache);
         context.setRecordContext(new ProcessorRecordContext(DEFAULT_TIMESTAMP, 0, 0, "topic"));
         cachingStore.init(context, cachingStore);
     }
 
     @After
     public void close() {
+        context.close();
         cachingStore.close();
     }
 
@@ -81,6 +90,8 @@ public class CachingSessionStoreTest {
         cachingStore.put(new Windowed<>("aa", new SessionWindow(0, 0)), 1L);
         cachingStore.put(new Windowed<>("b", new SessionWindow(0, 0)), 1L);
 
+        assertEquals(3, cache.size());
+
         final KeyValueIterator<Windowed<String>, Long> a = cachingStore.findSessions("a", 0, 0);
         final KeyValueIterator<Windowed<String>, Long> b = cachingStore.findSessions("b", 0, 0);
 
@@ -88,7 +99,35 @@ public class CachingSessionStoreTest {
         assertEquals(KeyValue.pair(new Windowed<>("b", new SessionWindow(0, 0)), 1L), b.next());
         assertFalse(a.hasNext());
         assertFalse(b.hasNext());
+    }
+
+    @Test
+    public void shouldPutFetchAllKeysFromCache() throws Exception {
+        cachingStore.put(new Windowed<>("a", new SessionWindow(0, 0)), 1L);
+        cachingStore.put(new Windowed<>("aa", new SessionWindow(0, 0)), 1L);
+        cachingStore.put(new Windowed<>("b", new SessionWindow(0, 0)), 1L);
+
         assertEquals(3, cache.size());
+
+        final KeyValueIterator<Windowed<String>, Long> all = cachingStore.findSessions("a", "b", 0, 0);
+        assertEquals(KeyValue.pair(new Windowed<>("a", new SessionWindow(0, 0)), 1L), all.next());
+        assertEquals(KeyValue.pair(new Windowed<>("aa", new SessionWindow(0, 0)), 1L), all.next());
+        assertEquals(KeyValue.pair(new Windowed<>("b", new SessionWindow(0, 0)), 1L), all.next());
+        assertFalse(all.hasNext());
+    }
+
+    @Test
+    public void shouldPutFetchRangeFromCache() throws Exception {
+        cachingStore.put(new Windowed<>("a", new SessionWindow(0, 0)), 1L);
+        cachingStore.put(new Windowed<>("aa", new SessionWindow(0, 0)), 1L);
+        cachingStore.put(new Windowed<>("b", new SessionWindow(0, 0)), 1L);
+
+        assertEquals(3, cache.size());
+
+        final KeyValueIterator<Windowed<String>, Long> some = cachingStore.findSessions("aa", "b", 0, 0);
+        assertEquals(KeyValue.pair(new Windowed<>("aa", new SessionWindow(0, 0)), 1L), some.next());
+        assertEquals(KeyValue.pair(new Windowed<>("b", new SessionWindow(0, 0)), 1L),  some.next());
+        assertFalse(some.hasNext());
     }
 
     @Test
@@ -117,7 +156,7 @@ public class CachingSessionStoreTest {
         assertEquals(added.size() - 1, cache.size());
         final KeyValueIterator<Bytes, byte[]> iterator = underlying.fetch(Bytes.wrap(added.get(0).key.key().getBytes()), 0, 0);
         final KeyValue<Bytes, byte[]> next = iterator.next();
-        assertEquals(added.get(0).key, SessionKeySerde.from(next.key.get(), Serdes.String().deserializer()));
+        assertEquals(added.get(0).key, SessionKeySerde.from(next.key.get(), Serdes.String().deserializer(), "dummy"));
         assertArrayEquals(serdes.rawValue(added.get(0).value), next.value);
     }
 
@@ -159,6 +198,52 @@ public class CachingSessionStoreTest {
     }
 
     @Test
+    public void shouldFetchRangeCorrectlyAcrossSegments() throws Exception {
+        final Windowed<String> a1 = new Windowed<>("a", new SessionWindow(0, 0));
+        final Windowed<String> aa1 = new Windowed<>("aa", new SessionWindow(0, 0));
+        final Windowed<String> a2 = new Windowed<>("a", new SessionWindow(Segments.MIN_SEGMENT_INTERVAL, Segments.MIN_SEGMENT_INTERVAL));
+        final Windowed<String> a3 = new Windowed<>("a", new SessionWindow(Segments.MIN_SEGMENT_INTERVAL * 2, Segments.MIN_SEGMENT_INTERVAL * 2));
+        final Windowed<String> aa3 = new Windowed<>("aa", new SessionWindow(Segments.MIN_SEGMENT_INTERVAL * 2, Segments.MIN_SEGMENT_INTERVAL * 2));
+        cachingStore.put(a1, 1L);
+        cachingStore.put(aa1, 1L);
+        cachingStore.put(a2, 2L);
+        cachingStore.put(a3, 3L);
+        cachingStore.put(aa3, 3L);
+        cachingStore.flush();
+
+        final KeyValueIterator<Windowed<String>, Long> rangeResults = cachingStore.findSessions("a", "aa", 0, Segments.MIN_SEGMENT_INTERVAL * 2);
+        assertEquals(a1, rangeResults.next().key);
+        assertEquals(aa1, rangeResults.next().key);
+        assertEquals(a2, rangeResults.next().key);
+        assertEquals(a3, rangeResults.next().key);
+        assertEquals(aa3, rangeResults.next().key);
+        assertFalse(rangeResults.hasNext());
+    }
+
+    @Test
+    public void shouldForwardChangedValuesDuringFlush() throws Exception {
+        final Windowed<String> a = new Windowed<>("a", new SessionWindow(0, 0));
+        final List<KeyValue<Windowed<String>, Change<Long>>> flushed = new ArrayList<>();
+        cachingStore.setFlushListener(new CacheFlushListener<Windowed<String>, Long>() {
+                @Override
+                public void apply(final Windowed<String> key, final Long newValue, final Long oldValue) {
+                    flushed.add(KeyValue.pair(key, new Change<>(newValue, oldValue)));
+                }
+            });
+        
+        cachingStore.put(a, 1L);
+        cachingStore.flush();
+        
+        cachingStore.put(a, 2L);
+        cachingStore.flush();
+
+        cachingStore.remove(a);
+        cachingStore.flush();
+
+        assertEquals(flushed, Arrays.asList(KeyValue.pair(a, new Change<>(1L, null)), KeyValue.pair(a, new Change<>(2L, 1L)), KeyValue.pair(a, new Change<>(null, 2L))));
+    }
+
+    @Test
     public void shouldClearNamespaceCacheOnClose() throws Exception {
         final Windowed<String> a1 = new Windowed<>("a", new SessionWindow(0, 0));
         cachingStore.put(a1, 1L);
@@ -189,6 +274,46 @@ public class CachingSessionStoreTest {
     public void shouldThrowIfTryingToPutIntoClosedCachingStore() throws Exception {
         cachingStore.close();
         cachingStore.put(new Windowed<>("a", new SessionWindow(0, 0)), 1L);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerExceptionOnFindSessionsNullKey() throws Exception {
+        cachingStore.findSessions(null, 1L, 2L);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerExceptionOnFindSessionsNullFromKey() throws Exception {
+        cachingStore.findSessions(null, "anyKeyTo", 1L, 2L);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerExceptionOnFindSessionsNullToKey() throws Exception {
+        cachingStore.findSessions("anyKeyFrom", null, 1L, 2L);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerExceptionOnFetchNullFromKey() throws Exception {
+        cachingStore.fetch(null, "anyToKey");
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerExceptionOnFetchNullToKey() throws Exception {
+        cachingStore.fetch("anyFromKey", null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerExceptionOnFetchNullKey() throws Exception {
+        cachingStore.fetch(null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerExceptionOnRemoveNullKey() throws Exception {
+        cachingStore.remove(null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerExceptionOnPutNullKey() throws Exception {
+        cachingStore.put(null, 1L);
     }
 
     private List<KeyValue<Windowed<String>, Long>> addSessionsUntilOverflow(final String...sessionIds) {

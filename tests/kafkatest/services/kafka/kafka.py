@@ -45,7 +45,9 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
     OPERATIONAL_LOG_INFO_DIR = os.path.join(OPERATIONAL_LOG_DIR, "info")
     OPERATIONAL_LOG_DEBUG_DIR = os.path.join(OPERATIONAL_LOG_DIR, "debug")
     # Kafka log segments etc go here
-    DATA_LOG_DIR = os.path.join(PERSISTENT_ROOT, "kafka-data-logs")
+    DATA_LOG_DIR_PREFIX = os.path.join(PERSISTENT_ROOT, "kafka-data-logs")
+    DATA_LOG_DIR_1 = "%s-1" % (DATA_LOG_DIR_PREFIX)
+    DATA_LOG_DIR_2 = "%s-2" % (DATA_LOG_DIR_PREFIX)
     CONFIG_FILE = os.path.join(PERSISTENT_ROOT, "kafka.properties")
     # Kafka Authorizer
     SIMPLE_AUTHORIZER = "kafka.security.auth.SimpleAclAuthorizer"
@@ -60,8 +62,11 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         "kafka_operational_logs_debug": {
             "path": OPERATIONAL_LOG_DEBUG_DIR,
             "collect_default": False},
-        "kafka_data": {
-            "path": DATA_LOG_DIR,
+        "kafka_data_1": {
+            "path": DATA_LOG_DIR_1,
+            "collect_default": False},
+        "kafka_data_2": {
+            "path": DATA_LOG_DIR_2,
             "collect_default": False}
     }
 
@@ -89,6 +94,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.zk_set_acl = False
         self.server_prop_overides = server_prop_overides
         self.log_level = "DEBUG"
+        self.num_nodes = num_nodes
 
         #
         # In a heavily loaded and not very fast machine, it is
@@ -126,9 +132,14 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
     @property
     def security_config(self):
-        return SecurityConfig(self.context, self.security_protocol, self.interbroker_security_protocol,
+        config = SecurityConfig(self.context, self.security_protocol, self.interbroker_security_protocol,
                               zk_sasl=self.zk.zk_sasl,
                               client_sasl_mechanism=self.client_sasl_mechanism, interbroker_sasl_mechanism=self.interbroker_sasl_mechanism)
+        for protocol in self.port_mappings:
+            port = self.port_mappings[protocol]
+            if port.open:
+                config.enable_security_protocol(port.name)
+        return config
 
     def open_port(self, protocol):
         self.port_mappings[protocol] = self.port_mappings[protocol]._replace(open=True)
@@ -143,6 +154,9 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                 self.minikdc.start()
         else:
             self.minikdc = None
+
+    def alive(self, node):
+        return len(self.pids(node)) > 0
 
     def start(self, add_principals=""):
         self.open_port(self.security_protocol)
@@ -256,7 +270,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         JmxMixin.clean_node(self, node)
         self.security_config.clean_node(node)
         node.account.kill_process("kafka", clean_shutdown=False, allow_fail=True)
-        node.account.ssh("rm -rf /mnt/*", allow_fail=False)
+        node.account.ssh("sudo rm -rf /mnt/*", allow_fail=False)
 
     def create_topic(self, topic_cfg, node=None):
         """Run the admin tool create topic command.
@@ -438,7 +452,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                           len(messages))
         for node in self.nodes:
             # Grab all .log files in directories prefixed with this topic
-            files = node.account.ssh_capture("find %s -regex  '.*/%s-.*/[^/]*.log'" % (KafkaService.DATA_LOG_DIR, topic))
+            files = node.account.ssh_capture("find %s* -regex  '.*/%s-.*/[^/]*.log'" % (KafkaService.DATA_LOG_DIR_PREFIX, topic))
 
             # Check each data file to see if it contains the messages we want
             for log in files:
@@ -465,10 +479,45 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.stop_node(node, clean_shutdown)
         self.start_node(node)
 
+    def isr_idx_list(self, topic, partition=0):
+        """ Get in-sync replica list the given topic and partition.
+        """
+        self.logger.debug("Querying zookeeper to find in-sync replicas for topic %s and partition %d" % (topic, partition))
+        zk_path = "/brokers/topics/%s/partitions/%d/state" % (topic, partition)
+        partition_state = self.zk.query(zk_path)
+
+        if partition_state is None:
+            raise Exception("Error finding partition state for topic %s and partition %d." % (topic, partition))
+
+        partition_state = json.loads(partition_state)
+        self.logger.info(partition_state)
+
+        isr_idx_list = partition_state["isr"]
+        self.logger.info("Isr for topic %s and partition %d is now: %s" % (topic, partition, isr_idx_list))
+        return isr_idx_list
+
+    def replicas(self, topic, partition=0):
+        """ Get the assigned replicas for the given topic and partition.
+        """
+        self.logger.debug("Querying zookeeper to find assigned replicas for topic %s and partition %d" % (topic, partition))
+        zk_path = "/brokers/topics/%s" % (topic)
+        assignemnt = self.zk.query(zk_path)
+
+        if assignemnt is None:
+            raise Exception("Error finding partition state for topic %s and partition %d." % (topic, partition))
+
+        assignemnt = json.loads(assignemnt)
+        self.logger.info(assignemnt)
+
+        replicas = assignemnt["partitions"][str(partition)]
+
+        self.logger.info("Assigned replicas for topic %s and partition %d is now: %s" % (topic, partition, replicas))
+        return [self.get_node(replica) for replica in replicas]
+
     def leader(self, topic, partition=0):
         """ Get the leader replica for the given topic and partition.
         """
-        self.logger.debug("Querying zookeeper to find leader replica for topic: \n%s" % (topic))
+        self.logger.debug("Querying zookeeper to find leader replica for topic %s and partition %d" % (topic, partition))
         zk_path = "/brokers/topics/%s/partitions/%d/state" % (topic, partition)
         partition_state = self.zk.query(zk_path)
 
@@ -481,6 +530,16 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         leader_idx = int(partition_state["leader"])
         self.logger.info("Leader for topic %s and partition %d is now: %d" % (topic, partition, leader_idx))
         return self.get_node(leader_idx)
+
+    def cluster_id(self):
+        """ Get the current cluster id
+        """
+        self.logger.debug("Querying ZooKeeper to retrieve cluster id")
+        cluster = json.loads(self.zk.query("/cluster/id"))
+        if cluster is None:
+            raise Exception("Error querying ZK for cluster id.")
+
+        return cluster['id']
 
     def list_consumer_groups(self, node=None, new_consumer=True, command_config=None):
         """ Get list of consumer groups.
@@ -535,7 +594,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.logger.debug(output)
         return output
 
-    def bootstrap_servers(self, protocol='PLAINTEXT', validate=True):
+    def bootstrap_servers(self, protocol='PLAINTEXT', validate=True, offline_nodes=[]):
         """Return comma-delimited list of brokers in this cluster formatted as HOSTNAME1:PORT1,HOSTNAME:PORT2,...
 
         This is the format expected by many config files.
@@ -546,7 +605,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         if validate and not port_mapping.open:
             raise ValueError("We are retrieving bootstrap servers for the port: %s which is not currently open. - " % str(port_mapping))
 
-        return ','.join([node.account.hostname + ":" + str(port_mapping.number) for node in self.nodes])
+        return ','.join([node.account.hostname + ":" + str(port_mapping.number) for node in self.nodes if node not in offline_nodes])
 
     def controller(self):
         """ Get the controller node

@@ -1,14 +1,18 @@
-/**
- * Licensed to the Apache Software Foundation (ASF) under one or more contributor license agreements. See the NOTICE
- * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
- * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
- * License. You may obtain a copy of the License at
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
- * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
- * specific language governing permissions and limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 package org.apache.kafka.clients.consumer.internals;
 
@@ -17,6 +21,7 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.internals.PartitionStates;
+import org.apache.kafka.common.requests.IsolationLevel;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -314,13 +319,20 @@ public class SubscriptionState {
         return assignedState(tp).position;
     }
 
-    public Long partitionLag(TopicPartition tp) {
+    public Long partitionLag(TopicPartition tp, IsolationLevel isolationLevel) {
         TopicPartitionState topicPartitionState = assignedState(tp);
-        return topicPartitionState.highWatermark == null ? null : topicPartitionState.highWatermark - topicPartitionState.position;
+        if (isolationLevel == IsolationLevel.READ_COMMITTED)
+            return topicPartitionState.lastStableOffset == null ? null : topicPartitionState.lastStableOffset - topicPartitionState.position;
+        else
+            return topicPartitionState.highWatermark == null ? null : topicPartitionState.highWatermark - topicPartitionState.position;
     }
 
     public void updateHighWatermark(TopicPartition tp, long highWatermark) {
         assignedState(tp).highWatermark = highWatermark;
+    }
+
+    public void updateLastStableOffset(TopicPartition tp, long lastStableOffset) {
+        assignedState(tp).lastStableOffset = lastStableOffset;
     }
 
     public Map<TopicPartition, OffsetAndMetadata> allConsumed() {
@@ -423,6 +435,7 @@ public class SubscriptionState {
     private static class TopicPartitionState {
         private Long position; // last consumed position
         private Long highWatermark; // the high watermark from last fetch
+        private Long lastStableOffset;
         private OffsetAndMetadata committed;  // last committed position
         private boolean paused;  // whether this partition has been paused by the user
         private OffsetResetStrategy resetStrategy;  // the strategy to use if the offset needs resetting
@@ -431,6 +444,7 @@ public class SubscriptionState {
             this.paused = false;
             this.position = null;
             this.highWatermark = null;
+            this.lastStableOffset = null;
             this.committed = null;
             this.resetStrategy = null;
         }

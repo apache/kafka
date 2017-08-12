@@ -1,15 +1,22 @@
-/**
- * Licensed to the Apache Software Foundation (ASF) under one or more contributor license
- * agreements.  See the NOTICE file distributed with this work for additional information regarding
- * copyright ownership. The ASF licenses this file to You under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance with the License.  You may obtain a
- * copy of the License at <p> http://www.apache.org/licenses/LICENSE-2.0 <p> Unless required by
- * applicable law or agreed to in writing, software distributed under the License is distributed on
- * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See
- * the License for the specific language governing permissions and limitations under the License.
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 package org.apache.kafka.streams.integration;
 
+import kafka.utils.MockTime;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
@@ -19,22 +26,24 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.KGroupedStream;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.MockKeyValueMapper;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.ClassRule;
 import org.junit.Test;
+import org.junit.experimental.categories.Category;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -44,8 +53,6 @@ import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 
-import kafka.utils.MockTime;
-
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
 
@@ -53,15 +60,18 @@ import static org.hamcrest.core.Is.is;
  * Similar to KStreamAggregationIntegrationTest but with dedupping enabled
  * by virtue of having a large commit interval
  */
+@Category({IntegrationTest.class})
 public class KStreamAggregationDedupIntegrationTest {
     private static final int NUM_BROKERS = 1;
+    private static final long COMMIT_INTERVAL_MS = 300L;
+
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER =
         new EmbeddedKafkaCluster(NUM_BROKERS);
 
     private final MockTime mockTime = CLUSTER.time;
     private static volatile int testNo = 0;
-    private KStreamBuilder builder;
+    private StreamsBuilder builder;
     private Properties streamsConfiguration;
     private KafkaStreams kafkaStreams;
     private String streamOneInput;
@@ -74,7 +84,7 @@ public class KStreamAggregationDedupIntegrationTest {
     @Before
     public void before() throws InterruptedException {
         testNo++;
-        builder = new KStreamBuilder();
+        builder = new StreamsBuilder();
         createTopics();
         streamsConfiguration = new Properties();
         String applicationId = "kgrouped-stream-test-" +
@@ -84,8 +94,9 @@ public class KStreamAggregationDedupIntegrationTest {
             .put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
-        streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 2000);
+        streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, COMMIT_INTERVAL_MS);
         streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 10 * 1024 * 1024L);
+        streamsConfiguration.put(IntegrationTestUtils.INTERNAL_LEAVE_GROUP_ON_CLOSE, true);
 
         KeyValueMapper<Integer, String, String> mapper = MockKeyValueMapper.<Integer, String>SelectValueMapper();
         stream = builder.stream(Serdes.Integer(), Serdes.String(), streamOneInput);
@@ -125,8 +136,8 @@ public class KStreamAggregationDedupIntegrationTest {
 
         List<KeyValue<String, String>> results = receiveMessages(
             new StringDeserializer(),
-            new StringDeserializer()
-            , 5);
+            new StringDeserializer(),
+            5);
 
         Collections.sort(results, new Comparator<KeyValue<String, String>>() {
             @Override
@@ -175,8 +186,8 @@ public class KStreamAggregationDedupIntegrationTest {
 
         List<KeyValue<String, String>> windowedOutput = receiveMessages(
             new StringDeserializer(),
-            new StringDeserializer()
-            , 10);
+            new StringDeserializer(),
+            10);
 
         Comparator<KeyValue<String, String>>
             comparator =
@@ -227,8 +238,8 @@ public class KStreamAggregationDedupIntegrationTest {
 
         final List<KeyValue<String, Long>> results = receiveMessages(
             new StringDeserializer(),
-            new LongDeserializer()
-            , 5);
+            new LongDeserializer(),
+            5);
         Collections.sort(results, new Comparator<KeyValue<String, Long>>() {
             @Override
             public int compare(final KeyValue<String, Long> o1, final KeyValue<String, Long> o2) {
@@ -275,7 +286,7 @@ public class KStreamAggregationDedupIntegrationTest {
     }
 
     private void startStreams() {
-        kafkaStreams = new KafkaStreams(builder, streamsConfiguration);
+        kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration);
         kafkaStreams.start();
     }
 
@@ -298,7 +309,8 @@ public class KStreamAggregationDedupIntegrationTest {
             valueDeserializer.getClass().getName());
         return IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(consumerProperties,
             outputTopic,
-            numMessages, 60 * 1000);
+            numMessages,
+            60 * 1000);
 
     }
 

@@ -17,11 +17,29 @@
 
 package kafka.message
 
-import org.apache.kafka.common.record.LogEntry
+import org.apache.kafka.common.record.{AbstractLegacyRecordBatch, Record, RecordBatch}
 
 object MessageAndOffset {
-  def fromLogEntry(logEntry : LogEntry): MessageAndOffset = {
-    MessageAndOffset(Message.fromRecord(logEntry.record), logEntry.offset)
+  def fromRecordBatch(batch: RecordBatch): MessageAndOffset = {
+    batch match {
+      case legacyBatch: AbstractLegacyRecordBatch =>
+        MessageAndOffset(Message.fromRecord(legacyBatch.outerRecord), legacyBatch.lastOffset)
+
+      case _ =>
+        throw new IllegalArgumentException(s"Illegal batch type ${batch.getClass}. The older message format classes " +
+          s"only support conversion from ${classOf[AbstractLegacyRecordBatch]}, which is used for magic v0 and v1")
+    }
+  }
+
+  def fromRecord(record: Record): MessageAndOffset = {
+    record match {
+      case legacyBatch: AbstractLegacyRecordBatch =>
+        MessageAndOffset(Message.fromRecord(legacyBatch.outerRecord), legacyBatch.lastOffset)
+
+      case _ =>
+        throw new IllegalArgumentException(s"Illegal record type ${record.getClass}. The older message format classes " +
+          s"only support conversion from ${classOf[AbstractLegacyRecordBatch]}, which is used for magic v0 and v1")
+    }
   }
 }
 
@@ -32,13 +50,5 @@ case class MessageAndOffset(message: Message, offset: Long) {
    */
   def nextOffset: Long = offset + 1
 
-  /**
-   * We need to decompress the message, if required, to get the offset of the first uncompressed message.
-   */
-  def firstOffset: Long = toLogEntry.firstOffset
-
-  def toLogEntry: LogEntry = {
-    LogEntry.create(offset, message.asRecord)
-  }
 }
 

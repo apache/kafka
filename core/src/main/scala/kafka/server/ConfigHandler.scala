@@ -130,6 +130,12 @@ class QuotaConfigHandler(private val quotaManagers: QuotaManagers) {
       else
         None
     quotaManagers.fetch.updateQuota(sanitizedUser, clientId, consumerQuota)
+    val requestQuota =
+      if (config.containsKey(DynamicConfig.Client.RequestPercentageOverrideProp))
+        Some(new Quota(config.getProperty(DynamicConfig.Client.RequestPercentageOverrideProp).toDouble, true))
+      else
+        None
+    quotaManagers.request.updateQuota(sanitizedUser, clientId, requestQuota)
   }
 }
 
@@ -193,12 +199,16 @@ object ThrottledReplicaListValidator extends Validator {
     def check(proposed: Seq[Any]): Unit = {
       if (!(proposed.forall(_.toString.trim.matches("([0-9]+:[0-9]+)?"))
         || proposed.headOption.exists(_.toString.trim.equals("*"))))
-        throw new ConfigException(name, value, s"$name  must match for format [partitionId],[brokerId]:[partitionId],[brokerId]:[partitionId],[brokerId] etc")
+        throw new ConfigException(name, value,
+          s"$name must be the literal '*' or a list of replicas in the following format: [partitionId],[brokerId]:[partitionId],[brokerId]:...")
     }
     value match {
       case scalaSeq: Seq[_] => check(scalaSeq)
       case javaList: java.util.List[_] => check(javaList.asScala)
-      case _ => throw new ConfigException(name, value, s"$name  must be a List but was ${value.getClass.getName}")
+      case _ => throw new ConfigException(name, value, s"$name must be a List but was ${value.getClass.getName}")
     }
   }
+
+  override def toString: String = "[partitionId],[brokerId]:[partitionId],[brokerId]:..."
+
 }

@@ -1,22 +1,26 @@
-/**
- * Licensed to the Apache Software Foundation (ASF) under one or more contributor license agreements. See the NOTICE
- * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
- * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
- * License. You may obtain a copy of the License at
- * 
- * http://www.apache.org/licenses/LICENSE-2.0
- * 
- * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
- * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
- * specific language governing permissions and limitations under the License.
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 package org.apache.kafka.clients;
 
-import java.io.Closeable;
-import java.util.List;
-
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.requests.AbstractRequest;
+
+import java.io.Closeable;
+import java.util.List;
 
 /**
  * The interface for {@link NetworkClient}
@@ -82,7 +86,17 @@ public interface KafkaClient extends Closeable {
     List<ClientResponse> poll(long timeout, long now);
 
     /**
+     * Diconnects the connection to a particular node, if there is one.
+     * Any pending ClientRequests for this connection will receive disconnections.
+     *
+     * @param nodeId The id of the node
+     */
+    void disconnect(String nodeId);
+
+    /**
      * Closes the connection to a particular node (if there is one).
+     * All requests on the connection will be cleared.  ClientRequest callbacks will not be invoked
+     * for the cleared requests, nor will they be returned from poll().
      *
      * @param nodeId The id of the node
      */
@@ -104,11 +118,26 @@ public interface KafkaClient extends Closeable {
     int inFlightRequestCount();
 
     /**
+     * Return true if there is at least one in-flight request and false otherwise.
+     */
+    boolean hasInFlightRequests();
+
+    /**
      * Get the total in-flight requests for a particular node
      * 
      * @param nodeId The id of the node
      */
     int inFlightRequestCount(String nodeId);
+
+    /**
+     * Return true if there is at least one in-flight request for a particular node and false otherwise.
+     */
+    boolean hasInFlightRequests(String nodeId);
+
+    /**
+     * Return true if there is at least one node with connection in ready state and false otherwise.
+     */
+    boolean hasReadyNodes();
 
     /**
      * Wake up the client if it is currently blocked waiting for I/O
@@ -135,7 +164,7 @@ public interface KafkaClient extends Closeable {
      * @param expectResponse true iff we expect a response
      * @param callback the callback to invoke when we get a response
      */
-    ClientRequest newClientRequest(String nodeId, AbstractRequest.Builder<?> requestBuilder,
-                                          long createdTimeMs, boolean expectResponse,
-                                          RequestCompletionHandler callback);
+    ClientRequest newClientRequest(String nodeId, AbstractRequest.Builder<?> requestBuilder, long createdTimeMs,
+                                   boolean expectResponse, RequestCompletionHandler callback);
+
 }

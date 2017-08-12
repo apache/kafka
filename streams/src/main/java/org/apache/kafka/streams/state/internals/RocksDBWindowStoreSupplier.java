@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Serde;
@@ -34,10 +33,11 @@ import java.util.Map;
  */
 
 public class RocksDBWindowStoreSupplier<K, V> extends AbstractStoreSupplier<K, V, WindowStore> implements WindowStoreSupplier<WindowStore> {
-
+    public static final int MIN_SEGMENTS = 2;
     private final long retentionPeriod;
     private final boolean retainDuplicates;
     private final int numSegments;
+    private final long segmentInterval;
     private final long windowSize;
     private final boolean enableCaching;
 
@@ -47,11 +47,15 @@ public class RocksDBWindowStoreSupplier<K, V> extends AbstractStoreSupplier<K, V
 
     public RocksDBWindowStoreSupplier(String name, long retentionPeriod, int numSegments, boolean retainDuplicates, Serde<K> keySerde, Serde<V> valueSerde, Time time, long windowSize, boolean logged, Map<String, String> logConfig, boolean enableCaching) {
         super(name, keySerde, valueSerde, time, logged, logConfig);
+        if (numSegments < MIN_SEGMENTS) {
+            throw new IllegalArgumentException("numSegments must be >= " + MIN_SEGMENTS);
+        }
         this.retentionPeriod = retentionPeriod;
         this.retainDuplicates = retainDuplicates;
         this.numSegments = numSegments;
         this.windowSize = windowSize;
         this.enableCaching = enableCaching;
+        this.segmentInterval = Segments.segmentInterval(retentionPeriod, numSegments);
     }
 
     public String name() {
@@ -85,9 +89,9 @@ public class RocksDBWindowStoreSupplier<K, V> extends AbstractStoreSupplier<K, V
     private WindowStore<K, V> maybeWrapCaching(final SegmentedBytesStore inner) {
         final MeteredSegmentedBytesStore metered = new MeteredSegmentedBytesStore(inner, "rocksdb-window", time);
         if (!enableCaching) {
-            return new RocksDBWindowStore<>(metered, keySerde, valueSerde, retainDuplicates);
+            return new RocksDBWindowStore<>(metered, keySerde, valueSerde, retainDuplicates, windowSize);
         }
-        final RocksDBWindowStore<Bytes, byte[]> windowed = RocksDBWindowStore.bytesStore(metered, retainDuplicates);
-        return new CachingWindowStore<>(windowed, keySerde, valueSerde, windowSize);
+        final RocksDBWindowStore<Bytes, byte[]> windowed = RocksDBWindowStore.bytesStore(metered, retainDuplicates, windowSize);
+        return new CachingWindowStore<>(windowed, keySerde, valueSerde, windowSize, segmentInterval);
     }
 }

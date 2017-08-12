@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,21 +14,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.ValueTransformer;
 import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockProcessorSupplier;
-import org.junit.After;
+import org.junit.Rule;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
@@ -39,20 +38,12 @@ public class KStreamTransformValuesTest {
     private String topicName = "topic";
 
     final private Serde<Integer> intSerde = Serdes.Integer();
-
-    private KStreamTestDriver driver;
-
-    @After
-    public void cleanup() {
-        if (driver != null) {
-            driver.close();
-        }
-        driver = null;
-    }
+    @Rule
+    public final KStreamTestDriver driver = new KStreamTestDriver();
 
     @Test
     public void testTransform() {
-        KStreamBuilder builder = new KStreamBuilder();
+        StreamsBuilder builder = new StreamsBuilder();
 
         ValueTransformerSupplier<Number, Integer> valueTransformerSupplier =
             new ValueTransformerSupplier<Number, Integer>() {
@@ -90,7 +81,7 @@ public class KStreamTransformValuesTest {
         stream = builder.stream(intSerde, intSerde, topicName);
         stream.transformValues(valueTransformerSupplier).process(processor);
 
-        driver = new KStreamTestDriver(builder);
+        driver.setUp(builder);
         for (int expectedKey : expectedKeys) {
             driver.process(topicName, expectedKey, expectedKey * 10);
         }

@@ -33,23 +33,23 @@ import scala.collection.JavaConverters._
 
 /**
  * This is a torture test that runs against an existing broker. Here is how it works:
- * 
+ *
  * It produces a series of specially formatted messages to one or more partitions. Each message it produces
  * it logs out to a text file. The messages have a limited set of keys, so there is duplication in the key space.
- * 
+ *
  * The broker will clean its log as the test runs.
- * 
+ *
  * When the specified number of messages have been produced we create a consumer and consume all the messages in the topic
  * and write that out to another text file.
- * 
- * Using a stable unix sort we sort both the producer log of what was sent and the consumer log of what was retrieved by the message key. 
+ *
+ * Using a stable unix sort we sort both the producer log of what was sent and the consumer log of what was retrieved by the message key.
  * Then we compare the final message in both logs for each key. If this final message is not the same for all keys we
  * print an error and exit with exit code 1, otherwise we print the size reduction and exit with exit code 0.
  */
 object TestLogCleaning {
 
   def main(args: Array[String]) {
-    val parser = new OptionParser
+    val parser = new OptionParser(false)
     val numMessagesOpt = parser.accepts("messages", "The number of messages to send or consume.")
                                .withRequiredArg
                                .describedAs("count")
@@ -129,31 +129,31 @@ object TestLogCleaning {
     val consumedLines = lineCount(consumedDataFile)
     val reduction = 1.0 - consumedLines.toDouble/producedLines.toDouble
     println("%d rows of data produced, %d rows of data consumed (%.1f%% reduction).".format(producedLines, consumedLines, 100 * reduction))
-    
+
     println("De-duplicating and validating output files...")
     validateOutput(producedDataFile, consumedDataFile)
     producedDataFile.delete()
     consumedDataFile.delete()
   }
-  
+
   def dumpLog(dir: File) {
     require(dir.exists, "Non-existent directory: " + dir.getAbsolutePath)
     for (file <- dir.list.sorted; if file.endsWith(Log.LogFileSuffix)) {
       val fileRecords = FileRecords.open(new File(dir, file))
-      for (entry <- fileRecords.shallowEntries.asScala) {
-        val key = TestUtils.readString(entry.record.key)
-        val content = 
-          if(entry.record.hasNullValue)
+      for (entry <- fileRecords.records.asScala) {
+        val key = TestUtils.readString(entry.key)
+        val content =
+          if (!entry.hasValue)
             null
           else
-            TestUtils.readString(entry.record.value)
+            TestUtils.readString(entry.value)
         println("offset = %s, key = %s, content = %s".format(entry.offset, key, content))
       }
     }
   }
-  
+
   def lineCount(file: File): Int = io.Source.fromFile(file).getLines.size
-  
+
   def validateOutput(producedDataFile: File, consumedDataFile: File) {
     val producedReader = externalSort(producedDataFile)
     val consumedReader = externalSort(consumedDataFile)
@@ -186,7 +186,7 @@ object TestLogCleaning {
     producedDedupedFile.delete()
     consumedDedupedFile.delete()
   }
-  
+
   def valuesIterator(reader: BufferedReader) = {
     new IteratorTemplate[TestRecord] {
       def makeNext(): TestRecord = {
@@ -200,7 +200,7 @@ object TestLogCleaning {
       }
     }
   }
-  
+
   def readNext(reader: BufferedReader): TestRecord = {
     var line = reader.readLine()
     if(line == null)
@@ -218,14 +218,14 @@ object TestLogCleaning {
     }
     null
   }
-  
+
   def peekLine(reader: BufferedReader) = {
     reader.mark(4096)
     val line = reader.readLine
     reader.reset()
     line
   }
-  
+
   def externalSort(file: File): BufferedReader = {
     val builder = new ProcessBuilder("sort", "--key=1,2", "--stable", "--buffer-size=20%", "--temporary-directory=" + System.getProperty("java.io.tmpdir"), file.getAbsolutePath)
     val process = builder.start()
@@ -265,7 +265,7 @@ object TestLogCleaning {
       val topic = topics((i % topics.length).toInt)
       val key = rand.nextInt(keyCount)
       val delete = i % 100 < percentDeletes
-      val msg = 
+      val msg =
         if(delete)
           new ProducerRecord[Array[Byte],Array[Byte]](topic, key.toString.getBytes(), null)
         else
@@ -278,7 +278,8 @@ object TestLogCleaning {
     producer.close()
     producedFile
   }
-  
+
+  @deprecated("This method has been deprecated and will be removed in a future release.", "0.11.0.0")
   def makeConsumer(zkUrl: String, topics: Array[String]): ZookeeperConsumerConnector = {
     val consumerProps = new Properties
     consumerProps.setProperty("group.id", "log-cleaner-test-" + new Random().nextInt(Int.MaxValue))
@@ -287,7 +288,7 @@ object TestLogCleaning {
     consumerProps.setProperty("auto.offset.reset", "smallest")
     new ZookeeperConsumerConnector(new ConsumerConfig(consumerProps))
   }
-  
+
   def consumeMessages(zkUrl: String, topics: Array[String]): File = {
     val connector = makeConsumer(zkUrl, topics)
     val streams = connector.createMessageStreams(topics.map(topic => (topic, 1)).toMap, new StringDecoder, new StringDecoder)
@@ -311,7 +312,7 @@ object TestLogCleaning {
     connector.shutdown()
     consumedFile
   }
-  
+
 }
 
 case class TestRecord(topic: String, key: Int, value: Long, delete: Boolean) {

@@ -69,8 +69,6 @@ class TestSecurityRollingUpgrade(ProduceConsumeValidateTest):
 
         # Roll cluster to include inter broker security protocol.
         self.kafka.interbroker_security_protocol = broker_protocol
-        self.kafka.open_port(client_protocol)
-        self.kafka.open_port(broker_protocol)
         self.bounce()
 
         # Roll cluster to disable PLAINTEXT port
@@ -131,14 +129,16 @@ class TestSecurityRollingUpgrade(ProduceConsumeValidateTest):
     def test_rolling_upgrade_phase_two(self, client_protocol, broker_protocol):
         """
         Start with a PLAINTEXT cluster with a second Secured port open (i.e. result of phase one).
-        Start an Producer and Consumer via the SECURED port
-        Incrementally upgrade to add inter-broker be the secure protocol
+        A third secure port is also open if inter-broker and client protocols are different.
+        Start a Producer and Consumer via the SECURED client port
+        Incrementally upgrade to add inter-broker be the secure broker protocol
         Incrementally upgrade again to add ACLs as well as disabling the PLAINTEXT port
         Ensure the producer and consumer ran throughout
         """
         #Given we have a broker that has both secure and PLAINTEXT ports open
         self.kafka.security_protocol = client_protocol
         self.kafka.interbroker_security_protocol = "PLAINTEXT"
+        self.kafka.open_port(broker_protocol)
         self.kafka.start()
 
         #Create Secured Producer and Consumer

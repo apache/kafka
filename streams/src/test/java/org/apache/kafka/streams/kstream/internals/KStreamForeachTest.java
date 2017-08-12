@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,22 +14,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
-import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.test.KStreamTestDriver;
-import org.junit.After;
+import org.junit.Rule;
 import org.junit.Test;
-import java.util.List;
-import java.util.Locale;
+
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
+import java.util.Locale;
 
 import static org.junit.Assert.assertEquals;
 
@@ -39,16 +39,8 @@ public class KStreamForeachTest {
 
     final private Serde<Integer> intSerde = Serdes.Integer();
     final private Serde<String> stringSerde = Serdes.String();
-
-    private KStreamTestDriver driver = null;
-
-    @After
-    public void cleanup() {
-        if (driver != null) {
-            driver.close();
-        }
-        driver = null;
-    }
+    @Rule
+    public final KStreamTestDriver driver = new KStreamTestDriver();
 
     @Test
     public void testForeach() {
@@ -77,12 +69,12 @@ public class KStreamForeachTest {
             };
 
         // When
-        KStreamBuilder builder = new KStreamBuilder();
+        StreamsBuilder builder = new StreamsBuilder();
         KStream<Integer, String> stream = builder.stream(intSerde, stringSerde, topicName);
         stream.foreach(action);
 
         // Then
-        driver = new KStreamTestDriver(builder);
+        driver.setUp(builder);
         for (KeyValue<Integer, String> record: inputRecords) {
             driver.process(topicName, record.key, record.value);
         }
@@ -96,13 +88,13 @@ public class KStreamForeachTest {
     }
 
     @Test
-    public void testTypeVariance() throws Exception {
+    public void testTypeVariance() {
         ForeachAction<Number, Object> consume = new ForeachAction<Number, Object>() {
             @Override
             public void apply(Number key, Object value) {}
         };
 
-        new KStreamBuilder()
+        new StreamsBuilder()
             .<Integer, String>stream("emptyTopic")
             .foreach(consume);
     }

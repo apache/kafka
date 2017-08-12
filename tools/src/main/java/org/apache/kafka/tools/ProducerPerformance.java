@@ -1,29 +1,33 @@
-/**
- * Licensed to the Apache Software Foundation (ASF) under one or more contributor license agreements. See the NOTICE
- * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
- * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
- * License. You may obtain a copy of the License at
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
- * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
- * specific language governing permissions and limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 package org.apache.kafka.tools;
 
 import static net.sourceforge.argparse4j.impl.Arguments.store;
+import static net.sourceforge.argparse4j.impl.Arguments.storeTrue;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Properties;
 import java.util.Random;
+import java.util.Arrays;
 
 import net.sourceforge.argparse4j.inf.MutuallyExclusiveGroup;
 import org.apache.kafka.clients.producer.Callback;
@@ -55,6 +59,10 @@ public class ProducerPerformance {
             List<String> producerProps = res.getList("producerConfig");
             String producerConfig = res.getString("producerConfigFile");
             String payloadFilePath = res.getString("payloadFile");
+            String transactionalId = res.getString("transactionalId");
+            boolean shouldPrintMetrics = res.getBoolean("printMetrics");
+            long transactionDurationMs = res.getLong("transactionDurationMs");
+            boolean transactionsEnabled =  0 < transactionDurationMs;
 
             // since default value gets printed with the help text, we are escaping \n there and replacing it with correct value here.
             String payloadDelimiter = res.getString("payloadDelimiter").equals("\\n") ? "\n" : res.getString("payloadDelimiter");
@@ -94,7 +102,13 @@ public class ProducerPerformance {
 
             props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
             props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
-            KafkaProducer<byte[], byte[]> producer = new KafkaProducer<byte[], byte[]>(props);
+            if (transactionsEnabled)
+                props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionalId);
+
+            KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(props);
+
+            if (transactionsEnabled)
+                producer.initTransactions();
 
             /* setup perf test */
             byte[] payload = null;
@@ -109,7 +123,16 @@ public class ProducerPerformance {
             long startMs = System.currentTimeMillis();
 
             ThroughputThrottler throttler = new ThroughputThrottler(throughput, startMs);
+
+            int currentTransactionSize = 0;
+            long transactionStartTime = 0;
             for (int i = 0; i < numRecords; i++) {
+                if (transactionsEnabled && currentTransactionSize == 0) {
+                    producer.beginTransaction();
+                    transactionStartTime = System.currentTimeMillis();
+                }
+
+
                 if (payloadFilePath != null) {
                     payload = payloadByteList.get(random.nextInt(payloadByteList.size()));
                 }
@@ -119,14 +142,38 @@ public class ProducerPerformance {
                 Callback cb = stats.nextCompletion(sendStartMs, payload.length, stats);
                 producer.send(record, cb);
 
+                currentTransactionSize++;
+                if (transactionsEnabled && transactionDurationMs <= (sendStartMs - transactionStartTime)) {
+                    producer.commitTransaction();
+                    currentTransactionSize = 0;
+                }
+
                 if (throttler.shouldThrottle(i, sendStartMs)) {
                     throttler.throttle();
                 }
             }
 
-            /* print final results */
-            producer.close();
-            stats.printTotal();
+            if (transactionsEnabled && currentTransactionSize != 0)
+                producer.commitTransaction();
+
+            if (!shouldPrintMetrics) {
+                producer.close();
+
+                /* print final results */
+                stats.printTotal();
+            } else {
+                // Make sure all messages are sent before printing out the stats and the metrics
+                // We need to do this in a different branch for now since tests/kafkatest/sanity_checks/test_performance_services.py
+                // expects this class to work with older versions of the client jar that don't support flush().
+                producer.flush();
+
+                /* print final results */
+                stats.printTotal();
+
+                /* print out metrics */
+                ToolsUtils.printMetrics(producer.metrics());
+                producer.close();
+            }
         } catch (ArgumentParserException e) {
             if (args.length == 0) {
                 parser.printHelp();
@@ -219,6 +266,32 @@ public class ProducerPerformance {
                 .dest("producerConfigFile")
                 .help("producer config properties file.");
 
+        parser.addArgument("--print-metrics")
+                .action(storeTrue())
+                .type(Boolean.class)
+                .metavar("PRINT-METRICS")
+                .dest("printMetrics")
+                .help("print out metrics at the end of the test.");
+
+        parser.addArgument("--transactional-id")
+               .action(store())
+               .required(false)
+               .type(String.class)
+               .metavar("TRANSACTIONAL-ID")
+               .dest("transactionalId")
+               .setDefault("performance-producer-default-transactional-id")
+               .help("The transactionalId to use if transaction-duration-ms is > 0. Useful when testing the performance of concurrent transactions.");
+
+        parser.addArgument("--transaction-duration-ms")
+               .action(store())
+               .required(false)
+               .type(Long.class)
+               .metavar("TRANSACTION-DURATION")
+               .dest("transactionDurationMs")
+               .setDefault(0L)
+               .help("The max age of each transaction. The commitTransaction will be called after this this time has elapsed. Transactions are only enabled if this value is positive.");
+
+
         return parser;
     }
 
@@ -287,7 +360,7 @@ public class ProducerPerformance {
             long ellapsed = System.currentTimeMillis() - windowStart;
             double recsPerSec = 1000.0 * windowCount / (double) ellapsed;
             double mbPerSec = 1000.0 * this.windowBytes / (double) ellapsed / (1024.0 * 1024.0);
-            System.out.printf("%d records sent, %.1f records/sec (%.2f MB/sec), %.1f ms avg latency, %.1f max latency.\n",
+            System.out.printf("%d records sent, %.1f records/sec (%.2f MB/sec), %.1f ms avg latency, %.1f max latency.%n",
                               windowCount,
                               recsPerSec,
                               mbPerSec,
@@ -308,7 +381,7 @@ public class ProducerPerformance {
             double recsPerSec = 1000.0 * count / (double) elapsed;
             double mbPerSec = 1000.0 * this.bytes / (double) elapsed / (1024.0 * 1024.0);
             int[] percs = percentiles(this.latencies, index, 0.5, 0.95, 0.99, 0.999);
-            System.out.printf("%d records sent, %f records/sec (%.2f MB/sec), %.2f ms avg latency, %.2f ms max latency, %d ms 50th, %d ms 95th, %d ms 99th, %d ms 99.9th.\n",
+            System.out.printf("%d records sent, %f records/sec (%.2f MB/sec), %.2f ms avg latency, %.2f ms max latency, %d ms 50th, %d ms 95th, %d ms 99th, %d ms 99.9th.%n",
                               count,
                               recsPerSec,
                               mbPerSec,

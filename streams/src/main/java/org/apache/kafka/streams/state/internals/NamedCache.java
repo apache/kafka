@@ -1,13 +1,13 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -29,7 +29,6 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Iterator;
-import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -47,9 +46,6 @@ class NamedCache {
     private LRUNode head;
     private long currentSizeBytes;
     private NamedCacheMetrics namedCacheMetrics;
-    // JMX stats
-    private Sensor hitRatio = null;
-
 
     // internal stats
     private long numReadHits = 0;
@@ -147,9 +143,6 @@ class NamedCache {
             delete(key);
         }
     }
-
-
-
 
     synchronized void put(final Bytes key, final LRUCacheEntry value) {
         if (!value.isDirty() && dirtyKeys.contains(key)) {
@@ -320,7 +313,7 @@ class NamedCache {
     /**
      * A simple wrapper class to implement a doubly-linked list around MemoryLRUCacheBytesEntry
      */
-    class LRUNode {
+    static class LRUNode {
         private final Bytes key;
         private LRUCacheEntry entry;
         private LRUNode previous;
@@ -364,29 +357,38 @@ class NamedCache {
         final StreamsMetricsImpl metrics;
         final String groupName;
         final Map<String, String> metricTags;
+        final Map<String, String> allMetricTags;
         final Sensor hitRatioSensor;
-
 
         public NamedCacheMetrics(StreamsMetrics metrics) {
             final String scope = "record-cache";
-            final String entityName = name;
             final String opName = "hitRatio";
-            final String tagKey = "record-cache-id";
-            final String tagValue = name;
+            final String tagKey = scope + "-id";
+            final String tagValue = ThreadCache.underlyingStoreNamefromCacheName(name);
             this.groupName = "stream-" + scope + "-metrics";
             this.metrics = (StreamsMetricsImpl) metrics;
-            this.metricTags = new LinkedHashMap<>();
-            this.metricTags.put(tagKey, tagValue);
+            this.allMetricTags = ((StreamsMetricsImpl) metrics).tagMap(tagKey, "all",
+                    "task-id", ThreadCache.taskIDfromCacheName(name));
+            this.metricTags = ((StreamsMetricsImpl) metrics).tagMap(tagKey, tagValue,
+                    "task-id", ThreadCache.taskIDfromCacheName(name));
 
+            // add parent
+            Sensor parent = this.metrics.registry().sensor(opName, Sensor.RecordingLevel.DEBUG);
+            ((StreamsMetricsImpl) metrics).maybeAddMetric(parent, this.metrics.registry().metricName(opName + "-avg", groupName,
+                    "The average cache hit ratio.", allMetricTags), new Avg());
+            ((StreamsMetricsImpl) metrics).maybeAddMetric(parent, this.metrics.registry().metricName(opName + "-min", groupName,
+                    "The minimum cache hit ratio.", allMetricTags), new Min());
+            ((StreamsMetricsImpl) metrics).maybeAddMetric(parent, this.metrics.registry().metricName(opName + "-max", groupName,
+                    "The maximum cache hit ratio.", allMetricTags), new Max());
 
-            hitRatioSensor = this.metrics.registry().sensor(entityName + "-" + opName, Sensor.RecordingLevel.DEBUG);
-
-            hitRatioSensor.add(this.metrics.registry().metricName(entityName + "-" + opName + "-avg", groupName,
-                "The current count of " + entityName + " " + opName + " operation.", metricTags), new Avg());
-            hitRatioSensor.add(this.metrics.registry().metricName(entityName + "-" + opName + "-min", groupName,
-                "The current count of " + entityName + " " + opName + " operation.", metricTags), new Min());
-            hitRatioSensor.add(this.metrics.registry().metricName(entityName + "-" + opName + "-max", groupName,
-                "The current count of " + entityName + " " + opName + " operation.", metricTags), new Max());
+            // add child
+            hitRatioSensor = this.metrics.registry().sensor(opName, Sensor.RecordingLevel.DEBUG, parent);
+            ((StreamsMetricsImpl) metrics).maybeAddMetric(hitRatioSensor, this.metrics.registry().metricName(opName + "-avg", groupName,
+                "The average cache hit ratio.", metricTags), new Avg());
+            ((StreamsMetricsImpl) metrics).maybeAddMetric(hitRatioSensor, this.metrics.registry().metricName(opName + "-min", groupName,
+                "The minimum cache hit ratio.", metricTags), new Min());
+            ((StreamsMetricsImpl) metrics).maybeAddMetric(hitRatioSensor, this.metrics.registry().metricName(opName + "-max", groupName,
+                "The maximum cache hit ratio.", metricTags), new Max());
 
         }
 

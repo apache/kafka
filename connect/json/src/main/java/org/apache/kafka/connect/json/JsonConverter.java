@@ -1,20 +1,19 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p/>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p/>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- **/
-
+ */
 package org.apache.kafka.connect.json;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -332,7 +331,7 @@ public class JsonConverter implements Converter {
         return new SchemaAndValue(schema, convertToConnect(schema, jsonValue.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME)));
     }
 
-    private ObjectNode asJsonSchema(Schema schema) {
+    public ObjectNode asJsonSchema(Schema schema) {
         if (schema == null)
             return null;
 
@@ -413,7 +412,7 @@ public class JsonConverter implements Converter {
     }
 
 
-    private Schema asConnectSchema(JsonNode jsonSchema) {
+    public Schema asConnectSchema(JsonNode jsonSchema) {
         if (jsonSchema.isNull())
             return null;
 
@@ -656,7 +655,8 @@ public class JsonConverter implements Converter {
 
             throw new DataException("Couldn't convert " + value + " to JSON.");
         } catch (ClassCastException e) {
-            throw new DataException("Invalid type for " + schema.type() + ": " + value.getClass());
+            String schemaTypeStr = (schema != null) ? schema.type().toString() : "unknown schema";
+            throw new DataException("Invalid type for " + schemaTypeStr + ": " + value.getClass());
         }
     }
 

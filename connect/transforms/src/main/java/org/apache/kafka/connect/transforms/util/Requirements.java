@@ -1,20 +1,19 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- **/
-
+ */
 package org.apache.kafka.connect.transforms.util;
 
 import org.apache.kafka.connect.connector.ConnectRecord;
@@ -33,6 +32,7 @@ public class Requirements {
         }
     }
 
+    @SuppressWarnings("unchecked")
     public static Map<String, Object> requireMap(Object value, String purpose) {
         if (!(value instanceof Map)) {
             throw new DataException("Only Map objects supported in absence of schema for [" + purpose + "], found: " + nullSafeClassName(value));
@@ -40,11 +40,25 @@ public class Requirements {
         return (Map<String, Object>) value;
     }
 
+    public static Map<String, Object> requireMapOrNull(Object value, String purpose) {
+        if (value == null) {
+            return null;
+        }
+        return requireMap(value, purpose);
+    }
+
     public static Struct requireStruct(Object value, String purpose) {
         if (!(value instanceof Struct)) {
             throw new DataException("Only Struct objects supported for [" + purpose + "], found: " + nullSafeClassName(value));
         }
         return (Struct) value;
+    }
+
+    public static Struct requireStructOrNull(Object value, String purpose) {
+        if (value == null) {
+            return null;
+        }
+        return requireStruct(value, purpose);
     }
 
     public static SinkRecord requireSinkRecord(ConnectRecord<?> record, String purpose) {
@@ -55,7 +69,7 @@ public class Requirements {
     }
 
     private static String nullSafeClassName(Object x) {
-        return x == null ? "null" : x.getClass().getCanonicalName();
+        return x == null ? "null" : x.getClass().getName();
     }
 
 }

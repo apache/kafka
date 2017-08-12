@@ -116,30 +116,27 @@ class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
     // Duplicate
     val singleRequest = new CreateTopicsRequest.Builder(Map("duplicate-topic" ->
         new CreateTopicsRequest.TopicDetails(1, 1.toShort)).asJava, 1000).build()
-    val duplicateRequest = duplicateFirstTopic(singleRequest)
-    assertFalse("Request doesn't have duplicate topics", duplicateRequest.duplicateTopics().isEmpty)
-    validateErrorCreateTopicsRequests(duplicateRequest, Map("duplicate-topic" -> error(Errors.INVALID_REQUEST,
-      Some("""Create topics request from client `client-id` contains multiple entries for the following topics: duplicate-topic"""))))
+    validateErrorCreateTopicsRequests(singleRequest, Map("duplicate-topic" -> error(Errors.INVALID_REQUEST,
+      Some("""Create topics request from client `client-id` contains multiple entries for the following topics: duplicate-topic"""))),
+      requestStruct = Some(toStructWithDuplicateFirstTopic(singleRequest)))
 
     // Duplicate Partial with validateOnly
     val doubleRequestValidateOnly = new CreateTopicsRequest.Builder(Map(
       "duplicate-topic" -> new CreateTopicsRequest.TopicDetails(1, 1.toShort),
       "other-topic" -> new CreateTopicsRequest.TopicDetails(1, 1.toShort)).asJava, 1000, true).build()
-    val duplicateDoubleRequestValidateOnly = duplicateFirstTopic(doubleRequestValidateOnly)
-    assertFalse("Request doesn't have duplicate topics", duplicateDoubleRequestValidateOnly.duplicateTopics.isEmpty)
-    validateErrorCreateTopicsRequests(duplicateDoubleRequestValidateOnly, Map(
+    validateErrorCreateTopicsRequests(doubleRequestValidateOnly, Map(
       "duplicate-topic" -> error(Errors.INVALID_REQUEST),
-      "other-topic" -> error(Errors.NONE)), checkErrorMessage = false)
+      "other-topic" -> error(Errors.NONE)), checkErrorMessage = false,
+      requestStruct = Some(toStructWithDuplicateFirstTopic(doubleRequestValidateOnly)))
 
     // Duplicate Partial
     val doubleRequest = new CreateTopicsRequest.Builder(Map(
       "duplicate-topic" -> new CreateTopicsRequest.TopicDetails(1, 1.toShort),
       "other-topic" -> new CreateTopicsRequest.TopicDetails(1, 1.toShort)).asJava, 1000).build()
-    val duplicateDoubleRequest = duplicateFirstTopic(doubleRequest)
-    assertFalse("Request doesn't have duplicate topics", duplicateDoubleRequest.duplicateTopics.isEmpty)
-    validateErrorCreateTopicsRequests(duplicateDoubleRequest, Map(
+    validateErrorCreateTopicsRequests(doubleRequest, Map(
       "duplicate-topic" -> error(Errors.INVALID_REQUEST),
-      "other-topic" -> error(Errors.NONE)), checkErrorMessage = false)
+      "other-topic" -> error(Errors.NONE)), checkErrorMessage = false,
+      requestStruct = Some(toStructWithDuplicateFirstTopic(doubleRequest)))
 
     // Partitions/ReplicationFactor and ReplicaAssignment
     val assignments = replicaAssignmentToJava(Map(0 -> List(0)))

@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.processor;
 
 import org.apache.kafka.common.Cluster;
@@ -63,7 +62,7 @@ public class DefaultPartitionGrouper implements PartitionGrouper {
 
                 for (String topic : topicGroup) {
                     List<PartitionInfo> partitions = metadata.partitionsForTopic(topic);
-                    if (partitions != null && partitionId < partitions.size()) {
+                    if (partitionId < partitions.size()) {
                         group.add(new TopicPartition(topic, partitionId));
                     }
                 }
@@ -82,7 +81,7 @@ public class DefaultPartitionGrouper implements PartitionGrouper {
         for (String topic : topics) {
             List<PartitionInfo> partitions = metadata.partitionsForTopic(topic);
 
-            if (partitions == null) {
+            if (partitions.isEmpty()) {
                 log.info("Skipping assigning topic {} to tasks since its metadata is not available yet", topic);
                 return StreamPartitionAssignor.NOT_AVAILABLE;
             } else {

@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -30,7 +30,7 @@ import org.apache.kafka.clients.producer.internals.FutureRecordMetadata;
 import org.apache.kafka.clients.producer.internals.ProduceRequestResult;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.CorruptRecordException;
-import org.apache.kafka.common.record.Record;
+import org.apache.kafka.common.record.RecordBatch;
 import org.junit.Test;
 
 public class RecordSendTest {
@@ -46,7 +46,7 @@ public class RecordSendTest {
     public void testTimeout() throws Exception {
         ProduceRequestResult request = new ProduceRequestResult(topicPartition);
         FutureRecordMetadata future = new FutureRecordMetadata(request, relOffset,
-                                                               Record.NO_TIMESTAMP, 0, 0, 0);
+                RecordBatch.NO_TIMESTAMP, 0L, 0, 0);
         assertFalse("Request is not completed", future.isDone());
         try {
             future.get(5, TimeUnit.MILLISECONDS);
@@ -54,7 +54,7 @@ public class RecordSendTest {
         } catch (TimeoutException e) { /* this is good */
         }
 
-        request.set(baseOffset, Record.NO_TIMESTAMP, null);
+        request.set(baseOffset, RecordBatch.NO_TIMESTAMP, null);
         request.done();
         assertTrue(future.isDone());
         assertEquals(baseOffset + relOffset, future.get().offset());
@@ -66,7 +66,7 @@ public class RecordSendTest {
     @Test(expected = ExecutionException.class)
     public void testError() throws Exception {
         FutureRecordMetadata future = new FutureRecordMetadata(asyncRequest(baseOffset, new CorruptRecordException(), 50L),
-                                                               relOffset, Record.NO_TIMESTAMP, 0, 0, 0);
+                relOffset, RecordBatch.NO_TIMESTAMP, 0L, 0, 0);
         future.get();
     }
 
@@ -76,7 +76,7 @@ public class RecordSendTest {
     @Test
     public void testBlocking() throws Exception {
         FutureRecordMetadata future = new FutureRecordMetadata(asyncRequest(baseOffset, null, 50L),
-                                                               relOffset, Record.NO_TIMESTAMP, 0, 0, 0);
+                relOffset, RecordBatch.NO_TIMESTAMP, 0L, 0, 0);
         assertEquals(baseOffset + relOffset, future.get().offset());
     }
 
@@ -87,7 +87,7 @@ public class RecordSendTest {
             public void run() {
                 try {
                     sleep(timeout);
-                    request.set(baseOffset, Record.NO_TIMESTAMP, error);
+                    request.set(baseOffset, RecordBatch.NO_TIMESTAMP, error);
                     request.done();
                 } catch (InterruptedException e) { }
             }

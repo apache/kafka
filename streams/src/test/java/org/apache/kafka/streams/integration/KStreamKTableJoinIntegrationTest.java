@@ -1,16 +1,18 @@
-/**
- * Licensed to the Apache Software Foundation (ASF) under one or more contributor license
- * agreements.  See the NOTICE file distributed with this work for additional information regarding
- * copyright ownership. The ASF licenses this file to You under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance with the License.  You may obtain a
- * copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
- * Unless required by applicable law or agreed to in writing, software distributed under the License
- * is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
- * or implied. See the License for the specific language governing permissions and limitations under
- * the License.
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 package org.apache.kafka.streams.integration;
 
@@ -26,24 +28,22 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.kstream.ValueJoiner;
+import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.ClassRule;
 import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameter;
-import org.junit.runners.Parameterized.Parameters;
+import org.junit.experimental.categories.Category;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -57,10 +57,10 @@ import static org.junit.Assert.assertThat;
  * End-to-end integration test that demonstrates how to perform a join between a KStream and a
  * KTable (think: KStream.leftJoin(KTable)), i.e. an example of a stateful computation.
  */
-
-@RunWith(Parameterized.class)
+@Category({IntegrationTest.class})
 public class KStreamKTableJoinIntegrationTest {
     private static final int NUM_BROKERS = 1;
+    private static final long COMMIT_INTERVAL_MS = 300L;
 
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
@@ -80,18 +80,18 @@ public class KStreamKTableJoinIntegrationTest {
         userRegionsTopic = "user-regions-" + testNo;
         userRegionsStoreName = "user-regions-store-name-" + testNo;
         outputTopic = "output-topic-" + testNo;
-        CLUSTER.createTopic(userClicksTopic);
-        CLUSTER.createTopic(userRegionsTopic);
-        CLUSTER.createTopic(outputTopic);
+        CLUSTER.createTopics(userClicksTopic, userRegionsTopic, outputTopic);
         streamsConfiguration = new Properties();
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "join-integration-test-" + testNo);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-        streamsConfiguration.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
-        streamsConfiguration.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
+        streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
+        streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
+        streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, COMMIT_INTERVAL_MS);
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG,
             TestUtils.tempDirectory().getPath());
-        streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, cacheSizeBytes);
+        streamsConfiguration.put(IntegrationTestUtils.INTERNAL_LEAVE_GROUP_ON_CLOSE, true);
+
 
     }
 
@@ -101,16 +101,6 @@ public class KStreamKTableJoinIntegrationTest {
             kafkaStreams.close();
         }
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
-    }
-
-    @Parameter
-    public long cacheSizeBytes;
-
-    //Single parameter, use Object[]
-    @Parameters
-    public static Object[] data() {
-        return new Object[] {0, 10 * 1024 * 1024L};
-
     }
 
     /**
@@ -143,7 +133,17 @@ public class KStreamKTableJoinIntegrationTest {
     }
 
     @Test
-    public void shouldCountClicksPerRegion() throws Exception {
+    public void shouldCountClicksPerRegionWithZeroByteCache() throws Exception {
+        countClicksPerRegion(0);
+    }
+
+    @Test
+    public void shouldCountClicksPerRegionWithNonZeroByteCache() throws Exception {
+        countClicksPerRegion(10 * 1024 * 1024);
+    }
+
+    private void countClicksPerRegion(final int cacheSizeBytes) throws java.util.concurrent.ExecutionException, InterruptedException {
+        streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, cacheSizeBytes);
         // Input 1: Clicks per user (multiple records allowed per user).
         final List<KeyValue<String, Long>> userClicks = Arrays.asList(
             new KeyValue<>("alice", 13L),
@@ -190,7 +190,7 @@ public class KStreamKTableJoinIntegrationTest {
         final Serde<String> stringSerde = Serdes.String();
         final Serde<Long> longSerde = Serdes.Long();
 
-        final KStreamBuilder builder = new KStreamBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
         // This KStream contains information such as "alice" -> 13L.
         //
@@ -253,7 +253,7 @@ public class KStreamKTableJoinIntegrationTest {
         // Write the (continuously updating) results to the output topic.
         clicksPerRegion.to(stringSerde, longSerde, outputTopic);
 
-        kafkaStreams = new KafkaStreams(builder, streamsConfiguration);
+        kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration);
         kafkaStreams.start();
 
         //

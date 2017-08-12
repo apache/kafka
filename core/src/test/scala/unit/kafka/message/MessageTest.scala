@@ -19,6 +19,7 @@ package kafka.message
 
 import java.nio._
 import java.util.HashMap
+
 import org.apache.kafka.common.protocol.Errors
 
 import scala.collection._
@@ -26,7 +27,7 @@ import org.junit.Assert._
 import org.scalatest.junit.JUnitSuite
 import org.junit.{Before, Test}
 import kafka.utils.TestUtils
-import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.utils.ByteUtils
 
 case class MessageTestVal(key: Array[Byte],
                           payload: Array[Byte],
@@ -56,7 +57,7 @@ class MessageTest extends JUnitSuite {
   }
 
   @Test
-  def testFieldValues {
+  def testFieldValues(): Unit = {
     for(v <- messages) {
       // check payload
       if(v.payload == null) {
@@ -89,7 +90,7 @@ class MessageTest extends JUnitSuite {
       assertTrue("Auto-computed checksum should be valid", v.message.isValid)
       // garble checksum
       val badChecksum: Int = (v.message.checksum + 1 % Int.MaxValue).toInt
-      Utils.writeUnsignedInt(v.message.buffer, Message.CrcOffset, badChecksum)
+      ByteUtils.writeUnsignedInt(v.message.buffer, Message.CrcOffset, badChecksum)
       assertFalse("Message with invalid checksum should be invalid", v.message.isValid)
     }
   }

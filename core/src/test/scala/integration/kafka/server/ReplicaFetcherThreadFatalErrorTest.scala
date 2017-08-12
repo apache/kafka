@@ -45,7 +45,7 @@ class ReplicaFetcherThreadFatalErrorTest extends ZooKeeperTestHarness {
   @After
   override def tearDown() {
     Exit.resetExitProcedure()
-    brokers.foreach(_.shutdown())
+    TestUtils.shutdownServers(brokers)
     super.tearDown()
   }
 
@@ -91,7 +91,8 @@ class ReplicaFetcherThreadFatalErrorTest extends ZooKeeperTestHarness {
         override def handleOffsetOutOfRange(topicPartition: TopicPartition): Long = throw new FatalExitError
         override protected def fetch(fetchRequest: FetchRequest): Seq[(TopicPartition, PartitionData)] = {
           fetchRequest.underlying.fetchData.asScala.keys.toSeq.map { tp =>
-            (tp, new PartitionData(new FetchResponse.PartitionData(Errors.OFFSET_OUT_OF_RANGE, -1, null)))
+            (tp, new PartitionData(new FetchResponse.PartitionData(Errors.OFFSET_OUT_OF_RANGE,
+              FetchResponse.INVALID_HIGHWATERMARK, FetchResponse.INVALID_LAST_STABLE_OFFSET, FetchResponse.INVALID_LOG_START_OFFSET, null, null)))
           }
         }
       }
@@ -110,15 +111,15 @@ class ReplicaFetcherThreadFatalErrorTest extends ZooKeeperTestHarness {
 
       override def createReplicaManager(isShuttingDown: AtomicBoolean): ReplicaManager = {
         new ReplicaManager(config, metrics, time, zkUtils, kafkaScheduler, logManager, isShuttingDown,
-          quotaManagers.follower) {
+          quotaManagers.follower, new BrokerTopicStats, metadataCache, logDirFailureChannel) {
 
           override protected def createReplicaFetcherManager(metrics: Metrics, time: Time, threadNamePrefix: Option[String],
                                                              quotaManager: ReplicationQuotaManager) =
             new ReplicaFetcherManager(config, this, metrics, time, threadNamePrefix, quotaManager) {
               override def createFetcherThread(fetcherId: Int, sourceBroker: BrokerEndPoint): AbstractFetcherThread = {
-                val prefix = threadNamePrefix.map(tp => s"${tp}:").getOrElse("")
+                val prefix = threadNamePrefix.map(tp => s"$tp:").getOrElse("")
                 val threadName = s"${prefix}ReplicaFetcherThread-$fetcherId-${sourceBroker.id}"
-                fetcherThread(new FetcherThreadParams(threadName, fetcherId, sourceBroker, replicaManager, metrics,
+                fetcherThread(FetcherThreadParams(threadName, fetcherId, sourceBroker, replicaManager, metrics,
                   time, quotaManager))
               }
             }

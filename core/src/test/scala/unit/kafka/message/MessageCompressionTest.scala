@@ -17,43 +17,21 @@
 
 package kafka.message
 
-import org.apache.kafka.common.record._
-
-import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import scala.collection._
-import org.scalatest.junit.JUnitSuite
 import org.junit._
 import org.junit.Assert._
 
-class MessageCompressionTest extends JUnitSuite {
-
-  @Test
-  def testLZ4FramingV0() {
-    val output = CompressionFactory(LZ4CompressionCodec, Message.MagicValue_V0, new ByteArrayOutputStream())
-    assertTrue(output.asInstanceOf[KafkaLZ4BlockOutputStream].useBrokenFlagDescriptorChecksum())
-
-    val input = CompressionFactory(LZ4CompressionCodec, Message.MagicValue_V0, new ByteArrayInputStream(Array[Byte](0x04, 0x22, 0x4D, 0x18, 0x60, 0x40, 0x1A)))
-    assertTrue(input.asInstanceOf[KafkaLZ4BlockInputStream].ignoreFlagDescriptorChecksum())
-  }
-
-  @Test
-  def testLZ4FramingV1() {
-    val output = CompressionFactory(LZ4CompressionCodec, Message.MagicValue_V1, new ByteArrayOutputStream())
-    assertFalse(output.asInstanceOf[KafkaLZ4BlockOutputStream].useBrokenFlagDescriptorChecksum())
-
-    val input = CompressionFactory(LZ4CompressionCodec, Message.MagicValue_V1, new ByteArrayInputStream(Array[Byte](0x04, 0x22, 0x4D, 0x18, 0x60, 0x40, -126)))
-    assertFalse(input.asInstanceOf[KafkaLZ4BlockInputStream].ignoreFlagDescriptorChecksum())
-  }
+class MessageCompressionTest {
 
   @Test
   def testSimpleCompressDecompress() {
     val codecs = mutable.ArrayBuffer[CompressionCodec](GZIPCompressionCodec)
-    if(isSnappyAvailable)
+    if (isSnappyAvailable)
       codecs += SnappyCompressionCodec
-    if(isLZ4Available)
+    if (isLZ4Available)
       codecs += LZ4CompressionCodec
-    for(codec <- codecs)
+    for (codec <- codecs)
       testSimpleCompressDecompress(codec)
   }
 
@@ -69,10 +47,10 @@ class MessageCompressionTest extends JUnitSuite {
 
     testCompressSize(GZIPCompressionCodec, messages, 396)
 
-    if(isSnappyAvailable)
-      testCompressSize(SnappyCompressionCodec, messages, 1063)
+    if (isSnappyAvailable)
+      testCompressSize(SnappyCompressionCodec, messages, 503)
 
-    if(isLZ4Available)
+    if (isLZ4Available)
       testCompressSize(LZ4CompressionCodec, messages, 387)
   }
 

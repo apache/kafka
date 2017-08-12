@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -6,7 +6,7 @@
  * (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -137,5 +137,33 @@ public class InMemoryLRUCacheStoreTest extends AbstractKeyValueStoreTest {
         assertTrue(driver.flushedEntryRemoved(3));
         assertEquals(3, driver.numFlushedEntryRemoved());
     }
-    
+
+    @Test
+    public void testRestoreEvict() {
+        store.close();
+        // Add any entries that will be restored to any store
+        // that uses the driver's context ...
+        driver.addEntryToRestoreLog(0, "zero");
+        driver.addEntryToRestoreLog(1, "one");
+        driver.addEntryToRestoreLog(2, "two");
+        driver.addEntryToRestoreLog(3, "three");
+        driver.addEntryToRestoreLog(4, "four");
+        driver.addEntryToRestoreLog(5, "five");
+        driver.addEntryToRestoreLog(6, "fix");
+        driver.addEntryToRestoreLog(7, "seven");
+        driver.addEntryToRestoreLog(8, "eight");
+        driver.addEntryToRestoreLog(9, "nine");
+        driver.addEntryToRestoreLog(10, "ten");
+
+        // Create the store, which should register with the context and automatically
+        // receive the restore entries ...
+        store = createKeyValueStore(driver.context(), Integer.class, String.class, false);
+        context.restore(store.name(), driver.restoredEntries());
+        // Verify that the store's changelog does not get more appends ...
+        assertEquals(0, driver.numFlushedEntryStored());
+        assertEquals(0, driver.numFlushedEntryRemoved());
+
+        // and there are no other entries ...
+        assertEquals(10, driver.sizeOf(store));
+    }
 }

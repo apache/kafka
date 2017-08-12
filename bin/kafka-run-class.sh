@@ -48,7 +48,7 @@ should_include_file() {
 base_dir=$(dirname $0)/..
 
 if [ -z "$SCALA_VERSION" ]; then
-  SCALA_VERSION=2.10.6
+  SCALA_VERSION=2.11.11
 fi
 
 if [ -z "$SCALA_BINARY_VERSION" ]; then
@@ -140,6 +140,11 @@ do
 done
 shopt -u nullglob
 
+if [ -z "$CLASSPATH" ] ; then
+  echo "Classpath is empty. Please build the project first e.g. by running './gradlew jar -Pscala_version=$SCALA_VERSION'"
+  exit 1
+fi
+
 # JMX settings
 if [ -z "$KAFKA_JMX_OPTS" ]; then
   KAFKA_JMX_OPTS="-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.authenticate=false  -Dcom.sun.management.jmxremote.ssl=false "
@@ -212,7 +217,7 @@ fi
 
 # JVM performance options
 if [ -z "$KAFKA_JVM_PERFORMANCE_OPTS" ]; then
-  KAFKA_JVM_PERFORMANCE_OPTS="-server -XX:+UseG1GC -XX:MaxGCPauseMillis=20 -XX:InitiatingHeapOccupancyPercent=35 -XX:+DisableExplicitGC -Djava.awt.headless=true"
+  KAFKA_JVM_PERFORMANCE_OPTS="-server -XX:+UseG1GC -XX:MaxGCPauseMillis=20 -XX:InitiatingHeapOccupancyPercent=35 -XX:+ExplicitGCInvokesConcurrent -Djava.awt.headless=true"
 fi
 
 
@@ -245,7 +250,14 @@ GC_FILE_SUFFIX='-gc.log'
 GC_LOG_FILE_NAME=''
 if [ "x$GC_LOG_ENABLED" = "xtrue" ]; then
   GC_LOG_FILE_NAME=$DAEMON_NAME$GC_FILE_SUFFIX
-  KAFKA_GC_LOG_OPTS="-Xloggc:$LOG_DIR/$GC_LOG_FILE_NAME -verbose:gc -XX:+PrintGCDetails -XX:+PrintGCDateStamps -XX:+PrintGCTimeStamps "
+  # the first segment of the version number, which is '1' for releases before Java 9
+  # it then becomes '9', '10', ...
+  JAVA_MAJOR_VERSION=$($JAVA -version 2>&1 | sed -E -n 's/.* version "([^.-]*).*"/\1/p')
+  if [[ "$JAVA_MAJOR_VERSION" -ge "9" ]] ; then
+    KAFKA_GC_LOG_OPTS="-Xlog:gc*:file=$LOG_DIR/$GC_LOG_FILE_NAME:time,tags:filecount=10,filesize=102400"
+  else
+    KAFKA_GC_LOG_OPTS="-Xloggc:$LOG_DIR/$GC_LOG_FILE_NAME -verbose:gc -XX:+PrintGCDetails -XX:+PrintGCDateStamps -XX:+PrintGCTimeStamps -XX:+UseGCLogFileRotation -XX:NumberOfGCLogFiles=10 -XX:GCLogFileSize=100M"
+  fi
 fi
 
 # If Cygwin is detected, classpath is converted to Windows format.

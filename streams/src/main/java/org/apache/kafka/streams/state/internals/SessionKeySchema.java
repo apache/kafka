@@ -1,13 +1,13 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -23,21 +23,47 @@ import org.apache.kafka.streams.kstream.internals.SessionKeySerde;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
+import java.nio.ByteBuffer;
 import java.util.List;
 
 
 class SessionKeySchema implements SegmentedBytesStore.KeySchema {
 
+    private static final int SUFFIX_SIZE = 2 * WindowStoreUtils.TIMESTAMP_SIZE;
+    private static final byte[] MIN_SUFFIX = new byte[SUFFIX_SIZE];
+
+    private String topic;
+
     @Override
-    public Bytes upperRange(final Bytes key, final long to) {
-        final Windowed<Bytes> sessionKey = new Windowed<>(key, new SessionWindow(to, Long.MAX_VALUE));
-        return SessionKeySerde.toBinary(sessionKey, Serdes.Bytes().serializer());
+    public void init(final String topic) {
+        this.topic = topic;
     }
 
     @Override
-    public Bytes lowerRange(final Bytes key, final long from) {
+    public Bytes upperRangeFixedSize(final Bytes key, final long to) {
+        final Windowed<Bytes> sessionKey = new Windowed<>(key, new SessionWindow(to, Long.MAX_VALUE));
+        return SessionKeySerde.toBinary(sessionKey, Serdes.Bytes().serializer(), topic);
+    }
+
+    @Override
+    public Bytes lowerRangeFixedSize(final Bytes key, final long from) {
         final Windowed<Bytes> sessionKey = new Windowed<>(key, new SessionWindow(0, Math.max(0, from)));
-        return SessionKeySerde.toBinary(sessionKey, Serdes.Bytes().serializer());
+        return SessionKeySerde.toBinary(sessionKey, Serdes.Bytes().serializer(), topic);
+    }
+
+    @Override
+    public Bytes upperRange(Bytes key, long to) {
+        final byte[] maxSuffix = ByteBuffer.allocate(SUFFIX_SIZE)
+            .putLong(to)
+            // start can at most be equal to end
+            .putLong(to)
+            .array();
+        return OrderedBytes.upperRange(key, maxSuffix);
+    }
+
+    @Override
+    public Bytes lowerRange(Bytes key, long from) {
+        return OrderedBytes.lowerRange(key, MIN_SUFFIX);
     }
 
     @Override
@@ -46,19 +72,20 @@ class SessionKeySchema implements SegmentedBytesStore.KeySchema {
     }
 
     @Override
-    public HasNextCondition hasNextCondition(final Bytes binaryKey, final long from, final long to) {
+    public HasNextCondition hasNextCondition(final Bytes binaryKeyFrom, final Bytes binaryKeyTo, final long from, final long to) {
         return new HasNextCondition() {
             @Override
             public boolean hasNext(final KeyValueIterator<Bytes, ?> iterator) {
-                if (iterator.hasNext()) {
+                while (iterator.hasNext()) {
                     final Bytes bytes = iterator.peekNextKey();
-                    final Bytes keyBytes = Bytes.wrap(SessionKeySerde.extractKeyBytes(bytes.get()));
-                    if (!keyBytes.equals(binaryKey)) {
-                        return false;
+                    final Windowed<Bytes> windowedKey = SessionKeySerde.fromBytes(bytes);
+                    if (windowedKey.key().compareTo(binaryKeyFrom) >= 0
+                        && windowedKey.key().compareTo(binaryKeyTo) <= 0
+                        && windowedKey.window().end() >= from
+                        && windowedKey.window().start() <= to) {
+                        return true;
                     }
-                    final long start = SessionKeySerde.extractStart(bytes.get());
-                    final long end = SessionKeySerde.extractEnd(bytes.get());
-                    return end >= from && start <= to;
+                    iterator.next();
                 }
                 return false;
             }

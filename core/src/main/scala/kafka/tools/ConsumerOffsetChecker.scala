@@ -34,6 +34,7 @@ import kafka.api.PartitionOffsetRequestInfo
 import org.I0Itec.zkclient.exception.ZkNoNodeException
 import org.apache.kafka.common.network.ListenerName
 
+@deprecated("This class has been deprecated and will be removed in a future release.", "0.11.0.0")
 object ConsumerOffsetChecker extends Logging {
 
   private val consumerMap: mutable.Map[Int, Option[SimpleConsumer]] = mutable.Map()
@@ -54,55 +55,49 @@ object ConsumerOffsetChecker extends Logging {
   }
 
   private def processPartition(zkUtils: ZkUtils,
-                               group: String, topic: String, pid: Int) {
-    val topicPartition = TopicAndPartition(topic, pid)
+                               group: String, topic: String, producerId: Int) {
+    val topicPartition = TopicAndPartition(topic, producerId)
     val offsetOpt = offsetMap.get(topicPartition)
     val groupDirs = new ZKGroupTopicDirs(group, topic)
-    val owner = zkUtils.readDataMaybeNull(groupDirs.consumerOwnerDir + "/%s".format(pid))._1
-    zkUtils.getLeaderForPartition(topic, pid) match {
+    val owner = zkUtils.readDataMaybeNull(groupDirs.consumerOwnerDir + "/%s".format(producerId))._1
+    zkUtils.getLeaderForPartition(topic, producerId) match {
       case Some(bid) =>
         val consumerOpt = consumerMap.getOrElseUpdate(bid, getConsumer(zkUtils, bid))
-        consumerOpt match {
-          case Some(consumer) =>
-            val topicAndPartition = TopicAndPartition(topic, pid)
-            val request =
-              OffsetRequest(immutable.Map(topicAndPartition -> PartitionOffsetRequestInfo(OffsetRequest.LatestTime, 1)))
-            val logSize = consumer.getOffsetsBefore(request).partitionErrorAndOffsets(topicAndPartition).offsets.head
+        consumerOpt.foreach { consumer =>
+          val topicAndPartition = TopicAndPartition(topic, producerId)
+          val request =
+            OffsetRequest(immutable.Map(topicAndPartition -> PartitionOffsetRequestInfo(OffsetRequest.LatestTime, 1)))
+          val logSize = consumer.getOffsetsBefore(request).partitionErrorAndOffsets(topicAndPartition).offsets.head
 
-            val lagString = offsetOpt.map(o => if (o == -1) "unknown" else (logSize - o).toString)
-            println("%-15s %-30s %-3s %-15s %-15s %-15s %s".format(group, topic, pid, offsetOpt.getOrElse("unknown"), logSize, lagString.getOrElse("unknown"),
-                                                                   owner match {case Some(ownerStr) => ownerStr case None => "none"}))
-          case None => // ignore
+          val lagString = offsetOpt.map(o => if (o == -1) "unknown" else (logSize - o).toString)
+          println("%-15s %-30s %-3s %-15s %-15s %-15s %s".format(group, topic, producerId, offsetOpt.getOrElse("unknown"), logSize, lagString.getOrElse("unknown"),
+                                                                 owner match {case Some(ownerStr) => ownerStr case None => "none"}))
         }
       case None =>
-        println("No broker for partition %s - %s".format(topic, pid))
+        println("No broker for partition %s - %s".format(topic, producerId))
     }
   }
 
   private def processTopic(zkUtils: ZkUtils, group: String, topic: String) {
-    topicPidMap.get(topic) match {
-      case Some(pids) =>
-        pids.sorted.foreach {
-          pid => processPartition(zkUtils, group, topic, pid)
+    topicPidMap.get(topic).foreach { producerIds =>
+      producerIds.sorted.foreach {
+        producerId => processPartition(zkUtils, group, topic, producerId)
         }
-      case None => // ignore
     }
   }
 
   private def printBrokerInfo() {
     println("BROKER INFO")
     for ((bid, consumerOpt) <- consumerMap)
-      consumerOpt match {
-        case Some(consumer) =>
-          println("%s -> %s:%d".format(bid, consumer.host, consumer.port))
-        case None => // ignore
+      consumerOpt.foreach { consumer =>
+        println("%s -> %s:%d".format(bid, consumer.host, consumer.port))
       }
   }
 
   def main(args: Array[String]) {
     warn("WARNING: ConsumerOffsetChecker is deprecated and will be dropped in releases following 0.9.0. Use ConsumerGroupCommand instead.")
 
-    val parser = new OptionParser()
+    val parser = new OptionParser(false)
 
     val zkConnectOpt = parser.accepts("zookeeper", "ZooKeeper connect string.").
             withRequiredArg().defaultsTo("localhost:2181").ofType(classOf[String])
@@ -156,7 +151,7 @@ object ConsumerOffsetChecker extends Logging {
 
       topicPidMap = immutable.Map(zkUtils.getPartitionsForTopics(topicList).toSeq:_*)
       val topicPartitions = topicPidMap.flatMap { case(topic, partitionSeq) => partitionSeq.map(TopicAndPartition(topic, _)) }.toSeq
-      val channel = ClientUtils.channelToOffsetManager(group, zkUtils, channelSocketTimeoutMs, channelRetryBackoffMs)
+      channel = ClientUtils.channelToOffsetManager(group, zkUtils, channelSocketTimeoutMs, channelRetryBackoffMs)
 
       debug("Sending offset fetch request to coordinator %s:%d.".format(channel.host, channel.port))
       channel.send(OffsetFetchRequest(group, topicPartitions))
@@ -186,6 +181,7 @@ object ConsumerOffsetChecker extends Logging {
         }
       }
       channel.disconnect()
+      channel = null
 
       println("%-15s %-30s %-3s %-15s %-15s %-15s %s".format("Group", "Topic", "Pid", "Offset", "logSize", "Lag", "Owner"))
       topicList.sorted.foreach {
@@ -195,23 +191,14 @@ object ConsumerOffsetChecker extends Logging {
       if (options.has("broker-info"))
         printBrokerInfo()
 
-      for ((_, consumerOpt) <- consumerMap)
-        consumerOpt match {
-          case Some(consumer) => consumer.close()
-          case None => // ignore
-        }
+      consumerMap.values.flatten.foreach(_.close())
     }
     catch {
       case t: Throwable =>
         println("Exiting due to: %s.".format(t.getMessage))
     }
     finally {
-      for (consumerOpt <- consumerMap.values) {
-        consumerOpt match {
-          case Some(consumer) => consumer.close()
-          case None => // ignore
-        }
-      }
+      consumerMap.values.flatten.foreach(_.close())
       if (zkUtils != null)
         zkUtils.close()
 

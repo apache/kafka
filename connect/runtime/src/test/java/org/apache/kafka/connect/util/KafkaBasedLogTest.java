@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -13,8 +13,7 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- **/
-
+ */
 package org.apache.kafka.connect.util;
 
 import org.apache.kafka.clients.CommonClientConfigs;
@@ -112,6 +111,8 @@ public class KafkaBasedLogTest {
     private KafkaBasedLog<String, String> store;
 
     @Mock
+    private Runnable initializer;
+    @Mock
     private KafkaProducer<String, String> producer;
     private MockConsumer<String, String> consumer;
 
@@ -132,7 +133,7 @@ public class KafkaBasedLogTest {
     @Before
     public void setUp() throws Exception {
         store = PowerMock.createPartialMock(KafkaBasedLog.class, new String[]{"createConsumer", "createProducer"},
-                TOPIC, PRODUCER_PROPS, CONSUMER_PROPS, consumedCallback, time);
+                TOPIC, PRODUCER_PROPS, CONSUMER_PROPS, consumedCallback, time, initializer);
         consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
         consumer.updatePartitions(TOPIC, Arrays.asList(TPINFO0, TPINFO1));
         Map<TopicPartition, Long> beginningOffsets = new HashMap<>();
@@ -385,7 +386,7 @@ public class KafkaBasedLogTest {
                 consumer.schedulePollTask(new Runnable() {
                     @Override
                     public void run() {
-                        consumer.setException(Errors.GROUP_COORDINATOR_NOT_AVAILABLE.exception());
+                        consumer.setException(Errors.COORDINATOR_NOT_AVAILABLE.exception());
                     }
                 });
 
@@ -463,6 +464,9 @@ public class KafkaBasedLogTest {
 
 
     private void expectStart() throws Exception {
+        initializer.run();
+        EasyMock.expectLastCall().times(1);
+
         PowerMock.expectPrivate(store, "createProducer")
                 .andReturn(producer);
         PowerMock.expectPrivate(store, "createConsumer")

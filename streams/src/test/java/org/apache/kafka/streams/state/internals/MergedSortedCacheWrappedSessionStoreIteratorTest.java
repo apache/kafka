@@ -1,20 +1,19 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Serdes;
@@ -37,6 +36,13 @@ import static org.junit.Assert.assertTrue;
 
 public class MergedSortedCacheWrappedSessionStoreIteratorTest {
 
+    private static final SegmentedCacheFunction SINGLE_SEGMENT_CACHE_FUNCTION = new SegmentedCacheFunction(null, -1) {
+        @Override
+        public long segmentId(Bytes key) {
+            return 0;
+        }
+    };
+
     private final String storeKey = "a";
     private final String cacheKey = "b";
 
@@ -44,10 +50,13 @@ public class MergedSortedCacheWrappedSessionStoreIteratorTest {
     private final Iterator<KeyValue<Windowed<Bytes>, byte[]>> storeKvs = Collections.singleton(
             KeyValue.pair(new Windowed<>(Bytes.wrap(storeKey.getBytes()), storeWindow), storeKey.getBytes())).iterator();
     private final SessionWindow cacheWindow = new SessionWindow(10, 20);
-    private final Iterator<KeyValue<Bytes, LRUCacheEntry>> cacheKvs = Collections.singleton(KeyValue.pair(
-            SessionKeySerde.toBinary(
-                    new Windowed<>(cacheKey, cacheWindow), Serdes.String().serializer()), new LRUCacheEntry(cacheKey.getBytes())))
-            .iterator();
+    private final Iterator<KeyValue<Bytes, LRUCacheEntry>> cacheKvs = Collections.singleton(
+        KeyValue.pair(
+            SINGLE_SEGMENT_CACHE_FUNCTION.cacheKey(
+                SessionKeySerde.toBinary(new Windowed<>(cacheKey, cacheWindow), Serdes.String().serializer(), "dummy")
+            ),
+            new LRUCacheEntry(cacheKey.getBytes())
+        )).iterator();
 
     @Test
     public void shouldHaveNextFromStore() throws Exception {
@@ -107,7 +116,10 @@ public class MergedSortedCacheWrappedSessionStoreIteratorTest {
 
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> cacheIterator
                 = new DelegatingPeekingKeyValueIterator<>("cache", new KeyValueIteratorStub<>(cacheKvs));
-        return new MergedSortedCacheSessionStoreIterator<>(cacheIterator, storeIterator, new StateSerdes<>("name", Serdes.String(), Serdes.String()));
+        return new MergedSortedCacheSessionStoreIterator<>(
+            cacheIterator, storeIterator, new StateSerdes<>("name", Serdes.String(), Serdes.String()),
+            SINGLE_SEGMENT_CACHE_FUNCTION
+        );
     }
 
 }

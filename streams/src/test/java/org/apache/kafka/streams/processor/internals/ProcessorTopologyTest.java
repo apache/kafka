@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -47,6 +46,7 @@ import java.io.File;
 import java.util.Properties;
 
 import static org.hamcrest.CoreMatchers.containsString;
+import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
@@ -78,9 +78,9 @@ public class ProcessorTopologyTest {
         props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "processor-topology-test");
         props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9091");
         props.setProperty(StreamsConfig.STATE_DIR_CONFIG, localState.getAbsolutePath());
-        props.setProperty(StreamsConfig.KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
-        props.setProperty(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
-        props.setProperty(StreamsConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, CustomTimestampExtractor.class.getName());
+        props.setProperty(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
+        props.setProperty(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
+        props.setProperty(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, CustomTimestampExtractor.class.getName());
         this.config = new StreamsConfig(props);
     }
 
@@ -121,9 +121,9 @@ public class ProcessorTopologyTest {
     }
 
     @Test
-    public void testDrivingSimpleTopology() {
+    public void testDrivingSimpleTopology() throws Exception {
         int partition = 10;
-        driver = new ProcessorTopologyTestDriver(config, createSimpleTopology(partition));
+        driver = new ProcessorTopologyTestDriver(config, createSimpleTopology(partition).internalTopologyBuilder);
         driver.process(INPUT_TOPIC_1, "key1", "value1", STRING_SERIALIZER, STRING_SERIALIZER);
         assertNextOutputRecord(OUTPUT_TOPIC_1, "key1", "value1", partition);
         assertNoOutputRecord(OUTPUT_TOPIC_2);
@@ -143,8 +143,8 @@ public class ProcessorTopologyTest {
 
 
     @Test
-    public void testDrivingMultiplexingTopology() {
-        driver = new ProcessorTopologyTestDriver(config, createMultiplexingTopology());
+    public void testDrivingMultiplexingTopology() throws Exception {
+        driver = new ProcessorTopologyTestDriver(config, createMultiplexingTopology().internalTopologyBuilder);
         driver.process(INPUT_TOPIC_1, "key1", "value1", STRING_SERIALIZER, STRING_SERIALIZER);
         assertNextOutputRecord(OUTPUT_TOPIC_1, "key1", "value1(1)");
         assertNextOutputRecord(OUTPUT_TOPIC_2, "key1", "value1(2)");
@@ -165,8 +165,8 @@ public class ProcessorTopologyTest {
     }
 
     @Test
-    public void testDrivingMultiplexByNameTopology() {
-        driver = new ProcessorTopologyTestDriver(config, createMultiplexByNameTopology());
+    public void testDrivingMultiplexByNameTopology() throws Exception {
+        driver = new ProcessorTopologyTestDriver(config, createMultiplexByNameTopology().internalTopologyBuilder);
         driver.process(INPUT_TOPIC_1, "key1", "value1", STRING_SERIALIZER, STRING_SERIALIZER);
         assertNextOutputRecord(OUTPUT_TOPIC_1, "key1", "value1(1)");
         assertNextOutputRecord(OUTPUT_TOPIC_2, "key1", "value1(2)");
@@ -187,9 +187,9 @@ public class ProcessorTopologyTest {
     }
 
     @Test
-    public void testDrivingStatefulTopology() {
+    public void testDrivingStatefulTopology() throws Exception {
         String storeName = "entries";
-        driver = new ProcessorTopologyTestDriver(config, createStatefulTopology(storeName), storeName);
+        driver = new ProcessorTopologyTestDriver(config, createStatefulTopology(storeName).internalTopologyBuilder);
         driver.process(INPUT_TOPIC_1, "key1", "value1", STRING_SERIALIZER, STRING_SERIALIZER);
         driver.process(INPUT_TOPIC_1, "key2", "value2", STRING_SERIALIZER, STRING_SERIALIZER);
         driver.process(INPUT_TOPIC_1, "key3", "value3", STRING_SERIALIZER, STRING_SERIALIZER);
@@ -210,11 +210,11 @@ public class ProcessorTopologyTest {
                 .withStringKeys().withStringValues().inMemory().disableLogging().build();
         final String global = "global";
         final String topic = "topic";
-        final KeyValueStore<String, String> globalStore = (KeyValueStore<String, String>) storeSupplier.get();
         final TopologyBuilder topologyBuilder = this.builder
-                .addGlobalStore(globalStore, global, STRING_DESERIALIZER, STRING_DESERIALIZER, topic, "processor", define(new StatefulProcessor("my-store")));
+                .addGlobalStore(storeSupplier, global, STRING_DESERIALIZER, STRING_DESERIALIZER, topic, "processor", define(new StatefulProcessor("my-store")));
 
-        driver = new ProcessorTopologyTestDriver(config, topologyBuilder, "my-store");
+        driver = new ProcessorTopologyTestDriver(config, topologyBuilder.internalTopologyBuilder);
+        final KeyValueStore<String, String> globalStore = (KeyValueStore<String, String>) topologyBuilder.globalStateStores().get("my-store");
         driver.process(topic, "key1", "value1", STRING_SERIALIZER, STRING_SERIALIZER);
         driver.process(topic, "key2", "value2", STRING_SERIALIZER, STRING_SERIALIZER);
         assertEquals("value1", globalStore.get("key1"));
@@ -222,9 +222,9 @@ public class ProcessorTopologyTest {
     }
 
     @Test
-    public void testDrivingSimpleMultiSourceTopology() {
+    public void testDrivingSimpleMultiSourceTopology() throws Exception {
         int partition = 10;
-        driver = new ProcessorTopologyTestDriver(config, createSimpleMultiSourceTopology(partition));
+        driver = new ProcessorTopologyTestDriver(config, createSimpleMultiSourceTopology(partition).internalTopologyBuilder);
 
         driver.process(INPUT_TOPIC_1, "key1", "value1", STRING_SERIALIZER, STRING_SERIALIZER);
         assertNextOutputRecord(OUTPUT_TOPIC_1, "key1", "value1", partition);
@@ -236,14 +236,39 @@ public class ProcessorTopologyTest {
     }
 
     @Test
-    public void testDrivingInternalRepartitioningTopology() {
-        driver = new ProcessorTopologyTestDriver(config, createInternalRepartitioningTopology());
+    public void testDrivingForwardToSourceTopology() throws Exception {
+        driver = new ProcessorTopologyTestDriver(config, createForwardToSourceTopology().internalTopologyBuilder);
+        driver.process(INPUT_TOPIC_1, "key1", "value1", STRING_SERIALIZER, STRING_SERIALIZER);
+        driver.process(INPUT_TOPIC_1, "key2", "value2", STRING_SERIALIZER, STRING_SERIALIZER);
+        driver.process(INPUT_TOPIC_1, "key3", "value3", STRING_SERIALIZER, STRING_SERIALIZER);
+        assertNextOutputRecord(OUTPUT_TOPIC_2, "key1", "value1");
+        assertNextOutputRecord(OUTPUT_TOPIC_2, "key2", "value2");
+        assertNextOutputRecord(OUTPUT_TOPIC_2, "key3", "value3");
+    }
+
+    @Test
+    public void testDrivingInternalRepartitioningTopology() throws Exception {
+        driver = new ProcessorTopologyTestDriver(config, createInternalRepartitioningTopology().internalTopologyBuilder);
         driver.process(INPUT_TOPIC_1, "key1", "value1", STRING_SERIALIZER, STRING_SERIALIZER);
         driver.process(INPUT_TOPIC_1, "key2", "value2", STRING_SERIALIZER, STRING_SERIALIZER);
         driver.process(INPUT_TOPIC_1, "key3", "value3", STRING_SERIALIZER, STRING_SERIALIZER);
         assertNextOutputRecord(OUTPUT_TOPIC_1, "key1", "value1");
         assertNextOutputRecord(OUTPUT_TOPIC_1, "key2", "value2");
         assertNextOutputRecord(OUTPUT_TOPIC_1, "key3", "value3");
+    }
+
+    @Test
+    public void testDrivingInternalRepartitioningForwardingTimestampTopology() throws Exception {
+        driver = new ProcessorTopologyTestDriver(config, createInternalRepartitioningWithValueTimestampTopology().internalTopologyBuilder);
+        driver.process(INPUT_TOPIC_1, "key1", "value1@1000", STRING_SERIALIZER, STRING_SERIALIZER);
+        driver.process(INPUT_TOPIC_1, "key2", "value2@2000", STRING_SERIALIZER, STRING_SERIALIZER);
+        driver.process(INPUT_TOPIC_1, "key3", "value3@3000", STRING_SERIALIZER, STRING_SERIALIZER);
+        assertThat(driver.readOutput(OUTPUT_TOPIC_1, STRING_DESERIALIZER, STRING_DESERIALIZER),
+                equalTo(new ProducerRecord<>(OUTPUT_TOPIC_1, null, 1000L, "key1", "value1")));
+        assertThat(driver.readOutput(OUTPUT_TOPIC_1, STRING_DESERIALIZER, STRING_DESERIALIZER),
+                equalTo(new ProducerRecord<>(OUTPUT_TOPIC_1, null, 2000L, "key2", "value2")));
+        assertThat(driver.readOutput(OUTPUT_TOPIC_1, STRING_DESERIALIZER, STRING_DESERIALIZER),
+                equalTo(new ProducerRecord<>(OUTPUT_TOPIC_1, null, 3000L, "key3", "value3")));
     }
 
     @Test
@@ -357,6 +382,22 @@ public class ProcessorTopologyTest {
             .addSink("sink1", OUTPUT_TOPIC_1, "source1");
     }
 
+    private TopologyBuilder createInternalRepartitioningWithValueTimestampTopology() {
+        return builder.addSource("source", INPUT_TOPIC_1)
+                .addInternalTopic(THROUGH_TOPIC_1)
+                .addProcessor("processor", define(new ValueTimestampProcessor()), "source")
+                .addSink("sink0", THROUGH_TOPIC_1, "processor")
+                .addSource("source1", THROUGH_TOPIC_1)
+                .addSink("sink1", OUTPUT_TOPIC_1, "source1");
+    }
+
+    private TopologyBuilder createForwardToSourceTopology() {
+        return builder.addSource("source-1", INPUT_TOPIC_1)
+                .addSink("sink-1", OUTPUT_TOPIC_1, "source-1")
+                .addSource("source-2", OUTPUT_TOPIC_1)
+                .addSink("sink-2", OUTPUT_TOPIC_2, "source-2");
+    }
+
     private TopologyBuilder createSimpleMultiSourceTopology(int partition) {
         return builder.addSource("source-1", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
                 .addProcessor("processor-1", define(new ForwardingProcessor()), "source-1")
@@ -380,6 +421,18 @@ public class ProcessorTopologyTest {
         @Override
         public void punctuate(long streamTime) {
             context().forward(Long.toString(streamTime), "punctuate");
+        }
+    }
+
+    /**
+     * A processor that removes custom timestamp information from messages and forwards modified messages to each child.
+     * A message contains custom timestamp information if the value is in ".*@[0-9]+" format.
+     */
+    protected static class ValueTimestampProcessor extends AbstractProcessor<String, String> {
+
+        @Override
+        public void process(String key, String value) {
+            context().forward(key, value.split("@")[0]);
         }
     }
 
@@ -488,9 +541,19 @@ public class ProcessorTopologyTest {
         };
     }
 
+    /**
+     * A custom timestamp extractor that extracts the timestamp from the record's value if the value is in ".*@[0-9]+"
+     * format. Otherwise, it returns the record's timestamp or the default timestamp if the record's timestamp is zero.
+    */
     public static class CustomTimestampExtractor implements TimestampExtractor {
         @Override
         public long extract(final ConsumerRecord<Object, Object> record, final long previousTimestamp) {
+            if (record.value().toString().matches(".*@[0-9]+"))
+                return Long.parseLong(record.value().toString().split("@")[1]);
+
+            if (record.timestamp() > 0L)
+                return record.timestamp();
+
             return timestamp;
         }
     }

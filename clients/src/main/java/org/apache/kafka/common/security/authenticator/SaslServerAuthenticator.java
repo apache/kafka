@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.common.security.authenticator;
 
 import org.apache.kafka.common.KafkaException;
@@ -134,9 +133,7 @@ public class SaslServerAuthenticator implements Authenticator {
             callbackHandler = new ScramServerCallbackHandler(credentialCache.cache(mechanism, ScramCredential.class));
         callbackHandler.configure(configs, Mode.SERVER, subject, saslMechanism);
         if (mechanism.equals(SaslConfigs.GSSAPI_MECHANISM)) {
-            if (subject.getPrincipals().isEmpty())
-                throw new IllegalArgumentException("subject must have at least one principal");
-            saslServer = createSaslKerberosServer(callbackHandler, configs);
+            saslServer = createSaslKerberosServer(callbackHandler, configs, subject);
         } else {
             try {
                 saslServer = Subject.doAs(subject, new PrivilegedExceptionAction<SaslServer>() {
@@ -150,12 +147,12 @@ public class SaslServerAuthenticator implements Authenticator {
         }
     }
 
-    private SaslServer createSaslKerberosServer(final AuthCallbackHandler saslServerCallbackHandler, final Map<String, ?> configs) throws IOException {
+    private SaslServer createSaslKerberosServer(final AuthCallbackHandler saslServerCallbackHandler, final Map<String, ?> configs, Subject subject) throws IOException {
         // server is using a JAAS-authenticated subject: determine service principal name and hostname from kafka server's subject.
-        final Principal servicePrincipal = subject.getPrincipals().iterator().next();
+        final String servicePrincipal = SaslClientAuthenticator.firstPrincipal(subject);
         KerberosName kerberosName;
         try {
-            kerberosName = KerberosName.parse(servicePrincipal.getName());
+            kerberosName = KerberosName.parse(servicePrincipal);
         } catch (IllegalArgumentException e) {
             throw new KafkaException("Principal has name with unexpected format " + servicePrincipal);
         }
@@ -308,11 +305,12 @@ public class SaslServerAuthenticator implements Authenticator {
 
             if (!Protocol.apiVersionSupported(requestHeader.apiKey(), requestHeader.apiVersion())) {
                 if (apiKey == ApiKeys.API_VERSIONS)
-                    sendKafkaResponse(requestHeader, ApiVersionsResponse.fromError(Errors.UNSUPPORTED_VERSION));
+                    sendKafkaResponse(ApiVersionsResponse.unsupportedVersionSend(node, requestHeader));
                 else
                     throw new UnsupportedVersionException("Version " + requestHeader.apiVersion() + " is not supported for apiKey " + apiKey);
             } else {
-                AbstractRequest request = AbstractRequest.getRequest(requestHeader.apiKey(), requestHeader.apiVersion(), requestBuffer);
+                AbstractRequest request = AbstractRequest.getRequest(requestHeader.apiKey(), requestHeader.apiVersion(),
+                        requestBuffer).request;
 
                 LOG.debug("Handle Kafka request {}", apiKey);
                 switch (apiKey) {
@@ -373,7 +371,11 @@ public class SaslServerAuthenticator implements Authenticator {
     }
 
     private void sendKafkaResponse(RequestHeader requestHeader, AbstractResponse response) throws IOException {
-        netOutBuffer = response.toSend(node, requestHeader);
+        sendKafkaResponse(response.toSend(node, requestHeader));
+    }
+
+    private void sendKafkaResponse(Send send) throws IOException {
+        netOutBuffer = send;
         flushNetOutBufferAndUpdateInterestOps();
     }
 }

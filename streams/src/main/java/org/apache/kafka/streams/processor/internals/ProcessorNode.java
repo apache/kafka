@@ -1,20 +1,19 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.metrics.Sensor;
@@ -24,11 +23,10 @@ import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.Punctuator;
 
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
 public class ProcessorNode<K, V> {
@@ -63,14 +61,6 @@ public class ProcessorNode<K, V> {
             if (processor != null) {
                 processor.close();
             }
-        }
-    };
-
-    private long timestamp;
-    private Runnable punctuateDelegate = new Runnable() {
-        @Override
-        public void run() {
-            processor().punctuate(timestamp);
         }
     };
 
@@ -110,7 +100,7 @@ public class ProcessorNode<K, V> {
     public void init(ProcessorContext context) {
         this.context = context;
         try {
-            nodeMetrics = new NodeMetrics(context.metrics(), name,  "task." + context.taskId());
+            nodeMetrics = new NodeMetrics(context.metrics(), name, context);
             nodeMetrics.metrics.measureLatencyNs(time, initDelegate, nodeMetrics.nodeCreationSensor);
         } catch (Exception e) {
             throw new StreamsException(String.format("failed to initialize processor %s", name), e);
@@ -134,8 +124,13 @@ public class ProcessorNode<K, V> {
         this.nodeMetrics.metrics.measureLatencyNs(time, processDelegate, nodeMetrics.nodeProcessTimeSensor);
     }
 
-    public void punctuate(long timestamp) {
-        this.timestamp = timestamp;
+    public void punctuate(final long timestamp, final Punctuator punctuator) {
+        Runnable punctuateDelegate = new Runnable() {
+            @Override
+            public void run() {
+                punctuator.punctuate(timestamp);
+            }
+        };
         this.nodeMetrics.metrics.measureLatencyNs(time, punctuateDelegate, nodeMetrics.nodePunctuateTimeSensor);
     }
 
@@ -164,34 +159,36 @@ public class ProcessorNode<K, V> {
         return sb.toString();
     }
 
-    protected class NodeMetrics  {
+    protected static final class NodeMetrics  {
         final StreamsMetricsImpl metrics;
-        final String metricGrpName;
-        final Map<String, String> metricTags;
 
         final Sensor nodeProcessTimeSensor;
         final Sensor nodePunctuateTimeSensor;
         final Sensor sourceNodeForwardSensor;
+        final Sensor sourceNodeSkippedDueToDeserializationError;
         final Sensor nodeCreationSensor;
         final Sensor nodeDestructionSensor;
 
 
-        public NodeMetrics(StreamsMetrics metrics, String name, String sensorNamePrefix) {
+        public NodeMetrics(final StreamsMetrics metrics, final String name, final ProcessorContext context) {
             final String scope = "processor-node";
-            final String tagKey = "processor-node-id";
-            final String tagValue = name;
+            final String tagKey = "task-id";
+            final String tagValue = context.taskId().toString();
             this.metrics = (StreamsMetricsImpl) metrics;
-            this.metricGrpName = "stream-processor-node-metrics";
-            this.metricTags = new LinkedHashMap<>();
-            this.metricTags.put(tagKey, tagValue);
 
             // these are all latency metrics
-            this.nodeProcessTimeSensor = metrics.addLatencyAndThroughputSensor(scope, sensorNamePrefix + "." + name, "process", Sensor.RecordingLevel.DEBUG, tagKey, tagValue);
-            this.nodePunctuateTimeSensor = metrics.addLatencyAndThroughputSensor(scope, sensorNamePrefix + "." + name, "punctuate", Sensor.RecordingLevel.DEBUG, tagKey, tagValue);
-            this.nodeCreationSensor = metrics.addLatencyAndThroughputSensor(scope, sensorNamePrefix + "." + name, "create", Sensor.RecordingLevel.DEBUG, tagKey, tagValue);
-            this.nodeDestructionSensor = metrics.addLatencyAndThroughputSensor(scope, sensorNamePrefix + "." + name, "destroy", Sensor.RecordingLevel.DEBUG, tagKey, tagValue);
-            this.sourceNodeForwardSensor = metrics.addThroughputSensor(scope, sensorNamePrefix + "." + name, "forward", Sensor.RecordingLevel.DEBUG, tagKey, tagValue);
-
+            this.nodeProcessTimeSensor = metrics.addLatencyAndThroughputSensor(scope, name, "process",
+                    Sensor.RecordingLevel.DEBUG, tagKey, tagValue);
+            this.nodePunctuateTimeSensor = metrics.addLatencyAndThroughputSensor(scope, name, "punctuate",
+                    Sensor.RecordingLevel.DEBUG, tagKey, tagValue);
+            this.nodeCreationSensor = metrics.addLatencyAndThroughputSensor(scope, name, "create",
+                    Sensor.RecordingLevel.DEBUG, tagKey, tagValue);
+            this.nodeDestructionSensor = metrics.addLatencyAndThroughputSensor(scope, name, "destroy",
+                    Sensor.RecordingLevel.DEBUG, tagKey, tagValue);
+            this.sourceNodeForwardSensor = metrics.addThroughputSensor(scope, name, "forward",
+                    Sensor.RecordingLevel.DEBUG, tagKey, tagValue);
+            this.sourceNodeSkippedDueToDeserializationError = metrics.addThroughputSensor(scope, name, "skippedDueToDeserializationError",
+                    Sensor.RecordingLevel.DEBUG, tagKey, tagValue);
         }
 
         public void removeAllSensors() {
@@ -200,6 +197,7 @@ public class ProcessorNode<K, V> {
             metrics.removeSensor(sourceNodeForwardSensor);
             metrics.removeSensor(nodeCreationSensor);
             metrics.removeSensor(nodeDestructionSensor);
+            metrics.removeSensor(sourceNodeSkippedDueToDeserializationError);
         }
     }
 }

@@ -1,22 +1,22 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p/>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p/>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- **/
-
+ */
 package org.apache.kafka.connect.storage;
 
+import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -40,6 +40,7 @@ import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.KafkaBasedLog;
+import org.apache.kafka.connect.util.TopicAdmin;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -404,7 +405,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
     }
 
     // package private for testing
-    KafkaBasedLog<String, byte[]> setupAndCreateKafkaBasedLog(String topic, WorkerConfig config) {
+    KafkaBasedLog<String, byte[]> setupAndCreateKafkaBasedLog(String topic, final WorkerConfig config) {
         Map<String, Object> producerProps = new HashMap<>();
         producerProps.putAll(config.originals());
         producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
@@ -416,12 +417,29 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
         consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
 
-        return createKafkaBasedLog(topic, producerProps, consumerProps, new ConsumeCallback());
+        Map<String, Object> adminProps = new HashMap<>(config.originals());
+        NewTopic topicDescription = TopicAdmin.defineTopic(topic).
+                compacted().
+                partitions(1).
+                replicationFactor(config.getShort(DistributedConfig.CONFIG_STORAGE_REPLICATION_FACTOR_CONFIG)).
+                build();
+
+        return createKafkaBasedLog(topic, producerProps, consumerProps, new ConsumeCallback(), topicDescription, adminProps);
     }
 
     private KafkaBasedLog<String, byte[]> createKafkaBasedLog(String topic, Map<String, Object> producerProps,
-                                                              Map<String, Object> consumerProps, Callback<ConsumerRecord<String, byte[]>> consumedCallback) {
-        return new KafkaBasedLog<>(topic, producerProps, consumerProps, consumedCallback, Time.SYSTEM);
+                                                              Map<String, Object> consumerProps,
+                                                              Callback<ConsumerRecord<String, byte[]>> consumedCallback,
+                                                              final NewTopic topicDescription, final Map<String, Object> adminProps) {
+        Runnable createTopics = new Runnable() {
+            @Override
+            public void run() {
+                try (TopicAdmin admin = new TopicAdmin(adminProps)) {
+                    admin.createTopics(topicDescription);
+                }
+            }
+        };
+        return new KafkaBasedLog<>(topic, producerProps, consumerProps, consumedCallback, Time.SYSTEM, createTopics);
     }
 
     @SuppressWarnings("unchecked")

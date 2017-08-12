@@ -22,8 +22,8 @@ import java.util.Properties
 import kafka.network.SocketServer
 import kafka.utils.TestUtils
 import org.apache.kafka.common.protocol.types.Struct
-import org.apache.kafka.common.protocol.{ApiKeys, Errors, ProtoUtils}
-import org.apache.kafka.common.requests.{CreateTopicsRequest, CreateTopicsResponse, MetadataRequest, MetadataResponse}
+import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.requests.{ApiError, CreateTopicsRequest, CreateTopicsResponse, MetadataRequest, MetadataResponse}
 import org.junit.Assert.{assertEquals, assertFalse, assertNotNull, assertTrue}
 
 import scala.collection.JavaConverters._
@@ -36,14 +36,14 @@ class AbstractCreateTopicsRequestTest extends BaseRequestTest {
   protected def validateValidCreateTopicsRequests(request: CreateTopicsRequest): Unit = {
     val response = sendCreateTopicRequest(request)
 
-    val error = response.errors.values.asScala.find(!_.is(Errors.NONE))
+    val error = response.errors.values.asScala.find(_.isFailure)
     assertTrue(s"There should be no errors, found ${response.errors.asScala}", error.isEmpty)
 
     request.topics.asScala.foreach { case (topic, details) =>
 
       def verifyMetadata(socketServer: SocketServer) = {
         val metadata = sendMetadataRequest(
-          new MetadataRequest.Builder(List(topic).asJava).build()).topicMetadata.asScala
+          new MetadataRequest.Builder(List(topic).asJava, true).build()).topicMetadata.asScala
         val metadataForTopic = metadata.filter(_.topic == topic).head
 
         val partitions = if (!details.replicasAssignments.isEmpty)
@@ -79,16 +79,16 @@ class AbstractCreateTopicsRequestTest extends BaseRequestTest {
     }
   }
 
-  protected def error(error: Errors, errorMessage: Option[String] = None): CreateTopicsResponse.Error =
-    new CreateTopicsResponse.Error(error, errorMessage.orNull)
+  protected def error(error: Errors, errorMessage: Option[String] = None): ApiError =
+    new ApiError(error, errorMessage.orNull)
 
-  protected def duplicateFirstTopic(request: CreateTopicsRequest) = {
+  protected def toStructWithDuplicateFirstTopic(request: CreateTopicsRequest): Struct = {
     val struct = request.toStruct
     val topics = struct.getArray("create_topic_requests")
     val firstTopic = topics(0).asInstanceOf[Struct]
     val newTopics = firstTopic :: topics.toList
     struct.set("create_topic_requests", newTopics.toArray)
-    new CreateTopicsRequest(struct, request.version)
+    struct
   }
 
   protected def addPartitionsAndReplicationFactorToFirstTopic(request: CreateTopicsRequest) = {
@@ -101,9 +101,11 @@ class AbstractCreateTopicsRequestTest extends BaseRequestTest {
   }
 
   protected def validateErrorCreateTopicsRequests(request: CreateTopicsRequest,
-                                                  expectedResponse: Map[String, CreateTopicsResponse.Error],
-                                                  checkErrorMessage: Boolean = true): Unit = {
-    val response = sendCreateTopicRequest(request)
+                                                  expectedResponse: Map[String, ApiError],
+                                                  checkErrorMessage: Boolean = true,
+                                                  requestStruct: Option[Struct] = None): Unit = {
+    val response = requestStruct.map(sendCreateTopicRequestStruct(_, request.version)).getOrElse(
+      sendCreateTopicRequest(request))
     val errors = response.errors.asScala
     assertEquals("The response size should match", expectedResponse.size, response.errors.size)
 
@@ -116,7 +118,7 @@ class AbstractCreateTopicsRequestTest extends BaseRequestTest {
         assertEquals(expected.messageWithFallback, actual.messageWithFallback)
       }
       // If no error validate topic exists
-      if (expectedError.is(Errors.NONE) && !request.validateOnly) {
+      if (expectedError.isSuccess && !request.validateOnly) {
         validateTopicExists(topic)
       }
     }
@@ -125,7 +127,7 @@ class AbstractCreateTopicsRequestTest extends BaseRequestTest {
   protected def validateTopicExists(topic: String): Unit = {
     TestUtils.waitUntilMetadataIsPropagated(servers, topic, 0)
     val metadata = sendMetadataRequest(
-      new MetadataRequest.Builder(List(topic).asJava).build()).topicMetadata.asScala
+      new MetadataRequest.Builder(List(topic).asJava, true).build()).topicMetadata.asScala
     assertTrue("The topic should be created", metadata.exists(p => p.topic.equals(topic) && p.error == Errors.NONE))
   }
 
@@ -133,15 +135,20 @@ class AbstractCreateTopicsRequestTest extends BaseRequestTest {
     assignments.map { case (k, v) => (k: Integer, v.map { i => i: Integer }.asJava) }.asJava
   }
 
+  protected def sendCreateTopicRequestStruct(requestStruct: Struct, apiVersion: Short,
+                                             socketServer: SocketServer = controllerSocketServer): CreateTopicsResponse = {
+    val response = connectAndSendStruct(requestStruct, ApiKeys.CREATE_TOPICS, apiVersion, socketServer)
+    CreateTopicsResponse.parse(response, apiVersion)
+  }
+
   protected def sendCreateTopicRequest(request: CreateTopicsRequest, socketServer: SocketServer = controllerSocketServer): CreateTopicsResponse = {
-    val response = send(request, ApiKeys.CREATE_TOPICS, socketServer)
+    val response = connectAndSend(request, ApiKeys.CREATE_TOPICS, socketServer)
     CreateTopicsResponse.parse(response, request.version)
   }
 
   protected def sendMetadataRequest(request: MetadataRequest, destination: SocketServer = anySocketServer): MetadataResponse = {
-    val version = ProtoUtils.latestVersion(ApiKeys.METADATA.id)
-    val response = send(request, ApiKeys.METADATA, destination = destination)
-    MetadataResponse.parse(response, version)
+    val response = connectAndSend(request, ApiKeys.METADATA, destination = destination)
+    MetadataResponse.parse(response, ApiKeys.METADATA.latestVersion)
   }
 
 }

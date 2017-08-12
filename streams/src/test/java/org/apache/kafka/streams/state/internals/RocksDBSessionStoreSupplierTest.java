@@ -1,20 +1,19 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -45,41 +44,36 @@ import static org.junit.Assert.assertTrue;
 public class RocksDBSessionStoreSupplierTest {
 
     private static final String STORE_NAME = "name";
+    private final List<ProducerRecord> logged = new ArrayList<>();
     private final ThreadCache cache = new ThreadCache("test", 1024, new MockStreamsMetrics(new Metrics()));
     private final MockProcessorContext context = new MockProcessorContext(TestUtils.tempDirectory(),
-                                                                          Serdes.String(),
-                                                                          Serdes.String(),
-                                                                          new NoOpRecordCollector(),
-                                                                          cache);
+        Serdes.String(),
+        Serdes.String(),
+        new NoOpRecordCollector() {
+            @Override
+            public <K, V> void send(final String topic,
+                                    final K key,
+                                    final V value,
+                                    final Integer partition,
+                                    final Long timestamp,
+                                    final Serializer<K> keySerializer,
+                                    final Serializer<V> valueSerializer) {
+                logged.add(new ProducerRecord<>(topic, partition, timestamp, key, value));
+            }
+        },
+        cache);
 
     private SessionStore<String, String> store;
 
     @After
     public void close() {
+        context.close();
         store.close();
     }
 
     @Test
     public void shouldCreateLoggingEnabledStoreWhenStoreLogged() throws Exception {
         store = createStore(true, false);
-        final List<ProducerRecord> logged = new ArrayList<>();
-        final NoOpRecordCollector collector = new NoOpRecordCollector() {
-            @Override
-            public <K, V> void send(final String topic,
-                                    K key,
-                                    V value,
-                                    Integer partition,
-                                    Long timestamp,
-                                    Serializer<K> keySerializer,
-                                    Serializer<V> valueSerializer) {
-                logged.add(new ProducerRecord<K, V>(topic, partition, timestamp, key, value));
-            }
-        };
-        final MockProcessorContext context = new MockProcessorContext(TestUtils.tempDirectory(),
-                                                                      Serdes.String(),
-                                                                      Serdes.String(),
-                                                                      collector,
-                                                                      cache);
         context.setTime(1);
         store.init(context, store);
         store.put(new Windowed<>("a", new SessionWindow(0, 10)), "b");
@@ -89,24 +83,6 @@ public class RocksDBSessionStoreSupplierTest {
     @Test
     public void shouldNotBeLoggingEnabledStoreWhenLoggingNotEnabled() throws Exception {
         store = createStore(false, false);
-        final List<ProducerRecord> logged = new ArrayList<>();
-        final NoOpRecordCollector collector = new NoOpRecordCollector() {
-            @Override
-            public <K, V> void send(final String topic,
-                                    K key,
-                                    V value,
-                                    Integer partition,
-                                    Long timestamp,
-                                    Serializer<K> keySerializer,
-                                    Serializer<V> valueSerializer) {
-                logged.add(new ProducerRecord<K, V>(topic, partition, timestamp, key, value));
-            }
-        };
-        final MockProcessorContext context = new MockProcessorContext(TestUtils.tempDirectory(),
-                                                                      Serdes.String(),
-                                                                      Serdes.String(),
-                                                                      collector,
-                                                                      cache);
         context.setTime(1);
         store.init(context, store);
         store.put(new Windowed<>("a", new SessionWindow(0, 10)), "b");
@@ -136,7 +112,6 @@ public class RocksDBSessionStoreSupplierTest {
         assertThat(store, is(instanceOf(RocksDBSessionStore.class)));
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldHaveMeteredStoreWhenCached() throws Exception {
         store = createStore(false, true);
@@ -145,7 +120,6 @@ public class RocksDBSessionStoreSupplierTest {
         assertFalse(metrics.metrics().isEmpty());
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldHaveMeteredStoreWhenLogged() throws Exception {
         store = createStore(true, false);
@@ -154,7 +128,6 @@ public class RocksDBSessionStoreSupplierTest {
         assertFalse(metrics.metrics().isEmpty());
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldHaveMeteredStoreWhenNotLoggedOrCached() throws Exception {
         store = createStore(false, false);

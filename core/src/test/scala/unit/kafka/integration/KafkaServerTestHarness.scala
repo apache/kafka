@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -28,7 +28,7 @@ import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.junit.{After, Before}
 
-import scala.collection.mutable.Buffer
+import scala.collection.mutable.{ArrayBuffer, Buffer}
 import java.util.Properties
 
 import org.apache.kafka.common.network.ListenerName
@@ -36,9 +36,9 @@ import org.apache.kafka.common.network.ListenerName
 /**
  * A test harness that brings up some number of broker nodes
  */
-trait KafkaServerTestHarness extends ZooKeeperTestHarness {
+abstract class KafkaServerTestHarness extends ZooKeeperTestHarness {
   var instanceConfigs: Seq[KafkaConfig] = null
-  var servers: Buffer[KafkaServer] = null
+  var servers: Buffer[KafkaServer] = new ArrayBuffer
   var brokerList: String = null
   var alive: Array[Boolean] = null
   val kafkaPrincipalType = KafkaPrincipal.USER_TYPE
@@ -47,7 +47,7 @@ trait KafkaServerTestHarness extends ZooKeeperTestHarness {
    * Implementations must override this method to return a set of KafkaConfigs. This method will be invoked for every
    * test and should not reuse previous configurations unless they select their ports randomly when servers are started.
    */
-  def generateConfigs(): Seq[KafkaConfig]
+  def generateConfigs: Seq[KafkaConfig]
 
   /**
    * Override this in case ACLs or security credentials must be set before `servers` are started.
@@ -64,7 +64,7 @@ trait KafkaServerTestHarness extends ZooKeeperTestHarness {
 
   def configs: Seq[KafkaConfig] = {
     if (instanceConfigs == null)
-      instanceConfigs = generateConfigs()
+      instanceConfigs = generateConfigs
     instanceConfigs
   }
 
@@ -88,7 +88,10 @@ trait KafkaServerTestHarness extends ZooKeeperTestHarness {
     // default implementation is a no-op, it is overridden by subclasses if required
     configureSecurityBeforeServersStart()
 
-    servers = configs.map(TestUtils.createServer(_)).toBuffer
+    // Add each broker to `servers` buffer as soon as it is created to ensure that brokers
+    // are shutdown cleanly in tearDown even if a subsequent broker fails to start
+    for (config <- configs)
+      servers += TestUtils.createServer(config)
     brokerList = TestUtils.bootstrapServers(servers, listenerName)
     alive = new Array[Boolean](servers.length)
     Arrays.fill(alive, true)
@@ -97,12 +100,11 @@ trait KafkaServerTestHarness extends ZooKeeperTestHarness {
   @After
   override def tearDown() {
     if (servers != null) {
-      servers.foreach(_.shutdown())
-      servers.foreach(server => CoreUtils.delete(server.config.logDirs))
+      TestUtils.shutdownServers(servers)
     }
     super.tearDown
   }
-  
+
   /**
    * Pick a broker at random and kill it if it isn't already dead
    * Return the id of the broker killed
@@ -120,7 +122,7 @@ trait KafkaServerTestHarness extends ZooKeeperTestHarness {
       alive(index) = false
     }
   }
-  
+
   /**
    * Restart any dead brokers
    */

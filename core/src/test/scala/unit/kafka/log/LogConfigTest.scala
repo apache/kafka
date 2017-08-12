@@ -111,16 +111,6 @@ class LogConfigTest {
       case _: ConfigException => false
     }
   }
-  def testValueValidator() {
-    val p = new Properties()
-    p.setProperty(LogConfig.SegmentBytesProp, "100")
-    p.setProperty(LogConfig.RetentionBytesProp, "100")
-    LogConfig.validate(p)
-    p.setProperty(LogConfig.RetentionBytesProp, "90")
-    intercept[IllegalArgumentException] {
-      LogConfig.validate(p)
-    }
-  }
 
   private def assertPropertyInvalid(name: String, values: AnyRef*) {
     values.foreach((value) => {

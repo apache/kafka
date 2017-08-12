@@ -1,13 +1,13 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -21,14 +21,15 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.kstream.internals.WindowedSerializer;
 import org.apache.kafka.streams.kstream.internals.WindowedStreamPartitioner;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StreamPartitioner;
-import org.apache.kafka.streams.processor.TopologyBuilder;
 
 /**
  * {@code KStream} is an abstraction of a <i>record stream</i> of {@link KeyValue} pairs, i.e., each record is an
@@ -36,13 +37,13 @@ import org.apache.kafka.streams.processor.TopologyBuilder;
  * For example a user X might buy two items I1 and I2, and thus there might be two records {@code <K:I1>, <K:I2>}
  * in the stream.
  * <p>
- * A {@code KStream} is either {@link KStreamBuilder#stream(String...) defined from one or multiple Kafka topics} that
+ * A {@code KStream} is either {@link StreamsBuilder#stream(String...) defined from one or multiple Kafka topics} that
  * are consumed message by message or the result of a {@code KStream} transformation.
  * A {@link KTable} can also be {@link KTable#toStream() converted} into a {@code KStream}.
  * <p>
  * A {@code KStream} can be transformed record by record, joined with another {@code KStream}, {@link KTable},
  * {@link GlobalKTable}, or can be aggregated into a {@link KTable}.
- * Kafka Streams DSL can be mixed-and-matched with Processor API (PAPI) (c.f. {@link TopologyBuilder}) via
+ * Kafka Streams DSL can be mixed-and-matched with Processor API (PAPI) (c.f. {@link Topology}) via
  * {@link #process(ProcessorSupplier, String...) process(...)},
  * {@link #transform(TransformerSupplier, String...) transform(...)}, and
  * {@link #transformValues(ValueTransformerSupplier, String...) transformValues(...)}.
@@ -51,10 +52,9 @@ import org.apache.kafka.streams.processor.TopologyBuilder;
  * @param <V> Type of values
  * @see KTable
  * @see KGroupedStream
- * @see KStreamBuilder#stream(String...)
+ * @see StreamsBuilder#stream(String...)
  */
-@SuppressWarnings("unused")
-@InterfaceStability.Unstable
+@InterfaceStability.Evolving
 public interface KStream<K, V> {
 
     /**
@@ -122,7 +122,7 @@ public interface KStream<K, V> {
      * The example below normalizes the String key to upper-case letters and counts the number of token of the value string.
      * <pre>{@code
      * KStream<String, String> inputStream = builder.stream("topic");
-     * KStream<Integer, String> outputStream = inputStream.map(new KeyValueMapper<String, String, KeyValue<String, Integer>> {
+     * KStream<String, Integer> outputStream = inputStream.map(new KeyValueMapper<String, String, KeyValue<String, Integer>> {
      *     KeyValue<String, Integer> apply(String key, String value) {
      *         return new KeyValue<>(key.toUpperCase(), value.split(" ").length);
      *     }
@@ -192,7 +192,7 @@ public interface KStream<K, V> {
      * and emit a record {@code <word:1>} for each word.
      * <pre>{@code
      * KStream<byte[], String> inputStream = builder.stream("topic");
-     * KStream<Integer, String> outputStream = inputStream.flatMap(new KeyValueMapper<byte[], String, Iterable<KeyValue<String, Integer>>> {
+     * KStream<String, Integer> outputStream = inputStream.flatMap(new KeyValueMapper<byte[], String, Iterable<KeyValue<String, Integer>>> {
      *     Iterable<KeyValue<String, Integer>> apply(byte[] key, String value) {
      *         String[] tokens = value.split(" ");
      *         List<KeyValue<String, Integer>> result = new ArrayList<>(tokens.length);
@@ -238,7 +238,7 @@ public interface KStream<K, V> {
      * The example below splits input records {@code <null:String>} containing sentences as values into their words.
      * <pre>{@code
      * KStream<byte[], String> inputStream = builder.stream("topic");
-     * KStream<Integer, String> outputStream = inputStream.flatMap(new ValueMapper<String, Iterable<String>> {
+     * KStream<byte[], String> outputStream = inputStream.flatMapValues(new ValueMapper<String, Iterable<String>> {
      *     Iterable<String> apply(String value) {
      *         return Arrays.asList(value.split(" "));
      *     }
@@ -287,9 +287,9 @@ public interface KStream<K, V> {
      * Implementors will need to override {@code toString()} for keys and values that are not of type {@link String},
      * {@link Integer} etc. to get meaningful information.
      *
-     * @param streamName the name used to label the key/value pairs printed to the console
+     * @param label the name used to label the key/value pairs printed to the console
      */
-    void print(final String streamName);
+    void print(final String label);
 
     /**
      * Print the records of this stream to {@code System.out}.
@@ -319,11 +319,111 @@ public interface KStream<K, V> {
      *
      * @param keySerde   key serde used to deserialize key if type is {@code byte[]},
      * @param valSerde   value serde used to deserialize value if type is {@code byte[]},
-     * @param streamName the name used to label the key/value pairs printed to the console
+     * @param label the name used to label the key/value pairs printed to the console
      */
     void print(final Serde<K> keySerde,
                final Serde<V> valSerde,
-               final String streamName);
+               final String label);
+
+    /**
+     * Print the customized output with {@code System.out}.
+     * <p>
+     * The default serde will be use to deserialize key or value if type is {@code byte[]}.
+     * The user provided {@link KeyValueMapper} which customizes output is used to print with {@code System.out}
+     * <p>
+     * The example below shows the way to customize output data.
+     * <pre>{@code
+     * final KeyValueMapper<Integer, String, String> mapper = new KeyValueMapper<Integer, String, String>() {
+     *     @Override
+     *     public String apply(Integer key, String value) {
+     *         return String.format("(%d, %s)", key, value);
+     *     }
+     * };
+     * }</pre>
+     * <p>
+     * The KeyValueMapper's mapped value type must be {@code String}.
+     *
+     * @param mapper a {@link KeyValueMapper} that computes output type {@code String}.
+     */
+    void print(final KeyValueMapper<? super K, ? super V, String> mapper);
+
+    /**
+     * Print the customized output with {@code System.out}.
+     * <p>
+     * The default serde will be used to deserialize key or value if type is {@code byte[]}.
+     * The user provided {@link KeyValueMapper} which customizes output is used to print with {@code System.out}
+     * <p>
+     * The example below shows the way to customize output data.
+     * <pre>{@code
+     * final KeyValueMapper<Integer, String, String> mapper = new KeyValueMapper<Integer, String, String>() {
+     *     @Override
+     *     public String apply(Integer key, String value) {
+     *         return String.format("(%d, %s)", key, value);
+     *     }
+     * };
+     * }</pre>
+     * <p>
+     * The KeyValueMapper's mapped value type must be {@code String}.
+     *
+     * @param mapper a {@link KeyValueMapper} that computes output type {@code String}.
+     * @param label The given name which labels output will be printed.
+     */
+    void print(final KeyValueMapper<? super K, ? super V, String> mapper, final String label);
+
+    /**
+     * Print the customized output with {@code System.out}.
+     * <p>
+     * The user provided {@link KeyValueMapper} which customizes output is used to print with {@code System.out}
+     * The provided serde will be use to deserialize key or value if type is {@code byte[]}.
+     * <p>
+     * The example below shows the way to customize output data.
+     * <pre>{@code
+     * final KeyValueMapper<Integer, String, String> mapper = new KeyValueMapper<Integer, String, String>() {
+     *     @Override
+     *     public String apply(Integer key, String value) {
+     *         return String.format("(%d, %s)", key, value);
+     *     }
+     * };
+     * }</pre>
+     * <p>
+     * The provided KeyValueMapper's mapped value type must be {@code String}.
+     * <p>
+     * Implementors will need to override {@code toString()} for keys and values that are not of type {@link String},
+     * {@link Integer} etc. to get meaningful information.
+     *
+     * @param mapper a {@link KeyValueMapper} that computes output type {@code String}.
+     * @param keySerde a {@link Serde<K>} used to deserialize key if type is {@code byte[]}.
+     * @param valSerde a {@link Serde<V>} used to deserialize value if type is {@code byte[]}.
+     */
+    void print(final KeyValueMapper<? super K, ? super V, String> mapper, final Serde<K> keySerde, final Serde<V> valSerde);
+
+    /**
+     * Print the customized output with {@code System.out}.
+     * <p>
+     * The user provided {@link KeyValueMapper} which customizes output is used to print with {@code System.out}.
+     * The provided serde will be use to deserialize key or value if type is {@code byte[]}.
+     * <p>
+     * The example below shows the way to customize output data.
+     * <pre>{@code
+     * final KeyValueMapper<Integer, String, String> mapper = new KeyValueMapper<Integer, String, String>() {
+     *     @Override
+     *     public String apply(Integer key, String value) {
+     *         return String.format("(%d, %s)", key, value);
+     *     }
+     * };
+     * }</pre>
+     * <p>
+     * The provided KeyValueMapper's mapped value type must be {@code String}.
+     * <p>
+     * Implementors will need to override {@code toString()} for keys and values that are not of type {@link String},
+     * {@link Integer} etc. to get meaningful information.
+     *
+     * @param mapper a {@link KeyValueMapper} that computes output type {@code String}.
+     * @param keySerde a {@link Serde<K>} used to deserialize key if type is {@code byte[]}.
+     * @param valSerde a {@link Serde<V>} used to deserialize value if type is {@code byte[]}.
+     * @param label The given name which labels output will be printed.
+     */
+    void print(final KeyValueMapper<? super K, ? super V, String> mapper, final Serde<K> keySerde, final Serde<V> valSerde, final String label);
 
     /**
      * Write the records of this stream to a file at the given path.
@@ -351,10 +451,10 @@ public interface KStream<K, V> {
      * {@link Integer} etc. to get meaningful information.
      *
      * @param filePath   name of the file to write to
-     * @param streamName the name used to label the key/value pairs written to the file
+     * @param label the name used to label the key/value pairs written to the file
      */
     void writeAsText(final String filePath,
-                     final String streamName);
+                     final String label);
 
     /**
      * Write the records of this stream to a file at the given path.
@@ -386,14 +486,126 @@ public interface KStream<K, V> {
      * {@link Integer} etc. to get meaningful information.
      *
      * @param filePath   name of the file to write to
-     * @param streamName the name used to label the key/value pairs written to the file
+     * @param label the name used to label the key/value pairs written to the file
      * @param keySerde   key serde used to deserialize key if type is {@code byte[]},
      * @param valSerde   value serde used deserialize value if type is {@code byte[]},
      */
     void writeAsText(final String filePath,
-                     final String streamName,
+                     final String label,
                      final Serde<K> keySerde,
                      final Serde<V> valSerde);
+
+    /**
+     * Write the customised output to a given file path.
+     * <p>
+     * The user provided {@link KeyValueMapper} which customizes output is used to write to file.
+     * This function will use default name of stream to label records.
+     * <p>
+     * The default key and value serde will used to deserialize {@code byte[]} records before calling {@code toString()}.
+     * <p>
+     * The example below shows the way to customize output data.
+     * <pre>{@code
+     * final KeyValueMapper<Integer, String, String> mapper = new KeyValueMapper<Integer, String, String>() {
+     *     @Override
+     *     public String apply(Integer key, String value) {
+     *         return String.format("(%d, %s)", key, value);
+     *     }
+     * };
+     * }</pre>
+     * <p>
+     * The KeyValueMapper's mapped value type must be {@code String}.
+     *
+     * @param filePath path of the file to write to.
+     * @param mapper a {@link KeyValueMapper} that computes output type {@code String}.
+     */
+    void writeAsText(final String filePath, final KeyValueMapper<? super K, ? super V, String> mapper);
+
+    /**
+     * Write the customised output to a given file path.
+     * <p>
+     * The user provided {@link KeyValueMapper} which customizes output is used to write to file.
+     * This function will use given name of stream to label records.
+     * <p>
+     * The default key and value serde will used to deserialize {@code byte[]} records before calling {@code toString()}.
+     * <p>
+     * The example below shows the way to customize output data.
+     * <pre>{@code
+     * final KeyValueMapper<Integer, String, String> mapper = new KeyValueMapper<Integer, String, String>() {
+     *     @Override
+     *     public String apply(Integer key, String value) {
+     *         return String.format("(%d, %s)", key, value);
+     *     }
+     * };
+     * }</pre>
+     * <p>
+     * The KeyValueMapper's mapped value type must be {@code String}.
+     *
+     * @param filePath path of the file to write to.
+     * @param label the name used to label records written to file.
+     * @param mapper a {@link KeyValueMapper} that computes output type {@code String}.
+     */
+    void writeAsText(final String filePath, final String label, final KeyValueMapper<? super K, ? super V, String> mapper);
+
+    /**
+     * Write the customised output to a given file path.
+     * <p>
+     * The user provided {@link KeyValueMapper} which customizes output is used to write to file.
+     * This function will use default name of stream to label records.
+     * <p>
+     * The given key and value serde will be used to deserialize {@code byte[]} records before calling {@code toString()}.
+     * <p>
+     * The example below shows the way to customize output data.
+     * <pre>{@code
+     * final KeyValueMapper<Integer, String, String> mapper = new KeyValueMapper<Integer, String, String>() {
+     *     @Override
+     *     public String apply(Integer key, String value) {
+     *         return String.format("(%d, %s)", key, value);
+     *     }
+     * };
+     * }</pre>
+     * <p>
+     * The KeyValueMapper's mapped value type must be {@code String}.
+     * <p>
+     * Implementors will need to override {@code toString()} for keys and values that are not of type {@link String},
+     * {@link Integer} etc. to get meaningful information.
+     *
+     * @param filePath path of the file to write to.
+     * @param keySerde key serde used to deserialize key if type is {@code byte[]}.
+     * @param valSerde value serde used to deserialize value if type is {@code byte[]}.
+     * @param mapper a {@link KeyValueMapper} that computes output type {@code String}.
+     */
+    void writeAsText(final String filePath, final Serde<K> keySerde, final Serde<V> valSerde, final KeyValueMapper<? super K, ? super V, String> mapper);
+
+    /**
+     * Write the customised output to a given file path.
+     * <p>
+     * The user provided {@link KeyValueMapper} which customizes output is used to write to file.
+     * This function will use given name of stream to label records.
+     * <p>
+     * The given key and value serde will be used to deserialize {@code byte[]} records before calling {@code toString()}.
+     * <p>
+     * The example below shows the way to customize output data.
+     * <pre>{@code
+     * final KeyValueMapper<Integer, String, String> mapper = new KeyValueMapper<Integer, String, String>() {
+     *     @Override
+     *     public String apply(Integer key, String value) {
+     *         return String.format("(%d, %s)", key, value);
+     *     }
+     * };
+     * }</pre>
+     * <p>
+     * The KeyValueMapper's mapped value type must be {@code String}.
+     * <p>
+     * Implementors will need to override {@code toString()} for keys and values that are not of type {@link String},
+     * {@link Integer} etc. to get meaningful information.
+     *
+     * @param filePath path of the file to write to.
+     * @param label the name used to label records written to file.
+     * @param keySerde key serde used to deserialize key if type is {@code byte[]}.
+     * @param valSerde value serde used to deserialize value if type is {@code byte[]}.
+     * @param mapper a {@link KeyValueMapper} that computes output type {@code String}.
+     */
+    void writeAsText(final String filePath, final String label, final Serde<K> keySerde, final Serde<V> valSerde, final KeyValueMapper<? super K, ? super V, String> mapper);
 
     /**
      * Perform an action on each record of {@code KStream}.
@@ -441,8 +653,9 @@ public interface KStream<K, V> {
      * The specified topic should be manually created before it is used (i.e., before the Kafka Streams application is
      * started).
      * <p>
-     * This is equivalent to calling {@link #to(String) #to(someTopicName)} and {@link KStreamBuilder#stream(String...)
-     * KStreamBuilder#stream(someTopicName)}.
+     * This is equivalent to calling {@link #to(String) #to(someTopicName)} and
+     * {@link org.apache.kafka.streams.StreamsBuilder#stream(String...)
+     * StreamsBuilder#stream(someTopicName)}.
      *
      * @param topic the topic name
      * @return a {@code KStream} that contains the exact same (and potentially repartitioned) records as this {@code KStream}
@@ -456,7 +669,7 @@ public interface KStream<K, V> {
      * started).
      * <p>
      * This is equivalent to calling {@link #to(StreamPartitioner, String) #to(StreamPartitioner, someTopicName)} and
-     * {@link KStreamBuilder#stream(String...) KStreamBuilder#stream(someTopicName)}.
+     * {@link StreamsBuilder#stream(String...) StreamsBuilder#stream(someTopicName)}.
      *
      * @param partitioner the function used to determine how records are distributed among partitions of the topic,
      *                    if not specified producer's {@link DefaultPartitioner} will be used
@@ -475,7 +688,7 @@ public interface KStream<K, V> {
      * used&mdash;otherwise producer's {@link DefaultPartitioner} is used.
      * <p>
      * This is equivalent to calling {@link #to(Serde, Serde, String) #to(keySerde, valSerde, someTopicName)} and
-     * {@link KStreamBuilder#stream(Serde, Serde, String...) KStreamBuilder#stream(keySerde, valSerde, someTopicName)}.
+     * {@link StreamsBuilder#stream(Serde, Serde, String...) StreamsBuilder#stream(keySerde, valSerde, someTopicName)}.
      *
      * @param keySerde key serde used to send key-value pairs,
      *                 if not specified the default key serde defined in the configuration will be used
@@ -495,8 +708,8 @@ public interface KStream<K, V> {
      * started).
      * <p>
      * This is equivalent to calling {@link #to(Serde, Serde, StreamPartitioner, String) #to(keySerde, valSerde,
-     * StreamPartitioner, someTopicName)} and {@link KStreamBuilder#stream(Serde, Serde, String...)
-     * KStreamBuilder#stream(keySerde, valSerde, someTopicName)}.
+     * StreamPartitioner, someTopicName)} and {@link StreamsBuilder#stream(Serde, Serde, String...)
+     * StreamsBuilder#stream(keySerde, valSerde, someTopicName)}.
      *
      * @param keySerde    key serde used to send key-value pairs,
      *                    if not specified the default key serde defined in the configuration will be used
@@ -941,7 +1154,11 @@ public interface KStream<K, V> {
      * <td></td>
      * </tr>
      * </table>
-     * Both input streams need to be co-partitioned on the join key.
+     * Both input streams (or to be more precise, their underlying source topics) need to have the same number of
+     * partitions.
+     * If this is not the case, you would need to call {@link #through(String)} (for one input stream) before doing the
+     * join, using a pre-created topic with the "correct" number of partitions.
+     * Furthermore, both input streams need to be co-partitioned on the join key (i.e., use the same partitioner).
      * If this requirement is not met, Kafka Streams will automatically repartition the data, i.e., it will create an
      * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
      * The repartitioning topic will be named "${applicationId}-XXX-repartition", where "applicationId" is
@@ -1012,7 +1229,11 @@ public interface KStream<K, V> {
      * <td></td>
      * </tr>
      * </table>
-     * Both input streams need to be co-partitioned on the join key.
+     * Both input streams (or to be more precise, their underlying source topics) need to have the same number of
+     * partitions.
+     * If this is not the case, you would need to call {@link #through(String)} (for one input stream) before doing the
+     * join, using a pre-created topic with the "correct" number of partitions.
+     * Furthermore, both input streams need to be co-partitioned on the join key (i.e., use the same partitioner).
      * If this requirement is not met, Kafka Streams will automatically repartition the data, i.e., it will create an
      * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
      * The repartitioning topic will be named "${applicationId}-XXX-repartition", where "applicationId" is
@@ -1096,7 +1317,11 @@ public interface KStream<K, V> {
      * <td></td>
      * </tr>
      * </table>
-     * Both input streams need to be co-partitioned on the join key.
+     * Both input streams (or to be more precise, their underlying source topics) need to have the same number of
+     * partitions.
+     * If this is not the case, you would need to call {@link #through(String)} (for one input stream) before doing the
+     * join, using a pre-created topic with the "correct" number of partitions.
+     * Furthermore, both input streams need to be co-partitioned on the join key (i.e., use the same partitioner).
      * If this requirement is not met, Kafka Streams will automatically repartition the data, i.e., it will create an
      * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
      * The repartitioning topic will be named "${applicationId}-XXX-repartition", where "applicationId" is
@@ -1171,7 +1396,11 @@ public interface KStream<K, V> {
      * <td></td>
      * </tr>
      * </table>
-     * Both input streams need to be co-partitioned on the join key.
+     * Both input streams (or to be more precise, their underlying source topics) need to have the same number of
+     * partitions.
+     * If this is not the case, you would need to call {@link #through(String)} (for one input stream) before doing the
+     * join, using a pre-created topic with the "correct" number of partitions.
+     * Furthermore, both input streams need to be co-partitioned on the join key (i.e., use the same partitioner).
      * If this requirement is not met, Kafka Streams will automatically repartition the data, i.e., it will create an
      * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
      * The repartitioning topic will be named "${applicationId}-XXX-repartition", where "applicationId" is
@@ -1218,7 +1447,7 @@ public interface KStream<K, V> {
                                      final Serde<VO> otherValueSerde);
 
     /**
-     * Join records of this stream with another {@code KStream}'s records using windowed left equi join with default
+     * Join records of this stream with another {@code KStream}'s records using windowed outer equi join with default
      * serializers and deserializers.
      * In contrast to {@link #join(KStream, ValueJoiner, JoinWindows) inner-join} or
      * {@link #leftJoin(KStream, ValueJoiner, JoinWindows) left-join}, all records from both streams will produce at
@@ -1258,7 +1487,11 @@ public interface KStream<K, V> {
      * <td>&lt;K3:ValueJoiner(null,c)&gt;</td>
      * </tr>
      * </table>
-     * Both input streams need to be co-partitioned on the join key.
+     * Both input streams (or to be more precise, their underlying source topics) need to have the same number of
+     * partitions.
+     * If this is not the case, you would need to call {@link #through(String)} (for one input stream) before doing the
+     * join, using a pre-created topic with the "correct" number of partitions.
+     * Furthermore, both input streams need to be co-partitioned on the join key (i.e., use the same partitioner).
      * If this requirement is not met, Kafka Streams will automatically repartition the data, i.e., it will create an
      * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
      * The repartitioning topic will be named "${applicationId}-XXX-repartition", where "applicationId" is
@@ -1295,7 +1528,7 @@ public interface KStream<K, V> {
                                       final JoinWindows windows);
 
     /**
-     * Join records of this stream with another {@code KStream}'s records using windowed left equi join.
+     * Join records of this stream with another {@code KStream}'s records using windowed outer equi join.
      * In contrast to {@link #join(KStream, ValueJoiner, JoinWindows, Serde, Serde, Serde) inner-join} or
      * {@link #leftJoin(KStream, ValueJoiner, JoinWindows, Serde, Serde, Serde) left-join}, all records from both
      * streams will produce at least one output record (cf. below).
@@ -1334,7 +1567,11 @@ public interface KStream<K, V> {
      * <td>&lt;K3:ValueJoiner(null,c)&gt;</td>
      * </tr>
      * </table>
-     * Both input streams need to be co-partitioned on the join key.
+     * Both input streams (or to be more precise, their underlying source topics) need to have the same number of
+     * partitions.
+     * If this is not the case, you would need to call {@link #through(String)} (for one input stream) before doing the
+     * join, using a pre-created topic with the "correct" number of partitions.
+     * Furthermore, both input streams need to be co-partitioned on the join key (i.e., use the same partitioner).
      * If this requirement is not met, Kafka Streams will automatically repartition the data, i.e., it will create an
      * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
      * The repartitioning topic will be named "${applicationId}-XXX-repartition", where "applicationId" is
@@ -1422,8 +1659,12 @@ public interface KStream<K, V> {
      * <td>&lt;K1:ValueJoiner(C,b)&gt;</td>
      * </tr>
      * </table>
-     * Both input streams need to be co-partitioned on the join key (cf.
-     * {@link #join(GlobalKTable, KeyValueMapper, ValueJoiner)}).
+     * Both input streams (or to be more precise, their underlying source topics) need to have the same number of
+     * partitions.
+     * If this is not the case, you would need to call {@link #through(String)} for this {@code KStream} before doing
+     * the join, using a pre-created topic with the same number of partitions as the given {@link KTable}.
+     * Furthermore, both input streams need to be co-partitioned on the join key (i.e., use the same partitioner);
+     * cf. {@link #join(GlobalKTable, KeyValueMapper, ValueJoiner)}.
      * If this requirement is not met, Kafka Streams will automatically repartition the data, i.e., it will create an
      * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
      * The repartitioning topic will be named "${applicationId}-XXX-repartition", where "applicationId" is
@@ -1432,7 +1673,7 @@ public interface KStream<K, V> {
      * "-repartition" is a fixed suffix.
      * You can retrieve all generated internal topic names via {@link KafkaStreams#toString()}.
      * <p>
-     * Repartitioning can happen only for this {@code KStream}s.
+     * Repartitioning can happen only for this {@code KStream} but not for the provided {@link KTable}.
      * For this case, all data of the stream will be redistributed through the repartitioning topic by writing all
      * records to it, and rereading all records from it, such that the join input {@code KStream} is partitioned
      * correctly on its key.
@@ -1491,8 +1732,12 @@ public interface KStream<K, V> {
      * <td>&lt;K1:ValueJoiner(C,b)&gt;</td>
      * </tr>
      * </table>
-     * Both input streams need to be co-partitioned on the join key (cf.
-     * {@link #join(GlobalKTable, KeyValueMapper, ValueJoiner)}).
+     * Both input streams (or to be more precise, their underlying source topics) need to have the same number of
+     * partitions.
+     * If this is not the case, you would need to call {@link #through(String)} for this {@code KStream} before doing
+     * the join, using a pre-created topic with the same number of partitions as the given {@link KTable}.
+     * Furthermore, both input streams need to be co-partitioned on the join key (i.e., use the same partitioner);
+     * cf. {@link #join(GlobalKTable, KeyValueMapper, ValueJoiner)}.
      * If this requirement is not met, Kafka Streams will automatically repartition the data, i.e., it will create an
      * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
      * The repartitioning topic will be named "${applicationId}-XXX-repartition", where "applicationId" is
@@ -1501,7 +1746,7 @@ public interface KStream<K, V> {
      * "-repartition" is a fixed suffix.
      * You can retrieve all generated internal topic names via {@link KafkaStreams#toString()}.
      * <p>
-     * Repartitioning can happen only for this {@code KStream}s.
+     * Repartitioning can happen only for this {@code KStream} but not for the provided {@link KTable}.
      * For this case, all data of the stream will be redistributed through the repartitioning topic by writing all
      * records to it, and rereading all records from it, such that the join input {@code KStream} is partitioned
      * correctly on its key.
@@ -1536,7 +1781,7 @@ public interface KStream<K, V> {
      * In contrast, processing {@link KTable} input records will only update the internal {@link KTable} state and
      * will not produce any result records.
      * <p>
-     * For each {@code KStream} record weather or not it finds a corresponding record in {@link KTable} the provided
+     * For each {@code KStream} record whether or not it finds a corresponding record in {@link KTable} the provided
      * {@link ValueJoiner} will be called to compute a value (with arbitrary type) for the result record.
      * If no {@link KTable} record was found during lookup, a {@code null} value will be provided to {@link ValueJoiner}.
      * The key of the result record is the same as for both joining input records.
@@ -1570,8 +1815,12 @@ public interface KStream<K, V> {
      * <td>&lt;K1:ValueJoiner(C,b)&gt;</td>
      * </tr>
      * </table>
-     * Both input streams need to be co-partitioned on the join key (cf.
-     * {@link #leftJoin(GlobalKTable, KeyValueMapper, ValueJoiner)}).
+     * Both input streams (or to be more precise, their underlying source topics) need to have the same number of
+     * partitions.
+     * If this is not the case, you would need to call {@link #through(String)} for this {@code KStream} before doing
+     * the join, using a pre-created topic with the same number of partitions as the given {@link KTable}.
+     * Furthermore, both input streams need to be co-partitioned on the join key (i.e., use the same partitioner);
+     * cf. {@link #join(GlobalKTable, KeyValueMapper, ValueJoiner)}.
      * If this requirement is not met, Kafka Streams will automatically repartition the data, i.e., it will create an
      * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
      * The repartitioning topic will be named "${applicationId}-XXX-repartition", where "applicationId" is
@@ -1580,7 +1829,7 @@ public interface KStream<K, V> {
      * "-repartition" is a fixed suffix.
      * You can retrieve all generated internal topic names via {@link KafkaStreams#toString()}.
      * <p>
-     * Repartitioning can happen only for this {@code KStream}s.
+     * Repartitioning can happen only for this {@code KStream} but not for the provided {@link KTable}.
      * For this case, all data of the stream will be redistributed through the repartitioning topic by writing all
      * records to it, and rereading all records from it, such that the join input {@code KStream} is partitioned
      * correctly on its key.
@@ -1608,7 +1857,7 @@ public interface KStream<K, V> {
      * In contrast, processing {@link KTable} input records will only update the internal {@link KTable} state and
      * will not produce any result records.
      * <p>
-     * For each {@code KStream} record weather or not it finds a corresponding record in {@link KTable} the provided
+     * For each {@code KStream} record whether or not it finds a corresponding record in {@link KTable} the provided
      * {@link ValueJoiner} will be called to compute a value (with arbitrary type) for the result record.
      * If no {@link KTable} record was found during lookup, a {@code null} value will be provided to {@link ValueJoiner}.
      * The key of the result record is the same as for both joining input records.
@@ -1642,8 +1891,12 @@ public interface KStream<K, V> {
      * <td>&lt;K1:ValueJoiner(C,b)&gt;</td>
      * </tr>
      * </table>
-     * Both input streams need to be co-partitioned on the join key (cf.
-     * {@link #leftJoin(GlobalKTable, KeyValueMapper, ValueJoiner)}).
+     * Both input streams (or to be more precise, their underlying source topics) need to have the same number of
+     * partitions.
+     * If this is not the case, you would need to call {@link #through(String)} for this {@code KStream} before doing
+     * the join, using a pre-created topic with the same number of partitions as the given {@link KTable}.
+     * Furthermore, both input streams need to be co-partitioned on the join key (i.e., use the same partitioner);
+     * cf. {@link #join(GlobalKTable, KeyValueMapper, ValueJoiner)}.
      * If this requirement is not met, Kafka Streams will automatically repartition the data, i.e., it will create an
      * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
      * The repartitioning topic will be named "${applicationId}-XXX-repartition", where "applicationId" is
@@ -1652,7 +1905,7 @@ public interface KStream<K, V> {
      * "-repartition" is a fixed suffix.
      * You can retrieve all generated internal topic names via {@link KafkaStreams#toString()}.
      * <p>
-     * Repartitioning can happen only for this {@code KStream}s.
+     * Repartitioning can happen only for this {@code KStream} but not for the provided {@link KTable}.
      * For this case, all data of the stream will be redistributed through the repartitioning topic by writing all
      * records to it, and rereading all records from it, such that the join input {@code KStream} is partitioned
      * correctly on its key.

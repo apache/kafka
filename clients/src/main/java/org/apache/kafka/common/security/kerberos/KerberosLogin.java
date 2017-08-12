@@ -1,13 +1,12 @@
-/**
- * Licensed to the Apache Software Foundation (ASF) under one
- * or more contributor license agreements.  See the NOTICE file
- * distributed with this work for additional information
- * regarding copyright ownership.  The ASF licenses this file
- * to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance
- * with the License.  You may obtain a copy of the License at
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -15,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.common.security.kerberos;
 
 import javax.security.auth.kerberos.KerberosPrincipal;
@@ -29,9 +27,9 @@ import org.apache.kafka.common.security.JaasContext;
 import org.apache.kafka.common.security.JaasUtils;
 import org.apache.kafka.common.security.authenticator.AbstractLogin;
 import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.Shell;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -131,7 +129,7 @@ public class KerberosLogin extends AbstractLogin {
         // TGT's existing expiry date and the configured minTimeBeforeRelogin. For testing and development,
         // you can decrease the interval of expiration of tickets (for example, to 3 minutes) by running:
         //  "modprinc -maxlife 3mins <principal>" in kadmin.
-        t = Utils.newThread(String.format("kafka-kerberos-refresh-thread-%s", principal), new Runnable() {
+        t = KafkaThread.daemon(String.format("kafka-kerberos-refresh-thread-%s", principal), new Runnable() {
             public void run() {
                 log.info("[Principal={}]: TGT refresh thread started.", principal);
                 while (true) {  // renewal thread's main loop. if it exits from here, thread will exit.
@@ -255,7 +253,7 @@ public class KerberosLogin extends AbstractLogin {
                     }
                 }
             }
-        }, true);
+        });
         t.start();
         return loginContext;
     }
@@ -353,8 +351,8 @@ public class KerberosLogin extends AbstractLogin {
         if (!hasSufficientTimeElapsed()) {
             return;
         }
-        log.info("Initiating logout for {}", principal);
         synchronized (KerberosLogin.class) {
+            log.info("Initiating logout for {}", principal);
             // register most recent relogin attempt
             lastLogin = currentElapsedTime();
             //clear up the kerberos state. But the tokens are not cleared! As per

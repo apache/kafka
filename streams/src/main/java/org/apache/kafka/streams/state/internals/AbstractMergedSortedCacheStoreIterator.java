@@ -1,28 +1,24 @@
-/**
- * Licensed to the Apache Software Foundation (ASF) under one
- * or more contributor license agreements.  See the NOTICE file
- * distributed with this work for additional information
- * regarding copyright ownership.  The ASF licenses this file
- * to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance
- * with the License.  You may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
-
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.state.KeyValueIterator;
-import org.apache.kafka.streams.state.StateSerdes;
 
 import java.util.NoSuchElementException;
 
@@ -32,26 +28,25 @@ import java.util.NoSuchElementException;
  * @param <K>
  * @param <V>
  */
-abstract class AbstractMergedSortedCacheStoreIterator<K, KS, V> implements KeyValueIterator<K, V> {
+abstract class AbstractMergedSortedCacheStoreIterator<K, KS, V, VS> implements KeyValueIterator<K, V> {
     private final PeekingKeyValueIterator<Bytes, LRUCacheEntry> cacheIterator;
-    private final KeyValueIterator<KS, byte[]> storeIterator;
-    protected final StateSerdes<K, V> serdes;
+    private final KeyValueIterator<KS, VS> storeIterator;
 
     AbstractMergedSortedCacheStoreIterator(final PeekingKeyValueIterator<Bytes, LRUCacheEntry> cacheIterator,
-                                           final KeyValueIterator<KS, byte[]> storeIterator,
-                                           final StateSerdes<K, V> serdes) {
+                                           final KeyValueIterator<KS, VS> storeIterator) {
         this.cacheIterator = cacheIterator;
         this.storeIterator = storeIterator;
-        this.serdes = serdes;
     }
 
     abstract int compare(final Bytes cacheKey, final KS storeKey);
 
     abstract K deserializeStoreKey(final KS key);
 
-    abstract KeyValue<K, V> deserializeStorePair(final KeyValue<KS, byte[]> pair);
+    abstract KeyValue<K, V> deserializeStorePair(final KeyValue<KS, VS> pair);
 
     abstract K deserializeCacheKey(final Bytes cacheKey);
+
+    abstract V deserializeCacheValue(final LRUCacheEntry cacheEntry);
 
     private boolean isDeletedCacheEntry(final KeyValue<Bytes, LRUCacheEntry> nextFromCache) {
         return nextFromCache.value.value == null;
@@ -104,7 +99,7 @@ abstract class AbstractMergedSortedCacheStoreIterator<K, KS, V> implements KeyVa
     }
 
     private KeyValue<K, V> nextStoreValue(KS nextStoreKey) {
-        final KeyValue<KS, byte[]> next = storeIterator.next();
+        final KeyValue<KS, VS> next = storeIterator.next();
 
         if (!next.key.equals(nextStoreKey)) {
             throw new IllegalStateException("Next record key is not the peeked key value; this should not happen");
@@ -120,7 +115,7 @@ abstract class AbstractMergedSortedCacheStoreIterator<K, KS, V> implements KeyVa
             throw new IllegalStateException("Next record key is not the peeked key value; this should not happen");
         }
 
-        return KeyValue.pair(deserializeCacheKey(next.key), serdes.valueFrom(next.value.value));
+        return KeyValue.pair(deserializeCacheKey(next.key), deserializeCacheValue(next.value));
     }
 
     @Override
@@ -137,7 +132,7 @@ abstract class AbstractMergedSortedCacheStoreIterator<K, KS, V> implements KeyVa
         }
 
         if (nextStoreKey == null) {
-            return serdes.keyFrom(nextCacheKey.get());
+            return deserializeCacheKey(nextCacheKey);
         }
 
         final int comparison = compare(nextCacheKey, nextStoreKey);

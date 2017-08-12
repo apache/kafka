@@ -1,13 +1,13 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -23,7 +23,6 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StreamPartitioner;
-import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.apache.kafka.streams.state.HostInfo;
 import org.apache.kafka.streams.state.StreamsMetadata;
 
@@ -44,14 +43,14 @@ import java.util.Set;
  */
 public class StreamsMetadataState {
     public static final HostInfo UNKNOWN_HOST = new HostInfo("unknown", -1);
-    private final TopologyBuilder builder;
+    private final InternalTopologyBuilder builder;
     private final List<StreamsMetadata> allMetadata = new ArrayList<>();
     private final Set<String> globalStores;
     private final HostInfo thisHost;
     private Cluster clusterMetadata;
     private StreamsMetadata myMetadata;
 
-    public StreamsMetadataState(final TopologyBuilder builder, final HostInfo thisHost) {
+    public StreamsMetadataState(final InternalTopologyBuilder builder, final HostInfo thisHost) {
         this.builder = builder;
         this.globalStores = builder.globalStateStores().keySet();
         this.thisHost = thisHost;
@@ -196,7 +195,7 @@ public class StreamsMetadataState {
      * @param currentState  the current mapping of {@link HostInfo} -> {@link TopicPartition}s
      * @param clusterMetadata    the current clusterMetadata {@link Cluster}
      */
-    public synchronized void onChange(final Map<HostInfo, Set<TopicPartition>> currentState, final Cluster clusterMetadata) {
+    synchronized void onChange(final Map<HostInfo, Set<TopicPartition>> currentState, final Cluster clusterMetadata) {
         this.clusterMetadata = clusterMetadata;
         rebuildMetadata(currentState);
     }
@@ -279,7 +278,7 @@ public class StreamsMetadataState {
             this.sourceTopics = sourceTopics;
             for (String topic : sourceTopics) {
                 final List<PartitionInfo> partitions = clusterMetadata.partitionsForTopic(topic);
-                if (partitions != null && partitions.size() > maxPartitions) {
+                if (partitions.size() > maxPartitions) {
                     maxPartitions = partitions.size();
                     topicWithMostPartitions = partitions.get(0).topic();
                 }

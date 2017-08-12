@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.common.network;
 
 /*
@@ -86,6 +85,11 @@ public interface TransportLayer extends ScatteringByteChannel, GatheringByteChan
     boolean isMute();
 
     /**
+     * @return true if channel has bytes to be read in any intermediate buffers
+     */
+    boolean hasBytesBuffered();
+
+    /**
      * Transfers bytes from `fileChannel` to this `TransportLayer`.
      *
      * This method will delegate to {@link FileChannel#transferTo(long, long, java.nio.channels.WritableByteChannel)},
@@ -100,5 +104,4 @@ public interface TransportLayer extends ScatteringByteChannel, GatheringByteChan
      * @see FileChannel#transferTo(long, long, java.nio.channels.WritableByteChannel)
      */
     long transferFrom(FileChannel fileChannel, long position, long count) throws IOException;
-
 }

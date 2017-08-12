@@ -1,14 +1,18 @@
-/**
- * Licensed to the Apache Software Foundation (ASF) under one or more contributor license agreements. See the NOTICE
- * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
- * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
- * License. You may obtain a copy of the License at
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
- * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
- * specific language governing permissions and limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 package org.apache.kafka.clients.consumer.internals;
 
@@ -49,6 +53,7 @@ import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -103,16 +108,18 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                                boolean autoCommitEnabled,
                                int autoCommitIntervalMs,
                                ConsumerInterceptors<?, ?> interceptors,
-                               boolean excludeInternalTopics) {
+                               boolean excludeInternalTopics,
+                               final boolean leaveGroupOnClose) {
         super(client,
-                groupId,
-                rebalanceTimeoutMs,
-                sessionTimeoutMs,
-                heartbeatIntervalMs,
-                metrics,
-                metricGrpPrefix,
-                time,
-                retryBackoffMs);
+              groupId,
+              rebalanceTimeoutMs,
+              sessionTimeoutMs,
+              heartbeatIntervalMs,
+              metrics,
+              metricGrpPrefix,
+              time,
+              retryBackoffMs,
+              leaveGroupOnClose);
         this.metadata = metadata;
         this.metadataSnapshot = new MetadataSnapshot(subscriptions, metadata.fetch());
         this.subscriptions = subscriptions;
@@ -168,7 +175,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     private void addMetadataListener() {
         this.metadata.addListener(new Metadata.Listener() {
             @Override
-            public void onMetadataUpdate(Cluster cluster) {
+            public void onMetadataUpdate(Cluster cluster, Set<String> unavailableTopics) {
                 // if we encounter any unauthorized topics, raise an exception to the user
                 if (!cluster.unauthorizedTopics().isEmpty())
                     throw new TopicAuthorizationException(new HashSet<>(cluster.unauthorizedTopics()));
@@ -182,6 +189,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                     if (!snapshot.equals(metadataSnapshot))
                         metadataSnapshot = snapshot;
                 }
+
+                if (!Collections.disjoint(metadata.topics(), unavailableTopics))
+                    metadata.requestUpdate();
             }
         });
     }
@@ -268,23 +278,39 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
      *
      * @param now current time in milliseconds
      */
-    public void poll(long now) {
+    public void poll(long now, long remainingMs) {
         invokeCompletedOffsetCommitCallbacks();
 
-        if (subscriptions.partitionsAutoAssigned() && coordinatorUnknown()) {
-            ensureCoordinatorReady();
-            now = time.milliseconds();
-        }
+        if (subscriptions.partitionsAutoAssigned()) {
+            if (coordinatorUnknown()) {
+                ensureCoordinatorReady();
+                now = time.milliseconds();
+            }
 
-        if (needRejoin()) {
-            // due to a race condition between the initial metadata fetch and the initial rebalance,
-            // we need to ensure that the metadata is fresh before joining initially. This ensures
-            // that we have matched the pattern against the cluster's topics at least once before joining.
-            if (subscriptions.hasPatternSubscription())
-                client.ensureFreshMetadata();
+            if (needRejoin()) {
+                // due to a race condition between the initial metadata fetch and the initial rebalance,
+                // we need to ensure that the metadata is fresh before joining initially. This ensures
+                // that we have matched the pattern against the cluster's topics at least once before joining.
+                if (subscriptions.hasPatternSubscription())
+                    client.ensureFreshMetadata();
 
-            ensureActiveGroup();
-            now = time.milliseconds();
+                ensureActiveGroup();
+                now = time.milliseconds();
+            }
+        } else {
+            // For manually assigned partitions, if there are no ready nodes, await metadata.
+            // If connections to all nodes fail, wakeups triggered while attempting to send fetch
+            // requests result in polls returning immediately, causing a tight loop of polls. Without
+            // the wakeup, poll() with no channels would block for the timeout, delaying re-connection.
+            // awaitMetadataUpdate() initiates new connections with configured backoff and avoids the busy loop.
+            // When group management is used, metadata wait is already performed for this scenario as
+            // coordinator is unknown, hence this check is not required.
+            if (metadata.updateRequested() && !client.hasReadyNodes()) {
+                boolean metadataUpdated = client.awaitMetadataUpdate(remainingMs);
+                if (!metadataUpdated && !client.hasReadyNodes())
+                    return;
+                now = time.milliseconds();
+            }
         }
 
         pollHeartbeat(now);
@@ -511,7 +537,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 @Override
                 public void onFailure(RuntimeException e) {
                     pendingAsyncCommits.decrementAndGet();
-                    completedOffsetCommits.add(new OffsetCommitCompletion(callback, offsets, new RetriableCommitFailedException(e)));
+                    completedOffsetCommits.add(new OffsetCommitCompletion(callback, offsets,
+                            RetriableCommitFailedException.withUnderlyingMessage(e.getMessage())));
                 }
             });
         }
@@ -540,7 +567,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 Exception commitException = e;
 
                 if (e instanceof RetriableException)
-                    commitException = new RetriableCommitFailedException(e);
+                    commitException = RetriableCommitFailedException.withUnderlyingMessage(e.getMessage());
 
                 completedOffsetCommits.add(new OffsetCommitCompletion(cb, offsets, commitException));
             }
@@ -583,7 +610,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 return true;
             }
 
-            if (!future.isRetriable())
+            if (future.failed() && !future.isRetriable())
                 throw future.exception();
 
             time.sleep(retryBackoffMs);
@@ -697,11 +724,10 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         if (generation == null)
             return RequestFuture.failure(new CommitFailedException());
 
-        OffsetCommitRequest.Builder builder =
-                new OffsetCommitRequest.Builder(this.groupId, offsetData).
-                        setGenerationId(generation.generationId).
-                        setMemberId(generation.memberId).
-                        setRetentionTime(OffsetCommitRequest.DEFAULT_RETENTION_TIME);
+        OffsetCommitRequest.Builder builder = new OffsetCommitRequest.Builder(this.groupId, offsetData).
+                setGenerationId(generation.generationId).
+                setMemberId(generation.memberId).
+                setRetentionTime(OffsetCommitRequest.DEFAULT_RETENTION_TIME);
 
         log.trace("Sending OffsetCommit request with {} to coordinator {} for group {}", offsets, coordinator, groupId);
 
@@ -745,13 +771,13 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                     log.debug("Offset commit for group {} failed on partition {}: {}", groupId, tp, error.message());
                     future.raise(error);
                     return;
-                } else if (error == Errors.GROUP_LOAD_IN_PROGRESS) {
+                } else if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS) {
                     // just retry
                     log.debug("Offset commit for group {} failed: {}", groupId, error.message());
                     future.raise(error);
                     return;
-                } else if (error == Errors.GROUP_COORDINATOR_NOT_AVAILABLE
-                        || error == Errors.NOT_COORDINATOR_FOR_GROUP
+                } else if (error == Errors.COORDINATOR_NOT_AVAILABLE
+                        || error == Errors.NOT_COORDINATOR
                         || error == Errors.REQUEST_TIMED_OUT) {
                     log.debug("Offset commit for group {} failed: {}", groupId, error.message());
                     coordinatorDead();
@@ -814,10 +840,10 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 Errors error = response.error();
                 log.debug("Offset fetch for group {} failed: {}", groupId, error.message());
 
-                if (error == Errors.GROUP_LOAD_IN_PROGRESS) {
+                if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS) {
                     // just retry
                     future.raise(error);
-                } else if (error == Errors.NOT_COORDINATOR_FOR_GROUP) {
+                } else if (error == Errors.NOT_COORDINATOR) {
                     // re-discover the coordinator and retry
                     coordinatorDead();
                     future.raise(error);

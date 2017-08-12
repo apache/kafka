@@ -29,6 +29,7 @@ import kafka.server.KafkaConfig
 import kafka.utils._
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.record.{DefaultRecordBatch, DefaultRecord}
 import org.junit.Test
 import org.junit.Assert._
 
@@ -36,7 +37,7 @@ import org.junit.Assert._
 class SyncProducerTest extends KafkaServerTestHarness {
   private val messageBytes =  new Array[Byte](2)
   // turning off controlled shutdown since testProducerCanTimeout() explicitly shuts down request handler pool.
-  def generateConfigs() = List(KafkaConfig.fromProps(TestUtils.createBrokerConfigs(1, zkConnect, false).head))
+  def generateConfigs = List(KafkaConfig.fromProps(TestUtils.createBrokerConfigs(1, zkConnect, false).head))
 
   private def produceRequest(topic: String,
     partition: Int,
@@ -51,38 +52,25 @@ class SyncProducerTest extends KafkaServerTestHarness {
   @Test
   def testReachableServer() {
     val server = servers.head
-
     val props = TestUtils.getSyncProducerConfig(boundPort(server))
 
-
     val producer = new SyncProducer(new SyncProducerConfig(props))
+
     val firstStart = Time.SYSTEM.milliseconds
-    try {
-      val response = producer.send(produceRequest("test", 0,
-        new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = new Message(messageBytes)), acks = 1))
-      assertNotNull(response)
-    } catch {
-      case e: Exception => fail("Unexpected failure sending message to broker. " + e.getMessage)
-    }
-    val firstEnd = Time.SYSTEM.milliseconds
-    assertTrue((firstEnd-firstStart) < 2000)
+    var response = producer.send(produceRequest("test", 0,
+      new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = new Message(messageBytes)), acks = 1))
+    assertNotNull(response)
+    assertTrue((Time.SYSTEM.milliseconds - firstStart) < 12000)
+
     val secondStart = Time.SYSTEM.milliseconds
-    try {
-      val response = producer.send(produceRequest("test", 0,
-        new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = new Message(messageBytes)), acks = 1))
-      assertNotNull(response)
-    } catch {
-      case e: Exception => fail("Unexpected failure sending message to broker. " + e.getMessage)
-    }
-    val secondEnd = Time.SYSTEM.milliseconds
-    assertTrue((secondEnd-secondStart) < 2000)
-    try {
-      val response = producer.send(produceRequest("test", 0,
-        new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = new Message(messageBytes)), acks = 1))
-      assertNotNull(response)
-    } catch {
-      case e: Exception => fail("Unexpected failure sending message to broker. " + e.getMessage)
-    }
+    response = producer.send(produceRequest("test", 0,
+      new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = new Message(messageBytes)), acks = 1))
+    assertNotNull(response)
+    assertTrue((Time.SYSTEM.milliseconds - secondStart) < 12000)
+
+    response = producer.send(produceRequest("test", 0,
+      new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = new Message(messageBytes)), acks = 1))
+    assertNotNull(response)
   }
 
   @Test
@@ -119,7 +107,7 @@ class SyncProducerTest extends KafkaServerTestHarness {
     assertEquals(Errors.MESSAGE_TOO_LARGE, response1.status(TopicAndPartition("test", 0)).error)
     assertEquals(-1L, response1.status(TopicAndPartition("test", 0)).offset)
 
-    val safeSize = configs.head.messageMaxBytes - Message.MinMessageOverhead - Message.TimestampLength - MessageSet.LogOverhead - 1
+    val safeSize = configs.head.messageMaxBytes - DefaultRecordBatch.RECORD_BATCH_OVERHEAD - DefaultRecord.MAX_RECORD_OVERHEAD
     val message2 = new Message(new Array[Byte](safeSize))
     val messageSet2 = new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = message2)
     val response2 = producer.send(produceRequest("test", 0, messageSet2, acks = 1))
@@ -128,7 +116,6 @@ class SyncProducerTest extends KafkaServerTestHarness {
     assertEquals(Errors.NONE, response2.status(TopicAndPartition("test", 0)).error)
     assertEquals(0, response2.status(TopicAndPartition("test", 0)).offset)
   }
-
 
   @Test
   def testMessageSizeTooLargeWithAckZero() {

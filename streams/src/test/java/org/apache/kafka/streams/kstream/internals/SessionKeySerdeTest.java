@@ -1,20 +1,19 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serde;
@@ -63,39 +62,39 @@ public class SessionKeySerdeTest {
 
     @Test
     public void shouldConvertToBinaryAndBack() throws Exception {
-        final Bytes serialized = SessionKeySerde.toBinary(windowedKey, serde.serializer());
-        final Windowed<String> result = SessionKeySerde.from(serialized.get(), Serdes.String().deserializer());
+        final Bytes serialized = SessionKeySerde.toBinary(windowedKey, serde.serializer(), "dummy");
+        final Windowed<String> result = SessionKeySerde.from(serialized.get(), Serdes.String().deserializer(), "dummy");
         assertEquals(windowedKey, result);
     }
 
     @Test
     public void shouldExtractEndTimeFromBinary() throws Exception {
-        final Bytes serialized = SessionKeySerde.toBinary(windowedKey, serde.serializer());
+        final Bytes serialized = SessionKeySerde.toBinary(windowedKey, serde.serializer(), "dummy");
         assertEquals(endTime, SessionKeySerde.extractEnd(serialized.get()));
     }
 
     @Test
     public void shouldExtractStartTimeFromBinary() throws Exception {
-        final Bytes serialized = SessionKeySerde.toBinary(windowedKey, serde.serializer());
+        final Bytes serialized = SessionKeySerde.toBinary(windowedKey, serde.serializer(), "dummy");
         assertEquals(startTime, SessionKeySerde.extractStart(serialized.get()));
     }
 
     @Test
     public void shouldExtractWindowFromBindary() throws Exception {
-        final Bytes serialized = SessionKeySerde.toBinary(windowedKey, serde.serializer());
+        final Bytes serialized = SessionKeySerde.toBinary(windowedKey, serde.serializer(), "dummy");
         assertEquals(window, SessionKeySerde.extractWindow(serialized.get()));
     }
 
     @Test
     public void shouldExtractKeyBytesFromBinary() throws Exception {
-        final Bytes serialized = SessionKeySerde.toBinary(windowedKey, serde.serializer());
+        final Bytes serialized = SessionKeySerde.toBinary(windowedKey, serde.serializer(), "dummy");
         assertArrayEquals(key.getBytes(), SessionKeySerde.extractKeyBytes(serialized.get()));
     }
 
     @Test
     public void shouldExtractKeyFromBinary() throws Exception {
-        final Bytes serialized = SessionKeySerde.toBinary(windowedKey, serde.serializer());
-        assertEquals(windowedKey, SessionKeySerde.from(serialized.get(), serde.deserializer()));
+        final Bytes serialized = SessionKeySerde.toBinary(windowedKey, serde.serializer(), "dummy");
+        assertEquals(windowedKey, SessionKeySerde.from(serialized.get(), serde.deserializer(), "dummy"));
     }
 
     @Test

@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -74,12 +74,12 @@ public class ErrorsTest {
     @Test
     public void testForExceptionDefault() {
         Errors error = Errors.forException(new ApiException());
-        assertEquals("forException should default to unknown", Errors.UNKNOWN, error);
+        assertEquals("forException should default to unknown", Errors.UNKNOWN_SERVER_ERROR, error);
     }
 
     @Test
     public void testExceptionName() {
-        String exceptionName = Errors.UNKNOWN.exceptionName();
+        String exceptionName = Errors.UNKNOWN_SERVER_ERROR.exceptionName();
         assertEquals("org.apache.kafka.common.errors.UnknownServerException", exceptionName);
         exceptionName = Errors.NONE.exceptionName();
         assertNull(exceptionName);

@@ -23,6 +23,7 @@ import kafka.api.ApiUtils._
 import org.apache.kafka.common.protocol.Errors
 
 
+@deprecated("This object has been deprecated and will be removed in a future release.", "1.0.0")
 object OffsetResponse {
 
   def readFrom(buffer: ByteBuffer): OffsetResponse = {
@@ -52,6 +53,7 @@ case class PartitionOffsetsResponse(error: Errors, offsets: Seq[Long]) {
 }
 
 
+@deprecated("This object has been deprecated and will be removed in a future release.", "1.0.0")
 case class OffsetResponse(correlationId: Int,
                           partitionErrorAndOffsets: Map[TopicAndPartition, PartitionOffsetsResponse])
     extends RequestOrResponse() {

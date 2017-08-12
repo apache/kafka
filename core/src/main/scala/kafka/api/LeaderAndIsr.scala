@@ -17,35 +17,32 @@
 
 package kafka.api
 
-import kafka.controller.LeaderIsrAndControllerEpoch
 import kafka.utils._
-
-import scala.collection.Set
 
 object LeaderAndIsr {
   val initialLeaderEpoch: Int = 0
   val initialZKVersion: Int = 0
-  val NoLeader = -1
-  val LeaderDuringDelete = -2
+  val NoLeader: Int = -1
+  val LeaderDuringDelete: Int = -2
+
+  def apply(leader: Int, isr: List[Int]): LeaderAndIsr = LeaderAndIsr(leader, initialLeaderEpoch, isr, initialZKVersion)
+
+  def duringDelete(isr: List[Int]): LeaderAndIsr = LeaderAndIsr(LeaderDuringDelete, isr)
 }
 
-case class LeaderAndIsr(var leader: Int, var leaderEpoch: Int, var isr: List[Int], var zkVersion: Int) {
-  def this(leader: Int, isr: List[Int]) = this(leader, LeaderAndIsr.initialLeaderEpoch, isr, LeaderAndIsr.initialZKVersion)
+case class LeaderAndIsr(leader: Int,
+                        leaderEpoch: Int,
+                        isr: List[Int],
+                        zkVersion: Int) {
+  def withZkVersion(zkVersion: Int) = copy(zkVersion = zkVersion)
+
+  def newLeader(leader: Int) = newLeaderAndIsr(leader, isr)
+
+  def newLeaderAndIsr(leader: Int, isr: List[Int]) = LeaderAndIsr(leader, leaderEpoch + 1, isr, zkVersion + 1)
+
+  def newEpochAndZkVersion = newLeaderAndIsr(leader, isr)
 
   override def toString: String = {
     Json.encode(Map("leader" -> leader, "leader_epoch" -> leaderEpoch, "isr" -> isr))
-  }
-}
-
-case class PartitionStateInfo(leaderIsrAndControllerEpoch: LeaderIsrAndControllerEpoch, allReplicas: Set[Int]) {
-
-  def replicationFactor = allReplicas.size
-
-  override def toString: String = {
-    val partitionStateInfo = new StringBuilder
-    partitionStateInfo.append("(LeaderAndIsrInfo:" + leaderIsrAndControllerEpoch.toString)
-    partitionStateInfo.append(",ReplicationFactor:" + replicationFactor + ")")
-    partitionStateInfo.append(",AllReplicas:" + allReplicas.mkString(",") + ")")
-    partitionStateInfo.toString()
   }
 }

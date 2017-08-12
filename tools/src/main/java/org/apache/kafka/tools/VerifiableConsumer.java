@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -18,6 +18,7 @@ package org.apache.kafka.tools;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonSerializer;
@@ -57,7 +58,6 @@ import java.util.concurrent.CountDownLatch;
 
 import static net.sourceforge.argparse4j.impl.Arguments.store;
 import static net.sourceforge.argparse4j.impl.Arguments.storeTrue;
-
 
 /**
  * Command line consumer designed for system testing. It outputs consumer events to STDOUT as JSON
@@ -216,6 +216,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
 
     public void run() {
         try {
+            printJson(new StartupComplete());
             consumer.subscribe(Collections.singletonList(topic), this);
 
             while (true) {
@@ -256,6 +257,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
         }
     }
 
+    @JsonPropertyOrder({ "timestamp", "name" })
     private static abstract class ConsumerEvent {
         private final long timestamp = System.currentTimeMillis();
 
@@ -265,6 +267,14 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
         @JsonProperty
         public long timestamp() {
             return timestamp;
+        }
+    }
+
+    private static class StartupComplete extends ConsumerEvent {
+
+        @Override
+        public String name() {
+            return "startup_complete";
         }
     }
 
@@ -337,6 +347,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
         }
     }
 
+    @JsonPropertyOrder({ "timestamp", "name", "key", "value", "topic", "partition", "offset" })
     public static class RecordData extends ConsumerEvent {
 
         private final ConsumerRecord<String, String> record;

@@ -18,6 +18,7 @@
 package kafka.server
 
 import java.io._
+import java.nio.file.Files
 import java.util.Properties
 import kafka.utils._
 import org.apache.kafka.common.utils.Utils
@@ -29,7 +30,6 @@ case class BrokerMetadata(brokerId: Int)
   */
 class BrokerMetadataCheckpoint(val file: File) extends Logging {
   private val lock = new Object()
-  new File(file + ".tmp").delete() // try to delete any existing temp files for cleanliness
 
   def write(brokerMetadata: BrokerMetadata) = {
     lock synchronized {
@@ -39,10 +39,13 @@ class BrokerMetadataCheckpoint(val file: File) extends Logging {
         brokerMetaProps.setProperty("broker.id", brokerMetadata.brokerId.toString)
         val temp = new File(file.getAbsolutePath + ".tmp")
         val fileOutputStream = new FileOutputStream(temp)
-        brokerMetaProps.store(fileOutputStream,"")
-        fileOutputStream.flush()
-        fileOutputStream.getFD().sync()
-        fileOutputStream.close()
+        try {
+          brokerMetaProps.store(fileOutputStream, "")
+          fileOutputStream.flush()
+          fileOutputStream.getFD().sync()
+        } finally {
+          Utils.closeQuietly(fileOutputStream, temp.getName)
+        }
         Utils.atomicMoveWithFallback(temp.toPath, file.toPath)
       } catch {
         case ie: IOException =>
@@ -53,6 +56,8 @@ class BrokerMetadataCheckpoint(val file: File) extends Logging {
   }
 
   def read(): Option[BrokerMetadata] = {
+    Files.deleteIfExists(new File(file + ".tmp").toPath()) // try to delete any existing temp files for cleanliness
+
     lock synchronized {
       try {
         val brokerMetaProps = new VerifiableProperties(Utils.loadProps(file.getAbsolutePath()))

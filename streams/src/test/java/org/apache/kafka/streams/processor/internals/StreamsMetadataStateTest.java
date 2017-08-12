@@ -1,13 +1,13 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -23,8 +23,9 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.StreamsBuilderTest;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.processor.StreamPartitioner;
@@ -56,18 +57,18 @@ public class StreamsMetadataStateTest {
     private TopicPartition topic2P0;
     private TopicPartition topic3P0;
     private Map<HostInfo, Set<TopicPartition>> hostToPartitions;
-    private KStreamBuilder builder;
+    private StreamsBuilder builder;
     private TopicPartition topic1P1;
     private TopicPartition topic2P1;
     private TopicPartition topic4P0;
     private List<PartitionInfo> partitionInfos;
     private Cluster cluster;
-    private final String globalTable = "global-table";;
+    private final String globalTable = "global-table";
     private StreamPartitioner<String, Object> partitioner;
 
     @Before
-    public void before() {
-        builder = new KStreamBuilder();
+    public void before() throws Exception {
+        builder = new StreamsBuilder();
         final KStream<Object, Object> one = builder.stream("topic-one");
         one.groupByKey().count("table-one");
 
@@ -89,7 +90,7 @@ public class StreamsMetadataStateTest {
 
         builder.globalTable("global-topic", "global-table");
 
-        builder.setApplicationId("appId");
+        StreamsBuilderTest.internalTopologyBuilder(builder).setApplicationId("appId");
 
         topic1P0 = new TopicPartition("topic-one", 0);
         topic1P1 = new TopicPartition("topic-one", 1);
@@ -115,7 +116,7 @@ public class StreamsMetadataStateTest {
                 new PartitionInfo("topic-four", 0, null, null, null));
 
         cluster = new Cluster(null, Collections.<Node>emptyList(), partitionInfos, Collections.<String>emptySet(), Collections.<String>emptySet());
-        discovery = new StreamsMetadataState(builder, hostOne);
+        discovery = new StreamsMetadataState(StreamsBuilderTest.internalTopologyBuilder(builder), hostOne);
         discovery.onChange(hostToPartitions, cluster);
         partitioner = new StreamPartitioner<String, Object>() {
             @Override
@@ -127,7 +128,7 @@ public class StreamsMetadataStateTest {
 
     @Test
     public void shouldNotThrowNPEWhenOnChangeNotCalled() throws Exception {
-        new StreamsMetadataState(builder, hostOne).getAllMetadataForStore("store");
+        new StreamsMetadataState(StreamsBuilderTest.internalTopologyBuilder(builder), hostOne).getAllMetadataForStore("store");
     }
 
     @Test
@@ -200,8 +201,9 @@ public class StreamsMetadataStateTest {
         final StreamsMetadata expected = new StreamsMetadata(hostThree, Utils.mkSet(globalTable, "table-three"),
                 Collections.singleton(topic3P0));
 
-        final StreamsMetadata actual = discovery.getMetadataWithKey("table-three", "the-key",
-                Serdes.String().serializer());
+        final StreamsMetadata actual = discovery.getMetadataWithKey("table-three",
+                                                                    "the-key",
+                                                                    Serdes.String().serializer());
 
         assertEquals(expected, actual);
     }
@@ -293,7 +295,7 @@ public class StreamsMetadataStateTest {
 
     @Test
     public void shouldGetAnyHostForGlobalStoreByKeyIfMyHostUnknown() throws Exception {
-        final StreamsMetadataState streamsMetadataState = new StreamsMetadataState(builder, StreamsMetadataState.UNKNOWN_HOST);
+        final StreamsMetadataState streamsMetadataState = new StreamsMetadataState(StreamsBuilderTest.internalTopologyBuilder(builder), StreamsMetadataState.UNKNOWN_HOST);
         streamsMetadataState.onChange(hostToPartitions, cluster);
         assertNotNull(streamsMetadataState.getMetadataWithKey(globalTable, "key", Serdes.String().serializer()));
     }
@@ -306,7 +308,7 @@ public class StreamsMetadataStateTest {
 
     @Test
     public void shouldGetAnyHostForGlobalStoreByKeyAndPartitionerIfMyHostUnknown() throws Exception {
-        final StreamsMetadataState streamsMetadataState = new StreamsMetadataState(builder, StreamsMetadataState.UNKNOWN_HOST);
+        final StreamsMetadataState streamsMetadataState = new StreamsMetadataState(StreamsBuilderTest.internalTopologyBuilder(builder), StreamsMetadataState.UNKNOWN_HOST);
         streamsMetadataState.onChange(hostToPartitions, cluster);
         assertNotNull(streamsMetadataState.getMetadataWithKey(globalTable, "key", partitioner));
     }

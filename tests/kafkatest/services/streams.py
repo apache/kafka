@@ -45,13 +45,14 @@ class StreamsTestBaseService(KafkaPathResolverMixin, Service):
             "collect_default": True},
     }
 
-    def __init__(self, test_context, kafka, streams_class_name, user_test_args, user_test_args1=None, user_test_args2=None):
+    def __init__(self, test_context, kafka, streams_class_name, user_test_args, user_test_args1=None, user_test_args2=None, user_test_args3=None):
         super(StreamsTestBaseService, self).__init__(test_context, 1)
         self.kafka = kafka
         self.args = {'streams_class_name': streams_class_name,
                      'user_test_args': user_test_args,
                      'user_test_args1': user_test_args1,
-                     'user_test_args2': user_test_args2}
+                     'user_test_args2': user_test_args2,
+                     'user_test_args3': user_test_args3}
         self.log_level = "DEBUG"
 
     @property
@@ -77,7 +78,7 @@ class StreamsTestBaseService(KafkaPathResolverMixin, Service):
             node.account.signal(pid, sig, allow_fail=True)
         if clean_shutdown:
             for pid in pids:
-                wait_until(lambda: not node.account.alive(pid), timeout_sec=60, err_msg="Streams Test process on " + str(node.account) + " took too long to exit")
+                wait_until(lambda: not node.account.alive(pid), timeout_sec=120, err_msg="Streams Test process on " + str(node.account) + " took too long to exit")
 
         node.account.ssh("rm -f " + self.PID_FILE, allow_fail=False)
 
@@ -97,7 +98,7 @@ class StreamsTestBaseService(KafkaPathResolverMixin, Service):
             self.logger.info("Restarting Kafka Streams on " + str(node.account))
             self.start_node(node)
 
-    def wait(self, timeout_sec=360):
+    def wait(self, timeout_sec=1440):
         for node in self.nodes:
             self.wait_node(node, timeout_sec)
 
@@ -122,7 +123,7 @@ class StreamsTestBaseService(KafkaPathResolverMixin, Service):
         cmd = "( export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%(log4j)s\"; " \
               "INCLUDE_TEST_JARS=true %(kafka_run_class)s %(streams_class_name)s " \
               " %(kafka)s %(state_dir)s %(user_test_args)s %(user_test_args1)s %(user_test_args2)s" \
-              " & echo $! >&3 ) 1>> %(stdout)s 2>> %(stderr)s 3> %(pidfile)s" % args
+              " %(user_test_args3)s & echo $! >&3 ) 1>> %(stdout)s 2>> %(stderr)s 3> %(pidfile)s" % args
 
         return cmd
 
@@ -150,6 +151,16 @@ class StreamsSmokeTestBaseService(StreamsTestBaseService):
                                                           command)
 
 
+class StreamsEosTestBaseService(StreamsTestBaseService):
+    """Base class for Streams EOS Test services providing some common settings and functionality"""
+
+    def __init__(self, test_context, kafka, command):
+        super(StreamsEosTestBaseService, self).__init__(test_context,
+                                                        kafka,
+                                                        "org.apache.kafka.streams.tests.StreamsEosTest",
+                                                        command)
+
+
 class StreamsSmokeTestDriverService(StreamsSmokeTestBaseService):
     def __init__(self, test_context, kafka):
         super(StreamsSmokeTestDriverService, self).__init__(test_context, kafka, "run")
@@ -160,14 +171,39 @@ class StreamsSmokeTestJobRunnerService(StreamsSmokeTestBaseService):
         super(StreamsSmokeTestJobRunnerService, self).__init__(test_context, kafka, "process")
 
 
+class StreamsEosTestDriverService(StreamsEosTestBaseService):
+    def __init__(self, test_context, kafka):
+        super(StreamsEosTestDriverService, self).__init__(test_context, kafka, "run")
+
+
+class StreamsEosTestJobRunnerService(StreamsEosTestBaseService):
+    def __init__(self, test_context, kafka):
+        super(StreamsEosTestJobRunnerService, self).__init__(test_context, kafka, "process")
+
+
+class StreamsComplexEosTestJobRunnerService(StreamsEosTestBaseService):
+    def __init__(self, test_context, kafka):
+        super(StreamsComplexEosTestJobRunnerService, self).__init__(test_context, kafka, "process-complex")
+
+
+class StreamsEosTestVerifyRunnerService(StreamsEosTestBaseService):
+    def __init__(self, test_context, kafka):
+        super(StreamsEosTestVerifyRunnerService, self).__init__(test_context, kafka, "verify")
+
+
+class StreamsComplexEosTestVerifyRunnerService(StreamsEosTestBaseService):
+    def __init__(self, test_context, kafka):
+        super(StreamsComplexEosTestVerifyRunnerService, self).__init__(test_context, kafka, "verify-complex")
+
+
 class StreamsSmokeTestShutdownDeadlockService(StreamsSmokeTestBaseService):
     def __init__(self, test_context, kafka):
         super(StreamsSmokeTestShutdownDeadlockService, self).__init__(test_context, kafka, "close-deadlock-test")
 
 
 class StreamsBrokerCompatibilityService(StreamsTestBaseService):
-    def __init__(self, test_context, kafka):
+    def __init__(self, test_context, kafka, eosEnabled):
         super(StreamsBrokerCompatibilityService, self).__init__(test_context,
                                                                 kafka,
                                                                 "org.apache.kafka.streams.tests.BrokerCompatibilityTest",
-                                                                "dummy")
+                                                                eosEnabled)

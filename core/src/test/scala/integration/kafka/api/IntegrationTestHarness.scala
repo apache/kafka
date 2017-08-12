@@ -22,7 +22,6 @@ import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import kafka.utils.TestUtils
 import java.util.Properties
 
-import kafka.common.Topic
 import org.apache.kafka.clients.producer.KafkaProducer
 import kafka.server.KafkaConfig
 import kafka.integration.KafkaServerTestHarness
@@ -33,11 +32,12 @@ import scala.collection.mutable.Buffer
 /**
  * A helper class for writing integration tests that involve producers, consumers, and servers
  */
-trait IntegrationTestHarness extends KafkaServerTestHarness {
+abstract class IntegrationTestHarness extends KafkaServerTestHarness {
 
   val producerCount: Int
   val consumerCount: Int
   val serverCount: Int
+  var logDirCount: Int = 1
   lazy val producerConfig = new Properties
   lazy val consumerConfig = new Properties
   lazy val serverConfig = new Properties
@@ -45,9 +45,9 @@ trait IntegrationTestHarness extends KafkaServerTestHarness {
   val consumers = Buffer[KafkaConsumer[Array[Byte], Array[Byte]]]()
   val producers = Buffer[KafkaProducer[Array[Byte], Array[Byte]]]()
 
-  override def generateConfigs() = {
+  override def generateConfigs = {
     val cfgs = TestUtils.createBrokerConfigs(serverCount, zkConnect, interBrokerSecurityProtocol = Some(securityProtocol),
-      trustStoreFile = trustStoreFile, saslProperties = serverSaslProperties)
+      trustStoreFile = trustStoreFile, saslProperties = serverSaslProperties, logDirCount = logDirCount)
     cfgs.foreach { config =>
       config.setProperty(KafkaConfig.ListenersProp, s"${listenerName.value}://localhost:${TestUtils.RandomPort}")
       config.remove(KafkaConfig.InterBrokerSecurityProtocolProp)
@@ -75,12 +75,7 @@ trait IntegrationTestHarness extends KafkaServerTestHarness {
       consumers += createNewConsumer
     }
 
-    // create the consumer offset topic
-    TestUtils.createTopic(zkUtils, Topic.GroupMetadataTopicName,
-      serverConfig.getProperty(KafkaConfig.OffsetsTopicPartitionsProp).toInt,
-      serverConfig.getProperty(KafkaConfig.OffsetsTopicReplicationFactorProp).toInt,
-      servers,
-      servers.head.groupCoordinator.offsetsTopicConfigs)
+    TestUtils.createOffsetsTopic(zkUtils, servers)
   }
 
   def createNewProducer: KafkaProducer[Array[Byte], Array[Byte]] = {
@@ -90,7 +85,7 @@ trait IntegrationTestHarness extends KafkaServerTestHarness {
                                   saslProperties = this.clientSaslProperties,
                                   props = Some(producerConfig))
   }
-  
+
   def createNewConsumer: KafkaConsumer[Array[Byte], Array[Byte]] = {
       TestUtils.createNewConsumer(brokerList,
                                   securityProtocol = this.securityProtocol,

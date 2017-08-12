@@ -1,20 +1,19 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.MockConsumer;
@@ -28,6 +27,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Before;
 import org.junit.Test;
@@ -36,9 +36,11 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 
+import static org.apache.kafka.streams.processor.internals.GlobalStreamThread.State.RUNNING;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -63,7 +65,7 @@ public class GlobalStreamThreadTest {
                                                     new StateDirectory("appId", TestUtils.tempDirectory().getPath(), time),
                                                     new Metrics(),
                                                     new MockTime(),
-                                                    "client");
+                                                    "clientId");
     }
 
     @Test
@@ -94,7 +96,7 @@ public class GlobalStreamThreadTest {
                                                     new StateDirectory("appId", TestUtils.tempDirectory().getPath(), time),
                                                     new Metrics(),
                                                     new MockTime(),
-                                                    "client");
+                                                    "clientId");
 
         try {
             globalStreamThread.start();
@@ -108,7 +110,7 @@ public class GlobalStreamThreadTest {
 
 
     @Test
-    public void shouldBeRunningAfterSuccesulStart() throws Exception {
+    public void shouldBeRunningAfterSuccessfulStart() throws Exception {
         initializeConsumer();
         globalStreamThread.start();
         assertTrue(globalStreamThread.stillRunning());
@@ -120,6 +122,7 @@ public class GlobalStreamThreadTest {
         globalStreamThread.start();
         globalStreamThread.close();
         globalStreamThread.join();
+        assertEquals(GlobalStreamThread.State.DEAD, globalStreamThread.state());
     }
 
     @Test
@@ -132,6 +135,48 @@ public class GlobalStreamThreadTest {
         globalStreamThread.join();
         assertFalse(globalStore.isOpen());
     }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldTransitionToDeadOnClose() throws InterruptedException {
+
+        initializeConsumer();
+        globalStreamThread.start();
+        globalStreamThread.close();
+        globalStreamThread.join();
+
+        assertEquals(GlobalStreamThread.State.DEAD, globalStreamThread.state());
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldStayDeadAfterTwoCloses() throws InterruptedException {
+
+        initializeConsumer();
+        globalStreamThread.start();
+        globalStreamThread.close();
+        globalStreamThread.join();
+        globalStreamThread.close();
+
+        assertEquals(GlobalStreamThread.State.DEAD, globalStreamThread.state());
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldTransitiontoRunningOnStart() throws InterruptedException {
+
+        initializeConsumer();
+        globalStreamThread.start();
+        TestUtils.waitForCondition(new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                return globalStreamThread.state() == RUNNING;
+            }
+        }, 10 * 1000, "Thread never started.");
+        globalStreamThread.close();
+    }
+
+
 
     private void initializeConsumer() {
         mockConsumer.updatePartitions("foo", Collections.singletonList(new PartitionInfo("foo",

@@ -18,6 +18,7 @@ package kafka.admin
 
 import java.util.Properties
 
+import kafka.admin.ReassignPartitionsCommand.Throttle
 import kafka.common.TopicAndPartition
 import kafka.log.LogConfig
 import kafka.log.LogConfig._
@@ -132,7 +133,7 @@ class ReassignPartitionsCommandTest extends Logging {
           case "topic2" =>
             assertEquals("0:101,0:102", configChange.get(LeaderReplicationThrottledReplicasProp))
             assertEquals("0:100", configChange.get(FollowerReplicationThrottledReplicasProp))
-          case _ => fail("Unexpected topic $topic")
+          case _ => fail(s"Unexpected topic $topic")
         }
         calls += 1
       }
@@ -248,7 +249,7 @@ class ReassignPartitionsCommandTest extends Logging {
     replay(admin)
 
     //When
-    assigner.maybeLimit(1000)
+    assigner.maybeLimit(Throttle(1000))
 
     //Then
     for (actual <- propsCapture.getValues) {
@@ -282,7 +283,7 @@ class ReassignPartitionsCommandTest extends Logging {
     replay(admin)
 
     //When
-    assigner.maybeLimit(1000)
+    assigner.maybeLimit(Throttle(1000))
 
     //Then
     for (actual <- propsCapture.getValues) {
@@ -312,7 +313,7 @@ class ReassignPartitionsCommandTest extends Logging {
     replay(admin)
 
     //When
-    assigner.maybeLimit(1000)
+    assigner.maybeLimit(Throttle(1000))
 
     //Then other property remains
     for (actual <- propsCapture.getValues) {

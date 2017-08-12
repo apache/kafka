@@ -17,7 +17,7 @@
 
 package kafka.api
 
-import org.apache.kafka.common.record.Record
+import org.apache.kafka.common.record.RecordBatch
 
 /**
  * This class contains the different Kafka versions.
@@ -62,7 +62,17 @@ object ApiVersion {
     "0.10.1" -> KAFKA_0_10_1_IV2,
     // introduced UpdateMetadataRequest v3 in KIP-103
     "0.10.2-IV0" -> KAFKA_0_10_2_IV0,
-    "0.10.2" -> KAFKA_0_10_2_IV0
+    "0.10.2" -> KAFKA_0_10_2_IV0,
+    // KIP-98 (idempotent and transactional producer support)
+    "0.11.0-IV0" -> KAFKA_0_11_0_IV0,
+    // introduced DeleteRecordsRequest v0 and FetchRequest v4 in KIP-107
+    "0.11.0-IV1" -> KAFKA_0_11_0_IV1,
+    // Introduced leader epoch fetches to the replica fetcher via KIP-101
+    "0.11.0-IV2" -> KAFKA_0_11_0_IV2,
+    "0.11.0" -> KAFKA_0_11_0_IV2,
+    // Introduced LeaderAndIsrRequest V1, UpdateMetadataRequest V4 and FetchRequest V6 via KIP-112
+    "1.0-IV0" -> KAFKA_1_0_IV0,
+    "1.0" -> KAFKA_1_0_IV0
   )
 
   private val versionPattern = "\\.".r
@@ -89,60 +99,85 @@ sealed trait ApiVersion extends Ordered[ApiVersion] {
 // Keep the IDs in order of versions
 case object KAFKA_0_8_0 extends ApiVersion {
   val version: String = "0.8.0.X"
-  val messageFormatVersion: Byte = Record.MAGIC_VALUE_V0
+  val messageFormatVersion: Byte = RecordBatch.MAGIC_VALUE_V0
   val id: Int = 0
 }
 
 case object KAFKA_0_8_1 extends ApiVersion {
   val version: String = "0.8.1.X"
-  val messageFormatVersion: Byte = Record.MAGIC_VALUE_V0
+  val messageFormatVersion: Byte = RecordBatch.MAGIC_VALUE_V0
   val id: Int = 1
 }
 
 case object KAFKA_0_8_2 extends ApiVersion {
   val version: String = "0.8.2.X"
-  val messageFormatVersion: Byte = Record.MAGIC_VALUE_V0
+  val messageFormatVersion: Byte = RecordBatch.MAGIC_VALUE_V0
   val id: Int = 2
 }
 
 case object KAFKA_0_9_0 extends ApiVersion {
   val version: String = "0.9.0.X"
-  val messageFormatVersion: Byte = Record.MAGIC_VALUE_V0
+  val messageFormatVersion: Byte = RecordBatch.MAGIC_VALUE_V0
   val id: Int = 3
 }
 
 case object KAFKA_0_10_0_IV0 extends ApiVersion {
   val version: String = "0.10.0-IV0"
-  val messageFormatVersion: Byte = Record.MAGIC_VALUE_V1
+  val messageFormatVersion: Byte = RecordBatch.MAGIC_VALUE_V1
   val id: Int = 4
 }
 
 case object KAFKA_0_10_0_IV1 extends ApiVersion {
   val version: String = "0.10.0-IV1"
-  val messageFormatVersion: Byte = Record.MAGIC_VALUE_V1
+  val messageFormatVersion: Byte = RecordBatch.MAGIC_VALUE_V1
   val id: Int = 5
 }
 
 case object KAFKA_0_10_1_IV0 extends ApiVersion {
   val version: String = "0.10.1-IV0"
-  val messageFormatVersion: Byte = Record.MAGIC_VALUE_V1
+  val messageFormatVersion: Byte = RecordBatch.MAGIC_VALUE_V1
   val id: Int = 6
 }
 
 case object KAFKA_0_10_1_IV1 extends ApiVersion {
   val version: String = "0.10.1-IV1"
-  val messageFormatVersion: Byte = Record.MAGIC_VALUE_V1
+  val messageFormatVersion: Byte = RecordBatch.MAGIC_VALUE_V1
   val id: Int = 7
 }
 
 case object KAFKA_0_10_1_IV2 extends ApiVersion {
   val version: String = "0.10.1-IV2"
-  val messageFormatVersion: Byte = Record.MAGIC_VALUE_V1
+  val messageFormatVersion: Byte = RecordBatch.MAGIC_VALUE_V1
   val id: Int = 8
 }
 
 case object KAFKA_0_10_2_IV0 extends ApiVersion {
   val version: String = "0.10.2-IV0"
-  val messageFormatVersion: Byte = Record.MAGIC_VALUE_V1
+  val messageFormatVersion: Byte = RecordBatch.MAGIC_VALUE_V1
   val id: Int = 9
 }
+
+case object KAFKA_0_11_0_IV0 extends ApiVersion {
+  val version: String = "0.11.0-IV0"
+  val messageFormatVersion: Byte = RecordBatch.MAGIC_VALUE_V2
+  val id: Int = 10
+}
+
+case object KAFKA_0_11_0_IV1 extends ApiVersion {
+  val version: String = "0.11.0-IV1"
+  val messageFormatVersion: Byte = RecordBatch.MAGIC_VALUE_V2
+  val id: Int = 11
+}
+
+case object KAFKA_0_11_0_IV2 extends ApiVersion {
+  val version: String = "0.11.0-IV2"
+  val messageFormatVersion: Byte = RecordBatch.MAGIC_VALUE_V2
+  val id: Int = 12
+}
+
+case object KAFKA_1_0_IV0 extends ApiVersion {
+  val version: String = "1.0-IV0"
+  val messageFormatVersion: Byte = RecordBatch.MAGIC_VALUE_V2
+  val id: Int = 13
+}
+

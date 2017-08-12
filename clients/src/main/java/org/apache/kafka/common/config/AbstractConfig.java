@@ -1,14 +1,18 @@
-/**
- * Licensed to the Apache Software Foundation (ASF) under one or more contributor license agreements. See the NOTICE
- * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
- * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
- * License. You may obtain a copy of the License at
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
- * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
- * specific language governing permissions and limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 package org.apache.kafka.common.config;
 
@@ -51,11 +55,16 @@ public class AbstractConfig {
     @SuppressWarnings("unchecked")
     public AbstractConfig(ConfigDef definition, Map<?, ?> originals, boolean doLog) {
         /* check that all the keys are really strings */
-        for (Object key : originals.keySet())
-            if (!(key instanceof String))
-                throw new ConfigException(key.toString(), originals.get(key), "Key must be a string.");
+        for (Map.Entry<?, ?> entry : originals.entrySet())
+            if (!(entry.getKey() instanceof String))
+                throw new ConfigException(entry.getKey().toString(), entry.getValue(), "Key must be a string.");
         this.originals = (Map<String, ?>) originals;
         this.values = definition.parse(this.originals);
+        Map<String, Object> configUpdates = postProcessParsedConfig(Collections.unmodifiableMap(this.values));
+        for (Map.Entry<String, Object> update : configUpdates.entrySet()) {
+            this.values.put(update.getKey(), update.getValue());
+        }
+        definition.parse(this.values);
         this.used = Collections.synchronizedSet(new HashSet<String>());
         this.definition = definition;
         if (doLog)
@@ -64,6 +73,17 @@ public class AbstractConfig {
 
     public AbstractConfig(ConfigDef definition, Map<?, ?> originals) {
         this(definition, originals, true);
+    }
+
+    /**
+     * Called directly after user configs got parsed (and thus default values got set).
+     * This allows to change default values for "secondary defaults" if required.
+     *
+     * @param parsedValues unmodifiable map of current configuration
+     * @return a map of updates that should be applied to the configuration (will be validated to prevent bad updates)
+     */
+    protected Map<String, Object> postProcessParsedConfig(Map<String, Object> parsedValues) {
+        return Collections.emptyMap();
     }
 
     protected Object get(String key) {
@@ -104,6 +124,13 @@ public class AbstractConfig {
 
     public String getString(String key) {
         return (String) get(key);
+    }
+
+    public ConfigDef.Type typeOf(String key) {
+        ConfigDef.ConfigKey configKey = definition.configKeys().get(key);
+        if (configKey == null)
+            return null;
+        return configKey.type;
     }
 
     public Password getPassword(String key) {
@@ -258,12 +285,12 @@ public class AbstractConfig {
                 try {
                     o = Utils.newInstance((String) klass, t);
                 } catch (ClassNotFoundException e) {
-                    throw new KafkaException(klass + " ClassNotFoundException exception occured", e);
+                    throw new KafkaException(klass + " ClassNotFoundException exception occurred", e);
                 }
             } else if (klass instanceof Class<?>) {
                 o = Utils.newInstance((Class<?>) klass);
             } else
-                throw new KafkaException("List contains element of type " + klass.getClass() + ", expected String or Class");
+                throw new KafkaException("List contains element of type " + klass.getClass().getName() + ", expected String or Class");
             if (!t.isInstance(o))
                 throw new KafkaException(klass + " is not an instance of " + t.getName());
             if (o instanceof Configurable)

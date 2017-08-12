@@ -1,14 +1,18 @@
-/**
- * Licensed to the Apache Software Foundation (ASF) under one or more contributor license agreements. See the NOTICE
- * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
- * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
- * License. You may obtain a copy of the License at
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
- * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
- * specific language governing permissions and limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 package org.apache.kafka.common.network;
 
@@ -21,6 +25,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.security.JaasContext;
 import org.apache.kafka.common.security.kerberos.KerberosShortNamer;
 import org.apache.kafka.common.security.authenticator.CredentialCache;
@@ -28,6 +33,7 @@ import org.apache.kafka.common.security.authenticator.LoginManager;
 import org.apache.kafka.common.security.authenticator.SaslClientAuthenticator;
 import org.apache.kafka.common.security.authenticator.SaslServerAuthenticator;
 import org.apache.kafka.common.security.ssl.SslFactory;
+import org.apache.kafka.common.utils.Java;
 import org.apache.kafka.common.protocol.SecurityProtocol;
 import org.apache.kafka.common.KafkaException;
 import org.slf4j.Logger;
@@ -90,11 +96,13 @@ public class SaslChannelBuilder implements ChannelBuilder {
                 this.sslFactory.configure(configs);
             }
         } catch (Exception e) {
+            close();
             throw new KafkaException(e);
         }
     }
 
-    public KafkaChannel buildChannel(String id, SelectionKey key, int maxReceiveSize) throws KafkaException {
+    @Override
+    public KafkaChannel buildChannel(String id, SelectionKey key, int maxReceiveSize, MemoryPool memoryPool) throws KafkaException {
         try {
             SocketChannel socketChannel = (SocketChannel) key.channel();
             TransportLayer transportLayer = buildTransportLayer(id, key, socketChannel);
@@ -108,7 +116,7 @@ public class SaslChannelBuilder implements ChannelBuilder {
                         socketChannel.socket().getInetAddress().getHostName(), clientSaslMechanism, handshakeRequestEnable);
             // Both authenticators don't use `PrincipalBuilder`, so we pass `null` for now. Reconsider if this changes.
             authenticator.configure(transportLayer, null, this.configs);
-            return new KafkaChannel(id, transportLayer, authenticator, maxReceiveSize);
+            return new KafkaChannel(id, transportLayer, authenticator, maxReceiveSize, memoryPool != null ? memoryPool : MemoryPool.NONE);
         } catch (Exception e) {
             log.info("Failed to create channel due to ", e);
             throw new KafkaException(e);
@@ -116,8 +124,10 @@ public class SaslChannelBuilder implements ChannelBuilder {
     }
 
     public void close()  {
-        if (this.loginManager != null)
-            this.loginManager.release();
+        if (loginManager != null) {
+            loginManager.release();
+            loginManager = null;
+        }
     }
 
     protected TransportLayer buildTransportLayer(String id, SelectionKey key, SocketChannel socketChannel) throws IOException {
@@ -127,6 +137,11 @@ public class SaslChannelBuilder implements ChannelBuilder {
         } else {
             return new PlaintextTransportLayer(key);
         }
+    }
+
+    // Package private for testing
+    LoginManager loginManager() {
+        return loginManager;
     }
 
     private static String defaultKerberosRealm() throws ClassNotFoundException, NoSuchMethodException,
@@ -139,7 +154,7 @@ public class SaslChannelBuilder implements ChannelBuilder {
         Class<?> classRef;
         Method getInstanceMethod;
         Method getDefaultRealmMethod;
-        if (System.getProperty("java.vendor").contains("IBM")) {
+        if (Java.isIBMJdk()) {
             classRef = Class.forName("com.ibm.security.krb5.internal.Config");
         } else {
             classRef = Class.forName("sun.security.krb5.Config");

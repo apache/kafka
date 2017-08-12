@@ -1,20 +1,19 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p/>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p/>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- **/
-
+ */
 package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.common.config.AbstractConfig;
@@ -25,6 +24,8 @@ import org.apache.kafka.common.config.ConfigDef.Width;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.runtime.isolation.PluginDesc;
+import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.transforms.Transformation;
 
 import java.util.ArrayList;
@@ -82,6 +83,17 @@ public class ConnectorConfig extends AbstractConfig {
     private static final String TRANSFORMS_DOC = "Aliases for the transformations to be applied to records.";
     private static final String TRANSFORMS_DISPLAY = "Transforms";
 
+    private final EnrichedConnectorConfig enrichedConfig;
+    private static class EnrichedConnectorConfig extends AbstractConfig {
+        EnrichedConnectorConfig(ConfigDef configDef, Map<String, String> props) {
+            super(configDef, props);
+        }
+
+        public Object get(String key) {
+            return super.get(key);
+        }
+    }
+
     public static ConfigDef configDef() {
         return new ConfigDef()
                 .define(NAME_CONFIG, Type.STRING, Importance.HIGH, NAME_DOC, COMMON_GROUP, 1, Width.MEDIUM, NAME_DISPLAY)
@@ -101,16 +113,25 @@ public class ConnectorConfig extends AbstractConfig {
                 }, Importance.LOW, TRANSFORMS_DOC, TRANSFORMS_GROUP, 6, Width.LONG, TRANSFORMS_DISPLAY);
     }
 
-    public ConnectorConfig() {
-        this(new HashMap<String, String>());
+    public ConnectorConfig(Plugins plugins) {
+        this(plugins, new HashMap<String, String>());
     }
 
-    public ConnectorConfig(Map<String, String> props) {
-        this(configDef(), props);
+    public ConnectorConfig(Plugins plugins, Map<String, String> props) {
+        this(plugins, configDef(), props);
     }
 
-    public ConnectorConfig(ConfigDef configDef, Map<String, String> props) {
-        super(enrich(configDef, props, true), props);
+    public ConnectorConfig(Plugins plugins, ConfigDef configDef, Map<String, String> props) {
+        super(configDef, props);
+        enrichedConfig = new EnrichedConnectorConfig(
+                enrich(plugins, configDef, props, true),
+                props
+        );
+    }
+
+    @Override
+    public Object get(String key) {
+        return enrichedConfig.get(key);
     }
 
     /**
@@ -143,15 +164,20 @@ public class ConnectorConfig extends AbstractConfig {
      * <p>
      * {@code requireFullConfig} specifies whether required config values that are missing should cause an exception to be thrown.
      */
-    public static ConfigDef enrich(ConfigDef baseConfigDef, Map<String, String> props, boolean requireFullConfig) {
-        final List<String> transformAliases = (List<String>) ConfigDef.parseType(TRANSFORMS_CONFIG, props.get(TRANSFORMS_CONFIG), Type.LIST);
-        if (transformAliases == null || transformAliases.isEmpty()) {
+    public static ConfigDef enrich(Plugins plugins, ConfigDef baseConfigDef, Map<String, String> props, boolean requireFullConfig) {
+        Object transformAliases = ConfigDef.parseType(TRANSFORMS_CONFIG, props.get(TRANSFORMS_CONFIG), Type.LIST);
+        if (!(transformAliases instanceof List)) {
             return baseConfigDef;
         }
 
-        final ConfigDef newDef = new ConfigDef(baseConfigDef);
-
-        for (String alias : new LinkedHashSet<>(transformAliases)) {
+        ConfigDef newDef = new ConfigDef(baseConfigDef);
+        LinkedHashSet<?> uniqueTransformAliases = new LinkedHashSet<>((List<?>) transformAliases);
+        for (Object o : uniqueTransformAliases) {
+            if (!(o instanceof String)) {
+                throw new ConfigException("Item in " + TRANSFORMS_CONFIG + " property is not of "
+                        + "type String");
+            }
+            String alias = (String) o;
             final String prefix = TRANSFORMS_CONFIG + "." + alias + ".";
             final String group = TRANSFORMS_GROUP + ": " + alias;
             int orderInGroup = 0;
@@ -165,7 +191,7 @@ public class ConnectorConfig extends AbstractConfig {
             };
             newDef.define(transformationTypeConfig, Type.CLASS, ConfigDef.NO_DEFAULT_VALUE, typeValidator, Importance.HIGH,
                     "Class for the '" + alias + "' transformation.", group, orderInGroup++, Width.LONG, "Transformation type for " + alias,
-                    Collections.<String>emptyList(), new TransformationClassRecommender());
+                    Collections.<String>emptyList(), new TransformationClassRecommender(plugins));
 
             final ConfigDef transformationConfigDef;
             try {
@@ -205,9 +231,19 @@ public class ConnectorConfig extends AbstractConfig {
      * Recommend bundled transformations.
      */
     static final class TransformationClassRecommender implements ConfigDef.Recommender {
+        private final Plugins plugins;
+
+        TransformationClassRecommender(Plugins plugins) {
+            this.plugins = plugins;
+        }
+
         @Override
         public List<Object> validValues(String name, Map<String, Object> parsedConfig) {
-            return (List) PluginDiscovery.transformationPlugins();
+            List<Object> transformationPlugins = new ArrayList<>();
+            for (PluginDesc<Transformation> plugin : plugins.transformations()) {
+                transformationPlugins.add(plugin.pluginClass());
+            }
+            return Collections.unmodifiableList(transformationPlugins);
         }
 
         @Override

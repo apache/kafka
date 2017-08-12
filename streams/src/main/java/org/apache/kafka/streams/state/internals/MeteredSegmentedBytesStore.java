@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.metrics.Sensor;
@@ -51,15 +50,22 @@ class MeteredSegmentedBytesStore extends WrappedStateStore.AbstractStateStore im
 
     @Override
     public void init(ProcessorContext context, StateStore root) {
-        final String name = name();
+        final String tagKey = "task-id";
+        final String tagValue = context.taskId().toString();
         this.metrics = context.metrics();
-        this.putTime = this.metrics.addLatencyAndThroughputSensor(metricScope, name, "put", Sensor.RecordingLevel.DEBUG);
-        this.fetchTime = this.metrics.addLatencyAndThroughputSensor(metricScope, name, "fetch", Sensor.RecordingLevel.DEBUG);
-        this.flushTime = this.metrics.addLatencyAndThroughputSensor(metricScope, name, "flush", Sensor.RecordingLevel.DEBUG);
-        this.getTime = this.metrics.addLatencyAndThroughputSensor(metricScope, name, "get", Sensor.RecordingLevel.DEBUG);
-        this.removeTime = this.metrics.addLatencyAndThroughputSensor(metricScope, name, "remove", Sensor.RecordingLevel.DEBUG);
+        this.putTime = this.metrics.addLatencyAndThroughputSensor(metricScope, name(), "put",
+                Sensor.RecordingLevel.DEBUG, tagKey, tagValue);
+        this.fetchTime = this.metrics.addLatencyAndThroughputSensor(metricScope, name(), "fetch",
+                Sensor.RecordingLevel.DEBUG, tagKey, tagValue);
+        this.flushTime = this.metrics.addLatencyAndThroughputSensor(metricScope, name(), "flush",
+                Sensor.RecordingLevel.DEBUG, tagKey, tagValue);
+        this.getTime = this.metrics.addLatencyAndThroughputSensor(metricScope, name(), "get",
+                Sensor.RecordingLevel.DEBUG, tagKey, tagValue);
+        this.removeTime = this.metrics.addLatencyAndThroughputSensor(metricScope, name(), "remove",
+                Sensor.RecordingLevel.DEBUG, tagKey, tagValue);
 
-        final Sensor restoreTime = this.metrics.addLatencyAndThroughputSensor(metricScope, name, "restore", Sensor.RecordingLevel.DEBUG);
+        final Sensor restoreTime = this.metrics.addLatencyAndThroughputSensor(metricScope, name(), "restore",
+                Sensor.RecordingLevel.DEBUG, tagKey, tagValue);
         // register and possibly restore the state from the logs
         final long startNs = time.nanoseconds();
         try {
@@ -80,8 +86,13 @@ class MeteredSegmentedBytesStore extends WrappedStateStore.AbstractStateStore im
     }
 
     @Override
-    public KeyValueIterator<Bytes, byte[]> fetch(final Bytes key, long timeFrom, long timeTo) {
+    public KeyValueIterator<Bytes, byte[]> fetch(final Bytes key, final long timeFrom, final long timeTo) {
         return new MeteredSegmentedBytesStoreIterator(inner.fetch(key, timeFrom, timeTo), this.fetchTime);
+    }
+
+    @Override
+    public KeyValueIterator<Bytes, byte[]> fetch(final Bytes keyFrom, final Bytes keyTo, final long from, final long to) {
+        return new MeteredSegmentedBytesStoreIterator(inner.fetch(keyFrom, keyTo, from, to), this.fetchTime);
     }
 
     @Override

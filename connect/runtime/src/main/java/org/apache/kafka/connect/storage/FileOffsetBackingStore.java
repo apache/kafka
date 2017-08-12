@@ -1,25 +1,25 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p/>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p/>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- **/
-
+ */
 package org.apache.kafka.connect.storage;
 
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
+import org.apache.kafka.connect.util.SafeObjectInputStream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -29,7 +29,6 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
@@ -70,8 +69,7 @@ public class FileOffsetBackingStore extends MemoryOffsetBackingStore {
 
     @SuppressWarnings("unchecked")
     private void load() {
-        try {
-            ObjectInputStream is = new ObjectInputStream(new FileInputStream(file));
+        try (SafeObjectInputStream is = new SafeObjectInputStream(new FileInputStream(file))) {
             Object obj = is.readObject();
             if (!(obj instanceof HashMap))
                 throw new ConnectException("Expected HashMap but found " + obj.getClass());
@@ -82,7 +80,6 @@ public class FileOffsetBackingStore extends MemoryOffsetBackingStore {
                 ByteBuffer value = (mapEntry.getValue() != null) ? ByteBuffer.wrap(mapEntry.getValue()) : null;
                 data.put(key, value);
             }
-            is.close();
         } catch (FileNotFoundException | EOFException e) {
             // FileNotFoundException: Ignore, may be new.
             // EOFException: Ignore, this means the file was missing or corrupt

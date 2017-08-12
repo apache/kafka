@@ -20,6 +20,7 @@ object Resource {
   val Separator = ":"
   val ClusterResourceName = "kafka-cluster"
   val ClusterResource = new Resource(Cluster, Resource.ClusterResourceName)
+  val ProducerIdResourceName = "producer-id"
   val WildCardResource = "*"
 
   def fromString(str: String): Resource = {
@@ -36,7 +37,7 @@ object Resource {
  * @param name name of the resource, for topic this will be topic name , for group it will be group name. For cluster type
  *             it will be a constant string kafka-cluster.
  */
-case class Resource(val resourceType: ResourceType, val name: String) {
+case class Resource(resourceType: ResourceType, name: String) {
 
   override def toString: String = {
     resourceType.name + Resource.Separator + name

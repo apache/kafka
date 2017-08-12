@@ -166,6 +166,10 @@ class SecurityConfig(TemplateRenderer):
         static_jaas_conf = node is None or (self.has_sasl and self.has_ssl)
         return SecurityConfig(self.context, self.security_protocol, client_sasl_mechanism=self.client_sasl_mechanism, template_props=template_props, static_jaas_conf=static_jaas_conf)
 
+    def enable_security_protocol(self, security_protocol):
+        self.has_sasl = self.has_sasl or self.is_sasl(security_protocol)
+        self.has_ssl = self.has_ssl or self.is_ssl(security_protocol)
+
     def setup_ssl(self, node):
         node.account.ssh("mkdir -p %s" % SecurityConfig.CONFIG_DIR, allow_fail=False)
         node.account.copy_to(SecurityConfig.ssl_stores.truststore_path, SecurityConfig.TRUSTSTORE_PATH)

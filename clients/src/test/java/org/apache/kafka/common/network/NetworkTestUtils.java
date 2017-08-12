@@ -1,14 +1,18 @@
-/**
- * Licensed to the Apache Software Foundation (ASF) under one or more contributor license agreements. See the NOTICE
- * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
- * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
- * License. You may obtain a copy of the License at
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
- * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
- * specific language governing permissions and limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 package org.apache.kafka.common.network;
 
@@ -32,7 +36,7 @@ public class NetworkTestUtils {
 
     public static NioEchoServer createEchoServer(ListenerName listenerName, SecurityProtocol securityProtocol,
                                                  AbstractConfig serverConfig) throws Exception {
-        NioEchoServer server = new NioEchoServer(listenerName, securityProtocol, serverConfig, "localhost");
+        NioEchoServer server = new NioEchoServer(listenerName, securityProtocol, serverConfig, "localhost", null);
         server.start();
         return server;
     }
@@ -73,7 +77,7 @@ public class NetworkTestUtils {
         assertTrue(selector.isChannelReady(node));
     }
 
-    public static void waitForChannelClose(Selector selector, String node) throws IOException {
+    public static void waitForChannelClose(Selector selector, String node, ChannelState channelState) throws IOException {
         boolean closed = false;
         for (int i = 0; i < 30; i++) {
             selector.poll(1000L);
@@ -83,5 +87,6 @@ public class NetworkTestUtils {
             }
         }
         assertTrue("Channel was not closed by timeout", closed);
+        assertEquals(channelState, selector.disconnected().get(node));
     }
 }

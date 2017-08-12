@@ -1,14 +1,18 @@
-/**
- * Licensed to the Apache Software Foundation (ASF) under one or more contributor license agreements. See the NOTICE
- * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
- * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
- * License. You may obtain a copy of the License at
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
- * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
- * specific language governing permissions and limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 package org.apache.kafka.clients.consumer;
 
@@ -18,10 +22,12 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.requests.IsolationLevel;
 import org.apache.kafka.common.serialization.Deserializer;
 
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
@@ -118,9 +124,9 @@ public class ConsumerConfig extends AbstractConfig {
      */
     public static final String FETCH_MAX_BYTES_CONFIG = "fetch.max.bytes";
     private static final String FETCH_MAX_BYTES_DOC = "The maximum amount of data the server should return for a fetch request. " +
-            "This is not an absolute maximum, if the first message in the first non-empty partition of the fetch is larger than " +
-            "this value, the message will still be returned to ensure that the consumer can make progress. " +
-            "The maximum message size accepted by the broker is defined via <code>message.max.bytes</code> (broker config) or " +
+            "Records are fetched in batches by the consumer, and if the first record batch in the first non-empty partition of the fetch is larger than " +
+            "this value, the record batch will still be returned to ensure that the consumer can make progress. As such, this is not a absolute maximum. " +
+            "The maximum record batch size accepted by the broker is defined via <code>message.max.bytes</code> (broker config) or " +
             "<code>max.message.bytes</code> (topic config). Note that the consumer performs multiple fetches in parallel.";
     public static final int DEFAULT_FETCH_MAX_BYTES = 50 * 1024 * 1024;
 
@@ -138,8 +144,9 @@ public class ConsumerConfig extends AbstractConfig {
      */
     public static final String MAX_PARTITION_FETCH_BYTES_CONFIG = "max.partition.fetch.bytes";
     private static final String MAX_PARTITION_FETCH_BYTES_DOC = "The maximum amount of data per-partition the server " +
-            "will return. If the first message in the first non-empty partition of the fetch is larger than this limit, the " +
-            "message will still be returned to ensure that the consumer can make progress. The maximum message size " +
+            "will return. Records are fetched in batches by the consumer. If the first record batch in the first non-empty " +
+            "partition of the fetch is larger than this limit, the " +
+            "batch will still be returned to ensure that the consumer can make progress. The maximum record batch size " +
             "accepted by the broker is defined via <code>message.max.bytes</code> (broker config) or " +
             "<code>max.message.bytes</code> (topic config). See " + FETCH_MAX_BYTES_CONFIG + " for limiting the consumer request size.";
     public static final int DEFAULT_MAX_PARTITION_FETCH_BYTES = 1 * 1024 * 1024;
@@ -159,6 +166,11 @@ public class ConsumerConfig extends AbstractConfig {
      * <code>reconnect.backoff.ms</code>
      */
     public static final String RECONNECT_BACKOFF_MS_CONFIG = CommonClientConfigs.RECONNECT_BACKOFF_MS_CONFIG;
+
+    /**
+     * <code>reconnect.backoff.max.ms</code>
+     */
+    public static final String RECONNECT_BACKOFF_MAX_MS_CONFIG = CommonClientConfigs.RECONNECT_BACKOFF_MAX_MS_CONFIG;
 
     /**
      * <code>retry.backoff.ms</code>
@@ -218,6 +230,29 @@ public class ConsumerConfig extends AbstractConfig {
     private static final String EXCLUDE_INTERNAL_TOPICS_DOC = "Whether records from internal topics (such as offsets) should be exposed to the consumer. "
                                                             + "If set to <code>true</code> the only way to receive records from an internal topic is subscribing to it.";
     public static final boolean DEFAULT_EXCLUDE_INTERNAL_TOPICS = true;
+
+    /**
+     * <code>internal.leave.group.on.close</code>
+     * Whether or not the consumer should leave the group on close. If set to <code>false</code> then a rebalance
+     * won't occur until <code>session.timeout.ms</code> expires.
+     *
+     * <p>
+     * Note: this is an internal configuration and could be changed in the future in a backward incompatible way
+     *
+     */
+    static final String LEAVE_GROUP_ON_CLOSE_CONFIG = "internal.leave.group.on.close";
+
+    /** <code>isolation.level</code> */
+    public static final String ISOLATION_LEVEL_CONFIG = "isolation.level";
+    public static final String ISOLATION_LEVEL_DOC = "<p>Controls how to read messages written transactionally. If set to <code>read_committed</code>, consumer.poll() will only return" +
+            " transactional messages which have been committed. If set to <code>read_uncommitted</code>' (the default), consumer.poll() will return all messages, even transactional messages" +
+            " which have been aborted. Non-transactional messages will be returned unconditionally in either mode.</p> <p>Messages will always be returned in offset order. Hence, in " +
+            " <code>read_committed</code> mode, consumer.poll() will only return messages up to the last stable offset (LSO), which is the one less than the offset of the first open transaction." +
+            " In particular any messages appearing after messages belonging to ongoing transactions will be withheld until the relevant transaction has been completed. As a result, <code>read_committed</code>" +
+            " consumers will not be able to read up to the high watermark when there are in flight transactions.</p><p> Further, when in <code>read_committed</mode> the seekToEnd method will" +
+            " return the LSO";
+
+    public static final String DEFAULT_ISOLATION_LEVEL = IsolationLevel.READ_UNCOMMITTED.toString().toLowerCase(Locale.ROOT);
     
     static {
         CONFIG = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG,
@@ -304,6 +339,12 @@ public class ConsumerConfig extends AbstractConfig {
                                         atLeast(0L),
                                         Importance.LOW,
                                         CommonClientConfigs.RECONNECT_BACKOFF_MS_DOC)
+                                .define(RECONNECT_BACKOFF_MAX_MS_CONFIG,
+                                        Type.LONG,
+                                        1000L,
+                                        atLeast(0L),
+                                        Importance.LOW,
+                                        CommonClientConfigs.RECONNECT_BACKOFF_MAX_MS_DOC)
                                 .define(RETRY_BACKOFF_MS_CONFIG,
                                         Type.LONG,
                                         100L,
@@ -386,7 +427,16 @@ public class ConsumerConfig extends AbstractConfig {
                                         DEFAULT_EXCLUDE_INTERNAL_TOPICS,
                                         Importance.MEDIUM,
                                         EXCLUDE_INTERNAL_TOPICS_DOC)
-
+                                .defineInternal(LEAVE_GROUP_ON_CLOSE_CONFIG,
+                                                Type.BOOLEAN,
+                                                true,
+                                                Importance.LOW)
+                                .define(ISOLATION_LEVEL_CONFIG,
+                                        Type.STRING,
+                                        DEFAULT_ISOLATION_LEVEL,
+                                        in(IsolationLevel.READ_COMMITTED.toString().toLowerCase(Locale.ROOT), IsolationLevel.READ_UNCOMMITTED.toString().toLowerCase(Locale.ROOT)),
+                                        Importance.MEDIUM,
+                                        ISOLATION_LEVEL_DOC)
                                 // security support
                                 .define(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
                                         Type.STRING,
@@ -396,6 +446,11 @@ public class ConsumerConfig extends AbstractConfig {
                                 .withClientSslSupport()
                                 .withClientSaslSupport();
 
+    }
+
+    @Override
+    protected Map<String, Object> postProcessParsedConfig(final Map<String, Object> parsedValues) {
+        return CommonClientConfigs.postProcessReconnectBackoffConfigs(this, parsedValues);
     }
 
     public static Map<String, Object> addDeserializerToConfig(Map<String, Object> configs,
@@ -424,6 +479,10 @@ public class ConsumerConfig extends AbstractConfig {
 
     ConsumerConfig(Map<?, ?> props) {
         super(CONFIG, props);
+    }
+
+    ConsumerConfig(Map<?, ?> props, boolean doLog) {
+        super(CONFIG, props, doLog);
     }
 
     public static Set<String> configNames() {

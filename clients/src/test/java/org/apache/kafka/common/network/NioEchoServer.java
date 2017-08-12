@@ -1,14 +1,18 @@
-/**
- * Licensed to the Apache Software Foundation (ASF) under one or more contributor license agreements. See the NOTICE
- * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
- * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
- * License. You may obtain a copy of the License at
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
- * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
- * specific language governing permissions and limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 package org.apache.kafka.common.network;
 
@@ -47,7 +51,8 @@ public class NioEchoServer extends Thread {
     private volatile WritableByteChannel outputChannel;
     private final CredentialCache credentialCache;
 
-    public NioEchoServer(ListenerName listenerName, SecurityProtocol securityProtocol, AbstractConfig config, String serverHost) throws Exception {
+    public NioEchoServer(ListenerName listenerName, SecurityProtocol securityProtocol, AbstractConfig config,
+            String serverHost, ChannelBuilder channelBuilder) throws Exception {
         super("echoserver");
         setDaemon(true);
         serverSocketChannel = ServerSocketChannel.open();
@@ -59,7 +64,8 @@ public class NioEchoServer extends Thread {
         this.credentialCache = new CredentialCache();
         if (securityProtocol == SecurityProtocol.SASL_PLAINTEXT || securityProtocol == SecurityProtocol.SASL_SSL)
             ScramCredentialUtils.createCache(credentialCache, ScramMechanism.mechanismNames());
-        ChannelBuilder channelBuilder = ChannelBuilders.serverChannelBuilder(listenerName, securityProtocol, config, credentialCache);
+        if (channelBuilder == null)
+            channelBuilder = ChannelBuilders.serverChannelBuilder(listenerName, securityProtocol, config, credentialCache);
         this.selector = new Selector(5000, new Metrics(), new MockTime(), "MetricGroup", channelBuilder);
         acceptorThread = new AcceptorThread();
     }
@@ -88,14 +94,15 @@ public class NioEchoServer extends Thread {
                 List<NetworkReceive> completedReceives = selector.completedReceives();
                 for (NetworkReceive rcv : completedReceives) {
                     KafkaChannel channel = channel(rcv.source());
-                    channel.mute();
+                    String channelId = channel.id();
+                    selector.mute(channelId);
                     NetworkSend send = new NetworkSend(rcv.source(), rcv.payload());
                     if (outputChannel == null)
                         selector.send(send);
                     else {
                         for (ByteBuffer buffer : send.buffers)
                             outputChannel.write(buffer);
-                        channel.unmute();
+                        selector.unmute(channelId);
                     }
                 }
                 for (Send send : selector.completedSends())

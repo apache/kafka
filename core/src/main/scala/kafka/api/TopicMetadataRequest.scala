@@ -20,16 +20,16 @@ package kafka.api
 import java.nio.ByteBuffer
 
 import kafka.api.ApiUtils._
-import kafka.network.{RequestOrResponseSend, RequestChannel}
-import kafka.network.RequestChannel.Response
 import kafka.utils.Logging
-import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.protocol.ApiKeys
 
+@deprecated("This object has been deprecated and will be removed in a future release.", "1.0.0")
 object TopicMetadataRequest extends Logging {
   val CurrentVersion = 0.shortValue
   val DefaultClientId = ""
 }
 
+@deprecated("This object has been deprecated and will be removed in a future release.", "1.0.0")
 case class TopicMetadataRequest(versionId: Short,
                                 correlationId: Int,
                                 clientId: String,
@@ -47,7 +47,7 @@ case class TopicMetadataRequest(versionId: Short,
     topics.foreach(topic => writeShortString(buffer, topic))
   }
 
-  def sizeInBytes(): Int = {
+  def sizeInBytes: Int = {
     2 +  /* version id */
     4 + /* correlation id */
     shortStringLength(clientId)  + /* client id */
@@ -57,14 +57,6 @@ case class TopicMetadataRequest(versionId: Short,
 
   override def toString: String = {
     describe(true)
-  }
-
-  override def handleError(e: Throwable, requestChannel: RequestChannel, request: RequestChannel.Request): Unit = {
-    val topicMetadata = topics.map {
-      topic => TopicMetadata(topic, Nil, Errors.forException(e))
-    }
-    val errorResponse = TopicMetadataResponse(Seq(), topicMetadata, correlationId)
-    requestChannel.sendResponse(new Response(request, new RequestOrResponseSend(request.connectionId, errorResponse)))
   }
 
   override def describe(details: Boolean): String = {

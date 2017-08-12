@@ -1,14 +1,18 @@
-/**
- * Licensed to the Apache Software Foundation (ASF) under one or more contributor license agreements. See the NOTICE
- * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
- * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
- * License. You may obtain a copy of the License at
- * 
- * http://www.apache.org/licenses/LICENSE-2.0
- * 
- * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
- * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
- * specific language governing permissions and limitations under the License.
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 package org.apache.kafka.common.metrics;
 
@@ -420,6 +424,14 @@ public class MetricsTest {
         assertEquals(0.0, p25.value(), 1.0);
         assertEquals(0.0, p50.value(), 1.0);
         assertEquals(0.0, p75.value(), 1.0);
+
+        // record two more windows worth of sequential values
+        for (int i = 0; i < buckets; i++)
+            sensor.record(i);
+
+        assertEquals(25, p25.value(), 1.0);
+        assertEquals(50, p50.value(), 1.0);
+        assertEquals(75, p75.value(), 1.0);
     }
 
     @Test
@@ -518,4 +530,58 @@ public class MetricsTest {
     private Double measure(Measurable rate, MetricConfig config) {
         return rate.measure(config, time.milliseconds());
     }
+    
+    @Test
+    public void testMetricInstances() {
+        MetricName n1 = metrics.metricInstance(SampleMetrics.METRIC1, "key1", "value1", "key2", "value2");
+        Map<String, String> tags = new HashMap<String, String>();
+        tags.put("key1", "value1");
+        tags.put("key2", "value2");
+        MetricName n2 = metrics.metricInstance(SampleMetrics.METRIC2, tags);
+        assertEquals("metric names created in two different ways should be equal", n1, n2);
+
+        try {
+            metrics.metricInstance(SampleMetrics.METRIC1, "key1");
+            fail("Creating MetricName with an odd number of keyValue should fail");
+        } catch (IllegalArgumentException e) {
+            // this is expected
+        }
+        
+        Map<String, String> parentTagsWithValues = new HashMap<>();
+        parentTagsWithValues.put("parent-tag", "parent-tag-value");
+
+        Map<String, String> childTagsWithValues = new HashMap<>();
+        childTagsWithValues.put("child-tag", "child-tag-value");
+
+        try (Metrics inherited = new Metrics(new MetricConfig().tags(parentTagsWithValues), Arrays.asList((MetricsReporter) new JmxReporter()), time, true)) {
+            MetricName inheritedMetric = inherited.metricInstance(SampleMetrics.METRIC_WITH_INHERITED_TAGS, childTagsWithValues);
+
+            Map<String, String> filledOutTags = inheritedMetric.tags();
+            assertEquals("parent-tag should be set properly", filledOutTags.get("parent-tag"), "parent-tag-value");
+            assertEquals("child-tag should be set properly", filledOutTags.get("child-tag"), "child-tag-value");
+
+            try {
+                inherited.metricInstance(SampleMetrics.METRIC_WITH_INHERITED_TAGS, parentTagsWithValues);
+                fail("Creating MetricName should fail if the child metrics are not defined at runtime");
+            } catch (IllegalArgumentException e) {
+                // this is expected
+            }
+
+            try {
+
+                Map<String, String> runtimeTags = new HashMap<>();
+                runtimeTags.put("child-tag", "child-tag-value");
+                runtimeTags.put("tag-not-in-template", "unexpected-value");
+
+                inherited.metricInstance(SampleMetrics.METRIC_WITH_INHERITED_TAGS, runtimeTags);
+                fail("Creating MetricName should fail if there is a tag at runtime that is not in the template");
+            } catch (IllegalArgumentException e) {
+                // this is expected
+            }
+        }
+
+    }
+
+    
+
 }

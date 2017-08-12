@@ -1,33 +1,48 @@
-/**
- * Licensed to the Apache Software Foundation (ASF) under one or more contributor license agreements. See the NOTICE
- * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
- * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
- * License. You may obtain a copy of the License at
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
- * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
- * specific language governing permissions and limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 package org.apache.kafka.common.utils;
 
-import java.io.EOFException;
-import java.io.IOException;
-import java.io.InputStream;
+import java.text.DecimalFormat;
+import org.apache.kafka.common.KafkaException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.Closeable;
+import java.io.DataOutput;
+import java.io.EOFException;
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.OutputStream;
-import java.io.UnsupportedEncodingException;
 import java.io.FileNotFoundException;
-import java.io.StringWriter;
+import java.io.IOException;
+import java.io.InputStream;
 import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.nio.ByteBuffer;
 import java.nio.MappedByteBuffer;
+import java.nio.channels.FileChannel;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
+import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -37,22 +52,21 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.Properties;
-import java.nio.channels.FileChannel;
-import java.nio.charset.Charset;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.apache.kafka.common.KafkaException;
 
 public class Utils {
 
     // This matches URIs of formats: host:port and protocol:\\host:port
     // IPv6 is supported with [ip] pattern
     private static final Pattern HOST_PORT_PATTERN = Pattern.compile(".*?\\[?([0-9a-zA-Z\\-%._:]*)\\]?:([0-9]+)");
+
+    // Prints up to 2 decimal digits. Used for human readable printing
+    private static final DecimalFormat TWO_DIGIT_FORMAT = new DecimalFormat("0.##");
+
+    private static final String[] BYTE_SCALE_SUFFIXES = new String[] {"B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"};
 
     public static final String NL = System.getProperty("line.separator");
 
@@ -77,11 +91,35 @@ public class Utils {
      * @return The string
      */
     public static String utf8(byte[] bytes) {
-        try {
-            return new String(bytes, "UTF8");
-        } catch (UnsupportedEncodingException e) {
-            throw new RuntimeException("This shouldn't happen.", e);
-        }
+        return new String(bytes, StandardCharsets.UTF_8);
+    }
+
+    /**
+     * Read a UTF8 string from a byte buffer. Note that the position of the byte buffer is not affected
+     * by this method.
+     *
+     * @param buffer The buffer to read from
+     * @param length The length of the string in bytes
+     * @return The UTF8 string
+     */
+    public static String utf8(ByteBuffer buffer, int length) {
+        return utf8(buffer, 0, length);
+    }
+
+    /**
+     * Read a UTF8 string from a byte buffer at a given offset. Note that the position of the byte buffer
+     * is not affected by this method.
+     *
+     * @param buffer The buffer to read from
+     * @param offset The offset relative to the current position in the buffer
+     * @param length The length of the string in bytes
+     * @return The UTF8 string
+     */
+    public static String utf8(ByteBuffer buffer, int offset, int length) {
+        if (buffer.hasArray())
+            return new String(buffer.array(), buffer.arrayOffset() + buffer.position() + offset, length, StandardCharsets.UTF_8);
+        else
+            return utf8(toArray(buffer, offset, length));
     }
 
     /**
@@ -91,126 +129,8 @@ public class Utils {
      * @return The byte[]
      */
     public static byte[] utf8(String string) {
-        try {
-            return string.getBytes("UTF8");
-        } catch (UnsupportedEncodingException e) {
-            throw new RuntimeException("This shouldn't happen.", e);
-        }
+        return string.getBytes(StandardCharsets.UTF_8);
     }
-
-    /**
-     * Read an unsigned integer from the current position in the buffer, incrementing the position by 4 bytes
-     *
-     * @param buffer The buffer to read from
-     * @return The integer read, as a long to avoid signedness
-     */
-    public static long readUnsignedInt(ByteBuffer buffer) {
-        return buffer.getInt() & 0xffffffffL;
-    }
-
-    /**
-     * Read an unsigned integer from the given position without modifying the buffers position
-     *
-     * @param buffer the buffer to read from
-     * @param index the index from which to read the integer
-     * @return The integer read, as a long to avoid signedness
-     */
-    public static long readUnsignedInt(ByteBuffer buffer, int index) {
-        return buffer.getInt(index) & 0xffffffffL;
-    }
-
-    /**
-     * Read an unsigned integer stored in little-endian format from the {@link InputStream}.
-     *
-     * @param in The stream to read from
-     * @return The integer read (MUST BE TREATED WITH SPECIAL CARE TO AVOID SIGNEDNESS)
-     */
-    public static int readUnsignedIntLE(InputStream in) throws IOException {
-        return (in.read() << 8 * 0)
-             | (in.read() << 8 * 1)
-             | (in.read() << 8 * 2)
-             | (in.read() << 8 * 3);
-    }
-
-    /**
-     * Get the little-endian value of an integer as a byte array.
-     * @param val The value to convert to a little-endian array
-     * @return The little-endian encoded array of bytes for the value
-     */
-    public static byte[] toArrayLE(int val) {
-        return new byte[] {
-            (byte) (val >> 8 * 0),
-            (byte) (val >> 8 * 1),
-            (byte) (val >> 8 * 2),
-            (byte) (val >> 8 * 3)
-        };
-    }
-
-
-    /**
-     * Read an unsigned integer stored in little-endian format from a byte array
-     * at a given offset.
-     *
-     * @param buffer The byte array to read from
-     * @param offset The position in buffer to read from
-     * @return The integer read (MUST BE TREATED WITH SPECIAL CARE TO AVOID SIGNEDNESS)
-     */
-    public static int readUnsignedIntLE(byte[] buffer, int offset) {
-        return (buffer[offset++] << 8 * 0)
-             | (buffer[offset++] << 8 * 1)
-             | (buffer[offset++] << 8 * 2)
-             | (buffer[offset]   << 8 * 3);
-    }
-
-    /**
-     * Write the given long value as a 4 byte unsigned integer. Overflow is ignored.
-     *
-     * @param buffer The buffer to write to
-     * @param value The value to write
-     */
-    public static void writeUnsignedInt(ByteBuffer buffer, long value) {
-        buffer.putInt((int) (value & 0xffffffffL));
-    }
-
-    /**
-     * Write the given long value as a 4 byte unsigned integer. Overflow is ignored.
-     *
-     * @param buffer The buffer to write to
-     * @param index The position in the buffer at which to begin writing
-     * @param value The value to write
-     */
-    public static void writeUnsignedInt(ByteBuffer buffer, int index, long value) {
-        buffer.putInt(index, (int) (value & 0xffffffffL));
-    }
-
-    /**
-     * Write an unsigned integer in little-endian format to the {@link OutputStream}.
-     *
-     * @param out The stream to write to
-     * @param value The value to write
-     */
-    public static void writeUnsignedIntLE(OutputStream out, int value) throws IOException {
-        out.write(value >>> 8 * 0);
-        out.write(value >>> 8 * 1);
-        out.write(value >>> 8 * 2);
-        out.write(value >>> 8 * 3);
-    }
-
-    /**
-     * Write an unsigned integer in little-endian format to a byte array
-     * at a given offset.
-     *
-     * @param buffer The byte array to write to
-     * @param offset The position in buffer to write to
-     * @param value The value to write
-     */
-    public static void writeUnsignedIntLE(byte[] buffer, int offset, int value) {
-        buffer[offset++] = (byte) (value >>> 8 * 0);
-        buffer[offset++] = (byte) (value >>> 8 * 1);
-        buffer[offset++] = (byte) (value >>> 8 * 2);
-        buffer[offset]   = (byte) (value >>> 8 * 3);
-    }
-
 
     /**
      * Get the absolute value of the given number. If the number is Int.MinValue return 0. This is different from
@@ -223,17 +143,33 @@ public class Utils {
     /**
      * Get the minimum of some long values.
      * @param first Used to ensure at least one value
-     * @param rest The rest of longs to compare
-     * @return The minimum of all passed argument.
+     * @param rest The remaining values to compare
+     * @return The minimum of all passed values
      */
     public static long min(long first, long ... rest) {
         long min = first;
-        for (int i = 0; i < rest.length; i++) {
-            if (rest[i] < min)
-                min = rest[i];
+        for (long r : rest) {
+            if (r < min)
+                min = r;
         }
         return min;
     }
+
+    /**
+     * Get the maximum of some long values.
+     * @param first Used to ensure at least one value
+     * @param rest The remaining values to compare
+     * @return The maximum of all passed values
+     */
+    public static long max(long first, long ... rest) {
+        long max = first;
+        for (long r : rest) {
+            if (r > max)
+                max = r;
+        }
+        return max;
+    }
+
 
     public static short min(short first, short second) {
         return (short) Math.min(first, second);
@@ -264,10 +200,20 @@ public class Utils {
     }
 
     /**
-     * Read the given byte buffer into a byte array
+     * Read the given byte buffer from its current position to its limit into a byte array.
+     * @param buffer The buffer to read from
      */
     public static byte[] toArray(ByteBuffer buffer) {
-        return toArray(buffer, 0, buffer.limit());
+        return toArray(buffer, 0, buffer.remaining());
+    }
+
+    /**
+     * Read a byte array from its current position given the size in the buffer
+     * @param buffer The buffer to read from
+     * @param size The number of bytes to read into the array
+     */
+    public static byte[] toArray(ByteBuffer buffer, int size) {
+        return toArray(buffer, 0, size);
     }
 
     /**
@@ -290,13 +236,17 @@ public class Utils {
 
     /**
      * Read a byte array from the given offset and size in the buffer
+     * @param buffer The buffer to read from
+     * @param offset The offset relative to the current position of the buffer
+     * @param size The number of bytes to read into the array
      */
     public static byte[] toArray(ByteBuffer buffer, int offset, int size) {
         byte[] dest = new byte[size];
         if (buffer.hasArray()) {
-            System.arraycopy(buffer.array(), buffer.arrayOffset() + offset, dest, 0, size);
+            System.arraycopy(buffer.array(), buffer.position() + buffer.arrayOffset() + offset, dest, 0, size);
         } else {
             int pos = buffer.position();
+            buffer.position(pos + offset);
             buffer.get(dest);
             buffer.position(pos);
         }
@@ -435,45 +385,63 @@ public class Utils {
     }
 
     /**
+     * Formats a byte number as a human readable String ("3.2 MB")
+     * @param bytes some size in bytes
+     * @return
+     */
+    public static String formatBytes(long bytes) {
+        if (bytes < 0) {
+            return "" + bytes;
+        }
+        double asDouble = (double) bytes;
+        int ordinal = (int) Math.floor(Math.log(asDouble) / Math.log(1024.0));
+        double scale = Math.pow(1024.0, ordinal);
+        double scaled = asDouble / scale;
+        String formatted = TWO_DIGIT_FORMAT.format(scaled);
+        try {
+            return formatted + " " + BYTE_SCALE_SUFFIXES[ordinal];
+        } catch (IndexOutOfBoundsException e) {
+            //huge number?
+            return "" + asDouble;
+        }
+    }
+
+    /**
      * Create a string representation of an array joined by the given separator
      * @param strs The array of items
-     * @param seperator The separator
+     * @param separator The separator
      * @return The string representation.
      */
-    public static <T> String join(T[] strs, String seperator) {
-        return join(Arrays.asList(strs), seperator);
+    public static <T> String join(T[] strs, String separator) {
+        return join(Arrays.asList(strs), separator);
     }
 
     /**
      * Create a string representation of a list joined by the given separator
      * @param list The list of items
-     * @param seperator The separator
+     * @param separator The separator
      * @return The string representation.
      */
-    public static <T> String join(Collection<T> list, String seperator) {
+    public static <T> String join(Collection<T> list, String separator) {
         StringBuilder sb = new StringBuilder();
         Iterator<T> iter = list.iterator();
         while (iter.hasNext()) {
             sb.append(iter.next());
             if (iter.hasNext())
-                sb.append(seperator);
+                sb.append(separator);
         }
         return sb.toString();
     }
 
-    public static <K, V> String mkString(Map<K, V> map) {
-        return mkString(map, "{", "}", "=", " ,");
-    }
-
     public static <K, V> String mkString(Map<K, V> map, String begin, String end,
-                                         String keyValueSeparator, String elementSeperator) {
+                                         String keyValueSeparator, String elementSeparator) {
         StringBuilder bld = new StringBuilder();
         bld.append(begin);
         String prefix = "";
         for (Map.Entry<K, V> entry : map.entrySet()) {
             bld.append(prefix).append(entry.getKey()).
                     append(keyValueSeparator).append(entry.getValue());
-            prefix = elementSeperator;
+            prefix = elementSeparator;
         }
         bld.append(end);
         return bld.toString();
@@ -510,34 +478,6 @@ public class Utils {
         PrintWriter pw = new PrintWriter(sw);
         e.printStackTrace(pw);
         return sw.toString();
-    }
-
-    /**
-     * Create a new thread
-     * @param name The name of the thread
-     * @param runnable The work for the thread to do
-     * @param daemon Should the thread block JVM shutdown?
-     * @return The unstarted thread
-     */
-    public static Thread newThread(String name, Runnable runnable, boolean daemon) {
-        Thread thread = new Thread(runnable, name);
-        thread.setDaemon(daemon);
-        thread.setUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
-            public void uncaughtException(Thread t, Throwable e) {
-                log.error("Uncaught exception in thread '" + t.getName() + "':", e);
-            }
-        });
-        return thread;
-    }
-
-    /**
-     * Create a daemon thread
-     * @param name The name of the thread
-     * @param runnable The runnable to execute in the background
-     * @return The unstarted thread
-     */
-    public static Thread daemonThread(String name, Runnable runnable) {
-        return newThread(name, runnable, true);
     }
 
     /**
@@ -629,43 +569,35 @@ public class Utils {
         return Arrays.asList(elems);
     }
 
-    /*
-     * Create a string from a collection
-     * @param coll the collection
-     * @param separator the separator
-     */
-    public static <T> CharSequence mkString(Collection<T> coll, String separator) {
-        StringBuilder sb = new StringBuilder();
-        Iterator<T> iter = coll.iterator();
-        if (iter.hasNext()) {
-            sb.append(iter.next().toString());
-
-            while (iter.hasNext()) {
-                sb.append(separator);
-                sb.append(iter.next().toString());
-            }
-        }
-        return sb;
-    }
-
     /**
      * Recursively delete the given file/directory and any subfiles (if any exist)
      *
      * @param file The root file at which to begin deleting
      */
-    public static void delete(File file) {
-        if (file == null) {
+    public static void delete(final File file) throws IOException {
+        if (file == null)
             return;
-        } else if (file.isDirectory()) {
-            File[] files = file.listFiles();
-            if (files != null) {
-                for (File f : files)
-                    delete(f);
+        Files.walkFileTree(file.toPath(), new SimpleFileVisitor<Path>() {
+            @Override
+            public FileVisitResult visitFileFailed(Path path, IOException exc) throws IOException {
+                // If the root path did not exist, ignore the error; otherwise throw it.
+                if (exc instanceof NoSuchFileException && path.toFile().equals(file))
+                    return FileVisitResult.TERMINATE;
+                throw exc;
             }
-            file.delete();
-        } else {
-            file.delete();
-        }
+
+            @Override
+            public FileVisitResult visitFile(Path path, BasicFileAttributes attrs) throws IOException {
+                Files.delete(path);
+                return FileVisitResult.CONTINUE;
+            }
+
+            @Override
+            public FileVisitResult postVisitDirectory(Path path, IOException exc) throws IOException {
+                Files.delete(path);
+                return FileVisitResult.CONTINUE;
+            }
+        });
     }
 
     /**
@@ -709,8 +641,8 @@ public class Utils {
         } catch (IOException outer) {
             try {
                 Files.move(source, target, StandardCopyOption.REPLACE_EXISTING);
-                log.debug("Non-atomic move of " + source + " to " + target + " succeeded after atomic move failed due to "
-                        + outer.getMessage());
+                log.debug("Non-atomic move of {} to {} succeeded after atomic move failed due to {}", source, target,
+                        outer.getMessage());
             } catch (IOException inner) {
                 inner.addSuppressed(outer);
                 throw inner;
@@ -728,7 +660,8 @@ public class Utils {
         IOException exception = null;
         for (Closeable closeable : closeables) {
             try {
-                closeable.close();
+                if (closeable != null)
+                    closeable.close();
             } catch (IOException e) {
                 if (exception != null)
                     exception.addSuppressed(e);
@@ -743,12 +676,12 @@ public class Utils {
     /**
      * Closes {@code closeable} and if an exception is thrown, it is logged at the WARN level.
      */
-    public static void closeQuietly(Closeable closeable, String name) {
+    public static void closeQuietly(AutoCloseable closeable, String name) {
         if (closeable != null) {
             try {
                 closeable.close();
             } catch (Throwable t) {
-                log.warn("Failed to close " + name, t);
+                log.warn("Failed to close {}", name, t);
             }
         }
     }
@@ -792,16 +725,6 @@ public class Utils {
             b.rewind();
             return b;
         }
-    }
-
-    /**
-     * Compute the checksum of a range of data
-     * @param buffer Buffer containing the data to checksum
-     * @param start Offset in the buffer to read from
-     * @param size The number of bytes to include
-     */
-    public static long computeChecksum(ByteBuffer buffer, int start, int size) {
-        return Crc32.crc32(buffer.array(), buffer.arrayOffset() + start, size);
     }
 
     /**
@@ -855,4 +778,60 @@ public class Utils {
             currentPosition += bytesRead;
         } while (bytesRead != -1 && destinationBuffer.hasRemaining());
     }
+
+    /**
+     * Read data from the input stream to the given byte buffer until there are no bytes remaining in the buffer or the
+     * end of the stream has been reached.
+     *
+     * @param inputStream Input stream to read from
+     * @param destinationBuffer The buffer into which bytes are to be transferred (it must be backed by an array)
+     *
+     * @throws IOException If an I/O error occurs
+     */
+    public static final void readFully(InputStream inputStream, ByteBuffer destinationBuffer) throws IOException {
+        if (!destinationBuffer.hasArray())
+            throw new IllegalArgumentException("destinationBuffer must be backed by an array");
+        int initialOffset = destinationBuffer.arrayOffset() + destinationBuffer.position();
+        byte[] array = destinationBuffer.array();
+        int length = destinationBuffer.remaining();
+        int totalBytesRead = 0;
+        do {
+            int bytesRead = inputStream.read(array, initialOffset + totalBytesRead, length - totalBytesRead);
+            if (bytesRead == -1)
+                break;
+            totalBytesRead += bytesRead;
+        } while (length > totalBytesRead);
+        destinationBuffer.position(destinationBuffer.position() + totalBytesRead);
+    }
+
+    public static void writeFully(FileChannel channel, ByteBuffer sourceBuffer) throws IOException {
+        while (sourceBuffer.hasRemaining())
+            channel.write(sourceBuffer);
+    }
+
+    /**
+     * Write the contents of a buffer to an output stream. The bytes are copied from the current position
+     * in the buffer.
+     * @param out The output to write to
+     * @param buffer The buffer to write from
+     * @param length The number of bytes to write
+     * @throws IOException For any errors writing to the output
+     */
+    public static void writeTo(DataOutput out, ByteBuffer buffer, int length) throws IOException {
+        if (buffer.hasArray()) {
+            out.write(buffer.array(), buffer.position() + buffer.arrayOffset(), length);
+        } else {
+            int pos = buffer.position();
+            for (int i = pos; i < length + pos; i++)
+                out.writeByte(buffer.get(i));
+        }
+    }
+
+    public static <T> List<T> toList(Iterator<T> iterator) {
+        List<T> res = new ArrayList<>();
+        while (iterator.hasNext())
+            res.add(iterator.next());
+        return res;
+    }
+
 }

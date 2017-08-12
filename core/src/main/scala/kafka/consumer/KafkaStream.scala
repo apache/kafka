@@ -22,6 +22,8 @@ import java.util.concurrent.BlockingQueue
 import kafka.serializer.Decoder
 import kafka.message.MessageAndMetadata
 
+@deprecated("This class has been deprecated and will be removed in a future release. " +
+            "Please use org.apache.kafka.streams.KafkaStreams instead.", "0.11.0.0")
 class KafkaStream[K,V](private val queue: BlockingQueue[FetchedDataChunk],
                         consumerTimeoutMs: Int,
                         private val keyDecoder: Decoder[K],
@@ -35,7 +37,7 @@ class KafkaStream[K,V](private val queue: BlockingQueue[FetchedDataChunk],
   /**
    *  Create an iterator over messages in the stream.
    */
-  def iterator(): ConsumerIterator[K,V] = iter
+  def iterator: ConsumerIterator[K,V] = iter
 
   /**
    * This method clears the queue being iterated during the consumer rebalancing. This is mainly

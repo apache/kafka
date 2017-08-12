@@ -175,7 +175,7 @@ class RequestResponseSerializationTest extends JUnitSuite {
   private val offsetFetchResponse = SerializationTestUtils.createTestOffsetFetchResponse
   private val consumerMetadataRequest = SerializationTestUtils.createConsumerMetadataRequest
   private val consumerMetadataResponse = SerializationTestUtils.createConsumerMetadataResponse
-  private val consumerMetadataResponseNoCoordinator = GroupCoordinatorResponse(None, Errors.GROUP_COORDINATOR_NOT_AVAILABLE, 0)
+  private val consumerMetadataResponseNoCoordinator = GroupCoordinatorResponse(None, Errors.COORDINATOR_NOT_AVAILABLE, 0)
 
   @Test
   def testSerializationAndDeserialization() {

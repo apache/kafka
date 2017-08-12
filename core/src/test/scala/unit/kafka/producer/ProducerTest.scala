@@ -21,7 +21,6 @@ import java.nio.ByteBuffer
 import java.util
 import java.util.Properties
 
-import kafka.admin.AdminUtils
 import kafka.api.FetchRequestBuilder
 import kafka.common.FailedToSendMessageException
 import kafka.consumer.SimpleConsumer
@@ -30,7 +29,6 @@ import kafka.serializer.StringEncoder
 import kafka.server.{KafkaConfig, KafkaRequestHandler, KafkaServer}
 import kafka.utils._
 import kafka.zk.ZooKeeperTestHarness
-import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.utils.Time
 import org.apache.log4j.{Level, Logger}
@@ -59,7 +57,7 @@ class ProducerTest extends ZooKeeperTestHarness with Logging{
 
   def getConsumer2() = {
     if (consumer2 == null)
-      consumer2 = new SimpleConsumer("localhost", TestUtils.boundPort(server2), 100, 64*1024, "")
+      consumer2 = new SimpleConsumer("localhost", TestUtils.boundPort(server2), 1000000, 64*1024, "")
     consumer2
   }
 
@@ -91,10 +89,7 @@ class ProducerTest extends ZooKeeperTestHarness with Logging{
     if (consumer2 != null)
       consumer2.close()
 
-    server1.shutdown
-    server2.shutdown
-    CoreUtils.delete(server1.config.logDirs)
-    CoreUtils.delete(server2.config.logDirs)
+    TestUtils.shutdownServers(Seq(server1, server2))
     super.tearDown()
   }
 
@@ -343,16 +338,8 @@ class ProducerTest extends ZooKeeperTestHarness with Logging{
       partitioner = classOf[StaticPartitioner].getName)
 
     try {
-
-      // create topic
-      AdminUtils.createTopic(zkUtils, "new-topic", 2, 1)
-      TestUtils.waitUntilTrue(() =>
-        AdminUtils.fetchTopicMetadataFromZk("new-topic", zkUtils).error != Errors.UNKNOWN_TOPIC_OR_PARTITION,
-        "Topic new-topic not created after timeout",
-        waitTime = zookeeper.tickTime)
-      TestUtils.waitUntilLeaderIsElectedOrChanged(zkUtils, "new-topic", 0)
-
-      producer.send(new KeyedMessage[String, String]("new-topic", "key", null))
+      TestUtils.createTopic(zkUtils, "new-topic", 2, 1, servers)
+      producer.send(new KeyedMessage("new-topic", "key", null))
     } finally {
       producer.close()
     }

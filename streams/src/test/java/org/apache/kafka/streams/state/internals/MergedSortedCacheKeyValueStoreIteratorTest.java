@@ -1,20 +1,19 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.metrics.Metrics;
@@ -32,8 +31,8 @@ import static org.junit.Assert.assertFalse;
 
 public class MergedSortedCacheKeyValueStoreIteratorTest {
 
-    private final String namespace = "one";
-    private final StateSerdes<byte[], byte[]> serdes =  new StateSerdes<>(namespace, Serdes.ByteArray(), Serdes.ByteArray());
+    private final String namespace = "0.0-one";
+    private final StateSerdes<byte[], byte[]> serdes =  new StateSerdes<>("dummy", Serdes.ByteArray(), Serdes.ByteArray());
     private KeyValueStore<Bytes, byte[]> store;
     private ThreadCache cache;
 
@@ -65,6 +64,7 @@ public class MergedSortedCacheKeyValueStoreIteratorTest {
             values[index++] = value;
             assertArrayEquals(bytes[bytesIndex++], value);
         }
+        iterator.close();
     }
 
 
@@ -148,7 +148,6 @@ public class MergedSortedCacheKeyValueStoreIteratorTest {
         final KeyValueStore<Bytes, byte[]> kv = new InMemoryKeyValueStore<>("one", Serdes.Bytes(), Serdes.ByteArray());
         final ThreadCache cache = new ThreadCache("testCache", 1000000L, new MockStreamsMetrics(new Metrics()));
         byte[][] bytes = {{0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9}, {10}};
-        final String namespace = "one";
         for (int i = 0; i < bytes.length - 1; i += 2) {
             kv.put(Bytes.wrap(bytes[i]), bytes[i]);
             cache.put(namespace, Bytes.wrap(bytes[i + 1]), new LRUCacheEntry(bytes[i + 1]));
@@ -172,6 +171,7 @@ public class MergedSortedCacheKeyValueStoreIteratorTest {
             assertArrayEquals(bytes[bytesIndex++], keys);
             iterator.next();
         }
+        iterator.close();
     }
 
     private MergedSortedCacheKeyValueStoreIterator<byte[], byte[]> createIterator() {

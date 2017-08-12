@@ -17,6 +17,7 @@
 
 package kafka.utils
 
+import kafka.common.TopicAndPartition
 import kafka.zk.ZooKeeperTestHarness
 import org.junit.Assert._
 import org.junit.Test
@@ -40,6 +41,21 @@ class ZkUtilsTest extends ZooKeeperTestHarness {
     assertTrue("Deletion should be successful", zkUtils.conditionalDeletePath(path, 0))
   }
 
+  // Verify behaviour of ZkUtils.createSequentialPersistentPath since PIDManager relies on it
+  @Test
+  def testPersistentSequentialPath() {
+    // Given an existing path
+    zkUtils.createPersistentPath(path)
+
+    var result = zkUtils.createSequentialPersistentPath(path + "/sequence_")
+
+    assertEquals("/path/sequence_0000000000", result)
+
+    result = zkUtils.createSequentialPersistentPath(path + "/sequence_")
+
+    assertEquals("/path/sequence_0000000001", result)
+  }
+
   @Test
   def testAbortedConditionalDeletePath() {
     // Given an existing path that gets updated
@@ -57,5 +73,15 @@ class ZkUtilsTest extends ZooKeeperTestHarness {
   def testClusterIdentifierJsonParsing() {
     val clusterId = "test"
     assertEquals(zkUtils.ClusterId.fromJson(zkUtils.ClusterId.toJson(clusterId)), clusterId)
+  }
+
+  @Test
+  def testGetAllPartitionsTopicWithoutPartitions() {
+    val topic = "testtopic"
+    // Create a regular topic and a topic without any partitions
+    zkUtils.createPersistentPath(ZkUtils.getTopicPartitionPath(topic, 0))
+    zkUtils.createPersistentPath(ZkUtils.getTopicPath("nopartitions"))
+
+    assertEquals(Set(TopicAndPartition(topic, 0)), zkUtils.getAllPartitions())
   }
 }
