@@ -1921,13 +1921,11 @@ class KafkaApis(val requestChannel: RequestChannel,
       else
         alterReplicaDirRequest.partitionDirs.asScala.keys.map((_, Errors.CLUSTER_AUTHORIZATION_FAILED)).toMap
     }
-    sendResponseMaybeThrottle(request, requestThrottleMs =>
-      new AlterReplicaDirResponse(requestThrottleMs, responseMap.asJava))
+    sendResponseMaybeThrottle(request, requestThrottleMs => new AlterReplicaDirResponse(requestThrottleMs, responseMap.asJava))
   }
 
   def handleDescribeDirsRequest(request: RequestChannel.Request): Unit = {
     val describeDirsDirRequest = request.body[DescribeDirsRequest]
-
     val logDirInfos = {
       if (authorize(request.session, Describe, Resource.ClusterResource)) {
         replicaManager.describeDirs(describeDirsDirRequest.logDirs().asScala, describeDirsDirRequest.topicPartitions().asScala)
@@ -1936,7 +1934,6 @@ class KafkaApis(val requestChannel: RequestChannel,
           (_, new LogDirInfo(Errors.CLUSTER_AUTHORIZATION_FAILED, Map.empty[TopicPartition, ReplicaInfo].asJava))).toMap
       }
     }
-
     sendResponseMaybeThrottle(request, throttleTimeMs => new DescribeDirsResponse(throttleTimeMs, logDirInfos.asJava))
   }
 
