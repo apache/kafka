@@ -18,6 +18,7 @@ package org.apache.kafka.common.security.ssl;
 
 import org.apache.kafka.common.config.types.Password;
 
+import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.security.GeneralSecurityException;
@@ -51,5 +52,10 @@ class SecurityStore {
         } finally {
             if (in != null) in.close();
         }
+    }
+
+    long getLastModified() {
+        File storeFile = new File(path);
+        return storeFile.lastModified();
     }
 }

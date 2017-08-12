@@ -40,19 +40,12 @@ class ReloadableX509TrustManager extends X509ExtendedTrustManager implements X50
     private final TrustManagerFactory tmf;
     private X509TrustManager trustManager;
     private long lastReload = 0L;
-    private long minimumDelay = 60 * 1000L;
 
     private KeyStore trustKeyStore;
 
     public ReloadableX509TrustManager(SecurityStore trustStore, TrustManagerFactory tmf) {
         this.trustStore = trustStore;
         this.tmf = tmf;
-    }
-
-    public ReloadableX509TrustManager(SecurityStore trustStore, TrustManagerFactory tmf, long minimumDelay) {
-        this.trustStore = trustStore;
-        this.tmf = tmf;
-        this.minimumDelay = minimumDelay;
     }
 
     public KeyStore getTrustKeyStore() {
@@ -109,18 +102,19 @@ class ReloadableX509TrustManager extends X509ExtendedTrustManager implements X50
 
     private void reloadTrustManager() throws KafkaException {
         try {
-            if (trustManager == null || System.currentTimeMillis() - lastReload > minimumDelay) {
+            if (trustManager == null || trustStore.getLastModified() >= lastReload) {
                 trustKeyStore = trustStore.load();
 
                 Enumeration<String> alias = trustKeyStore.aliases();
-                StringBuilder logMessage = new StringBuilder("Trust manager reloaded. List of trusted certs: ");
+                log.info("Trust manager reloaded.");
+                StringBuilder logMessage = new StringBuilder("List of trusted certs: ");
                 if (alias.hasMoreElements()) {
                     logMessage.append(alias.nextElement());
                 }
                 while (alias.hasMoreElements()) {
                     logMessage.append(", ").append(alias.nextElement());
                 }
-                log.info(logMessage.toString());
+                log.debug(logMessage.toString());
 
                 tmf.init(trustKeyStore);
 

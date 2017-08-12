@@ -97,23 +97,18 @@ public class SslFactoryTest {
         tmf.init(ts);
         SecurityStore securityStore = new SecurityStore("jks", trustStoreFile.getPath(), trustStorePassword);
 
-        ReloadableX509TrustManager reloadableX509TrustManager = new ReloadableX509TrustManager(securityStore, tmf, 2 * 1000);
+        ReloadableX509TrustManager reloadableX509TrustManager = new ReloadableX509TrustManager(securityStore, tmf);
         reloadableX509TrustManager.getAcceptedIssuers();
 
         // One alias in truststore
         assertEquals(1, reloadableX509TrustManager.getTrustKeyStore().size());
 
+        Thread.sleep(1000);
         KeyPair cKP2 = TestSslUtils.generateKeyPair("RSA");
         X509Certificate cCert2 = TestSslUtils.generateCertificate("CN=localhost, O=client 2", cKP2, 30, "SHA1withRSA");
         certs.put("client2", cCert2);
         TestSslUtils.createTrustStore(trustStoreFile.getPath(), trustStorePassword, certs);
 
-        reloadableX509TrustManager.getAcceptedIssuers();
-
-        // Two aliases in truststore, but not reloaded yet.
-        assertEquals(1, reloadableX509TrustManager.getTrustKeyStore().size());
-
-        Thread.sleep(2 * 1000);
         reloadableX509TrustManager.getAcceptedIssuers();
 
         // Two aliases in truststore, should have reloaded.
