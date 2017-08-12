@@ -30,7 +30,10 @@ import java.security.KeyStore;
 import java.security.cert.X509Certificate;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 
+import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -88,11 +91,7 @@ public class SslFactoryTest {
         TrustManagerFactory tmf = TrustManagerFactory.getInstance(tmfAlgorithm);
         File trustStoreFile = File.createTempFile("truststore", ".jks");
         Password trustStorePassword = new Password("TrustStorePassword");
-        KeyPair cKP1 = TestSslUtils.generateKeyPair("RSA");
-        X509Certificate cCert1 = TestSslUtils.generateCertificate("CN=localhost, O=client 1", cKP1, 30, "SHA1withRSA");
-        certs.put("client1", cCert1);
-        KeyStore ts = TestSslUtils.createTrustStore(trustStoreFile.getPath(), trustStorePassword, certs);
-        trustStoreFile.deleteOnExit();
+        KeyStore ts = createTruststore(1, trustStoreFile, trustStorePassword);
 
         tmf.init(ts);
         SecurityStore securityStore = new SecurityStore("jks", trustStoreFile.getPath(), trustStorePassword);
@@ -104,14 +103,63 @@ public class SslFactoryTest {
         assertEquals(1, reloadableX509TrustManager.getTrustKeyStore().size());
 
         Thread.sleep(1000);
-        KeyPair cKP2 = TestSslUtils.generateKeyPair("RSA");
-        X509Certificate cCert2 = TestSslUtils.generateCertificate("CN=localhost, O=client 2", cKP2, 30, "SHA1withRSA");
-        certs.put("client2", cCert2);
-        TestSslUtils.createTrustStore(trustStoreFile.getPath(), trustStorePassword, certs);
-
+        createTruststore(2, trustStoreFile, trustStorePassword);
         reloadableX509TrustManager.getAcceptedIssuers();
-
         // Two aliases in truststore, should have reloaded.
         assertEquals(2, reloadableX509TrustManager.getTrustKeyStore().size());
+    }
+
+    @Test
+    public void testTrustManagerWithIOException() throws Exception {
+        Map<String, X509Certificate> certs = new HashMap<>();
+        String tmfAlgorithm = TrustManagerFactory.getDefaultAlgorithm();
+        TrustManagerFactory tmf = TrustManagerFactory.getInstance(tmfAlgorithm);
+        File trustStoreFile = File.createTempFile("truststore", ".jks");
+        Password trustStorePassword = new Password("TrustStorePassword");
+        KeyStore ts = createTruststore(1, trustStoreFile, trustStorePassword);
+
+        tmf.init(ts);
+        SecurityStore securityStore = new SecurityStore("jks", trustStoreFile.getPath(), trustStorePassword);
+
+        ReloadableX509TrustManager reloadableX509TrustManager = new ReloadableX509TrustManager(securityStore, tmf);
+
+        ScheduledExecutorService service = Executors.newSingleThreadScheduledExecutor();
+        service.schedule(updateTruststore(trustStoreFile, trustStorePassword), 0, SECONDS );
+        // ReloadableX509TrustManager should handle IO exception.
+        reloadableX509TrustManager.getAcceptedIssuers();
+        // Two aliases in truststore, should have reloaded.
+        assertEquals(2, reloadableX509TrustManager.getTrustKeyStore().size());
+    }
+
+    /**
+     * Update truststore in a separate thread to simulate truststore been updated by a different process.
+     */
+    private Runnable updateTruststore(final File trustStoreFile, final Password trustStorePassword) {
+        return new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    trustStoreFile.delete();
+                    Thread.sleep(1000);
+                    trustStoreFile.createNewFile();
+                    createTruststore(2, trustStoreFile, trustStorePassword);
+                }
+                catch (Exception ex) {
+                    throw new RuntimeException(ex);
+                }
+            }
+        };
+    }
+
+    private KeyStore createTruststore(int numberOfKeypairs, File trustStoreFile, Password trustStorePassword) throws Exception {
+        Map<String, X509Certificate> certs = new HashMap<>();
+        for (int i = 0; i < numberOfKeypairs; i++) {
+            KeyPair cKP = TestSslUtils.generateKeyPair("RSA");
+            X509Certificate cCert = TestSslUtils.generateCertificate("CN=localhost, O=client " + i, cKP, 30, "SHA1withRSA");
+            certs.put("client" + i, cCert);
+        }
+        KeyStore ts = TestSslUtils.createTrustStore(trustStoreFile.getPath(), trustStorePassword, certs);
+        trustStoreFile.deleteOnExit();
+        return ts;
     }
 }
