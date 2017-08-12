@@ -194,7 +194,7 @@ class WorkerSinkTask extends WorkerTask {
         }
     }
 
-    private void onCommitCompleted(Throwable error, long seqno) {
+    private void onCommitCompleted(Throwable error, long seqno, Map<TopicPartition, OffsetAndMetadata> committedOffsets) {
         if (commitSeqno != seqno) {
             log.debug("Got callback for timed out commit {}: {}, but most recent commit is {}",
                     this,
@@ -206,6 +206,9 @@ class WorkerSinkTask extends WorkerTask {
             } else {
                 log.debug("Finished {} offset commit successfully in {} ms",
                         this, time.milliseconds() - commitStarted);
+                if (committedOffsets != null) {
+                    lastCommittedOffsets = committedOffsets;
+                }
                 commitFailures = 0;
             }
             committing = false;
@@ -250,17 +253,21 @@ class WorkerSinkTask extends WorkerTask {
         deliverMessages();
     }
 
+    // Visible for testing
+    boolean isCommitting() {
+        return committing;
+    }
+
     private void doCommitSync(Map<TopicPartition, OffsetAndMetadata> offsets, int seqno) {
         try {
             consumer.commitSync(offsets);
-            lastCommittedOffsets = offsets;
-            onCommitCompleted(null, seqno);
+            onCommitCompleted(null, seqno, offsets);
         } catch (WakeupException e) {
             // retry the commit to ensure offsets get pushed, then propagate the wakeup up to poll
             doCommitSync(offsets, seqno);
             throw e;
         } catch (KafkaException e) {
-            onCommitCompleted(e, seqno);
+            onCommitCompleted(e, seqno, offsets);
         }
     }
 
@@ -276,10 +283,7 @@ class WorkerSinkTask extends WorkerTask {
             OffsetCommitCallback cb = new OffsetCommitCallback() {
                 @Override
                 public void onComplete(Map<TopicPartition, OffsetAndMetadata> offsets, Exception error) {
-                    if (error == null) {
-                        lastCommittedOffsets = offsets;
-                    }
-                    onCommitCompleted(error, seqno);
+                    onCommitCompleted(error, seqno, offsets);
                 }
             };
             consumer.commitAsync(offsets, cb);
@@ -299,8 +303,8 @@ class WorkerSinkTask extends WorkerTask {
             taskProvidedOffsets = task.preCommit(new HashMap<>(currentOffsets));
         } catch (Throwable t) {
             if (closing) {
-                log.warn("{} Offset commit failed during close");
-                onCommitCompleted(t, commitSeqno);
+                log.warn("{} Offset commit failed during close", this);
+                onCommitCompleted(t, commitSeqno, null);
             } else {
                 log.error("{} Offset commit failed, rewinding to last committed offsets", this, t);
                 for (Map.Entry<TopicPartition, OffsetAndMetadata> entry : lastCommittedOffsets.entrySet()) {
@@ -308,7 +312,7 @@ class WorkerSinkTask extends WorkerTask {
                     consumer.seek(entry.getKey(), entry.getValue().offset());
                 }
                 currentOffsets = new HashMap<>(lastCommittedOffsets);
-                onCommitCompleted(t, commitSeqno);
+                onCommitCompleted(t, commitSeqno, null);
             }
             return;
         } finally {
@@ -319,7 +323,7 @@ class WorkerSinkTask extends WorkerTask {
 
         if (taskProvidedOffsets.isEmpty()) {
             log.debug("{} Skipping offset commit, task opted-out", this);
-            onCommitCompleted(null, commitSeqno);
+            onCommitCompleted(null, commitSeqno, null);
             return;
         }
 
@@ -340,7 +344,7 @@ class WorkerSinkTask extends WorkerTask {
 
         if (commitableOffsets.equals(lastCommittedOffsets)) {
             log.debug("{} Skipping offset commit, no change since last commit", this);
-            onCommitCompleted(null, commitSeqno);
+            onCommitCompleted(null, commitSeqno, null);
             return;
         }
 
@@ -483,6 +487,10 @@ class WorkerSinkTask extends WorkerTask {
     private class HandleRebalance implements ConsumerRebalanceListener {
         @Override
         public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+            // Increase the commit sequence number so that asynchronous commits that are not complete
+            // won't overwrite what we do here
+            commitSeqno += 1;
+            committing = false;
             lastCommittedOffsets = new HashMap<>();
             currentOffsets = new HashMap<>();
             for (TopicPartition tp : partitions) {
