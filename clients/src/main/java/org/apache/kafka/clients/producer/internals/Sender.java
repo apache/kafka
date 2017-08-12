@@ -422,6 +422,7 @@ public class Sender implements Runnable {
                         ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(
                                 initProducerIdResponse.producerId(), initProducerIdResponse.epoch());
                         transactionManager.setProducerIdAndEpoch(producerIdAndEpoch);
+                        return;
                     } else if (error.exception() instanceof RetriableException) {
                         log.debug("Retriable error from InitProducerId response", error.message());
                     } else {
@@ -517,7 +518,7 @@ public class Sender implements Runnable {
                     // If idempotence is enabled only retry the request if the current producer id is the same as
                     // the producer id of the batch.
                     log.debug("Retrying batch to topic-partition {}. Sequence number : {}", batch.topicPartition,
-                            transactionManager.sequenceNumber(batch.topicPartition));
+                            batch.baseSequence());
                     reenqueueBatch(batch, now);
                 } else {
                     failBatch(batch, response, new OutOfOrderSequenceException("Attempted to retry sending a " +
@@ -560,9 +561,9 @@ public class Sender implements Runnable {
 
     private void completeBatch(ProducerBatch batch, ProduceResponse.PartitionResponse response) {
         if (transactionManager != null && transactionManager.hasProducerIdAndEpoch(batch.producerId(), batch.producerEpoch())) {
-            transactionManager.incrementSequenceNumber(batch.topicPartition, batch.recordCount);
-            log.debug("Incremented sequence number for topic-partition {} to {}", batch.topicPartition,
-                    transactionManager.sequenceNumber(batch.topicPartition));
+            transactionManager.setLastAckedSequence(batch.topicPartition, batch.baseSequence() + batch.recordCount - 1);
+            log.debug("ProducerId: {}; Set last ack'd sequence number for topic-partition {} to {}", batch.producerId(), batch.topicPartition,
+                    transactionManager.lastAckedSequence(batch.topicPartition));
         }
 
         batch.done(response.baseOffset, response.logAppendTime, null);
@@ -594,16 +595,24 @@ public class Sender implements Runnable {
             } else if (transactionManager.isTransactional()) {
                 transactionManager.transitionToAbortableError(exception);
             }
+
+            if (transactionManager.hasProducerId()) {
+
+            }
         }
+
         batch.done(baseOffset, logAppendTime, exception);
         this.accumulator.deallocate(batch);
     }
 
     /**
-     * We can retry a send if the error is transient and the number of attempts taken is fewer than the maximum allowed
+     * We can retry a send if the error is transient and the number of attempts taken is fewer than the maximum allowed.
+     * We can also retry OutOfOrderSequence exceptions for future batches, since if the first batch has failed, the future
+     * batches are certain to fail with an OutOfOrderSequence exception.
      */
     private boolean canRetry(ProducerBatch batch, Errors error) {
-        return batch.attempts() < this.retries && error.exception() instanceof RetriableException;
+        return (batch.attempts() < this.retries && error.exception() instanceof RetriableException) ||
+                (error.exception() instanceof OutOfOrderSequenceException && !transactionManager.isNextSequence(batch.topicPartition, batch.baseSequence()));
     }
 
     /**

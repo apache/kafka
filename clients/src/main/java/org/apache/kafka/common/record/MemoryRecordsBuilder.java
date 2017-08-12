@@ -238,7 +238,7 @@ public class MemoryRecordsBuilder {
         }
     }
 
-    public void setProducerState(long producerId, short producerEpoch, int baseSequence, boolean isTransactional) {
+    public void setProducerState(long producerId, short producerEpoch) {
         if (isClosed()) {
             // Sequence numbers are assigned when the batch is closed while the accumulator is being drained.
             // If the resulting ProduceRequest to the partition leader failed for a retriable error, the batch will
@@ -248,8 +248,6 @@ public class MemoryRecordsBuilder {
         }
         this.producerId = producerId;
         this.producerEpoch = producerEpoch;
-        this.baseSequence = baseSequence;
-        this.isTransactional = isTransactional;
     }
 
     public void overrideLastOffset(long lastOffset) {
@@ -766,4 +764,7 @@ public class MemoryRecordsBuilder {
         return this.producerEpoch;
     }
 
+    public int baseSequence() {
+        return this.baseSequence;
+    }
 }

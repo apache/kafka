@@ -48,6 +48,7 @@ import java.nio.ByteBuffer;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -195,7 +196,7 @@ public final class RecordAccumulator {
             synchronized (dq) {
                 if (closed)
                     throw new IllegalStateException("Cannot send after the producer is closed.");
-                RecordAppendResult appendResult = tryAppend(timestamp, key, value, headers, callback, dq);
+                RecordAppendResult appendResult = tryAppend(tp, timestamp, key, value, headers, callback, dq);
                 if (appendResult != null)
                     return appendResult;
             }
@@ -210,13 +211,13 @@ public final class RecordAccumulator {
                 if (closed)
                     throw new IllegalStateException("Cannot send after the producer is closed.");
 
-                RecordAppendResult appendResult = tryAppend(timestamp, key, value, headers, callback, dq);
+                RecordAppendResult appendResult = tryAppend(tp, timestamp, key, value, headers, callback, dq);
                 if (appendResult != null) {
                     // Somebody else found us a batch, return the one we waited for! Hopefully this doesn't happen often...
                     return appendResult;
                 }
 
-                MemoryRecordsBuilder recordsBuilder = recordsBuilder(buffer, maxUsableMagic);
+                MemoryRecordsBuilder recordsBuilder = recordsBuilder(tp, buffer, maxUsableMagic);
                 ProducerBatch batch = new ProducerBatch(tp, recordsBuilder, time.milliseconds());
                 FutureRecordMetadata future = Utils.notNull(batch.tryAppend(timestamp, key, value, headers, callback, time.milliseconds()));
 
@@ -235,10 +236,19 @@ public final class RecordAccumulator {
         }
     }
 
-    private MemoryRecordsBuilder recordsBuilder(ByteBuffer buffer, byte maxUsableMagic) {
+    private MemoryRecordsBuilder recordsBuilder(TopicPartition topicPartition, ByteBuffer buffer, byte maxUsableMagic) {
         if (transactionManager != null && maxUsableMagic < RecordBatch.MAGIC_VALUE_V2) {
             throw new UnsupportedVersionException("Attempting to use idempotence with a broker which does not " +
                     "support the required message format (v2). The broker must be version 0.11 or later.");
+        }
+        if (transactionManager != null) {
+            int sequenceNumber = transactionManager.sequenceNumber(topicPartition);
+            MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, maxUsableMagic, compression, TimestampType.CREATE_TIME, 0L,
+                    RecordBatch.NO_TIMESTAMP, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, sequenceNumber,
+                    transactionManager.isTransactional(), RecordBatch.NO_PARTITION_LEADER_EPOCH);
+            log.debug("ProducerId {}: Assigned sequence number to {} to newly created batch for partition {}",
+                    transactionManager.producerIdAndEpoch().producerId, sequenceNumber, topicPartition);
+            return builder;
         }
         return MemoryRecords.builder(buffer, maxUsableMagic, compression, TimestampType.CREATE_TIME, 0L);
     }
@@ -251,15 +261,18 @@ public final class RecordAccumulator {
      *  and memory records built) in one of the following cases (whichever comes first): right before send,
      *  if it is expired, or when the producer is closed.
      */
-    private RecordAppendResult tryAppend(long timestamp, byte[] key, byte[] value, Header[] headers, Callback callback, Deque<ProducerBatch> deque) {
+    private RecordAppendResult tryAppend(TopicPartition tp, long timestamp, byte[] key, byte[] value, Header[] headers,
+                                         Callback callback, Deque<ProducerBatch> deque) {
         ProducerBatch last = deque.peekLast();
         if (last != null) {
             FutureRecordMetadata future = last.tryAppend(timestamp, key, value, headers, callback, time.milliseconds());
-            if (future == null)
+            if (future == null) {
                 last.closeForRecordAppends();
-            else
+                if (transactionManager != null)
+                    transactionManager.maybeCountSequenceNumber(last);
+            } else {
                 return new RecordAppendResult(future, deque.size() > 1 || last.isFull(), false);
-
+            }
         }
         return null;
     }
@@ -310,6 +323,21 @@ public final class RecordAccumulator {
         Deque<ProducerBatch> deque = getOrCreateDeque(batch.topicPartition);
         synchronized (deque) {
             deque.addFirst(batch);
+            maybeReorderBySequenceNumber(deque);
+        }
+    }
+
+    void maybeReorderBySequenceNumber(Deque<ProducerBatch> deque) {
+        if (transactionManager != null) {
+            ArrayList<ProducerBatch> copy = new ArrayList<>(deque);
+            Collections.sort(copy, new Comparator<ProducerBatch>() {
+                @Override
+                public int compare(ProducerBatch o1, ProducerBatch o2) {
+                    return o1.baseSequence() - o2.baseSequence();
+                }
+            });
+            deque.clear();
+            deque.addAll(copy);
         }
     }
 
@@ -334,6 +362,7 @@ public final class RecordAccumulator {
                 partitionDequeue.addFirst(batch);
             }
         }
+        maybeReorderBySequenceNumber(partitionDequeue);
         return numSplitBatches;
     }
 
@@ -458,7 +487,6 @@ public final class RecordAccumulator {
                                         break;
                                     } else {
                                         ProducerIdAndEpoch producerIdAndEpoch = null;
-                                        boolean isTransactional = false;
                                         if (transactionManager != null) {
                                             if (!transactionManager.isSendToPartitionAllowed(tp))
                                                 break;
@@ -467,8 +495,6 @@ public final class RecordAccumulator {
                                             if (!producerIdAndEpoch.isValid())
                                                 // we cannot send the batch until we have refreshed the producer id
                                                 break;
-
-                                            isTransactional = transactionManager.isTransactional();
                                         }
 
                                         ProducerBatch batch = deque.pollFirst();
@@ -478,11 +504,22 @@ public final class RecordAccumulator {
                                             // the previous attempt may actually have been accepted, and if we change
                                             // the producer id and sequence here, this attempt will also be accepted,
                                             // causing a duplicate.
-                                            int sequenceNumber = transactionManager.sequenceNumber(batch.topicPartition);
-                                            log.debug("Assigning sequence number {} from producer {} to dequeued " +
-                                                            "batch from partition {} bound for {}.",
-                                                    sequenceNumber, producerIdAndEpoch, batch.topicPartition, node);
-                                            batch.setProducerState(producerIdAndEpoch, sequenceNumber, isTransactional);
+                                            batch.setProducerState(producerIdAndEpoch);
+                                            log.debug("Assigned producerId {} and producerEpoch {} to batch with sequence " +
+                                                            "{} being sent to partition {}", producerIdAndEpoch.producerId,
+                                                    producerIdAndEpoch.epoch, batch.baseSequence(), tp);
+                                        }
+                                        if (transactionManager != null && !batch.hasBeenCountedTowardSequence()) {
+                                            // We close the batch for writing once it is full. We would have incremented
+                                            // the sequence number at that point so that the next batch would get the
+                                            // correct next sequence.
+                                            //
+                                            // However, it is possible that the linger has expired and we are just sending
+                                            // an incompleted batch which was not yet closed for writing.
+                                            //
+                                            // In this case, we need to increment the sequence number here.
+                                            transactionManager.maybeCountSequenceNumber(batch);
+                                            log.debug("ProducerId {}, Partition {}, incremented sequence number to: {}", producerIdAndEpoch.producerId, tp, transactionManager.sequenceNumber(tp));
                                         }
                                         batch.close();
                                         size += batch.records().sizeInBytes();

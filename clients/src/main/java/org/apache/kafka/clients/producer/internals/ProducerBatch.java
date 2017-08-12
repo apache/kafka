@@ -75,6 +75,7 @@ public final class ProducerBatch {
     private long drainedMs;
     private String expiryErrorMessage;
     private boolean retry;
+    private boolean countedTowardSequence;
 
     public ProducerBatch(TopicPartition tp, MemoryRecordsBuilder recordsBuilder, long now) {
         this(tp, recordsBuilder, now, false);
@@ -89,6 +90,7 @@ public final class ProducerBatch {
         this.produceFuture = new ProduceRequestResult(topicPartition);
         this.retry = false;
         this.isSplitBatch = isSplitBatch;
+        this.countedTowardSequence = false;
         float compressionRatioEstimation = CompressionRatioEstimator.estimation(topicPartition.topic(),
                                                                                 recordsBuilder.compressionType());
         recordsBuilder.setEstimatedCompressionRatio(compressionRatioEstimation);
@@ -233,12 +235,13 @@ public final class ProducerBatch {
             assert thunkIter.hasNext();
             Thunk thunk = thunkIter.next();
             if (batch == null)
-                batch = createBatchOffAccumulatorForRecord(record, splitBatchSize);
+                batch = createBatchOffAccumulatorForRecord(record, splitBatchSize, baseSequence(), isTransactional());
 
             // A newly created batch can always host the first message.
             if (!batch.tryAppendForSplit(record.timestamp(), record.key(), record.value(), record.headers(), thunk)) {
+                int nextSequence = batch.baseSequence() == RecordBatch.NO_SEQUENCE ? RecordBatch.NO_SEQUENCE : batch.baseSequence() + batch.recordCount;
                 batches.add(batch);
-                batch = createBatchOffAccumulatorForRecord(record, splitBatchSize);
+                batch = createBatchOffAccumulatorForRecord(record, splitBatchSize, nextSequence, batch.isTransactional());
                 batch.tryAppendForSplit(record.timestamp(), record.key(), record.value(), record.headers(), thunk);
             }
         }
@@ -252,7 +255,7 @@ public final class ProducerBatch {
         return batches;
     }
 
-    private ProducerBatch createBatchOffAccumulatorForRecord(Record record, int batchSize) {
+    private ProducerBatch createBatchOffAccumulatorForRecord(Record record, int batchSize, int sequence, boolean isTransactional) {
         int initialSize = Math.max(AbstractRecords.estimateSizeInBytesUpperBound(magic(),
                 recordsBuilder.compressionType(), record.key(), record.value(), record.headers()), batchSize);
         ByteBuffer buffer = ByteBuffer.allocate(initialSize);
@@ -261,8 +264,11 @@ public final class ProducerBatch {
         // for the newly created batch. This will be set when the batch is dequeued for sending (which is consistent
         // with how normal batches are handled).
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic(), recordsBuilder.compressionType(),
-                TimestampType.CREATE_TIME, 0L);
-        return new ProducerBatch(topicPartition, builder, this.createdMs, true);
+                TimestampType.CREATE_TIME, 0L, RecordBatch.NO_TIMESTAMP, RecordBatch.NO_PRODUCER_ID,
+                RecordBatch.NO_PRODUCER_EPOCH, sequence, isTransactional, RecordBatch.NO_PARTITION_LEADER_EPOCH);
+        ProducerBatch batch = new ProducerBatch(topicPartition, builder, this.createdMs, true);
+        batch.countSequenceNumber();
+        return batch;
     }
 
     public boolean isCompressed() {
@@ -374,9 +380,8 @@ public final class ProducerBatch {
         return recordsBuilder.isFull();
     }
 
-    public void setProducerState(ProducerIdAndEpoch producerIdAndEpoch, int baseSequence, boolean isTransactional) {
-        recordsBuilder.setProducerState(producerIdAndEpoch.producerId, producerIdAndEpoch.epoch,
-                baseSequence, isTransactional);
+    public void setProducerState(ProducerIdAndEpoch producerIdAndEpoch) {
+        recordsBuilder.setProducerState(producerIdAndEpoch.producerId, producerIdAndEpoch.epoch);
     }
 
     /**
@@ -433,5 +438,21 @@ public final class ProducerBatch {
 
     public short producerEpoch() {
         return recordsBuilder.producerEpoch();
+    }
+
+    public int baseSequence() {
+        return recordsBuilder.baseSequence();
+    }
+
+    private boolean isTransactional() {
+        return recordsBuilder.isTransactional();
+    }
+
+    void countSequenceNumber() {
+        countedTowardSequence = true;
+    }
+
+    boolean hasBeenCountedTowardSequence() {
+        return countedTowardSequence;
     }
 }

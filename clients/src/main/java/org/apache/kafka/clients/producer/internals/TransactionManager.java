@@ -66,6 +66,7 @@ public class TransactionManager {
     private final int transactionTimeoutMs;
 
     private final Map<TopicPartition, Integer> sequenceNumbers;
+    private final Map<TopicPartition, Integer> lastAckedSequence;
     private final PriorityQueue<TxnRequestHandler> pendingRequests;
     private final Set<TopicPartition> newPartitionsInTransaction;
     private final Set<TopicPartition> pendingPartitionsInTransaction;
@@ -143,6 +144,7 @@ public class TransactionManager {
     public TransactionManager(LogContext logContext, String transactionalId, int transactionTimeoutMs, long retryBackoffMs) {
         this.producerIdAndEpoch = new ProducerIdAndEpoch(NO_PRODUCER_ID, NO_PRODUCER_EPOCH);
         this.sequenceNumbers = new HashMap<>();
+        this.lastAckedSequence = new HashMap<>();
         this.transactionalId = transactionalId;
         this.log = logContext.logger(TransactionManager.class);
         this.transactionTimeoutMs = transactionTimeoutMs;
@@ -377,6 +379,13 @@ public class TransactionManager {
         return currentSequenceNumber;
     }
 
+    synchronized void maybeCountSequenceNumber(ProducerBatch batch) {
+        if (batch.hasBeenCountedTowardSequence())
+            return;
+        incrementSequenceNumber(batch.topicPartition, batch.recordCount);
+        batch.countSequenceNumber();
+    }
+
     synchronized void incrementSequenceNumber(TopicPartition topicPartition, int increment) {
         Integer currentSequenceNumber = sequenceNumbers.get(topicPartition);
         if (currentSequenceNumber == null)
@@ -384,6 +393,22 @@ public class TransactionManager {
 
         currentSequenceNumber += increment;
         sequenceNumbers.put(topicPartition, currentSequenceNumber);
+    }
+
+    synchronized void setLastAckedSequence(TopicPartition topicPartition, int sequence) {
+        lastAckedSequence.put(topicPartition, sequence);
+    }
+
+    synchronized int lastAckedSequence(TopicPartition topicPartition) {
+        Integer currentLastAckedSequence = lastAckedSequence.get(topicPartition);
+        if (currentLastAckedSequence == null)
+            return -1;
+        return lastAckedSequence.get(topicPartition);
+    }
+
+    synchronized boolean isNextSequence(TopicPartition topicPartition, int sequence) {
+        return (!lastAckedSequence.containsKey(topicPartition) && sequence == 0) ||
+                (lastAckedSequence.containsKey(topicPartition) && (sequence - lastAckedSequence.get(topicPartition) == 1));
     }
 
     synchronized TxnRequestHandler nextRequestHandler(boolean hasIncompleteBatches) {
