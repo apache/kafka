@@ -123,8 +123,9 @@ public class SslFactoryTest {
 
         ReloadableX509TrustManager reloadableX509TrustManager = new ReloadableX509TrustManager(securityStore, tmf);
 
+        trustStoreFile.delete();
         ScheduledExecutorService service = Executors.newSingleThreadScheduledExecutor();
-        service.schedule(updateTruststore(trustStoreFile, trustStorePassword), 0, SECONDS );
+        service.schedule(updateTruststore(trustStoreFile, trustStorePassword), 0, SECONDS);
         // ReloadableX509TrustManager should handle IO exception.
         reloadableX509TrustManager.getAcceptedIssuers();
         // Two aliases in truststore, should have reloaded.
@@ -139,12 +140,10 @@ public class SslFactoryTest {
             @Override
             public void run() {
                 try {
-                    trustStoreFile.delete();
                     Thread.sleep(1000);
                     trustStoreFile.createNewFile();
                     createTruststore(2, trustStoreFile, trustStorePassword);
-                }
-                catch (Exception ex) {
+                } catch (Exception ex) {
                     throw new RuntimeException(ex);
                 }
             }
