@@ -41,7 +41,6 @@ class ReloadableX509TrustManager extends X509ExtendedTrustManager implements X50
     private final TrustManagerFactory tmf;
     private X509TrustManager trustManager;
     private long lastReload = 0L;
-    private long retryDelayMs = 200L;
 
     private KeyStore trustKeyStore;
 
@@ -56,7 +55,7 @@ class ReloadableX509TrustManager extends X509ExtendedTrustManager implements X50
 
     @Override
     public void checkClientTrusted(X509Certificate[] chain, String authType) throws CertificateException {
-        reloadTrustManagerWithRetry();
+        reloadTrustManager();
         if (trustManager == null) {
             throw new CertificateException("Trust manager not initialized.");
         }
@@ -66,7 +65,7 @@ class ReloadableX509TrustManager extends X509ExtendedTrustManager implements X50
     @Override
     public void checkServerTrusted(X509Certificate[] chain, String authType) throws CertificateException {
         if (trustManager == null) {
-            reloadTrustManagerWithRetry();
+            reloadTrustManager();
         }
         if (trustManager == null) {
             throw new CertificateException("Trust manager not initialized.");
@@ -76,13 +75,17 @@ class ReloadableX509TrustManager extends X509ExtendedTrustManager implements X50
 
     @Override
     public X509Certificate[] getAcceptedIssuers() {
-        reloadTrustManagerWithRetry();
+        reloadTrustManager();
+
+        if (trustManager == null) {
+            return new X509Certificate[0];
+        }
         return trustManager.getAcceptedIssuers();
     }
 
     @Override
     public void checkClientTrusted(X509Certificate[] x509Certificates, String s, Socket socket) throws CertificateException {
-        reloadTrustManagerWithRetry();
+        reloadTrustManager();
         if (trustManager == null) {
             throw new CertificateException("Trust manager not initialized.");
         }
@@ -92,7 +95,7 @@ class ReloadableX509TrustManager extends X509ExtendedTrustManager implements X50
     @Override
     public void checkServerTrusted(X509Certificate[] x509Certificates, String s, Socket socket) throws CertificateException {
         if (trustManager == null) {
-            reloadTrustManagerWithRetry();
+            reloadTrustManager();
         }
         if (trustManager == null) {
             throw new CertificateException("Trust manager not initialized.");
@@ -102,7 +105,7 @@ class ReloadableX509TrustManager extends X509ExtendedTrustManager implements X50
 
     @Override
     public void checkClientTrusted(X509Certificate[] x509Certificates, String s, SSLEngine sslEngine) throws CertificateException {
-        reloadTrustManagerWithRetry();
+        reloadTrustManager();
         if (trustManager == null) {
             throw new CertificateException("Trust manager not initialized.");
         }
@@ -112,7 +115,7 @@ class ReloadableX509TrustManager extends X509ExtendedTrustManager implements X50
     @Override
     public void checkServerTrusted(X509Certificate[] x509Certificates, String s, SSLEngine sslEngine) throws CertificateException {
         if (trustManager == null) {
-            reloadTrustManagerWithRetry();
+            reloadTrustManager();
         }
         if (trustManager == null) {
             throw new CertificateException("Trust manager not initialized.");
@@ -120,7 +123,7 @@ class ReloadableX509TrustManager extends X509ExtendedTrustManager implements X50
         ((X509ExtendedTrustManager) trustManager).checkServerTrusted(x509Certificates, s, sslEngine);
     }
 
-    private void reloadTrustManager() throws IOException {
+    private void reloadTrustManager() {
         try {
             if (trustManager == null || trustStore.getLastModified() >= lastReload) {
                 trustKeyStore = trustStore.load();
@@ -151,28 +154,13 @@ class ReloadableX509TrustManager extends X509ExtendedTrustManager implements X50
                 }
 
                 lastReload = System.currentTimeMillis();
+                // getLastModified() returns timestamp rounded to 1000 ms. Do the same here for lastReload.
+                lastReload -= lastReload % 1000;
             }
         } catch (GeneralSecurityException gsEx) {
             log.error("Failed to reload trust manager due to security exception. {}", gsEx.getMessage());
-        }
-    }
-
-    private void reloadTrustManagerWithRetry() {
-        try {
-            reloadTrustManager();
         } catch (IOException ioEx) {
-            // There is a very small chance that the truststore is being updated when reloadTrustManager() is called.
-            // Do a retry here to handle this failure case.
-            log.warn("Failed to load trust manager due to IO exception. {}", ioEx.getMessage());
-            try {
-                Thread.sleep(retryDelayMs);
-                reloadTrustManager();
-            } catch (InterruptedException intEx) {
-                log.warn("Failed to reload trust manager due to interrupted exception.");
-                Thread.currentThread().interrupt();
-            } catch (IOException ioEx2) {
-                log.error("Failed to reload trust manager due to IO exception. {}", ioEx2.getMessage());
-            }
+            log.error("Failed to reload trust manager due to IO exception. {}", ioEx.getMessage());
         }
     }
 }

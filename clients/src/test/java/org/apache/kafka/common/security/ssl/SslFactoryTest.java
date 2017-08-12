@@ -30,10 +30,7 @@ import java.security.KeyStore;
 import java.security.cert.X509Certificate;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
 
-import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -102,7 +99,6 @@ public class SslFactoryTest {
         // One alias in truststore
         assertEquals(1, reloadableX509TrustManager.getTrustKeyStore().size());
 
-        Thread.sleep(1000);
         createTruststore(2, trustStoreFile, trustStorePassword);
         reloadableX509TrustManager.getAcceptedIssuers();
         // Two aliases in truststore, should have reloaded.
@@ -124,29 +120,14 @@ public class SslFactoryTest {
         ReloadableX509TrustManager reloadableX509TrustManager = new ReloadableX509TrustManager(securityStore, tmf);
 
         trustStoreFile.delete();
-        ScheduledExecutorService service = Executors.newSingleThreadScheduledExecutor();
-        service.schedule(updateTruststore(trustStoreFile, trustStorePassword), 50, MILLISECONDS);
         // ReloadableX509TrustManager should handle IO exception.
         reloadableX509TrustManager.getAcceptedIssuers();
-        // Two aliases in truststore, should have reloaded.
-        assertEquals(2, reloadableX509TrustManager.getTrustKeyStore().size());
-    }
 
-    /**
-     * Update truststore in a separate thread to simulate truststore been updated by a different process.
-     */
-    private Runnable updateTruststore(final File trustStoreFile, final Password trustStorePassword) {
-        return new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    trustStoreFile.createNewFile();
-                    createTruststore(2, trustStoreFile, trustStorePassword);
-                } catch (Exception ex) {
-                    throw new RuntimeException(ex);
-                }
-            }
-        };
+        trustStoreFile.createNewFile();
+        createTruststore(1, trustStoreFile, trustStorePassword);
+        reloadableX509TrustManager.getAcceptedIssuers();
+        // Two aliases in truststore, should have reloaded.
+        assertEquals(1, reloadableX509TrustManager.getTrustKeyStore().size());
     }
 
     private KeyStore createTruststore(int numberOfKeypairs, File trustStoreFile, Password trustStorePassword) throws Exception {
