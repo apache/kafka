@@ -33,7 +33,7 @@ import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 
-import static java.util.concurrent.TimeUnit.SECONDS;
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -125,7 +125,7 @@ public class SslFactoryTest {
 
         trustStoreFile.delete();
         ScheduledExecutorService service = Executors.newSingleThreadScheduledExecutor();
-        service.schedule(updateTruststore(trustStoreFile, trustStorePassword), 0, SECONDS);
+        service.schedule(updateTruststore(trustStoreFile, trustStorePassword), 50, MILLISECONDS);
         // ReloadableX509TrustManager should handle IO exception.
         reloadableX509TrustManager.getAcceptedIssuers();
         // Two aliases in truststore, should have reloaded.
@@ -140,7 +140,6 @@ public class SslFactoryTest {
             @Override
             public void run() {
                 try {
-                    Thread.sleep(1000);
                     trustStoreFile.createNewFile();
                     createTruststore(2, trustStoreFile, trustStorePassword);
                 } catch (Exception ex) {

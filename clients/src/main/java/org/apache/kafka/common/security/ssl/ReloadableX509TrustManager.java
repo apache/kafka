@@ -17,7 +17,6 @@
 package org.apache.kafka.common.security.ssl;
 
 
-import org.apache.kafka.common.KafkaException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -28,6 +27,7 @@ import javax.net.ssl.X509ExtendedTrustManager;
 import javax.net.ssl.X509TrustManager;
 import java.io.IOException;
 import java.net.Socket;
+import java.security.GeneralSecurityException;
 import java.security.KeyStore;
 import java.security.NoSuchAlgorithmException;
 import java.security.cert.CertificateException;
@@ -41,6 +41,7 @@ class ReloadableX509TrustManager extends X509ExtendedTrustManager implements X50
     private final TrustManagerFactory tmf;
     private X509TrustManager trustManager;
     private long lastReload = 0L;
+    private long retryDelayMs = 200L;
 
     private KeyStore trustKeyStore;
 
@@ -55,53 +56,71 @@ class ReloadableX509TrustManager extends X509ExtendedTrustManager implements X50
 
     @Override
     public void checkClientTrusted(X509Certificate[] chain, String authType) throws CertificateException {
-        reloadTrustManager();
+        reloadTrustManagerWithRetry();
+        if (trustManager == null) {
+            throw new CertificateException("Trust manager not initialized.");
+        }
         trustManager.checkClientTrusted(chain, authType);
     }
 
     @Override
     public void checkServerTrusted(X509Certificate[] chain, String authType) throws CertificateException {
         if (trustManager == null) {
-            reloadTrustManager();
+            reloadTrustManagerWithRetry();
+        }
+        if (trustManager == null) {
+            throw new CertificateException("Trust manager not initialized.");
         }
         trustManager.checkServerTrusted(chain, authType);
     }
 
     @Override
     public X509Certificate[] getAcceptedIssuers() {
-        reloadTrustManager();
+        reloadTrustManagerWithRetry();
         return trustManager.getAcceptedIssuers();
     }
 
     @Override
     public void checkClientTrusted(X509Certificate[] x509Certificates, String s, Socket socket) throws CertificateException {
-        reloadTrustManager();
+        reloadTrustManagerWithRetry();
+        if (trustManager == null) {
+            throw new CertificateException("Trust manager not initialized.");
+        }
         ((X509ExtendedTrustManager) trustManager).checkClientTrusted(x509Certificates, s, socket);
     }
 
     @Override
     public void checkServerTrusted(X509Certificate[] x509Certificates, String s, Socket socket) throws CertificateException {
         if (trustManager == null) {
-            reloadTrustManager();
+            reloadTrustManagerWithRetry();
+        }
+        if (trustManager == null) {
+            throw new CertificateException("Trust manager not initialized.");
         }
         ((X509ExtendedTrustManager) trustManager).checkServerTrusted(x509Certificates, s, socket);
     }
 
     @Override
     public void checkClientTrusted(X509Certificate[] x509Certificates, String s, SSLEngine sslEngine) throws CertificateException {
-        reloadTrustManager();
+        reloadTrustManagerWithRetry();
+        if (trustManager == null) {
+            throw new CertificateException("Trust manager not initialized.");
+        }
         ((X509ExtendedTrustManager) trustManager).checkClientTrusted(x509Certificates, s, sslEngine);
     }
 
     @Override
     public void checkServerTrusted(X509Certificate[] x509Certificates, String s, SSLEngine sslEngine) throws CertificateException {
         if (trustManager == null) {
-            reloadTrustManager();
+            reloadTrustManagerWithRetry();
+        }
+        if (trustManager == null) {
+            throw new CertificateException("Trust manager not initialized.");
         }
         ((X509ExtendedTrustManager) trustManager).checkServerTrusted(x509Certificates, s, sslEngine);
     }
 
-    private void reloadTrustManager() throws KafkaException {
+    private void reloadTrustManager() throws IOException {
         try {
             if (trustManager == null || trustStore.getLastModified() >= lastReload) {
                 trustKeyStore = trustStore.load();
@@ -133,19 +152,27 @@ class ReloadableX509TrustManager extends X509ExtendedTrustManager implements X50
 
                 lastReload = System.currentTimeMillis();
             }
+        } catch (GeneralSecurityException gsEx) {
+            log.error("Failed to reload trust manager due to security exception. {}", gsEx.getMessage());
+        }
+    }
+
+    private void reloadTrustManagerWithRetry() {
+        try {
+            reloadTrustManager();
         } catch (IOException ioEx) {
             // There is a very small chance that the truststore is being updated when reloadTrustManager() is called.
             // Do a retry here to handle this failure case.
-            log.warn("Failed to reload trust manager due to IO exception. {}", ioEx.getMessage());
+            log.warn("Failed to load trust manager due to IO exception. {}", ioEx.getMessage());
             try {
-                Thread.sleep(100);
+                Thread.sleep(retryDelayMs);
                 reloadTrustManager();
             } catch (InterruptedException intEx) {
                 log.warn("Failed to reload trust manager due to interrupted exception.");
                 Thread.currentThread().interrupt();
+            } catch (IOException ioEx2) {
+                log.error("Failed to reload trust manager due to IO exception. {}", ioEx2.getMessage());
             }
-        } catch (Exception ex) {
-            throw new KafkaException(ex);
         }
     }
 }
