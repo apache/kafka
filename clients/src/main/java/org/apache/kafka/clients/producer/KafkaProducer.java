@@ -407,7 +407,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             this.errors = this.metrics.sensor("errors");
             config.logUnused();
             AppInfoParser.registerAppInfo(JMX_PREFIX, clientId);
-            log.debug("Kafka producer started");
+            log.debug("Kafka producer with client id {} created", clientId);
         } catch (Throwable t) {
             // call close methods if internal objects are already constructed this is to prevent resource leak. see KAFKA-2121
             close(0, TimeUnit.MILLISECONDS, true);
@@ -1012,7 +1012,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         ClientUtils.closeQuietly(valueSerializer, "producer valueSerializer", firstException);
         ClientUtils.closeQuietly(partitioner, "producer partitioner", firstException);
         AppInfoParser.unregisterAppInfo(JMX_PREFIX, clientId);
-        log.debug("The Kafka producer has closed.");
+        log.debug("Kafka producer with client id {} has been closed", clientId);
         if (firstException.get() != null && !swallowException)
             throw new KafkaException("Failed to close kafka producer", firstException.get());
     }
