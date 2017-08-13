@@ -38,16 +38,14 @@ object LogDirsCommand {
     def describe(args: Array[String], out: PrintStream): Unit = {
         val opts = new LogDirsCommandOptions(args)
         val adminClient = createAdminClient(opts)
-        val logDirList = opts.options.valueOf(opts.logDirListOpt).split(",").filter(!_.isEmpty)
         val topicList = opts.options.valueOf(opts.topicListOpt).split(",").filter(!_.isEmpty)
         val brokerList = Option(opts.options.valueOf(opts.brokerListOpt)) match {
             case Some(brokerListStr) => brokerListStr.split(',').filter(!_.isEmpty).map(_.toInt)
             case None => adminClient.describeCluster().nodes().get().asScala.map(_.id()).toArray
         }
-        val logDirsByBroker = brokerList.map(broker => Integer.valueOf(broker) -> logDirList.toSeq.asJavaCollection).toMap.asJava
 
         out.println("Querying brokers for log directories information")
-        val describeDirsResult: DescribeDirsResult = adminClient.describeDirs(logDirsByBroker)
+        val describeDirsResult: DescribeDirsResult = adminClient.describeDirs(brokerList.map(Integer.valueOf).toSeq.asJava)
         val logDirInfosByBroker = describeDirsResult.all.get().asScala.mapValues(_.asScala)
 
         out.println(s"Received log directory information from brokers ${brokerList.mkString(",")}")

@@ -24,7 +24,7 @@ import org.apache.kafka.common.errors.ControllerMovedException;
 import org.apache.kafka.common.errors.CoordinatorLoadInProgressException;
 import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
 import org.apache.kafka.common.errors.CorruptRecordException;
-import org.apache.kafka.common.errors.DirNotAvailableException;
+import org.apache.kafka.common.errors.LogDirNotAvailableException;
 import org.apache.kafka.common.errors.DuplicateSequenceNumberException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.IllegalGenerationException;
@@ -514,7 +514,7 @@ public enum Errors {
         new ApiExceptionBuilder() {
             @Override
             public ApiException build(String message) {
-                return new DirNotAvailableException(message);
+                return new LogDirNotAvailableException(message);
             }
         });
 

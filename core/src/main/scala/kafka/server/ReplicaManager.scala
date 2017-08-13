@@ -30,7 +30,7 @@ import kafka.server.QuotaFactory.UnboundedQuota
 import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.errors.{ControllerMovedException, CorruptRecordException, DirNotAvailableException, InvalidTimestampException, InvalidTopicException, KafkaStorageException, NotEnoughReplicasException, NotLeaderForPartitionException, OffsetOutOfRangeException, PolicyViolationException, _}
+import org.apache.kafka.common.errors.{ControllerMovedException, CorruptRecordException, LogDirNotAvailableException, InvalidTimestampException, InvalidTopicException, KafkaStorageException, NotEnoughReplicasException, NotLeaderForPartitionException, OffsetOutOfRangeException, PolicyViolationException, _}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
@@ -566,7 +566,7 @@ class ReplicaManager(val config: KafkaConfig,
 
         (topicPartition, Errors.NONE)
       } catch {
-        case e@(_: DirNotAvailableException |
+        case e@(_: LogDirNotAvailableException |
                 _: ReplicaNotAvailableException |
                 _: KafkaStorageException) =>
           (topicPartition, Errors.forException(e))
@@ -614,7 +614,7 @@ class ReplicaManager(val config: KafkaConfig,
         }
 
       } catch {
-        case e@ (_: DirNotAvailableException |
+        case e@ (_: LogDirNotAvailableException |
                  _: KafkaStorageException) =>
           (dir, new LogDirInfo(Errors.forException(e), Map.empty[TopicPartition, ReplicaInfo].asJava))
         case t: Throwable =>

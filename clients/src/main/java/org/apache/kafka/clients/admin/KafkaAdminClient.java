@@ -1592,10 +1592,7 @@ public class KafkaAdminClient extends AdminClient {
      * before the replica has been created on the broker. It will support moving replicas that are already created after
      * KIP-113 is fully implemented.
      *
-     * Updates are not transactional so they may succeed for some resources while fail for others. The log directory for
-     * a particular replica is updated atomically.
-     *
-     * This operation is supported by brokers with version 0.11.1.0 or higher.
+     * This operation is supported by brokers with version 1.0.0 or higher.
      *
      * @param replicaAssignment  The replicas with their log directory absolute path
      * @param options            The options to use when changing replica dir
@@ -1661,25 +1658,22 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     @Override
-    public DescribeDirsResult describeDirs(Map<Integer, Collection<String>> logDirsByBroker, DescribeDirsOptions options) {
-        final Map<Integer, KafkaFutureImpl<Map<String, DescribeDirsResponse.LogDirInfo>>> futures = new HashMap<>(logDirsByBroker.size());
+    public DescribeDirsResult describeDirs(Collection<Integer> brokers, DescribeDirsOptions options) {
+        final Map<Integer, KafkaFutureImpl<Map<String, DescribeDirsResponse.LogDirInfo>>> futures = new HashMap<>(brokers.size());
 
-        for (Integer brokerId: logDirsByBroker.keySet()) {
+        for (Integer brokerId: brokers) {
             futures.put(brokerId, new KafkaFutureImpl<Map<String, DescribeDirsResponse.LogDirInfo>>());
         }
 
         final long now = time.milliseconds();
-        for (Map.Entry<Integer, Collection<String>> entry: logDirsByBroker.entrySet()) {
-            final int brokerId = entry.getKey();
-            final Collection<String> logDirs = entry.getValue();
-
+        for (final Integer brokerId: brokers) {
             runnable.call(new Call("describeDirs", calcDeadlineMs(now, options.timeoutMs()),
                 new ConstantNodeIdProvider(brokerId)) {
 
                 @Override
                 public AbstractRequest.Builder createRequest(int timeoutMs) {
                     // Query selected partitions in all log directories
-                    return new DescribeDirsRequest.Builder(new HashSet<>(logDirs), new HashSet<TopicPartition>());
+                    return new DescribeDirsRequest.Builder(new HashSet<String>(), new HashSet<TopicPartition>());
                 }
 
                 @Override

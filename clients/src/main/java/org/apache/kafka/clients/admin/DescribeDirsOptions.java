@@ -18,12 +18,12 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
+
 import java.util.Collection;
-import java.util.Map;
 
 
 /**
- * Options for {@link AdminClient#describeDirs(Map<Integer, Collection<String>>)}.
+ * Options for {@link AdminClient#describeDirs(Collection<Integer>)}
  *
  * The API of this class is evolving, see {@link AdminClient} for details.
  */

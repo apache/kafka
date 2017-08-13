@@ -336,9 +336,6 @@ public abstract class AdminClient implements AutoCloseable {
     /**
      * Update the configuration for the specified resources with the default options.
      *
-     * Updates are not transactional so they may succeed for some resources while fail for others. The configs for
-     * a particular resource are updated atomically.
-     *
      * This operation is supported by brokers with version 0.11.0.0 or higher.
      *
      * @param configs         The resources with their configs (topic is the only resource type with configs that can
@@ -352,26 +349,26 @@ public abstract class AdminClient implements AutoCloseable {
      * Query the log directory information for the specified log directories.
      * All log directories on a broker are queried if an empty collection of log directories is specified for this broker
      *
-     * This operation is supported by brokers with version 0.11.1.0 or higher.
+     * This operation is supported by brokers with version 1.0.0 or higher.
      *
-     * @param logDirsByBroker     A list of log dirs per broker
-     * @return                    The DescribeDirsResult
+     * @param brokers     A list of brokers
+     * @return            The DescribeDirsResult
      */
-    public DescribeDirsResult describeDirs(Map<Integer, Collection<String>> logDirsByBroker) {
-        return describeDirs(logDirsByBroker, new DescribeDirsOptions());
+    public DescribeDirsResult describeDirs(Collection<Integer> brokers) {
+        return describeDirs(brokers, new DescribeDirsOptions());
     }
 
     /**
      * Query the log directory information for the specified log directories.
      * All log directories on a broker are queried if an empty collection of log directories is specified for this broker
      *
-     * This operation is supported by brokers with version 0.11.1.0 or higher.
+     * This operation is supported by brokers with version 1.0.0 or higher.
      *
-     * @param logDirsByBroker     A list of log dirs per broker
-     * @param options             The options to use when querying log dir info
-     * @return                    The DescribeDirsResult
+     * @param brokers     A list of brokers
+     * @param options     The options to use when querying log dir info
+     * @return            The DescribeDirsResult
      */
-    public abstract DescribeDirsResult describeDirs(Map<Integer, Collection<String>> logDirsByBroker, DescribeDirsOptions options);
+    public abstract DescribeDirsResult describeDirs(Collection<Integer> brokers, DescribeDirsOptions options);
 
     /**
      * Query the replica directory information for the specified replicas.

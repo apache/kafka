@@ -19,19 +19,19 @@ package org.apache.kafka.common.errors;
 /**
  * Thrown when a request is made for a dir that is not found in the broker configuration
  */
-public class DirNotAvailableException extends ApiException {
+public class LogDirNotAvailableException extends ApiException {
 
     private static final long serialVersionUID = 1L;
 
-    public DirNotAvailableException(String message) {
+    public LogDirNotAvailableException(String message) {
         super(message);
     }
 
-    public DirNotAvailableException(String message, Throwable cause) {
+    public LogDirNotAvailableException(String message, Throwable cause) {
         super(message, cause);
     }
 
-    public DirNotAvailableException(Throwable cause) {
+    public LogDirNotAvailableException(Throwable cause) {
         super(cause);
     }
 }

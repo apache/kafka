@@ -20,13 +20,14 @@ package org.apache.kafka.clients.admin;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import java.util.HashMap;
+import java.util.Collection;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import org.apache.kafka.common.requests.DescribeDirsResponse.LogDirInfo;
 
 
 /**
- * The result of the {@link KafkaAdminClient#describeDirs(Map)} call.
+ * The result of the {@link AdminClient#describeDirs(Collection<Integer>)} call.
  *
  * The API of this class is evolving, see {@link AdminClient} for details.
  */

@@ -22,7 +22,7 @@ import java.util.Map;
 
 
 /**
- * Options for {@link KafkaAdminClient#alterReplicaDir(Map)}.
+ * Options for {@link KafkaAdminClient#alterReplicaDir(Map, AlterReplicaDirOptions)}.
  */
 @InterfaceStability.Evolving
 public class AlterReplicaDirOptions {

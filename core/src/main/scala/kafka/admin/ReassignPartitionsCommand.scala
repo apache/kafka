@@ -29,7 +29,7 @@ import org.I0Itec.zkclient.exception.ZkNodeExistsException
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.TopicPartitionReplica
-import org.apache.kafka.common.errors.{DirNotAvailableException, ReplicaNotAvailableException}
+import org.apache.kafka.common.errors.{LogDirNotAvailableException, ReplicaNotAvailableException}
 import org.apache.kafka.clients.admin.{AdminClientConfig, AlterReplicaDirOptions, KafkaAdminClient, AdminClient => JAdminClient}
 import org.apache.kafka.clients.admin.DescribeReplicaDirResult.ReplicaDirInfo
 import LogConfig._
@@ -577,7 +577,7 @@ class ReassignPartitionsCommand(zkUtils: ZkUtils,
         val partitionsBeingReassigned = zkUtils.getPartitionsBeingReassigned()
         throw new AdminCommandFailedException("Partition reassignment currently in " +
           "progress for %s. Aborting operation".format(partitionsBeingReassigned))
-      case e: DirNotAvailableException =>
+      case e: LogDirNotAvailableException =>
         throw new AdminCommandFailedException(s"The proposed replica assignment $proposedReplicaAssignment contains " +
           s"invalid log directory. Aborting operation", e)
       case e: AdminCommandFailedException => throw e

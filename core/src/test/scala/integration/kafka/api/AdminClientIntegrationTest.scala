@@ -222,10 +222,8 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
     val topic = "topic"
     val leaderByPartition = TestUtils.createTopic(zkUtils, topic, 10, 1, servers, new Properties())
     val partitionsByBroker = leaderByPartition.groupBy(_._2).mapValues(_.keys.toSeq)
-    val logDirsByBroker = (0 until brokerCount).map {
-      brokerId => Integer.valueOf(brokerId) -> Seq.empty[String].asJavaCollection
-    }.toMap
-    val logDirInfosByBroker = client.describeDirs(logDirsByBroker.asJava).all.get
+    val brokers = (0 until brokerCount).map(Integer.valueOf).toSeq
+    val logDirInfosByBroker = client.describeDirs(brokers.asJava).all.get
 
     (0 until brokerCount).foreach { brokerId =>
       val expectedPartitions = partitionsByBroker(brokerId)

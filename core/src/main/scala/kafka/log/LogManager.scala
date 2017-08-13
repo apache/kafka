@@ -30,7 +30,7 @@ import kafka.server.{BrokerState, RecoveringFromUncleanShutdown, _}
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.utils.Time
-import org.apache.kafka.common.errors.{DirNotAvailableException, KafkaStorageException}
+import org.apache.kafka.common.errors.{LogDirNotAvailableException, KafkaStorageException}
 
 import scala.collection.JavaConverters._
 import scala.collection._
@@ -623,6 +623,7 @@ class LogManager(logDirs: Array[File],
   /**
     * Rename the directory of the given topic-partition "logdir" as "logdir.uuid.delete" and
     * add it in the queue for deletion.
+    *
     * @param topicPartition TopicPartition that needs to be deleted
     * @return the removed log
     */
@@ -722,7 +723,7 @@ class LogManager(logDirs: Array[File],
   // logDir should be an absolute path
   def isLogDirOnline(logDir: String): Boolean = {
     if (!logDirs.exists(_.getAbsolutePath == logDir))
-      throw new DirNotAvailableException(s"Log dir $logDir is not found in the config.")
+      throw new LogDirNotAvailableException(s"Log dir $logDir is not found in the config.")
 
     _liveLogDirs.contains(new File(logDir))
   }
