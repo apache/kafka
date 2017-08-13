@@ -19,43 +19,37 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.state.KeyValueIterator;
-import org.apache.kafka.streams.state.StateSerdes;
 
 /**
  * Merges two iterators. Assumes each of them is sorted by key
  *
- * @param <K>
- * @param <V>
  */
-class MergedSortedCacheKeyValueStoreIterator<K, V> extends AbstractMergedSortedCacheStoreIterator<K, Bytes, V, byte[]> {
+class MergedSortedCacheKeyValueBytesStoreIterator extends AbstractMergedSortedCacheStoreIterator<Bytes, Bytes, byte[], byte[]> {
 
-    private final StateSerdes<K, V> serdes;
 
-    MergedSortedCacheKeyValueStoreIterator(final PeekingKeyValueIterator<Bytes, LRUCacheEntry> cacheIterator,
-                                           final KeyValueIterator<Bytes, byte[]> storeIterator,
-                                           final StateSerdes<K, V> serdes) {
+    MergedSortedCacheKeyValueBytesStoreIterator(final PeekingKeyValueIterator<Bytes, LRUCacheEntry> cacheIterator,
+                                                final KeyValueIterator<Bytes, byte[]> storeIterator) {
         super(cacheIterator, storeIterator);
-        this.serdes = serdes;
     }
 
     @Override
-    public KeyValue<K, V> deserializeStorePair(final KeyValue<Bytes, byte[]> pair) {
-        return KeyValue.pair(serdes.keyFrom(pair.key.get()), serdes.valueFrom(pair.value));
+    public KeyValue<Bytes, byte[]> deserializeStorePair(final KeyValue<Bytes, byte[]> pair) {
+        return pair;
     }
 
     @Override
-    K deserializeCacheKey(final Bytes cacheKey) {
-        return serdes.keyFrom(cacheKey.get());
+    Bytes deserializeCacheKey(final Bytes cacheKey) {
+        return cacheKey;
     }
 
     @Override
-    V deserializeCacheValue(final LRUCacheEntry cacheEntry) {
-        return serdes.valueFrom(cacheEntry.value);
+    byte[] deserializeCacheValue(final LRUCacheEntry cacheEntry) {
+        return cacheEntry.value;
     }
 
     @Override
-    public K deserializeStoreKey(final Bytes key) {
-        return serdes.keyFrom(key.get());
+    public Bytes deserializeStoreKey(final Bytes key) {
+        return key;
     }
 
     @Override
