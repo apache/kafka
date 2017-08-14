@@ -100,31 +100,28 @@ public class StoreChangelogReader implements ChangelogReader {
 
 
     public Collection<TopicPartition> restore() {
-        final List<TopicPartition> completed = new ArrayList<>();
         if (!initialized) {
-            completed.addAll(initialize());
+            initialize();
         }
 
         if (needsRestoring.isEmpty()) {
             consumer.assign(Collections.<TopicPartition>emptyList());
-            return completed;
+            return completed();
         }
 
         final Set<TopicPartition> partitions = new HashSet<>(needsRestoring.keySet());
         final ConsumerRecords<byte[], byte[]> allRecords = consumer.poll(10);
         for (final TopicPartition partition : partitions) {
-            if (restorePartition(allRecords, partition)) {
-                completed.add(partition);
-            }
+            restorePartition(allRecords, partition);
         }
 
         if (needsRestoring.isEmpty()) {
             consumer.assign(Collections.<TopicPartition>emptyList());
         }
-        return completed;
+        return completed();
     }
 
-    private Collection<TopicPartition> initialize() {
+    private void initialize() {
         needsRestoring.clear();
         if (!consumer.subscription().isEmpty()) {
             throw new IllegalStateException(String.format("Restore consumer should have not subscribed to any partitions (%s) beforehand", consumer.subscription()));
@@ -171,11 +168,7 @@ public class StoreChangelogReader implements ChangelogReader {
                               position,
                               endOffsets.get(restorer.partition()));
         }
-
-        final Set<TopicPartition> completed = new HashSet<>(stateRestorers.keySet());
-        completed.removeAll(needsRestoring.keySet());
         initialized = true;
-        return completed;
     }
 
     private void logRestoreOffsets(final TopicPartition partition, final long startingOffset, final Long endOffset) {
@@ -184,6 +177,12 @@ public class StoreChangelogReader implements ChangelogReader {
                   partition,
                   startingOffset,
                   endOffset);
+    }
+
+    private Collection<TopicPartition> completed() {
+        final Set<TopicPartition> completed = new HashSet<>(stateRestorers.keySet());
+        completed.removeAll(needsRestoring.keySet());
+        return completed;
     }
 
     @Override

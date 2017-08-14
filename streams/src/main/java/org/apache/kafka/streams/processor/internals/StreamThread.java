@@ -125,7 +125,7 @@ public class StreamThread extends Thread {
      * the coordinator repeatedly fails in-between revoking partitions and assigning new partitions.
      */
     public enum State {
-        CREATED(1, 5, 6), RUNNING(2, 5, 6), PARTITIONS_REVOKED(2, 3, 5, 6), ASSIGNING_PARTITIONS(4, 5, 6), PARTITIONS_ASSIGNED(1, 2, 5, 6), PENDING_SHUTDOWN(6), DEAD;
+        CREATED(1, 5), RUNNING(2, 5), PARTITIONS_REVOKED(2, 3, 5), ASSIGNING_PARTITIONS(4, 5), PARTITIONS_ASSIGNED(1, 2, 5), PENDING_SHUTDOWN(6), DEAD;
 
         private final Set<Integer> validTransitions = new HashSet<>();
 
