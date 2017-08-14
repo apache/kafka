@@ -47,7 +47,6 @@ import static java.util.Arrays.asList;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThat;
-import static org.junit.Assert.fail;
 
 public class StreamsKafkaClientTest {
 
@@ -131,76 +130,46 @@ public class StreamsKafkaClientTest {
         verifyCorrectTopicConfigs(streamsKafkaClient, topicConfigWithNoOverrides, Collections.singletonMap("cleanup.policy", "delete"));
     }
 
-    @Test
-    public void testCheckBrokerCompatibilityEmptyResponse() {
+    @Test(expected = StreamsException.class)
+    public void shouldThrowStreamsExceptionOnEmptyBrokerCompatibilityResponse() {
         kafkaClient.prepareResponse(null);
         final StreamsKafkaClient streamsKafkaClient = createStreamsKafkaClient();
-        try {
-            streamsKafkaClient.checkBrokerCompatibility(false);
-            fail("Response was not empty");
-        } catch (final StreamsException se) {
-            assertThat(se.getMessage(), equalTo("Empty response for client request."));
-        }
+        streamsKafkaClient.checkBrokerCompatibility(false);
     }
 
-    @Test
-    public void testCheckBrokerCompatibilityConsistentResponseType() {
+    @Test(expected = StreamsException.class)
+    public void shouldThrowStreamsExceptionWhenBrokerCompatibilityResponseInconsistent() {
         kafkaClient.prepareResponse(new ProduceResponse(Collections.<TopicPartition, ProduceResponse.PartitionResponse>emptyMap()));
         final StreamsKafkaClient streamsKafkaClient = createStreamsKafkaClient();
-        try {
-            streamsKafkaClient.checkBrokerCompatibility(false);
-            fail("Consistent response type");
-        } catch (final StreamsException se) {
-            assertThat(se.getMessage(), equalTo("Inconsistent response type for API versions request. Expected ApiVersionsResponse but received org.apache.kafka.common.requests.ProduceResponse"));
-        }
+        streamsKafkaClient.checkBrokerCompatibility(false);
     }
 
-    @Test
-    public void testCheckBrokerCompatibilityRequiresBrokerVersion0101xOrHigher() {
+    @Test(expected = StreamsException.class)
+    public void shouldRequireBrokerVersion0101OrHigherWhenEosDisabled() {
         kafkaClient.prepareResponse(new ApiVersionsResponse(Errors.NONE, Collections.singletonList(new ApiVersionsResponse.ApiVersion(ApiKeys.PRODUCE))));
         final StreamsKafkaClient streamsKafkaClient = createStreamsKafkaClient();
-        try {
-            streamsKafkaClient.checkBrokerCompatibility(false);
-            fail("Version is 0.10.1.x or higher");
-        } catch (final StreamsException se) {
-            assertThat(se.getMessage(), equalTo("Kafka Streams requires broker version 0.10.1.x or higher."));
-        }
+        streamsKafkaClient.checkBrokerCompatibility(false);
     }
 
-    @Test
-    public void testCheckBrokerCompatibilityRequiresBrokerVersion0110xOrHigher() {
+    @Test(expected = StreamsException.class)
+    public void shouldRequireBrokerVersions0110OrHigherWhenEosEnabled() {
         kafkaClient.prepareResponse(new ApiVersionsResponse(Errors.NONE, Collections.singletonList(new ApiVersionsResponse.ApiVersion(ApiKeys.CREATE_TOPICS))));
         final StreamsKafkaClient streamsKafkaClient = createStreamsKafkaClient();
-        try {
-            streamsKafkaClient.checkBrokerCompatibility(true);
-            fail("Version is 0.11.0.x or higher");
-        } catch (final StreamsException se) {
-            assertThat(se.getMessage(), equalTo("Setting processing.guarantee=exactly_once requires broker version 0.11.0.x or higher."));
-        }
+        streamsKafkaClient.checkBrokerCompatibility(true);
     }
 
-    @Test
-    public void fetchMetadataEmptyResponse() {
+    @Test(expected = StreamsException.class)
+    public void shouldThrowStreamsExceptionOnEmptyFetchMetadataResponse() {
         kafkaClient.prepareResponse(null);
         final StreamsKafkaClient streamsKafkaClient = createStreamsKafkaClient();
-        try {
-            streamsKafkaClient.fetchMetadata();
-            fail("Response was not empty");
-        } catch (final StreamsException se) {
-            assertThat(se.getMessage(), equalTo("Empty response for client request."));
-        }
+        streamsKafkaClient.fetchMetadata();
     }
 
-    @Test
-    public void fetchMetadataConsistentResponseType() {
+    @Test(expected = StreamsException.class)
+    public void shouldThrowStreamsExceptionWhenFetchMetadataResponseInconsistent() {
         kafkaClient.prepareResponse(new ProduceResponse(Collections.<TopicPartition, ProduceResponse.PartitionResponse>emptyMap()));
         final StreamsKafkaClient streamsKafkaClient = createStreamsKafkaClient();
-        try {
-            streamsKafkaClient.fetchMetadata();
-            fail("Consistent response type");
-        } catch (final StreamsException se) {
-            assertThat(se.getMessage(), equalTo("Inconsistent response type for internal topic metadata request. Expected MetadataResponse but received org.apache.kafka.common.requests.ProduceResponse"));
-        }
+        streamsKafkaClient.fetchMetadata();
     }
 
     private void verifyCorrectTopicConfigs(final StreamsKafkaClient streamsKafkaClient,
