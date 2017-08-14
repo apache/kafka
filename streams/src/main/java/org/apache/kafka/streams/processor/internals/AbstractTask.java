@@ -37,7 +37,7 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
-public abstract class AbstractTask {
+public abstract class AbstractTask implements Task {
     private static final Logger log = LoggerFactory.getLogger(AbstractTask.class);
 
     final TaskId id;
@@ -87,32 +87,32 @@ public abstract class AbstractTask {
         }
     }
 
-    public abstract void resume();
-
-    public abstract void commit();
-    public abstract void suspend();
-    public abstract void close(final boolean clean);
-
-    public final TaskId id() {
+    @Override
+    public TaskId id() {
         return id;
     }
 
+    @Override
     public final String applicationId() {
         return applicationId;
     }
 
+    @Override
     public final Set<TopicPartition> partitions() {
         return partitions;
     }
 
+    @Override
     public final ProcessorTopology topology() {
         return topology;
     }
 
+    @Override
     public final ProcessorContext context() {
         return processorContext;
     }
 
+    @Override
     public StateStore getStore(final String name) {
         return stateMgr.getStore(name);
     }

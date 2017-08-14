@@ -16,8 +16,10 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.MockConsumer;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.common.KafkaException;
@@ -36,6 +38,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
+import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
@@ -54,6 +57,7 @@ import org.apache.kafka.test.MockTimestampExtractor;
 import org.apache.kafka.test.NoOpProcessorContext;
 import org.apache.kafka.test.NoOpRecordCollector;
 import org.apache.kafka.test.TestUtils;
+import org.easymock.EasyMock;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -121,7 +125,6 @@ public class StreamTaskTest {
     private final MockTime time = new MockTime();
     private File baseDir = TestUtils.tempDirectory();
     private StateDirectory stateDirectory;
-    private final RecordCollectorImpl recordCollector = new RecordCollectorImpl(producer, "taskId");
     private StreamsConfig config;
     private StreamsConfig eosConfig;
     private StreamTask task;
@@ -900,6 +903,93 @@ public class StreamTaskTest {
         task.close(true);
         task = null;
         assertTrue(producer.closed());
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldNotViolateAtLeastOnceWhenExceptionOccursDuringFlushStateWhenCommitting() {
+        final MockProducer producer = new MockProducer();
+        final Consumer<byte[], byte[]> consumer = EasyMock.createStrictMock(Consumer.class);
+        EasyMock.expect(consumer.committed(EasyMock.anyObject(TopicPartition.class)))
+                .andStubReturn(new OffsetAndMetadata(1L));
+        EasyMock.replay(consumer);
+        final StreamTask task = new StreamTask(taskId00, applicationId, partitions, topology, consumer,
+                              changelogReader, eosConfig, streamsMetrics, stateDirectory, null, time, producer) {
+
+            @Override
+            protected void flushState() {
+                throw new RuntimeException("KABOOM!");
+            }
+        };
+
+        try {
+            task.commit();
+            fail("should have thrown an exception");
+        } catch (Exception e) {
+            // all good
+        }
+        EasyMock.verify(consumer);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldNotViolateAtLeastOnceWhenExceptionOccursDuringTaskSuspension() {
+        final MockProducer producer = new MockProducer();
+        final Consumer<byte[], byte[]> consumer = EasyMock.createStrictMock(Consumer.class);
+        EasyMock.expect(consumer.committed(EasyMock.anyObject(TopicPartition.class)))
+                .andStubReturn(new OffsetAndMetadata(1L));
+        EasyMock.replay(consumer);
+        MockSourceNode sourceNode = new MockSourceNode(topic1, intDeserializer, intDeserializer) {
+            @Override
+            public void close() {
+                throw new RuntimeException("KABOOM!");
+            }
+        };
+
+        final ProcessorTopology topology = new ProcessorTopology(Collections.<ProcessorNode>singletonList(sourceNode),
+                                                                 Collections.<String, SourceNode>singletonMap(topic1[0], sourceNode),
+                                                                 Collections.<String, SinkNode>emptyMap(),
+                                                                 Collections.<StateStore>emptyList(),
+                                                                 Collections.<String, String>emptyMap(),
+                                                                 Collections.<StateStore>emptyList());
+        final StreamTask task = new StreamTask(taskId00, applicationId, Utils.mkSet(partition1), topology, consumer,
+                                               changelogReader, eosConfig, streamsMetrics, stateDirectory, null, time, producer);
+
+
+        try {
+            task.suspend();
+            fail("should have thrown an exception");
+        } catch (Exception e) {
+            // all good
+        }
+        EasyMock.verify(consumer);
+    }
+
+    @Test
+    public void shouldCloseStateManagerIfFailureOnTaskClose() {
+        final AtomicBoolean stateManagerCloseCalled = new AtomicBoolean(false);
+        final StreamTask streamTask = new StreamTask(taskId00, applicationId, partitions, topology, consumer,
+                                               changelogReader, eosConfig, streamsMetrics, stateDirectory, null,
+                                                     time, new MockProducer<byte[], byte[]>()) {
+
+            @Override
+            void suspend(boolean val) {
+                throw new RuntimeException("KABOOM!");
+            }
+
+            @Override
+            void closeStateManager(final boolean writeCheckpoint) throws ProcessorStateException {
+                stateManagerCloseCalled.set(true);
+            }
+        };
+
+        try {
+            streamTask.close(true);
+            fail("should have thrown an exception");
+        } catch (Exception e) {
+            // all good
+        }
+        assertTrue(stateManagerCloseCalled.get());
     }
 
     @SuppressWarnings("unchecked")
