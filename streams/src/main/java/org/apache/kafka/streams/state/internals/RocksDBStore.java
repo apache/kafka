@@ -102,6 +102,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     private FlushOptions fOptions;
 
     private volatile boolean prepareForBulkload = false;
+    private volatile boolean hasPreExistingSstFiles = false;
     private ProcessorContext internalProcessorContext;
     // visible for testing
     volatile BatchingStateRestoreCallback batchingStateRestoreCallback = null;
@@ -170,7 +171,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
         this.dbDir = new File(new File(context.stateDir(), parentDir), this.name);
 
-        if (!hasSstFiles(dbDir) && prepareForBulkload) {
+        if (!hasPreExistingSstFiles && prepareForBulkload) {
             options.prepareForBulkLoad();
         }
 
@@ -532,6 +533,11 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         }
     }
 
+    boolean hasSstFiles() {
+        hasPreExistingSstFiles = hasSstFiles(dbDir);
+        return hasPreExistingSstFiles;
+    }
+
     private boolean hasSstFiles(final File dbDir) {
         final String[] sstFileNames = dbDir.list(new FilenameFilter() {
             @Override
@@ -543,9 +549,14 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         return sstFileNames != null && sstFileNames.length > 0;
     }
 
-    private static class RocksDBBatchingRestoreCallback extends AbstractNotifyingBatchingRestoreCallback {
+    // not private for testing
+    static class RocksDBBatchingRestoreCallback extends AbstractNotifyingBatchingRestoreCallback {
 
         private final RocksDBStore rocksDBStore;
+        private boolean needsReopenAtEnd = false;
+
+        // for testing
+        private boolean wasReOpenedAfterRestore = false;
 
         RocksDBBatchingRestoreCallback(final RocksDBStore rocksDBStore) {
             this.rocksDBStore = rocksDBStore;
@@ -561,14 +572,29 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
                                    final String storeName,
                                    final long startingOffset,
                                    final long endingOffset) {
-            rocksDBStore.toggleDbForBulkLoading(true);
+
+            wasReOpenedAfterRestore = false;
+
+            if (!rocksDBStore.hasSstFiles()) {
+                rocksDBStore.toggleDbForBulkLoading(true);
+                needsReopenAtEnd = true;
+            }
         }
 
         @Override
         public void onRestoreEnd(final TopicPartition topicPartition,
                                  final String storeName,
                                  final long totalRestored) {
-            rocksDBStore.toggleDbForBulkLoading(false);
+            if (needsReopenAtEnd) {
+                rocksDBStore.toggleDbForBulkLoading(false);
+                needsReopenAtEnd = false;
+                wasReOpenedAfterRestore = true;
+            }
+        }
+
+        // testing and findbugs
+        boolean isWasReOpenedAfterRestore() {
+            return wasReOpenedAfterRestore;
         }
     }
 }

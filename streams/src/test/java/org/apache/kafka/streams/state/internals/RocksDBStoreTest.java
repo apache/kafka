@@ -23,7 +23,6 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.ProcessorStateException;
-import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -38,6 +37,7 @@ import org.rocksdb.Options;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -150,21 +150,42 @@ public class RocksDBStoreTest {
     @Test
     public void shouldTogglePrepareForBulkloadSetting() {
         subject.init(context, subject);
-        StateRestoreListener restoreListener = (StateRestoreListener) subject.batchingStateRestoreCallback;
+        RocksDBStore.RocksDBBatchingRestoreCallback restoreListener =
+            (RocksDBStore.RocksDBBatchingRestoreCallback) subject.batchingStateRestoreCallback;
 
         restoreListener.onRestoreStart(null, null, 0, 0);
         assertTrue("Should have set bulk loading to true", subject.isPrepareForBulkload());
 
         restoreListener.onRestoreEnd(null, null, 0);
         assertFalse("Should have set bulk loading to false", subject.isPrepareForBulkload());
+
+        assertTrue("Should have been re-opened", restoreListener.isWasReOpenedAfterRestore());
+    }
+
+    @Test
+    public void shouldNotTogglePrepareForBulkloadSettingWhenPrexistingSstFiles() throws Exception {
+        final List<KeyValue<byte[], byte[]>> entries = getKeyValueEntries();
+
+        subject.init(context, subject);
+        context.restore(subject.name(), entries);
+
+        RocksDBStore.RocksDBBatchingRestoreCallback restoreListener =
+            (RocksDBStore.RocksDBBatchingRestoreCallback) subject.batchingStateRestoreCallback;
+
+        restoreListener.onRestoreStart(null, null, 0, 0);
+
+        // since pre-existing sst files, should not have called the toggleForBulkload method, hence,
+        // prepareForBulkLoad is never set to true;
+        assertFalse("Should have not set bulk loading to true", subject.isPrepareForBulkload());
+
+        restoreListener.onRestoreEnd(null, null, 0);
+
+        assertFalse("Should not have have been re-opened", restoreListener.isWasReOpenedAfterRestore());
     }
 
     @Test
     public void shouldRestoreAll() throws Exception {
-        final List<KeyValue<byte[], byte[]>> entries = new ArrayList<>();
-        entries.add(new KeyValue<>("1".getBytes("UTF-8"), "a".getBytes("UTF-8")));
-        entries.add(new KeyValue<>("2".getBytes("UTF-8"), "b".getBytes("UTF-8")));
-        entries.add(new KeyValue<>("3".getBytes("UTF-8"), "c".getBytes("UTF-8")));
+        final List<KeyValue<byte[], byte[]>> entries = getKeyValueEntries();
 
         subject.init(context, subject);
         context.restore(subject.name(), entries);
@@ -177,10 +198,7 @@ public class RocksDBStoreTest {
 
     @Test
     public void shouldHandleDeletesOnRestoreAll() throws Exception {
-        final List<KeyValue<byte[], byte[]>> entries = new ArrayList<>();
-        entries.add(new KeyValue<>("1".getBytes("UTF-8"), "a".getBytes("UTF-8")));
-        entries.add(new KeyValue<>("2".getBytes("UTF-8"), "b".getBytes("UTF-8")));
-        entries.add(new KeyValue<>("3".getBytes("UTF-8"), "c".getBytes("UTF-8")));
+        final List<KeyValue<byte[], byte[]>> entries = getKeyValueEntries();
         entries.add(new KeyValue<>("1".getBytes("UTF-8"), (byte[]) null));
 
         subject.init(context, subject);
@@ -226,11 +244,7 @@ public class RocksDBStoreTest {
 
     @Test
     public void shouldRestoreThenDeleteOnRestoreAll() throws Exception {
-
-        final List<KeyValue<byte[], byte[]>> entries = new ArrayList<>();
-        entries.add(new KeyValue<>("1".getBytes("UTF-8"), "a".getBytes("UTF-8")));
-        entries.add(new KeyValue<>("2".getBytes("UTF-8"), "b".getBytes("UTF-8")));
-        entries.add(new KeyValue<>("3".getBytes("UTF-8"), "c".getBytes("UTF-8")));
+        final List<KeyValue<byte[], byte[]>> entries = getKeyValueEntries();
 
         subject.init(context, subject);
         
@@ -322,6 +336,13 @@ public class RocksDBStoreTest {
         }
     }
 
+    private List<KeyValue<byte[], byte[]>> getKeyValueEntries() throws UnsupportedEncodingException {
+        final List<KeyValue<byte[], byte[]>> entries = new ArrayList<>();
+        entries.add(new KeyValue<>("1".getBytes("UTF-8"), "a".getBytes("UTF-8")));
+        entries.add(new KeyValue<>("2".getBytes("UTF-8"), "b".getBytes("UTF-8")));
+        entries.add(new KeyValue<>("3".getBytes("UTF-8"), "c".getBytes("UTF-8")));
+        return entries;
+    }
 
     private static class ConfigurableProcessorContext extends MockProcessorContext {
         final Map<String, Object> configs;
