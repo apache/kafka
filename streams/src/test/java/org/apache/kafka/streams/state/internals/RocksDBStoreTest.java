@@ -76,6 +76,25 @@ public class RocksDBStoreTest {
     }
 
     @Test
+    public void shouldNotThrowExceptionOnRestoreWithBulkLoad() throws Exception {
+        String message = "how can a 4 ounce bird carry a 2lb coconut";
+        subject.init(context, subject);
+        int intKey = 1;
+        for (int i = 0; i < 2000000; i++) {
+            subject.put("theKeyIs" + intKey++, message);
+        }
+
+        List<KeyValue<byte[], byte[]>> restoreBytes = new ArrayList<>();
+        byte[] restoredKey = "restoredKey".getBytes("UTF-8");
+        byte[] restoredValue = "restoredValue".getBytes("UTF-8");
+        restoreBytes.add(KeyValue.pair(restoredKey, restoredValue));
+
+        context.restore("test", restoreBytes);
+
+        assertThat(subject.get("restoredKey"), equalTo("restoredValue"));
+    }
+
+    @Test
     public void canSpecifyConfigSetterAsClass() throws Exception {
         final Map<String, Object> configs = new HashMap<>();
         configs.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, MockRocksDbConfigSetter.class);

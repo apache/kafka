@@ -47,6 +47,7 @@ import org.rocksdb.WriteBatch;
 import org.rocksdb.WriteOptions;
 
 import java.io.File;
+import java.io.FilenameFilter;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.util.Collection;
@@ -143,10 +144,6 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         // (this could be a bug in the RocksDB code and their devs have been contacted).
         options.setIncreaseParallelism(Math.max(Runtime.getRuntime().availableProcessors(), 2));
 
-        if (prepareForBulkload) {
-            options.prepareForBulkLoad();
-        }
-
         wOptions = new WriteOptions();
         wOptions.setDisableWAL(true);
 
@@ -172,6 +169,11 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
             valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
 
         this.dbDir = new File(new File(context.stateDir(), parentDir), this.name);
+
+        if (!hasSstFiles(dbDir) && prepareForBulkload) {
+            options.prepareForBulkLoad();
+        }
+
         try {
             this.db = openDB(this.dbDir, this.options, TTL_SECONDS);
         } catch (IOException e) {
@@ -528,6 +530,17 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         public synchronized boolean hasNext() {
             return super.hasNext() && comparator.compare(super.peekRawKey(), this.rawToKey) <= 0;
         }
+    }
+
+    private boolean hasSstFiles(File dbDir) {
+        String[] sstFileNames = dbDir.list(new FilenameFilter() {
+            @Override
+            public boolean accept(File dir, String name) {
+                return name.matches(".*\\.sst");
+            }
+        });
+
+        return sstFileNames != null && sstFileNames.length > 0;
     }
 
     private static class RocksDBBatchingRestoreCallback extends AbstractNotifyingBatchingRestoreCallback {
