@@ -661,6 +661,7 @@ public class WorkerSinkTaskTest {
         workerCurrentOffsets.put(TOPIC_PARTITION, new OffsetAndMetadata(FIRST_OFFSET + 1));
         workerCurrentOffsets.put(TOPIC_PARTITION2, new OffsetAndMetadata(FIRST_OFFSET));
 
+        final List<TopicPartition> originalPartitions = asList(TOPIC_PARTITION, TOPIC_PARTITION2);
         final List<TopicPartition> rebalancedPartitions = asList(TOPIC_PARTITION, TOPIC_PARTITION2, TOPIC_PARTITION3);
         final Map<TopicPartition, OffsetAndMetadata> rebalanceOffsets = new HashMap<>();
         rebalanceOffsets.put(TOPIC_PARTITION, workerCurrentOffsets.get(TOPIC_PARTITION));
@@ -710,6 +711,8 @@ public class WorkerSinkTaskTest {
                 new IAnswer<ConsumerRecords<byte[], byte[]>>() {
                     @Override
                     public ConsumerRecords<byte[], byte[]> answer() throws Throwable {
+                        // Rebalance always begins with revoking current partitions ...
+                        rebalanceListener.getValue().onPartitionsRevoked(originalPartitions);
                         // Respond to the rebalance
                         Map<TopicPartition, Long> offsets = new HashMap<>();
                         offsets.put(TOPIC_PARTITION, rebalanceOffsets.get(TOPIC_PARTITION).offset());
@@ -734,6 +737,16 @@ public class WorkerSinkTaskTest {
                     }
                 });
 
+        // onPartitionsRevoked
+        sinkTask.preCommit(workerCurrentOffsets);
+        EasyMock.expectLastCall().andReturn(workerCurrentOffsets);
+        sinkTask.put(EasyMock.<Collection<SinkRecord>>anyObject());
+        EasyMock.expectLastCall();
+        sinkTask.close(workerCurrentOffsets.keySet());
+        EasyMock.expectLastCall();
+        consumer.commitSync(workerCurrentOffsets);
+        EasyMock.expectLastCall();
+
         // onPartitionsAssigned - step 1
         final long offsetTp1 = rebalanceOffsets.get(TOPIC_PARTITION).offset();
         final long offsetTp2 = rebalanceOffsets.get(TOPIC_PARTITION2).offset();
@@ -752,10 +765,6 @@ public class WorkerSinkTaskTest {
         consumer.seek(TOPIC_PARTITION2, offsetTp2);
         EasyMock.expectLastCall();
         consumer.seek(TOPIC_PARTITION3, offsetTp3);
-        EasyMock.expectLastCall();
-
-        // consumer poll returns 2 records
-        sinkTask.put(EasyMock.<Collection<SinkRecord>>anyObject());
         EasyMock.expectLastCall();
 
         // iter 4 - note that we return the current offset to indicate they should be committed
