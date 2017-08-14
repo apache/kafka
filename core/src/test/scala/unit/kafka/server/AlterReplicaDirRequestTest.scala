@@ -68,7 +68,7 @@ class AlterReplicaDirRequestTest extends BaseRequestTest {
     partitionDirs.put(new TopicPartition(topic, 2), offlineDir)
 
     val alterReplicaDirResponse = sendAlterReplicaDirRequest(partitionDirs.toMap)
-    assertEquals(Errors.DIR_NOT_AVAILABLE, alterReplicaDirResponse.responses().get(new TopicPartition(topic, 0)))
+    assertEquals(Errors.LOG_DIR_NOT_FOUND, alterReplicaDirResponse.responses().get(new TopicPartition(topic, 0)))
     assertEquals(Errors.NONE, alterReplicaDirResponse.responses().get(new TopicPartition(topic, 1)))
     assertEquals(Errors.KAFKA_STORAGE_ERROR, alterReplicaDirResponse.responses().get(new TopicPartition(topic, 2)))
   }

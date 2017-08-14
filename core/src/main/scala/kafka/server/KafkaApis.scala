@@ -54,7 +54,7 @@ import org.apache.kafka.common.{Node, TopicPartition}
 import org.apache.kafka.common.requests.SaslHandshakeResponse
 import org.apache.kafka.common.resource.{Resource => AdminResource}
 import org.apache.kafka.common.acl.{AccessControlEntry, AclBinding}
-import org.apache.kafka.common.requests.DescribeDirsResponse.{LogDirInfo, ReplicaInfo}
+import DescribeLogDirsResponse.{LogDirInfo, ReplicaInfo}
 
 import scala.collection.{mutable, _}
 import scala.collection.JavaConverters._
@@ -131,7 +131,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.ALTER_CONFIGS => handleAlterConfigsRequest(request)
         case ApiKeys.DESCRIBE_CONFIGS => handleDescribeConfigsRequest(request)
         case ApiKeys.ALTER_REPLICA_DIR => handleAlterReplicaDirRequest(request)
-        case ApiKeys.DESCRIBE_DIRS => handleDescribeDirsRequest(request)
+        case ApiKeys.DESCRIBE_LOG_DIRS => handleDescribeLogDirsRequest(request)
       }
     } catch {
       case e: FatalExitError => throw e
@@ -1924,17 +1924,16 @@ class KafkaApis(val requestChannel: RequestChannel,
     sendResponseMaybeThrottle(request, requestThrottleMs => new AlterReplicaDirResponse(requestThrottleMs, responseMap.asJava))
   }
 
-  def handleDescribeDirsRequest(request: RequestChannel.Request): Unit = {
-    val describeDirsDirRequest = request.body[DescribeDirsRequest]
+  def handleDescribeLogDirsRequest(request: RequestChannel.Request): Unit = {
+    val describeLogDirsDirRequest = request.body[DescribeLogDirsRequest]
     val logDirInfos = {
       if (authorize(request.session, Describe, Resource.ClusterResource)) {
-        replicaManager.describeDirs(describeDirsDirRequest.logDirs().asScala, describeDirsDirRequest.topicPartitions().asScala)
+        replicaManager.describeLogDirs(describeLogDirsDirRequest.topicPartitions().asScala)
       } else {
-        describeDirsDirRequest.logDirs().asScala.map(
-          (_, new LogDirInfo(Errors.CLUSTER_AUTHORIZATION_FAILED, Map.empty[TopicPartition, ReplicaInfo].asJava))).toMap
+        Map.empty[String, LogDirInfo]
       }
     }
-    sendResponseMaybeThrottle(request, throttleTimeMs => new DescribeDirsResponse(throttleTimeMs, logDirInfos.asJava))
+    sendResponseMaybeThrottle(request, throttleTimeMs => new DescribeLogDirsResponse(throttleTimeMs, logDirInfos.asJava))
   }
 
   def authorizeClusterAction(request: RequestChannel.Request): Unit = {

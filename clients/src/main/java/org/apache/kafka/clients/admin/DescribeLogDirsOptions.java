@@ -23,28 +23,11 @@ import java.util.Collection;
 
 
 /**
- * Options for {@link AdminClient#describeDirs(Collection<Integer>)}
+ * Options for {@link AdminClient#describeLogDirs(Collection<Integer>)}
  *
  * The API of this class is evolving, see {@link AdminClient} for details.
  */
 @InterfaceStability.Evolving
-public class DescribeDirsOptions {
-    private Integer timeoutMs = null;
+public class DescribeLogDirsOptions extends AbstractOptions<DescribeLogDirsOptions> {
 
-    /**
-     * Set the request timeout in milliseconds for this operation or {@code null} if the default request timeout for the
-     * AdminClient should be used.
-     */
-    public DescribeDirsOptions timeoutMs(Integer timeoutMs) {
-        this.timeoutMs = timeoutMs;
-        return this;
-    }
-
-    /**
-     * The request timeout in milliseconds for this operation or {@code null} if the default request timeout for the
-     * AdminClient should be used.
-     */
-    public Integer timeoutMs() {
-        return timeoutMs;
-    }
 }

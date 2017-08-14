@@ -24,79 +24,79 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Collection;
 import java.util.concurrent.ExecutionException;
+import org.apache.kafka.common.requests.DescribeLogDirsResponse;
 
 
 /**
- * The result of {@link AdminClient#describeReplicaDir(Collection)}.
+ * The result of {@link AdminClient#describeReplicaLogDir(Collection)}.
  *
  * The API of this class is evolving, see {@link AdminClient} for details.
  */
 @InterfaceStability.Evolving
-public class DescribeReplicaDirResult {
-    private final Map<TopicPartitionReplica, KafkaFuture<ReplicaDirInfo>> futures;
+public class DescribeReplicaLogDirResult {
+    private final Map<TopicPartitionReplica, KafkaFuture<ReplicaLogDirInfo>> futures;
 
-    DescribeReplicaDirResult(Map<TopicPartitionReplica, KafkaFuture<ReplicaDirInfo>> futures) {
+    DescribeReplicaLogDirResult(Map<TopicPartitionReplica, KafkaFuture<ReplicaLogDirInfo>> futures) {
         this.futures = futures;
     }
 
     /**
      * Return a map from replica to future which can be used to check the log directory information of individual replicas
      */
-    public Map<TopicPartitionReplica, KafkaFuture<ReplicaDirInfo>> values() {
+    public Map<TopicPartitionReplica, KafkaFuture<ReplicaLogDirInfo>> values() {
         return futures;
     }
 
     /**
      * Return a future which succeeds if log directory information of all replicas are available
      */
-    public KafkaFuture<Map<TopicPartitionReplica, ReplicaDirInfo>> all() {
+    public KafkaFuture<Map<TopicPartitionReplica, ReplicaLogDirInfo>> all() {
         return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0])).
-            thenApply(new KafkaFuture.Function<Void, Map<TopicPartitionReplica, ReplicaDirInfo>>() {
+            thenApply(new KafkaFuture.Function<Void, Map<TopicPartitionReplica, ReplicaLogDirInfo>>() {
                 @Override
-                public Map<TopicPartitionReplica, ReplicaDirInfo> apply(Void v) {
-                    Map<TopicPartitionReplica, ReplicaDirInfo> replicaDirInfos = new HashMap<>();
-                    for (Map.Entry<TopicPartitionReplica, KafkaFuture<ReplicaDirInfo>> entry : futures.entrySet()) {
+                public Map<TopicPartitionReplica, ReplicaLogDirInfo> apply(Void v) {
+                    Map<TopicPartitionReplica, ReplicaLogDirInfo> replicaLogDirInfos = new HashMap<>();
+                    for (Map.Entry<TopicPartitionReplica, KafkaFuture<ReplicaLogDirInfo>> entry : futures.entrySet()) {
                         try {
-                            replicaDirInfos.put(entry.getKey(), entry.getValue().get());
+                            replicaLogDirInfos.put(entry.getKey(), entry.getValue().get());
                         } catch (InterruptedException | ExecutionException e) {
-                            // This should be unreachable, because allOf ensured that all the futures
-                            // completed successfully.
+                            // This should be unreachable, because allOf ensured that all the futures completed successfully.
                             throw new RuntimeException(e);
                         }
                     }
-                    return replicaDirInfos;
+                    return replicaLogDirInfos;
                 }
             });
     }
 
-    static public class ReplicaDirInfo {
-        public String currentReplicaDir;
-        public String temporaryReplicaDir;
-        public long temporaryReplicaOffsetLag;
+    static public class ReplicaLogDirInfo {
+        public final String currentReplicaLogDir;
+        public final String temporaryReplicaLogDir;
+        public final long temporaryReplicaOffsetLag;
 
-        public ReplicaDirInfo() {
-            this(null, null, 0L);
+        public ReplicaLogDirInfo() {
+            this(null, null, DescribeLogDirsResponse.INVALID_OFFSET_LAG);
         }
 
-        public ReplicaDirInfo(String currentReplicaDir, String temporaryReplicaDir, long temporaryReplicaOffsetLag) {
-            this.currentReplicaDir = currentReplicaDir;
-            this.temporaryReplicaDir = temporaryReplicaDir;
+        public ReplicaLogDirInfo(String currentReplicaLogDir, String temporaryReplicaLogDir, long temporaryReplicaOffsetLag) {
+            this.currentReplicaLogDir = currentReplicaLogDir;
+            this.temporaryReplicaLogDir = temporaryReplicaLogDir;
             this.temporaryReplicaOffsetLag = temporaryReplicaOffsetLag;
         }
 
         @Override
         public String toString() {
             StringBuilder builder = new StringBuilder();
-            if (temporaryReplicaDir != null && !temporaryReplicaDir.isEmpty()) {
-                builder.append("ReplicaDirInfo(currentReplicaDir=")
-                    .append(currentReplicaDir)
-                    .append(", temporaryReplicaDir=")
-                    .append(temporaryReplicaDir)
+            if (temporaryReplicaLogDir != null) {
+                builder.append("ReplicaLogDirInfo(currentReplicaLogDir=")
+                    .append(currentReplicaLogDir)
+                    .append(", temporaryReplicaLogDir=")
+                    .append(temporaryReplicaLogDir)
                     .append(", temporaryReplicaOffsetLag=")
                     .append(temporaryReplicaOffsetLag)
                     .append(")");
             } else {
-                builder.append("ReplicaDirInfo(currentReplicaDir=").append(currentReplicaDir).append(")");
+                builder.append("ReplicaLogDirInfo(currentReplicaLogDir=").append(currentReplicaLogDir).append(")");
             }
             return builder.toString();
         }

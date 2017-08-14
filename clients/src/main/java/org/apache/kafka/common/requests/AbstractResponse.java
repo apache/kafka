@@ -112,8 +112,8 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
                 return new AlterConfigsResponse(struct);
             case ALTER_REPLICA_DIR:
                 return new AlterReplicaDirResponse(struct);
-            case DESCRIBE_DIRS:
-                return new DescribeDirsResponse(struct);
+            case DESCRIBE_LOG_DIRS:
+                return new DescribeLogDirsResponse(struct);
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `parseResponse`, the " +
                         "code should be updated to do so.", apiKey));

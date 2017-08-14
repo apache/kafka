@@ -30,14 +30,14 @@ import kafka.server.QuotaFactory.UnboundedQuota
 import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.errors.{ControllerMovedException, CorruptRecordException, LogDirNotAvailableException, InvalidTimestampException, InvalidTopicException, KafkaStorageException, NotEnoughReplicasException, NotLeaderForPartitionException, OffsetOutOfRangeException, PolicyViolationException, _}
+import org.apache.kafka.common.errors.{ControllerMovedException, CorruptRecordException, LogDirNotFoundException, InvalidTimestampException, InvalidTopicException, KafkaStorageException, NotEnoughReplicasException, NotLeaderForPartitionException, OffsetOutOfRangeException, PolicyViolationException, _}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.protocol.Errors.UNKNOWN_TOPIC_OR_PARTITION
 import org.apache.kafka.common.protocol.Errors.KAFKA_STORAGE_ERROR
 import org.apache.kafka.common.record._
-import org.apache.kafka.common.requests.DescribeDirsResponse.{LogDirInfo, ReplicaInfo}
+import org.apache.kafka.common.requests.DescribeLogDirsResponse.{LogDirInfo, ReplicaInfo}
 import org.apache.kafka.common.requests.EpochEndOffset._
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
@@ -566,7 +566,7 @@ class ReplicaManager(val config: KafkaConfig,
 
         (topicPartition, Errors.NONE)
       } catch {
-        case e@(_: LogDirNotAvailableException |
+        case e@(_: LogDirNotFoundException |
                 _: ReplicaNotAvailableException |
                 _: KafkaStorageException) =>
           (topicPartition, Errors.forException(e))
@@ -579,25 +579,17 @@ class ReplicaManager(val config: KafkaConfig,
 
   /*
    * Get the LogDirInfo for the specified list of log directories and partitions.
-   *
-   * All log directories in the broker config will be queried if an empty set of log directories is specified.
-   * And all partitions will be queried if an empty set of partitions is specified.
+   * All partitions will be queried if an empty set of partitions is specified.
    *
    * Each LogDirInfo specifies the following information for a given log directory:
    * 1) Error of the log directory, e.g. whether the log is online or offline
    * 2) size and lag of primary and temporary logs in the given log directory. A replica is included only if
    *    its partition is queried. There may be temporary logs on the broker after KIP-113 is implemented.
    */
-  def describeDirs(requestedDirs: Set[String], partitions: Set[TopicPartition]): Map[String, LogDirInfo] = {
-    val logDirs = {
-      if (requestedDirs.isEmpty)
-        config.logDirs.toSet
-      else
-        requestedDirs
-    }
+  def describeLogDirs(partitions: Set[TopicPartition]): Map[String, LogDirInfo] = {
     val logsByDir = logManager.allLogs().groupBy(log => log.dir.getParent)
 
-    logDirs.map { dir =>
+    config.logDirs.toSet.map { dir: String =>
       try {
         if (!logManager.isLogDirOnline(dir))
           throw new KafkaStorageException(s"Log directory $dir is offline")
@@ -614,9 +606,8 @@ class ReplicaManager(val config: KafkaConfig,
         }
 
       } catch {
-        case e@ (_: LogDirNotAvailableException |
-                 _: KafkaStorageException) =>
-          (dir, new LogDirInfo(Errors.forException(e), Map.empty[TopicPartition, ReplicaInfo].asJava))
+        case e: KafkaStorageException =>
+          (dir, new LogDirInfo(Errors.KAFKA_STORAGE_ERROR, Map.empty[TopicPartition, ReplicaInfo].asJava))
         case t: Throwable =>
           error(s"Error while describing replica in dir $dir", t)
           (dir, new LogDirInfo(Errors.forException(t), Map.empty[TopicPartition, ReplicaInfo].asJava))
@@ -624,19 +615,13 @@ class ReplicaManager(val config: KafkaConfig,
     }.toMap
   }
 
-  // Return -1L to indicate that the LEO lag is not available if broker is not the follower/leader of this partition
-  // or if the HW is 0. Otherwise, return max(0, HW - LEO)
   def getLogEndOffsetLag(topicPartition: TopicPartition): Long = {
     getReplica(topicPartition) match {
       case Some(replica) =>
-        // return -1L if the high watermark is 0
-        if (replica.highWatermark.messageOffset == 0)
-          -1L
-        else
           math.max(replica.highWatermark.messageOffset - replica.log.get.logEndOffset, 0)
       case None =>
-        // return -1L if the broker is neither follower or leader of this partition
-        -1L
+        // return -1L to indicate that the LEO lag is not available if broker is neither follower or leader of this partition
+        DescribeLogDirsResponse.INVALID_OFFSET_LAG
     }
   }
 

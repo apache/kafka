@@ -179,8 +179,8 @@ public abstract class AbstractRequest extends AbstractRequestResponse {
                 return new AlterConfigsRequest(struct, apiVersion);
             case ALTER_REPLICA_DIR:
                 return new AlterReplicaDirRequest(struct, apiVersion);
-            case DESCRIBE_DIRS:
-                return new DescribeDirsRequest(struct, apiVersion);
+            case DESCRIBE_LOG_DIRS:
+                return new DescribeLogDirsRequest(struct, apiVersion);
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `parseRequest`, the " +
                         "code should be updated to do so.", apiKey));

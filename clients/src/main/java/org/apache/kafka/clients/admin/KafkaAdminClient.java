@@ -27,6 +27,7 @@ import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.admin.DeleteAclsResult.FilterResult;
 import org.apache.kafka.clients.admin.DeleteAclsResult.FilterResults;
+import org.apache.kafka.clients.admin.DescribeReplicaLogDirResult.ReplicaLogDirInfo;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
@@ -80,8 +81,8 @@ import org.apache.kafka.common.requests.DescribeAclsResponse;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.requests.DescribeConfigsRequest;
 import org.apache.kafka.common.requests.DescribeConfigsResponse;
-import org.apache.kafka.common.requests.DescribeDirsRequest;
-import org.apache.kafka.common.requests.DescribeDirsResponse;
+import org.apache.kafka.common.requests.DescribeLogDirsRequest;
+import org.apache.kafka.common.requests.DescribeLogDirsResponse;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.Resource;
@@ -1589,7 +1590,7 @@ public class KafkaAdminClient extends AdminClient {
 
     /**
      * Change the log directory for the specified replicas. This API is currently only useful if it is used
-     * before the replica has been created on the broker. It will support moving replicas that are already created after
+     * before the replica has been created on the broker. It will support moving replicas that have already been created after
      * KIP-113 is fully implemented.
      *
      * This operation is supported by brokers with version 1.0.0 or higher.
@@ -1658,29 +1659,32 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     @Override
-    public DescribeDirsResult describeDirs(Collection<Integer> brokers, DescribeDirsOptions options) {
-        final Map<Integer, KafkaFutureImpl<Map<String, DescribeDirsResponse.LogDirInfo>>> futures = new HashMap<>(brokers.size());
+    public DescribeLogDirsResult describeLogDirs(Collection<Integer> brokers, DescribeLogDirsOptions options) {
+        final Map<Integer, KafkaFutureImpl<Map<String, DescribeLogDirsResponse.LogDirInfo>>> futures = new HashMap<>(brokers.size());
 
         for (Integer brokerId: brokers) {
-            futures.put(brokerId, new KafkaFutureImpl<Map<String, DescribeDirsResponse.LogDirInfo>>());
+            futures.put(brokerId, new KafkaFutureImpl<Map<String, DescribeLogDirsResponse.LogDirInfo>>());
         }
 
         final long now = time.milliseconds();
         for (final Integer brokerId: brokers) {
-            runnable.call(new Call("describeDirs", calcDeadlineMs(now, options.timeoutMs()),
+            runnable.call(new Call("describeLogDirs", calcDeadlineMs(now, options.timeoutMs()),
                 new ConstantNodeIdProvider(brokerId)) {
 
                 @Override
                 public AbstractRequest.Builder createRequest(int timeoutMs) {
                     // Query selected partitions in all log directories
-                    return new DescribeDirsRequest.Builder(new HashSet<String>(), new HashSet<TopicPartition>());
+                    return new DescribeLogDirsRequest.Builder(new HashSet<TopicPartition>());
                 }
 
                 @Override
                 public void handleResponse(AbstractResponse abstractResponse) {
-                    DescribeDirsResponse response = (DescribeDirsResponse) abstractResponse;
-                    KafkaFutureImpl<Map<String, DescribeDirsResponse.LogDirInfo>> future = futures.get(brokerId);
-                    future.complete(response.logDirInfos());
+                    DescribeLogDirsResponse response = (DescribeLogDirsResponse) abstractResponse;
+                    KafkaFutureImpl<Map<String, DescribeLogDirsResponse.LogDirInfo>> future = futures.get(brokerId);
+                    if (response.logDirInfos().size() > 0)
+                        future.complete(response.logDirInfos());
+                    else
+                        future.completeExceptionally(Errors.CLUSTER_AUTHORIZATION_FAILED.exception());
                 }
                 @Override
                 void handleFailure(Throwable throwable) {
@@ -1689,15 +1693,15 @@ public class KafkaAdminClient extends AdminClient {
             }, now);
         }
 
-        return new DescribeDirsResult(new HashMap<Integer, KafkaFuture<Map<String, DescribeDirsResponse.LogDirInfo>>>(futures));
+        return new DescribeLogDirsResult(new HashMap<Integer, KafkaFuture<Map<String, DescribeLogDirsResponse.LogDirInfo>>>(futures));
     }
 
     @Override
-    public DescribeReplicaDirResult describeReplicaDir(Collection<TopicPartitionReplica> replicas, DescribeReplicaDirOptions options) {
-        final Map<TopicPartitionReplica, KafkaFutureImpl<DescribeReplicaDirResult.ReplicaDirInfo>> futures = new HashMap<>(replicas.size());
+    public DescribeReplicaLogDirResult describeReplicaLogDir(Collection<TopicPartitionReplica> replicas, DescribeReplicaLogDirOptions options) {
+        final Map<TopicPartitionReplica, KafkaFutureImpl<DescribeReplicaLogDirResult.ReplicaLogDirInfo>> futures = new HashMap<>(replicas.size());
 
         for (TopicPartitionReplica replica : replicas) {
-            futures.put(replica, new KafkaFutureImpl<DescribeReplicaDirResult.ReplicaDirInfo>());
+            futures.put(replica, new KafkaFutureImpl<DescribeReplicaLogDirResult.ReplicaLogDirInfo>());
         }
 
         Map<Integer, Set<TopicPartition>> partitionsByBroker = new HashMap<>();
@@ -1712,47 +1716,48 @@ public class KafkaAdminClient extends AdminClient {
         for (Map.Entry<Integer, Set<TopicPartition>> entry: partitionsByBroker.entrySet()) {
             final int brokerId = entry.getKey();
             final Set<TopicPartition> topicPartitions = entry.getValue();
-            final Map<TopicPartition, DescribeReplicaDirResult.ReplicaDirInfo> replicaDirInfoByPartition = new HashMap<>();
+            final Map<TopicPartition, ReplicaLogDirInfo> replicaDirInfoByPartition = new HashMap<>();
             for (TopicPartition topicPartition: topicPartitions)
-                replicaDirInfoByPartition.put(topicPartition, new DescribeReplicaDirResult.ReplicaDirInfo());
+                replicaDirInfoByPartition.put(topicPartition, new ReplicaLogDirInfo());
 
-            runnable.call(new Call("describeReplicaDir", calcDeadlineMs(now, options.timeoutMs()),
+            runnable.call(new Call("describeReplicaLogDir", calcDeadlineMs(now, options.timeoutMs()),
                 new ConstantNodeIdProvider(brokerId)) {
 
                 @Override
                 public AbstractRequest.Builder createRequest(int timeoutMs) {
                     // Query selected partitions in all log directories
-                    return new DescribeDirsRequest.Builder(new HashSet<String>(), topicPartitions);
+                    return new DescribeLogDirsRequest.Builder(topicPartitions);
                 }
 
                 @Override
                 public void handleResponse(AbstractResponse abstractResponse) {
-                    DescribeDirsResponse response = (DescribeDirsResponse) abstractResponse;
-                    for (Map.Entry<String, DescribeDirsResponse.LogDirInfo> responseEntry: response.logDirInfos().entrySet()) {
+                    DescribeLogDirsResponse response = (DescribeLogDirsResponse) abstractResponse;
+                    for (Map.Entry<String, DescribeLogDirsResponse.LogDirInfo> responseEntry: response.logDirInfos().entrySet()) {
                         String logDir = responseEntry.getKey();
-                        DescribeDirsResponse.LogDirInfo logDirInfo = responseEntry.getValue();
+                        DescribeLogDirsResponse.LogDirInfo logDirInfo = responseEntry.getValue();
                         if (logDirInfo.error != Errors.NONE)
                             continue;
 
-                        for (Map.Entry<TopicPartition, DescribeDirsResponse.ReplicaInfo> replicaInfoEntry: logDirInfo.replicaInfos.entrySet()) {
+                        for (Map.Entry<TopicPartition, DescribeLogDirsResponse.ReplicaInfo> replicaInfoEntry: logDirInfo.replicaInfos.entrySet()) {
                             TopicPartition topicPartition = replicaInfoEntry.getKey();
-                            DescribeDirsResponse.ReplicaInfo replicaInfo = replicaInfoEntry.getValue();
-                            DescribeReplicaDirResult.ReplicaDirInfo replicaDirInfo = replicaDirInfoByPartition.get(topicPartition);
-                            if (replicaDirInfo == null)
-                                continue;
+                            DescribeLogDirsResponse.ReplicaInfo replicaInfo = replicaInfoEntry.getValue();
+                            ReplicaLogDirInfo replicaLogDirInfo = replicaDirInfoByPartition.get(topicPartition);
+                            if (replicaLogDirInfo == null)
+                                throw new IllegalArgumentException("Partition " + topicPartition + " is in the response but not in the request");
 
                             if (replicaInfo.isTemporary) {
-                                replicaDirInfo.temporaryReplicaDir = logDir;
-                                replicaDirInfo.temporaryReplicaOffsetLag = replicaInfo.offsetLag;
+                                replicaDirInfoByPartition.put(topicPartition,
+                                    new ReplicaLogDirInfo(replicaLogDirInfo.currentReplicaLogDir, logDir, replicaInfo.offsetLag));
                             } else {
-                                replicaDirInfo.currentReplicaDir = logDir;
+                                replicaDirInfoByPartition.put(topicPartition,
+                                    new ReplicaLogDirInfo(logDir, replicaLogDirInfo.temporaryReplicaLogDir, replicaLogDirInfo.temporaryReplicaOffsetLag));
                             }
                         }
                     }
 
-                    for (Map.Entry<TopicPartition, DescribeReplicaDirResult.ReplicaDirInfo> entry: replicaDirInfoByPartition.entrySet()) {
+                    for (Map.Entry<TopicPartition, ReplicaLogDirInfo> entry: replicaDirInfoByPartition.entrySet()) {
                         TopicPartition tp = entry.getKey();
-                        KafkaFutureImpl<DescribeReplicaDirResult.ReplicaDirInfo> future = futures.get(new TopicPartitionReplica(tp.topic(), tp.partition(), brokerId));
+                        KafkaFutureImpl<ReplicaLogDirInfo> future = futures.get(new TopicPartitionReplica(tp.topic(), tp.partition(), brokerId));
                         future.complete(entry.getValue());
                     }
                 }
@@ -1763,6 +1768,6 @@ public class KafkaAdminClient extends AdminClient {
             }, now);
         }
 
-        return new DescribeReplicaDirResult(new HashMap<TopicPartitionReplica, KafkaFuture<DescribeReplicaDirResult.ReplicaDirInfo>>(futures));
+        return new DescribeReplicaLogDirResult(new HashMap<TopicPartitionReplica, KafkaFuture<ReplicaLogDirInfo>>(futures));
     }
 }

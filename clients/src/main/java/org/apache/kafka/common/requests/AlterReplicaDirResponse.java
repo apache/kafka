@@ -45,7 +45,7 @@ public class AlterReplicaDirResponse extends AbstractResponse {
     /**
      * Possible error code:
      *
-     * DIR_NOT_AVAILABLE (57)
+     * LOG_DIR_NOT_FOUND (57)
      * KAFKA_STORAGE_ERROR (56)
      * REPLICA_NOT_AVAILABLE (9)
      * UNKNOWN (-1)

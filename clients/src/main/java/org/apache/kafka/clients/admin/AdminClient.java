@@ -346,50 +346,48 @@ public abstract class AdminClient implements AutoCloseable {
     public abstract AlterConfigsResult alterConfigs(Map<ConfigResource, Config> configs, AlterConfigsOptions options);
 
     /**
-     * Query the log directory information for the specified log directories.
-     * All log directories on a broker are queried if an empty collection of log directories is specified for this broker
+     * Query the information of all log directories on the given set of brokers
      *
      * This operation is supported by brokers with version 1.0.0 or higher.
      *
      * @param brokers     A list of brokers
-     * @return            The DescribeDirsResult
+     * @return            The DescribeLogDirsResult
      */
-    public DescribeDirsResult describeDirs(Collection<Integer> brokers) {
-        return describeDirs(brokers, new DescribeDirsOptions());
+    public DescribeLogDirsResult describeLogDirs(Collection<Integer> brokers) {
+        return describeLogDirs(brokers, new DescribeLogDirsOptions());
     }
 
     /**
-     * Query the log directory information for the specified log directories.
-     * All log directories on a broker are queried if an empty collection of log directories is specified for this broker
+     * Query the information of all log directories on the given set of brokers
      *
      * This operation is supported by brokers with version 1.0.0 or higher.
      *
      * @param brokers     A list of brokers
      * @param options     The options to use when querying log dir info
-     * @return            The DescribeDirsResult
+     * @return            The DescribeLogDirsResult
      */
-    public abstract DescribeDirsResult describeDirs(Collection<Integer> brokers, DescribeDirsOptions options);
+    public abstract DescribeLogDirsResult describeLogDirs(Collection<Integer> brokers, DescribeLogDirsOptions options);
 
     /**
-     * Query the replica directory information for the specified replicas.
+     * Query the replica log directory information for the specified replicas.
      *
      * This operation is supported by brokers with version 0.11.1.0 or higher.
      *
      * @param replicas      The replicas to query
-     * @return              The DescribeReplicaDirResult
+     * @return              The DescribeReplicaLogDirResult
      */
-    public DescribeReplicaDirResult describeReplicaDir(Collection<TopicPartitionReplica> replicas) {
-        return describeReplicaDir(replicas, new DescribeReplicaDirOptions());
+    public DescribeReplicaLogDirResult describeReplicaLogDir(Collection<TopicPartitionReplica> replicas) {
+        return describeReplicaLogDir(replicas, new DescribeReplicaLogDirOptions());
     }
 
     /**
-     * Query the replica directory information for the specified replicas.
+     * Query the replica log directory information for the specified replicas.
      *
      * This operation is supported by brokers with version 0.11.1.0 or higher.
      *
      * @param replicas      The replicas to query
      * @param options       The options to use when querying replica dir info
-     * @return              The DescribeReplicaDirResult
+     * @return              The DescribeReplicaLogDirResult
      */
-    public abstract DescribeReplicaDirResult describeReplicaDir(Collection<TopicPartitionReplica> replicas, DescribeReplicaDirOptions options);
+    public abstract DescribeReplicaLogDirResult describeReplicaLogDir(Collection<TopicPartitionReplica> replicas, DescribeReplicaLogDirOptions options);
 }

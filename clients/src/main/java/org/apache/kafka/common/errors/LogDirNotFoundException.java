@@ -14,18 +14,24 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-package org.apache.kafka.clients.admin;
-
-import org.apache.kafka.common.acl.AclBindingFilter;
-import org.apache.kafka.common.annotation.InterfaceStability;
+package org.apache.kafka.common.errors;
 
 /**
- * Options for {@link AdminClient#describeAcls(AclBindingFilter)}.
- *
- * The API of this class is evolving, see {@link AdminClient} for details.
+ * Thrown when a request is made for a log directory that is not present on the broker
  */
-@InterfaceStability.Evolving
-public class DescribeAclsOptions extends AbstractOptions<DescribeAclsOptions> {
+public class LogDirNotFoundException extends ApiException {
 
+    private static final long serialVersionUID = 1L;
+
+    public LogDirNotFoundException(String message) {
+        super(message);
+    }
+
+    public LogDirNotFoundException(String message, Throwable cause) {
+        super(message, cause);
+    }
+
+    public LogDirNotFoundException(Throwable cause) {
+        super(cause);
+    }
 }

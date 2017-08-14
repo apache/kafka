@@ -223,7 +223,7 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
     val leaderByPartition = TestUtils.createTopic(zkUtils, topic, 10, 1, servers, new Properties())
     val partitionsByBroker = leaderByPartition.groupBy(_._2).mapValues(_.keys.toSeq)
     val brokers = (0 until brokerCount).map(Integer.valueOf).toSeq
-    val logDirInfosByBroker = client.describeDirs(brokers.asJava).all.get
+    val logDirInfosByBroker = client.describeLogDirs(brokers.asJava).all.get
 
     (0 until brokerCount).foreach { brokerId =>
       val expectedPartitions = partitionsByBroker(brokerId)
@@ -237,24 +237,24 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
   }
 
   @Test
-  def testDescribeReplicaDir(): Unit = {
+  def testDescribeReplicaLogDir(): Unit = {
     client = AdminClient.create(createConfig())
     val topic = "topic"
     val leaderByPartition = TestUtils.createTopic(zkUtils, topic, 10, 1, servers, new Properties())
     val replicas = leaderByPartition.map { case (partition, brokerId) => new TopicPartitionReplica(topic, partition, brokerId) }.toSeq
 
-    val replicaDirInfos = client.describeReplicaDir(replicas.asJavaCollection).all.get
+    val replicaDirInfos = client.describeReplicaLogDir(replicas.asJavaCollection).all.get
     replicaDirInfos.asScala.foreach{ case (topicPartitionReplica, replicaDirInfo) =>
       val server = servers.find(_.config.brokerId == topicPartitionReplica.brokerId()).get
       val tp = new TopicPartition(topicPartitionReplica.topic(), topicPartitionReplica.partition())
-      assertEquals(server.logManager.getLog(tp).get.dir.getParent, replicaDirInfo.currentReplicaDir)
+      assertEquals(server.logManager.getLog(tp).get.dir.getParent, replicaDirInfo.currentReplicaLogDir)
     }
 
     client.close()
   }
 
   @Test
-  def testAlterReplicaDirBeforeTopicCreation(): Unit = {
+  def testAlterReplicaLogDirBeforeTopicCreation(): Unit = {
     val kafkaAdminClient = AdminClient.create(createConfig()).asInstanceOf[KafkaAdminClient]
     val topic = "topic"
     val tp = new TopicPartition(topic, 0)

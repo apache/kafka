@@ -294,8 +294,8 @@ class RequestQuotaTest extends BaseRequestTest {
         case ApiKeys.ALTER_REPLICA_DIR =>
           new AlterReplicaDirRequest.Builder(Collections.singletonMap(tp, logDir))
 
-        case ApiKeys.DESCRIBE_DIRS =>
-          new DescribeDirsRequest.Builder(Collections.singleton(logDir), Collections.singleton(tp))
+        case ApiKeys.DESCRIBE_LOG_DIRS =>
+          new DescribeLogDirsRequest.Builder(Collections.singleton(tp))
 
         case _ =>
           throw new IllegalArgumentException("Unsupported API key " + apiKey)
@@ -389,7 +389,7 @@ class RequestQuotaTest extends BaseRequestTest {
       case ApiKeys.DESCRIBE_CONFIGS => new DescribeConfigsResponse(response).throttleTimeMs
       case ApiKeys.ALTER_CONFIGS => new AlterConfigsResponse(response).throttleTimeMs
       case ApiKeys.ALTER_REPLICA_DIR => new AlterReplicaDirResponse(response).throttleTimeMs
-      case ApiKeys.DESCRIBE_DIRS => new DescribeDirsResponse(response).throttleTimeMs
+      case ApiKeys.DESCRIBE_LOG_DIRS => new DescribeLogDirsResponse(response).throttleTimeMs
       case requestId => throw new IllegalArgumentException(s"No throttle time for $requestId")
     }
   }

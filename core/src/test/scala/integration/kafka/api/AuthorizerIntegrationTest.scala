@@ -136,7 +136,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       ApiKeys.DELETE_ACLS -> classOf[DeleteAclsResponse],
       ApiKeys.DESCRIBE_ACLS -> classOf[DescribeAclsResponse],
       ApiKeys.ALTER_REPLICA_DIR -> classOf[AlterReplicaDirResponse],
-      ApiKeys.DESCRIBE_DIRS -> classOf[DescribeDirsResponse]
+      ApiKeys.DESCRIBE_LOG_DIRS -> classOf[DescribeLogDirsResponse]
   )
 
   val requestKeyToError = Map[ApiKeys, Nothing => Errors](
@@ -172,7 +172,8 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     ApiKeys.DESCRIBE_ACLS -> ((resp: DescribeAclsResponse) => resp.error.error),
     ApiKeys.DELETE_ACLS -> ((resp: DeleteAclsResponse) => resp.responses.asScala.head.error.error),
     ApiKeys.ALTER_REPLICA_DIR -> ((resp: AlterReplicaDirResponse) => resp.responses.get(tp)),
-    ApiKeys.DESCRIBE_DIRS -> ((resp: DescribeDirsResponse) => resp.logDirInfos.get(logDir).error)
+    ApiKeys.DESCRIBE_LOG_DIRS -> ((resp: DescribeLogDirsResponse) =>
+      if (resp.logDirInfos.size() > 0) resp.logDirInfos.asScala.head._2.error else Errors.CLUSTER_AUTHORIZATION_FAILED)
   )
 
   val requestKeysToAcls = Map[ApiKeys, Map[Resource, Set[Acl]]](
@@ -206,7 +207,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     ApiKeys.DESCRIBE_ACLS -> clusterDescribeAcl,
     ApiKeys.DELETE_ACLS -> clusterAlterAcl,
     ApiKeys.ALTER_REPLICA_DIR -> clusterAlterAcl,
-    ApiKeys.DESCRIBE_DIRS -> clusterDescribeAcl
+    ApiKeys.DESCRIBE_LOG_DIRS -> clusterDescribeAcl
   )
 
   @Before
@@ -349,7 +350,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
 
   private def alterReplicaDirRequest = new AlterReplicaDirRequest.Builder(Collections.singletonMap(tp, logDir)).build()
 
-  private def describeDirsRequest = new DescribeDirsRequest.Builder(Collections.singleton(logDir), Collections.singleton(tp)).build()
+  private def describeLogDirsRequest = new DescribeLogDirsRequest.Builder(Collections.singleton(tp)).build()
 
 
   @Test
@@ -379,7 +380,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       ApiKeys.DELETE_ACLS -> deleteAclsRequest,
       ApiKeys.DESCRIBE_ACLS -> describeAclsRequest,
       ApiKeys.ALTER_REPLICA_DIR -> alterReplicaDirRequest,
-      ApiKeys.DESCRIBE_DIRS -> describeDirsRequest
+      ApiKeys.DESCRIBE_LOG_DIRS -> describeLogDirsRequest
     )
 
     for ((key, request) <- requestKeyToRequest) {

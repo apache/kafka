@@ -25,23 +25,6 @@ import java.util.Map;
  * Options for {@link KafkaAdminClient#alterReplicaDir(Map, AlterReplicaDirOptions)}.
  */
 @InterfaceStability.Evolving
-public class AlterReplicaDirOptions {
-    private Integer timeoutMs = null;
+public class AlterReplicaDirOptions extends AbstractOptions<AlterReplicaDirOptions> {
 
-    /**
-     * Set the request timeout in milliseconds for this operation or {@code null} if the default request timeout for the
-     * AdminClient should be used.
-     */
-    public AlterReplicaDirOptions timeoutMs(Integer timeoutMs) {
-        this.timeoutMs = timeoutMs;
-        return this;
-    }
-
-    /**
-     * The request timeout in milliseconds for this operation or {@code null} if the default request timeout for the
-     * AdminClient should be used.
-     */
-    public Integer timeoutMs() {
-        return timeoutMs;
-    }
 }

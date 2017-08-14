@@ -23,19 +23,19 @@ import java.util.HashMap;
 import java.util.Collection;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
-import org.apache.kafka.common.requests.DescribeDirsResponse.LogDirInfo;
+import org.apache.kafka.common.requests.DescribeLogDirsResponse.LogDirInfo;
 
 
 /**
- * The result of the {@link AdminClient#describeDirs(Collection<Integer>)} call.
+ * The result of the {@link AdminClient#describeLogDirs(Collection<Integer>)} call.
  *
  * The API of this class is evolving, see {@link AdminClient} for details.
  */
 @InterfaceStability.Evolving
-public class DescribeDirsResult {
+public class DescribeLogDirsResult {
     private final Map<Integer, KafkaFuture<Map<String, LogDirInfo>>> futures;
 
-    DescribeDirsResult(Map<Integer, KafkaFuture<Map<String, LogDirInfo>>> futures) {
+    DescribeLogDirsResult(Map<Integer, KafkaFuture<Map<String, LogDirInfo>>> futures) {
         this.futures = futures;
     }
 
@@ -59,8 +59,7 @@ public class DescribeDirsResult {
                         try {
                             descriptions.put(entry.getKey(), entry.getValue().get());
                         } catch (InterruptedException | ExecutionException e) {
-                            // This should be unreachable, because allOf ensured that all the futures
-                            // completed successfully.
+                            // This should be unreachable, because allOf ensured that all the futures completed successfully.
                             throw new RuntimeException(e);
                         }
                     }

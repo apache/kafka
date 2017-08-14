@@ -1854,15 +1854,14 @@ public class Protocol {
     public static final Schema[] ALTER_REPLICA_DIR_REQUEST = {ALTER_REPLICA_DIR_REQUEST_V0};
     public static final Schema[] ALTER_REPLICA_DIR_RESPONSE = {ALTER_REPLICA_DIR_RESPONSE_V0};
 
-    public static final Schema DESCRIBE_DIRS_REQUEST_V0 = new Schema(
-        new Field("log_dirs", new ArrayOf(STRING), "An array of absolute log directory paths"),
+    public static final Schema DESCRIBE_LOG_DIRS_REQUEST_V0 = new Schema(
         new Field("topics", new ArrayOf(new Schema(
             new Field("topic", STRING, "The name of the topic."),
             new Field("partitions", new ArrayOf(INT32), "List of partition ids of the topic.")
         )))
     );
 
-    public static final Schema DESCRIBE_DIRS_RESPONSE_V0 = new Schema(
+    public static final Schema DESCRIBE_LOG_DIRS_RESPONSE_V0 = new Schema(
         newThrottleTimeField(),
         new Field("log_dirs",
             new ArrayOf(new Schema(
@@ -1872,7 +1871,7 @@ public class Protocol {
                     new Field("topic", STRING, "The name of the topic."),
                     new Field("partitions", new ArrayOf(new Schema(
                         new Field("partition", INT32, "The id of the partition."),
-                        new Field("size", INT64, "The size of the remaining log segments of the partition in bytes."),
+                        new Field("size", INT64, "The size of the log segments of the partition in bytes."),
                         new Field("offset_lag", INT64,
                             "The lag of the replica's LEO w.r.t. partition's HW (if it is a primary replica) or primary replica's LEO (if it is a temporary replica)"),
                         new Field("is_temporary", BOOLEAN, "True if this is a temporary log created by AlterReplicaDirRequest.")
@@ -1880,8 +1879,8 @@ public class Protocol {
                 )))
             ))));
 
-    public static final Schema[] DESCRIBE_DIRS_REQUEST = {DESCRIBE_DIRS_REQUEST_V0};
-    public static final Schema[] DESCRIBE_DIRS_RESPONSE = {DESCRIBE_DIRS_RESPONSE_V0};
+    public static final Schema[] DESCRIBE_LOG_DIRS_REQUEST = {DESCRIBE_LOG_DIRS_REQUEST_V0};
+    public static final Schema[] DESCRIBE_LOG_DIRS_RESPONSE = {DESCRIBE_LOG_DIRS_RESPONSE_V0};
 
     /* an array of all requests and responses with all schema versions; a null value in the inner array means that the
      * particular version is not supported */
@@ -1929,7 +1928,7 @@ public class Protocol {
         REQUESTS[ApiKeys.DESCRIBE_CONFIGS.id] = DESCRIBE_CONFIGS_REQUEST;
         REQUESTS[ApiKeys.ALTER_CONFIGS.id] = ALTER_CONFIGS_REQUEST;
         REQUESTS[ApiKeys.ALTER_REPLICA_DIR.id] = ALTER_REPLICA_DIR_REQUEST;
-        REQUESTS[ApiKeys.DESCRIBE_DIRS.id] = DESCRIBE_DIRS_REQUEST;
+        REQUESTS[ApiKeys.DESCRIBE_LOG_DIRS.id] = DESCRIBE_LOG_DIRS_REQUEST;
 
         RESPONSES[ApiKeys.PRODUCE.id] = PRODUCE_RESPONSE;
         RESPONSES[ApiKeys.FETCH.id] = FETCH_RESPONSE;
@@ -1966,7 +1965,7 @@ public class Protocol {
         RESPONSES[ApiKeys.DESCRIBE_CONFIGS.id] = DESCRIBE_CONFIGS_RESPONSE;
         RESPONSES[ApiKeys.ALTER_CONFIGS.id] = ALTER_CONFIGS_RESPONSE;
         RESPONSES[ApiKeys.ALTER_REPLICA_DIR.id] = ALTER_REPLICA_DIR_RESPONSE;
-        RESPONSES[ApiKeys.DESCRIBE_DIRS.id] = DESCRIBE_DIRS_RESPONSE;
+        RESPONSES[ApiKeys.DESCRIBE_LOG_DIRS.id] = DESCRIBE_LOG_DIRS_RESPONSE;
 
         /* set the minimum and maximum version of each api */
         for (ApiKeys api : ApiKeys.values()) {

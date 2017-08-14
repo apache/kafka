@@ -14,24 +14,30 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.errors;
 
-/**
- * Thrown when a request is made for a dir that is not found in the broker configuration
- */
-public class LogDirNotAvailableException extends ApiException {
+package org.apache.kafka.clients.admin;
 
-    private static final long serialVersionUID = 1L;
 
-    public LogDirNotAvailableException(String message) {
-        super(message);
+public abstract class AbstractOptions<T extends AbstractOptions> {
+
+    private Integer timeoutMs = null;
+
+    /**
+     * Set the request timeout in milliseconds for this operation or {@code null} if the default request timeout for the
+     * AdminClient should be used.
+     */
+    public T timeoutMs(Integer timeoutMs) {
+        this.timeoutMs = timeoutMs;
+        return (T) this;
     }
 
-    public LogDirNotAvailableException(String message, Throwable cause) {
-        super(message, cause);
+    /**
+     * The request timeout in milliseconds for this operation or {@code null} if the default request timeout for the
+     * AdminClient should be used.
+     */
+    public Integer timeoutMs() {
+        return timeoutMs;
     }
 
-    public LogDirNotAvailableException(Throwable cause) {
-        super(cause);
-    }
+
 }

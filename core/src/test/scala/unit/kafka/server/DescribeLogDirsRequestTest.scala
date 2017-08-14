@@ -27,7 +27,7 @@ import org.junit.Test
 
 import scala.collection.JavaConverters._
 
-class DescribeDirsRequestTest extends BaseRequestTest {
+class DescribeLogDirsRequestTest extends BaseRequestTest {
 
   override def numBrokers: Int = 1
   override def logDirCount: Int = 2
@@ -38,37 +38,14 @@ class DescribeDirsRequestTest extends BaseRequestTest {
   val tp1 = new TopicPartition(topic, 1)
 
   @Test
-  def testDescribeDirsRequestWithSpecificLogDirAndPartition() {
-    val invalidDir = "invalidDir"
+  def testDescribeLogDirsRequest(): Unit = {
     val onlineDir = servers.head.config.logDirs.head
     val offlineDir = servers.head.config.logDirs.tail.head
     servers.head.logDirFailureChannel.maybeAddOfflineLogDir(offlineDir, "", new java.io.IOException())
     TestUtils.createTopic(zkUtils, topic, partitionNum, 1, servers)
     TestUtils.produceMessages(servers, topic, 10)
 
-    val logDirInfos = sendDescribeDirsRequest(Set(invalidDir, onlineDir), Set(tp0)).logDirInfos()
-    assertEquals(2, logDirInfos.size())
-
-    assertEquals(Errors.DIR_NOT_AVAILABLE, logDirInfos.get(invalidDir).error)
-    assertEquals(0, logDirInfos.get(invalidDir).replicaInfos.size())
-
-    assertEquals(Errors.NONE, logDirInfos.get(onlineDir).error)
-    val replicaInfo0 = logDirInfos.get(onlineDir).replicaInfos.get(tp0)
-    assertFalse(logDirInfos.get(onlineDir).replicaInfos.containsKey(tp1))
-    assertEquals(servers.head.logManager.getLog(tp0).get.size, replicaInfo0.size)
-    assertTrue(servers.head.logManager.getLog(tp0).get.logEndOffset > 0)
-    assertEquals(servers.head.replicaManager.getLogEndOffsetLag(tp0), replicaInfo0.offsetLag)
-  }
-
-  @Test
-  def testDescribeDirsRequestWithWildcardLogDirAndPartition(): Unit = {
-    val onlineDir = servers.head.config.logDirs.head
-    val offlineDir = servers.head.config.logDirs.tail.head
-    servers.head.logDirFailureChannel.maybeAddOfflineLogDir(offlineDir, "", new java.io.IOException())
-    TestUtils.createTopic(zkUtils, topic, partitionNum, 1, servers)
-    TestUtils.produceMessages(servers, topic, 10)
-
-    val logDirInfos = sendDescribeDirsRequest(Set.empty[String], Set.empty[TopicPartition]).logDirInfos()
+    val logDirInfos = sendDescribeLogDirsRequest(Set.empty[TopicPartition]).logDirInfos()
     assertEquals(logDirCount, logDirInfos.size())
 
     assertEquals(Errors.KAFKA_STORAGE_ERROR, logDirInfos.get(offlineDir).error)
@@ -85,11 +62,10 @@ class DescribeDirsRequestTest extends BaseRequestTest {
     assertEquals(servers.head.replicaManager.getLogEndOffsetLag(tp1), replicaInfo1.offsetLag)
   }
 
-  private def sendDescribeDirsRequest(logDirs: Set[String],
-                                      partitions: Set[TopicPartition],
-                                      socketServer: SocketServer = controllerSocketServer): DescribeDirsResponse = {
-    val request = new DescribeDirsRequest.Builder(logDirs.asJava, partitions.asJava).build()
-    val response = connectAndSend(request, ApiKeys.DESCRIBE_DIRS, socketServer)
-    DescribeDirsResponse.parse(response, request.version)
+  private def sendDescribeLogDirsRequest(partitions: Set[TopicPartition],
+                                      socketServer: SocketServer = controllerSocketServer): DescribeLogDirsResponse = {
+    val request = new DescribeLogDirsRequest.Builder(partitions.asJava).build()
+    val response = connectAndSend(request, ApiKeys.DESCRIBE_LOG_DIRS, socketServer)
+    DescribeLogDirsResponse.parse(response, request.version)
   }
 }

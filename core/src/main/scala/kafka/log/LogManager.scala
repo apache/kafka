@@ -30,7 +30,7 @@ import kafka.server.{BrokerState, RecoveringFromUncleanShutdown, _}
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.utils.Time
-import org.apache.kafka.common.errors.{LogDirNotAvailableException, KafkaStorageException}
+import org.apache.kafka.common.errors.{LogDirNotFoundException, KafkaStorageException}
 
 import scala.collection.JavaConverters._
 import scala.collection._
@@ -560,8 +560,6 @@ class LogManager(logDirs: Array[File],
         }
         if (!isLogDirOnline(logDir))
           throw new KafkaStorageException(s"Can not create log for $topicPartition because log directory $logDir is offline")
-        // Do not re-use the user-specified log directory if the replica is deleted and re-created in the future.
-        preferredLogDirs.remove(topicPartition)
 
         try {
           val dir = new File(logDir, topicPartition.topic + "-" + topicPartition.partition)
@@ -586,6 +584,9 @@ class LogManager(logDirs: Array[File],
               topicPartition.partition,
               logDir,
               config.originals.asScala.mkString(", ")))
+          // Remove the preferred log dir since it has already been satisfied
+          preferredLogDirs.remove(topicPartition)
+
           log
         } catch {
           case e: IOException =>
@@ -723,7 +724,7 @@ class LogManager(logDirs: Array[File],
   // logDir should be an absolute path
   def isLogDirOnline(logDir: String): Boolean = {
     if (!logDirs.exists(_.getAbsolutePath == logDir))
-      throw new LogDirNotAvailableException(s"Log dir $logDir is not found in the config.")
+      throw new LogDirNotFoundException(s"Log dir $logDir is not found in the config.")
 
     _liveLogDirs.contains(new File(logDir))
   }

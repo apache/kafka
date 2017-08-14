@@ -19,10 +19,8 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
-import org.apache.kafka.common.requests.DescribeDirsResponse.LogDirInfo;
-import org.apache.kafka.common.requests.DescribeDirsResponse.ReplicaInfo;
+import org.apache.kafka.common.requests.DescribeLogDirsResponse.LogDirInfo;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -32,40 +30,34 @@ import java.util.Map;
 import java.util.Set;
 
 
-public class DescribeDirsRequest extends AbstractRequest {
+public class DescribeLogDirsRequest extends AbstractRequest {
 
     // request level key names
-    private static final String LOG_DIRS_KEY_NAME = "log_dirs";
     private static final String TOPICS_KEY_NAME = "topics";
 
     // topic level key names
     private static final String TOPIC_KEY_NAME = "topic";
     private static final String PARTITIONS_KEY_NAME = "partitions";
 
-    private final Set<String> logDirs;
     private final Set<TopicPartition> topicPartitions;
 
-    public static class Builder extends AbstractRequest.Builder<DescribeDirsRequest> {
-        private final Set<String> logDirs;
+    public static class Builder extends AbstractRequest.Builder<DescribeLogDirsRequest> {
         private final Set<TopicPartition> topicPartitions;
 
-        public Builder(Set<String> logDirs, Set<TopicPartition> partitions) {
-            super(ApiKeys.DESCRIBE_DIRS);
-            this.logDirs = logDirs;
+        public Builder(Set<TopicPartition> partitions) {
+            super(ApiKeys.DESCRIBE_LOG_DIRS);
             this.topicPartitions = partitions;
         }
 
         @Override
-        public DescribeDirsRequest build(short version) {
-            return new DescribeDirsRequest(logDirs, topicPartitions, version);
+        public DescribeLogDirsRequest build(short version) {
+            return new DescribeLogDirsRequest(topicPartitions, version);
         }
 
         @Override
         public String toString() {
             StringBuilder builder = new StringBuilder();
-            builder.append("(type=DescribeDirsRequest")
-                .append(", logDirs=")
-                .append(logDirs)
+            builder.append("(type=DescribeLogDirsRequest")
                 .append(", topicPartitions=")
                 .append(topicPartitions)
                 .append(")");
@@ -73,13 +65,9 @@ public class DescribeDirsRequest extends AbstractRequest {
         }
     }
 
-    public DescribeDirsRequest(Struct struct, short version) {
+    public DescribeLogDirsRequest(Struct struct, short version) {
         super(version);
-        logDirs = new HashSet<>();
         topicPartitions = new HashSet<>();
-        for (Object logDir : struct.getArray(LOG_DIRS_KEY_NAME)) {
-            logDirs.add((String) logDir);
-        }
         for (Object topicStructObj : struct.getArray(TOPICS_KEY_NAME)) {
             Struct topicStruct = (Struct) topicStructObj;
             String topic = topicStruct.getString(TOPIC_KEY_NAME);
@@ -90,17 +78,14 @@ public class DescribeDirsRequest extends AbstractRequest {
         }
     }
 
-    public DescribeDirsRequest(Set<String> logDirs, Set<TopicPartition> topicPartitions, short version) {
+    public DescribeLogDirsRequest(Set<TopicPartition> topicPartitions, short version) {
         super(version);
-        this.logDirs = logDirs;
         this.topicPartitions = topicPartitions;
     }
 
     @Override
     protected Struct toStruct() {
-        Struct struct = new Struct(ApiKeys.DESCRIBE_DIRS.requestSchema(version()));
-        struct.set(LOG_DIRS_KEY_NAME, logDirs.toArray());
-
+        Struct struct = new Struct(ApiKeys.DESCRIBE_LOG_DIRS.requestSchema(version()));
         Map<String, List<Integer>> partitionsByTopic = new HashMap<>();
         for (TopicPartition tp : topicPartitions) {
             if (!partitionsByTopic.containsKey(tp.topic())) {
@@ -123,32 +108,22 @@ public class DescribeDirsRequest extends AbstractRequest {
 
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
-        Map<String, LogDirInfo> logDirInfos = new HashMap<>();
-
-        for (String logDir : logDirs) {
-            logDirInfos.put(logDir, new LogDirInfo(Errors.forException(e), new HashMap<TopicPartition, ReplicaInfo>()));
-        }
-
         short versionId = version();
         switch (versionId) {
             case 0:
-                return new DescribeDirsResponse(throttleTimeMs, logDirInfos);
+                return new DescribeLogDirsResponse(throttleTimeMs, new HashMap<String, LogDirInfo>());
             default:
                 throw new IllegalArgumentException(
                     String.format("Version %d is not valid. Valid versions for %s are 0 to %d", versionId,
-                        this.getClass().getSimpleName(), ApiKeys.DESCRIBE_DIRS.latestVersion()));
+                        this.getClass().getSimpleName(), ApiKeys.DESCRIBE_LOG_DIRS.latestVersion()));
         }
-    }
-
-    public Set<String> logDirs() {
-        return logDirs;
     }
 
     public Set<TopicPartition> topicPartitions() {
         return topicPartitions;
     }
 
-    public static DescribeDirsRequest parse(ByteBuffer buffer, short version) {
-        return new DescribeDirsRequest(ApiKeys.DESCRIBE_DIRS.parseRequest(version, buffer), version);
+    public static DescribeLogDirsRequest parse(ByteBuffer buffer, short version) {
+        return new DescribeLogDirsRequest(ApiKeys.DESCRIBE_LOG_DIRS.parseRequest(version, buffer), version);
     }
 }

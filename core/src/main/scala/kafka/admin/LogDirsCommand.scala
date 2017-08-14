@@ -19,8 +19,10 @@ package kafka.admin
 
 import java.io.PrintStream
 import java.util.Properties
-import org.apache.kafka.clients.admin.{AdminClientConfig, DescribeDirsResult, AdminClient => JAdminClient}
-import org.apache.kafka.common.requests.DescribeDirsResponse.LogDirInfo
+
+import org.apache.kafka.clients.admin.{AdminClientConfig, DescribeLogDirsResult, AdminClient => JAdminClient}
+import org.apache.kafka.common.requests.DescribeLogDirsResponse.LogDirInfo
+
 import scala.collection.JavaConverters._
 import scala.collection.Map
 import kafka.utils.{CommandLineUtils, Json}
@@ -45,8 +47,8 @@ object LogDirsCommand {
         }
 
         out.println("Querying brokers for log directories information")
-        val describeDirsResult: DescribeDirsResult = adminClient.describeDirs(brokerList.map(Integer.valueOf).toSeq.asJava)
-        val logDirInfosByBroker = describeDirsResult.all.get().asScala.mapValues(_.asScala)
+        val describeLogDirsResult: DescribeLogDirsResult = adminClient.describeLogDirs(brokerList.map(Integer.valueOf).toSeq.asJava)
+        val logDirInfosByBroker = describeLogDirsResult.all.get().asScala.mapValues(_.asScala)
 
         out.println(s"Received log directory information from brokers ${brokerList.mkString(",")}")
         out.println(formatAsJson(logDirInfosByBroker, topicList.toSet))

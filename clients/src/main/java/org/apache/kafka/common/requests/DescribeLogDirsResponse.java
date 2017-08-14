@@ -29,7 +29,9 @@ import java.util.List;
 import java.util.Map;
 
 
-public class DescribeDirsResponse extends AbstractResponse {
+public class DescribeLogDirsResponse extends AbstractResponse {
+
+    public static final long INVALID_OFFSET_LAG = -1L;
 
     // request level key names
     private static final String LOG_DIRS_KEY_NAME = "log_dirs";
@@ -52,7 +54,7 @@ public class DescribeDirsResponse extends AbstractResponse {
     private final int throttleTimeMs;
     private final Map<String, LogDirInfo> logDirInfos;
 
-    public DescribeDirsResponse(Struct struct) {
+    public DescribeLogDirsResponse(Struct struct) {
         throttleTimeMs = struct.getInt(THROTTLE_TIME_KEY_NAME);
         logDirInfos = new HashMap<>();
 
@@ -84,14 +86,14 @@ public class DescribeDirsResponse extends AbstractResponse {
     /**
      * Constructor for version 0.
      */
-    public DescribeDirsResponse(int throttleTimeMs, Map<String, LogDirInfo> logDirInfos) {
+    public DescribeLogDirsResponse(int throttleTimeMs, Map<String, LogDirInfo> logDirInfos) {
         this.throttleTimeMs = throttleTimeMs;
         this.logDirInfos = logDirInfos;
     }
 
     @Override
     protected Struct toStruct(short version) {
-        Struct struct = new Struct(ApiKeys.DESCRIBE_DIRS.responseSchema(version));
+        Struct struct = new Struct(ApiKeys.DESCRIBE_LOG_DIRS.responseSchema(version));
         struct.set(THROTTLE_TIME_KEY_NAME, throttleTimeMs);
         List<Struct> logDirStructArray = new ArrayList<>();
         for (Map.Entry<String, LogDirInfo> logDirInfosEntry : logDirInfos.entrySet()) {
@@ -134,14 +136,13 @@ public class DescribeDirsResponse extends AbstractResponse {
         return logDirInfos;
     }
 
-    public static DescribeDirsResponse parse(ByteBuffer buffer, short version) {
-        return new DescribeDirsResponse(ApiKeys.DESCRIBE_DIRS.responseSchema(version).read(buffer));
+    public static DescribeLogDirsResponse parse(ByteBuffer buffer, short version) {
+        return new DescribeLogDirsResponse(ApiKeys.DESCRIBE_LOG_DIRS.responseSchema(version).read(buffer));
     }
 
     /**
      * Possible error code:
      *
-     * DIR_NOT_AVAILABLE (57)
      * KAFKA_STORAGE_ERROR (56)
      * UNKNOWN (-1)
      */

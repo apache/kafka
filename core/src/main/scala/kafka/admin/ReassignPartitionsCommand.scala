@@ -29,11 +29,11 @@ import org.I0Itec.zkclient.exception.ZkNodeExistsException
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.TopicPartitionReplica
-import org.apache.kafka.common.errors.{LogDirNotAvailableException, ReplicaNotAvailableException}
+import org.apache.kafka.common.errors.{LogDirNotFoundException, ReplicaNotAvailableException}
 import org.apache.kafka.clients.admin.{AdminClientConfig, AlterReplicaDirOptions, KafkaAdminClient, AdminClient => JAdminClient}
-import org.apache.kafka.clients.admin.DescribeReplicaDirResult.ReplicaDirInfo
 import LogConfig._
 import joptsimple.OptionParser
+import org.apache.kafka.clients.admin.DescribeReplicaLogDirResult.ReplicaLogDirInfo
 
 object ReassignPartitionsCommand extends Logging {
 
@@ -315,34 +315,34 @@ object ReassignPartitionsCommand extends Logging {
   private def checkIfReplicaReassignmentSucceeded(adminClientOpt: Option[JAdminClient], replicaAssignment: Map[TopicPartitionReplica, String])
   :Map[TopicPartitionReplica, ReassignmentStatus] = {
 
-    val replicaDirInfos = {
+    val replicaLogDirInfos = {
       if (replicaAssignment.nonEmpty) {
         val adminClient = adminClientOpt.getOrElse(
           throw new AdminCommandFailedException("bootstrap-server needs to be provided in order to reassign replica to the specified log directory"))
-        adminClient.describeReplicaDir(replicaAssignment.keySet.asJava).all().get().asScala
+        adminClient.describeReplicaLogDir(replicaAssignment.keySet.asJava).all().get().asScala
       } else {
-        Map.empty[TopicPartitionReplica, ReplicaDirInfo]
+        Map.empty[TopicPartitionReplica, ReplicaLogDirInfo]
       }
     }
 
     replicaAssignment.map { case (replica, newLogDir) =>
-      val status: ReassignmentStatus = replicaDirInfos.get(replica) match {
-        case Some(replicaDirInfo) =>
-          if (replicaDirInfo.currentReplicaDir == null) {
+      val status: ReassignmentStatus = replicaLogDirInfos.get(replica) match {
+        case Some(replicaLogDirInfo) =>
+          if (replicaLogDirInfo.currentReplicaLogDir == null) {
             println(s"Partition ${replica.topic()}-${replica.partition()} is not found in any live log dir on the " +
               s"broker ${replica.brokerId()}. There is likely offline log directory on the broker.")
             ReassignmentFailed
-          } else if (replicaDirInfo.temporaryReplicaDir == newLogDir) {
+          } else if (replicaLogDirInfo.temporaryReplicaLogDir == newLogDir) {
             ReassignmentInProgress
-          } else if (replicaDirInfo.temporaryReplicaDir != null) {
+          } else if (replicaLogDirInfo.temporaryReplicaLogDir != null) {
             println(s"Partition ${replica.topic()}-${replica.partition()} on the broker ${replica.brokerId()} " +
-              s"is being moved to log dir ${replicaDirInfo.temporaryReplicaDir} instead of $newLogDir")
+              s"is being moved to log dir ${replicaLogDirInfo.temporaryReplicaLogDir} instead of $newLogDir")
             ReassignmentFailed
-          } else if (replicaDirInfo.currentReplicaDir == newLogDir) {
+          } else if (replicaLogDirInfo.currentReplicaLogDir == newLogDir) {
             ReassignmentCompleted
           } else {
             println(s"Partition ${replica.topic()}-${replica.partition()} on the broker ${replica.brokerId()} " +
-              s"is not being moved from log dir ${replicaDirInfo.currentReplicaDir} to $newLogDir")
+              s"is not being moved from log dir ${replicaLogDirInfo.currentReplicaLogDir} to $newLogDir")
             ReassignmentFailed
           }
         case None =>
@@ -577,7 +577,7 @@ class ReassignPartitionsCommand(zkUtils: ZkUtils,
         val partitionsBeingReassigned = zkUtils.getPartitionsBeingReassigned()
         throw new AdminCommandFailedException("Partition reassignment currently in " +
           "progress for %s. Aborting operation".format(partitionsBeingReassigned))
-      case e: LogDirNotAvailableException =>
+      case e: LogDirNotFoundException =>
         throw new AdminCommandFailedException(s"The proposed replica assignment $proposedReplicaAssignment contains " +
           s"invalid log directory. Aborting operation", e)
       case e: AdminCommandFailedException => throw e
