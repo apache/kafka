@@ -223,16 +223,17 @@ object ConsoleConsumer extends Logging {
     * are conflicting.
     */
   def setAutoOffsetResetValue(config: ConsumerConfig, props: Properties) {
-    val (earliestConfigName, latestConfigName) = if (config.useOldConsumer)
+    val (earliestConfigValue, latestConfigValue) = if (config.useOldConsumer)
       (OffsetRequest.SmallestTimeString, OffsetRequest.LargestTimeString)
     else
       ("earliest", "latest")
 
     if (props.containsKey(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG)) {
       // auto.offset.reset parameter was specified on the command line
-      if (config.options.has(config.resetBeginningOpt) && earliestConfigName != props.getProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG)) {
+      val autoResetOption = props.getProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG)
+      if (config.options.has(config.resetBeginningOpt) && earliestConfigValue != autoResetOption) {
         // conflicting options - latest und earliest, throw an error
-        System.err.println(s"Can't simultaneously specify --from-beginning and 'auto.offset.reset=$latestConfigName', " +
+        System.err.println(s"Can't simultaneously specify --from-beginning and 'auto.offset.reset=$autoResetOption', " +
           "please remove one option")
         Exit.exit(1)
       }
@@ -241,7 +242,7 @@ object ConsoleConsumer extends Logging {
     } else {
       // no explicit value for auto.offset.reset was specified
       // if --from-beginning was specified use earliest, otherwise default to latest
-      val autoResetOption = if (config.options.has(config.resetBeginningOpt)) earliestConfigName else latestConfigName
+      val autoResetOption = if (config.options.has(config.resetBeginningOpt)) earliestConfigValue else latestConfigValue
       props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, autoResetOption)
     }
   }
