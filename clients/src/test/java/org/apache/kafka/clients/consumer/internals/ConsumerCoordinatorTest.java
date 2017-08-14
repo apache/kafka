@@ -58,6 +58,7 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
@@ -1210,6 +1211,42 @@ public class ConsumerCoordinatorTest {
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         client.prepareResponse(offsetCommitResponse(Collections.singletonMap(t1p, Errors.NONE)));
         coordinator.commitOffsetsSync(Collections.singletonMap(t1p, new OffsetAndMetadata(100L)), Long.MAX_VALUE);
+    }
+
+    @Test
+    public void testAsyncCommitCallbacksInvokedPriorToSyncCommitCompletion() throws Exception {
+        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        coordinator.ensureCoordinatorReady();
+
+        final List<OffsetAndMetadata> committedOffsets = Collections.synchronizedList(new ArrayList<OffsetAndMetadata>());
+        final OffsetAndMetadata firstOffset = new OffsetAndMetadata(0L);
+        final OffsetAndMetadata secondOffset = new OffsetAndMetadata(1L);
+
+        coordinator.commitOffsetsAsync(Collections.singletonMap(t1p, firstOffset), new OffsetCommitCallback() {
+            @Override
+            public void onComplete(Map<TopicPartition, OffsetAndMetadata> offsets, Exception exception) {
+                committedOffsets.add(firstOffset);
+            }
+        });
+
+        // Do a synchronous commit in the background so that we can send both responses at the same time
+        Thread thread = new Thread() {
+            @Override
+            public void run() {
+                coordinator.commitOffsetsSync(Collections.singletonMap(t1p, secondOffset), 10000);
+                committedOffsets.add(secondOffset);
+            }
+        };
+
+        thread.start();
+
+        client.waitForRequests(2, 5000);
+        client.respond(offsetCommitResponse(Collections.singletonMap(t1p, Errors.NONE)));
+        client.respond(offsetCommitResponse(Collections.singletonMap(t1p, Errors.NONE)));
+
+        thread.join();
+
+        assertEquals(Arrays.asList(firstOffset, secondOffset), committedOffsets);
     }
 
     @Test(expected = KafkaException.class)
