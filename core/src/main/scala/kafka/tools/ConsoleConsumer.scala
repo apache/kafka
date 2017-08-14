@@ -65,7 +65,7 @@ object ConsoleConsumer extends Logging {
         checkZk(conf)
         val props = getOldConsumerProps(conf)
         checkAndMaybeDeleteOldPath(conf, props)
-        new OldConsumer(conf.filterSpec, getOldConsumerProps(conf))
+        new OldConsumer(conf.filterSpec, props)
       } else {
         val timeoutMs = if (conf.timeoutMs >= 0) conf.timeoutMs else Long.MaxValue
         if (conf.partitionArg.isDefined)

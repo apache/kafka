@@ -330,8 +330,6 @@ class ConsoleConsumerTest {
       "--consumer-property", "auto.offset.reset=latest",
       "--from-beginning")
 
-    // Enclose test calls in try-finally to ensure the exit procedure is
-    // reset at the end
     try {
       val config = new ConsoleConsumer.ConsumerConfig(args)
       ConsoleConsumer.getNewConsumerProps(config)
@@ -339,8 +337,7 @@ class ConsoleConsumerTest {
       Exit.resetExitProcedure()
     }
 
-    // Should have thrown an exception before here, if we reach this line we can fail the test
-    fail()
+    fail("Expected consumer property construction to fail due to inconsistent reset options")
   }
 
   @Test(expected = classOf[IllegalArgumentException])
@@ -357,8 +354,6 @@ class ConsoleConsumerTest {
       "--consumer-property", "auto.offset.reset=largest",
       "--from-beginning")
 
-    // Enclose test calls in try-finally to ensure the exit procedure is
-    // reset at the end
     try {
       val config = new ConsoleConsumer.ConsumerConfig(args)
       ConsoleConsumer.getOldConsumerProps(config)
@@ -366,8 +361,7 @@ class ConsoleConsumerTest {
       Exit.resetExitProcedure()
     }
 
-    // Should have thrown an exception before here, if we reach this line we can fail the test
-    fail()
+    fail("Expected consumer property construction to fail due to inconsistent reset options")
   }
 
   @Test
