@@ -177,12 +177,12 @@ class ConsoleConsumerTest {
   }
 
   @Test
-  def shouldParseValidOldConsumerValidConfigWithAutoOffsetReset() {
+  def shouldParseValidOldConsumerConfigWithAutoOffsetResetSmallest() {
     //Given
     val args: Array[String] = Array(
       "--zookeeper", "localhost:2181",
       "--topic", "test",
-      "--consumer-property", "auto.offset.reset=earliest")
+      "--consumer-property", "auto.offset.reset=smallest")
 
     //When
     val config = new ConsoleConsumer.ConsumerConfig(args)
@@ -193,11 +193,51 @@ class ConsoleConsumerTest {
     assertEquals("localhost:2181", config.zkConnectionStr)
     assertEquals("test", config.topicArg)
     assertEquals(false, config.fromBeginning)
-    assertEquals("earliest", consumerProperties.getProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG))
+    assertEquals("smallest", consumerProperties.getProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG))
   }
 
   @Test
-  def shouldParseValidNewSimpleConsumerValidConfigWithAutoOffsetReset() {
+  def shouldParseValidOldConsumerConfigWithAutoOffsetResetLargest() {
+    //Given
+    val args: Array[String] = Array(
+      "--zookeeper", "localhost:2181",
+      "--topic", "test",
+      "--consumer-property", "auto.offset.reset=largest")
+
+    //When
+    val config = new ConsoleConsumer.ConsumerConfig(args)
+    val consumerProperties = ConsoleConsumer.getOldConsumerProps(config)
+
+    //Then
+    assertTrue(config.useOldConsumer)
+    assertEquals("localhost:2181", config.zkConnectionStr)
+    assertEquals("test", config.topicArg)
+    assertEquals(false, config.fromBeginning)
+    assertEquals("largest", consumerProperties.getProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG))
+  }
+
+  @Test
+  def shouldSetAutoResetToSmallestWhenFromBeginningConfigured() {
+    //Given
+    val args = Array(
+      "--zookeeper", "localhost:2181",
+      "--topic", "test",
+      "--from-beginning")
+
+    //When
+    val config = new ConsoleConsumer.ConsumerConfig(args)
+    val consumerProperties = ConsoleConsumer.getOldConsumerProps(config)
+
+    //Then
+    assertTrue(config.useOldConsumer)
+    assertEquals("localhost:2181", config.zkConnectionStr)
+    assertEquals("test", config.topicArg)
+    assertEquals(true, config.fromBeginning)
+    assertEquals("smallest", consumerProperties.getProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG))
+  }
+
+  @Test
+  def shouldParseValidNewConsumerConfigWithAutoOffsetResetLatest() {
     //Given
     val args: Array[String] = Array(
       "--bootstrap-server", "localhost:9092",
@@ -217,7 +257,27 @@ class ConsoleConsumerTest {
   }
 
   @Test
-  def shouldParseValidNewSimpleConsumerValidConfigWithAutoOffsetResetAndMatchingFromBeginning() {
+  def shouldParseValidNewConsumerConfigWithAutoOffsetResetEarliest() {
+    //Given
+    val args: Array[String] = Array(
+      "--bootstrap-server", "localhost:9092",
+      "--topic", "test",
+      "--consumer-property", "auto.offset.reset=earliest")
+
+    //When
+    val config = new ConsoleConsumer.ConsumerConfig(args)
+    val consumerProperties = ConsoleConsumer.getNewConsumerProps(config)
+
+    //Then
+    assertFalse(config.useOldConsumer)
+    assertEquals("localhost:9092", config.bootstrapServer)
+    assertEquals("test", config.topicArg)
+    assertEquals(false, config.fromBeginning)
+    assertEquals("earliest", consumerProperties.getProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG))
+  }
+
+  @Test
+  def shouldParseValidNewConsumerConfigWithAutoOffsetResetAndMatchingFromBeginning() {
     //Given
     val args: Array[String] = Array(
       "--bootstrap-server", "localhost:9092",
@@ -238,7 +298,7 @@ class ConsoleConsumerTest {
   }
 
   @Test
-  def shouldParseValidNewSimpleConsumerValidConfigWithNoOffsetReset() {
+  def shouldParseValidNewConsumerConfigWithNoOffsetReset() {
     //Given
     val args: Array[String] = Array(
       "--bootstrap-server", "localhost:9092",
@@ -257,7 +317,7 @@ class ConsoleConsumerTest {
   }
 
   @Test(expected = classOf[IllegalArgumentException])
-  def shouldStopWheValidConfigWithAutoOffsetResetAndConflictingFromBeginning() {
+  def shouldExitOnInvalidConfigWithAutoOffsetResetAndConflictingFromBeginningNewConsumer() {
 
     // Override exit procedure to throw an exception instead of exiting, so we can catch the exit
     // properly for this test case
@@ -270,18 +330,38 @@ class ConsoleConsumerTest {
       "--consumer-property", "auto.offset.reset=latest",
       "--from-beginning")
 
-    // Enclose test calls in try-finally to ensure the exit procedure is
-    // reset at the end
     try {
       val config = new ConsoleConsumer.ConsumerConfig(args)
-      val consumerProperties = ConsoleConsumer.getNewConsumerProps(config)
-    } finally
-    {
+      ConsoleConsumer.getNewConsumerProps(config)
+    } finally {
       Exit.resetExitProcedure()
     }
 
-    // Should have thrown an exception before here, if we reach this line we can fail the test
-    fail()
+    fail("Expected consumer property construction to fail due to inconsistent reset options")
+  }
+
+  @Test(expected = classOf[IllegalArgumentException])
+  def shouldExitOnInvalidConfigWithAutoOffsetResetAndConflictingFromBeginningOldConsumer() {
+
+    // Override exit procedure to throw an exception instead of exiting, so we can catch the exit
+    // properly for this test case
+    Exit.setExitProcedure((_, message) => throw new IllegalArgumentException(message.orNull))
+
+    //Given
+    val args: Array[String] = Array(
+      "--zookeeper", "localhost:2181",
+      "--topic", "test",
+      "--consumer-property", "auto.offset.reset=largest",
+      "--from-beginning")
+
+    try {
+      val config = new ConsoleConsumer.ConsumerConfig(args)
+      ConsoleConsumer.getOldConsumerProps(config)
+    } finally {
+      Exit.resetExitProcedure()
+    }
+
+    fail("Expected consumer property construction to fail due to inconsistent reset options")
   }
 
   @Test
