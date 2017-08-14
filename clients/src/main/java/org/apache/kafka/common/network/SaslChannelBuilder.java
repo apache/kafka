@@ -109,7 +109,7 @@ public class SaslChannelBuilder implements ChannelBuilder {
             Authenticator authenticator;
             if (mode == Mode.SERVER)
                 authenticator = new SaslServerAuthenticator(id, jaasContext, loginManager.subject(),
-                        kerberosShortNamer, socketChannel.socket().getLocalAddress().getHostName(), maxReceiveSize,
+                        kerberosShortNamer, socketChannel.socket().getLocalAddress().getHostName(),
                         credentialCache);
             else
                 authenticator = new SaslClientAuthenticator(id, loginManager.subject(), loginManager.serviceName(),
