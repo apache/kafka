@@ -76,17 +76,19 @@ public class RocksDBStoreTest {
     }
 
     @Test
-    public void shouldNotThrowExceptionOnRestoreWithBulkLoad() throws Exception {
-        String message = "how can a 4 ounce bird carry a 2lb coconut";
+    public void shouldNotThrowExceptionOnRestoreWhenThereIsPreExistingRocksDbFiles() throws Exception {
         subject.init(context, subject);
+
+        final String message = "how can a 4 ounce bird carry a 2lb coconut";
         int intKey = 1;
         for (int i = 0; i < 2000000; i++) {
             subject.put("theKeyIs" + intKey++, message);
         }
 
-        List<KeyValue<byte[], byte[]>> restoreBytes = new ArrayList<>();
-        byte[] restoredKey = "restoredKey".getBytes("UTF-8");
-        byte[] restoredValue = "restoredValue".getBytes("UTF-8");
+        final List<KeyValue<byte[], byte[]>> restoreBytes = new ArrayList<>();
+
+        final byte[] restoredKey = "restoredKey".getBytes("UTF-8");
+        final byte[] restoredValue = "restoredValue".getBytes("UTF-8");
         restoreBytes.add(KeyValue.pair(restoredKey, restoredValue));
 
         context.restore("test", restoreBytes);

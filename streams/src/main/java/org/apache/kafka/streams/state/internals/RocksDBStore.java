@@ -532,8 +532,8 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         }
     }
 
-    private boolean hasSstFiles(File dbDir) {
-        String[] sstFileNames = dbDir.list(new FilenameFilter() {
+    private boolean hasSstFiles(final File dbDir) {
+        final String[] sstFileNames = dbDir.list(new FilenameFilter() {
             @Override
             public boolean accept(File dir, String name) {
                 return name.matches(".*\\.sst");
