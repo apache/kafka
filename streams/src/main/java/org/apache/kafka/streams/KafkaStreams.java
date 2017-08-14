@@ -216,7 +216,7 @@ public class KafkaStreams {
     private final Object stateLock = new Object();
     private volatile State state = State.CREATED;
     private KafkaStreams.StateListener stateListener = null;
-    private boolean inTheMiddleOfStateChange = false;
+    private volatile boolean inTheMiddleOfStateChange = false;
 
     /**
      * Listen to {@link State} change events.
