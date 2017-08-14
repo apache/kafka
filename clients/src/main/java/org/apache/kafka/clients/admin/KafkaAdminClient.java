@@ -1575,4 +1575,9 @@ public class KafkaAdminClient extends AdminClient {
         }, now);
         return new AlterConfigsResult(new HashMap<ConfigResource, KafkaFuture<Void>>(futures));
     }
+
+    @Override
+    public ListBrokersVersionInfoResult listBrokersVersionInfo() {
+        return null;
+    }
 }
