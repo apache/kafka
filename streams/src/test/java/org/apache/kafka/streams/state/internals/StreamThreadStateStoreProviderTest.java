@@ -122,7 +122,8 @@ public class StreamThreadStateStoreProviderTest {
                 new Metrics(),
                 Time.SYSTEM,
                 new StreamsMetadataState(builder, StreamsMetadataState.UNKNOWN_HOST),
-                0) {
+                0,
+                stateDirectory) {
 
                 @Override
                 public Map<TaskId, StreamTask> tasks() {

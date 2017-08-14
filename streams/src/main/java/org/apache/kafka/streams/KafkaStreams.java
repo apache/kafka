@@ -57,7 +57,6 @@ import org.apache.kafka.streams.state.internals.StreamThreadStateStoreProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -70,6 +69,9 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 
 import static org.apache.kafka.common.utils.Utils.getHost;
@@ -128,6 +130,7 @@ public class KafkaStreams {
     private static final int DEFAULT_CLOSE_TIMEOUT = 0;
     private GlobalStreamThread globalStreamThread;
 
+    private final ScheduledExecutorService stateDirCleaner;
     private final StreamThread[] threads;
     private final Metrics metrics;
     private final QueryableStoreProvider queryableStoreProvider;
@@ -141,6 +144,7 @@ public class KafkaStreams {
     private final StreamsMetadataState streamsMetadataState;
 
     private final StreamsConfig config;
+    private final StateDirectory stateDirectory;
 
     // container states
     /**
@@ -474,13 +478,13 @@ public class KafkaStreams {
         final long cacheSizeBytes = Math.max(0, config.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG) /
                 (config.getInt(StreamsConfig.NUM_STREAM_THREADS_CONFIG) + (globalTaskTopology == null ? 0 : 1)));
 
-
+        stateDirectory = new StateDirectory(applicationId, config.getString(StreamsConfig.STATE_DIR_CONFIG), time);
         if (globalTaskTopology != null) {
             final String globalThreadId = clientId + "-GlobalStreamThread";
             globalStreamThread = new GlobalStreamThread(globalTaskTopology,
                                                         config,
                                                         clientSupplier.getRestoreConsumer(config.getRestoreConsumerConfigs(clientId + "-global")),
-                                                        new StateDirectory(applicationId, globalThreadId, config.getString(StreamsConfig.STATE_DIR_CONFIG), time),
+                                                        stateDirectory,
                                                         metrics,
                                                         time,
                                                         globalThreadId);
@@ -497,7 +501,8 @@ public class KafkaStreams {
                                           metrics,
                                           time,
                                           streamsMetadataState,
-                                          cacheSizeBytes);
+                                          cacheSizeBytes,
+                                          stateDirectory);
             threadState.put(threads[i].getId(), threads[i].state());
             storeProviders.add(new StreamThreadStateStoreProvider(threads[i]));
         }
@@ -510,6 +515,15 @@ public class KafkaStreams {
         }
         final GlobalStateStoreProvider globalStateStoreProvider = new GlobalStateStoreProvider(builder.globalStateStores());
         queryableStoreProvider = new QueryableStoreProvider(storeProviders, globalStateStoreProvider);
+        final String cleanupThreadName = clientId + "-CleanupThread";
+        stateDirCleaner = Executors.newSingleThreadScheduledExecutor(new ThreadFactory() {
+            @Override
+            public Thread newThread(final Runnable r) {
+                final Thread thread = new Thread(r, cleanupThreadName);
+                thread.setDaemon(true);
+                return thread;
+            }
+        });
     }
 
     private static HostInfo parseHostInfo(final String endPoint) {
@@ -580,9 +594,21 @@ public class KafkaStreams {
         for (final StreamThread thread : threads) {
             thread.start();
         }
+        final Long cleanupDelay = config.getLong(StreamsConfig.STATE_CLEANUP_DELAY_MS_CONFIG);
+        stateDirCleaner.scheduleAtFixedRate(new Runnable() {
+            @Override
+            public void run() {
+                synchronized (stateLock) {
+                    if (state == State.RUNNING) {
+                        stateDirectory.cleanRemovedTasks(cleanupDelay);
+                    }
+                }
+            }
+        }, cleanupDelay, cleanupDelay, TimeUnit.MILLISECONDS);
 
         log.info("{} Started Kafka Stream process", logPrefix);
     }
+
 
     /**
      * Shutdown this {@code KafkaStreams} instance by signaling all the threads to stop, and then wait for them to join.
@@ -638,7 +664,7 @@ public class KafkaStreams {
         if (!checkFirstTimeClosing()) {
             return true;
         }
-
+        stateDirCleaner.shutdownNow();
         // save the current thread so that if it is a stream thread
         // we don't attempt to join it and cause a deadlock
         final Thread shutdown = new Thread(new Runnable() {
@@ -732,17 +758,6 @@ public class KafkaStreams {
         if (isRunning()) {
             throw new IllegalStateException("Cannot clean up while running.");
         }
-
-        final String appId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
-        final String stateDir = config.getString(StreamsConfig.STATE_DIR_CONFIG);
-
-        final String localApplicationDir = stateDir + File.separator + appId;
-        log.debug("{} Removing local Kafka Streams application data in {} for application {}.",
-            logPrefix,
-            localApplicationDir,
-            appId);
-
-        final StateDirectory stateDirectory = new StateDirectory(appId, "cleanup", stateDir, Time.SYSTEM);
         stateDirectory.cleanRemovedTasks(0);
     }
 

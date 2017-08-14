@@ -79,6 +79,7 @@ import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.Resource;
 import org.apache.kafka.common.requests.ResourceType;
+import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
@@ -353,7 +354,8 @@ public class KafkaAdminClient extends AdminClient {
             new TimeoutProcessorFactory() : timeoutProcessorFactory;
         this.maxRetries = config.getInt(AdminClientConfig.RETRIES_CONFIG);
         config.logUnused();
-        log.debug("Created Kafka admin client {}", this.clientId);
+        AppInfoParser.registerAppInfo(JMX_PREFIX, clientId);
+        log.debug("Kafka admin client with client id {} created", this.clientId);
         thread.start();
     }
 
@@ -388,6 +390,9 @@ public class KafkaAdminClient extends AdminClient {
         try {
             // Wait for the thread to be joined.
             thread.join();
+
+            AppInfoParser.unregisterAppInfo(JMX_PREFIX, clientId);
+            
             log.debug("{}: closed.", clientId);
         } catch (InterruptedException e) {
             log.debug("{}: interrupted while joining I/O thread", clientId, e);
