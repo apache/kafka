@@ -195,6 +195,15 @@ class WorkerSinkTask extends WorkerTask {
         }
     }
 
+    /**
+     * Respond to a previous commit attempt that may or may not have succeeded. Note that due to our use of async commits,
+     * these invocations may come out of order and thus the need for the commit sequence number.
+     *
+     * @param error            the error resulting from the commit, or null if the commit succeeded without error
+     * @param seqno            the sequence number at the time the commit was requested
+     * @param committedOffsets the offsets that were committed; may be null if the commit did not complete successfully
+     *                         or if no new offsets were committed
+     */
     private void onCommitCompleted(Throwable error, long seqno, Map<TopicPartition, OffsetAndMetadata> committedOffsets) {
         if (commitSeqno != seqno) {
             log.debug("{} Got callback for timed out commit: {}, but most recent commit is {}", this, seqno, commitSeqno);
@@ -490,10 +499,6 @@ class WorkerSinkTask extends WorkerTask {
     private class HandleRebalance implements ConsumerRebalanceListener {
         @Override
         public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
-            // Increase the commit sequence number so that asynchronous commits that are not complete
-            // won't overwrite what we do here
-            commitSeqno += 1;
-            committing = false;
             lastCommittedOffsets = new HashMap<>();
             currentOffsets = new HashMap<>();
             for (TopicPartition tp : partitions) {
