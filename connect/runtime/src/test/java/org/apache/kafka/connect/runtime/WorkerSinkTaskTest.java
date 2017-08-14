@@ -894,6 +894,9 @@ public class WorkerSinkTaskTest {
         sinkTask.close(new HashSet<>(partitions));
         EasyMock.expectLastCall().andThrow(e);
 
+        sinkTask.preCommit(EasyMock.<Map<TopicPartition, OffsetAndMetadata>>anyObject());
+        EasyMock.expectLastCall().andReturn(Collections.emptyMap());
+
         EasyMock.expect(consumer.poll(EasyMock.anyLong())).andAnswer(
                 new IAnswer<ConsumerRecords<byte[], byte[]>>() {
                     @Override
