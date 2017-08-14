@@ -215,7 +215,7 @@
                 props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
                 props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
 
-                final StreamsBuilder builder = new StreamsBuilder();
+                final KStreamBuilder builder = new KStreamBuilder();
 
                 builder.stream("streams-plaintext-input").to("streams-pipe-output");
 
@@ -262,7 +262,7 @@
     <h4><a id="tutorial_code_linesplit" href="#tutorial_code_linesplit">Writing a second Streams application: Line Split</a></h4>
 
     <p>
-        We have learned how to construct a Streams client with its two key components: the <code>StreamsConfig</code> and <code>Topology</code>.
+        We have learned how to construct a Streams client with its two key components: the <code>StreamsConfig</code> and <code>TopologyBuilder</code>.
         Now let's move on to add some real processing logic by augmenting the current topology.
         We can first create another program by first copy the existing <code>Pipe.java</code> class:
     </p>
