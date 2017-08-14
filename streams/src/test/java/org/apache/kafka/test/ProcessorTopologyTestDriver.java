@@ -230,6 +230,7 @@ public class ProcessorTopologyTestDriver {
                                   cache,
                                   new MockTime(),
                                   producer);
+            task.initialize();
         }
     }
 

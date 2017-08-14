@@ -292,10 +292,10 @@ public class StreamThreadTest {
         expectedGroup1 = new HashSet<>(Collections.singleton(t1p1));
         activeTasks.put(new TaskId(0, 1), expectedGroup1);
         rebalanceListener.onPartitionsAssigned(assignedPartitions);
-
+        thread.runOnce(-1);
         assertEquals(thread.state(), StreamThread.State.RUNNING);
-        Assert.assertEquals(stateListener.numChanges, 4);
-        Assert.assertEquals(stateListener.oldState, StreamThread.State.ASSIGNING_PARTITIONS);
+        Assert.assertEquals(5, stateListener.numChanges);
+        Assert.assertEquals(StreamThread.State.PARTITIONS_ASSIGNED, stateListener.oldState);
         assertTrue(thread.tasks().containsKey(task1));
         assertEquals(expectedGroup1, thread.tasks().get(task1).partitions());
         assertEquals(1, thread.tasks().size());
@@ -313,7 +313,7 @@ public class StreamThreadTest {
         expectedGroup2 = new HashSet<>(Collections.singleton(t1p2));
         activeTasks.put(new TaskId(0, 2), expectedGroup2);
         rebalanceListener.onPartitionsAssigned(assignedPartitions);
-
+        thread.runOnce(-1);
         assertTrue(thread.tasks().containsKey(task2));
         assertEquals(expectedGroup2, thread.tasks().get(task2).partitions());
         assertEquals(1, thread.tasks().size());
@@ -328,7 +328,7 @@ public class StreamThreadTest {
         activeTasks.put(new TaskId(0, 1), expectedGroup1);
         activeTasks.put(new TaskId(0, 2), expectedGroup2);
         rebalanceListener.onPartitionsAssigned(assignedPartitions);
-
+        thread.runOnce(-1);
         assertTrue(thread.tasks().containsKey(task1));
         assertTrue(thread.tasks().containsKey(task2));
         assertEquals(expectedGroup1, thread.tasks().get(task1).partitions());
@@ -340,7 +340,7 @@ public class StreamThreadTest {
         rebalanceListener.onPartitionsRevoked(revokedPartitions);
         assignedPartitions = Collections.emptyList();
         rebalanceListener.onPartitionsAssigned(assignedPartitions);
-
+        thread.runOnce(-1);
         assertTrue(thread.tasks().isEmpty());
 
         thread.close();
@@ -391,6 +391,7 @@ public class StreamThreadTest {
         activeTasks.put(new TaskId(1, 1), expectedGroup1);
         activeTasks.put(new TaskId(1, 2), expectedGroup2);
         rebalanceListener.onPartitionsAssigned(assignedPartitions);
+        thread.runOnce(-1);
 
         assertTrue(thread.tasks().containsKey(task4));
         assertTrue(thread.tasks().containsKey(task5));
@@ -408,6 +409,7 @@ public class StreamThreadTest {
         activeTasks.put(new TaskId(0, 1), expectedGroup1);
         activeTasks.put(new TaskId(1, 1), expectedGroup2);
         rebalanceListener.onPartitionsAssigned(assignedPartitions);
+        thread.runOnce(-1);
 
         assertTrue(thread.tasks().containsKey(task1));
         assertTrue(thread.tasks().containsKey(task4));
@@ -422,6 +424,7 @@ public class StreamThreadTest {
         expectedGroup1 = new HashSet<>(Collections.singleton(t1p1));
         expectedGroup2 = new HashSet<>(Arrays.asList(t2p1, t3p1));
         rebalanceListener.onPartitionsAssigned(assignedPartitions);
+        thread.runOnce(-1);
 
         assertTrue(thread.tasks().containsKey(task1));
         assertTrue(thread.tasks().containsKey(task4));
@@ -434,6 +437,7 @@ public class StreamThreadTest {
         rebalanceListener.onPartitionsRevoked(revokedPartitions);
         assignedPartitions = Collections.emptyList();
         rebalanceListener.onPartitionsAssigned(assignedPartitions);
+        thread.runOnce(-1);
 
         assertTrue(thread.tasks().isEmpty());
 
@@ -502,7 +506,13 @@ public class StreamThreadTest {
         );
         internalTopologyBuilder.addSource(null, "source", null, null, null, TOPIC);
 
-        //clientSupplier.consumer.assign(Arrays.asList(new TopicPartition(TOPIC, 0), new TopicPartition(TOPIC, 1)));
+        TopicPartition tp0 = new TopicPartition(TOPIC, 0);
+        TopicPartition tp1 = new TopicPartition(TOPIC, 1);
+        clientSupplier.consumer.assign(Arrays.asList(tp0, tp1));
+        final Map<TopicPartition, Long> offsets = new HashMap<>();
+        offsets.put(tp0, 0L);
+        offsets.put(tp1, 0L);
+        clientSupplier.consumer.updateBeginningOffsets(offsets);
 
         final StreamThread thread1 = createStreamThread(clientId + 1, config, false);
         final StreamThread thread2 = createStreamThread(clientId + 2, config, false);
@@ -517,30 +527,17 @@ public class StreamThreadTest {
         thread1.setThreadMetadataProvider(new MockStreamsPartitionAssignor(thread1Assignment));
         thread2.setThreadMetadataProvider(new MockStreamsPartitionAssignor(thread2Assignment));
 
-
-        thread1.start();
-        TestUtils.waitForCondition(new TestCondition() {
-            @Override
-            public boolean conditionMet() {
-                return thread1.state() == StreamThread.State.RUNNING;
-            }
-        }, 10 * 1000, "Thread never started.");
-
-        thread2.start();
-        TestUtils.waitForCondition(new TestCondition() {
-            @Override
-            public boolean conditionMet() {
-                return thread2.state() == StreamThread.State.RUNNING;
-            }
-        }, 10 * 1000, "Thread never started.");
-
         // revoke (to get threads in correct state)
+        thread1.setState(StreamThread.State.RUNNING);
+        thread2.setState(StreamThread.State.RUNNING);
         thread1.rebalanceListener.onPartitionsRevoked(EMPTY_SET);
         thread2.rebalanceListener.onPartitionsRevoked(EMPTY_SET);
 
         // assign
         thread1.rebalanceListener.onPartitionsAssigned(task0Assignment);
+        thread1.runOnce(-1);
         thread2.rebalanceListener.onPartitionsAssigned(task1Assignment);
+        thread2.runOnce(-1);
 
         final Set<TaskId> originalTaskAssignmentThread1 = new HashSet<>();
         originalTaskAssignmentThread1.addAll(thread1.tasks().keySet());
@@ -551,6 +548,8 @@ public class StreamThreadTest {
         thread1.rebalanceListener.onPartitionsRevoked(task0Assignment);
         thread2.rebalanceListener.onPartitionsRevoked(task1Assignment);
 
+        assertThat(thread1.prevActiveTasks(), equalTo(originalTaskAssignmentThread1));
+        assertThat(thread2.prevActiveTasks(), equalTo(originalTaskAssignmentThread2));
 
         // assign reverted
         thread1Assignment.clear();
@@ -563,18 +562,18 @@ public class StreamThreadTest {
             @Override
             public void run() {
                 thread1.rebalanceListener.onPartitionsAssigned(task1Assignment);
+                thread1.runOnce(-1);
             }
         });
         runIt.start();
 
         thread2.rebalanceListener.onPartitionsAssigned(task0Assignment);
+        thread2.runOnce(-1);
 
         runIt.join();
 
         assertThat(thread1.tasks().keySet(), equalTo(originalTaskAssignmentThread2));
         assertThat(thread2.tasks().keySet(), equalTo(originalTaskAssignmentThread1));
-        assertThat(thread1.prevActiveTasks(), equalTo(originalTaskAssignmentThread1));
-        assertThat(thread2.prevActiveTasks(), equalTo(originalTaskAssignmentThread2));
     }
 
     private class MockStreamsPartitionAssignor extends StreamPartitionAssignor {
@@ -713,16 +712,16 @@ public class StreamThreadTest {
             @Override
             public Object answer() throws Throwable {
                 final Object[] currentArguments = EasyMock.getCurrentArguments();
-                TaskManager.TaskAction action = (TaskManager.TaskAction) currentArguments[0];
+                TaskAction action = (TaskAction) currentArguments[0];
                 if (!action.name().equals("commit")) {
                     throw new IllegalArgumentException("expected to get commit action but was:" + action.name());
                 }
                 return null;
             }
         };
-        taskManager.performOnActiveTasks(EasyMock.anyObject(TaskManager.TaskAction.class));
+        taskManager.performOnActiveTasks(EasyMock.anyObject(TaskAction.class), EasyMock.eq(false));
         EasyMock.expectLastCall().andAnswer(checkCommitAction).times(numberOfCommits);
-        taskManager.performOnStandbyTasks(EasyMock.anyObject(TaskManager.TaskAction.class));
+        taskManager.performOnStandbyTasks(EasyMock.anyObject(TaskAction.class), EasyMock.eq(false));
         EasyMock.expectLastCall().andAnswer(checkCommitAction).times(numberOfCommits);
         EasyMock.replay(taskManager, consumer);
         return taskManager;
@@ -769,6 +768,7 @@ public class StreamThreadTest {
         thread.setState(StreamThread.State.RUNNING);
         thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
         thread.rebalanceListener.onPartitionsAssigned(assignedPartitions);
+        thread.runOnce(-1);
 
         assertEquals(thread.tasks().size(), clientSupplier.producers.size());
         final Iterator it = clientSupplier.producers.iterator();
@@ -880,11 +880,14 @@ public class StreamThreadTest {
 
         final Map<TaskId, Set<TopicPartition>> standbyTasks = new HashMap<>();
         final TopicPartition t1 = new TopicPartition("t1", 0);
-        standbyTasks.put(new TaskId(0, 0), Utils.mkSet(t1));
+        Set<TopicPartition> partitionsT1 = Utils.mkSet(t1);
+        standbyTasks.put(new TaskId(0, 0), partitionsT1);
 
         final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
         final TopicPartition t2 = new TopicPartition("t2", 0);
-        activeTasks.put(new TaskId(1, 0), Utils.mkSet(t2));
+        Set<TopicPartition> partitionsT2 = Utils.mkSet(t2);
+        activeTasks.put(new TaskId(1, 0), partitionsT2);
+        clientSupplier.consumer.updateBeginningOffsets(Collections.singletonMap(t2, 0L));
 
         thread.setThreadMetadataProvider(new StreamPartitionAssignor() {
             @Override
@@ -900,8 +903,9 @@ public class StreamThreadTest {
 
         thread.setState(StreamThread.State.RUNNING);
         thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
+        clientSupplier.consumer.assign(partitionsT2);
         thread.rebalanceListener.onPartitionsAssigned(Utils.mkSet(t2));
-
+        thread.runOnce(-1);
         // swap the assignment around and make sure we don't get any exceptions
         standbyTasks.clear();
         activeTasks.clear();
@@ -909,6 +913,7 @@ public class StreamThreadTest {
         activeTasks.put(new TaskId(0, 0), Utils.mkSet(t1));
 
         thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
+        clientSupplier.consumer.assign(partitionsT1);
         thread.rebalanceListener.onPartitionsAssigned(Utils.mkSet(t1));
     }
 
@@ -927,46 +932,24 @@ public class StreamThreadTest {
 
         thread.setThreadMetadataProvider(new MockStreamsPartitionAssignor(activeTasks));
 
-        thread.start();
-        TestUtils.waitForCondition(new TestCondition() {
-            @Override
-            public boolean conditionMet() {
-                return thread.state() == StreamThread.State.RUNNING;
-            }
-        }, 10 * 1000, "Thread never started.");
+        thread.setState(StreamThread.State.RUNNING);
         thread.rebalanceListener.onPartitionsRevoked(null);
         thread.rebalanceListener.onPartitionsAssigned(task0Assignment);
+        thread.runOnce(-1);
         assertThat(thread.tasks().size(), equalTo(1));
         final MockProducer producer = clientSupplier.producers.get(0);
 
-        TestUtils.waitForCondition(
-            new TestCondition() {
-                @Override
-                public boolean conditionMet() {
-                    return !consumer.subscription().isEmpty();
-                }
-            },
-            "StreamsThread's internal consumer did not subscribe to input topic.");
+
 
         // change consumer subscription from "pattern" to "manual" to be able to call .addRecords()
-        consumer.updateBeginningOffsets(new HashMap<TopicPartition, Long>() {
-            {
-                put(task0Assignment.iterator().next(), 0L);
-            }
-        });
+        consumer.updateBeginningOffsets(Collections.singletonMap(task0Assignment.iterator().next(), 0L));
         consumer.unsubscribe();
         consumer.assign(task0Assignment);
 
         consumer.addRecord(new ConsumerRecord<>(TOPIC, 0, 0, new byte[0], new byte[0]));
         mockTime.sleep(config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG) + 1);
-        TestUtils.waitForCondition(
-            new TestCondition() {
-                @Override
-                public boolean conditionMet() {
-                    return producer.history().size() == 1;
-                }
-            },
-            "StreamsThread did not produce output record.");
+        thread.runOnce(-1);
+        assertThat(producer.history().size(), equalTo(1));
 
         assertFalse(producer.transactionCommitted());
         mockTime.sleep(config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG) + 1L);
@@ -981,8 +964,8 @@ public class StreamThreadTest {
 
         producer.fenceProducer();
         mockTime.sleep(config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG) + 1L);
-
         consumer.addRecord(new ConsumerRecord<>(TOPIC, 0, 0, new byte[0], new byte[0]));
+        thread.runOnce(-1);
         TestUtils.waitForCondition(
             new TestCondition() {
                 @Override
@@ -991,9 +974,6 @@ public class StreamThreadTest {
                 }
             },
             "StreamsThread did not remove fenced zombie task.");
-
-        thread.close();
-        thread.join();
 
         assertThat(producer.commitCount(), equalTo(1L));
     }
@@ -1013,12 +993,15 @@ public class StreamThreadTest {
         thread.setState(StreamThread.State.RUNNING);
         thread.rebalanceListener.onPartitionsRevoked(null);
         thread.rebalanceListener.onPartitionsAssigned(task0Assignment);
+        thread.runOnce(-1);
+
         assertThat(thread.tasks().size(), equalTo(1));
 
         thread.rebalanceListener.onPartitionsRevoked(null);
         clientSupplier.producers.get(0).fenceProducer();
         try {
             thread.rebalanceListener.onPartitionsAssigned(task0Assignment);
+            thread.runOnce(-1);
             fail("should have thrown " + ProducerFencedException.class.getSimpleName());
         } catch (final ProducerFencedException e) { }
 
