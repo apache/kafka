@@ -61,6 +61,7 @@ class AssignedTasks<T extends AbstractTask> {
     }
 
     void addNewTask(final T task) {
+        log.trace("{} add new {} {}", logPrefix, taskTypeName, task.id());
         created.put(task.id(), task);
     }
 
@@ -91,7 +92,8 @@ class AssignedTasks<T extends AbstractTask> {
                 }
                 it.remove();
             } catch (final LockException e) {
-                log.warn("{} Could not create {} {} due to {}; will retry", logPrefix, taskTypeName, entry.getKey(), e);
+                // made this trace as it will spam the logs in the poll loop.
+                log.trace("{} Could not create {} {} due to {}; will retry", logPrefix, taskTypeName, entry.getKey(), e.getMessage());
             }
         }
     }
@@ -163,6 +165,7 @@ class AssignedTasks<T extends AbstractTask> {
                 task.suspend();
                 suspended.put(task.id(), task);
             } catch (final CommitFailedException e) {
+                suspended.put(task.id(), task);
                 // commit failed during suspension. Just log it.
                 log.warn("{} Failed to commit {} {} state when suspending due to CommitFailedException", logPrefix, taskTypeName, task.id);
             } catch (final ProducerFencedException e) {
@@ -205,6 +208,8 @@ class AssignedTasks<T extends AbstractTask> {
                 task.resume();
                 transitionToRunning(task);
                 return true;
+            } else {
+                log.trace("{} couldn't resume task {} assigned partitions {}, task partitions", logPrefix, taskId, partitions, task.partitions);
             }
         }
         return false;
