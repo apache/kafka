@@ -21,10 +21,13 @@ import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Type;
 
+import java.util.EnumSet;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.apache.kafka.common.protocol.types.Type.BOOLEAN;
 import static org.apache.kafka.common.protocol.types.Type.BYTES;
@@ -32,21 +35,26 @@ import static org.apache.kafka.common.protocol.types.Type.INT16;
 import static org.apache.kafka.common.protocol.types.Type.INT32;
 import static org.apache.kafka.common.protocol.types.Type.INT64;
 import static org.apache.kafka.common.protocol.types.Type.INT8;
+import static org.apache.kafka.common.protocol.types.Type.NULLABLE_BYTES;
 import static org.apache.kafka.common.protocol.types.Type.RECORDS;
 import static org.apache.kafka.common.protocol.types.Type.STRING;
 import static org.apache.kafka.common.protocol.types.Type.NULLABLE_STRING;
 
 public class Protocol {
 
-    public static final Schema REQUEST_HEADER = new Schema(new Field("api_key", INT16, "The id of the request type."),
-                                                           new Field("api_version", INT16, "The version of the API."),
-                                                           new Field("correlation_id",
-                                                                     INT32,
-                                                                     "A user-supplied integer value that will be passed back with the response"),
-                                                           new Field("client_id",
-                                                                     NULLABLE_STRING,
-                                                                     "A user specified identifier for the client making the request.",
-                                                                     ""));
+    public static final Schema REQUEST_HEADER = new Schema(
+            new Field("api_key", INT16, "The id of the request type."),
+            new Field("api_version", INT16, "The version of the API."),
+            new Field("correlation_id", INT32, "A user-supplied integer value that will be passed back with the response"),
+            new Field("client_id", NULLABLE_STRING, "A user specified identifier for the client making the request.", ""));
+
+    // Version 0 of the controlled shutdown API used a non-standard request header (the clientId is missing).
+    // This can be removed once we drop support for that version.
+    public static final Schema CONTROLLED_SHUTDOWN_REQUEST_V0_HEADER = new Schema(
+            new Field("api_key", INT16, "The id of the request type."),
+            new Field("api_version", INT16, "The version of the API."),
+            new Field("correlation_id", INT32, "A user-supplied integer value that will be passed back with the response"));
+
 
     public static final Schema RESPONSE_HEADER = new Schema(new Field("correlation_id",
                                                                       INT32,
@@ -938,23 +946,25 @@ public class Protocol {
     public static final Schema[] FIND_COORDINATOR_RESPONSE = {FIND_COORDINATOR_RESPONSE_V0, FIND_COORDINATOR_RESPONSE_V1};
 
     /* Controlled shutdown api */
-    public static final Schema CONTROLLED_SHUTDOWN_REQUEST_V1 = new Schema(new Field("broker_id",
+    public static final Schema CONTROLLED_SHUTDOWN_REQUEST_V0 = new Schema(new Field("broker_id",
                                                                                      INT32,
                                                                                      "The id of the broker for which controlled shutdown has been requested."));
 
-    public static final Schema CONTROLLED_SHUTDOWN_PARTITION_V1 = new Schema(new Field("topic", STRING),
+    public static final Schema CONTROLLED_SHUTDOWN_PARTITION_V0 = new Schema(new Field("topic", STRING),
                                                                              new Field("partition",
                                                                                        INT32,
                                                                                        "Topic partition id."));
 
-    public static final Schema CONTROLLED_SHUTDOWN_RESPONSE_V1 = new Schema(new Field("error_code", INT16),
+    public static final Schema CONTROLLED_SHUTDOWN_RESPONSE_V0 = new Schema(new Field("error_code", INT16),
                                                                             new Field("partitions_remaining",
-                                                                                      new ArrayOf(CONTROLLED_SHUTDOWN_PARTITION_V1),
+                                                                                      new ArrayOf(CONTROLLED_SHUTDOWN_PARTITION_V0),
                                                                                       "The partitions that the broker still leads."));
 
-    /* V0 is not supported as it would require changes to the request header not to include `clientId` */
-    public static final Schema[] CONTROLLED_SHUTDOWN_REQUEST = {null, CONTROLLED_SHUTDOWN_REQUEST_V1};
-    public static final Schema[] CONTROLLED_SHUTDOWN_RESPONSE = {null, CONTROLLED_SHUTDOWN_RESPONSE_V1};
+    public static final Schema CONTROLLED_SHUTDOWN_REQUEST_V1 = CONTROLLED_SHUTDOWN_REQUEST_V0;
+    public static final Schema CONTROLLED_SHUTDOWN_RESPONSE_V1 = CONTROLLED_SHUTDOWN_RESPONSE_V0;
+
+    public static final Schema[] CONTROLLED_SHUTDOWN_REQUEST = {CONTROLLED_SHUTDOWN_REQUEST_V0, CONTROLLED_SHUTDOWN_REQUEST_V1};
+    public static final Schema[] CONTROLLED_SHUTDOWN_RESPONSE = {CONTROLLED_SHUTDOWN_RESPONSE_V0, CONTROLLED_SHUTDOWN_RESPONSE_V1};
 
     /* Join group api */
     public static final Schema JOIN_GROUP_REQUEST_PROTOCOL_V0 = new Schema(new Field("protocol_name", STRING),
@@ -1825,6 +1835,7 @@ public class Protocol {
     public static final Schema[][] REQUESTS = new Schema[ApiKeys.MAX_API_KEY + 1][];
     public static final Schema[][] RESPONSES = new Schema[ApiKeys.MAX_API_KEY + 1][];
     static final short[] MIN_VERSIONS = new short[ApiKeys.MAX_API_KEY + 1];
+    static final EnumSet<ApiKeys> DELAYED_DEALLOCATION_REQUESTS; //initialized in static block
 
     /* the latest version of each api */
     static final short[] CURR_VERSION = new short[ApiKeys.MAX_API_KEY + 1];
@@ -1924,6 +1935,44 @@ public class Protocol {
                     throw new IllegalStateException("Request and response for version " + i + " of API "
                             + api.id + " are defined inconsistently. One is null while the other is not null.");
         }
+
+        /* go over all request schemata and find those that retain links to the underlying ByteBuffer from
+         * which they were read out. knowing which requests do (and do not) retain a reference to the buffer
+         * is needed to enable buffers to be released as soon as possible for requests that no longer need them */
+        Set<ApiKeys> requestsWithBufferRefs = new HashSet<>();
+        for (int reqId = 0; reqId < REQUESTS.length; reqId++) {
+            ApiKeys requestType = ApiKeys.forId(reqId);
+            Schema[] schemata = REQUESTS[reqId];
+            if (schemata == null) {
+                continue;
+            }
+            for (Schema requestVersionSchema : schemata) {
+                if (retainsBufferReference(requestVersionSchema)) {
+                    requestsWithBufferRefs.add(requestType);
+                    break; //kafka is loose with versions, so if _ANY_ version retains buffers we must assume all do.
+                }
+            }
+        }
+
+        DELAYED_DEALLOCATION_REQUESTS = EnumSet.copyOf(requestsWithBufferRefs);
+    }
+
+    private static boolean retainsBufferReference(Schema schema) {
+        if (schema == null) {
+            return false;
+        }
+        final AtomicReference<Boolean> foundBufferReference = new AtomicReference<>(Boolean.FALSE);
+        SchemaVisitor detector = new SchemaVisitorAdapter() {
+            @Override
+            public void visit(Type field) {
+                if (field == BYTES || field == NULLABLE_BYTES || field == RECORDS) {
+                    foundBufferReference.set(Boolean.TRUE);
+                }
+            }
+        };
+        foundBufferReference.set(Boolean.FALSE);
+        ProtoUtils.walk(schema, detector);
+        return foundBufferReference.get();
     }
 
     public static boolean apiVersionSupported(short apiKey, short apiVersion) {
@@ -1934,6 +1983,18 @@ public class Protocol {
         return new Field("throttle_time_ms", INT32,
                 "Duration in milliseconds for which the request was throttled due to quota violation. (Zero if the request did not violate any quota.)",
                 0);
+    }
+
+    public static boolean requiresDelayedDeallocation(int apiKey) {
+        return DELAYED_DEALLOCATION_REQUESTS.contains(ApiKeys.forId(apiKey));
+    }
+    
+    public static Schema requestHeaderSchema(short apiKey, short version) {
+        if (apiKey == ApiKeys.CONTROLLED_SHUTDOWN_KEY.id && version == 0)
+            // This will be removed once we remove support for v0 of ControlledShutdownRequest, which
+            // depends on a non-standard request header (it does not have a clientId)
+            return CONTROLLED_SHUTDOWN_REQUEST_V0_HEADER;
+        return REQUEST_HEADER;
     }
 
     private static String indentString(int size) {

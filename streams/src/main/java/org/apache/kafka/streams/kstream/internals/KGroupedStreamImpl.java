@@ -22,7 +22,6 @@ import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KGroupedStream;
 import org.apache.kafka.streams.kstream.KTable;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.Merger;
 import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.kstream.SessionWindows;
@@ -31,8 +30,8 @@ import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.Windows;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.SessionStore;
+import org.apache.kafka.streams.state.WindowStore;
 
 import java.util.Collections;
 import java.util.Objects;
@@ -48,13 +47,13 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
     private final boolean repartitionRequired;
     private boolean isQueryable = true;
 
-    KGroupedStreamImpl(final KStreamBuilder topology,
+    KGroupedStreamImpl(final InternalStreamsBuilder builder,
                        final String name,
                        final Set<String> sourceNodes,
                        final Serde<K> keySerde,
                        final Serde<V> valSerde,
                        final boolean repartitionRequired) {
-        super(topology, name, sourceNodes);
+        super(builder, name, sourceNodes);
         this.keySerde = keySerde;
         this.valSerde = valSerde;
         this.repartitionRequired = repartitionRequired;
@@ -391,20 +390,21 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
             final String functionName,
             final StateStoreSupplier storeSupplier) {
 
-        final String aggFunctionName = topology.newName(functionName);
+        final String aggFunctionName = builder.newName(functionName);
 
         final String sourceName = repartitionIfRequired(storeSupplier.name());
 
-        topology.addProcessor(aggFunctionName, aggregateSupplier, sourceName);
-        topology.addStateStore(storeSupplier, aggFunctionName);
+        builder.internalTopologyBuilder.addProcessor(aggFunctionName, aggregateSupplier, sourceName);
+        builder.internalTopologyBuilder.addStateStore(storeSupplier, aggFunctionName);
 
-        return new KTableImpl<>(topology,
-                aggFunctionName,
-                aggregateSupplier,
-                sourceName.equals(this.name) ? sourceNodes
-                        : Collections.singleton(sourceName),
-                storeSupplier.name(),
-                isQueryable);
+        return new KTableImpl<>(
+            builder,
+            aggFunctionName,
+            aggregateSupplier,
+            sourceName.equals(this.name) ? sourceNodes
+                    : Collections.singleton(sourceName),
+            storeSupplier.name(),
+            isQueryable);
     }
 
     /**

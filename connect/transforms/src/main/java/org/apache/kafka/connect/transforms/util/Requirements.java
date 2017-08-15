@@ -40,11 +40,25 @@ public class Requirements {
         return (Map<String, Object>) value;
     }
 
+    public static Map<String, Object> requireMapOrNull(Object value, String purpose) {
+        if (value == null) {
+            return null;
+        }
+        return requireMap(value, purpose);
+    }
+
     public static Struct requireStruct(Object value, String purpose) {
         if (!(value instanceof Struct)) {
             throw new DataException("Only Struct objects supported for [" + purpose + "], found: " + nullSafeClassName(value));
         }
         return (Struct) value;
+    }
+
+    public static Struct requireStructOrNull(Object value, String purpose) {
+        if (value == null) {
+            return null;
+        }
+        return requireStruct(value, purpose);
     }
 
     public static SinkRecord requireSinkRecord(ConnectRecord<?> record, String purpose) {

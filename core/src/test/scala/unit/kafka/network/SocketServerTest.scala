@@ -20,6 +20,7 @@ package kafka.network
 import java.io._
 import java.net._
 import java.nio.ByteBuffer
+import java.nio.channels.SocketChannel
 import java.util.{HashMap, Random}
 import javax.net.ssl._
 
@@ -29,13 +30,14 @@ import kafka.security.CredentialProvider
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.network.{ListenerName, NetworkSend, Send}
+import org.apache.kafka.common.network.{KafkaChannel, ListenerName, NetworkSend, Send}
 import org.apache.kafka.common.protocol.{ApiKeys, SecurityProtocol}
 import org.apache.kafka.common.record.{MemoryRecords, RecordBatch}
 import org.apache.kafka.common.requests.{AbstractRequest, ProduceRequest, RequestHeader}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
-import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.{Time, MockTime}
 import org.junit.Assert._
 import org.junit._
 import org.scalatest.junit.JUnitSuite
@@ -179,7 +181,138 @@ class SocketServerTest extends JUnitSuite {
     for (_ <- 0 until 10) {
       val request = server.requestChannel.receiveRequest(2000)
       assertNotNull("receiveRequest timed out", request)
-      server.requestChannel.sendResponse(RequestChannel.Response(request, None, RequestChannel.NoOpAction))
+      server.requestChannel.sendResponse(new RequestChannel.Response(request, None, RequestChannel.NoOpAction))
+    }
+  }
+
+  @Test
+  def testConnectionId() {
+    val sockets = (1 to 5).map(_ => connect(protocol = SecurityProtocol.PLAINTEXT))
+    val serializedBytes = producerRequestBytes
+
+    val requests = sockets.map{socket =>
+      sendRequest(socket, serializedBytes)
+      server.requestChannel.receiveRequest(2000)
+    }
+    requests.zipWithIndex.foreach { case (request, i) =>
+      val index = request.connectionId.split("-").last
+      assertEquals(i.toString, index)
+    }
+
+    sockets.foreach(_.close)
+  }
+
+  @Test
+  def testIdleConnection() {
+    val idleTimeMs = 60000
+    val time = new MockTime()
+    props.put(KafkaConfig.ConnectionsMaxIdleMsProp, idleTimeMs.toString)
+    val serverMetrics = new Metrics
+    val overrideServer = new SocketServer(KafkaConfig.fromProps(props), serverMetrics, time, credentialProvider)
+
+    def openChannel(request: RequestChannel.Request): Option[KafkaChannel] =
+      overrideServer.processor(request.processor).channel(request.connectionId)
+    def openOrClosingChannel(request: RequestChannel.Request): Option[KafkaChannel] =
+      overrideServer.processor(request.processor).openOrClosingChannel(request.connectionId)
+
+    try {
+      overrideServer.startup()
+      val serializedBytes = producerRequestBytes
+
+      // Connection with no staged receives
+      val socket1 = connect(overrideServer, protocol = SecurityProtocol.PLAINTEXT)
+      sendRequest(socket1, serializedBytes)
+      val request1 = overrideServer.requestChannel.receiveRequest(2000)
+      assertTrue("Channel not open", openChannel(request1).nonEmpty)
+      assertEquals(openChannel(request1), openOrClosingChannel(request1))
+
+      time.sleep(idleTimeMs + 1)
+      TestUtils.waitUntilTrue(() => openOrClosingChannel(request1).isEmpty, "Failed to close idle channel")
+      assertTrue("Channel not removed", openChannel(request1).isEmpty)
+      processRequest(overrideServer.requestChannel, request1)
+
+      // Connection with staged receives
+      val socket2 = connect(overrideServer, protocol = SecurityProtocol.PLAINTEXT)
+      sendRequest(socket2, serializedBytes)
+      sendRequest(socket2, serializedBytes)
+      val request2 = overrideServer.requestChannel.receiveRequest(2000)
+
+      time.sleep(idleTimeMs + 1)
+      TestUtils.waitUntilTrue(() => openChannel(request2).isEmpty, "Failed to close idle channel")
+      assertTrue("Channel removed without processing staging receives", openOrClosingChannel(request2).nonEmpty)
+      processRequest(overrideServer.requestChannel, request2) // this triggers a failed send since channel has been closed
+      TestUtils.waitUntilTrue(() => openOrClosingChannel(request2).isEmpty, "Failed to remove channel with failed sends")
+      assertNull("Received request after failed send", overrideServer.requestChannel.receiveRequest(200))
+
+    } finally {
+      overrideServer.shutdown()
+      serverMetrics.close()
+    }
+  }
+
+  @Test
+  def testConnectionIdReuse() {
+    val idleTimeMs = 60000
+    val time = new MockTime()
+    props.put(KafkaConfig.ConnectionsMaxIdleMsProp, idleTimeMs.toString)
+    val serverMetrics = new Metrics
+    val overrideConnectionId = "127.0.0.1:1-127.0.0.1:2-0"
+    val overrideServer = new SocketServer(KafkaConfig.fromProps(props), serverMetrics, time, credentialProvider) {
+      override def newProcessor(id: Int, connectionQuotas: ConnectionQuotas, listenerName: ListenerName,
+                                protocol: SecurityProtocol, memoryPool: MemoryPool): Processor = {
+        new Processor(id, time, config.socketRequestMaxBytes, requestChannel, connectionQuotas,
+          config.connectionsMaxIdleMs, listenerName, protocol, config, metrics, credentialProvider, memoryPool) {
+          override protected[network] def connectionId(socket: Socket): String = overrideConnectionId
+        }
+      }
+    }
+
+    def openChannel: Option[KafkaChannel] = overrideServer.processor(0).channel(overrideConnectionId)
+    def openOrClosingChannel: Option[KafkaChannel] = overrideServer.processor(0).openOrClosingChannel(overrideConnectionId)
+    def connectionCount = overrideServer.connectionCount(InetAddress.getByName("127.0.0.1"))
+
+    try {
+      overrideServer.startup()
+      val socket1 = connect(overrideServer)
+      TestUtils.waitUntilTrue(() => connectionCount == 1, "Failed to create channel")
+      val channel1 = openChannel.getOrElse(throw new RuntimeException("Channel not found"))
+
+      // Create new connection with same id when `channel1` is still open and in Selector.channels
+      // Check that new connection is closed and openChannel still contains `channel1`
+      connect(overrideServer)
+      TestUtils.waitUntilTrue(() => connectionCount == 1, "Failed to close channel")
+      assertSame(channel1, openChannel.getOrElse(throw new RuntimeException("Channel not found")))
+
+      // Send a request to `channel1` and advance time beyond idle time so that `channel1` is
+      // closed with staged receives and is in Selector.closingChannels
+      val serializedBytes = producerRequestBytes
+      (1 to 3).foreach(_ => sendRequest(socket1, serializedBytes))
+      val request = overrideServer.requestChannel.receiveRequest(2000)
+      time.sleep(idleTimeMs + 1)
+      TestUtils.waitUntilTrue(() => openChannel.isEmpty, "Idle channel not closed")
+      assertTrue("Channel removed without processing staging receives", openOrClosingChannel.nonEmpty)
+
+      // Create new connection with same id when when `channel1` is in Selector.closingChannels
+      // Check that new connection is closed and openOrClosingChannel still contains `channel1`
+      connect(overrideServer)
+      TestUtils.waitUntilTrue(() => connectionCount == 1, "Failed to close channel")
+      assertSame(channel1, openOrClosingChannel.getOrElse(throw new RuntimeException("Channel not found")))
+
+      // Complete request with failed send so that `channel1` is removed from Selector.closingChannels
+      processRequest(overrideServer.requestChannel, request)
+      TestUtils.waitUntilTrue(() => connectionCount == 0, "Failed to remove channel with failed send")
+      assertTrue("Channel not removed", openOrClosingChannel.isEmpty)
+
+      // Check that new connections can be created with the same id since `channel1` is no longer in Selector
+      connect(overrideServer)
+      TestUtils.waitUntilTrue(() => connectionCount == 1, "Failed to open new channel")
+      val newChannel = openChannel.getOrElse(throw new RuntimeException("Channel not found"))
+      assertNotSame(channel1, newChannel)
+      newChannel.disconnect()
+
+    } finally {
+      overrideServer.shutdown()
+      serverMetrics.close()
     }
   }
 
@@ -328,9 +461,9 @@ class SocketServerTest extends JUnitSuite {
     var conn: Socket = null
     val overrideServer = new SocketServer(KafkaConfig.fromProps(props), serverMetrics, Time.SYSTEM, credentialProvider) {
       override def newProcessor(id: Int, connectionQuotas: ConnectionQuotas, listenerName: ListenerName,
-                                protocol: SecurityProtocol): Processor = {
+                                protocol: SecurityProtocol, memoryPool: MemoryPool): Processor = {
         new Processor(id, time, config.socketRequestMaxBytes, requestChannel, connectionQuotas,
-          config.connectionsMaxIdleMs, listenerName, protocol, config, metrics, credentialProvider) {
+          config.connectionsMaxIdleMs, listenerName, protocol, config, metrics, credentialProvider, MemoryPool.NONE) {
           override protected[network] def sendResponse(response: RequestChannel.Response, responseSend: Send) {
             conn.close()
             super.sendResponse(response, responseSend)
@@ -347,7 +480,7 @@ class SocketServerTest extends JUnitSuite {
       val channel = overrideServer.requestChannel
       val request = channel.receiveRequest(2000)
 
-      val requestMetrics = RequestMetrics.metricsMap(ApiKeys.forId(request.requestId).name)
+      val requestMetrics = RequestMetrics.metricsMap(ApiKeys.forId(request.header.apiKey).name)
       def totalTimeHistCount(): Long = requestMetrics.totalTimeHist.count
       val expectedTotalTimeCount = totalTimeHistCount() + 1
 
@@ -389,7 +522,7 @@ class SocketServerTest extends JUnitSuite {
       TestUtils.waitUntilTrue(() => overrideServer.processor(request.processor).channel(request.connectionId).isEmpty,
         s"Idle connection `${request.connectionId}` was not closed by selector")
 
-      val requestMetrics = RequestMetrics.metricsMap(ApiKeys.forId(request.requestId).name)
+      val requestMetrics = RequestMetrics.metricsMap(ApiKeys.forId(request.header.apiKey).name)
       def totalTimeHistCount(): Long = requestMetrics.totalTimeHist.count
       val expectedTotalTimeCount = totalTimeHistCount() + 1
 

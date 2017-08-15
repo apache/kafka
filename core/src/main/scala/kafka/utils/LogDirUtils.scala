@@ -28,7 +28,7 @@ object LogDirUtils extends Logging {
   def propagateLogDirEvent(zkUtils: ZkUtils, brokerId: Int) {
     val logDirEventNotificationPath: String = zkUtils.createSequentialPersistentPath(
       ZkUtils.LogDirEventNotificationPath + "/" + LogDirEventNotificationPrefix, logDirFailureEventZkData(brokerId))
-    debug("Added " + logDirEventNotificationPath + " for broker " + brokerId)
+    debug(s"Added $logDirEventNotificationPath for broker $brokerId")
   }
 
   private def logDirFailureEventZkData(brokerId: Int): String = {
@@ -42,24 +42,18 @@ object LogDirUtils extends Logging {
 
   def getBrokerIdFromLogDirEvent(zkUtils: ZkUtils, child: String): Option[Int] = {
     val changeZnode = ZkUtils.LogDirEventNotificationPath + "/" + child
-    val (jsonOpt, stat) = zkUtils.readDataMaybeNull(changeZnode)
-    if (jsonOpt.isDefined) {
-      val json = Json.parseFull(jsonOpt.get)
-
-      json match {
-        case Some(m) =>
-          val brokerAndEventType = m.asInstanceOf[Map[String, Any]]
-          val brokerId = brokerAndEventType.get("broker").get.asInstanceOf[Int]
-          val eventType = brokerAndEventType.get("event").get.asInstanceOf[Int]
-          if (eventType != LogDirFailureEvent)
-            throw new IllegalArgumentException(s"The event type $eventType in znode $changeZnode is not recognized")
-          Some(brokerId)
-        case None =>
-          error("Invalid LogDirEvent JSON: " + jsonOpt.get + " in ZK: " + changeZnode)
-          None
+    val (jsonOpt, _) = zkUtils.readDataMaybeNull(changeZnode)
+    jsonOpt.flatMap { json =>
+      val result = Json.parseFull(json).map(_.asJsonObject).map { jsObject =>
+        val brokerId = jsObject("broker").to[Int]
+        val eventType = jsObject("event").to[Int]
+        if (eventType != LogDirFailureEvent)
+          throw new IllegalArgumentException(s"The event type $eventType in znode $changeZnode is not recognized")
+        brokerId
       }
-    } else {
-      None
+      if (result.isEmpty)
+        error(s"Invalid LogDirEvent in ZK node '$changeZnode', JSON: $json")
+      result
     }
   }
 

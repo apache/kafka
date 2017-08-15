@@ -479,7 +479,36 @@ public class AbstractCoordinatorTest {
         assertEquals(0, coordinator.onJoinCompleteInvokes);
         assertFalse(heartbeatReceived.get());
 
+        coordinator.ensureActiveGroup();
+
+        assertEquals(1, coordinator.onJoinPrepareInvokes);
+        assertEquals(1, coordinator.onJoinCompleteInvokes);
+
+        awaitFirstHeartbeat(heartbeatReceived);
+    }
+
+    @Test
+    public void testWakeupInOnJoinComplete() throws Exception {
+        setupCoordinator(RETRY_BACKOFF_MS);
+
+        coordinator.wakeupOnJoinComplete = true;
+        mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        mockClient.prepareResponse(joinGroupFollowerResponse(1, "memberId", "leaderId", Errors.NONE));
+        mockClient.prepareResponse(syncGroupResponse(Errors.NONE));
+        AtomicBoolean heartbeatReceived = prepareFirstHeartbeat();
+
+        try {
+            coordinator.ensureActiveGroup();
+            fail("Should have woken up from ensureActiveGroup()");
+        } catch (WakeupException e) {
+        }
+
+        assertEquals(1, coordinator.onJoinPrepareInvokes);
+        assertEquals(0, coordinator.onJoinCompleteInvokes);
+        assertFalse(heartbeatReceived.get());
+
         // the join group completes in this poll()
+        coordinator.wakeupOnJoinComplete = false;
         consumerClient.poll(0);
         coordinator.ensureActiveGroup();
 
@@ -534,6 +563,7 @@ public class AbstractCoordinatorTest {
 
         private int onJoinPrepareInvokes = 0;
         private int onJoinCompleteInvokes = 0;
+        private boolean wakeupOnJoinComplete = false;
 
         public DummyCoordinator(ConsumerNetworkClient client,
                                 Metrics metrics,
@@ -567,6 +597,8 @@ public class AbstractCoordinatorTest {
 
         @Override
         protected void onJoinComplete(int generation, String memberId, String protocol, ByteBuffer memberAssignment) {
+            if (wakeupOnJoinComplete)
+                throw new WakeupException();
             onJoinCompleteInvokes++;
         }
     }

@@ -27,6 +27,7 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
@@ -35,7 +36,6 @@ import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KGroupedStream;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.kstream.SessionWindows;
@@ -81,7 +81,7 @@ public class KStreamAggregationIntegrationTest {
 
     private static volatile int testNo = 0;
     private final MockTime mockTime = CLUSTER.time;
-    private KStreamBuilder builder;
+    private StreamsBuilder builder;
     private Properties streamsConfiguration;
     private KafkaStreams kafkaStreams;
     private String streamOneInput;
@@ -96,7 +96,7 @@ public class KStreamAggregationIntegrationTest {
     @Before
     public void before() throws InterruptedException {
         testNo++;
-        builder = new KStreamBuilder();
+        builder = new StreamsBuilder();
         createTopics();
         streamsConfiguration = new Properties();
         final String applicationId = "kgrouped-stream-test-" + testNo;
@@ -666,7 +666,7 @@ public class KStreamAggregationIntegrationTest {
     }
 
     private void startStreams() {
-        kafkaStreams = new KafkaStreams(builder, streamsConfiguration);
+        kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration);
         kafkaStreams.start();
     }
 

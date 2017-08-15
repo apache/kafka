@@ -17,34 +17,40 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.errors.ProcessorStateException;
-import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.ProcessorStateException;
+import org.apache.kafka.streams.processor.StateRestoreListener;
+import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
+import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.RocksDBConfigSetter;
 import org.apache.kafka.test.MockProcessorContext;
 import org.apache.kafka.test.NoOpRecordCollector;
 import org.apache.kafka.test.TestUtils;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
-
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.rocksdb.Options;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.io.IOException;
-import org.rocksdb.Options;
+import java.util.Set;
+
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertThat;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 public class RocksDBStoreTest {
     private final File tempDir = TestUtils.tempDirectory();
@@ -119,6 +125,119 @@ public class RocksDBStoreTest {
         assertEquals(subject.get("2"), "b");
         assertEquals(subject.get("3"), "c");
     }
+
+    @Test
+    public void shouldTogglePrepareForBulkloadSetting() {
+        subject.init(context, subject);
+        StateRestoreListener restoreListener = (StateRestoreListener) subject.batchingStateRestoreCallback;
+
+        restoreListener.onRestoreStart(null, null, 0, 0);
+        assertTrue("Should have set bulk loading to true", subject.isPrepareForBulkload());
+
+        restoreListener.onRestoreEnd(null, null, 0);
+        assertFalse("Should have set bulk loading to false", subject.isPrepareForBulkload());
+    }
+
+    @Test
+    public void shouldRestoreAll() throws Exception {
+        final List<KeyValue<byte[], byte[]>> entries = new ArrayList<>();
+        entries.add(new KeyValue<>("1".getBytes("UTF-8"), "a".getBytes("UTF-8")));
+        entries.add(new KeyValue<>("2".getBytes("UTF-8"), "b".getBytes("UTF-8")));
+        entries.add(new KeyValue<>("3".getBytes("UTF-8"), "c".getBytes("UTF-8")));
+
+        subject.init(context, subject);
+        context.restore(subject.name(), entries);
+
+        assertEquals(subject.get("1"), "a");
+        assertEquals(subject.get("2"), "b");
+        assertEquals(subject.get("3"), "c");
+    }
+
+
+    @Test
+    public void shouldHandleDeletesOnRestoreAll() throws Exception {
+        final List<KeyValue<byte[], byte[]>> entries = new ArrayList<>();
+        entries.add(new KeyValue<>("1".getBytes("UTF-8"), "a".getBytes("UTF-8")));
+        entries.add(new KeyValue<>("2".getBytes("UTF-8"), "b".getBytes("UTF-8")));
+        entries.add(new KeyValue<>("3".getBytes("UTF-8"), "c".getBytes("UTF-8")));
+        entries.add(new KeyValue<>("1".getBytes("UTF-8"), (byte[]) null));
+
+        subject.init(context, subject);
+        context.restore(subject.name(), entries);
+
+        final KeyValueIterator<String, String> iterator = subject.all();
+        final Set<String> keys = new HashSet<>();
+
+        while (iterator.hasNext()) {
+            keys.add(iterator.next().key);
+        }
+
+        assertThat(keys, equalTo(Utils.mkSet("2", "3")));
+    }
+
+    @Test
+    public void shouldHandleDeletesAndPutbackOnRestoreAll() throws Exception {
+        final List<KeyValue<byte[], byte[]>> entries = new ArrayList<>();
+        entries.add(new KeyValue<>("1".getBytes("UTF-8"), "a".getBytes("UTF-8")));
+        entries.add(new KeyValue<>("2".getBytes("UTF-8"), "b".getBytes("UTF-8")));
+        // this will be deleted
+        entries.add(new KeyValue<>("1".getBytes("UTF-8"), (byte[]) null));
+        entries.add(new KeyValue<>("3".getBytes("UTF-8"), "c".getBytes("UTF-8")));
+        // this will restore key "1" as WriteBatch applies updates in order
+        entries.add(new KeyValue<>("1".getBytes("UTF-8"), "restored".getBytes("UTF-8")));
+
+        subject.init(context, subject);
+        context.restore(subject.name(), entries);
+
+        final KeyValueIterator<String, String> iterator = subject.all();
+        final Set<String> keys = new HashSet<>();
+
+        while (iterator.hasNext()) {
+            keys.add(iterator.next().key);
+        }
+
+        assertThat(keys, equalTo(Utils.mkSet("1", "2", "3")));
+
+        assertEquals(subject.get("1"), "restored");
+        assertEquals(subject.get("2"), "b");
+        assertEquals(subject.get("3"), "c");
+    }
+
+    @Test
+    public void shouldRestoreThenDeleteOnRestoreAll() throws Exception {
+
+        final List<KeyValue<byte[], byte[]>> entries = new ArrayList<>();
+        entries.add(new KeyValue<>("1".getBytes("UTF-8"), "a".getBytes("UTF-8")));
+        entries.add(new KeyValue<>("2".getBytes("UTF-8"), "b".getBytes("UTF-8")));
+        entries.add(new KeyValue<>("3".getBytes("UTF-8"), "c".getBytes("UTF-8")));
+
+        subject.init(context, subject);
+        
+        context.restore(subject.name(), entries);
+
+        assertEquals(subject.get("1"), "a");
+        assertEquals(subject.get("2"), "b");
+        assertEquals(subject.get("3"), "c");
+
+        entries.clear();
+
+        entries.add(new KeyValue<>("2".getBytes("UTF-8"), "b".getBytes("UTF-8")));
+        entries.add(new KeyValue<>("3".getBytes("UTF-8"), "c".getBytes("UTF-8")));
+        entries.add(new KeyValue<>("1".getBytes("UTF-8"), (byte[]) null));
+
+        context.restore(subject.name(), entries);
+
+        final KeyValueIterator<String, String> iterator = subject.all();
+        final Set<String> keys = new HashSet<>();
+
+        while (iterator.hasNext()) {
+            keys.add(iterator.next().key);
+        }
+
+        assertThat(keys, equalTo(Utils.mkSet("2", "3")));
+    }
+
+
 
     @Test
     public void shouldThrowNullPointerExceptionOnNullPut() {

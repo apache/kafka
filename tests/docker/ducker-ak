@@ -58,9 +58,14 @@ help|-h|--help
     Display this help message
 
 up [-n|--num-nodes NUM_NODES] [-f|--force] [docker-image]
+        [-C|--custom-ducktape DIR]
     Bring up a cluster with the specified amount of nodes (defaults to ${default_num_nodes}).
     The docker image name defaults to ${default_image_name}.  If --force is specified, we will
     attempt to bring up an image even some parameters are not valid.
+
+    If --custom-ducktape is specified, we will install the provided custom
+    ducktape source code directory before bringing up the nodes.  The provided
+    directory should be the ducktape git repo, not the ducktape installed module directory.
 
 test [test-name(s)]
     Run a test or set of tests inside the currently active Ducker nodes.
@@ -161,14 +166,20 @@ must_popd() {
 
 # Run a command and die if it fails.
 #
-# $1: If this equals 1, we will print the command before executing it.
-# $2: If this equals 1, we will show the output of the command.
+# Optional flags:
+# -v: print the command before running it.
+# -o: display the command output.
 # $@: The command to run.
 must_do() {
-    local verbose="${1}"
+    local verbose=0
     local output="/dev/null"
-    [[ "${2}" -eq 1 ]] && output="/dev/stdout"
-    shift 2
+    while true; do
+        case ${1} in
+            -v) verbose=1; shift;;
+            -o) output="/dev/stdout"; shift;;
+            *) break;;
+        esac
+    done
     local cmd="${@}"
     [[ "${verbose}" -eq 1 ]] && echo "${cmd}"
     ${cmd} >${output} || die "${1} failed"
@@ -203,7 +214,7 @@ ducker_build() {
     SECONDS=0
 
     must_pushd "${ducker_dir}"
-    must_do 1 1 docker build --memory="${docker_build_memory_limit}" \
+    must_do -v -o docker build --memory="${docker_build_memory_limit}" \
         --build-arg "ducker_creator=${user_name}" -t "${image_name}" \
         -f "${ducker_dir}/Dockerfile" ${docker_args} -- .
     docker_status=$?
@@ -217,10 +228,40 @@ $((${duration} % 60))s.  See ${build_log} for details."
 $((${duration} % 60))s.  See ${build_log} for details."
 }
 
+docker_run() {
+    local node=${1}
+    local image_name=${2}
+
+    # Invoke docker-run. We need privileged mode to be able to run iptables
+    # and mount FUSE filesystems inside the container.  We also need it to
+    # run iptables inside the container.
+    must_do -v docker run --privileged \
+        -d -t --net=host -h "${node}" --network ducknet \
+        --memory=${docker_run_memory_limit} --memory-swappiness=1 \
+        -v "${kafka_dir}:/opt/kafka-dev" --name "${node}" -- "${image_name}"
+}
+
+setup_custom_ducktape() {
+    local custom_ducktape="${1}"
+    local image_name="${2}"
+
+    [[ -f "${custom_ducktape}/ducktape/__init__.py" ]] || \
+        die "You must supply a valid ducktape directory to --custom-ducktape"
+    docker_run ducker01 "${image_name}"
+    local running_container="$(docker ps -f=network=ducknet -q)"
+    must_do -v -o docker cp "${custom_ducktape}" "${running_container}:/opt/ducktape"
+    docker exec --user=root ducker01 bash -c 'set -x && cd /opt/kafka-dev/tests && sudo python ./setup.py develop install && cd /opt/ducktape && sudo python ./setup.py develop install'
+    [[ $? -ne 0 ]] && die "failed to install the new ducktape."
+    must_do -v -o docker commit ducker01 "${image_name}"
+    must_do -v docker kill "${running_container}"
+    must_do -v docker rm ducker01
+}
+
 ducker_up() {
     require_commands docker
     while [[ $# -ge 1 ]]; do
         case "${1}" in
+            -C|--custom-ducktape) set_once custom_ducktape "${2}" "the custom ducktape directory"; shift 2;;
             -f|--force) force=1; shift;;
             -n|--num-nodes) set_once num_nodes "${2}" "number of nodes"; shift 2;;
             *) set_once image_name "${1}" "docker image name"; shift;;
@@ -239,9 +280,11 @@ use only ${num_nodes}."
             exit 1
         fi
     fi
-    ducker_build "${image_name}"
 
     docker ps >/dev/null || die "ducker_up: failed to run docker.  Please check that the daemon is started."
+
+    ducker_build "${image_name}"
+
     docker inspect --format='{{.Config.Labels}}' --type=image "${image_name}" | grep -q 'ducker.type'
     local docker_status=${PIPESTATUS[0]}
     local grep_status=${PIPESTATUS[1]}
@@ -265,17 +308,15 @@ attempting to start new ones."
 
     echo "ducker_up: Bringing up ${image_name} with ${num_nodes} nodes..."
     if docker network inspect ducknet &>/dev/null; then
-        must_do 1 0 docker network rm ducknet
+        must_do -v docker network rm ducknet
     fi
-    must_do 1 0 docker network create ducknet
+    must_do -v docker network create ducknet
+    if [[ -n "${custom_ducktape}" ]]; then
+        setup_custom_ducktape "${custom_ducktape}" "${image_name}"
+    fi
     for n in $(seq -f %02g 1 ${num_nodes}); do
         local node="ducker${n}"
-        # Invoke docker-run. Enable the NET_ADMIN and NET_RAW capabilities so that we can use
-        # iptables inside the container.
-        must_do 1 0 docker run --cap-add=NET_ADMIN --cap-add=NET_RAW \
-            -d -t --net=host -h "${node}" --network ducknet \
-            --memory=${docker_run_memory_limit} --memory-swappiness=1 \
-            -v "${kafka_dir}:/opt/kafka-dev" --name "${node}" -- "${image_name}"
+        docker_run "${node}" "${image_name}"
     done
     mkdir -p "${ducker_dir}/build"
     exec 3<> "${ducker_dir}/build/node_hosts"
@@ -447,13 +488,17 @@ ducker_down() {
         maybe_echo "${verbose}" "No ducker containers found."
         return
     fi
-    if [[ -n "${running_containers}" ]]; then
-        must_do ${verbose} 0 docker kill "${running_containers}"
+    verbose_flag=""
+    if [[ ${verbose} == 1 ]]; then
+        verbose_flag="-v"
     fi
-    must_do ${verbose} 0 docker rm "${all_containers}"
-    must_do ${verbose} 1 rm -f -- "${ducker_dir}/build/node_hosts" "${ducker_dir}/build/cluster.json"
+    if [[ -n "${running_containers}" ]]; then
+        must_do ${verbose_flag} docker kill "${running_containers}"
+    fi
+    must_do ${verbose_flag} docker rm "${all_containers}"
+    must_do ${verbose_flag} -o rm -f -- "${ducker_dir}/build/node_hosts" "${ducker_dir}/build/cluster.json"
     if docker network inspect ducknet &>/dev/null; then
-        must_do 1 0 docker network rm ducknet
+        must_do -v docker network rm ducknet
     fi
     maybe_echo "${verbose}" "ducker_down: removed $(count ${all_containers}) containers."
 }
@@ -485,7 +530,7 @@ ducker_purge() {
     done
     ask_yes_no "Delete these docker images? [y/n]"
     [[ "${_return}" -eq 0 ]] && exit 0
-    must_do 1 1 docker rmi ${force_str} ${images}
+    must_do -v -o docker rmi ${force_str} ${images}
 }
 
 # Parse command-line arguments

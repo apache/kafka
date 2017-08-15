@@ -121,9 +121,9 @@ public class ProcessorTopologyTest {
     }
 
     @Test
-    public void testDrivingSimpleTopology() {
+    public void testDrivingSimpleTopology() throws Exception {
         int partition = 10;
-        driver = new ProcessorTopologyTestDriver(config, createSimpleTopology(partition));
+        driver = new ProcessorTopologyTestDriver(config, createSimpleTopology(partition).internalTopologyBuilder);
         driver.process(INPUT_TOPIC_1, "key1", "value1", STRING_SERIALIZER, STRING_SERIALIZER);
         assertNextOutputRecord(OUTPUT_TOPIC_1, "key1", "value1", partition);
         assertNoOutputRecord(OUTPUT_TOPIC_2);
@@ -143,8 +143,8 @@ public class ProcessorTopologyTest {
 
 
     @Test
-    public void testDrivingMultiplexingTopology() {
-        driver = new ProcessorTopologyTestDriver(config, createMultiplexingTopology());
+    public void testDrivingMultiplexingTopology() throws Exception {
+        driver = new ProcessorTopologyTestDriver(config, createMultiplexingTopology().internalTopologyBuilder);
         driver.process(INPUT_TOPIC_1, "key1", "value1", STRING_SERIALIZER, STRING_SERIALIZER);
         assertNextOutputRecord(OUTPUT_TOPIC_1, "key1", "value1(1)");
         assertNextOutputRecord(OUTPUT_TOPIC_2, "key1", "value1(2)");
@@ -165,8 +165,8 @@ public class ProcessorTopologyTest {
     }
 
     @Test
-    public void testDrivingMultiplexByNameTopology() {
-        driver = new ProcessorTopologyTestDriver(config, createMultiplexByNameTopology());
+    public void testDrivingMultiplexByNameTopology() throws Exception {
+        driver = new ProcessorTopologyTestDriver(config, createMultiplexByNameTopology().internalTopologyBuilder);
         driver.process(INPUT_TOPIC_1, "key1", "value1", STRING_SERIALIZER, STRING_SERIALIZER);
         assertNextOutputRecord(OUTPUT_TOPIC_1, "key1", "value1(1)");
         assertNextOutputRecord(OUTPUT_TOPIC_2, "key1", "value1(2)");
@@ -187,9 +187,9 @@ public class ProcessorTopologyTest {
     }
 
     @Test
-    public void testDrivingStatefulTopology() {
+    public void testDrivingStatefulTopology() throws Exception {
         String storeName = "entries";
-        driver = new ProcessorTopologyTestDriver(config, createStatefulTopology(storeName));
+        driver = new ProcessorTopologyTestDriver(config, createStatefulTopology(storeName).internalTopologyBuilder);
         driver.process(INPUT_TOPIC_1, "key1", "value1", STRING_SERIALIZER, STRING_SERIALIZER);
         driver.process(INPUT_TOPIC_1, "key2", "value2", STRING_SERIALIZER, STRING_SERIALIZER);
         driver.process(INPUT_TOPIC_1, "key3", "value3", STRING_SERIALIZER, STRING_SERIALIZER);
@@ -213,7 +213,7 @@ public class ProcessorTopologyTest {
         final TopologyBuilder topologyBuilder = this.builder
                 .addGlobalStore(storeSupplier, global, STRING_DESERIALIZER, STRING_DESERIALIZER, topic, "processor", define(new StatefulProcessor("my-store")));
 
-        driver = new ProcessorTopologyTestDriver(config, topologyBuilder);
+        driver = new ProcessorTopologyTestDriver(config, topologyBuilder.internalTopologyBuilder);
         final KeyValueStore<String, String> globalStore = (KeyValueStore<String, String>) topologyBuilder.globalStateStores().get("my-store");
         driver.process(topic, "key1", "value1", STRING_SERIALIZER, STRING_SERIALIZER);
         driver.process(topic, "key2", "value2", STRING_SERIALIZER, STRING_SERIALIZER);
@@ -222,9 +222,9 @@ public class ProcessorTopologyTest {
     }
 
     @Test
-    public void testDrivingSimpleMultiSourceTopology() {
+    public void testDrivingSimpleMultiSourceTopology() throws Exception {
         int partition = 10;
-        driver = new ProcessorTopologyTestDriver(config, createSimpleMultiSourceTopology(partition));
+        driver = new ProcessorTopologyTestDriver(config, createSimpleMultiSourceTopology(partition).internalTopologyBuilder);
 
         driver.process(INPUT_TOPIC_1, "key1", "value1", STRING_SERIALIZER, STRING_SERIALIZER);
         assertNextOutputRecord(OUTPUT_TOPIC_1, "key1", "value1", partition);
@@ -236,8 +236,8 @@ public class ProcessorTopologyTest {
     }
 
     @Test
-    public void testDrivingForwardToSourceTopology() {
-        driver = new ProcessorTopologyTestDriver(config, createForwardToSourceTopology());
+    public void testDrivingForwardToSourceTopology() throws Exception {
+        driver = new ProcessorTopologyTestDriver(config, createForwardToSourceTopology().internalTopologyBuilder);
         driver.process(INPUT_TOPIC_1, "key1", "value1", STRING_SERIALIZER, STRING_SERIALIZER);
         driver.process(INPUT_TOPIC_1, "key2", "value2", STRING_SERIALIZER, STRING_SERIALIZER);
         driver.process(INPUT_TOPIC_1, "key3", "value3", STRING_SERIALIZER, STRING_SERIALIZER);
@@ -247,8 +247,8 @@ public class ProcessorTopologyTest {
     }
 
     @Test
-    public void testDrivingInternalRepartitioningTopology() {
-        driver = new ProcessorTopologyTestDriver(config, createInternalRepartitioningTopology());
+    public void testDrivingInternalRepartitioningTopology() throws Exception {
+        driver = new ProcessorTopologyTestDriver(config, createInternalRepartitioningTopology().internalTopologyBuilder);
         driver.process(INPUT_TOPIC_1, "key1", "value1", STRING_SERIALIZER, STRING_SERIALIZER);
         driver.process(INPUT_TOPIC_1, "key2", "value2", STRING_SERIALIZER, STRING_SERIALIZER);
         driver.process(INPUT_TOPIC_1, "key3", "value3", STRING_SERIALIZER, STRING_SERIALIZER);
@@ -258,8 +258,8 @@ public class ProcessorTopologyTest {
     }
 
     @Test
-    public void testDrivingInternalRepartitioningForwardingTimestampTopology() {
-        driver = new ProcessorTopologyTestDriver(config, createInternalRepartitioningWithValueTimestampTopology());
+    public void testDrivingInternalRepartitioningForwardingTimestampTopology() throws Exception {
+        driver = new ProcessorTopologyTestDriver(config, createInternalRepartitioningWithValueTimestampTopology().internalTopologyBuilder);
         driver.process(INPUT_TOPIC_1, "key1", "value1@1000", STRING_SERIALIZER, STRING_SERIALIZER);
         driver.process(INPUT_TOPIC_1, "key2", "value2@2000", STRING_SERIALIZER, STRING_SERIALIZER);
         driver.process(INPUT_TOPIC_1, "key3", "value3@3000", STRING_SERIALIZER, STRING_SERIALIZER);

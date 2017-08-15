@@ -18,11 +18,12 @@ package org.apache.kafka.streams.examples.pipe;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 
 import java.util.Properties;
+import java.util.concurrent.CountDownLatch;
 
 /**
  * Demonstrates, using the high-level KStream DSL, how to read data from a source (input) topic and how to
@@ -47,17 +48,28 @@ public class PipeDemo {
         // setting offset reset to earliest so that we can re-run the demo code with the same pre-loaded data
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
 
-        KStreamBuilder builder = new KStreamBuilder();
+        StreamsBuilder builder = new StreamsBuilder();
 
-        builder.stream("streams-file-input").to("streams-pipe-output");
+        builder.stream("streams-plaintext-input").to("streams-pipe-output");
 
-        KafkaStreams streams = new KafkaStreams(builder, props);
-        streams.start();
+        final KafkaStreams streams = new KafkaStreams(builder.build(), props);
+        final CountDownLatch latch = new CountDownLatch(1);
 
-        // usually the stream application would be running forever,
-        // in this example we just let it run for some time and stop since the input data is finite.
-        Thread.sleep(5000L);
+        // attach shutdown handler to catch control-c
+        Runtime.getRuntime().addShutdownHook(new Thread("streams-pipe-shutdown-hook") {
+            @Override
+            public void run() {
+                streams.close();
+                latch.countDown();
+            }
+        });
 
-        streams.close();
+        try {
+            streams.start();
+            latch.await();
+        } catch (Throwable e) {
+            System.exit(1);
+        }
+        System.exit(0);
     }
 }
