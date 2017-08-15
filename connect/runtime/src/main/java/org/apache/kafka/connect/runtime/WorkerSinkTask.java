@@ -287,7 +287,6 @@ class WorkerSinkTask extends WorkerTask {
         OffsetCommitCallback cb = new OffsetCommitCallback() {
             @Override
             public void onComplete(Map<TopicPartition, OffsetAndMetadata> offsets, Exception error) {
-                log.debug("{} Complete asynchronous offset commit for sequence number {}: {}", this, seqno, offsets);
                 onCommitCompleted(error, seqno, offsets);
             }
         };
