@@ -164,23 +164,7 @@ public class KafkaStreamsTest {
 
         testStateThreadCloseHelper(numThreads);
     }
-
-    @Test
-    public void testNoDeadlockWhenCloseIsCalledInCallback() throws Exception {
-        final int numThreads = 2;
-        final KStreamBuilder builder = new KStreamBuilder();
-        // make sure we have the global state thread running too
-        builder.globalTable("anyTopic", "anyStore");
-        props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, numThreads);
-        final KafkaStreams streams = new KafkaStreams(builder, props);
-        StateListenerStub stateListener = new StateListenerStub(true, streams);
-        streams.setStateListener(stateListener);
-
-
-        testStateThreadCloseHelper(numThreads);
-    }
-
-
+    
     @Test
     public void testStateGlobalThreadClose() throws Exception {
         final int numThreads = 2;
