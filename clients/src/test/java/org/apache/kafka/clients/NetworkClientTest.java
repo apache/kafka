@@ -270,14 +270,22 @@ public class NetworkClientTest {
     public void testCallDisconnect() throws Exception {
         awaitReady(client, node);
         assertTrue("Expected NetworkClient to be ready to send to node " + node.idString(),
-            client.isReady(node, Time.SYSTEM.milliseconds()));
+            client.isReady(node, time.milliseconds()));
         assertFalse("Did not expect connection to node " + node.idString() + " to be failed",
             client.connectionFailed(node));
         client.disconnect(node.idString());
         assertFalse("Expected node " + node.idString() + " to be disconnected.",
-            client.isReady(node, Time.SYSTEM.milliseconds()));
+            client.isReady(node, time.milliseconds()));
         assertTrue("Expected connection to node " + node.idString() + " to be failed after disconnect",
             client.connectionFailed(node));
+        assertFalse(client.canConnect(node, time.milliseconds()));
+
+        time.sleep(reconnectBackoffMsTest);
+        assertTrue(client.canConnect(node, time.milliseconds()));
+
+        // ensure disconnect does not reset blackout period if already disconnected
+        client.disconnect(node.idString());
+        assertTrue(client.canConnect(node, time.milliseconds()));
     }
 
     private static class TestCallbackHandler implements RequestCompletionHandler {
