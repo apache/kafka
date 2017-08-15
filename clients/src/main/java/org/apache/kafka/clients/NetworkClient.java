@@ -234,6 +234,9 @@ public class NetworkClient implements KafkaClient {
      */
     @Override
     public void disconnect(String nodeId) {
+        if (connectionStates.isDisconnected(nodeId))
+            return;
+
         selector.close(nodeId);
         List<ApiKeys> requestTypes = new ArrayList<>();
         long now = time.milliseconds();
