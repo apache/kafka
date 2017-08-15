@@ -178,7 +178,7 @@ class WorkerSinkTask extends WorkerTask {
             long timeoutMs = Math.max(nextCommit - now, 0);
             poll(timeoutMs);
         } catch (WakeupException we) {
-            log.trace("{} consumer woken up", id);
+            log.trace("{} Consumer woken up", this);
 
             if (isStopping())
                 return;
@@ -237,9 +237,8 @@ class WorkerSinkTask extends WorkerTask {
         if (topicsStr == null || topicsStr.isEmpty())
             throw new ConnectException("Sink tasks require a list of topics.");
         String[] topics = topicsStr.split(",");
-        log.debug("{} Subscribing to topics {}", this, topics);
         consumer.subscribe(Arrays.asList(topics), new HandleRebalance());
-        log.debug("{} Initializing and starting task", this);
+        log.debug("{} Initializing and starting task for topics {}", this, topics);
         task.initialize(context);
         task.start(taskConfig);
         log.info("Sink task {} finished initialization and start", this);
@@ -254,10 +253,10 @@ class WorkerSinkTask extends WorkerTask {
             context.timeout(-1L);
         }
 
-        log.trace("{} polling consumer with timeout {} ms", id, timeoutMs);
+        log.trace("{} Polling consumer with timeout {} ms", this, timeoutMs);
         ConsumerRecords<byte[], byte[]> msgs = pollConsumer(timeoutMs);
         assert messageBatch.isEmpty() || msgs.isEmpty();
-        log.trace("{} polling returned {} messages", id, msgs.count());
+        log.trace("{} Polling returned {} messages", this, msgs.count());
 
         convertMessages(msgs);
         deliverMessages();
@@ -315,7 +314,7 @@ class WorkerSinkTask extends WorkerTask {
 
         final Map<TopicPartition, OffsetAndMetadata> taskProvidedOffsets;
         try {
-            log.trace("{} task.preCommit with current offsets: {}", this, currentOffsets);
+            log.trace("{} Calling task.preCommit with current offsets: {}", this, currentOffsets);
             taskProvidedOffsets = task.preCommit(new HashMap<>(currentOffsets));
         } catch (Throwable t) {
             if (closing) {
@@ -416,22 +415,25 @@ class WorkerSinkTask extends WorkerTask {
 
     private void convertMessages(ConsumerRecords<byte[], byte[]> msgs) {
         for (ConsumerRecord<byte[], byte[]> msg : msgs) {
-            log.trace("Consuming message with key {}, value {}", msg.key(), msg.value());
+            log.trace("{} Consuming and converting message in topic '{}' partition {} at offset {} and timestamp {}",
+                    this, msg.topic(), msg.partition(), msg.offset(), msg.timestamp());
             SchemaAndValue keyAndSchema = keyConverter.toConnectData(msg.topic(), msg.key());
             SchemaAndValue valueAndSchema = valueConverter.toConnectData(msg.topic(), msg.value());
+            Long timestamp = (msg.timestampType() == TimestampType.NO_TIMESTAMP_TYPE) ? null : msg.timestamp();
             SinkRecord record = new SinkRecord(msg.topic(), msg.partition(),
                     keyAndSchema.schema(), keyAndSchema.value(),
                     valueAndSchema.schema(), valueAndSchema.value(),
                     msg.offset(),
-                    (msg.timestampType() == TimestampType.NO_TIMESTAMP_TYPE) ? null : msg.timestamp(),
+                    timestamp,
                     msg.timestampType());
-            log.trace("{} applying transformations to message with key {}, value {}", this, msg.key(), msg.value());
+            log.trace("{} Applying transformations to record in topic '{}' partition {} at offset {} and timestamp {} with key {} and value {}",
+                    this, msg.topic(), msg.partition(), msg.offset(), timestamp, keyAndSchema.value(), msg.value());
             record = transformationChain.apply(record);
             if (record != null) {
                 messageBatch.add(record);
             } else {
-                log.trace("{} dropping message after transformations returned null for message with key {}, value {}",
-                        this, msg.key(), msg.value());
+                log.trace("{} Transformations returned null, so dropping record in topic '{}' partition {} at offset {} and timestamp {} with key {} and value {}",
+                        this, msg.topic(), msg.partition(), msg.offset(), timestamp, keyAndSchema.value(), msg.value());
             }
         }
     }
@@ -450,7 +452,7 @@ class WorkerSinkTask extends WorkerTask {
         // Finally, deliver this batch to the sink
         try {
             // Since we reuse the messageBatch buffer, ensure we give the task its own copy
-            log.trace("{} delivering batch of {} messages to task", this, messageBatch.size());
+            log.trace("{} Delivering batch of {} messages to task", this, messageBatch.size());
             task.put(new ArrayList<>(messageBatch));
             for (SinkRecord record : messageBatch)
                 currentOffsets.put(new TopicPartition(record.topic(), record.kafkaPartition()),
@@ -515,7 +517,7 @@ class WorkerSinkTask extends WorkerTask {
                 long pos = consumer.position(tp);
                 lastCommittedOffsets.put(tp, new OffsetAndMetadata(pos));
                 currentOffsets.put(tp, new OffsetAndMetadata(pos));
-                log.debug("{} assigned topic partition {} with offset {}", id, tp, pos);
+                log.debug("{} Assigned topic partition {} with offset {}", this, tp, pos);
             }
 
             // If we paused everything for redelivery (which is no longer relevant since we discarded the data), make
