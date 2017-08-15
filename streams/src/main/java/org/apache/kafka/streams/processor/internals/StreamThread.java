@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
@@ -170,8 +169,8 @@ public class StreamThread extends Thread {
                       assignment,
                       partitionAssignor.activeTasks().keySet(),
                       partitionAssignor.standbyTasks().keySet(),
-                      active.previousTasks(),
-                      standby.previousTasks());
+                      active.previousTaskIds(),
+                      standby.previousTaskIds());
 
             final long start = time.milliseconds();
             try {
@@ -201,7 +200,7 @@ public class StreamThread extends Thread {
                          time.milliseconds() - start,
                          active.allAssignedTaskIds(),
                          standby.allAssignedTaskIds(),
-                         active.previousTasks());
+                         active.previousTaskIds());
             }
         }
 
@@ -232,8 +231,8 @@ public class StreamThread extends Thread {
                                  "\tsuspended standby tasks: {}",
                          logPrefix,
                          time.milliseconds() - start,
-                         active.previousTasks(),
-                         standby.previousTasks());
+                         active.suspendedTaskIds(),
+                         standby.suspendedTaskIds());
             }
         }
     }
@@ -702,26 +701,8 @@ public class StreamThread extends Thread {
         standby.commit();
     }
 
-    /**
-     * Commit the state of a task
-     */
-    private void commitOne(final AbstractTask task) {
-        try {
-            task.commit();
-        } catch (final CommitFailedException e) {
-            // commit failed. This is already logged inside the task as WARN and we can just log it again here.
-            log.warn("{} Failed to commit {} {} state due to CommitFailedException; this task may be no longer owned by the thread", logPrefix, task.getClass().getSimpleName(), task.id());
-        } catch (final KafkaException e) {
-            // commit failed due to an unexpected exception. Log it and rethrow the exception.
-            log.error("{} Failed to commit {} {} state due to the following error:", logPrefix, task.getClass().getSimpleName(), task.id(), e);
-            throw e;
-        }
-
-        streamsMetrics.commitTimeSensor.record(computeLatency(), timerStartedMs);
-    }
-
     private void assignStandbyPartitions() {
-        final Collection<StandbyTask> running = standby.running();
+        final Collection<StandbyTask> running = standby.runningTasks();
         final Map<TopicPartition, Long> checkpointedOffsets = new HashMap<>();
         for (StandbyTask standbyTask : running) {
             checkpointedOffsets.putAll(standbyTask.checkpointedOffsets());
@@ -827,7 +808,7 @@ public class StreamThread extends Thread {
      * Returns ids of tasks that were being executed before the rebalance.
      */
     public Set<TaskId> prevActiveTasks() {
-        return Collections.unmodifiableSet(active.previousTasks());
+        return Collections.unmodifiableSet(active.previousTaskIds());
     }
 
     /**
@@ -997,7 +978,7 @@ public class StreamThread extends Thread {
     private void shutdownTasksAndState(final boolean cleanRun) {
         log.debug("{} Shutting down all active tasks {}, standby tasks {}, suspended tasks {}, and suspended standby tasks {}",
                   logPrefix, active.runningTaskIds(), standby.runningTaskIds(),
-                  active.previousTasks(), standby.previousTasks());
+                  active.previousTaskIds(), standby.previousTaskIds());
 
         for (final AbstractTask task : allTasks()) {
             try {
@@ -1054,7 +1035,7 @@ public class StreamThread extends Thread {
 
     private void closeNonAssignedSuspendedTasks() {
         final Map<TaskId, Set<TopicPartition>> newTaskAssignment = partitionAssignor.activeTasks();
-        final Iterator<StreamTask> suspendedTaskIterator = active.suspended().iterator();
+        final Iterator<StreamTask> suspendedTaskIterator = active.suspendedTasks().iterator();
         while (suspendedTaskIterator.hasNext()) {
             final StreamTask task = suspendedTaskIterator.next();
             final Set<TopicPartition> assignedPartitionsForTask = newTaskAssignment.get(task.id);
@@ -1073,7 +1054,7 @@ public class StreamThread extends Thread {
 
     private void closeNonAssignedSuspendedStandbyTasks() {
         final Set<TaskId> newStandbyTaskIds = partitionAssignor.standbyTasks().keySet();
-        final Iterator<StandbyTask> standByTaskIterator = standby.suspended().iterator();
+        final Iterator<StandbyTask> standByTaskIterator = standby.suspendedTasks().iterator();
         while (standByTaskIterator.hasNext()) {
             final StandbyTask task = standByTaskIterator.next();
             if (!newStandbyTaskIds.contains(task.id)) {

@@ -48,6 +48,7 @@ class AssignedTasks<T extends AbstractTask> {
     private Map<TaskId, T> suspended = new HashMap<>();
     private Map<TaskId, T> restoring = new HashMap<>();
     private Set<TopicPartition> restoredPartitions = new HashSet<>();
+    private Set<TaskId> previousActiveTasks = new HashSet<>();
     // IQ may access this map.
     private Map<TaskId, T> running = new ConcurrentHashMap<>();
     private Map<TopicPartition, T> runningByPartition = new HashMap<>();
@@ -125,7 +126,7 @@ class AssignedTasks<T extends AbstractTask> {
                 && restoring.isEmpty();
     }
 
-    Collection<T> running() {
+    Collection<T> runningTasks() {
         return running.values();
     }
 
@@ -135,6 +136,8 @@ class AssignedTasks<T extends AbstractTask> {
         firstException.compareAndSet(null, suspendTasks(running.values()));
         log.trace("{} Close restoring {} {}", logPrefix, taskTypeName, restoring.keySet());
         firstException.compareAndSet(null, closeRestoringTasks());
+        previousActiveTasks.clear();
+        previousActiveTasks.addAll(running.keySet());
         running.clear();
         restoring.clear();
         created.clear();
@@ -265,11 +268,11 @@ class AssignedTasks<T extends AbstractTask> {
         return tasks;
     }
 
-    Collection<T> suspended() {
+    Collection<T> suspendedTasks() {
         return suspended.values();
     }
 
-    Collection<T> restoring() {
+    Collection<T> restoringTasks() {
         return Collections.unmodifiableCollection(restoring.values());
     }
 
@@ -290,10 +293,8 @@ class AssignedTasks<T extends AbstractTask> {
         restoredPartitions.clear();
     }
 
-    Set<TaskId> previousTasks() {
-        final Set<TaskId> previous = new HashSet<>();
-        previous.addAll(suspended.keySet());
-        return previous;
+    Set<TaskId> previousTaskIds() {
+        return previousActiveTasks;
     }
 
     void commit() {
@@ -367,6 +368,10 @@ class AssignedTasks<T extends AbstractTask> {
         }
     }
 
+    Collection<TaskId> suspendedTaskIds() {
+        return suspended.keySet();
+    }
+
     interface TaskAction<T extends AbstractTask> {
         String name();
 
@@ -391,7 +396,7 @@ class AssignedTasks<T extends AbstractTask> {
     private RuntimeException applyToRunningTasks(final TaskAction<T> action, final boolean throwException) {
         RuntimeException firstException = null;
 
-        for (Iterator<T> it = running().iterator(); it.hasNext(); ) {
+        for (Iterator<T> it = runningTasks().iterator(); it.hasNext(); ) {
             final T task = it.next();
             try {
                 action.apply(task);

@@ -117,7 +117,7 @@ public class AssignedTasksTest {
 
         assignedTasks.initializeNewTasks();
 
-        Collection<AbstractTask> restoring = assignedTasks.restoring();
+        Collection<AbstractTask> restoring = assignedTasks.restoringTasks();
         assertThat(restoring.size(), equalTo(1));
         assertSame(restoring.iterator().next(), t1);
     }
@@ -161,7 +161,7 @@ public class AssignedTasksTest {
 
         suspendTask();
 
-        assertThat(assignedTasks.previousTasks(), equalTo(Collections.singleton(taskId1)));
+        assertThat(assignedTasks.previousTaskIds(), equalTo(Collections.singleton(taskId1)));
         EasyMock.verify(t1);
     }
 
@@ -195,7 +195,6 @@ public class AssignedTasksTest {
         EasyMock.replay(t1);
 
         assertThat(suspendTask(), not(nullValue()));
-        assertTrue(assignedTasks.previousTasks().isEmpty());
         EasyMock.verify(t1);
     }
 
@@ -209,7 +208,7 @@ public class AssignedTasksTest {
         EasyMock.replay(t1);
 
         assertThat(suspendTask(), nullValue());
-        assertTrue(assignedTasks.previousTasks().isEmpty());
+        assertTrue(assignedTasks.previousTaskIds().isEmpty());
         EasyMock.verify(t1);
     }
 
@@ -230,7 +229,6 @@ public class AssignedTasksTest {
 
         assertTrue(assignedTasks.maybeResumeSuspendedTask(taskId1, Collections.singleton(tp1)));
         assertThat(assignedTasks.runningTaskIds(), equalTo(Collections.singleton(taskId1)));
-        assertTrue(assignedTasks.previousTasks().isEmpty());
         EasyMock.verify(t1);
     }
 
@@ -260,7 +258,7 @@ public class AssignedTasksTest {
         assignedTasks.initializeNewTasks();
 
         assignedTasks.commit();
-        assertTrue(assignedTasks.running().isEmpty());
+        assertTrue(assignedTasks.runningTasks().isEmpty());
         EasyMock.verify(t1);
     }
 
@@ -322,7 +320,7 @@ public class AssignedTasksTest {
         assignedTasks.initializeNewTasks();
 
         assignedTasks.process();
-        assertTrue(assignedTasks.running().isEmpty());
+        assertTrue(assignedTasks.runningTasks().isEmpty());
         EasyMock.verify(t1);
     }
 
@@ -404,7 +402,7 @@ public class AssignedTasksTest {
         assignedTasks.initializeNewTasks();
 
         assignedTasks.punctuateAndCommit(commitSensor, punctuateSensor);
-        assertTrue(assignedTasks.running().isEmpty());
+        assertTrue(assignedTasks.runningTasks().isEmpty());
         EasyMock.verify(t1);
 
     }
