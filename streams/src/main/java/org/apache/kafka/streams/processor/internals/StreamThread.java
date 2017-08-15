@@ -761,25 +761,8 @@ public class StreamThread extends Thread {
      * Commit the states of all its tasks
      */
     private void commitAll() {
-
-        final RuntimeException e = active.applyToRunningTasks(new TaskAction<StreamTask>() {
-            @Override
-            public String name() {
-                return "commit";
-            }
-
-            @Override
-            public void apply(final StreamTask task1) {
-                commitOne(task1);
-            }
-        }, false);
-        if (e != null) {
-            throw e;
-        }
-
-        for (final StandbyTask task : standby.running()) {
-            commitOne(task);
-        }
+        active.commit();
+        standby.commit();
     }
 
     /**

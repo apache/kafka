@@ -284,13 +284,16 @@ class AssignedTasks<T extends AbstractTask> {
         return previous;
     }
 
-    RuntimeException applyToRunningTasks(final StreamThread.TaskAction<T> action, final boolean throwException) {
+    public RuntimeException applyToRunningTasks(final StreamThread.TaskAction<T> action, final boolean throwException) {
         RuntimeException firstException = null;
 
         for (Iterator<T> it = running().iterator(); it.hasNext(); ) {
             final T task = it.next();
             try {
                 action.apply(task);
+            } catch (final CommitFailedException e) {
+                // commit failed. This is already logged inside the task as WARN and we can just log it again here.
+                log.warn("{} Failed to commit {} {} state due to CommitFailedException; this task may be no longer owned by the thread", logPrefix, taskTypeName, task.id());
             } catch (final ProducerFencedException e) {
                 closeZombieTask(task);
                 it.remove();
@@ -311,5 +314,24 @@ class AssignedTasks<T extends AbstractTask> {
         }
 
         return firstException;
+    }
+
+    void commit() {
+        final RuntimeException exception = applyToRunningTasks(new StreamThread.TaskAction<T>() {
+            @Override
+            public String name() {
+                return "commit";
+            }
+
+            @Override
+            public void apply(final T task) {
+                task.commit();
+            }
+        }, false);
+
+        if (exception != null) {
+            throw exception;
+        }
+
     }
 }
