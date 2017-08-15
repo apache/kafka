@@ -20,7 +20,6 @@ package kafka.network
 import java.io._
 import java.net._
 import java.nio.ByteBuffer
-import java.nio.channels.SocketChannel
 import java.util.{HashMap, Random}
 import javax.net.ssl._
 
