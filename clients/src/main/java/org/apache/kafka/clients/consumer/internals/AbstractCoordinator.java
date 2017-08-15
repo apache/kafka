@@ -649,6 +649,9 @@ public abstract class AbstractCoordinator implements Closeable {
     protected synchronized void coordinatorDead() {
         if (this.coordinator != null) {
             log.info("Marking the coordinator {} dead for group {}", this.coordinator, groupId);
+
+            // Disconnect from the coordinator to ensure that there are no in-flight requests remaining.
+            // Pending callbacks will be invoked with a DisconnectException.
             client.disconnect(this.coordinator);
             this.coordinator = null;
         }
