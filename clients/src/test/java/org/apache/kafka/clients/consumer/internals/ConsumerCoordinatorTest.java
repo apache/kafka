@@ -34,6 +34,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
+import org.apache.kafka.common.errors.NotCoordinatorException;
 import org.apache.kafka.common.errors.OffsetMetadataTooLarge;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.metrics.Metrics;
@@ -949,6 +950,38 @@ public class ConsumerCoordinatorTest {
         assertTrue(success.get());
 
         assertEquals(100L, subscriptions.committed(t1p).offset());
+    }
+
+    @Test
+    public void testCoordinatorDisconnectAfterNotCoordinatorError() {
+        testInFlightRequestsFailedAfterCoordinatorMarkedDead(Errors.NOT_COORDINATOR);
+    }
+
+    @Test
+    public void testCoordinatorDisconnectAfterCoordinatorNotAvailableError() {
+        testInFlightRequestsFailedAfterCoordinatorMarkedDead(Errors.COORDINATOR_NOT_AVAILABLE);
+    }
+
+    private void testInFlightRequestsFailedAfterCoordinatorMarkedDead(Errors error) {
+        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        coordinator.ensureCoordinatorReady();
+
+        // Send two async commits and fail the first one with a COORDINATOR_NOT_AVAILABLE error.
+        // This should cause a coordinator disconnect which will cancel the second request.
+
+        MockCommitCallback firstCommitCallback = new MockCommitCallback();
+        MockCommitCallback secondCommitCallback = new MockCommitCallback();
+        coordinator.commitOffsetsAsync(Collections.singletonMap(t1p, new OffsetAndMetadata(100L)), firstCommitCallback);
+        coordinator.commitOffsetsAsync(Collections.singletonMap(t1p, new OffsetAndMetadata(100L)), secondCommitCallback);
+
+        client.respond(offsetCommitResponse(Collections.singletonMap(t1p, error)));
+        consumerClient.pollNoWakeup();
+        coordinator.invokeCompletedOffsetCommitCallbacks();
+
+        assertTrue(coordinator.coordinatorUnknown());
+        assertTrue(firstCommitCallback.exception instanceof RetriableCommitFailedException);
+        assertTrue(secondCommitCallback.exception instanceof RetriableCommitFailedException);
+
     }
 
     @Test
