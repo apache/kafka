@@ -140,6 +140,20 @@ public class AbstractTaskTest {
                 return false;
             }
 
+            @Override
+            boolean process() {
+                return false;
+            }
+
+            @Override
+            boolean maybePunctuate() {
+                return false;
+            }
+
+            @Override
+            boolean commitNeeded() {
+                return false;
+            }
         };
     }
 

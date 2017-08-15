@@ -61,7 +61,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
 
@@ -269,12 +268,6 @@ public class StreamThread extends Thread {
         }
     }
 
-    interface TaskAction<T extends AbstractTask> {
-        String name();
-
-        void apply(final T task);
-    }
-
     /**
      * This class extends {@link StreamsMetricsImpl(Metrics, String, String, Map)} and
      * overrides one of its functions for efficiency
@@ -444,8 +437,8 @@ public class StreamThread extends Thread {
         lastCommitMs = timerStartedMs;
         final Integer requestTimeOut = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
         rebalanceListener = new RebalanceListener(time);
-        active = new AssignedTasks<>(logPrefix, "stream task");
-        standby = new AssignedTasks<>(logPrefix, "standby task");
+        active = new AssignedTasks<>(logPrefix, "stream task", Time.SYSTEM);
+        standby = new AssignedTasks<>(logPrefix, "standby task", Time.SYSTEM);
         storeChangelogReader = new StoreChangelogReader(getName(), restoreConsumer, time, requestTimeOut);
         setState(State.RUNNING);
     }
@@ -624,83 +617,27 @@ public class StreamThread extends Thread {
      */
     private long processAndPunctuate(final long recordsProcessedBeforeCommit) {
 
-        final AtomicLong totalProcessedEachRound = new AtomicLong(0);
-        final AtomicLong totalProcessedSinceLastMaybeCommit = new AtomicLong(0);
+        int processed;
+        long totalProcessedSinceLastMaybeCommit = 0;
         // Round-robin scheduling by taking one record from each task repeatedly
         // until no task has any records left
         do {
-            totalProcessedEachRound.set(0);
-            active.applyToRunningTasks(new TaskAction<StreamTask>() {
-                @Override
-                public String name() {
-                    return "process";
-                }
-
-                @Override
-                public void apply(final StreamTask task) {
-                    if (task.process()) {
-                        totalProcessedEachRound.incrementAndGet();
-                        totalProcessedSinceLastMaybeCommit.incrementAndGet();
-                    }
-                }
-            }, true);
+            processed = active.process();
+            totalProcessedSinceLastMaybeCommit += processed;
 
             if (recordsProcessedBeforeCommit != UNLIMITED_RECORDS &&
-                totalProcessedSinceLastMaybeCommit.get() >= recordsProcessedBeforeCommit) {
-                totalProcessedSinceLastMaybeCommit.set(0);
+                totalProcessedSinceLastMaybeCommit >= recordsProcessedBeforeCommit) {
+                totalProcessedSinceLastMaybeCommit = 0;
                 final long processLatency = computeLatency();
-                streamsMetrics.processTimeSensor.record(processLatency / (double) totalProcessedSinceLastMaybeCommit.get(),
+                streamsMetrics.processTimeSensor.record(processLatency / (double) totalProcessedSinceLastMaybeCommit,
                     timerStartedMs);
                 maybeCommit(timerStartedMs);
             }
-        } while (totalProcessedEachRound.get() != 0);
+        } while (processed != 0);
 
         // go over the tasks again to punctuate or commit
-
-        final RuntimeException e = active.applyToRunningTasks(new TaskAction<StreamTask>() {
-            String name;
-            @Override
-            public String name() {
-                return name;
-            }
-
-            @Override
-            public void apply(final StreamTask task) {
-                name = "punctuate";
-                maybePunctuate(task);
-                if (task.commitNeeded()) {
-                    name = "commit";
-
-                    long beforeCommitMs = time.milliseconds();
-
-                    commitOne(task);
-
-                    if (log.isDebugEnabled()) {
-                        log.debug("{} Committed active task {} per user request in {}ms",
-                                  logPrefix, task.id(), timerStartedMs - beforeCommitMs);
-                    }
-                }
-            }
-        }, false);
-
-        if (e != null) {
-            throw e;
-        }
-
-        return totalProcessedSinceLastMaybeCommit.get();
-    }
-
-    private void maybePunctuate(final StreamTask task) {
-        try {
-            // check whether we should punctuate based on the task's partition group timestamp;
-            // which are essentially based on record timestamp.
-            if (task.maybePunctuate()) {
-                streamsMetrics.punctuateTimeSensor.record(computeLatency(), timerStartedMs);
-            }
-        } catch (final KafkaException e) {
-            log.error("{} Failed to punctuate active task {} due to the following error:", logPrefix, task.id(), e);
-            throw e;
-        }
+        active.punctuateAndCommit(streamsMetrics.commitTimeSensor, streamsMetrics.punctuateTimeSensor);
+        return totalProcessedSinceLastMaybeCommit;
     }
 
     /**

@@ -152,4 +152,19 @@ public class StandbyTask extends AbstractTask {
         return true;
     }
 
+    @Override
+    boolean process() {
+        throw new UnsupportedOperationException("process not supported by standby task");
+    }
+
+    @Override
+    boolean maybePunctuate() {
+        throw new UnsupportedOperationException("maybePunctuate not supported by standby task");
+    }
+
+    @Override
+    boolean commitNeeded() {
+        throw new UnsupportedOperationException("commitNeeded not supported by standby task");
+    }
+
 }

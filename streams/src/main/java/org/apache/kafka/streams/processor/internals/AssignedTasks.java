@@ -19,6 +19,8 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ProducerFencedException;
+import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.slf4j.Logger;
@@ -34,12 +36,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 class AssignedTasks<T extends AbstractTask> {
     private static final Logger log = LoggerFactory.getLogger(AssignedTasks.class);
     private final String logPrefix;
     private final String taskTypeName;
+    private final Time time;
     private Map<TaskId, T> created = new HashMap<>();
     private Map<TaskId, T> suspended = new HashMap<>();
     private Map<TaskId, T> restoring = new HashMap<>();
@@ -48,9 +52,12 @@ class AssignedTasks<T extends AbstractTask> {
     private Map<TaskId, T> running = new ConcurrentHashMap<>();
     private Map<TopicPartition, T> runningByPartition = new HashMap<>();
 
-    AssignedTasks(final String logPrefix, final String taskTypeName) {
+    AssignedTasks(final String logPrefix,
+                  final String taskTypeName,
+                  final Time time) {
         this.logPrefix = logPrefix;
         this.taskTypeName = taskTypeName;
+        this.time = time;
     }
 
     void addNewTask(final T task) {
@@ -123,7 +130,7 @@ class AssignedTasks<T extends AbstractTask> {
     RuntimeException suspend() {
         final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
         log.trace("{} Suspending running {} {}", logPrefix, taskTypeName, runningTaskIds());
-        firstException.compareAndSet(null, suspendTasks(running.values(), suspended));
+        firstException.compareAndSet(null, suspendTasks(running.values()));
         log.trace("{} Close restoring {} {}", logPrefix, taskTypeName, restoring.keySet());
         firstException.compareAndSet(null, closeRestoringTasks());
         running.clear();
@@ -148,13 +155,13 @@ class AssignedTasks<T extends AbstractTask> {
         return exception;
     }
 
-    private RuntimeException suspendTasks(final Collection<T> tasks, final Map<TaskId, T> suspendedTasks) {
+    private RuntimeException suspendTasks(final Collection<T> tasks) {
         RuntimeException exception = null;
         for (Iterator<T> it = tasks.iterator(); it.hasNext(); ) {
             final T task = it.next();
             try {
                 task.suspend();
-                suspendedTasks.put(task.id(), task);
+                suspended.put(task.id(), task);
             } catch (final CommitFailedException e) {
                 // commit failed during suspension. Just log it.
                 log.warn("{} Failed to commit {} {} state when suspending due to CommitFailedException", logPrefix, taskTypeName, task.id);
@@ -284,7 +291,99 @@ class AssignedTasks<T extends AbstractTask> {
         return previous;
     }
 
-    public RuntimeException applyToRunningTasks(final StreamThread.TaskAction<T> action, final boolean throwException) {
+    void commit() {
+        final RuntimeException exception = applyToRunningTasks(new TaskAction<T>() {
+            @Override
+            public String name() {
+                return "commit";
+            }
+
+            @Override
+            public void apply(final T task) {
+                task.commit();
+            }
+        }, false);
+
+        if (exception != null) {
+            throw exception;
+        }
+
+    }
+
+    int process() {
+        final AtomicInteger processed = new AtomicInteger(0);
+        applyToRunningTasks(new TaskAction<T>() {
+            @Override
+            public String name() {
+                return "process";
+            }
+
+            @Override
+            public void apply(final T task) {
+                if (task.process()) {
+                    processed.incrementAndGet();
+                }
+            }
+        }, true);
+        return processed.get();
+    }
+
+    void punctuateAndCommit(final Sensor commitTimeSensor, final Sensor punctuateTimeSensor) {
+        final Latency latency = new Latency(time.milliseconds());
+        final RuntimeException exception = applyToRunningTasks(new TaskAction<T>() {
+            String name;
+
+            @Override
+            public String name() {
+                return name;
+            }
+
+            @Override
+            public void apply(final T task) {
+                name = "punctuate";
+                if (task.maybePunctuate()) {
+                    punctuateTimeSensor.record(latency.compute(), latency.startTime);
+                }
+                if (task.commitNeeded()) {
+                    name = "commit";
+                    long beforeCommitMs = time.milliseconds();
+                    task.commit();
+                    commitTimeSensor.record(latency.compute(), latency.startTime);
+                    if (log.isDebugEnabled()) {
+                        log.debug("{} Committed active task {} per user request in {} ms",
+                                  logPrefix, task.id(), latency.startTime - beforeCommitMs);
+                    }
+                }
+            }
+        }, false);
+
+        if (exception != null) {
+            throw exception;
+        }
+    }
+
+    interface TaskAction<T extends AbstractTask> {
+        String name();
+
+        void apply(final T task);
+    }
+
+    class Latency {
+        private long startTime;
+
+        Latency(final long startTime) {
+            this.startTime = startTime;
+        }
+
+        private long compute() {
+            final long previousTimeMs = startTime;
+            startTime = time.milliseconds();
+            return Math.max(startTime - previousTimeMs, 0);
+        }
+    }
+
+
+    private RuntimeException applyToRunningTasks(final TaskAction<T> action, final boolean throwException) {
         RuntimeException firstException = null;
 
         for (Iterator<T> it = running().iterator(); it.hasNext(); ) {
@@ -293,7 +392,7 @@ class AssignedTasks<T extends AbstractTask> {
                 action.apply(task);
             } catch (final CommitFailedException e) {
                 // commit failed. This is already logged inside the task as WARN and we can just log it again here.
-                log.warn("{} Failed to commit {} {} state due to CommitFailedException; this task may be no longer owned by the thread", logPrefix, taskTypeName, task.id());
+                log.warn("{} Failed to commit {} {} during {} state due to CommitFailedException; this task may be no longer owned by the thread", logPrefix, taskTypeName, task.id(), action.name());
             } catch (final ProducerFencedException e) {
                 closeZombieTask(task);
                 it.remove();
@@ -314,24 +413,5 @@ class AssignedTasks<T extends AbstractTask> {
         }
 
         return firstException;
-    }
-
-    void commit() {
-        final RuntimeException exception = applyToRunningTasks(new StreamThread.TaskAction<T>() {
-            @Override
-            public String name() {
-                return "commit";
-            }
-
-            @Override
-            public void apply(final T task) {
-                task.commit();
-            }
-        }, false);
-
-        if (exception != null) {
-            throw exception;
-        }
-
     }
 }

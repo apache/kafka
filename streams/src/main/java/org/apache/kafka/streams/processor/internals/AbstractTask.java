@@ -251,6 +251,8 @@ public abstract class AbstractTask {
      */
     public abstract boolean initialize();
 
+    abstract boolean process();
+
     boolean hasStateStores() {
         return !topology.stateStores().isEmpty();
     }
@@ -258,4 +260,8 @@ public abstract class AbstractTask {
     Collection<TopicPartition> changelogPartitions() {
         return stateMgr.changelogPartitions();
     }
+
+    abstract boolean maybePunctuate();
+
+    abstract boolean commitNeeded();
 }
