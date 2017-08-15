@@ -170,8 +170,8 @@ public class ProcessorStateManager implements StateManager {
                                                              stateRestoreCallback,
                                                              checkpointedOffsets.get(storePartition),
                                                              offsetLimit(storePartition),
-                                                             store.persistent(),
-                                                             store.name());
+                                                             store.persistent()
+            );
 
             changelogReader.register(restorer);
         }

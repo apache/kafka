@@ -275,7 +275,7 @@ public class KafkaStreams {
                 threadState.remove(thread.getId());
             }
             if (newState == StreamThread.State.PARTITIONS_REVOKED ||
-                newState == StreamThread.State.ASSIGNING_PARTITIONS) {
+                newState == StreamThread.State.PARTITIONS_ASSIGNED) {
                 setState(State.REBALANCING);
             } else if (newState == StreamThread.State.RUNNING) {
                 for (final StreamThread.State state : threadState.values()) {

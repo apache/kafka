@@ -296,7 +296,7 @@ public class StreamThreadTest {
         activeTasks.put(new TaskId(0, 1), expectedGroup1);
         rebalanceListener.onPartitionsAssigned(assignedPartitions);
         Assert.assertEquals(stateListener.numChanges, 3);
-        Assert.assertEquals(stateListener.oldState, StreamThread.State.ASSIGNING_PARTITIONS);
+        Assert.assertEquals(stateListener.oldState, StreamThread.State.PARTITIONS_ASSIGNED);
         thread.runOnce(-1);
         assertEquals(thread.state(), StreamThread.State.RUNNING);
         assertTrue(thread.tasks().containsKey(task1));

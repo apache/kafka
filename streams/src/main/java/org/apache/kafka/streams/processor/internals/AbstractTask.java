@@ -203,9 +203,10 @@ public abstract class AbstractTask {
                                                       logPrefix, id));
             }
         } catch (IOException e) {
-            throw new StreamsException(String.format("%s fatal error while trying to lock the state directory for task %s",
+            throw new StreamsException(String.format("%s Fatal error while trying to lock the state directory for task %s %s",
                                                      logPrefix,
-                                                     id));
+                                                     id,
+                                                     e.getMessage()));
         }
         log.trace("{} Initializing state stores", logPrefix);
 

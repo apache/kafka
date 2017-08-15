@@ -95,14 +95,8 @@ public class StreamThread extends Thread {
      *          |           |              |
      *          |           v              |
      *          |     +-----+-------+      |
-     *          +<--- | Assigning   |      |
-     *          |     | Partitions  |      |
-     *          |     +-----+-------+      |
-     *          |           |              |
-     *          |           v              |
-     *          |     +-----+-------+      |
-     *          |     | Partitions  |      |
-     *          +<--- | Assigned    | +--> +
+     *          +<--- | Partitions  |+---> |
+     *          |     | Assigned    |
      *          |     +-----+-------+
      *          |           |
      *          |           v
@@ -125,7 +119,7 @@ public class StreamThread extends Thread {
      * the coordinator repeatedly fails in-between revoking partitions and assigning new partitions.
      */
     public enum State {
-        CREATED(1, 5), RUNNING(2, 5), PARTITIONS_REVOKED(2, 3, 5), ASSIGNING_PARTITIONS(4, 5), PARTITIONS_ASSIGNED(1, 2, 5), PENDING_SHUTDOWN(6), DEAD;
+        CREATED(1, 4), RUNNING(2, 4), PARTITIONS_REVOKED(2, 3, 4), PARTITIONS_ASSIGNED(1, 4),  PENDING_SHUTDOWN(5), DEAD;
 
         private final Set<Integer> validTransitions = new HashSet<>();
 
@@ -181,7 +175,7 @@ public class StreamThread extends Thread {
             final long start = time.milliseconds();
             try {
 
-                if (!setStateWhenNotInPendingShutdown(State.ASSIGNING_PARTITIONS)) {
+                if (!setStateWhenNotInPendingShutdown(State.PARTITIONS_ASSIGNED)) {
                     return;
                 }
                 // do this first as we may have suspended standby tasks that
@@ -452,8 +446,7 @@ public class StreamThread extends Thread {
         rebalanceListener = new RebalanceListener(time);
         active = new AssignedTasks<>(logPrefix, "stream task");
         standby = new AssignedTasks<>(logPrefix, "standby task");
-        storeChangelogReader =
-                new StoreChangelogReader(getName(), restoreConsumer, time, requestTimeOut);
+        storeChangelogReader = new StoreChangelogReader(getName(), restoreConsumer, time, requestTimeOut);
         setState(State.RUNNING);
     }
 
@@ -498,8 +491,7 @@ public class StreamThread extends Thread {
     }
 
     // Visible for testing
-    long runOnce(final long recordsProcessedBeforeCommit) {
-        long processedBeforeCommit = recordsProcessedBeforeCommit;
+    long runOnce(long recordsProcessedBeforeCommit) {
         timerStartedMs = time.milliseconds();
 
         // try to fetch some records if necessary
@@ -531,14 +523,14 @@ public class StreamThread extends Thread {
                 final long processLatency = computeLatency();
                 streamsMetrics.processTimeSensor.record(processLatency / (double) totalProcessed,
                                                         timerStartedMs);
-                processedBeforeCommit = adjustRecordsProcessedBeforeCommit(recordsProcessedBeforeCommit, totalProcessed,
+                recordsProcessedBeforeCommit = adjustRecordsProcessedBeforeCommit(recordsProcessedBeforeCommit, totalProcessed,
                                                                                   processLatency, commitTimeMs);
             }
         }
 
         maybeCommit(timerStartedMs);
         maybeUpdateStandbyTasks(timerStartedMs);
-        return processedBeforeCommit;
+        return recordsProcessedBeforeCommit;
     }
 
     /**
@@ -1024,6 +1016,7 @@ public class StreamThread extends Thread {
     // Visible for testing
     void shutdown(final boolean cleanRun) {
         log.info("{} Shutting down", logPrefix);
+        setState(State.PENDING_SHUTDOWN);
         shutdownTasksAndState(cleanRun);
 
         // close all embedded clients

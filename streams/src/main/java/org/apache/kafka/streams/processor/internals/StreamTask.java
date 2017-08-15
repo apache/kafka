@@ -154,7 +154,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
      */
     @Override
     public void resume() {
-        log.debug("{} Resuming {}", logPrefix, id);
+        log.debug("{} Resuming", logPrefix);
         if (eosEnabled) {
             producer.beginTransaction();
             transactionInFlight = true;
@@ -320,7 +320,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
         }
     }
 
-    void initTopology() {
+    private void initTopology() {
         // initialize the task by initializing all its processor nodes in the topology
         log.trace("{} Initializing processor nodes of the topology", logPrefix);
         for (final ProcessorNode node : topology.processors()) {
@@ -550,6 +550,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
     }
 
     public boolean initialize() {
+        log.debug("{} Initializing", logPrefix);
         initializeStateStores();
         initTopology();
         processorContext.initialized();

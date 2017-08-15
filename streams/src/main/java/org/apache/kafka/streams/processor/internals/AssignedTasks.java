@@ -72,7 +72,7 @@ class AssignedTasks<T extends AbstractTask> {
 
     void initializeNewTasks() {
         if (!created.isEmpty()) {
-            log.trace("{} initializing {}s {}", logPrefix, taskTypeName, created.keySet());
+            log.trace("{} Initializing {}s {}", logPrefix, taskTypeName, created.keySet());
         }
         for (final Iterator<Map.Entry<TaskId, T>> it = created.entrySet().iterator(); it.hasNext(); ) {
             final Map.Entry<TaskId, T> entry = it.next();
@@ -122,9 +122,9 @@ class AssignedTasks<T extends AbstractTask> {
 
     RuntimeException suspend() {
         final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
-        log.trace("{} suspending running {} {}", logPrefix, taskTypeName, runningTaskIds());
+        log.trace("{} Suspending running {} {}", logPrefix, taskTypeName, runningTaskIds());
         firstException.compareAndSet(null, suspendTasks(running.values(), suspended));
-        log.trace("{} close restoring {} {}", logPrefix, taskTypeName, restoring.keySet());
+        log.trace("{} Close restoring {} {}", logPrefix, taskTypeName, restoring.keySet());
         firstException.compareAndSet(null, closeRestoringTasks());
         running.clear();
         restoring.clear();
@@ -139,7 +139,7 @@ class AssignedTasks<T extends AbstractTask> {
             try {
                 task.close(false);
             } catch (final RuntimeException e) {
-                log.error("{} failed to close restoring {}, {}", logPrefix, taskTypeName, task.id, e);
+                log.error("{} Failed to close restoring {}, {}", logPrefix, taskTypeName, task.id, e);
                 if (exception == null) {
                     exception = e;
                 }
@@ -194,7 +194,7 @@ class AssignedTasks<T extends AbstractTask> {
             final T task = suspended.get(taskId);
             if (task.partitions().equals(partitions)) {
                 suspended.remove(taskId);
-                log.trace("{} resuming suspended {} {}", logPrefix, taskTypeName, taskId);
+                log.trace("{} Resuming suspended {} {}", logPrefix, taskTypeName, taskId);
                 task.resume();
                 transitionToRunning(task);
                 return true;
@@ -311,9 +311,5 @@ class AssignedTasks<T extends AbstractTask> {
         }
 
         return firstException;
-    }
-
-    public Collection<TaskId> restoringTaskIds() {
-        return restoring.keySet();
     }
 }

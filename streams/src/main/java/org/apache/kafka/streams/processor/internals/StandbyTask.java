@@ -145,6 +145,7 @@ public class StandbyTask extends AbstractTask {
     }
 
     public boolean initialize() {
+        log.debug("{} Initializing", logPrefix);
         initializeStateStores();
         checkpointedOffsets = Collections.unmodifiableMap(stateMgr.checkpointed());
         processorContext.initialized();

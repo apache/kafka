@@ -134,10 +134,10 @@ public class StoreChangelogReader implements ChangelogReader {
             Long offset = entry.getValue();
             final StateRestorer restorer = stateRestorers.get(topicPartition);
             if (restorer.checkpoint() >= offset) {
-                log.debug("{} not restoring partition {} as checkpoint is >= offset", topicPartition);
+                log.debug("{} not restoring partition {} as checkpoint {} is >= offset {}", logPrefix, topicPartition, restorer.checkpoint(), offset);
                 restorer.setRestoredOffset(restorer.checkpoint());
             } else if (restorer.offsetLimit() == 0) {
-                log.debug("{} not restoring partition {} as offset limit is 0", topicPartition);
+                log.debug("{} not restoring partition {} as offset limit is 0", logPrefix, topicPartition);
                 restorer.setRestoredOffset(0);
             } else {
                 needsRestoring.put(topicPartition, restorer);
@@ -235,7 +235,8 @@ public class StoreChangelogReader implements ChangelogReader {
     }
 
     private long processNext(final List<ConsumerRecord<byte[], byte[]>> records,
-                             final StateRestorer restorer, final Long endOffset) {
+                             final StateRestorer restorer,
+                             final Long endOffset) {
         for (final ConsumerRecord<byte[], byte[]> record : records) {
             final long offset = record.offset();
             if (restorer.hasCompleted(offset, endOffset)) {
