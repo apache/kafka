@@ -5,9 +5,9 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -16,17 +16,18 @@
  */
 package org.apache.kafka.tools;
 
-import net.sourceforge.argparse4j.inf.ArgumentParserException;
+import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
-import org.apache.kafka.common.utils.Exit;
+import org.apache.kafka.clients.admin.ListBrokersVersionInfoResult;
+import org.apache.kafka.common.Node;
+import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.utils.Utils;
 
 import java.io.IOException;
-import java.util.Arrays;
+import java.util.Map;
 import java.util.Properties;
-
-import static org.apache.kafka.tools.BrokerApiVersionsCommand.BrokerVersionCommandOptions.COMMAND_CONFIG;
+import java.util.concurrent.ExecutionException;
 
 /**
  * A command for retrieving broker version information
@@ -34,46 +35,57 @@ import static org.apache.kafka.tools.BrokerApiVersionsCommand.BrokerVersionComma
 public class BrokerApiVersionsCommand {
 
     public static void main(String[] args) throws IOException {
-
         new BrokerApiVersionsCommand().run(args);
     }
 
     void run(String[] args) throws IOException {
-
-        BrokerVersionCommandOptions opts = null;
-        try {
-            opts = new BrokerVersionCommandOptions(args);
-        } catch (ArgumentParserException ape) {
-            opts.parser.handleError(ape);
-            Exit.exit(1);
-        }
-
-        opts.checkArgs();
-
-        Properties props;
-        if (opts.has(COMMAND_CONFIG))
-            props = Utils.loadProps(opts.getCommandConfig());
-        else
-            props = new Properties();
-
+        BrokerVersionCommandOptions opts = new BrokerVersionCommandOptions(args);
+        Properties props = opts.getCommandConfig() == null ? new Properties() : Utils.loadProps(opts.getCommandConfig());
         props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, opts.getBootstrapServer());
         AdminClient adminClient = AdminClient.create(props);
+        try {
+            requestAndPrintBrokersVersionInfo(adminClient);
+        } finally {
+            adminClient.close();
+        }
+    }
 
-        adminClient.listBrokersVersionInfo();
+    private void requestAndPrintBrokersVersionInfo(AdminClient adminClient) {
+        ListBrokersVersionInfoResult listBrokersVersionInfoResult = adminClient.listBrokersVersionInfo();
+        for (Map.Entry<Node, KafkaFutureImpl<NodeApiVersions>> entry : listBrokersVersionInfoResult.getBrokerVersionsInfoFutures().entrySet()) {
+            try {
+                NodeApiVersions nodeApiVersions = entry.getValue().get();
+                print(entry.getKey(), nodeApiVersions.toString(true));
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            } catch (ExecutionException e) {
+                print(entry.getKey(), e.getMessage());
+            }
+        }
+    }
 
-
+    private void print(Node node, String message) {
+        System.out.println(String.format("%s -> %s", node, message));
     }
 
     private static class BrokerVersionCommandOptions extends CommandOptions {
 
-        public static final String COMMAND_CONFIG = "command-config";
-        public static final String BOOTSTRAP_SERVER = "bootstrap-server";
+        private BrokerVersionCommandOptions(String[] args) {
+            super("broker-api-versions-command", "Retrieve broker version information", args);
+        }
 
-        private BrokerVersionCommandOptions(String[] args) throws ArgumentParserException {
-            super("broker-api-versions-command", "Retrieve broker version information");
+        private String getCommandConfig() {
+            return this.ns.getString("command-config");
+        }
 
+        private String getBootstrapServer() {
+            return this.ns.getString("bootstrap-server");
+        }
+
+        @Override
+        public void prepareArgs() {
             this.parser.addArgument("--command-config")
-                    .required(true)
+                    .required(false)
                     .type(String.class)
                     .help("A property file containing configs to be passed to Admin Client.");
 
@@ -81,23 +93,8 @@ public class BrokerApiVersionsCommand {
                     .required(true)
                     .type(String.class)
                     .help("REQUIRED: The server(s) to connect to.");
-
-            this.ns = this.parser.parseArgs(args);
         }
 
-        private String getCommandConfig() {
-            return this.ns.getString(COMMAND_CONFIG);
-        }
-
-        private String getBootstrapServer() {
-            return this.ns.getString(BOOTSTRAP_SERVER);
-        }
-
-
-        @Override
-        public void checkArgs() throws IOException {
-            CommandLineUtils.checkRequiredArgs(parser, this, Arrays.asList(BOOTSTRAP_SERVER));
-        }
     }
 
 }
