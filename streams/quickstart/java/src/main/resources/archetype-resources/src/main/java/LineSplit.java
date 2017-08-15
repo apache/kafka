@@ -14,49 +14,58 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.examples.pipe;
+package ${package};
 
-import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.kstream.KStreamBuilder;
+import org.apache.kafka.streams.kstream.ValueMapper;
 
+import java.util.Arrays;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
 
 /**
- * Demonstrates, using the high-level KStream DSL, how to read data from a source (input) topic and how to
- * write data to a sink (output) topic.
- *
- * In this example, we implement a simple "pipe" program that reads from a source topic "streams-file-input"
- * and writes the data as-is (i.e. unmodified) into a sink topic "streams-pipe-output".
- *
- * Before running this example you must create the input topic and the output topic (e.g. via
- * bin/kafka-topics.sh --create ...), and write some data to the input topic (e.g. via
- * bin/kafka-console-producer.sh). Otherwise you won't see any data arriving in the output topic.
+ * In this example, we implement a simple LineSplit program using the high-level Streams DSL
+ * that reads from a source topic "streams-plaintext-input", where the values of messages represent lines of text;
+ * the code split each text line in string into words and then write back into a sink topic "streams-linesplit-output" where
+ * each record represents a single word.
  */
-public class PipeDemo {
+public class LineSplit {
 
     public static void main(String[] args) throws Exception {
         Properties props = new Properties();
-        props.put(StreamsConfig.APPLICATION_ID_CONFIG, "streams-pipe");
+        props.put(StreamsConfig.APPLICATION_ID_CONFIG, "streams-linesplit");
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
 
-        // setting offset reset to earliest so that we can re-run the demo code with the same pre-loaded data
-        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        final KStreamBuilder builder = new KStreamBuilder();
 
-        KStreamBuilder builder = new KStreamBuilder();
+        builder.<String, String>stream("streams-plaintext-input")
+               .flatMapValues(new ValueMapper<String, Iterable<String>>() {
+                    @Override
+                    public Iterable<String> apply(String value) {
+                        return Arrays.asList(value.split("\\W+"));
+                    }
+                })
+               .to("streams-linesplit-output");
 
-        builder.stream("streams-plaintext-input").to("streams-pipe-output");
+        /* ------- use the code below for Java 8 and uncomment the above ----
+
+        builder.stream("streams-plaintext-input")
+               .flatMapValues(value -> Arrays.asList(value.split("\\W+")))
+               .to("streams-linesplit-output");
+
+           ----------------------------------------------------------------- */
+
 
         final KafkaStreams streams = new KafkaStreams(builder, props);
         final CountDownLatch latch = new CountDownLatch(1);
 
         // attach shutdown handler to catch control-c
-        Runtime.getRuntime().addShutdownHook(new Thread("streams-pipe-shutdown-hook") {
+        Runtime.getRuntime().addShutdownHook(new Thread("streams-shutdown-hook") {
             @Override
             public void run() {
                 streams.close();

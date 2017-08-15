@@ -121,7 +121,8 @@ if (new File('.git').exists()) {
         '**/README.md',
         '**/id_rsa',
         '**/id_rsa.pub',
-        'checkstyle/suppressions.xml'
+        'checkstyle/suppressions.xml',
+        'streams/quickstart/java/src/test/resources/projects/basic/goal.txt'
     ])
   }
 }
