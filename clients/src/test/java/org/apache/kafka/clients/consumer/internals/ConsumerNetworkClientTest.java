@@ -59,7 +59,7 @@ public class ConsumerNetworkClientTest {
 
         consumerClient.poll(future);
         assertTrue(future.isDone());
-        assertTrue(future.succeeded());
+        assertTrue(future.succeeded() == RequestFuture.Status.SUCCEEDED);
 
         ClientResponse clientResponse = future.value();
         HeartbeatResponse response = (HeartbeatResponse) clientResponse.responseBody();
@@ -76,8 +76,8 @@ public class ConsumerNetworkClientTest {
         assertEquals(2, consumerClient.pendingRequestCount(node));
 
         consumerClient.awaitPendingRequests(node, Long.MAX_VALUE);
-        assertTrue(future1.succeeded());
-        assertTrue(future2.succeeded());
+        assertTrue(future1.succeeded() == RequestFuture.Status.SUCCEEDED);
+        assertTrue(future2.succeeded() == RequestFuture.Status.SUCCEEDED);
     }
 
     @Test
@@ -198,7 +198,7 @@ public class ConsumerNetworkClientTest {
         // First send should have expired and second send still pending
         consumerClient.poll(0);
         assertTrue(future1.isDone());
-        assertFalse(future1.succeeded());
+        assertFalse(future1.succeeded() == RequestFuture.Status.SUCCEEDED);
         assertEquals(1, consumerClient.pendingRequestCount());
         assertEquals(1, consumerClient.pendingRequestCount(node));
         assertFalse(future2.isDone());
@@ -219,7 +219,7 @@ public class ConsumerNetworkClientTest {
         disconnected.set(true);
         consumerClient.poll(0);
         assertTrue(future3.isDone());
-        assertFalse(future3.succeeded());
+        assertFalse(future3.succeeded() == RequestFuture.Status.SUCCEEDED);
         assertEquals(0, consumerClient.pendingRequestCount());
         assertEquals(0, consumerClient.pendingRequestCount(node));
     }

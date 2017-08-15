@@ -85,7 +85,7 @@ class AdminClient(val time: Time,
     pendingFutures.add(future)
     future.awaitDone(Long.MaxValue, TimeUnit.MILLISECONDS)
     pendingFutures.remove(future)
-    if (future.succeeded())
+    if (future.succeeded() == RequestFuture.Status.SUCCEEDED)
       future.value().responseBody()
     else
       throw future.exception()
