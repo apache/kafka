@@ -365,9 +365,7 @@ public abstract class AbstractCoordinator implements Closeable {
             client.poll(future);
 
             if (future.succeeded() == RequestFuture.Status.SUCCEEDED) {
-                needsJoinPrepare = true;
                 onJoinComplete(generation.generationId, generation.memberId, generation.protocol, future.value());
-
                 // We reset the join group future only after the completion callback returns. This ensures
                 // that if the callback is woken up, we will retry it on the next joinGroupIfNeeded.
                 resetJoinGroupFuture();
