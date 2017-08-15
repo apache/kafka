@@ -206,15 +206,15 @@ class WorkerSinkTask extends WorkerTask {
      */
     private void onCommitCompleted(Throwable error, long seqno, Map<TopicPartition, OffsetAndMetadata> committedOffsets) {
         if (commitSeqno != seqno) {
-            log.debug("{} Received out of order callback for commit of generation {}, but most recent generation is {}",
+            log.debug("{} Received out of order commit callback for sequence number {}, but most recent sequence number is {}",
                     this, seqno, commitSeqno);
         } else {
             if (error != null) {
-                log.error("{} Commit of offsets threw an unexpected exception for generation {}: {}",
+                log.error("{} Commit of offsets threw an unexpected exception for sequence number {}: {}",
                         this, seqno, committedOffsets, error);
                 commitFailures++;
             } else {
-                log.debug("{} Finished offset commit successfully in {} ms for offset generation {}: {}",
+                log.debug("{} Finished offset commit successfully in {} ms for sequence number {}: {}",
                         this, committedOffsets, seqno, time.milliseconds() - commitStarted);
                 if (committedOffsets != null) {
                     log.debug("{} Setting last committed offsets to {}", committedOffsets);
@@ -270,8 +270,8 @@ class WorkerSinkTask extends WorkerTask {
     }
 
     private void doCommitSync(Map<TopicPartition, OffsetAndMetadata> offsets, int seqno) {
+        log.info("{} Committing offsets synchronously using sequence number: {}", this, seqno, offsets);
         try {
-            log.debug("{} Sync offset commit for generation {}: {}", this, seqno, offsets);
             consumer.commitSync(offsets);
             onCommitCompleted(null, seqno, offsets);
         } catch (WakeupException e) {
@@ -283,24 +283,27 @@ class WorkerSinkTask extends WorkerTask {
         }
     }
 
+    private void doCommitAsync(Map<TopicPartition, OffsetAndMetadata> offsets, final int seqno) {
+        log.info("{} Committing offsets asynchronously using sequence number: {}", this, seqno, offsets);
+        OffsetCommitCallback cb = new OffsetCommitCallback() {
+            @Override
+            public void onComplete(Map<TopicPartition, OffsetAndMetadata> offsets, Exception error) {
+                log.debug("{} Complete asynchronous offset commit for sequence number {}: {}", this, seqno, offsets);
+                onCommitCompleted(error, seqno, offsets);
+            }
+        };
+        consumer.commitAsync(offsets, cb);
+    }
+
     /**
      * Starts an offset commit by flushing outstanding messages from the task and then starting
      * the write commit.
      **/
-    private void doCommit(Map<TopicPartition, OffsetAndMetadata> offsets, boolean closing, final int seqno) {
-        log.info("{} Committing offsets: {}", this, offsets);
+    private void doCommit(Map<TopicPartition, OffsetAndMetadata> offsets, boolean closing, int seqno) {
         if (closing) {
             doCommitSync(offsets, seqno);
         } else {
-            OffsetCommitCallback cb = new OffsetCommitCallback() {
-                @Override
-                public void onComplete(Map<TopicPartition, OffsetAndMetadata> offsets, Exception error) {
-                    log.debug("{} Complete async offset commit callback for generation {}: {}", this, seqno, offsets);
-                    onCommitCompleted(error, seqno, offsets);
-                }
-            };
-            log.debug("{} Begin async offset commit for generation {}: {}", this, seqno, offsets);
-            consumer.commitAsync(offsets, cb);
+            doCommitAsync(offsets, seqno);
         }
     }
 
@@ -362,7 +365,6 @@ class WorkerSinkTask extends WorkerTask {
             return;
         }
 
-        log.trace("{} Offsets to commit: {}", this, commitableOffsets);
         doCommit(commitableOffsets, closing, commitSeqno);
     }
 
