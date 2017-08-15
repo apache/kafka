@@ -75,8 +75,6 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
 
     private final ProcessorSupplier<?, ?> processorSupplier;
 
-    private final KeyValueMapper<K, V, String> defaultKeyValueMapper;
-
     private final String queryableStoreName;
     private final boolean isQueryable;
 
@@ -96,12 +94,6 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         this.keySerde = null;
         this.valSerde = null;
         this.isQueryable = isQueryable;
-        this.defaultKeyValueMapper = new KeyValueMapper<K, V, String>() {
-            @Override
-            public String apply(K key, V value) {
-                return String.format("%s, %s", key, value);
-            }
-        };
     }
 
     public KTableImpl(final InternalStreamsBuilder builder,
@@ -118,12 +110,6 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         this.keySerde = keySerde;
         this.valSerde = valSerde;
         this.isQueryable = isQueryable;
-        this.defaultKeyValueMapper = new KeyValueMapper<K, V, String>() {
-            @Override
-            public String apply(K key, V value) {
-                return String.format("%s, %s", key, value);
-            }
-        };
     }
 
     @Override
@@ -268,7 +254,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
                       final String label) {
         Objects.requireNonNull(label, "label can't be null");
         final String name = builder.newName(PRINTING_NAME);
-        builder.internalTopologyBuilder.addProcessor(name, new KStreamPrint<>(new PrintForeachAction(null, defaultKeyValueMapper, label), keySerde, valSerde), this.name);
+        builder.internalTopologyBuilder.addProcessor(name, new KStreamPrint<>(new PrintForeachAction<K, V>(null, label), keySerde, valSerde, null), this.name);
     }
 
     @SuppressWarnings("deprecation")
@@ -309,7 +295,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         String name = builder.newName(PRINTING_NAME);
         try {
             PrintWriter printWriter = new PrintWriter(filePath, StandardCharsets.UTF_8.name());
-            builder.internalTopologyBuilder.addProcessor(name, new KStreamPrint<>(new PrintForeachAction(printWriter, defaultKeyValueMapper, label), keySerde, valSerde), this.name);
+            builder.internalTopologyBuilder.addProcessor(name, new KStreamPrint<>(new PrintForeachAction<K, V>(printWriter, label), keySerde, valSerde, null), this.name);
         } catch (final FileNotFoundException | UnsupportedEncodingException e) {
             throw new TopologyException(String.format("Unable to write stream to file at [%s] %s", filePath, e.getMessage()));
         }
