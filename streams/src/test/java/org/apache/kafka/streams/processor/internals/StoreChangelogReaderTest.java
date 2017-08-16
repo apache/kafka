@@ -31,12 +31,14 @@ import org.apache.kafka.test.MockRestoreCallback;
 import org.hamcrest.CoreMatchers;
 import org.junit.Test;
 
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsEqual.equalTo;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 public class StoreChangelogReaderTest {
@@ -251,6 +253,25 @@ public class StoreChangelogReaderTest {
         changelogReader.restore();
 
         assertThat(callback.restored, CoreMatchers.equalTo(Utils.mkList(KeyValue.pair(bytes, bytes), KeyValue.pair(bytes, bytes))));
+    }
+
+    @Test
+    public void shouldReturnCompletedPartitionsOnEachRestoreCall() {
+        assignPartition(10, topicPartition);
+        final byte[] bytes = new byte[0];
+        for (int i = 0; i < 5; i++) {
+            consumer.addRecord(new ConsumerRecord<>(topicPartition.topic(), topicPartition.partition(), i, bytes, bytes));
+        }
+        consumer.assign(Collections.singletonList(topicPartition));
+        changelogReader.register(new StateRestorer(topicPartition, callback, null, Long.MAX_VALUE, false));
+
+        final Collection<TopicPartition> completedFirstTime = changelogReader.restore();
+        assertTrue(completedFirstTime.isEmpty());
+        for (int i = 5; i < 10; i++) {
+            consumer.addRecord(new ConsumerRecord<>(topicPartition.topic(), topicPartition.partition(), i, bytes, bytes));
+        }
+        final Collection<TopicPartition> expected = Collections.singleton(topicPartition);
+        assertThat(changelogReader.restore(), equalTo(expected));
     }
 
     private void setupConsumer(final long messages, final TopicPartition topicPartition) {

@@ -137,16 +137,13 @@ public class StreamTask extends AbstractTask implements Punctuator {
         // initialize the topology with its own context
         processorContext = new ProcessorContextImpl(id, this, config, recordCollector, stateMgr, metrics, cache);
         this.time = time;
-        log.debug("{} Initializing", logPrefix);
-        initializeStateStores();
+
         stateMgr.registerGlobalStateStores(topology.globalStateStores());
         if (eosEnabled) {
             this.producer.initTransactions();
             this.producer.beginTransaction();
             transactionInFlight = true;
         }
-        initTopology();
-        processorContext.initialized();
     }
 
     /**
@@ -334,6 +331,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
                 processorContext.setCurrentNode(null);
             }
         }
+        taskInitialized = true;
     }
 
     /**
@@ -376,14 +374,16 @@ public class StreamTask extends AbstractTask implements Punctuator {
         // close the processors
         // make sure close() is called for each node even when there is a RuntimeException
         RuntimeException exception = null;
-        for (final ProcessorNode node : topology.processors()) {
-            processorContext.setCurrentNode(node);
-            try {
-                node.close();
-            } catch (final RuntimeException e) {
-                exception = e;
-            } finally {
-                processorContext.setCurrentNode(null);
+        if (taskInitialized) {
+            for (final ProcessorNode node : topology.processors()) {
+                processorContext.setCurrentNode(node);
+                try {
+                    node.close();
+                } catch (final RuntimeException e) {
+                    exception = e;
+                } finally {
+                    processorContext.setCurrentNode(null);
+                }
             }
         }
 
@@ -550,6 +550,14 @@ public class StreamTask extends AbstractTask implements Punctuator {
     // visible for testing only
     RecordCollector createRecordCollector() {
         return new RecordCollectorImpl(producer, id.toString());
+    }
+
+    public boolean initialize() {
+        log.debug("{} Initializing", logPrefix);
+        initializeStateStores();
+        initTopology();
+        processorContext.initialized();
+        return topology.stateStores().isEmpty();
     }
 
 }

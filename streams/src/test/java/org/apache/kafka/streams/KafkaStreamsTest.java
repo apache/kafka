@@ -437,7 +437,7 @@ public class KafkaStreamsTest {
         CLUSTER.createTopic(topic);
         final KStreamBuilder builder = new KStreamBuilder();
 
-        builder.stream(Serdes.String(), Serdes.String(), topic);
+        builder.table(Serdes.String(), Serdes.String(), topic, topic);
 
         final KafkaStreams streams = new KafkaStreams(builder, props);
         final CountDownLatch latch = new CountDownLatch(1);

@@ -18,6 +18,7 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.TopicPartition;
 
+import java.util.Collection;
 import java.util.Map;
 
 /**
@@ -42,11 +43,14 @@ public interface ChangelogReader {
 
     /**
      * Restore all registered state stores by reading from their changelogs.
+     * @return all topic partitions that have been restored
      */
-    void restore();
+    Collection<TopicPartition> restore();
 
     /**
      * @return the restored offsets for all persistent stores.
      */
     Map<TopicPartition, Long> restoredOffsets();
+
+    void reset();
 }

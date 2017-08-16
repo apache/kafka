@@ -27,6 +27,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -36,7 +37,7 @@ import java.util.Map;
 public class StandbyTask extends AbstractTask {
 
     private static final Logger log = LoggerFactory.getLogger(StandbyTask.class);
-    private final Map<TopicPartition, Long> checkpointedOffsets;
+    private Map<TopicPartition, Long> checkpointedOffsets = new HashMap<>();
 
     /**
      * Create {@link StandbyTask} with its assigned partitions
@@ -63,11 +64,6 @@ public class StandbyTask extends AbstractTask {
 
         // initialize the topology with its own context
         processorContext = new StandbyContextImpl(id, applicationId, config, stateMgr, metrics);
-
-        log.debug("{} Initializing", logPrefix);
-        initializeStateStores();
-        processorContext.initialized();
-        checkpointedOffsets = Collections.unmodifiableMap(stateMgr.checkpointed());
     }
 
     /**
@@ -77,7 +73,7 @@ public class StandbyTask extends AbstractTask {
      */
     @Override
     public void resume() {
-        log.debug("{} " + "Resuming", logPrefix);
+        log.debug("{} Resuming", logPrefix);
         updateOffsetLimits();
     }
 
@@ -123,6 +119,9 @@ public class StandbyTask extends AbstractTask {
      */
     @Override
     public void close(final boolean clean) {
+        if (!taskInitialized) {
+            return;
+        }
         log.debug("{} Closing", logPrefix);
         boolean committedSuccessfully = false;
         try {
@@ -146,6 +145,30 @@ public class StandbyTask extends AbstractTask {
 
     Map<TopicPartition, Long> checkpointedOffsets() {
         return checkpointedOffsets;
+    }
+
+    public boolean initialize() {
+        log.debug("{} Initializing", logPrefix);
+        initializeStateStores();
+        checkpointedOffsets = Collections.unmodifiableMap(stateMgr.checkpointed());
+        processorContext.initialized();
+        taskInitialized = true;
+        return true;
+    }
+
+    @Override
+    boolean process() {
+        throw new UnsupportedOperationException("process not supported by standby task");
+    }
+
+    @Override
+    boolean maybePunctuate() {
+        throw new UnsupportedOperationException("maybePunctuate not supported by standby task");
+    }
+
+    @Override
+    boolean commitNeeded() {
+        throw new UnsupportedOperationException("commitNeeded not supported by standby task");
     }
 
 }
