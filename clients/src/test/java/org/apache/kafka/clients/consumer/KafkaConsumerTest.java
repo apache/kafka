@@ -1667,7 +1667,6 @@ public class KafkaConsumerTest {
         return new KafkaConsumer<>(
                 loggerFactory,
                 clientId,
-                groupId,
                 consumerCoordinator,
                 keyDeserializer,
                 valueDeserializer,

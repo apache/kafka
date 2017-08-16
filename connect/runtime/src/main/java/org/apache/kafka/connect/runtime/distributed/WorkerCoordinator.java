@@ -24,11 +24,11 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.requests.JoinGroupRequest.ProtocolMetadata;
 import org.apache.kafka.common.utils.CircularIterator;
+import org.apache.kafka.common.utils.KafkaLogger;
+import org.apache.kafka.common.utils.KafkaLoggerFactory;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.storage.ConfigBackingStore;
 import org.apache.kafka.connect.util.ConnectorTaskId;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
 import java.nio.ByteBuffer;
@@ -44,11 +44,10 @@ import java.util.Map;
  * to workers.
  */
 public final class WorkerCoordinator extends AbstractCoordinator implements Closeable {
-    private static final Logger log = LoggerFactory.getLogger(WorkerCoordinator.class);
-
     // Currently doesn't support multiple task assignment strategies, so we just fill in a default value
     public static final String DEFAULT_SUBPROTOCOL = "default";
 
+    private final KafkaLogger log;
     private final String restUrl;
     private final ConfigBackingStore configStorage;
     private ConnectProtocol.Assignment assignmentSnapshot;
@@ -61,7 +60,8 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
     /**
      * Initialize the coordination manager.
      */
-    public WorkerCoordinator(ConsumerNetworkClient client,
+    public WorkerCoordinator(KafkaLoggerFactory loggerFactory,
+                             ConsumerNetworkClient client,
                              String groupId,
                              int rebalanceTimeoutMs,
                              int sessionTimeoutMs,
@@ -73,7 +73,8 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
                              String restUrl,
                              ConfigBackingStore configStorage,
                              WorkerRebalanceListener listener) {
-        super(client,
+        super(loggerFactory,
+              client,
               groupId,
               rebalanceTimeoutMs,
               sessionTimeoutMs,
@@ -83,6 +84,7 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
               time,
               retryBackoffMs,
               true);
+        this.log = loggerFactory.getLogger(WorkerCoordinator.class);
         this.restUrl = restUrl;
         this.configStorage = configStorage;
         this.assignmentSnapshot = null;

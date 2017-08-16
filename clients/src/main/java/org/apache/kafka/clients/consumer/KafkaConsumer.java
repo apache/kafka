@@ -551,7 +551,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
     private final KafkaLogger log;
     private final String clientId;
-    private final String groupId;
     private final ConsumerCoordinator coordinator;
     private final Deserializer<K> keyDeserializer;
     private final Deserializer<V> valueDeserializer;
@@ -645,7 +644,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             if (clientId.isEmpty())
                 clientId = "consumer-" + CONSUMER_CLIENT_ID_SEQUENCE.getAndIncrement();
             this.clientId = clientId;
-            this.groupId = config.getString(ConsumerConfig.GROUP_ID_CONFIG);
+            String groupId = config.getString(ConsumerConfig.GROUP_ID_CONFIG);
 
             KafkaLoggerFactory loggerFactory = new KafkaLoggerFactory("[Consumer clientId=" + clientId + " groupId=" + groupId + "]");
             this.log = loggerFactory.getLogger(getClass());
@@ -732,7 +731,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     PartitionAssignor.class);
             this.coordinator = new ConsumerCoordinator(loggerFactory,
                     this.client,
-                    this.groupId,
+                    groupId,
                     config.getInt(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG),
                     config.getInt(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG),
                     config.getInt(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG),
@@ -783,7 +782,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     // visible for testing
     KafkaConsumer(KafkaLoggerFactory loggerFactory,
                   String clientId,
-                  String groupId,
                   ConsumerCoordinator coordinator,
                   Deserializer<K> keyDeserializer,
                   Deserializer<V> valueDeserializer,
@@ -798,7 +796,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                   long requestTimeoutMs) {
         this.log = loggerFactory.getLogger(getClass());
         this.clientId = clientId;
-        this.groupId = groupId;
         this.coordinator = coordinator;
         this.keyDeserializer = keyDeserializer;
         this.valueDeserializer = valueDeserializer;
