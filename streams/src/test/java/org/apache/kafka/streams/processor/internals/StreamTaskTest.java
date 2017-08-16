@@ -613,6 +613,7 @@ public class StreamTaskTest {
     public void shouldThrowExceptionIfAnyExceptionsRaisedDuringCloseButStillCloseAllProcessorNodesTopology() throws Exception {
         task.close(true);
         task = createTaskThatThrowsExceptionOnClose();
+        task.initialize();
         try {
             task.close(true);
             fail("should have thrown runtime exception");
@@ -778,6 +779,17 @@ public class StreamTaskTest {
         task = null;
         assertTrue(producer.closed());
     }
+
+    @Test
+    public void shouldNotCloseTopologyProcessorNodesIfNotInitialized() {
+        final StreamTask task = createTaskThatThrowsExceptionOnClose();
+        try {
+            task.close(true);
+        } catch (Exception e) {
+            fail("should have not closed unitialized topology");
+        }
+    }
+
 
     @SuppressWarnings("unchecked")
     private StreamTask createTaskThatThrowsExceptionOnClose() {

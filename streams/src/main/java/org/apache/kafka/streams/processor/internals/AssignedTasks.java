@@ -135,7 +135,8 @@ class AssignedTasks<T extends AbstractTask> {
         log.trace("{} Suspending running {} {}", logPrefix, taskTypeName, runningTaskIds());
         firstException.compareAndSet(null, suspendTasks(running.values()));
         log.trace("{} Close restoring {} {}", logPrefix, taskTypeName, restoring.keySet());
-        firstException.compareAndSet(null, closeRestoringTasks());
+        firstException.compareAndSet(null, closeTasksUnclean(restoring.values()));
+        firstException.compareAndSet(null, closeTasksUnclean(created.values()));
         previousActiveTasks.clear();
         previousActiveTasks.addAll(running.keySet());
         running.clear();
@@ -145,13 +146,13 @@ class AssignedTasks<T extends AbstractTask> {
         return firstException.get();
     }
 
-    private RuntimeException closeRestoringTasks() {
+    private RuntimeException closeTasksUnclean(final Collection<T> tasks) {
         RuntimeException exception = null;
-        for (final T task : restoring.values()) {
+        for (final T task : tasks) {
             try {
                 task.close(false);
             } catch (final RuntimeException e) {
-                log.error("{} Failed to close restoring {}, {}", logPrefix, taskTypeName, task.id, e);
+                log.error("{} Failed to close {}, {}", logPrefix, taskTypeName, task.id, e);
                 if (exception == null) {
                     exception = e;
                 }

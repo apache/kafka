@@ -166,7 +166,9 @@ public class AssignedTasksTest {
     }
 
     @Test
-    public void shouldNotSuspendUnInitializedTasks() {
+    public void shouldCloseUnInitializedTasksOnSuspend() {
+        t1.close(false);
+        EasyMock.expectLastCall();
         EasyMock.replay(t1);
 
         assignedTasks.addNewTask(t1);

@@ -52,6 +52,7 @@ public abstract class AbstractTask {
     final String logPrefix;
     final boolean eosEnabled;
     private final StateDirectory stateDirectory;
+    boolean taskInitialized;
 
     InternalProcessorContext processorContext;
 
