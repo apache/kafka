@@ -14,6 +14,7 @@
 # limitations under the License.
 
 
+import os
 import re
 import time
 
@@ -27,13 +28,15 @@ from kafkatest.version import DEV_BRANCH
 
 
 class ZookeeperService(KafkaPathResolverMixin, Service):
+    ROOT = "/mnt/zookeeper"
+    DATA = os.path.join(ROOT, "data")
 
     logs = {
         "zk_log": {
-            "path": "/mnt/zk.log",
+            "path": "%s/zk.log" % ROOT,
             "collect_default": True},
         "zk_data": {
-            "path": "/mnt/zookeeper",
+            "path": DATA,
             "collect_default": False}
     }
 
@@ -64,19 +67,19 @@ class ZookeeperService(KafkaPathResolverMixin, Service):
         idx = self.idx(node)
         self.logger.info("Starting ZK node %d on %s", idx, node.account.hostname)
 
-        node.account.ssh("mkdir -p /mnt/zookeeper")
-        node.account.ssh("echo %d > /mnt/zookeeper/myid" % idx)
+        node.account.ssh("mkdir -p %s" % ZookeeperService.DATA)
+        node.account.ssh("echo %d > %s/myid" % (idx, ZookeeperService.DATA))
 
         self.security_config.setup_node(node)
         config_file = self.render('zookeeper.properties')
         self.logger.info("zookeeper.properties:")
         self.logger.info(config_file)
-        node.account.create_file("/mnt/zookeeper.properties", config_file)
+        node.account.create_file("%s/zookeeper.properties" % ZookeeperService.ROOT, config_file)
 
         start_cmd = "export KAFKA_OPTS=\"%s\";" % (self.kafka_opts + ' ' + self.security_system_properties) \
             if self.security_config.zk_sasl else self.kafka_opts
         start_cmd += "%s " % self.path.script("zookeeper-server-start.sh", node)
-        start_cmd += "/mnt/zookeeper.properties 1>> %(path)s 2>> %(path)s &" % self.logs["zk_log"]
+        start_cmd += "%s/zookeeper.properties &>> %s &" % (ZookeeperService.ROOT, self.logs["zk_log"]["path"])
         node.account.ssh(start_cmd)
 
         time.sleep(5)  # give it some time to start
@@ -104,7 +107,7 @@ class ZookeeperService(KafkaPathResolverMixin, Service):
             self.logger.warn("%s %s was still alive at cleanup time. Killing forcefully..." %
                              (self.__class__.__name__, node.account))
         node.account.kill_process("zookeeper", clean_shutdown=False, allow_fail=True)
-        node.account.ssh("rm -rf /mnt/zookeeper /mnt/zookeeper.properties /mnt/zk.log", allow_fail=False)
+        node.account.ssh("rm -rf -- %s" % ZookeeperService.ROOT, allow_fail=False)
 
 
     def connect_setting(self, chroot=None):
