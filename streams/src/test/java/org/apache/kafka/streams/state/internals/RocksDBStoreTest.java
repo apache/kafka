@@ -158,12 +158,10 @@ public class RocksDBStoreTest {
 
         restoreListener.onRestoreEnd(null, null, 0);
         assertFalse("Should have set bulk loading to false", subject.isPrepareForBulkload());
-
-        assertTrue("Should have been re-opened", restoreListener.isWasReOpenedAfterRestore());
     }
 
     @Test
-    public void shouldNotTogglePrepareForBulkloadSettingWhenPrexistingSstFiles() throws Exception {
+    public void shouldTogglePrepareForBulkloadSettingWhenPrexistingSstFiles() throws Exception {
         final List<KeyValue<byte[], byte[]>> entries = getKeyValueEntries();
 
         subject.init(context, subject);
@@ -173,14 +171,10 @@ public class RocksDBStoreTest {
             (RocksDBStore.RocksDBBatchingRestoreCallback) subject.batchingStateRestoreCallback;
 
         restoreListener.onRestoreStart(null, null, 0, 0);
-
-        // since pre-existing sst files, should not have called the toggleForBulkload method, hence,
-        // prepareForBulkLoad is never set to true;
-        assertFalse("Should have not set bulk loading to true", subject.isPrepareForBulkload());
+        assertTrue("Should have not set bulk loading to true", subject.isPrepareForBulkload());
 
         restoreListener.onRestoreEnd(null, null, 0);
-
-        assertFalse("Should not have have been re-opened", restoreListener.isWasReOpenedAfterRestore());
+        assertFalse("Should have set bulk loading to false", subject.isPrepareForBulkload());
     }
 
     @Test
