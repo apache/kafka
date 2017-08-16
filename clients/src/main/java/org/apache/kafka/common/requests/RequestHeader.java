@@ -16,23 +16,20 @@
  */
 package org.apache.kafka.common.requests;
 
-import static org.apache.kafka.common.protocol.Protocol.REQUEST_HEADER;
+import org.apache.kafka.common.protocol.Protocol;
+import org.apache.kafka.common.protocol.types.Schema;
+import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
-
-import org.apache.kafka.common.protocol.Protocol;
-import org.apache.kafka.common.protocol.types.Field;
-import org.apache.kafka.common.protocol.types.Struct;
 
 /**
  * The header for a request in the Kafka protocol
  */
 public class RequestHeader extends AbstractRequestResponse {
-
-    private static final Field API_KEY_FIELD = REQUEST_HEADER.get("api_key");
-    private static final Field API_VERSION_FIELD = REQUEST_HEADER.get("api_version");
-    private static final Field CLIENT_ID_FIELD = REQUEST_HEADER.get("client_id");
-    private static final Field CORRELATION_ID_FIELD = REQUEST_HEADER.get("correlation_id");
+    private static final String API_KEY_FIELD_NAME = "api_key";
+    private static final String API_VERSION_FIELD_NAME = "api_version";
+    private static final String CLIENT_ID_FIELD_NAME = "client_id";
+    private static final String CORRELATION_ID_FIELD_NAME = "correlation_id";
 
     private final short apiKey;
     private final short apiVersion;
@@ -40,25 +37,34 @@ public class RequestHeader extends AbstractRequestResponse {
     private final int correlationId;
 
     public RequestHeader(Struct struct) {
-        apiKey = struct.getShort(API_KEY_FIELD);
-        apiVersion = struct.getShort(API_VERSION_FIELD);
-        clientId = struct.getString(CLIENT_ID_FIELD);
-        correlationId = struct.getInt(CORRELATION_ID_FIELD);
+        apiKey = struct.getShort(API_KEY_FIELD_NAME);
+        apiVersion = struct.getShort(API_VERSION_FIELD_NAME);
+
+        // only v0 of the controlled shutdown request is missing the clientId
+        if (struct.hasField(CLIENT_ID_FIELD_NAME))
+            clientId = struct.getString(CLIENT_ID_FIELD_NAME);
+        else
+            clientId = "";
+        correlationId = struct.getInt(CORRELATION_ID_FIELD_NAME);
     }
 
-    public RequestHeader(short apiKey, short version, String client, int correlation) {
+    public RequestHeader(short apiKey, short version, String clientId, int correlation) {
         this.apiKey = apiKey;
         this.apiVersion = version;
-        this.clientId = client;
+        this.clientId = clientId;
         this.correlationId = correlation;
     }
 
     public Struct toStruct() {
-        Struct struct = new Struct(Protocol.REQUEST_HEADER);
-        struct.set(API_KEY_FIELD, apiKey);
-        struct.set(API_VERSION_FIELD, apiVersion);
-        struct.set(CLIENT_ID_FIELD, clientId);
-        struct.set(CORRELATION_ID_FIELD, correlationId);
+        Schema schema = Protocol.requestHeaderSchema(apiKey, apiVersion);
+        Struct struct = new Struct(schema);
+        struct.set(API_KEY_FIELD_NAME, apiKey);
+        struct.set(API_VERSION_FIELD_NAME, apiVersion);
+
+        // only v0 of the controlled shutdown request is missing the clientId
+        if (struct.hasField(CLIENT_ID_FIELD_NAME))
+            struct.set(CLIENT_ID_FIELD_NAME, clientId);
+        struct.set(CORRELATION_ID_FIELD_NAME, correlationId);
         return struct;
     }
 
@@ -83,11 +89,37 @@ public class RequestHeader extends AbstractRequestResponse {
     }
 
     public static RequestHeader parse(ByteBuffer buffer) {
-        return new RequestHeader(Protocol.REQUEST_HEADER.read(buffer));
+        short apiKey = buffer.getShort();
+        short apiVersion = buffer.getShort();
+        Schema schema = Protocol.requestHeaderSchema(apiKey, apiVersion);
+        buffer.rewind();
+        return new RequestHeader(schema.read(buffer));
     }
 
     @Override
     public String toString() {
         return toStruct().toString();
     }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+
+        RequestHeader that = (RequestHeader) o;
+        return apiKey == that.apiKey &&
+                apiVersion == that.apiVersion &&
+                correlationId == that.correlationId &&
+                (clientId == null ? that.clientId == null : clientId.equals(that.clientId));
+    }
+
+    @Override
+    public int hashCode() {
+        int result = (int) apiKey;
+        result = 31 * result + (int) apiVersion;
+        result = 31 * result + (clientId != null ? clientId.hashCode() : 0);
+        result = 31 * result + correlationId;
+        return result;
+    }
+
 }

@@ -27,6 +27,7 @@ import org.junit.Test;
 
 import java.util.Collections;
 import java.util.Map;
+import java.util.LinkedHashMap;
 
 import static org.junit.Assert.assertNotNull;
 
@@ -90,6 +91,17 @@ public class ProcessorNodeTest {
         }
     }
 
+    private void testSpecificMetrics(final Metrics metrics, final String groupName,
+                                     final String opName,
+                                     final Map<String, String> metricTags) {
+        assertNotNull(metrics.metrics().get(metrics.metricName(opName + "-latency-avg", groupName,
+                "The average latency of " + opName + " operation.", metricTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName(opName + "-latency-max", groupName,
+                "The max latency of " + opName + " operation.", metricTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName(opName + "-rate", groupName,
+                "The average number of occurrence of " + opName + " operation per second.", metricTags)));
+
+    }
     @Test
     public void testMetrics() {
         final StateSerdes anyStateSerde = StateSerdes.withBuiltinTypes("anyName", Bytes.class, Bytes.class);
@@ -99,31 +111,34 @@ public class ProcessorNodeTest {
         node.init(context);
 
         Metrics metrics = context.baseMetrics();
-        String name = "task." + context.taskId() + "." + node.name();
-        String[] entities = {"all", name};
+        String name = "task." + context.taskId();
         String[] latencyOperations = {"process", "punctuate", "create", "destroy"};
         String throughputOperation =  "forward";
         String groupName = "stream-processor-node-metrics";
-        Map<String, String> tags = Collections.singletonMap("processor-node-id", node.name());
+        final Map<String, String> metricTags = new LinkedHashMap<>();
+        metricTags.put("processor-node-id", node.name());
+        metricTags.put("task-id", context.taskId().toString());
+
 
         for (String operation : latencyOperations) {
             assertNotNull(metrics.getSensor(operation));
-            assertNotNull(metrics.getSensor(name + "-" + operation));
         }
         assertNotNull(metrics.getSensor(throughputOperation));
 
-        for (String entity : entities) {
-            for (String operation : latencyOperations) {
-                assertNotNull(metrics.metrics().get(metrics.metricName(entity + "-" + operation + "-latency-avg", groupName,
-                    "The average latency in milliseconds of " + entity + " " + operation + " operation.", tags)));
-                assertNotNull(metrics.metrics().get(metrics.metricName(entity + "-" + operation + "-latency-max", groupName,
-                    "The max latency in milliseconds of " + entity + " " + operation + " operation.", tags)));
-                assertNotNull(metrics.metrics().get(metrics.metricName(entity + "-" + operation + "-rate", groupName,
-                    "The average number of occurrence of " + entity + " " + operation + " operation per second.", tags)));
-            }
-            assertNotNull(metrics.metrics().get(metrics.metricName(entity + "-" + throughputOperation + "-rate", groupName,
-                "The average number of occurrence of " + entity + " " + throughputOperation + " operation per second.", tags)));
+        for (String opName : latencyOperations) {
+            testSpecificMetrics(metrics, groupName, opName, metricTags);
         }
+        assertNotNull(metrics.metrics().get(metrics.metricName(throughputOperation + "-rate", groupName,
+                "The average number of occurrence of " + throughputOperation + " operation per second.", metricTags)));
+
+        // test "all"
+        metricTags.put("processor-node-id", "all");
+        for (String opName : latencyOperations) {
+            testSpecificMetrics(metrics, groupName, opName, metricTags);
+        }
+        assertNotNull(metrics.metrics().get(metrics.metricName(throughputOperation + "-rate", groupName,
+                "The average number of occurrence of " + throughputOperation + " operation per second.", metricTags)));
+
 
         context.close();
     }

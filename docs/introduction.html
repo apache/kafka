@@ -146,7 +146,7 @@
   Kafka does it better. By having a notion of parallelism&mdash;the partition&mdash;within the topics, Kafka is able to provide both ordering guarantees and load balancing over a pool of consumer processes. This is achieved by assigning the partitions in the topic to the consumers in the consumer group so that each partition is consumed by exactly one consumer in the group. By doing this we ensure that the consumer is the only reader of that partition and consumes the data in order. Since there are many partitions this still balances the load over many consumer instances. Note however that there cannot be more consumer instances in a consumer group than partitions.
   </p>
 
-  <h4>Kafka as a Storage System</h4>
+  <h4 id="kafka_storage">Kafka as a Storage System</h4>
 
   <p>
   Any message queue that allows publishing messages decoupled from consuming them is effectively acting as a storage system for the in-flight messages. What is different about Kafka is that it is a very good storage system.
@@ -159,6 +159,9 @@
   </p>
   <p>
   As a result of taking storage seriously and allowing the clients to control their read position, you can think of Kafka as a kind of special purpose distributed filesystem dedicated to high-performance, low-latency commit log storage, replication, and propagation.
+  </p>
+  <p>
+  For details about the Kafka's commit log storage and replication design, please read <a href="https://kafka.apache.org/documentation/#design">this</a> page.
   </p>
   <h4>Kafka for Stream Processing</h4>
   <p>

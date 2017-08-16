@@ -18,9 +18,8 @@ package org.apache.kafka.streams.examples.pipe;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.common.utils.Exit;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 
 import java.util.Properties;
@@ -49,15 +48,15 @@ public class PipeDemo {
         // setting offset reset to earliest so that we can re-run the demo code with the same pre-loaded data
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
 
-        KStreamBuilder builder = new KStreamBuilder();
+        StreamsBuilder builder = new StreamsBuilder();
 
-        builder.stream("streams-file-input").to("streams-pipe-output");
+        builder.stream("streams-plaintext-input").to("streams-pipe-output");
 
-        final KafkaStreams streams = new KafkaStreams(builder, props);
+        final KafkaStreams streams = new KafkaStreams(builder.build(), props);
         final CountDownLatch latch = new CountDownLatch(1);
 
         // attach shutdown handler to catch control-c
-        Runtime.getRuntime().addShutdownHook(new Thread("streams-wordcount-shutdown-hook") {
+        Runtime.getRuntime().addShutdownHook(new Thread("streams-pipe-shutdown-hook") {
             @Override
             public void run() {
                 streams.close();
@@ -69,8 +68,8 @@ public class PipeDemo {
             streams.start();
             latch.await();
         } catch (Throwable e) {
-            Exit.exit(1);
+            System.exit(1);
         }
-        Exit.exit(0);
+        System.exit(0);
     }
 }

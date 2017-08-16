@@ -68,7 +68,7 @@ public class WorkerConnector {
     public void initialize(ConnectorConfig connectorConfig) {
         try {
             this.config = connectorConfig.originalsStrings();
-            log.debug("Initializing connector {} with config {}", connName, config);
+            log.debug("{} Initializing connector {} with config {}", this, connName, config);
 
             connector.initialize(new ConnectorContext() {
                 @Override
@@ -78,13 +78,13 @@ public class WorkerConnector {
 
                 @Override
                 public void raiseError(Exception e) {
-                    log.error("Connector raised an error {}", connName, e);
+                    log.error("{} Connector raised an error", this, e);
                     onFailure(e);
                     ctx.raiseError(e);
                 }
             });
         } catch (Throwable t) {
-            log.error("Error initializing connector {}", connName, t);
+            log.error("{} Error initializing connector", this, t);
             onFailure(t);
         }
     }
@@ -105,7 +105,7 @@ public class WorkerConnector {
                     throw new IllegalArgumentException("Cannot start connector in state " + state);
             }
         } catch (Throwable t) {
-            log.error("Error while starting connector {}", connName, t);
+            log.error("{} Error while starting connector", this, t);
             onFailure(t);
             return false;
         }
@@ -149,7 +149,7 @@ public class WorkerConnector {
                     throw new IllegalArgumentException("Cannot pause connector in state " + state);
             }
         } catch (Throwable t) {
-            log.error("Error while shutting down connector {}", connName, t);
+            log.error("{} Error while shutting down connector", this, t);
             statusListener.onFailure(connName, t);
             this.state = State.FAILED;
         }
@@ -161,7 +161,7 @@ public class WorkerConnector {
                 connector.stop();
             this.state = State.STOPPED;
         } catch (Throwable t) {
-            log.error("Error while shutting down connector {}", connName, t);
+            log.error("{} Error while shutting down connector", this, t);
             this.state = State.FAILED;
         } finally {
             statusListener.onShutdown(connName);
@@ -170,11 +170,11 @@ public class WorkerConnector {
 
     public void transitionTo(TargetState targetState) {
         if (state == State.FAILED) {
-            log.warn("Cannot transition connector {} to {} since it has failed", connName, targetState);
+            log.warn("{} Cannot transition connector to {} since it has failed", this, targetState);
             return;
         }
 
-        log.debug("Transition connector {} to {}", connName, targetState);
+        log.debug("{} Transition connector to {}", this, targetState);
         if (targetState == TargetState.PAUSED) {
             pause();
         } else if (targetState == TargetState.STARTED) {
@@ -198,8 +198,7 @@ public class WorkerConnector {
     @Override
     public String toString() {
         return "WorkerConnector{" +
-                "connName='" + connName + '\'' +
-                ", connector=" + connector +
+                "id=" + connName +
                 '}';
     }
 }
