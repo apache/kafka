@@ -179,6 +179,8 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         } catch (IOException e) {
             throw new ProcessorStateException(e);
         }
+
+        open = true;
     }
 
     public void init(ProcessorContext context, StateStore root) {
@@ -190,8 +192,6 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         // value getter should always read directly from rocksDB
         // since it is only for values that are already flushed
         context.register(root, false, this.batchingStateRestoreCallback);
-
-        open = true;
     }
 
     private RocksDB openDB(File dir, Options options, int ttl) throws IOException {
@@ -270,7 +270,6 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
             if (sstFileNames != null && sstFileNames.length > 0) {
                 try {
                     this.db.compactRange(true, 1, 0);
-
                 } catch (RocksDBException e) {
                     throw new ProcessorStateException("Error while range compacting during restoring  store " + this.name, e);
                 }
@@ -285,7 +284,6 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         close();
         this.prepareForBulkload = prepareForBulkload;
         openDB(internalProcessorContext);
-        open = true;
     }
 
     @SuppressWarnings("unchecked")
