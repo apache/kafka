@@ -24,6 +24,7 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Transformer;
 import org.apache.kafka.streams.kstream.TransformerSupplier;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.junit.Rule;
@@ -39,38 +40,46 @@ public class KStreamTransformTest {
     @Rule
     public final KStreamTestDriver driver = new KStreamTestDriver();
 
+    private Punctuator punctuator;
+
+    private final TransformerSupplier<Number, Number, KeyValue<Integer, Integer>> transformerSupplier =
+        new TransformerSupplier<Number, Number, KeyValue<Integer, Integer>>() {
+            public Transformer<Number, Number, KeyValue<Integer, Integer>> get() {
+                return new Transformer<Number, Number, KeyValue<Integer, Integer>>() {
+
+                    private int total = 0;
+
+                    @Override
+                    public void init(final ProcessorContext context) {
+                        punctuator = new Punctuator() {
+                            @Override
+                            public void punctuate(long timestamp) {
+                                context.forward(-1, (int) timestamp);
+                            }
+                        };
+                    }
+
+                    @Override
+                    public KeyValue<Integer, Integer> transform(Number key, Number value) {
+                        total += value.intValue();
+                        return KeyValue.pair(key.intValue() * 2, total);
+                    }
+
+                    @Override
+                    public KeyValue<Integer, Integer> punctuate(long timestamp) {
+                        return KeyValue.pair(-1, (int) timestamp);
+                    }
+
+                    @Override
+                    public void close() {
+                    }
+                };
+            }
+        };
+
     @Test
     public void testTransform() {
         StreamsBuilder builder = new StreamsBuilder();
-
-        TransformerSupplier<Number, Number, KeyValue<Integer, Integer>> transformerSupplier =
-            new TransformerSupplier<Number, Number, KeyValue<Integer, Integer>>() {
-                public Transformer<Number, Number, KeyValue<Integer, Integer>> get() {
-                    return new Transformer<Number, Number, KeyValue<Integer, Integer>>() {
-
-                        private int total = 0;
-
-                        @Override
-                        public void init(ProcessorContext context) {
-                        }
-
-                        @Override
-                        public KeyValue<Integer, Integer> transform(Number key, Number value) {
-                            total += value.intValue();
-                            return KeyValue.pair(key.intValue() * 2, total);
-                        }
-
-                        @Override
-                        public KeyValue<Integer, Integer> punctuate(long timestamp) {
-                            return KeyValue.pair(-1, (int) timestamp);
-                        }
-
-                        @Override
-                        public void close() {
-                        }
-                    };
-                }
-            };
 
         final int[] expectedKeys = {1, 10, 100, 1000};
 
@@ -83,8 +92,35 @@ public class KStreamTransformTest {
             driver.process(topicName, expectedKey, expectedKey * 10);
         }
 
-        driver.punctuate(2);
-        driver.punctuate(3);
+        driver.punctuate(2, punctuator);
+        driver.punctuate(3, punctuator);
+
+        assertEquals(6, processor.processed.size());
+
+        String[] expected = {"2:10", "20:110", "200:1110", "2000:11110", "-1:2", "-1:3"};
+
+        for (int i = 0; i < expected.length; i++) {
+            assertEquals(expected[i], processor.processed.get(i));
+        }
+    }
+
+    @Test @Deprecated
+    public void testTransformWithDeprecatedPunctuate() {
+        StreamsBuilder builder = new StreamsBuilder();
+
+        final int[] expectedKeys = {1, 10, 100, 1000};
+
+        MockProcessorSupplier<Integer, Integer> processor = new MockProcessorSupplier<>();
+        KStream<Integer, Integer> stream = builder.stream(intSerde, intSerde, topicName);
+        stream.transform(transformerSupplier).process(processor);
+
+        driver.setUp(builder);
+        for (int expectedKey : expectedKeys) {
+            driver.process(topicName, expectedKey, expectedKey * 10);
+        }
+
+        driver.punctuateDeprecated(2);
+        driver.punctuateDeprecated(3);
 
         assertEquals(6, processor.processed.size());
 
