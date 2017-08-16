@@ -72,7 +72,8 @@ public class KafkaLogger {
     }
     
     public void debug(String message, Object... args) {
-        logger.debug(logPrefix + message, args);
+        if (logger.isDebugEnabled())
+            logger.debug(logPrefix + message, args);
     }
 
     public void warn(String message) {
