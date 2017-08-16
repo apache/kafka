@@ -80,7 +80,7 @@ public class WorkerGroupMember {
             clientId = clientIdConfig.length() <= 0 ? "connect-" + CONNECT_CLIENT_ID_SEQUENCE.getAndIncrement() : clientIdConfig;
             String groupId = config.getString(DistributedConfig.GROUP_ID_CONFIG);
 
-            KafkaLoggerFactory loggerFactory = new KafkaLoggerFactory("[Worker clientId=" + clientId + " groupId=" + groupId);
+            KafkaLoggerFactory loggerFactory = new KafkaLoggerFactory("[Worker clientId=" + clientId + " groupId=" + groupId + "]");
             this.log = loggerFactory.getLogger(WorkerGroupMember.class);
 
             Map<String, String> metricsTags = new LinkedHashMap<>();
