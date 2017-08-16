@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.utils.Utils;
@@ -35,6 +36,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsEqual.equalTo;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 public class AssignedTasksTest {
 
@@ -311,6 +313,69 @@ public class AssignedTasksTest {
         assertThat(assignedTasks.runningTaskIds(), equalTo(Collections.singleton(taskId1)));
         EasyMock.verify(t1, taskAction);
     }
+
+    @Test
+    public void shouldCommitRunningTasks() {
+        mockTaskInitialization();
+        t1.commit();
+        EasyMock.expectLastCall();
+        EasyMock.replay(t1);
+
+        assignedTasks.addNewTask(t1);
+        assignedTasks.initializeNewTasks();
+
+        assignedTasks.commit();
+        EasyMock.verify(t1);
+    }
+
+    @Test
+    public void shouldCloseTaskOnCommitIfProduceFencedException() {
+        mockTaskInitialization();
+        t1.commit();
+        EasyMock.expectLastCall().andThrow(new ProducerFencedException(""));
+        t1.close(false);
+        EasyMock.expectLastCall();
+        EasyMock.replay(t1);
+        assignedTasks.addNewTask(t1);
+        assignedTasks.initializeNewTasks();
+
+        assignedTasks.commit();
+        EasyMock.verify(t1);
+    }
+
+    @Test
+    public void shouldNotThrowCommitFailedExceptionOnCommit() {
+        mockTaskInitialization();
+        t1.commit();
+        EasyMock.expectLastCall().andThrow(new CommitFailedException());
+        EasyMock.replay(t1);
+        assignedTasks.addNewTask(t1);
+        assignedTasks.initializeNewTasks();
+
+        assignedTasks.commit();
+        assertThat(assignedTasks.runningTaskIds(), equalTo(Collections.singleton(taskId1)));
+        EasyMock.verify(t1);
+    }
+
+    @Test
+    public void shouldThrowExceptionOnCommitWhenNotCommitFailedOrProducerFenced() {
+        mockTaskInitialization();
+        t1.commit();
+        EasyMock.expectLastCall().andThrow(new RuntimeException(""));
+        EasyMock.replay(t1);
+        assignedTasks.addNewTask(t1);
+        assignedTasks.initializeNewTasks();
+
+        try {
+            assignedTasks.commit();
+            fail("Should have thrown exception");
+        } catch (Exception e) {
+            // ok
+        }
+        assertThat(assignedTasks.runningTaskIds(), equalTo(Collections.singleton(taskId1)));
+        EasyMock.verify(t1);
+    }
+
 
     private RuntimeException suspendTask() {
         assignedTasks.addNewTask(t1);

@@ -340,6 +340,9 @@ class AssignedTasks {
             final Task task = it.next();
             try {
                 action.apply(task);
+            } catch (final CommitFailedException e) {
+                // commit failed. This is already logged inside the task as WARN and we can just log it again here.
+                log.warn("{} Failed to commit {} {} during {} state due to CommitFailedException; this task may be no longer owned by the thread", logPrefix, taskTypeName, task.id(), action.name());
             } catch (final ProducerFencedException e) {
                 closeZombieTask(task);
                 it.remove();
