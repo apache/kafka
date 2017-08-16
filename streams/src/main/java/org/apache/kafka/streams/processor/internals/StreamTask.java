@@ -381,14 +381,16 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         // close the processors
         // make sure close() is called for each node even when there is a RuntimeException
         RuntimeException exception = null;
-        for (final ProcessorNode node : topology.processors()) {
-            processorContext.setCurrentNode(node);
-            try {
-                node.close();
-            } catch (final RuntimeException e) {
-                exception = e;
-            } finally {
-                processorContext.setCurrentNode(null);
+        if (taskInitialized) {
+            for (final ProcessorNode node : topology.processors()) {
+                processorContext.setCurrentNode(node);
+                try {
+                    node.close();
+                } catch (final RuntimeException e) {
+                    exception = e;
+                } finally {
+                    processorContext.setCurrentNode(null);
+                }
             }
         }
 
@@ -593,6 +595,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         initializeStateStores();
         initTopology();
         processorContext.initialized();
+        taskInitialized = true;
         return topology.stateStores().isEmpty();
     }
 

@@ -225,6 +225,7 @@ class TaskManager {
         }
         // remove the changelog partitions from restore consumer
         unAssignChangeLogPartitions();
+        taskCreator.close();
 
     }
 
@@ -300,5 +301,10 @@ class TaskManager {
                 restoreConsumer.seekToBeginning(singleton(partition));
             }
         }
+    }
+
+    void commitAll() {
+        active.commit();
+        standby.commit();
     }
 }

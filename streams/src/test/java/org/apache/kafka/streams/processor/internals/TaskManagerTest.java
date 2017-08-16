@@ -368,6 +368,50 @@ public class TaskManagerTest {
         verify(restoreConsumer);
     }
 
+    @Test
+    public void shouldCommitActiveAndStandbyTasks() {
+        active.commit();
+        standby.commit();
+        EasyMock.expectLastCall();
+
+        replay();
+        taskManager.commitAll();
+
+        verify(active, standby);
+    }
+
+    @Test
+    public void shouldPropagateExceptionFromActiveCommit() {
+        // upgrade to strict mock to ensure no calls
+        checkOrder(standby, true);
+        active.commit();
+        EasyMock.expectLastCall().andThrow(new RuntimeException(""));
+        replay();
+
+        try {
+            taskManager.commitAll();
+            fail("should have thrown first exception");
+        } catch (Exception e) {
+            // ok
+        }
+        verify(active, standby);
+    }
+
+    @Test
+    public void shouldPropagateExceptionFromStandbyCommit() {
+        standby.commit();
+        EasyMock.expectLastCall().andThrow(new RuntimeException(""));
+        replay();
+
+        try {
+            taskManager.commitAll();
+            fail("should have thrown exception");
+        } catch (Exception e) {
+            // ok
+        }
+        verify(standby);
+    }
+
     private void mockAssignStandbyPartitions(final long offset) {
         final Task task = EasyMock.createNiceMock(Task.class);
         EasyMock.expect(active.allTasksRunning()).andReturn(true);

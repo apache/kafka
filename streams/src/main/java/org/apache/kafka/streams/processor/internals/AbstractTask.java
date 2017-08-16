@@ -50,6 +50,7 @@ public abstract class AbstractTask implements Task {
     final Consumer consumer;
     final String logPrefix;
     final boolean eosEnabled;
+    boolean taskInitialized;
     private final StateDirectory stateDirectory;
 
     InternalProcessorContext processorContext;

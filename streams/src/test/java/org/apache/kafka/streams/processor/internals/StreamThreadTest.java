@@ -48,7 +48,6 @@ import org.apache.kafka.test.MockTimestampExtractor;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 import org.easymock.EasyMock;
-import org.easymock.IAnswer;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
@@ -708,21 +707,8 @@ public class StreamThreadTest {
         final TaskManager taskManager = EasyMock.createMock(TaskManager.class);
         taskManager.setConsumer(EasyMock.anyObject(Consumer.class));
         EasyMock.expectLastCall();
-        IAnswer<Object> checkCommitAction = new IAnswer<Object>() {
-            @Override
-            public Object answer() throws Throwable {
-                final Object[] currentArguments = EasyMock.getCurrentArguments();
-                TaskAction action = (TaskAction) currentArguments[0];
-                if (!action.name().equals("commit")) {
-                    throw new IllegalArgumentException("expected to get commit action but was:" + action.name());
-                }
-                return null;
-            }
-        };
-        taskManager.performOnActiveTasks(EasyMock.anyObject(TaskAction.class), EasyMock.eq(false));
-        EasyMock.expectLastCall().andAnswer(checkCommitAction).times(numberOfCommits);
-        taskManager.performOnStandbyTasks(EasyMock.anyObject(TaskAction.class), EasyMock.eq(false));
-        EasyMock.expectLastCall().andAnswer(checkCommitAction).times(numberOfCommits);
+        taskManager.commitAll();
+        EasyMock.expectLastCall().times(numberOfCommits);
         EasyMock.replay(taskManager, consumer);
         return taskManager;
     }
@@ -802,14 +788,14 @@ public class StreamThreadTest {
         }
     }
 
+    @SuppressWarnings("unchecked")
     @Test
-    public void shouldCloseThreadProducerOnCloseIfEosDisabled() throws InterruptedException {
+    public void shouldShutdownTaskManagerOnClose() throws InterruptedException {
         final Consumer<byte[], byte[]> consumer = EasyMock.createNiceMock(Consumer.class);
         final TaskManager taskManager = EasyMock.createNiceMock(TaskManager.class);
-
         taskManager.setConsumer(EasyMock.anyObject(Consumer.class));
         EasyMock.expectLastCall();
-        taskManager.closeProducer();
+        taskManager.shutdown(true);
         EasyMock.expectLastCall();
         EasyMock.replay(taskManager, consumer);
 

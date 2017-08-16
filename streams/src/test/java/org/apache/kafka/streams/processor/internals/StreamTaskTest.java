@@ -743,6 +743,7 @@ public class StreamTaskTest {
     public void shouldThrowExceptionIfAnyExceptionsRaisedDuringCloseButStillCloseAllProcessorNodesTopology() throws Exception {
         task.close(true);
         task = createTaskThatThrowsExceptionOnClose();
+        task.initialize();
         try {
             task.close(true);
             fail("should have thrown runtime exception");
@@ -959,7 +960,7 @@ public class StreamTaskTest {
         final StreamTask task = new StreamTask(taskId00, applicationId, Utils.mkSet(partition1), topology, consumer,
                                                changelogReader, eosConfig, streamsMetrics, stateDirectory, null, time, producer);
 
-
+        task.initialize();
         try {
             task.suspend();
             fail("should have thrown an exception");
@@ -994,6 +995,16 @@ public class StreamTaskTest {
             // all good
         }
         assertTrue(stateManagerCloseCalled.get());
+    }
+
+    @Test
+    public void shouldNotCloseTopologyProcessorNodesIfNotInitialized() {
+        final StreamTask task = createTaskThatThrowsExceptionOnClose();
+        try {
+            task.close(true);
+        } catch (Exception e) {
+            fail("should have not closed unitialized topology");
+        }
     }
 
     @SuppressWarnings("unchecked")

@@ -865,7 +865,7 @@ public class StreamThread extends Thread implements ThreadDataProvider {
     }
 
     private void maybePunctuateSystemTime() {
-        final RuntimeException e = taskManager.performOnActiveTasks(new org.apache.kafka.streams.processor.internals.TaskAction() {
+        final RuntimeException e = taskManager.performOnActiveTasks(new TaskAction() {
             @Override
             public String name() {
                 return "punctuate";
@@ -931,7 +931,7 @@ public class StreamThread extends Thread implements ThreadDataProvider {
                         logPrefix, taskManager.activeTaskIds(), taskManager.standbyTaskIds(), now - lastCommitMs, commitTimeMs);
             }
 
-            commitAll();
+            taskManager.commitAll();
 
             if (log.isDebugEnabled()) {
                 log.info("{} Committed all active tasks {} and standby tasks {} in {}ms",
@@ -941,32 +941,6 @@ public class StreamThread extends Thread implements ThreadDataProvider {
             lastCommitMs = now;
 
             processStandbyRecords = true;
-        }
-    }
-
-    /**
-     * Commit the states of all its tasks
-     */
-    private void commitAll() {
-        final org.apache.kafka.streams.processor.internals.TaskAction commitAction = new org.apache.kafka.streams.processor.internals.TaskAction() {
-            @Override
-            public String name() {
-                return "commit";
-            }
-
-            @Override
-            public void apply(final Task task) {
-                commitOne(task);
-            }
-        };
-        final RuntimeException e = taskManager.performOnActiveTasks(commitAction, false);
-        if (e != null) {
-            throw e;
-        }
-
-        final RuntimeException standbyTaskCommitException = taskManager.performOnStandbyTasks(commitAction, false);
-        if (standbyTaskCommitException != null) {
-            throw standbyTaskCommitException;
         }
     }
 
@@ -1208,7 +1182,7 @@ public class StreamThread extends Thread implements ThreadDataProvider {
             .append(indent).append("\tStreamsThread threadId: ").append(getName()).append("\n");
 
         // iterate and print active tasks
-        final org.apache.kafka.streams.processor.internals.TaskAction printAction = new org.apache.kafka.streams.processor.internals.TaskAction() {
+        final TaskAction printAction = new TaskAction() {
             @Override
             public String name() {
                 return "print";
@@ -1240,9 +1214,6 @@ public class StreamThread extends Thread implements ThreadDataProvider {
         setState(State.PENDING_SHUTDOWN);
         log.info("{} Shutting down", logPrefix);
         taskManager.shutdown(cleanRun);
-
-        // close all embedded clients
-        taskManager.closeProducer();
 
         try {
             consumer.close();

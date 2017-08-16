@@ -420,7 +420,7 @@ public class StandbyTaskTest {
                 closedStateManager.set(true);
             }
         };
-
+        task.initialize();
         try {
             task.close(true);
             fail("should have thrown exception");

@@ -119,6 +119,9 @@ public class StandbyTask extends AbstractTask {
      */
     @Override
     public void close(final boolean clean) {
+        if (!taskInitialized) {
+            return;
+        }
         log.debug("{} Closing", logPrefix);
         boolean committedSuccessfully = false;
         try {
@@ -178,6 +181,7 @@ public class StandbyTask extends AbstractTask {
         initializeStateStores();
         checkpointedOffsets = Collections.unmodifiableMap(stateMgr.checkpointed());
         processorContext.initialized();
+        taskInitialized = true;
         return true;
     }
 
