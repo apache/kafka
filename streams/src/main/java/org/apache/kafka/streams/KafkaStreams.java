@@ -205,9 +205,7 @@ public class KafkaStreams {
         public boolean isRunning() {
             return equals(RUNNING) || equals(REBALANCING);
         }
-        public boolean isCreatedOrRunning() {
-            return isRunning() || equals(CREATED);
-        }
+
         public boolean isValidTransition(final State newState) {
             return validTransitions.contains(newState.ordinal());
         }
@@ -380,7 +378,7 @@ public class KafkaStreams {
                 threadState.put(thread.getId(), newState);
 
                 if (newState == StreamThread.State.PARTITIONS_REVOKED ||
-                        newState == StreamThread.State.ASSIGNING_PARTITIONS) {
+                        newState == StreamThread.State.PARTITIONS_ASSIGNED) {
                     setState(State.REBALANCING);
                 } else if (newState == StreamThread.State.RUNNING && state() != State.RUNNING) {
                     maybeSetRunning();

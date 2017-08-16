@@ -114,7 +114,6 @@ public class StreamTaskTest {
     private final MockTime time = new MockTime();
     private File baseDir = TestUtils.tempDirectory();
     private StateDirectory stateDirectory;
-    private final RecordCollectorImpl recordCollector = new RecordCollectorImpl(producer, "taskId");
     private StreamsConfig config;
     private StreamsConfig eosConfig;
     private StreamTask task;
@@ -147,6 +146,7 @@ public class StreamTaskTest {
         stateDirectory = new StateDirectory("applicationId", baseDir.getPath(), new MockTime());
         task = new StreamTask(taskId00, applicationId, partitions, topology, consumer,
                               changelogReader, config, streamsMetrics, stateDirectory, null, time, producer);
+        task.initialize();
     }
 
     @After
@@ -377,6 +377,7 @@ public class StreamTaskTest {
 
         task = new StreamTask(taskId00, applicationId, partitions, topology, consumer, changelogReader, config,
             streamsMetrics, stateDirectory, null, time, producer);
+        task.initialize();
         final int offset = 20;
         task.addRecords(partition1, Collections.singletonList(
                 new ConsumerRecord<>(partition1.topic(), partition1.partition(), offset, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue)));
@@ -494,6 +495,7 @@ public class StreamTaskTest {
                 };
             }
         };
+        streamTask.initialize();
 
         time.sleep(config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG));
 
@@ -611,6 +613,7 @@ public class StreamTaskTest {
     public void shouldThrowExceptionIfAnyExceptionsRaisedDuringCloseButStillCloseAllProcessorNodesTopology() throws Exception {
         task.close(true);
         task = createTaskThatThrowsExceptionOnClose();
+        task.initialize();
         try {
             task.close(true);
             fail("should have thrown runtime exception");
@@ -776,6 +779,17 @@ public class StreamTaskTest {
         task = null;
         assertTrue(producer.closed());
     }
+
+    @Test
+    public void shouldNotCloseTopologyProcessorNodesIfNotInitialized() {
+        final StreamTask task = createTaskThatThrowsExceptionOnClose();
+        try {
+            task.close(true);
+        } catch (Exception e) {
+            fail("should have not closed unitialized topology");
+        }
+    }
+
 
     @SuppressWarnings("unchecked")
     private StreamTask createTaskThatThrowsExceptionOnClose() {

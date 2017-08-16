@@ -23,7 +23,9 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.AuthorizationException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
@@ -39,6 +41,7 @@ import java.util.Set;
 
 public abstract class AbstractTask {
     private static final Logger log = LoggerFactory.getLogger(AbstractTask.class);
+    private static final int STATE_DIR_LOCK_RETRIES = 5;
 
     final TaskId id;
     final String applicationId;
@@ -48,6 +51,8 @@ public abstract class AbstractTask {
     final Consumer consumer;
     final String logPrefix;
     final boolean eosEnabled;
+    private final StateDirectory stateDirectory;
+    boolean taskInitialized;
 
     InternalProcessorContext processorContext;
 
@@ -69,6 +74,7 @@ public abstract class AbstractTask {
         this.topology = topology;
         this.consumer = consumer;
         this.eosEnabled = StreamsConfig.EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
+        this.stateDirectory = stateDirectory;
 
         logPrefix = String.format("%s [%s]", isStandby ? "standby-task" : "task", id());
 
@@ -93,7 +99,7 @@ public abstract class AbstractTask {
     public abstract void suspend();
     public abstract void close(final boolean clean);
 
-    public final TaskId id() {
+    public TaskId id() {
         return id;
     }
 
@@ -101,7 +107,7 @@ public abstract class AbstractTask {
         return applicationId;
     }
 
-    public final Set<TopicPartition> partitions() {
+    public Set<TopicPartition> partitions() {
         return partitions;
     }
 
@@ -188,6 +194,21 @@ public abstract class AbstractTask {
     }
 
     void initializeStateStores() {
+        if (topology.stateStores().isEmpty()) {
+            return;
+        }
+
+        try {
+            if (!stateDirectory.lock(id, STATE_DIR_LOCK_RETRIES)) {
+                throw new LockException(String.format("%s Failed to lock the state directory for task %s",
+                                                      logPrefix, id));
+            }
+        } catch (IOException e) {
+            throw new StreamsException(String.format("%s Fatal error while trying to lock the state directory for task %s %s",
+                                                     logPrefix,
+                                                     id,
+                                                     e.getMessage()));
+        }
         log.trace("{} Initializing state stores", logPrefix);
 
         // set initial offset limits
@@ -204,8 +225,44 @@ public abstract class AbstractTask {
      * @param writeCheckpoint boolean indicating if a checkpoint file should be written
      */
     void closeStateManager(final boolean writeCheckpoint) throws ProcessorStateException {
+        ProcessorStateException exception = null;
         log.trace("{} Closing state manager", logPrefix);
-        stateMgr.close(writeCheckpoint ? recordCollectorOffsets() : null);
+        try {
+            stateMgr.close(writeCheckpoint ? recordCollectorOffsets() : null);
+        } catch (final ProcessorStateException e) {
+            exception = e;
+        } finally {
+            try {
+                stateDirectory.unlock(id);
+            } catch (IOException e) {
+                if (exception == null) {
+                    exception = new ProcessorStateException(String.format("%s Failed to release state dir lock", logPrefix), e);
+                }
+                log.error("{} Failed to release state dir lock: ", logPrefix, e);
+            }
+        }
+        if (exception != null) {
+            throw exception;
+        }
     }
 
+    /**
+     * initialize the topology/state stores
+     * @return true if the topology is ready to run, i.e, all stores have been restored.
+     */
+    public abstract boolean initialize();
+
+    abstract boolean process();
+
+    boolean hasStateStores() {
+        return !topology.stateStores().isEmpty();
+    }
+
+    Collection<TopicPartition> changelogPartitions() {
+        return stateMgr.changelogPartitions();
+    }
+
+    abstract boolean maybePunctuate();
+
+    abstract boolean commitNeeded();
 }
