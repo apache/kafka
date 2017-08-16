@@ -90,6 +90,10 @@ public class ScramSaslServer implements SaslServer {
                         this.scramCredential = credentialCallback.scramCredential();
                         if (scramCredential == null)
                             throw new SaslException("Authentication failed: Invalid user credentials");
+                        String authorizationIDFromClient = clientFirstMessage.authorizationId();
+                        if (!authorizationIDFromClient.isEmpty() && !authorizationIDFromClient.equals(username))
+                            throw new SaslException("Authentication failed: Client requested an authorization id that is different from username");
+
                         if (scramCredential.iterations() < mechanism.minIterations())
                             throw new SaslException("Iterations " + scramCredential.iterations() +  " is less than the minimum " + mechanism.minIterations() + " for " + mechanism);
                         this.serverFirstMessage = new ServerFirstMessage(clientFirstMessage.nonce(),
@@ -128,8 +132,7 @@ public class ScramSaslServer implements SaslServer {
     public String getAuthorizationID() {
         if (!isComplete())
             throw new IllegalStateException("Authentication exchange has not completed");
-        String authzId = clientFirstMessage.authorizationId();
-        return authzId == null || authzId.length() == 0 ? username : authzId;
+        return username;
     }
 
     @Override
