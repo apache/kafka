@@ -824,6 +824,57 @@ public class WorkerSinkTaskTest {
     }
 
     @Test
+    public void testDeliveryWithMutatingTransform() throws Exception {
+        expectInitializeTask();
+
+        expectPollInitialAssignment();
+
+        expectConsumerPoll(1);
+        expectConversionAndTransformation(1, "newtopic_");
+        sinkTask.put(EasyMock.<Collection<SinkRecord>>anyObject());
+        EasyMock.expectLastCall();
+
+        final Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
+        offsets.put(TOPIC_PARTITION, new OffsetAndMetadata(FIRST_OFFSET + 1));
+        offsets.put(TOPIC_PARTITION2, new OffsetAndMetadata(FIRST_OFFSET));
+        sinkTask.preCommit(offsets);
+        EasyMock.expectLastCall().andReturn(offsets);
+
+        final Capture<OffsetCommitCallback> callback = EasyMock.newCapture();
+        consumer.commitAsync(EasyMock.eq(offsets), EasyMock.capture(callback));
+        EasyMock.expectLastCall().andAnswer(new IAnswer<Void>() {
+            @Override
+            public Void answer() throws Throwable {
+                callback.getValue().onComplete(offsets, null);
+                return null;
+            }
+        });
+
+        expectConsumerPoll(0);
+        sinkTask.put(Collections.<SinkRecord>emptyList());
+        EasyMock.expectLastCall();
+
+        PowerMock.replayAll();
+
+        workerTask.initialize(TASK_CONFIG);
+        workerTask.initializeAndStart();
+
+        workerTask.iteration(); // initial assignment
+
+        workerTask.iteration(); // first record delivered
+
+        sinkTaskContext.getValue().requestCommit();
+        assertTrue(sinkTaskContext.getValue().isCommitRequested());
+        assertNotEquals(offsets, Whitebox.<Map<TopicPartition, OffsetAndMetadata>>getInternalState(workerTask, "lastCommittedOffsets"));
+        workerTask.iteration(); // triggers the commit
+        assertFalse(sinkTaskContext.getValue().isCommitRequested()); // should have been cleared
+        assertEquals(offsets, Whitebox.<Map<TopicPartition, OffsetAndMetadata>>getInternalState(workerTask, "lastCommittedOffsets"));
+        assertEquals(0, workerTask.commitFailures());
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
     public void testMissingTimestampPropagation() throws Exception {
         expectInitializeTask();
         expectConsumerPoll(1, RecordBatch.NO_TIMESTAMP, TimestampType.CREATE_TIME);
@@ -980,6 +1031,10 @@ public class WorkerSinkTaskTest {
     }
 
     private void expectConversionAndTransformation(final int numMessages) {
+        expectConversionAndTransformation(numMessages, null);
+    }
+
+    private void expectConversionAndTransformation(final int numMessages, final String topicPrefix) {
         EasyMock.expect(keyConverter.toConnectData(TOPIC, RAW_KEY)).andReturn(new SchemaAndValue(KEY_SCHEMA, KEY)).times(numMessages);
         EasyMock.expect(valueConverter.toConnectData(TOPIC, RAW_VALUE)).andReturn(new SchemaAndValue(VALUE_SCHEMA, VALUE)).times(numMessages);
 
@@ -988,7 +1043,18 @@ public class WorkerSinkTaskTest {
                 .andAnswer(new IAnswer<SinkRecord>() {
                     @Override
                     public SinkRecord answer() {
-                        return recordCapture.getValue();
+                        SinkRecord origRecord = recordCapture.getValue();
+                        return topicPrefix != null && !topicPrefix.isEmpty()
+                               ? origRecord.newRecord(
+                                       topicPrefix + origRecord.topic(),
+                                       origRecord.kafkaPartition(),
+                                       origRecord.keySchema(),
+                                       origRecord.key(),
+                                       origRecord.valueSchema(),
+                                       origRecord.value(),
+                                       origRecord.timestamp()
+                               )
+                               : origRecord;
                     }
                 }).times(numMessages);
     }
