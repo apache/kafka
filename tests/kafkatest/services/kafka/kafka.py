@@ -68,7 +68,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
     def __init__(self, context, num_nodes, zk, security_protocol=SecurityConfig.PLAINTEXT, interbroker_security_protocol=SecurityConfig.PLAINTEXT,
                  client_sasl_mechanism=SecurityConfig.SASL_MECHANISM_GSSAPI, interbroker_sasl_mechanism=SecurityConfig.SASL_MECHANISM_GSSAPI,
                  authorizer_class_name=None, topics=None, version=DEV_BRANCH, jmx_object_names=None,
-                 jmx_attributes=None, zk_connect_timeout=5000, zk_session_timeout=6000, server_prop_overides=[]):
+                 jmx_attributes=None, zk_connect_timeout=5000, zk_session_timeout=6000, server_prop_overides=[], zk_chroot=None):
         """
         :type context
         :type zk: ZookeeperService
@@ -90,6 +90,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.server_prop_overides = server_prop_overides
         self.log_level = "DEBUG"
         self.num_nodes = num_nodes
+        self.zk_chroot = zk_chroot
 
         #
         # In a heavily loaded and not very fast machine, it is
@@ -182,7 +183,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
     def prop_file(self, node):
         cfg = KafkaConfig(**node.config)
         cfg[config_property.ADVERTISED_HOSTNAME] = node.account.hostname
-        cfg[config_property.ZOOKEEPER_CONNECT] = self.zk.connect_setting()
+        cfg[config_property.ZOOKEEPER_CONNECT] = self.zk_connect_setting()
 
         for prop in self.server_prop_overides:
             cfg[prop[0]] = prop[1]
@@ -214,7 +215,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         node.account.create_file(self.LOG4J_CONFIG, self.render('log4j.properties', log_dir=KafkaService.OPERATIONAL_LOG_DIR))
 
         self.security_config.setup_node(node)
-        self.security_config.setup_credentials(node, self.path, self.zk.connect_setting(), broker=True)
+        self.security_config.setup_credentials(node, self.path, self.zk_connect_setting(), broker=True)
 
         cmd = self.start_cmd(node)
         self.logger.debug("Attempting to start KafkaService on %s with command: %s" % (str(node.account), cmd))
@@ -225,7 +226,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         # Credentials for inter-broker communication are created before starting Kafka.
         # Client credentials are created after starting Kafka so that both loading of
         # existing credentials from ZK and dynamic update of credentials in Kafka are tested.
-        self.security_config.setup_credentials(node, self.path, self.zk.connect_setting(), broker=False)
+        self.security_config.setup_credentials(node, self.path, self.zk_connect_setting(), broker=False)
 
         self.start_jmx_tool(self.idx(node), node)
         if len(self.pids(node)) == 0:
@@ -279,7 +280,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
         cmd = kafka_topic_script + " "
         cmd += "--zookeeper %(zk_connect)s --create --topic %(topic)s " % {
-                'zk_connect': self.zk.connect_setting(),
+                'zk_connect': self.zk_connect_setting(),
                 'topic': topic_cfg.get("topic"),
            }
         if 'replica-assignment' in topic_cfg:
@@ -308,7 +309,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         if node is None:
             node = self.nodes[0]
         cmd = "%s --zookeeper %s --topic %s --describe" % \
-              (self.path.script("kafka-topics.sh", node), self.zk.connect_setting(), topic)
+              (self.path.script("kafka-topics.sh", node), self.zk_connect_setting(), topic)
         output = ""
         for line in node.account.ssh_capture(cmd):
             output += line
@@ -318,7 +319,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         if node is None:
             node = self.nodes[0]
         cmd = "%s --zookeeper %s --list" % \
-              (self.path.script("kafka-topics.sh", node), self.zk.connect_setting())
+              (self.path.script("kafka-topics.sh", node), self.zk_connect_setting())
         for line in node.account.ssh_capture(cmd):
             if not line.startswith("SLF4J"):
                 yield line.rstrip()
@@ -328,7 +329,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             node = self.nodes[0]
         self.logger.info("Altering message format version for topic %s with format %s", topic, msg_format_version)
         cmd = "%s --zookeeper %s --entity-name %s --entity-type topics --alter --add-config message.format.version=%s" % \
-              (self.path.script("kafka-configs.sh", node), self.zk.connect_setting(), topic, msg_format_version)
+              (self.path.script("kafka-configs.sh", node), self.zk_connect_setting(), topic, msg_format_version)
         self.logger.info("Running alter message format command...\n%s" % cmd)
         node.account.ssh(cmd)
 
@@ -376,7 +377,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         # create command
         cmd = "echo %s > %s && " % (json_str, json_file)
         cmd += "%s " % self.path.script("kafka-reassign-partitions.sh", node)
-        cmd += "--zookeeper %s " % self.zk.connect_setting()
+        cmd += "--zookeeper %s " % self.zk_connect_setting()
         cmd += "--reassignment-json-file %s " % json_file
         cmd += "--verify "
         cmd += "&& sleep 1 && rm -f %s" % json_file
@@ -415,7 +416,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         # create command
         cmd = "echo %s > %s && " % (json_str, json_file)
         cmd += "%s " % self.path.script( "kafka-reassign-partitions.sh", node)
-        cmd += "--zookeeper %s " % self.zk.connect_setting()
+        cmd += "--zookeeper %s " % self.zk_connect_setting()
         cmd += "--reassignment-json-file %s " % json_file
         cmd += "--execute"
         if throttle is not None:
@@ -476,7 +477,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         """
         self.logger.debug("Querying zookeeper to find leader replica for topic: \n%s" % (topic))
         zk_path = "/brokers/topics/%s/partitions/%d/state" % (topic, partition)
-        partition_state = self.zk.query(zk_path)
+        partition_state = self.zk.query(zk_path, chroot=self.zk_chroot)
 
         if partition_state is None:
             raise Exception("Error finding partition state for topic %s and partition %d." % (topic, partition))
@@ -492,11 +493,13 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         """ Get the current cluster id
         """
         self.logger.debug("Querying ZooKeeper to retrieve cluster id")
-        cluster = json.loads(self.zk.query("/cluster/id"))
-        if cluster is None:
-            raise Exception("Error querying ZK for cluster id.")
+        cluster = self.zk.query("/cluster/id", chroot=self.zk_chroot)
 
-        return cluster['id']
+        try:
+            return json.loads(cluster)['id'] if cluster else None
+        except:
+            self.logger.debug("Data in /cluster/id znode could not be parsed. Data = %s" % cluster)
+            raise
 
     def list_consumer_groups(self, node=None, new_consumer=True, command_config=None):
         """ Get list of consumer groups.
@@ -516,7 +519,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                    self.bootstrap_servers(self.security_protocol),
                    command_config)
         else:
-            cmd = "%s --zookeeper %s %s --list" % (consumer_group_script, self.zk.connect_setting(), command_config)
+            cmd = "%s --zookeeper %s %s --list" % (consumer_group_script, self.zk_connect_setting(), command_config)
         output = ""
         self.logger.debug(cmd)
         for line in node.account.ssh_capture(cmd):
@@ -542,7 +545,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                   (consumer_group_script, self.bootstrap_servers(self.security_protocol), command_config, group)
         else:
             cmd = "%s --zookeeper %s %s --group %s --describe" % \
-                  (consumer_group_script, self.zk.connect_setting(), command_config, group)
+                  (consumer_group_script, self.zk_connect_setting(), command_config, group)
         output = ""
         self.logger.debug(cmd)
         for line in node.account.ssh_capture(cmd):
@@ -550,6 +553,9 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                 output += line
         self.logger.debug(output)
         return output
+
+    def zk_connect_setting(self):
+        return self.zk.connect_setting(self.zk_chroot)
 
     def bootstrap_servers(self, protocol='PLAINTEXT', validate=True):
         """Return comma-delimited list of brokers in this cluster formatted as HOSTNAME1:PORT1,HOSTNAME:PORT2,...
@@ -568,7 +574,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         """ Get the controller node
         """
         self.logger.debug("Querying zookeeper to find controller broker")
-        controller_info = self.zk.query("/controller")
+        controller_info = self.zk.query("/controller", chroot=self.zk_chroot)
 
         if controller_info is None:
             raise Exception("Error finding controller info")
@@ -585,7 +591,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         Check whether a broker is registered in Zookeeper
         """
         self.logger.debug("Querying zookeeper to see if broker %s is registered", node)
-        broker_info = self.zk.query("/brokers/ids/%s" % self.idx(node))
+        broker_info = self.zk.query("/brokers/ids/%s" % self.idx(node), chroot=self.zk_chroot)
         self.logger.debug("Broker info: %s", broker_info)
         return broker_info is not None
 
