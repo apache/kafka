@@ -34,7 +34,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
-import org.apache.kafka.common.errors.NotCoordinatorException;
 import org.apache.kafka.common.errors.OffsetMetadataTooLarge;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.metrics.Metrics;
@@ -966,7 +965,7 @@ public class ConsumerCoordinatorTest {
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         coordinator.ensureCoordinatorReady();
 
-        // Send two async commits and fail the first one with a COORDINATOR_NOT_AVAILABLE error.
+        // Send two async commits and fail the first one with an error.
         // This should cause a coordinator disconnect which will cancel the second request.
 
         MockCommitCallback firstCommitCallback = new MockCommitCallback();
@@ -981,7 +980,6 @@ public class ConsumerCoordinatorTest {
         assertTrue(coordinator.coordinatorUnknown());
         assertTrue(firstCommitCallback.exception instanceof RetriableCommitFailedException);
         assertTrue(secondCommitCallback.exception instanceof RetriableCommitFailedException);
-
     }
 
     @Test
