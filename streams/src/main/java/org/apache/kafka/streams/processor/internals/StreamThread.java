@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
@@ -60,7 +59,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
 
 import static java.util.Collections.singleton;
 
@@ -602,8 +600,18 @@ public class StreamThread extends Thread implements ThreadDataProvider {
                                                         restoreConsumer,
                                                         activeTaskCreator,
                                                         standbyTaskCreator,
-                                                        new AssignedTasks(logPrefix, "stream task"),
-                                                        new AssignedTasks(logPrefix, "standby task"));
+                                                        new AssignedTasks(logPrefix,
+                                                                          "stream task",
+                                                                          time,
+                                                                          streamsMetrics.commitTimeSensor,
+                                                                          streamsMetrics.processTimeSensor,
+                                                                          streamsMetrics.punctuateTimeSensor),
+                                                        new AssignedTasks(logPrefix,
+                                                                          "standby task",
+                                                                          time,
+                                                                          streamsMetrics.commitTimeSensor,
+                                                                          streamsMetrics.processTimeSensor,
+                                                                          streamsMetrics.punctuateTimeSensor));
 
         return new StreamThread(builder,
                                 clientId,
@@ -792,76 +800,28 @@ public class StreamThread extends Thread implements ThreadDataProvider {
      */
     private long processAndPunctuateStreamTime(final long recordsProcessedBeforeCommit) {
 
-        final AtomicLong totalProcessedEachRound = new AtomicLong(0);
-        final AtomicLong totalProcessedSinceLastMaybeCommit = new AtomicLong(0);
+        long processed;
+        long totalProcessedSinceLastMaybeCommit = 0;
         // Round-robin scheduling by taking one record from each task repeatedly
         // until no task has any records left
         do {
-            totalProcessedEachRound.set(0);
-            taskManager.performOnActiveTasks(new TaskAction() {
-                @Override
-                public String name() {
-                    return "process_and_punctuate";
-                }
-
-                @Override
-                public void apply(final Task task) {
-                    if (task.process()) {
-                        totalProcessedEachRound.incrementAndGet();
-                        totalProcessedSinceLastMaybeCommit.incrementAndGet();
-                        maybePunctuateStreamTime(task);
-                    }
-                }
-            }, true);
+            processed = taskManager.process();
+            totalProcessedSinceLastMaybeCommit += processed;
 
             if (recordsProcessedBeforeCommit != UNLIMITED_RECORDS &&
-                totalProcessedSinceLastMaybeCommit.get() >= recordsProcessedBeforeCommit) {
-                totalProcessedSinceLastMaybeCommit.set(0);
+                totalProcessedSinceLastMaybeCommit >= recordsProcessedBeforeCommit) {
+                totalProcessedSinceLastMaybeCommit = 0;
                 final long processLatency = computeLatency();
-                streamsMetrics.processTimeSensor.record(processLatency / (double) totalProcessedSinceLastMaybeCommit.get(),
+                streamsMetrics.processTimeSensor.record(processLatency / (double) totalProcessedSinceLastMaybeCommit,
                     timerStartedMs);
                 maybeCommit(timerStartedMs);
             }
-        } while (totalProcessedEachRound.get() != 0);
+        } while (processed != 0);
 
-        // go over the tasks again to punctuate or commit
-        final RuntimeException e = taskManager.performOnActiveTasks(new org.apache.kafka.streams.processor.internals.TaskAction() {
-            @Override
-            public String name() {
-                return "commit";
-            }
+        // go over the tasks again to maybe commit
+        taskManager.maybeCommitActiveTasks();
 
-            @Override
-            public void apply(final Task task) {
-                if (task.commitNeeded()) {
-                    long beforeCommitMs = time.milliseconds();
-                    commitOne(task);
-                    if (log.isDebugEnabled()) {
-                        log.debug("{} Committed active task {} per user request in {}ms",
-                                logPrefix, task.id(), timerStartedMs - beforeCommitMs);
-                    }
-                }
-            }
-        }, false);
-
-        if (e != null) {
-            throw e;
-        }
-
-        return totalProcessedSinceLastMaybeCommit.get();
-    }
-
-    private void maybePunctuateStreamTime(final Task task) {
-        try {
-            // check whether we should punctuate based on the task's partition group timestamp;
-            // which are essentially based on record timestamp.
-            if (task.maybePunctuateStreamTime()) {
-                streamsMetrics.punctuateTimeSensor.record(computeLatency(), timerStartedMs);
-            }
-        } catch (final KafkaException e) {
-            log.error("{} Failed to punctuate active task {} due to the following error:", logPrefix, task.id(), e);
-            throw e;
-        }
+        return totalProcessedSinceLastMaybeCommit;
     }
 
     private void maybePunctuateSystemTime() {
@@ -942,24 +902,6 @@ public class StreamThread extends Thread implements ThreadDataProvider {
 
             processStandbyRecords = true;
         }
-    }
-
-    /**
-     * Commit the state of a task
-     */
-    private void commitOne(final Task task) {
-        try {
-            task.commit();
-        } catch (final CommitFailedException e) {
-            // commit failed. This is already logged inside the task as WARN and we can just log it again here.
-            log.warn("{} Failed to commit {} {} state due to CommitFailedException; this task may be no longer owned by the thread", logPrefix, task.getClass().getSimpleName(), task.id());
-        } catch (final KafkaException e) {
-            // commit failed due to an unexpected exception. Log it and rethrow the exception.
-            log.error("{} Failed to commit {} {} state due to the following error:", logPrefix, task.getClass().getSimpleName(), task.id(), e);
-            throw e;
-        }
-
-        streamsMetrics.commitTimeSensor.record(computeLatency(), timerStartedMs);
     }
 
     private void maybeUpdateStandbyTasks(final long now) {

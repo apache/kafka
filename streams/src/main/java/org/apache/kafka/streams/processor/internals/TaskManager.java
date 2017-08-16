@@ -254,10 +254,6 @@ class TaskManager {
         this.consumer = consumer;
     }
 
-    void closeProducer() {
-        taskCreator.close();
-    }
-
 
     boolean updateNewAndRestoringTasks() {
         active.initializeNewTasks();
@@ -306,5 +302,13 @@ class TaskManager {
     void commitAll() {
         active.commit();
         standby.commit();
+    }
+
+    long process() {
+        return active.process();
+    }
+
+    void maybeCommitActiveTasks() {
+        active.maybeCommit();
     }
 }

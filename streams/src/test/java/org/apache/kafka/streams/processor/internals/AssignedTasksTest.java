@@ -20,6 +20,8 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ProducerFencedException;
+import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.processor.TaskId;
 import org.easymock.EasyMock;
@@ -40,7 +42,7 @@ import static org.junit.Assert.fail;
 
 public class AssignedTasksTest {
 
-    private final AssignedTasks assignedTasks = new AssignedTasks("log", "task");
+    private final Metrics metrics = new Metrics();
     private final Task t1 = EasyMock.createMock(Task.class);
     private final Task t2 = EasyMock.createMock(Task.class);
     private final TopicPartition tp1 = new TopicPartition("t1", 0);
@@ -49,9 +51,16 @@ public class AssignedTasksTest {
     private final TopicPartition changeLog2 = new TopicPartition("cl2", 0);
     private final TaskId taskId1 = new TaskId(0, 0);
     private final TaskId taskId2 = new TaskId(1, 0);
+    private AssignedTasks assignedTasks;
 
     @Before
     public void before() {
+        assignedTasks = new AssignedTasks("log",
+                                          "task",
+                                          new MockTime(),
+                                          metrics.sensor("commit"),
+                                          metrics.sensor("process"),
+                                          metrics.sensor("punctuate"));
         EasyMock.expect(t1.id()).andReturn(taskId1).anyTimes();
         EasyMock.expect(t2.id()).andReturn(taskId2).anyTimes();
     }

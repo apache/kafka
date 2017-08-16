@@ -17,8 +17,11 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.CommitFailedException;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ProducerFencedException;
+import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.slf4j.Logger;
@@ -34,13 +37,17 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 class AssignedTasks {
     private static final Logger log = LoggerFactory.getLogger(AssignedTasks.class);
     private final String logPrefix;
     private final String taskTypeName;
+    private final Time time;
+    private final Sensor processSensor;
+    private final Sensor punctuateSensor;
+    private final TaskAction maybeCommitAction;
+    private final TaskAction commitAction;
     private Map<TaskId, Task> created = new HashMap<>();
     private Map<TaskId, Task> suspended = new HashMap<>();
     private Map<TaskId, Task> restoring = new HashMap<>();
@@ -49,11 +56,53 @@ class AssignedTasks {
     // IQ may access this map.
     private Map<TaskId, Task> running = new ConcurrentHashMap<>();
     private Map<TopicPartition, Task> runningByPartition = new HashMap<>();
+    private long timerStartedMs = 0;
+
 
     AssignedTasks(final String logPrefix,
-                  final String taskTypeName) {
+                  final String taskTypeName,
+                  final Time time,
+                  final Sensor commitSensor,
+                  final Sensor processSensor,
+                  final Sensor punctuateSensor) {
         this.logPrefix = logPrefix;
         this.taskTypeName = taskTypeName;
+        this.time = time;
+        this.processSensor = processSensor;
+        this.punctuateSensor = punctuateSensor;
+
+        maybeCommitAction = new TaskAction() {
+            @Override
+            public String name() {
+                return "maybeCommit";
+            }
+
+            @Override
+            public void apply(final Task task) {
+                if (task.commitNeeded()) {
+                    long beforeCommitMs = time.milliseconds();
+                    task.commit();
+                    commitSensor.record(computeLatency(), timerStartedMs);
+                    if (log.isDebugEnabled()) {
+                        log.debug("{} Committed active task {} per user request in {}ms",
+                                  logPrefix, task.id(), timerStartedMs - beforeCommitMs);
+                    }
+                }
+            }
+        };
+
+        commitAction = new TaskAction() {
+            @Override
+            public String name() {
+                return "commit";
+            }
+
+            @Override
+            public void apply(final Task task) {
+                task.commit();
+                commitSensor.record(computeLatency(), timerStartedMs);
+            }
+        };
     }
 
     void addNewTask(final Task task) {
@@ -266,10 +315,6 @@ class AssignedTasks {
         return tasks;
     }
 
-    Collection<Task> suspendedTasks() {
-        return suspended.values();
-    }
-
     Collection<Task> restoringTasks() {
         return Collections.unmodifiableCollection(restoring.values());
     }
@@ -296,42 +341,41 @@ class AssignedTasks {
     }
 
     void commit() {
-        final RuntimeException exception = applyToRunningTasks(new TaskAction() {
-            @Override
-            public String name() {
-                return "commit";
-            }
+        performTimedAction(commitAction);
+    }
 
-            @Override
-            public void apply(final Task task) {
-                task.commit();
-            }
-        }, false);
+    void maybeCommit() {
+        performTimedAction(maybeCommitAction);
+    }
 
+    private void performTimedAction(final TaskAction action) {
+        timerStartedMs = time.milliseconds();
+        final RuntimeException exception = applyToRunningTasks(action, false);
         if (exception != null) {
             throw exception;
         }
-
     }
 
     int process() {
-        final AtomicInteger processed = new AtomicInteger(0);
-        applyToRunningTasks(new TaskAction() {
-            @Override
-            public String name() {
-                return "process";
-            }
-
-            @Override
-            public void apply(final Task task) {
-                if (task.process()) {
-                    processed.incrementAndGet();
+        timerStartedMs = time.milliseconds();
+        int processed = 0;
+        timerStartedMs = time.milliseconds();
+        for (final Task task : running()) {
+            if (task.process()) {
+                processSensor.record(computeLatency(), timerStartedMs);
+                processed++;
+                try {
+                    if (task.maybePunctuateStreamTime()) {
+                        punctuateSensor.record(computeLatency(), timerStartedMs);
+                    }
+                } catch (final KafkaException e) {
+                    log.error("{} Failed to punctuate active task {} due to the following error:", logPrefix, task.id(), e);
+                    throw e;
                 }
             }
-        }, true);
-        return processed.get();
+        }
+        return processed;
     }
-
 
     RuntimeException applyToRunningTasks(final TaskAction action, final boolean throwException) {
         RuntimeException firstException = null;
@@ -385,7 +429,7 @@ class AssignedTasks {
             }
         }
     }
-    
+
     void close(final boolean clean) {
         close(allInitializedTasks(), clean);
         close(created.values(), clean);
@@ -404,5 +448,12 @@ class AssignedTasks {
                           t);
             }
         }
+    }
+
+    private long computeLatency() {
+        final long previousTimeMs = timerStartedMs;
+        timerStartedMs = time.milliseconds();
+
+        return Math.max(timerStartedMs - previousTimeMs, 0);
     }
 }
