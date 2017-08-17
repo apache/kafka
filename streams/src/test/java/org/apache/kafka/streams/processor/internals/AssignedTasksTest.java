@@ -20,8 +20,6 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ProducerFencedException;
-import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.processor.TaskId;
 import org.easymock.EasyMock;
@@ -42,7 +40,6 @@ import static org.junit.Assert.fail;
 
 public class AssignedTasksTest {
 
-    private final Metrics metrics = new Metrics();
     private final Task t1 = EasyMock.createMock(Task.class);
     private final Task t2 = EasyMock.createMock(Task.class);
     private final TopicPartition tp1 = new TopicPartition("t1", 0);
@@ -55,12 +52,7 @@ public class AssignedTasksTest {
 
     @Before
     public void before() {
-        assignedTasks = new AssignedTasks("log",
-                                          "task",
-                                          new MockTime(),
-                                          metrics.sensor("commit"),
-                                          metrics.sensor("process"),
-                                          metrics.sensor("punctuate"));
+        assignedTasks = new AssignedTasks("log", "task");
         EasyMock.expect(t1.id()).andReturn(taskId1).anyTimes();
         EasyMock.expect(t2.id()).andReturn(taskId2).anyTimes();
     }
@@ -100,8 +92,7 @@ public class AssignedTasksTest {
         EasyMock.expect(t1.initialize()).andReturn(false);
         EasyMock.replay(t1);
 
-        assignedTasks.addNewTask(t1);
-        assignedTasks.initializeNewTasks();
+        addAndInitTask();
 
         EasyMock.verify(t1);
     }
@@ -147,9 +138,7 @@ public class AssignedTasksTest {
         EasyMock.expect(t1.changelogPartitions()).andReturn(Utils.mkSet(changeLog1, changeLog2)).anyTimes();
         EasyMock.replay(t1);
 
-        assignedTasks.addNewTask(t1);
-
-        assignedTasks.initializeNewTasks();
+        addAndInitTask();
 
         assertTrue(assignedTasks.updateRestored(Utils.mkSet(changeLog1)).isEmpty());
         Set<TopicPartition> partitions = assignedTasks.updateRestored(Utils.mkSet(changeLog2));
@@ -256,8 +245,7 @@ public class AssignedTasksTest {
 
         EasyMock.replay(t1, taskAction);
 
-        assignedTasks.addNewTask(t1);
-        assignedTasks.initializeNewTasks();
+        addAndInitTask();
 
         assignedTasks.applyToRunningTasks(taskAction, false);
 
@@ -272,8 +260,7 @@ public class AssignedTasksTest {
 
         EasyMock.replay(t1, taskAction);
 
-        assignedTasks.addNewTask(t1);
-        assignedTasks.initializeNewTasks();
+        addAndInitTask();
 
         assignedTasks.applyToRunningTasks(taskAction, false);
 
@@ -291,8 +278,7 @@ public class AssignedTasksTest {
         EasyMock.expectLastCall();
         EasyMock.replay(t1, taskAction);
 
-        assignedTasks.addNewTask(t1);
-        assignedTasks.initializeNewTasks();
+        addAndInitTask();
 
         assignedTasks.applyToRunningTasks(taskAction, false);
         assertTrue(assignedTasks.running().isEmpty());
@@ -315,8 +301,7 @@ public class AssignedTasksTest {
         mockTaskInitialization();
         EasyMock.replay(t1, taskAction);
 
-        assignedTasks.addNewTask(t1);
-        assignedTasks.initializeNewTasks();
+        addAndInitTask();
 
         assertThat(assignedTasks.applyToRunningTasks(taskAction, false), not(nullValue()));
         assertThat(assignedTasks.runningTaskIds(), equalTo(Collections.singleton(taskId1)));
@@ -330,8 +315,7 @@ public class AssignedTasksTest {
         EasyMock.expectLastCall();
         EasyMock.replay(t1);
 
-        assignedTasks.addNewTask(t1);
-        assignedTasks.initializeNewTasks();
+        addAndInitTask();
 
         assignedTasks.commit();
         EasyMock.verify(t1);
@@ -345,8 +329,7 @@ public class AssignedTasksTest {
         t1.close(false);
         EasyMock.expectLastCall();
         EasyMock.replay(t1);
-        assignedTasks.addNewTask(t1);
-        assignedTasks.initializeNewTasks();
+        addAndInitTask();
 
         assignedTasks.commit();
         EasyMock.verify(t1);
@@ -358,8 +341,7 @@ public class AssignedTasksTest {
         t1.commit();
         EasyMock.expectLastCall().andThrow(new CommitFailedException());
         EasyMock.replay(t1);
-        assignedTasks.addNewTask(t1);
-        assignedTasks.initializeNewTasks();
+        addAndInitTask();
 
         assignedTasks.commit();
         assertThat(assignedTasks.runningTaskIds(), equalTo(Collections.singleton(taskId1)));
@@ -372,8 +354,7 @@ public class AssignedTasksTest {
         t1.commit();
         EasyMock.expectLastCall().andThrow(new RuntimeException(""));
         EasyMock.replay(t1);
-        assignedTasks.addNewTask(t1);
-        assignedTasks.initializeNewTasks();
+        addAndInitTask();
 
         try {
             assignedTasks.commit();
@@ -385,10 +366,104 @@ public class AssignedTasksTest {
         EasyMock.verify(t1);
     }
 
+    @Test
+    public void shouldCommitRunningTasksIfNeeded() {
+        mockTaskInitialization();
+        EasyMock.expect(t1.commitNeeded()).andReturn(true);
+        t1.commit();
+        EasyMock.expectLastCall();
+        EasyMock.replay(t1);
 
-    private RuntimeException suspendTask() {
+        addAndInitTask();
+
+        assertThat(assignedTasks.maybeCommit(), equalTo(1));
+        EasyMock.verify(t1);
+    }
+
+    @Test
+    public void shouldCloseTaskOnMaybeCommitIfProduceFencedException() {
+        mockTaskInitialization();
+        EasyMock.expect(t1.commitNeeded()).andReturn(true);
+        t1.commit();
+        EasyMock.expectLastCall().andThrow(new ProducerFencedException(""));
+        t1.close(false);
+        EasyMock.expectLastCall();
+        EasyMock.replay(t1);
+        addAndInitTask();
+
+        assignedTasks.maybeCommit();
+        EasyMock.verify(t1);
+    }
+
+    @Test
+    public void shouldNotThrowCommitFailedExceptionOnMaybeCommit() {
+        mockTaskInitialization();
+        EasyMock.expect(t1.commitNeeded()).andReturn(true);
+        t1.commit();
+        EasyMock.expectLastCall().andThrow(new CommitFailedException());
+        EasyMock.replay(t1);
+        addAndInitTask();
+
+        assignedTasks.maybeCommit();
+        assertThat(assignedTasks.runningTaskIds(), equalTo(Collections.singleton(taskId1)));
+        EasyMock.verify(t1);
+    }
+
+    @Test
+    public void shouldThrowExceptionOnMaybeCommitWhenNotCommitFailedOrProducerFenced() {
+        mockTaskInitialization();
+        EasyMock.expect(t1.commitNeeded()).andReturn(true);
+        t1.commit();
+        EasyMock.expectLastCall().andThrow(new RuntimeException(""));
+        EasyMock.replay(t1);
+
+        addAndInitTask();
+
+        try {
+            assignedTasks.maybeCommit();
+            fail("Should have thrown exception");
+        } catch (Exception e) {
+            // ok
+        }
+        assertThat(assignedTasks.runningTaskIds(), equalTo(Collections.singleton(taskId1)));
+        EasyMock.verify(t1);
+    }
+
+
+
+    @Test
+    public void shouldPunctuateRunningTasks() {
+        mockTaskInitialization();
+        EasyMock.expect(t1.maybePunctuateStreamTime()).andReturn(true);
+        EasyMock.expect(t1.maybePunctuateSystemTime()).andReturn(true);
+        EasyMock.replay(t1);
+
+        addAndInitTask();
+
+        assertThat(assignedTasks.punctuate(), equalTo(2));
+        EasyMock.verify(t1);
+    }
+
+    @Test
+    public void shouldReturnNumberOfPunctuations() {
+        mockTaskInitialization();
+        EasyMock.expect(t1.maybePunctuateStreamTime()).andReturn(true);
+        EasyMock.expect(t1.maybePunctuateSystemTime()).andReturn(false);
+        EasyMock.replay(t1);
+
+        addAndInitTask();
+
+        assertThat(assignedTasks.punctuate(), equalTo(1));
+        EasyMock.verify(t1);
+    }
+
+    private void addAndInitTask() {
         assignedTasks.addNewTask(t1);
         assignedTasks.initializeNewTasks();
+    }
+
+    private RuntimeException suspendTask() {
+        addAndInitTask();
         return assignedTasks.suspend();
     }
 

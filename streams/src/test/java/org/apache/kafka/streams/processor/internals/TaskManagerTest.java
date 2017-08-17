@@ -39,6 +39,8 @@ import static org.easymock.EasyMock.checkOrder;
 import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.expectLastCall;
 import static org.easymock.EasyMock.verify;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.core.IsEqual.equalTo;
 import static org.junit.Assert.fail;
 
 @RunWith(EasyMockRunner.class)
@@ -370,13 +372,12 @@ public class TaskManagerTest {
 
     @Test
     public void shouldCommitActiveAndStandbyTasks() {
-        active.commit();
-        standby.commit();
-        EasyMock.expectLastCall();
+        EasyMock.expect(active.commit()).andReturn(1);
+        EasyMock.expect(standby.commit()).andReturn(2);
 
         replay();
-        taskManager.commitAll();
 
+        assertThat(taskManager.commitAll(), equalTo(3));
         verify(active, standby);
     }
 
@@ -399,8 +400,7 @@ public class TaskManagerTest {
 
     @Test
     public void shouldPropagateExceptionFromStandbyCommit() {
-        standby.commit();
-        EasyMock.expectLastCall().andThrow(new RuntimeException(""));
+        EasyMock.expect(standby.commit()).andThrow(new RuntimeException(""));
         replay();
 
         try {
@@ -410,6 +410,33 @@ public class TaskManagerTest {
             // ok
         }
         verify(standby);
+    }
+
+    @Test
+    public void shouldMaybeCommitActiveTasks() {
+        EasyMock.expect(active.maybeCommit()).andReturn(5);
+        replay();
+
+        assertThat(taskManager.maybeCommitActiveTasks(), equalTo(5));
+        verify(active);
+    }
+
+    @Test
+    public void shouldProcessActiveTasks() {
+        EasyMock.expect(active.process()).andReturn(10);
+        replay();
+
+        assertThat(taskManager.process(), equalTo(10));
+        verify(active);
+    }
+
+    @Test
+    public void shouldPunctuateActiveTasks() {
+        EasyMock.expect(active.punctuate()).andReturn(20);
+        replay();
+
+        assertThat(taskManager.punctuate(), equalTo(20));
+        verify(active);
     }
 
     private void mockAssignStandbyPartitions(final long offset) {

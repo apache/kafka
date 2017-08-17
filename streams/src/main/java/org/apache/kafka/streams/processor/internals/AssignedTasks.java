@@ -20,8 +20,6 @@ import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ProducerFencedException;
-import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.slf4j.Logger;
@@ -43,9 +41,6 @@ class AssignedTasks {
     private static final Logger log = LoggerFactory.getLogger(AssignedTasks.class);
     private final String logPrefix;
     private final String taskTypeName;
-    private final Time time;
-    private final Sensor processSensor;
-    private final Sensor punctuateSensor;
     private final TaskAction maybeCommitAction;
     private final TaskAction commitAction;
     private Map<TaskId, Task> created = new HashMap<>();
@@ -56,20 +51,13 @@ class AssignedTasks {
     // IQ may access this map.
     private Map<TaskId, Task> running = new ConcurrentHashMap<>();
     private Map<TopicPartition, Task> runningByPartition = new HashMap<>();
-    private long timerStartedMs = 0;
+    private int committed = 0;
 
 
     AssignedTasks(final String logPrefix,
-                  final String taskTypeName,
-                  final Time time,
-                  final Sensor commitSensor,
-                  final Sensor processSensor,
-                  final Sensor punctuateSensor) {
+                  final String taskTypeName) {
         this.logPrefix = logPrefix;
         this.taskTypeName = taskTypeName;
-        this.time = time;
-        this.processSensor = processSensor;
-        this.punctuateSensor = punctuateSensor;
 
         maybeCommitAction = new TaskAction() {
             @Override
@@ -80,12 +68,11 @@ class AssignedTasks {
             @Override
             public void apply(final Task task) {
                 if (task.commitNeeded()) {
-                    long beforeCommitMs = time.milliseconds();
+                    committed++;
                     task.commit();
-                    commitSensor.record(computeLatency(), timerStartedMs);
                     if (log.isDebugEnabled()) {
-                        log.debug("{} Committed active task {} per user request in {}ms",
-                                  logPrefix, task.id(), timerStartedMs - beforeCommitMs);
+                        log.debug("{} Committed active task {} per user request in",
+                                  logPrefix, task.id());
                     }
                 }
             }
@@ -100,7 +87,6 @@ class AssignedTasks {
             @Override
             public void apply(final Task task) {
                 task.commit();
-                commitSensor.record(computeLatency(), timerStartedMs);
             }
         };
     }
@@ -340,16 +326,18 @@ class AssignedTasks {
         return previousActiveTasks;
     }
 
-    void commit() {
+    int commit() {
         performTimedAction(commitAction);
+        return running.size();
     }
 
-    void maybeCommit() {
+    int maybeCommit() {
+        committed = 0;
         performTimedAction(maybeCommitAction);
+        return committed;
     }
 
     private void performTimedAction(final TaskAction action) {
-        timerStartedMs = time.milliseconds();
         final RuntimeException exception = applyToRunningTasks(action, false);
         if (exception != null) {
             throw exception;
@@ -357,20 +345,28 @@ class AssignedTasks {
     }
 
     int process() {
-        timerStartedMs = time.milliseconds();
         int processed = 0;
-        for (final Task task : running()) {
+        for (final Task task : running.values()) {
             if (task.process()) {
-                processSensor.record(computeLatency(), timerStartedMs);
                 processed++;
-                try {
-                    if (task.maybePunctuateStreamTime()) {
-                        punctuateSensor.record(computeLatency(), timerStartedMs);
-                    }
-                } catch (final KafkaException e) {
-                    log.error("{} Failed to punctuate active task {} due to the following error:", logPrefix, task.id(), e);
-                    throw e;
+            }
+        }
+        return processed;
+    }
+
+    int punctuate() {
+        int processed = 0;
+        for (Task task : running.values()) {
+            try {
+                if (task.maybePunctuateStreamTime()) {
+                    processed++;
                 }
+                if (task.maybePunctuateSystemTime()) {
+                    processed++;
+                }
+            } catch (KafkaException e) {
+                log.error("{} Failed to punctuate {} {} due to the following error:", logPrefix, taskTypeName, task.id(), e);
+                throw e;
             }
         }
         return processed;
@@ -444,12 +440,5 @@ class AssignedTasks {
                           t);
             }
         }
-    }
-
-    private long computeLatency() {
-        final long previousTimeMs = timerStartedMs;
-        timerStartedMs = time.milliseconds();
-
-        return Math.max(timerStartedMs - previousTimeMs, 0);
     }
 }

@@ -596,17 +596,11 @@ public class StreamThread extends Thread implements ThreadDataProvider {
                                                         activeTaskCreator,
                                                         standbyTaskCreator,
                                                         new AssignedTasks(logPrefix,
-                                                                          "stream task",
-                                                                          time,
-                                                                          streamsMetrics.commitTimeSensor,
-                                                                          streamsMetrics.processTimeSensor,
-                                                                          streamsMetrics.punctuateTimeSensor),
+                                                                          "stream task"
+                                                        ),
                                                         new AssignedTasks(logPrefix,
-                                                                          "standby task",
-                                                                          time,
-                                                                          streamsMetrics.commitTimeSensor,
-                                                                          streamsMetrics.processTimeSensor,
-                                                                          streamsMetrics.punctuateTimeSensor));
+                                                                          "standby task"
+                                                        ));
 
         return new StreamThread(builder,
                                 clientId,
@@ -699,7 +693,7 @@ public class StreamThread extends Thread implements ThreadDataProvider {
             }
         }
 
-        maybePunctuateSystemTime();
+        punctuate();
         maybeCommit(timerStartedMs);
         maybeUpdateStandbyTasks(timerStartedMs);
         return processedBeforeCommit;
@@ -801,47 +795,30 @@ public class StreamThread extends Thread implements ThreadDataProvider {
         // until no task has any records left
         do {
             processed = taskManager.process();
+            if (processed > 0) {
+                streamsMetrics.processTimeSensor.record(computeLatency() / (double) processed, timerStartedMs);
+            }
             totalProcessedSinceLastMaybeCommit += processed;
+
+            punctuate();
 
             if (recordsProcessedBeforeCommit != UNLIMITED_RECORDS &&
                 totalProcessedSinceLastMaybeCommit >= recordsProcessedBeforeCommit) {
                 totalProcessedSinceLastMaybeCommit = 0;
-                final long processLatency = computeLatency();
-                streamsMetrics.processTimeSensor.record(processLatency / (double) totalProcessedSinceLastMaybeCommit,
-                    timerStartedMs);
                 maybeCommit(timerStartedMs);
             }
         } while (processed != 0);
 
         // go over the tasks again to maybe commit
-        taskManager.maybeCommitActiveTasks();
-
+        final int committed = taskManager.maybeCommitActiveTasks();
+        streamsMetrics.commitTimeSensor.record(computeLatency() / (double) committed, timerStartedMs);
         return totalProcessedSinceLastMaybeCommit;
     }
 
-    private void maybePunctuateSystemTime() {
-        final RuntimeException e = taskManager.performOnActiveTasks(new TaskAction() {
-            @Override
-            public String name() {
-                return "punctuate";
-            }
-
-            @Override
-            public void apply(final Task task) {
-                try {
-                    // check whether we should punctuate based on system timestamp
-                    if (task.maybePunctuateSystemTime()) {
-                        streamsMetrics.punctuateTimeSensor.record(computeLatency(), timerStartedMs);
-                    }
-                } catch (final KafkaException e) {
-                    log.error("{} Failed to punctuate active task {} due to the following error:", logPrefix, task.id(), e);
-                    throw e;
-                }
-            }
-        }, false);
-
-        if (e != null) {
-            throw e;
+    private void punctuate() {
+        final int punctuated = taskManager.punctuate();
+        if (punctuated > 0) {
+            streamsMetrics.punctuateTimeSensor.record(computeLatency(), timerStartedMs);
         }
     }
 
@@ -886,8 +863,8 @@ public class StreamThread extends Thread implements ThreadDataProvider {
                         logPrefix, taskManager.activeTaskIds(), taskManager.standbyTaskIds(), now - lastCommitMs, commitTimeMs);
             }
 
-            taskManager.commitAll();
-
+            int committed = taskManager.commitAll();
+            streamsMetrics.commitTimeSensor.record(computeLatency() / (double) committed, timerStartedMs);
             if (log.isDebugEnabled()) {
                 log.info("{} Committed all active tasks {} and standby tasks {} in {}ms",
                         logPrefix,  taskManager.activeTaskIds(), taskManager.standbyTaskIds(), timerStartedMs - now);

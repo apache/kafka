@@ -299,16 +299,20 @@ class TaskManager {
         }
     }
 
-    void commitAll() {
-        active.commit();
-        standby.commit();
+    int commitAll() {
+        int committed = active.commit();
+        return committed + standby.commit();
     }
 
-    long process() {
+    int process() {
         return active.process();
     }
 
-    void maybeCommitActiveTasks() {
-        active.maybeCommit();
+    int punctuate() {
+        return active.punctuate();
+    }
+
+    int maybeCommitActiveTasks() {
+        return active.maybeCommit();
     }
 }

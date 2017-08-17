@@ -707,8 +707,7 @@ public class StreamThreadTest {
         final TaskManager taskManager = EasyMock.createMock(TaskManager.class);
         taskManager.setConsumer(EasyMock.anyObject(Consumer.class));
         EasyMock.expectLastCall();
-        taskManager.commitAll();
-        EasyMock.expectLastCall().times(numberOfCommits);
+        EasyMock.expect(taskManager.commitAll()).andReturn(1).times(numberOfCommits);
         EasyMock.replay(taskManager, consumer);
         return taskManager;
     }
