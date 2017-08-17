@@ -299,7 +299,7 @@ public class TopologyBuilder {
      * Enum used to define auto offset reset policy when creating {@link KStream} or {@link KTable}
      */
     public enum AutoOffsetReset {
-        EARLIEST , LATEST
+        EARLIEST, LATEST
     }
 
     /**
