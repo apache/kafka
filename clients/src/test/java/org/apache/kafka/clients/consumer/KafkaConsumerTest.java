@@ -63,7 +63,7 @@ import org.apache.kafka.common.requests.SyncGroupResponse;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.kafka.common.utils.KafkaLoggerFactory;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -1622,7 +1622,7 @@ public class KafkaConsumerTest {
         ConsumerMetrics metricsRegistry = new ConsumerMetrics(metricGroupPrefix);
 
         SubscriptionState subscriptions = new SubscriptionState(autoResetStrategy);
-        KafkaLoggerFactory loggerFactory = new KafkaLoggerFactory();
+        LogContext loggerFactory = new LogContext();
         ConsumerNetworkClient consumerClient = new ConsumerNetworkClient(loggerFactory, client, metadata, time,
                 retryBackoffMs, requestTimeoutMs);
         ConsumerCoordinator consumerCoordinator = new ConsumerCoordinator(

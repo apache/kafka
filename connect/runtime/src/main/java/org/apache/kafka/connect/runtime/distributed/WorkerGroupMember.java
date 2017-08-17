@@ -31,11 +31,11 @@ import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.network.ChannelBuilder;
 import org.apache.kafka.common.network.Selector;
 import org.apache.kafka.common.utils.AppInfoParser;
-import org.apache.kafka.common.utils.KafkaLogger;
-import org.apache.kafka.common.utils.KafkaLoggerFactory;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.storage.ConfigBackingStore;
 import org.apache.kafka.connect.util.ConnectorTaskId;
+import org.slf4j.Logger;
 
 import java.net.InetSocketAddress;
 import java.util.Collections;
@@ -57,7 +57,7 @@ public class WorkerGroupMember {
     private static final AtomicInteger CONNECT_CLIENT_ID_SEQUENCE = new AtomicInteger(1);
     private static final String JMX_PREFIX = "kafka.connect";
 
-    private final KafkaLogger log;
+    private final Logger log;
     private final Time time;
     private final String clientId;
     private final ConsumerNetworkClient client;
@@ -80,8 +80,8 @@ public class WorkerGroupMember {
             clientId = clientIdConfig.length() <= 0 ? "connect-" + CONNECT_CLIENT_ID_SEQUENCE.getAndIncrement() : clientIdConfig;
             String groupId = config.getString(DistributedConfig.GROUP_ID_CONFIG);
 
-            KafkaLoggerFactory loggerFactory = new KafkaLoggerFactory("[Worker clientId=" + clientId + " groupId=" + groupId + "]");
-            this.log = loggerFactory.getLogger(WorkerGroupMember.class);
+            LogContext logContext = new LogContext("[Worker clientId=" + clientId + " groupId=" + groupId + "]");
+            this.log = logContext.logger(WorkerGroupMember.class);
 
             Map<String, String> metricsTags = new LinkedHashMap<>();
             metricsTags.put("client-id", clientId);
@@ -111,14 +111,14 @@ public class WorkerGroupMember {
                     true,
                     new ApiVersions());
             this.client = new ConsumerNetworkClient(
-                    loggerFactory,
+                    logContext,
                     netClient,
                     metadata,
                     time,
                     retryBackoffMs,
                     config.getInt(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG));
             this.coordinator = new WorkerCoordinator(
-                    loggerFactory,
+                    logContext,
                     this.client,
                     groupId,
                     config.getInt(DistributedConfig.REBALANCE_TIMEOUT_MS_CONFIG),

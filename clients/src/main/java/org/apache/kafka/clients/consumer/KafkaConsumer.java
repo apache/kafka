@@ -49,10 +49,10 @@ import org.apache.kafka.common.requests.IsolationLevel;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.AppInfoParser;
-import org.apache.kafka.common.utils.KafkaLogger;
-import org.apache.kafka.common.utils.KafkaLoggerFactory;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.slf4j.Logger;
 
 import java.net.InetSocketAddress;
 import java.util.Collection;
@@ -549,7 +549,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     // Visible for testing
     final Metrics metrics;
 
-    private final KafkaLogger log;
+    private final Logger log;
     private final String clientId;
     private final ConsumerCoordinator coordinator;
     private final Deserializer<K> keyDeserializer;
@@ -646,8 +646,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             this.clientId = clientId;
             String groupId = config.getString(ConsumerConfig.GROUP_ID_CONFIG);
 
-            KafkaLoggerFactory loggerFactory = new KafkaLoggerFactory("[Consumer clientId=" + clientId + " groupId=" + groupId + "]");
-            this.log = loggerFactory.getLogger(getClass());
+            LogContext loggerFactory = new LogContext("[Consumer clientId=" + clientId + " groupId=" + groupId + "]");
+            this.log = loggerFactory.logger(getClass());
 
             log.debug("Initializing the Kafka consumer");
             this.requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
@@ -780,7 +780,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     // visible for testing
-    KafkaConsumer(KafkaLoggerFactory loggerFactory,
+    KafkaConsumer(LogContext logContext,
                   String clientId,
                   ConsumerCoordinator coordinator,
                   Deserializer<K> keyDeserializer,
@@ -794,7 +794,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                   Metadata metadata,
                   long retryBackoffMs,
                   long requestTimeoutMs) {
-        this.log = loggerFactory.getLogger(getClass());
+        this.log = logContext.logger(getClass());
         this.clientId = clientId;
         this.coordinator = coordinator;
         this.keyDeserializer = keyDeserializer;

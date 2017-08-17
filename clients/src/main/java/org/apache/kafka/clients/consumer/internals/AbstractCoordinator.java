@@ -48,10 +48,10 @@ import org.apache.kafka.common.requests.LeaveGroupResponse;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.common.requests.SyncGroupRequest;
 import org.apache.kafka.common.requests.SyncGroupResponse;
-import org.apache.kafka.common.utils.KafkaLogger;
-import org.apache.kafka.common.utils.KafkaLoggerFactory;
 import org.apache.kafka.common.utils.KafkaThread;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.slf4j.Logger;
 
 import java.io.Closeable;
 import java.nio.ByteBuffer;
@@ -99,7 +99,7 @@ public abstract class AbstractCoordinator implements Closeable {
         STABLE,      // the client has joined and is sending heartbeats
     }
 
-    private final KafkaLogger log;
+    private final Logger log;
     private final int sessionTimeoutMs;
     private final boolean leaveGroupOnClose;
     private final GroupCoordinatorMetrics sensors;
@@ -123,7 +123,7 @@ public abstract class AbstractCoordinator implements Closeable {
     /**
      * Initialize the coordination manager.
      */
-    public AbstractCoordinator(KafkaLoggerFactory loggerFactory,
+    public AbstractCoordinator(LogContext logContext,
                                ConsumerNetworkClient client,
                                String groupId,
                                int rebalanceTimeoutMs,
@@ -134,7 +134,7 @@ public abstract class AbstractCoordinator implements Closeable {
                                Time time,
                                long retryBackoffMs,
                                boolean leaveGroupOnClose) {
-        this.log = loggerFactory.getLogger(AbstractCoordinator.class);
+        this.log = logContext.logger(AbstractCoordinator.class);
         this.client = client;
         this.time = time;
         this.groupId = groupId;

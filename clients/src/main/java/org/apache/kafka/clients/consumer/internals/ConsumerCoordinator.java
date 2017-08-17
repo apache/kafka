@@ -47,9 +47,9 @@ import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.common.requests.OffsetCommitResponse;
 import org.apache.kafka.common.requests.OffsetFetchRequest;
 import org.apache.kafka.common.requests.OffsetFetchResponse;
-import org.apache.kafka.common.utils.KafkaLogger;
-import org.apache.kafka.common.utils.KafkaLoggerFactory;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.slf4j.Logger;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -66,7 +66,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * This class manages the coordination process with the consumer coordinator.
  */
 public final class ConsumerCoordinator extends AbstractCoordinator {
-    private final KafkaLogger log;
+    private final Logger log;
     private final List<PartitionAssignor> assignors;
     private final Metadata metadata;
     private final ConsumerCoordinatorMetrics sensors;
@@ -91,7 +91,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     /**
      * Initialize the coordination manager.
      */
-    public ConsumerCoordinator(KafkaLoggerFactory loggerFactory,
+    public ConsumerCoordinator(LogContext logContext,
                                ConsumerNetworkClient client,
                                String groupId,
                                int rebalanceTimeoutMs,
@@ -109,7 +109,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                                ConsumerInterceptors<?, ?> interceptors,
                                boolean excludeInternalTopics,
                                final boolean leaveGroupOnClose) {
-        super(loggerFactory,
+        super(logContext,
               client,
               groupId,
               rebalanceTimeoutMs,
@@ -120,7 +120,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
               time,
               retryBackoffMs,
               leaveGroupOnClose);
-        this.log = loggerFactory.getLogger(ConsumerCoordinator.class);
+        this.log = logContext.logger(ConsumerCoordinator.class);
         this.metadata = metadata;
         this.metadataSnapshot = new MetadataSnapshot(subscriptions, metadata.fetch());
         this.subscriptions = subscriptions;

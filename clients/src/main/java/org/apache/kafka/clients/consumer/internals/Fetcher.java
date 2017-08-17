@@ -62,10 +62,10 @@ import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.ExtendedDeserializer;
 import org.apache.kafka.common.utils.CloseableIterator;
-import org.apache.kafka.common.utils.KafkaLogger;
-import org.apache.kafka.common.utils.KafkaLoggerFactory;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.slf4j.Logger;
 
 import java.io.Closeable;
 import java.nio.ByteBuffer;
@@ -91,7 +91,7 @@ import static org.apache.kafka.common.serialization.ExtendedDeserializer.Wrapper
  * This class manage the fetching process with the brokers.
  */
 public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
-    private final KafkaLogger log;
+    private final Logger log;
     private final ConsumerNetworkClient client;
     private final Time time;
     private final int minBytes;
@@ -113,7 +113,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
 
     private PartitionRecords nextInLineRecords = null;
 
-    public Fetcher(KafkaLoggerFactory loggerFactory,
+    public Fetcher(LogContext logContext,
                    ConsumerNetworkClient client,
                    int minBytes,
                    int maxBytes,
@@ -130,7 +130,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                    Time time,
                    long retryBackoffMs,
                    IsolationLevel isolationLevel) {
-        this.log = loggerFactory.getLogger(Fetcher.class);
+        this.log = logContext.logger(Fetcher.class);
         this.time = time;
         this.client = client;
         this.metadata = metadata;

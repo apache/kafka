@@ -29,7 +29,7 @@ import org.apache.kafka.common.requests.JoinGroupRequest.ProtocolMetadata;
 import org.apache.kafka.common.requests.JoinGroupResponse;
 import org.apache.kafka.common.requests.SyncGroupRequest;
 import org.apache.kafka.common.requests.SyncGroupResponse;
-import org.apache.kafka.common.utils.KafkaLoggerFactory;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.connect.runtime.TargetState;
 import org.apache.kafka.connect.storage.KafkaConfigBackingStore;
@@ -89,7 +89,7 @@ public class WorkerCoordinatorTest {
 
     @Before
     public void setup() {
-        KafkaLoggerFactory loggerFactory = new KafkaLoggerFactory();
+        LogContext loggerFactory = new LogContext();
 
         this.time = new MockTime();
         this.client = new MockClient(time);

@@ -29,9 +29,9 @@ import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.RequestHeader;
-import org.apache.kafka.common.utils.KafkaLogger;
-import org.apache.kafka.common.utils.KafkaLoggerFactory;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.slf4j.Logger;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -55,7 +55,7 @@ public class ConsumerNetworkClient implements Closeable {
 
     // the mutable state of this class is protected by the object's monitor (excluding the wakeup
     // flag and the request completion queue below).
-    private final KafkaLogger log;
+    private final Logger log;
     private final KafkaClient client;
     private final UnsentRequests unsent = new UnsentRequests();
     private final Metadata metadata;
@@ -72,13 +72,13 @@ public class ConsumerNetworkClient implements Closeable {
     // atomic to avoid the need to acquire the lock above in order to enable it concurrently.
     private final AtomicBoolean wakeup = new AtomicBoolean(false);
 
-    public ConsumerNetworkClient(KafkaLoggerFactory loggerFactory,
+    public ConsumerNetworkClient(LogContext logContext,
                                  KafkaClient client,
                                  Metadata metadata,
                                  Time time,
                                  long retryBackoffMs,
                                  long requestTimeoutMs) {
-        this.log = loggerFactory.getLogger(ConsumerNetworkClient.class);
+        this.log = logContext.logger(ConsumerNetworkClient.class);
         this.client = client;
         this.metadata = metadata;
         this.time = time;
