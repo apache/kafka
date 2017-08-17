@@ -38,6 +38,8 @@ public abstract class CommandOptions {
                 .defaultHelp(true)
                 .description(description);
 
+        prepareArgs();
+
         Namespace ns = null;
         try {
             ns = this.parser.parseArgs(args);
@@ -46,7 +48,6 @@ public abstract class CommandOptions {
             Exit.exit(1);
         }
         this.ns = ns;
-        prepareArgs();
     }
 
     public boolean has(String dest) {
