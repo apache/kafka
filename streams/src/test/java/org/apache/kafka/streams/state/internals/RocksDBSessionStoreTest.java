@@ -234,6 +234,11 @@ public class RocksDBSessionStoreTest {
         sessionStore.put(null, 1L);
     }
 
+    @Test
+    public void should() {
+        
+    }
+
     static List<KeyValue<Windowed<String>, Long>> toList(final KeyValueIterator<Windowed<String>, Long> iterator) {
         final List<KeyValue<Windowed<String>, Long>> results = new ArrayList<>();
         while (iterator.hasNext()) {
