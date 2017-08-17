@@ -55,7 +55,7 @@ object ConsumerPerformance {
     val consumerTimeout = new AtomicBoolean(false)
     var metrics: mutable.Map[MetricName, _ <: Metric] = null
     val joinGroupTimeInMs = new AtomicLong(0)
-    val fetchTimeInMs = new AtomicLong(0)
+    var fetchTimeInMs = 0L
 
     if (!config.hideHeader) {
       printHeader(config.showDetailedStats, config.useOldConsumer)
@@ -67,7 +67,7 @@ object ConsumerPerformance {
       consumer.subscribe(Collections.singletonList(config.topic))
       startMs = System.currentTimeMillis
       consume(consumer, List(config.topic), config.numMessages, 1000,
-        config, totalMessagesRead, totalBytesRead, joinGroupTimeInMs)
+        config, totalMessagesRead, totalBytesRead, joinGroupTimeInMs, startMs)
       endMs = System.currentTimeMillis
 
       if (config.printMetrics) {
@@ -98,7 +98,7 @@ object ConsumerPerformance {
       consumerConnector.shutdown()
     }
     val elapsedSecs = (endMs - startMs) / 1000.0
-    fetchTimeInMs.set((endMs - startMs) - joinGroupTimeInMs.get)
+    fetchTimeInMs = (endMs - startMs) - joinGroupTimeInMs.get
     if (!config.showDetailedStats) {
       val totalMBRead = (totalBytesRead.get * 1.0) / (1024 * 1024)
       print("%s, %s, %.4f, %.4f, %d, %.4f".format(
@@ -112,9 +112,9 @@ object ConsumerPerformance {
       if (!config.useOldConsumer) {
         print(", %d, %d, %.4f, %.4f".format(
           joinGroupTimeInMs.get,
-          fetchTimeInMs.get,
-          totalMBRead / (fetchTimeInMs.get / 1000.0),
-          totalMessagesRead.get / (fetchTimeInMs.get / 1000.0)
+          fetchTimeInMs,
+          totalMBRead / (fetchTimeInMs / 1000.0),
+          totalMessagesRead.get / (fetchTimeInMs / 1000.0)
         ))
       }
     }
@@ -126,12 +126,11 @@ object ConsumerPerformance {
   }
 
   private[tools] def printHeader(showDetailedStats: Boolean, useOldConsumer: Boolean): Unit = {
+    val newFieldsInHeader = s"${if (!useOldConsumer) ", rebalance.time.ms, fetch.time.ms, fetch.MB.sec, fetch.nMsg.sec" else ""}"
     if (!showDetailedStats) {
-        println("start.time, end.time, data.consumed.in.MB, MB.sec, data.consumed.in.nMsg, nMsg.sec" +
-          s"${if (!useOldConsumer) ", rebalance.time.ms, fetch.time.ms, fetch.MB.sec, fetch.nMsg.sec" else ""}"
-        )
+        println("start.time, end.time, data.consumed.in.MB, MB.sec, data.consumed.in.nMsg, nMsg.sec" + newFieldsInHeader)
       } else {
-        println("time, threadId, data.consumed.in.MB, MB.sec, data.consumed.in.nMsg, nMsg.sec")
+        println("time, threadId, data.consumed.in.MB, MB.sec, data.consumed.in.nMsg, nMsg.sec" + newFieldsInHeader)
     }
   }
 
@@ -142,7 +141,8 @@ object ConsumerPerformance {
               config: ConsumerPerfConfig,
               totalMessagesRead: AtomicLong,
               totalBytesRead: AtomicLong,
-              joinTime: AtomicLong) {
+              joinTime: AtomicLong,
+              testStartTime: Long) {
     var bytesRead = 0L
     var messagesRead = 0L
     var lastBytesRead = 0L
@@ -190,7 +190,8 @@ object ConsumerPerformance {
 
         if (currentTimeMillis - lastReportTime >= config.reportingInterval) {
           if (config.showDetailedStats)
-            printProgressMessage(0, bytesRead, lastBytesRead, messagesRead, lastMessagesRead, lastReportTime, currentTimeMillis, config.dateFormat)
+            printProgressMessage(0, bytesRead, lastBytesRead, messagesRead, lastMessagesRead,
+              lastReportTime, currentTimeMillis, config.dateFormat, Some(testStartTime), Some(joinTime.get))
           lastReportTime = currentTimeMillis
           lastMessagesRead = messagesRead
           lastBytesRead = bytesRead
@@ -209,12 +210,21 @@ object ConsumerPerformance {
                            lastMessagesRead: Long,
                            startMs: Long,
                            endMs: Long,
-                           dateFormat: SimpleDateFormat) = {
+                           dateFormat: SimpleDateFormat,
+                           beginTime: Option[Long] = None,
+                           joinTimeOpt: Option[Long] = None) = {
     val elapsedMs: Double = endMs - startMs
     val totalMBRead = (bytesRead * 1.0) / (1024 * 1024)
     val mbRead = ((bytesRead - lastBytesRead) * 1.0) / (1024 * 1024)
-    println("%s, %d, %.4f, %.4f, %d, %.4f".format(dateFormat.format(endMs), id, totalMBRead,
+    print("%s, %d, %.4f, %.4f, %d, %.4f".format(dateFormat.format(endMs), id, totalMBRead,
       1000.0 * (mbRead / elapsedMs), messagesRead, ((messagesRead - lastMessagesRead) / elapsedMs) * 1000.0))
+    joinTimeOpt match {
+      case Some(joinTime) =>
+        val fetchTimeMs = endMs - beginTime.getOrElse(startMs) - joinTime
+        println(", %d, %d, %.4f, %.4f".format(joinTime, fetchTimeMs, (bytesRead * 1.0 / (1024 * 1024) / (fetchTimeMs / 1000.0)),
+          messagesRead / (fetchTimeMs / 1000.0)))
+      case None => println()
+    }
   }
 
   class ConsumerPerfConfig(args: Array[String]) extends PerfConfig(args) {
