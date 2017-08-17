@@ -199,18 +199,6 @@ class TaskManager {
         return null;
     }
 
-    RuntimeException performOnActiveTasks(final TaskAction action, final boolean throwException) {
-        return performOnTasks(action, active, throwException);
-    }
-
-    RuntimeException performOnStandbyTasks(final TaskAction action, final boolean throwException) {
-        return performOnTasks(action, standby, throwException);
-    }
-
-    private RuntimeException performOnTasks(final TaskAction action, final AssignedTasks assignedTasks, final boolean throwException) {
-        return assignedTasks.applyToRunningTasks(action, throwException);
-    }
-
     void shutdown(final boolean clean) {
         log.debug("{} Shutting down all active tasks {}, standby tasks {}, suspended tasks {}, and suspended standby tasks {}",
                   logPrefix, active.runningTaskIds(), standby.runningTaskIds(),
@@ -314,5 +302,14 @@ class TaskManager {
 
     int maybeCommitActiveTasks() {
         return active.maybeCommit();
+    }
+
+    public String toString(final String indent) {
+        final StringBuilder builder = new StringBuilder();
+        builder.append(indent).append("\tActive tasks:\n");
+        builder.append(active.toString(indent + "\t\t"));
+        builder.append(indent).append("\tStandby tasks:\n");
+        builder.append(standby.toString(indent + "\t\t"));
+        return builder.toString();
     }
 }

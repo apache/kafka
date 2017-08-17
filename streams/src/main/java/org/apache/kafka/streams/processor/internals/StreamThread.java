@@ -1096,23 +1096,7 @@ public class StreamThread extends Thread implements ThreadDataProvider {
             .append(indent).append("\tStreamsThread clientId: ").append(clientId).append("\n")
             .append(indent).append("\tStreamsThread threadId: ").append(getName()).append("\n");
 
-        // iterate and print active tasks
-        final TaskAction printAction = new TaskAction() {
-            @Override
-            public String name() {
-                return "print";
-            }
-
-            @Override
-            public void apply(final Task task) {
-                sb.append(indent).append(task.toString(indent + "\t\t"));
-            }
-        };
-
-        sb.append(indent).append("\tActive tasks:\n");
-        taskManager.performOnActiveTasks(printAction, false);
-        sb.append(indent).append("\tStandby tasks:\n");
-        taskManager.performOnStandbyTasks(printAction, false);
+        sb.append(taskManager.toString(indent));
         return sb.toString();
     }
 
