@@ -445,8 +445,9 @@ class ProducerStateManager(val topicPartition: TopicPartition,
             lastMapOffset = lastSnapOffset
             return
           } catch {
-            case e: CorruptSnapshotException =>
-              error(s"Snapshot file at ${file.getPath} is corrupt: ${e.getMessage}")
+            case e: Exception =>
+              warn(s"Failed to load producer snapshot from ${file.getPath}. The producer state will be " +
+                "rebuilt from an earlier snapshot if possible or from the log if necessary.", e)
               Files.deleteIfExists(file.toPath)
           }
         case None =>
