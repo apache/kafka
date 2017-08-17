@@ -90,12 +90,6 @@ public class StreamThread extends Thread implements ThreadDataProvider {
      *          |           |              |
      *          |           v              |
      *          |     +-----+-------+      |
-     *          +<--- | Assigning   |      |
-     *          |     | Partitions  |      |
-     *          |     +-----+-------+      |
-     *          |           |              |
-     *          |           v              |
-     *          |     +-----+-------+      |
      *          |     | Partitions  |      |
      *          +<--- | Assigned    | +--> +
      *          |     +-----+-------+
@@ -121,7 +115,7 @@ public class StreamThread extends Thread implements ThreadDataProvider {
      *
      */
     public enum State implements ThreadStateTransitionValidator {
-        CREATED(1, 5), RUNNING(2, 5), PARTITIONS_REVOKED(2, 3, 5), ASSIGNING_PARTITIONS(4, 5), PARTITIONS_ASSIGNED(1, 2, 5), PENDING_SHUTDOWN(6), DEAD;
+        CREATED(1, 4), RUNNING(2, 4), PARTITIONS_REVOKED(2, 3, 4), PARTITIONS_ASSIGNED(1, 2, 4), PENDING_SHUTDOWN(5), DEAD;
 
         private final Set<Integer> validTransitions = new HashSet<>();
 
@@ -175,14 +169,15 @@ public class StreamThread extends Thread implements ThreadDataProvider {
         public void onPartitionsAssigned(final Collection<TopicPartition> assignment) {
             final long start = time.milliseconds();
             try {
-                streamThread.setState(State.ASSIGNING_PARTITIONS);
+                if (!streamThread.setState(State.PARTITIONS_ASSIGNED)) {
+                    return;
+                }
                 taskManager.createTasks(assignment);
                 final RuntimeException exception = streamThread.unAssignChangeLogPartitions();
                 if (exception != null) {
                     throw exception;
                 }
                 streamThread.refreshMetadataState();
-                streamThread.setState(State.PARTITIONS_ASSIGNED);
             } catch (final Throwable t) {
                 streamThread.setRebalanceException(t);
                 throw t;
@@ -1074,17 +1069,17 @@ public class StreamThread extends Thread implements ThreadDataProvider {
      * Sets the state
      * @param newState New state
      */
-    void setState(final State newState) {
+    boolean setState(final State newState) {
+        State oldState;
         synchronized (stateLock) {
-            final State oldState = state;
-
+            oldState = state;
             // there are cases when we shouldn't check if a transition is valid, e.g.,
             // when, for testing, a thread is closed multiple times. We could either
             // check here and immediately return for those cases, or add them to the transition
             // diagram (but then the diagram would be confusing and have transitions like
             // PENDING_SHUTDOWN->PENDING_SHUTDOWN).
             if (newState != State.DEAD && (state == State.PENDING_SHUTDOWN || state == State.DEAD)) {
-                return;
+                return false;
             }
 
             if (!state.isValidTransition(newState)) {
@@ -1095,10 +1090,11 @@ public class StreamThread extends Thread implements ThreadDataProvider {
             }
 
             state = newState;
-            if (stateListener != null) {
-                stateListener.onChange(this, state, oldState);
-            }
         }
+        if (stateListener != null) {
+            stateListener.onChange(this, state, oldState);
+        }
+        return true;
     }
 
     /**

@@ -235,7 +235,7 @@ class AssignedTasks {
         return exception;
     }
 
-    void closeZombieTask(final Task task) {
+    private void closeZombieTask(final Task task) {
         log.warn("{} Producer of task {} fenced; closing zombie task", logPrefix, task.id());
         try {
             task.close(false);
@@ -359,7 +359,6 @@ class AssignedTasks {
     int process() {
         timerStartedMs = time.milliseconds();
         int processed = 0;
-        timerStartedMs = time.milliseconds();
         for (final Task task : running()) {
             if (task.process()) {
                 processSensor.record(computeLatency(), timerStartedMs);
@@ -411,10 +410,7 @@ class AssignedTasks {
     }
 
     void closeNonAssignedSuspendedTasks(final Map<TaskId, Set<TopicPartition>> newAssignment) {
-        closeNonAssignedTask(newAssignment, suspended.values().iterator());
-    }
-
-    private void closeNonAssignedTask(final Map<TaskId, Set<TopicPartition>> newAssignment, final Iterator<Task> standByTaskIterator) {
+        final Iterator<Task> standByTaskIterator = suspended.values().iterator();
         while (standByTaskIterator.hasNext()) {
             final Task suspendedTask = standByTaskIterator.next();
             if (!newAssignment.containsKey(suspendedTask.id()) || !suspendedTask.partitions().equals(newAssignment.get(suspendedTask.id()))) {

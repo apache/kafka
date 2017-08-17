@@ -404,7 +404,7 @@ public class KafkaStreams {
                 threadState.put(thread.getId(), newState);
 
                 if (newState == StreamThread.State.PARTITIONS_REVOKED ||
-                        newState == StreamThread.State.ASSIGNING_PARTITIONS) {
+                        newState == StreamThread.State.PARTITIONS_ASSIGNED) {
                     setState(State.REBALANCING);
                 } else if (newState == StreamThread.State.RUNNING && state() != State.RUNNING) {
                     maybeSetRunning();

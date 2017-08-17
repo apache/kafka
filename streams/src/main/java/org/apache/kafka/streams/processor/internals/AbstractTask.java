@@ -244,11 +244,6 @@ public abstract class AbstractTask implements Task {
         }
     }
 
-    /**
-     * initialize the topology/state stores
-     * @return true if the topology is ready to run, i.e, all stores have been restored.
-     */
-    public abstract boolean initialize();
 
     public boolean hasStateStores() {
         return !topology.stateStores().isEmpty();
