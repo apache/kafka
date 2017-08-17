@@ -303,6 +303,7 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
   def testQuotaViolation(): Unit = {
     val clientQuotaManager = new ClientQuotaManager(config, metrics, Produce, time, Some(ClientQuotaManagerTest.scheduler), "")
     val queueSizeMetric = metrics.metrics().get(metrics.metricName("queue-size", "Produce", ""))
+    val throttleCountMetric = metrics.metrics().get(metrics.metricName("throttle-count", "Produce", ""))
     try {
       clientQuotaManager.updateQuota(None, Some(ConfigEntityName.Default), Some(ConfigEntityName.Default),
         Some(new Quota(500, true)))
@@ -325,6 +326,8 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
       assertEquals(2100, throttleTime, "Should be throttled")
       throttle(clientQuotaManager, "ANONYMOUS", "unknown", throttleTime, callback)
       assertEquals(1, queueSizeMetric.metricValue.asInstanceOf[Double].toInt)
+      assertEquals(1, throttleCountMetric.metricValue.asInstanceOf[Double].toInt)
+
       // After a request is delayed, the callback cannot be triggered immediately
       clientQuotaManager.throttledChannelReaper.doWork()
       assertEquals(0, numCallbacks)
@@ -332,6 +335,7 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
 
       // Callback can only be triggered after the delay time passes
       clientQuotaManager.throttledChannelReaper.doWork()
+      assertEquals(1, throttleCountMetric.metricValue.asInstanceOf[Double].toInt)
       assertEquals(0, queueSizeMetric.metricValue.asInstanceOf[Double].toInt)
       assertEquals(1, numCallbacks)
 

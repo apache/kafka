@@ -199,7 +199,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
     case None => QuotaTypes.NoQuotas
   }
 
-  private val delayQueueSensor = metrics.sensor(quotaType.toString + "-delayQueue")
+  private val delayQueueSensor = metrics.sensor(quotaType.toString + "-delayQueueSize")
   delayQueueSensor.add(metrics.metricName("queue-size", quotaType.toString,
     "Tracks the size of the delay queue"), new CumulativeSum())
 
@@ -214,6 +214,11 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
       case _ =>
     }
   }
+
+  private val throttledRequestCountSensor = metrics.sensor(quotaType.toString() + "-throttledRequestCount")
+  throttledRequestCountSensor.add(metrics.metricName("throttle-count",
+                                                     quotaType.toString,
+                                                     "Tracks the number of requests that have been throttled"), new CumulativeSum())
 
   /**
    * Reaper thread that triggers channel unmute callbacks on all throttled channels
@@ -357,6 +362,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
       val throttledChannel = new ThrottledChannel(time, throttleTimeMs, throttleCallback)
       delayQueue.add(throttledChannel)
       delayQueueSensor.record()
+      throttledRequestCountSensor.record()
       debug("Channel throttled for sensor (%s). Delay time: (%d)".format(clientSensors.quotaSensor.name(), throttleTimeMs))
     }
   }
