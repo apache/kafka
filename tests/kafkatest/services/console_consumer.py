@@ -170,7 +170,7 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
     def start_cmd(self, node):
         """Return the start command appropriate for the given node."""
         args = self.args.copy()
-        args['zk_connect'] = self.kafka.zk.connect_setting()
+        args['zk_connect'] = self.kafka.zk_connect_setting()
         args['stdout'] = ConsoleConsumer.STDOUT_CAPTURE
         args['stderr'] = ConsoleConsumer.STDERR_CAPTURE
         args['log_dir'] = ConsoleConsumer.LOG_DIR
