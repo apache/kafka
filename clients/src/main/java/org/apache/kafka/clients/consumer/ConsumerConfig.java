@@ -233,8 +233,8 @@ public class ConsumerConfig extends AbstractConfig {
 
     /** <code>buffer.memory</code> */
     public static final String BUFFER_MEMORY_CONFIG = "buffer.memory";
-    private static final String BUFFER_MEMORY_DOC = "The total bytes of memory the consumer can use to buffer records received from the server and waiting to be processed (decompressed and deserialized)."
-                                                    + "This setting slightly differs from the total memory the consumer will use because some additional memory will be used for decompression (if compression is enabled), deserialization as well as for maintaining in-flight requests."
+    private static final String BUFFER_MEMORY_DOC = "The total bytes of memory the consumer can use to buffer records received from the server and waiting to be processed (decompressed and deserialized). "
+                                                    + "This setting slightly differs from the total memory the consumer will use because some additional memory will be used for decompression (if compression is enabled), deserialization as well as for maintaining in-flight requests. "
                                                     + "Note that this setting must be at least as big as max.fetch.bytes.";
 
     /**

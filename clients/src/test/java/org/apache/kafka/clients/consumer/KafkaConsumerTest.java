@@ -1330,25 +1330,24 @@ public class KafkaConsumerTest {
         consumer.close(0, TimeUnit.MILLISECONDS);
     }
 
-    @Test
-    public void testBadMemoryPoolConfigs() {
+    @Test(expected = ConfigException.class)
+    public void testBufferMemoryNotPositive() {
         Properties props = new Properties();
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
         props.put(ConsumerConfig.BUFFER_MEMORY_CONFIG, 0L);
         try (KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(props, new ByteArrayDeserializer(), new ByteArrayDeserializer())) {
-            fail("should have caught an exception and returned");
-        } catch (ConfigException ce) {
-            // Expected exception
+            fail("should have thrown an exception");
         }
+    }
 
-        props = new Properties();
+    @Test(expected = KafkaException.class)
+    public void testMaxPartitionLargerThanBufferMemory() {
+        Properties props = new Properties();
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
         props.put(ConsumerConfig.BUFFER_MEMORY_CONFIG, 1L);
         props.put(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, 2);
         try (KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(props, new ByteArrayDeserializer(), new ByteArrayDeserializer())) {
-            fail("should have caught an exception and returned");
-        } catch (KafkaException ke) {
-            // Expected exception
+            fail("should have thrown an exception");
         }
     }
 

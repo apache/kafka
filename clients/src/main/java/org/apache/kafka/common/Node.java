@@ -31,7 +31,7 @@ public class Node {
     private final boolean hasPriority;
 
     public Node(int id, String host, int port, String rack) {
-        this(id, host, port, null, false);
+        this(id, host, port, rack, false);
     }
 
     public Node(int id, String host, int port, boolean priority) {
