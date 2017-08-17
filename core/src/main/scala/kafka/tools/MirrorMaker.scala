@@ -709,7 +709,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
         this.producer.send(record).get()
       } else {
           this.producer.send(record,
-            new MirrorMakerProducerCallback(record.topic(), record.key(), record.value()))
+            new MirrorMakerProducerCallback(record))
       }
     }
 
@@ -726,8 +726,8 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
     }
   }
 
-  private class MirrorMakerProducerCallback (topic: String, key: Array[Byte], value: Array[Byte])
-    extends ErrorLoggingCallback(topic, key, value, false) {
+  private class MirrorMakerProducerCallback (record: ProducerRecord[Array[Byte], Array[Byte]])
+    extends ErrorLoggingCallback(record) {
 
     override def onCompletion(metadata: RecordMetadata, exception: Exception) {
       if (exception != null) {

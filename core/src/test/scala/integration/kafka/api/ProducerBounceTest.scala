@@ -138,9 +138,10 @@ class ProducerBounceTest extends KafkaServerTestHarness {
       val responses = new ArrayBuffer[IndexedSeq[Future[RecordMetadata]]]()
       for (producer <- producers) {
         val response =
-          for (i <- sent+1 to sent+numRecords)
-            yield producer.send(new ProducerRecord[Array[Byte],Array[Byte]](topic1, null, null, ((producerId + 1) * i).toString.getBytes),
-              new ErrorLoggingCallback(topic1, null, null, true))
+          for (i <- sent+1 to sent+numRecords) yield {
+            val record = new ProducerRecord[Array[Byte],Array[Byte]](topic1, null, null, ((producerId + 1) * i).toString.getBytes)
+            producer.send(record, new ErrorLoggingCallback(record))
+          }
         responses.append(response)
         producerId += 1
       }
