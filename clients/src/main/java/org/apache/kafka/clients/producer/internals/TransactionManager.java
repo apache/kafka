@@ -383,6 +383,8 @@ public class TransactionManager {
         if (batch.hasBeenCountedTowardSequence())
             return;
         incrementSequenceNumber(batch.topicPartition, batch.recordCount);
+        log.debug("ProducerId: {}; topic-partition: {}; incremented sequence number to {}",
+                producerIdAndEpoch().producerId, batch.topicPartition, sequenceNumber(batch.topicPartition));
         batch.countSequenceNumber();
     }
 

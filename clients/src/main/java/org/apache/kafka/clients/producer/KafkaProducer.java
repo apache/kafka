@@ -482,7 +482,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     }
 
     private static int configureInflightRequests(ProducerConfig config, boolean idempotenceEnabled) {
-        if (idempotenceEnabled && 0 < config.getInt(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION)) {
+        if (idempotenceEnabled && 5 < config.getInt(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION)) {
             throw new ConfigException("Must set " + ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION + " to at most 5" +
                     "to use the idempotent producer. Otherwise we cannot guarantee idempotence.");
         }

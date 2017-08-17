@@ -509,7 +509,7 @@ public final class RecordAccumulator {
                                                             "{} being sent to partition {}", producerIdAndEpoch.producerId,
                                                     producerIdAndEpoch.epoch, batch.baseSequence(), tp);
                                         }
-                                        if (transactionManager != null && !batch.hasBeenCountedTowardSequence()) {
+                                        if (transactionManager != null) {
                                             // We close the batch for writing once it is full. We would have incremented
                                             // the sequence number at that point so that the next batch would get the
                                             // correct next sequence.
@@ -519,7 +519,6 @@ public final class RecordAccumulator {
                                             //
                                             // In this case, we need to increment the sequence number here.
                                             transactionManager.maybeCountSequenceNumber(batch);
-                                            log.debug("ProducerId {}, Partition {}, incremented sequence number to: {}", producerIdAndEpoch.producerId, tp, transactionManager.sequenceNumber(tp));
                                         }
                                         batch.close();
                                         size += batch.records().sizeInBytes();
