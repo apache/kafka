@@ -75,4 +75,36 @@ class ConsoleProducerTest {
     assert(reader.parseKey)
   }
 
+  @Test
+  def testProvidedClientIdProp(): Unit = {
+
+    val args: Array[String] = Array(
+      "--broker-list",
+      "localhost:1001,localhost:1002",
+      "--topic",
+      "t3",
+      "--producer-property",
+      "client.id=myclientid"
+    )
+
+    val config = new ConsoleProducer.ProducerConfig(args)
+    val props = ConsoleProducer.getNewProducerProps(config)
+    assert(props.get("client.id") == "myclientid")
+  }
+
+  @Test
+  def testFixedClientIdProp(): Unit = {
+
+    val args: Array[String] = Array(
+      "--broker-list",
+      "localhost:1001,localhost:1002",
+      "--topic",
+      "t3"
+    )
+
+    val config = new ConsoleProducer.ProducerConfig(args)
+    val props = ConsoleProducer.getNewProducerProps(config)
+    assert(props.get("client.id") == "console-producer")
+  }
+
 }
