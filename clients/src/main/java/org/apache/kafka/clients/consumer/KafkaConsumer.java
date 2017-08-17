@@ -1119,6 +1119,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * <p>
      * This is a synchronous commits and will block until either the commit succeeds or an unrecoverable error is
      * encountered (in which case it is thrown to the caller).
+     * <p>
+     * Note that asynchronous offset commits sent previously with the {@link #commitAsync(OffsetCommitCallback)}
+     * (or similar) are guaranteed to have their callbacks invoked prior to completion of this method.
      *
      * @throws org.apache.kafka.clients.consumer.CommitFailedException if the commit failed and cannot be retried.
      *             This can only occur if you are using automatic group management with {@link #subscribe(Collection)},
@@ -1152,6 +1155,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * <p>
      * This is a synchronous commits and will block until either the commit succeeds or an unrecoverable error is
      * encountered (in which case it is thrown to the caller).
+     * <p>
+     * Note that asynchronous offset commits sent previously with the {@link #commitAsync(OffsetCommitCallback)}
+     * (or similar) are guaranteed to have their callbacks invoked prior to completion of this method.
      *
      * @param offsets A map of offsets by partition with associated metadata
      * @throws org.apache.kafka.clients.consumer.CommitFailedException if the commit failed and cannot be retried.
@@ -1194,6 +1200,11 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * <p>
      * This is an asynchronous call and will not block. Any errors encountered are either passed to the callback
      * (if provided) or discarded.
+     * <p>
+     * Offsets committed through multiple calls to this API are guaranteed to be sent in the same order as
+     * the invocations. Corresponding commit callbacks are also invoked in the same order. Additionally note that
+     * offsets committed through this API are guaranteed to complete before a subsequent call to {@link #commitSync()}
+     * (and variants) returns.
      *
      * @param callback Callback to invoke when the commit completes
      */
@@ -1217,6 +1228,11 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * <p>
      * This is an asynchronous call and will not block. Any errors encountered are either passed to the callback
      * (if provided) or discarded.
+     * <p>
+     * Offsets committed through multiple calls to this API are guaranteed to be sent in the same order as
+     * the invocations. Corresponding commit callbacks are also invoked in the same order. Additionally note that
+     * offsets committed through this API are guaranteed to complete before a subsequent call to {@link #commitSync()}
+     * (and variants) returns.
      *
      * @param offsets A map of offsets by partition with associate metadata. This map will be copied internally, so it
      *                is safe to mutate the map after returning.

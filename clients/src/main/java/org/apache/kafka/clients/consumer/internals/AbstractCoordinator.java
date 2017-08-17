@@ -21,8 +21,8 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
-import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
 import org.apache.kafka.common.errors.IllegalGenerationException;
+import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.RebalanceInProgressException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
@@ -59,7 +59,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
-import org.apache.kafka.common.errors.InterruptException;
 
 /**
  * AbstractCoordinator implements group management for a single group member by interacting with
@@ -247,8 +246,6 @@ public abstract class AbstractCoordinator implements Closeable {
             // find a node to ask about the coordinator
             Node node = this.client.leastLoadedNode();
             if (node == null) {
-                // TODO: If there are no brokers left, perhaps we should use the bootstrap set
-                // from configuration?
                 log.debug("No broker available to send GroupCoordinator request for group {}", groupId);
                 return RequestFuture.noBrokersAvailable();
             } else
@@ -651,7 +648,10 @@ public abstract class AbstractCoordinator implements Closeable {
     protected synchronized void coordinatorDead() {
         if (this.coordinator != null) {
             log.info("Marking the coordinator {} dead for group {}", this.coordinator, groupId);
-            client.failUnsentRequests(this.coordinator, CoordinatorNotAvailableException.INSTANCE);
+
+            // Disconnect from the coordinator to ensure that there are no in-flight requests remaining.
+            // Pending callbacks will be invoked with a DisconnectException.
+            client.disconnect(this.coordinator);
             this.coordinator = null;
         }
     }

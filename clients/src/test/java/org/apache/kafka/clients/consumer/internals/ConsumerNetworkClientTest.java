@@ -22,6 +22,7 @@ import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.HeartbeatRequest;
@@ -78,6 +79,27 @@ public class ConsumerNetworkClientTest {
         consumerClient.awaitPendingRequests(node, Long.MAX_VALUE);
         assertTrue(future1.succeeded());
         assertTrue(future2.succeeded());
+    }
+
+    @Test
+    public void testDisconnectWithUnsentRequests() {
+        RequestFuture<ClientResponse> future = consumerClient.send(node, heartbeat());
+        assertTrue(consumerClient.hasPendingRequests(node));
+        assertFalse(client.hasInFlightRequests(node.idString()));
+        consumerClient.disconnect(node);
+        assertTrue(future.failed());
+        assertTrue(future.exception() instanceof DisconnectException);
+    }
+
+    @Test
+    public void testDisconnectWithInFlightRequests() {
+        RequestFuture<ClientResponse> future = consumerClient.send(node, heartbeat());
+        consumerClient.pollNoWakeup();
+        assertTrue(consumerClient.hasPendingRequests(node));
+        assertTrue(client.hasInFlightRequests(node.idString()));
+        consumerClient.disconnect(node);
+        assertTrue(future.failed());
+        assertTrue(future.exception() instanceof DisconnectException);
     }
 
     @Test
