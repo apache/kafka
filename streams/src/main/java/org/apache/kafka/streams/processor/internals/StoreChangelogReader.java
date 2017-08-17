@@ -23,7 +23,9 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -45,17 +47,21 @@ public class StoreChangelogReader implements ChangelogReader {
     private final long partitionValidationTimeoutMs;
     private final Map<String, List<PartitionInfo>> partitionInfo = new HashMap<>();
     private final Map<TopicPartition, StateRestorer> stateRestorers = new HashMap<>();
+    private final StateRestoreListener stateRestoreListener;
 
-    public StoreChangelogReader(final String threadId, final Consumer<byte[], byte[]> consumer, final Time time, final long partitionValidationTimeoutMs) {
+    public StoreChangelogReader(final String threadId, final Consumer<byte[], byte[]> consumer, final Time time,
+                                final long partitionValidationTimeoutMs, final StateRestoreListener stateRestoreListener) {
         this.time = time;
         this.consumer = consumer;
         this.partitionValidationTimeoutMs = partitionValidationTimeoutMs;
 
         this.logPrefix = String.format("stream-thread [%s]", threadId);
+        this.stateRestoreListener = stateRestoreListener;
     }
 
-    public StoreChangelogReader(final Consumer<byte[], byte[]> consumer, final Time time, final long partitionValidationTimeoutMs) {
-        this("", consumer, time, partitionValidationTimeoutMs);
+    public StoreChangelogReader(final Consumer<byte[], byte[]> consumer, final Time time,
+                                long partitionValidationTimeoutMs, final StateRestoreListener stateRestoreListener) {
+        this("", consumer, time, partitionValidationTimeoutMs, stateRestoreListener);
     }
 
     @Override
@@ -93,6 +99,7 @@ public class StoreChangelogReader implements ChangelogReader {
     @Override
     public void register(final StateRestorer restorer) {
         if (restorer.offsetLimit() > 0) {
+            restorer.setGlobalRestoreListener(stateRestoreListener);
             stateRestorers.put(restorer.partition(), restorer);
         }
     }
@@ -115,6 +122,8 @@ public class StoreChangelogReader implements ChangelogReader {
                     restorer.setRestoredOffset(restorer.checkpoint());
                 } else {
                     needsRestoring.put(topicPartition, restorer);
+                    final Long endOffset = endOffsets.get(topicPartition);
+                    restorer.restoreStarted(restorer.startingOffset(), endOffset);
                 }
             }
 
@@ -177,6 +186,12 @@ public class StoreChangelogReader implements ChangelogReader {
         return restoredOffsets;
     }
 
+    @Override
+    public void clear() {
+        partitionInfo.clear();
+        stateRestorers.clear();
+    }
+
     private void restorePartition(final Map<TopicPartition, Long> endOffsets,
                                   final ConsumerRecords<byte[], byte[]> allRecords,
                                   final Iterator<TopicPartition> partitionIterator) {
@@ -202,21 +217,39 @@ public class StoreChangelogReader implements ChangelogReader {
                     restorer.startingOffset(),
                     restorer.restoredOffset());
 
+            restorer.restoreDone();
+
             partitionIterator.remove();
         }
     }
 
-    private long processNext(final List<ConsumerRecord<byte[], byte[]>> records, final StateRestorer restorer, final Long endOffset) {
+    private long processNext(final List<ConsumerRecord<byte[], byte[]>> records,
+                             final StateRestorer restorer, final Long endOffset) {
+        final List<KeyValue<byte[], byte[]>> restoreRecords = new ArrayList<>();
+        long nextPosition = -1;
+
         for (final ConsumerRecord<byte[], byte[]> record : records) {
             final long offset = record.offset();
             if (restorer.hasCompleted(offset, endOffset)) {
-                return offset;
+                nextPosition = record.offset();
+                break;
             }
             if (record.key() != null) {
-                restorer.restore(record.key(), record.value());
+                restoreRecords.add(KeyValue.pair(record.key(), record.value()));
             }
         }
-        return consumer.position(restorer.partition());
+
+        if (nextPosition == -1) {
+            nextPosition = consumer.position(restorer.partition());
+        }
+
+        if (!restoreRecords.isEmpty()) {
+            restorer.restore(restoreRecords);
+            restorer.restoreBatchCompleted(nextPosition, records.size());
+
+        }
+
+        return nextPosition;
     }
 
     private boolean hasPartition(final TopicPartition topicPartition) {

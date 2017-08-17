@@ -103,17 +103,17 @@ class SourceTaskOffsetCommitter {
     }
 
     private void commit(WorkerSourceTask workerTask) {
-        log.debug("Committing offsets for {}", workerTask);
+        log.debug("{} Committing offsets", workerTask);
         try {
             if (workerTask.commitOffsets()) {
                 return;
             }
-            log.error("Failed to commit offsets for {}", workerTask);
+            log.error("{} Failed to commit offsets", workerTask);
         } catch (Throwable t) {
             // We're very careful about exceptions here since any uncaught exceptions in the commit
             // thread would cause the fixed interval schedule on the ExecutorService to stop running
             // for that task
-            log.error("Unhandled exception when committing {}: ", workerTask, t);
+            log.error("{} Unhandled exception when committing: ", workerTask, t);
         }
     }
 }

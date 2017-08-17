@@ -19,20 +19,20 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KGroupedStream;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
-import org.apache.kafka.streams.kstream.Reducer;
-import org.apache.kafka.streams.kstream.Merger;
 import org.apache.kafka.streams.kstream.KTable;
+import org.apache.kafka.streams.kstream.Merger;
+import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.TimeWindows;
-import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.Windows;
+import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.WindowStore;
@@ -41,8 +41,8 @@ import org.apache.kafka.test.MockAggregator;
 import org.apache.kafka.test.MockInitializer;
 import org.apache.kafka.test.MockReducer;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 
 import java.util.ArrayList;
@@ -60,22 +60,15 @@ public class KGroupedStreamImplTest {
 
     private static final String TOPIC = "topic";
     private static final String INVALID_STORE_NAME = "~foo bar~";
-    private final KStreamBuilder builder = new KStreamBuilder();
+    private final StreamsBuilder builder = new StreamsBuilder();
     private KGroupedStream<String, String> groupedStream;
-    private KStreamTestDriver driver = null;
+    @Rule
+    public final KStreamTestDriver driver = new KStreamTestDriver();
 
     @Before
     public void before() {
         final KStream<String, String> stream = builder.stream(Serdes.String(), Serdes.String(), TOPIC);
         groupedStream = stream.groupByKey(Serdes.String(), Serdes.String());
-    }
-
-    @After
-    public void cleanup() {
-        if (driver != null) {
-            driver.close();
-        }
-        driver = null;
     }
 
     @Test(expected = NullPointerException.class)
@@ -180,7 +173,7 @@ public class KGroupedStreamImplTest {
     }
 
     private void doAggregateSessionWindows(final Map<Windowed<String>, Integer> results) throws Exception {
-        driver = new KStreamTestDriver(builder, TestUtils.tempDirectory());
+        driver.setUp(builder, TestUtils.tempDirectory());
         driver.setTime(10);
         driver.process(TOPIC, "1", "1");
         driver.setTime(15);
@@ -218,7 +211,7 @@ public class KGroupedStreamImplTest {
                 return aggOne + aggTwo;
             }
         }, SessionWindows.with(30), Serdes.Integer(), "session-store");
-        table.foreach(new ForeachAction<Windowed<String>, Integer>() {
+        table.toStream().foreach(new ForeachAction<Windowed<String>, Integer>() {
             @Override
             public void apply(final Windowed<String> key, final Integer value) {
                 results.put(key, value);
@@ -248,7 +241,7 @@ public class KGroupedStreamImplTest {
                 return aggOne + aggTwo;
             }
         }, SessionWindows.with(30), Serdes.Integer());
-        table.foreach(new ForeachAction<Windowed<String>, Integer>() {
+        table.toStream().foreach(new ForeachAction<Windowed<String>, Integer>() {
             @Override
             public void apply(final Windowed<String> key, final Integer value) {
                 results.put(key, value);
@@ -260,7 +253,7 @@ public class KGroupedStreamImplTest {
     }
 
     private void doCountSessionWindows(final Map<Windowed<String>, Long> results) throws Exception {
-        driver = new KStreamTestDriver(builder, TestUtils.tempDirectory());
+        driver.setUp(builder, TestUtils.tempDirectory());
         driver.setTime(10);
         driver.process(TOPIC, "1", "1");
         driver.setTime(15);
@@ -283,7 +276,7 @@ public class KGroupedStreamImplTest {
     public void shouldCountSessionWindows() throws Exception {
         final Map<Windowed<String>, Long> results = new HashMap<>();
         KTable table = groupedStream.count(SessionWindows.with(30), "session-store");
-        table.foreach(new ForeachAction<Windowed<String>, Long>() {
+        table.toStream().foreach(new ForeachAction<Windowed<String>, Long>() {
             @Override
             public void apply(final Windowed<String> key, final Long value) {
                 results.put(key, value);
@@ -297,7 +290,7 @@ public class KGroupedStreamImplTest {
     public void shouldCountSessionWindowsWithInternalStoreName() throws Exception {
         final Map<Windowed<String>, Long> results = new HashMap<>();
         KTable table = groupedStream.count(SessionWindows.with(30));
-        table.foreach(new ForeachAction<Windowed<String>, Long>() {
+        table.toStream().foreach(new ForeachAction<Windowed<String>, Long>() {
             @Override
             public void apply(final Windowed<String> key, final Long value) {
                 results.put(key, value);
@@ -308,7 +301,7 @@ public class KGroupedStreamImplTest {
     }
 
     private void doReduceSessionWindows(final Map<Windowed<String>, String> results) throws Exception {
-        driver = new KStreamTestDriver(builder, TestUtils.tempDirectory());
+        driver.setUp(builder, TestUtils.tempDirectory());
         driver.setTime(10);
         driver.process(TOPIC, "1", "A");
         driver.setTime(15);
@@ -338,7 +331,7 @@ public class KGroupedStreamImplTest {
                     }
                 }, SessionWindows.with(30),
                 "session-store");
-        table.foreach(new ForeachAction<Windowed<String>, String>() {
+        table.toStream().foreach(new ForeachAction<Windowed<String>, String>() {
             @Override
             public void apply(final Windowed<String> key, final String value) {
                 results.put(key, value);
@@ -358,7 +351,7 @@ public class KGroupedStreamImplTest {
                         return value1 + ":" + value2;
                     }
                 }, SessionWindows.with(30));
-        table.foreach(new ForeachAction<Windowed<String>, String>() {
+        table.toStream().foreach(new ForeachAction<Windowed<String>, String>() {
             @Override
             public void apply(final Windowed<String> key, final String value) {
                 results.put(key, value);
@@ -485,7 +478,7 @@ public class KGroupedStreamImplTest {
     }
 
     private void doCountWindowed(final List<KeyValue<Windowed<String>, Long>> results) throws Exception {
-        driver = new KStreamTestDriver(builder, TestUtils.tempDirectory(), 0);
+        driver.setUp(builder, TestUtils.tempDirectory(), 0);
         driver.setTime(0);
         driver.process(TOPIC, "1", "A");
         driver.process(TOPIC, "2", "B");
@@ -512,6 +505,7 @@ public class KGroupedStreamImplTest {
         groupedStream.count(
                 TimeWindows.of(500L),
                 "aggregate-by-key-windowed")
+                .toStream()
                 .foreach(new ForeachAction<Windowed<String>, Long>() {
                     @Override
                     public void apply(final Windowed<String> key, final Long value) {
@@ -527,6 +521,7 @@ public class KGroupedStreamImplTest {
         final List<KeyValue<Windowed<String>, Long>> results = new ArrayList<>();
         groupedStream.count(
                 TimeWindows.of(500L))
+                .toStream()
                 .foreach(new ForeachAction<Windowed<String>, Long>() {
                     @Override
                     public void apply(final Windowed<String> key, final Long value) {

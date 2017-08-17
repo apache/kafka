@@ -23,7 +23,6 @@ import org.apache.kafka.common.errors.IllegalSaslStateException;
 import org.apache.kafka.common.errors.UnsupportedSaslMechanismException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.network.Authenticator;
-import org.apache.kafka.common.security.JaasContext;
 import org.apache.kafka.common.network.Mode;
 import org.apache.kafka.common.network.NetworkReceive;
 import org.apache.kafka.common.network.NetworkSend;
@@ -33,12 +32,13 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Protocol;
 import org.apache.kafka.common.protocol.types.SchemaException;
-import org.apache.kafka.common.requests.AbstractRequest;
+import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.requests.SaslHandshakeRequest;
 import org.apache.kafka.common.requests.SaslHandshakeResponse;
+import org.apache.kafka.common.security.JaasContext;
 import org.apache.kafka.common.security.auth.AuthCallbackHandler;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.PrincipalBuilder;
@@ -73,6 +73,8 @@ import java.util.Set;
 
 public class SaslServerAuthenticator implements Authenticator {
 
+    // GSSAPI limits requests to 64K, but we allow a bit extra for custom SASL mechanisms
+    static final int MAX_RECEIVE_SIZE = 524288;
     private static final Logger LOG = LoggerFactory.getLogger(SaslServerAuthenticator.class);
 
     public enum SaslState {
@@ -83,7 +85,6 @@ public class SaslServerAuthenticator implements Authenticator {
     private final JaasContext jaasContext;
     private final Subject subject;
     private final KerberosShortNamer kerberosNamer;
-    private final int maxReceiveSize;
     private final String host;
     private final CredentialCache credentialCache;
 
@@ -104,14 +105,15 @@ public class SaslServerAuthenticator implements Authenticator {
     private NetworkReceive netInBuffer;
     private Send netOutBuffer;
 
-    public SaslServerAuthenticator(String node, JaasContext jaasContext, final Subject subject, KerberosShortNamer kerberosNameParser, String host, int maxReceiveSize, CredentialCache credentialCache) throws IOException {
+    public SaslServerAuthenticator(String node, JaasContext jaasContext, final Subject subject,
+                                   KerberosShortNamer kerberosNameParser, String host,
+                                   CredentialCache credentialCache) throws IOException {
         if (subject == null)
             throw new IllegalArgumentException("subject cannot be null");
         this.node = node;
         this.jaasContext = jaasContext;
         this.subject = subject;
         this.kerberosNamer = kerberosNameParser;
-        this.maxReceiveSize = maxReceiveSize;
         this.host = host;
         this.credentialCache = credentialCache;
     }
@@ -209,7 +211,7 @@ public class SaslServerAuthenticator implements Authenticator {
             return;
         }
 
-        if (netInBuffer == null) netInBuffer = new NetworkReceive(maxReceiveSize, node);
+        if (netInBuffer == null) netInBuffer = new NetworkReceive(MAX_RECEIVE_SIZE, node);
 
         netInBuffer.readFrom(transportLayer);
 
@@ -309,16 +311,16 @@ public class SaslServerAuthenticator implements Authenticator {
                 else
                     throw new UnsupportedVersionException("Version " + requestHeader.apiVersion() + " is not supported for apiKey " + apiKey);
             } else {
-                AbstractRequest request = AbstractRequest.getRequest(requestHeader.apiKey(), requestHeader.apiVersion(),
-                        requestBuffer).request;
-
                 LOG.debug("Handle Kafka request {}", apiKey);
                 switch (apiKey) {
                     case API_VERSIONS:
                         handleApiVersionsRequest(requestHeader);
                         break;
                     case SASL_HANDSHAKE:
-                        clientMechanism = handleHandshakeRequest(requestHeader, (SaslHandshakeRequest) request);
+                        short version = requestHeader.apiVersion();
+                        Struct struct = ApiKeys.SASL_HANDSHAKE.parseRequest(version, requestBuffer);
+                        SaslHandshakeRequest saslHandshakeRequest = new SaslHandshakeRequest(struct, version);
+                        clientMechanism = handleHandshakeRequest(requestHeader, saslHandshakeRequest);
                         break;
                     default:
                         throw new IllegalSaslStateException("Unexpected Kafka request of type " + apiKey + " during SASL handshake.");

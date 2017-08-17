@@ -1600,7 +1600,7 @@ class Log(@volatile var dir: File,
       fun
     } catch {
       case e: IOException =>
-        logDirFailureChannel.maybeAddLogFailureEvent(dir.getParent)
+        logDirFailureChannel.maybeAddOfflineLogDir(dir.getParent, msg, e)
         throw new KafkaStorageException(msg, e)
     }
   }
@@ -1649,14 +1649,14 @@ object Log {
 
   def apply(dir: File,
             config: LogConfig,
-            logStartOffset: Long = 0L,
-            recoveryPoint: Long = 0L,
+            logStartOffset: Long,
+            recoveryPoint: Long,
             scheduler: Scheduler,
             brokerTopicStats: BrokerTopicStats,
             time: Time = Time.SYSTEM,
-            maxProducerIdExpirationMs: Int = 60 * 60 * 1000,
-            producerIdExpirationCheckIntervalMs: Int = 10 * 60 * 1000,
-            logDirFailureChannel: LogDirFailureChannel = null): Log = {
+            maxProducerIdExpirationMs: Int,
+            producerIdExpirationCheckIntervalMs: Int,
+            logDirFailureChannel: LogDirFailureChannel): Log = {
     val topicPartition = Log.parseTopicPartitionName(dir)
     val producerStateManager = new ProducerStateManager(topicPartition, dir, maxProducerIdExpirationMs)
     new Log(dir, config, logStartOffset, recoveryPoint, scheduler, brokerTopicStats, time, maxProducerIdExpirationMs,

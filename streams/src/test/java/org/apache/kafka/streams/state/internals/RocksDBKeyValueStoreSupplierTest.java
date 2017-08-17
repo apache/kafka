@@ -96,7 +96,7 @@ public class RocksDBKeyValueStoreSupplierTest {
                                     Long timestamp,
                                     Serializer<K> keySerializer,
                                     Serializer<V> valueSerializer) {
-                logged.add(new ProducerRecord<K, V>(topic, partition, timestamp, key, value));
+                logged.add(new ProducerRecord<>(topic, partition, timestamp, key, value));
             }
         };
         final MockProcessorContext context = new MockProcessorContext(TestUtils.tempDirectory(),
@@ -111,26 +111,26 @@ public class RocksDBKeyValueStoreSupplierTest {
     }
 
     @Test
-    public void shouldReturnCachedKeyValueStoreWhenCachingEnabled() throws Exception {
+    public void shouldHaveCachedKeyValueStoreWhenCachingEnabled() throws Exception {
         store = createStore(false, true);
         store.init(context, store);
         context.setTime(1);
         store.put("a", "b");
         store.put("b", "c");
-        assertThat(store, is(instanceOf(CachingKeyValueStore.class)));
+        assertThat(((WrappedStateStore) store).wrappedStore(), is(instanceOf(CachingKeyValueStore.class)));
         assertThat(cache.size(), is(2L));
     }
 
     @Test
     public void shouldReturnMeteredStoreWhenCachingAndLoggingDisabled() throws Exception {
         store = createStore(false, false);
-        assertThat(store, is(instanceOf(MeteredKeyValueStore.class)));
+        assertThat(store, is(instanceOf(MeteredKeyValueBytesStore.class)));
     }
 
     @Test
     public void shouldReturnMeteredStoreWhenCachingDisabled() throws Exception {
         store = createStore(true, false);
-        assertThat(store, is(instanceOf(MeteredKeyValueStore.class)));
+        assertThat(store, is(instanceOf(MeteredKeyValueBytesStore.class)));
     }
 
     @Test

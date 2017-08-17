@@ -189,7 +189,7 @@ class ReplicaManager(val config: KafkaConfig,
 
   private class LogDirFailureHandler(name: String, haltBrokerOnDirFailure: Boolean) extends ShutdownableThread(name) {
     override def doWork() {
-      val newOfflineLogDir = logDirFailureChannel.takeNextLogFailureEvent()
+      val newOfflineLogDir = logDirFailureChannel.takeNextOfflineLogDir()
       if (haltBrokerOnDirFailure) {
         fatal(s"Halting broker because dir $newOfflineLogDir is offline")
         Exit.halt(1)
@@ -222,6 +222,14 @@ class ReplicaManager(val config: KafkaConfig,
       def value = underReplicatedPartitionCount
     }
   )
+
+  val underMinIsrPartitionCount = newGauge(
+    "UnderMinIsrPartitionCount",
+    new Gauge[Int] {
+      def value = getLeaderPartitions.count(_.isUnderMinIsr)
+    }
+  )
+
   val isrExpandRate = newMeter("IsrExpandsPerSec", "expands", TimeUnit.SECONDS)
   val isrShrinkRate = newMeter("IsrShrinksPerSec", "shrinks", TimeUnit.SECONDS)
   val failedIsrUpdatesRate = newMeter("FailedIsrUpdatesPerSec", "failedUpdates", TimeUnit.SECONDS)
@@ -1266,6 +1274,7 @@ class ReplicaManager(val config: KafkaConfig,
     removeMetric("PartitionCount")
     removeMetric("OfflineReplicaCount")
     removeMetric("UnderReplicatedPartitions")
+    removeMetric("UnderMinIsrPartitionCount")
   }
 
   // High watermark do not need to be checkpointed only when under unit tests

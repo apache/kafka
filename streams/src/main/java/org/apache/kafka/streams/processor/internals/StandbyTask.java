@@ -59,7 +59,7 @@ public class StandbyTask extends AbstractTask {
                 final StreamsConfig config,
                 final StreamsMetrics metrics,
                 final StateDirectory stateDirectory) {
-        super(id, applicationId, partitions, topology, consumer, changelogReader, true, stateDirectory, null, config);
+        super(id, applicationId, partitions, topology, consumer, changelogReader, true, stateDirectory, config);
 
         // initialize the topology with its own context
         processorContext = new StandbyContextImpl(id, applicationId, config, stateMgr, metrics);
@@ -133,6 +133,26 @@ public class StandbyTask extends AbstractTask {
         }
     }
 
+    @Override
+    public void closeSuspended(final boolean clean, final RuntimeException e) {
+        throw new UnsupportedOperationException("closeSuspended not supported by StandbyTask");
+    }
+
+    @Override
+    public boolean maybePunctuateStreamTime() {
+        throw new UnsupportedOperationException("maybePunctuateStreamTime not supported by StandbyTask");
+    }
+
+    @Override
+    public boolean maybePunctuateSystemTime() {
+        throw new UnsupportedOperationException("maybePunctuateSystemTime not supported by StandbyTask");
+    }
+
+    @Override
+    public boolean commitNeeded() {
+        return false;
+    }
+
     /**
      * Updates a state store using records from one change log partition
      *
@@ -144,8 +164,18 @@ public class StandbyTask extends AbstractTask {
         return stateMgr.updateStandbyStates(partition, records);
     }
 
-    Map<TopicPartition, Long> checkpointedOffsets() {
+    @Override
+    public int addRecords(final TopicPartition partition, final Iterable<ConsumerRecord<byte[], byte[]>> records) {
+        throw new UnsupportedOperationException("addRecords not supported by StandbyTask");
+    }
+
+    public Map<TopicPartition, Long> checkpointedOffsets() {
         return checkpointedOffsets;
+    }
+
+    @Override
+    public boolean process() {
+        throw new UnsupportedOperationException("process not supported by StandbyTask");
     }
 
 }

@@ -26,12 +26,12 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.ForeachAction;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.internals.GlobalStreamThread;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.MockMetricsReporter;
+import org.apache.kafka.test.MockStateRestoreListener;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Assert;
@@ -63,7 +63,7 @@ public class KafkaStreamsTest {
     // quick enough)
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
-    private final KStreamBuilder builder = new KStreamBuilder();
+    private final StreamsBuilder builder = new StreamsBuilder();
     private KafkaStreams streams;
     private Properties props;
 
@@ -75,13 +75,13 @@ public class KafkaStreamsTest {
         props.setProperty(StreamsConfig.METRIC_REPORTER_CLASSES_CONFIG, MockMetricsReporter.class.getName());
         props.setProperty(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, NUM_THREADS);
-        streams = new KafkaStreams(builder, props);
+        streams = new KafkaStreams(builder.build(), props);
     }
 
     @Test
     public void testStateChanges() throws Exception {
-        final KStreamBuilder builder = new KStreamBuilder();
-        final KafkaStreams streams = new KafkaStreams(builder, props);
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KafkaStreams streams = new KafkaStreams(builder.build(), props);
 
         final StateListenerStub stateListener = new StateListenerStub();
         streams.setStateListener(stateListener);
@@ -101,8 +101,8 @@ public class KafkaStreamsTest {
 
     @Test
     public void testStateCloseAfterCreate() throws Exception {
-        final KStreamBuilder builder = new KStreamBuilder();
-        final KafkaStreams streams = new KafkaStreams(builder, props);
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KafkaStreams streams = new KafkaStreams(builder.build(), props);
 
         final StateListenerStub stateListener = new StateListenerStub();
         streams.setStateListener(stateListener);
@@ -113,11 +113,11 @@ public class KafkaStreamsTest {
     @Test
     public void testStateThreadClose() throws Exception {
         final int numThreads = 2;
-        final KStreamBuilder builder = new KStreamBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
         // make sure we have the global state thread running too
         builder.globalTable("anyTopic");
         props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, numThreads);
-        final KafkaStreams streams = new KafkaStreams(builder, props);
+        final KafkaStreams streams = new KafkaStreams(builder.build(), props);
 
 
 
@@ -170,11 +170,11 @@ public class KafkaStreamsTest {
     @Test
     public void testStateGlobalThreadClose() throws Exception {
         final int numThreads = 2;
-        final KStreamBuilder builder = new KStreamBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
         // make sure we have the global state thread running too
         builder.globalTable("anyTopic");
         props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, numThreads);
-        final KafkaStreams streams = new KafkaStreams(builder, props);
+        final KafkaStreams streams = new KafkaStreams(builder.build(), props);
 
 
         streams.start();
@@ -206,8 +206,8 @@ public class KafkaStreamsTest {
     @Test
     public void testInitializesAndDestroysMetricsReporters() throws Exception {
         final int oldInitCount = MockMetricsReporter.INIT_COUNT.get();
-        final KStreamBuilder builder = new KStreamBuilder();
-        final KafkaStreams streams = new KafkaStreams(builder, props);
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KafkaStreams streams = new KafkaStreams(builder.build(), props);
         final int newInitCount = MockMetricsReporter.INIT_COUNT.get();
         final int initDiff = newInitCount - oldInitCount;
         assertTrue("some reporters should be initialized by calling on construction", initDiff > 0);
@@ -257,6 +257,19 @@ public class KafkaStreamsTest {
     }
 
     @Test
+    public void shouldNotSetGlobalRestoreListenerAfterStarting() {
+        streams.start();
+        try {
+            streams.setGlobalStateRestoreListener(new MockStateRestoreListener());
+            fail("Should throw an IllegalStateException");
+        } catch (final IllegalStateException e) {
+            Assert.assertEquals("Can only set the GlobalRestoreListener in the CREATED state", e.getMessage());
+        } finally {
+            streams.close();
+        }
+    }
+
+    @Test
     public void shouldThrowExceptionSettingUncaughtExceptionHandlerNotInCreateState() {
         streams.start();
         try {
@@ -296,8 +309,8 @@ public class KafkaStreamsTest {
         props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "appId");
         props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         props.setProperty(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, "illegalConfig");
-        final KStreamBuilder builder = new KStreamBuilder();
-        new KafkaStreams(builder, props);
+        final StreamsBuilder builder = new StreamsBuilder();
+        new KafkaStreams(builder.build(), props);
     }
 
     @Test
@@ -306,13 +319,13 @@ public class KafkaStreamsTest {
         props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "appId");
         props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         props.setProperty(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, Sensor.RecordingLevel.INFO.toString());
-        final KStreamBuilder builder1 = new KStreamBuilder();
-        final KafkaStreams streams1 = new KafkaStreams(builder1, props);
+        final StreamsBuilder builder1 = new StreamsBuilder();
+        final KafkaStreams streams1 = new KafkaStreams(builder1.build(), props);
         streams1.close();
 
         props.setProperty(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, Sensor.RecordingLevel.DEBUG.toString());
-        final KStreamBuilder builder2 = new KStreamBuilder();
-        new KafkaStreams(builder2, props);
+        final StreamsBuilder builder2 = new StreamsBuilder();
+        new KafkaStreams(builder2.build(), props);
     }
 
     @Test(expected = IllegalStateException.class)
@@ -349,7 +362,7 @@ public class KafkaStreamsTest {
             props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
             props.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
 
-            final KStreamBuilder builder = new KStreamBuilder();
+            final StreamsBuilder builder = new StreamsBuilder();
             final CountDownLatch latch = new CountDownLatch(1);
             final String topic = "input";
             CLUSTER.createTopic(topic);
@@ -368,7 +381,7 @@ public class KafkaStreamsTest {
                             }
                         }
                     });
-            final KafkaStreams streams = new KafkaStreams(builder, props);
+            final KafkaStreams streams = new KafkaStreams(builder.build(), props);
             streams.start();
             IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(topic,
                                                                             Collections.singletonList(new KeyValue<>("A", "A")),
@@ -393,8 +406,8 @@ public class KafkaStreamsTest {
         props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "appId");
         props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
 
-        final KStreamBuilder builder = new KStreamBuilder();
-        return new KafkaStreams(builder, props);
+        final StreamsBuilder builder = new StreamsBuilder();
+        return new KafkaStreams(builder.build(), props);
     }
 
     @Test
@@ -403,8 +416,8 @@ public class KafkaStreamsTest {
         props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "testLocalCleanup");
         props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
 
-        final KStreamBuilder builder = new KStreamBuilder();
-        final KafkaStreams streams = new KafkaStreams(builder, props);
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KafkaStreams streams = new KafkaStreams(builder.build(), props);
 
         streams.cleanUp();
         streams.start();
@@ -418,8 +431,8 @@ public class KafkaStreamsTest {
         props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "testCannotCleanupWhileRunning");
         props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
 
-        final KStreamBuilder builder = new KStreamBuilder();
-        final KafkaStreams streams = new KafkaStreams(builder, props);
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KafkaStreams streams = new KafkaStreams(builder.build(), props);
 
         streams.start();
         TestUtils.waitForCondition(new TestCondition() {
@@ -463,11 +476,11 @@ public class KafkaStreamsTest {
 
         final String topic = "topic";
         CLUSTER.createTopic(topic);
-        final KStreamBuilder builder = new KStreamBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
         builder.stream(Serdes.String(), Serdes.String(), topic);
 
-        final KafkaStreams streams = new KafkaStreams(builder, props);
+        final KafkaStreams streams = new KafkaStreams(builder.build(), props);
         final CountDownLatch latch = new CountDownLatch(1);
         streams.setStateListener(new KafkaStreams.StateListener() {
             @Override

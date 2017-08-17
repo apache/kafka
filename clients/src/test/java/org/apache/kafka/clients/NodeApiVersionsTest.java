@@ -20,7 +20,6 @@ import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.requests.ApiVersionsResponse.ApiVersion;
-import org.junit.Assert;
 import org.junit.Test;
 
 import java.util.ArrayList;
@@ -58,9 +57,7 @@ public class NodeApiVersionsTest {
     public void testVersionsToString() {
         List<ApiVersion> versionList = new ArrayList<>();
         for (ApiKeys apiKey : ApiKeys.values()) {
-            if (apiKey == ApiKeys.CONTROLLED_SHUTDOWN_KEY) {
-                versionList.add(new ApiVersion(apiKey.id, (short) 0, (short) 0));
-            } else if (apiKey == ApiKeys.DELETE_TOPICS) {
+            if (apiKey == ApiKeys.DELETE_TOPICS) {
                 versionList.add(new ApiVersion(apiKey.id, (short) 10000, (short) 10001));
             } else {
                 versionList.add(new ApiVersion(apiKey));
@@ -71,9 +68,7 @@ public class NodeApiVersionsTest {
         String prefix = "(";
         for (ApiKeys apiKey : ApiKeys.values()) {
             bld.append(prefix);
-            if (apiKey == ApiKeys.CONTROLLED_SHUTDOWN_KEY) {
-                bld.append("ControlledShutdown(7): 0 [unusable: node too old]");
-            } else if (apiKey == ApiKeys.DELETE_TOPICS) {
+            if (apiKey == ApiKeys.DELETE_TOPICS) {
                 bld.append("DeleteTopics(20): 10000 to 10001 [unusable: node too new]");
             } else {
                 bld.append(apiKey.name).append("(").
@@ -96,21 +91,6 @@ public class NodeApiVersionsTest {
     }
 
     @Test
-    public void testUsableVersionCalculation() {
-        List<ApiVersion> versionList = new ArrayList<>();
-        versionList.add(new ApiVersion(ApiKeys.CONTROLLED_SHUTDOWN_KEY.id, (short) 0, (short) 0));
-        versionList.add(new ApiVersion(ApiKeys.FETCH.id, (short) 1, (short) 2));
-        NodeApiVersions versions =  new NodeApiVersions(versionList);
-        try {
-            versions.usableVersion(ApiKeys.CONTROLLED_SHUTDOWN_KEY);
-            Assert.fail("expected UnsupportedVersionException");
-        } catch (UnsupportedVersionException e) {
-            // pass
-        }
-        assertEquals(2, versions.usableVersion(ApiKeys.FETCH));
-    }
-
-    @Test
     public void testUsableVersionNoDesiredVersionReturnsLatestUsable() {
         NodeApiVersions apiVersions = NodeApiVersions.create(Collections.singleton(
                 new ApiVersion(ApiKeys.PRODUCE.id, (short) 1, (short) 3)));
@@ -121,6 +101,7 @@ public class NodeApiVersionsTest {
     public void testDesiredVersion() {
         NodeApiVersions apiVersions = NodeApiVersions.create(Collections.singleton(
                 new ApiVersion(ApiKeys.PRODUCE.id, (short) 1, (short) 3)));
+        assertEquals(3, apiVersions.usableVersion(ApiKeys.PRODUCE));
         assertEquals(1, apiVersions.usableVersion(ApiKeys.PRODUCE, (short) 1));
         assertEquals(2, apiVersions.usableVersion(ApiKeys.PRODUCE, (short) 2));
         assertEquals(3, apiVersions.usableVersion(ApiKeys.PRODUCE, (short) 3));
@@ -145,6 +126,13 @@ public class NodeApiVersionsTest {
         List<ApiVersion> versionList = new ArrayList<>();
         NodeApiVersions versions =  new NodeApiVersions(versionList);
         versions.usableVersion(ApiKeys.FETCH);
+    }
+
+    @Test(expected = UnsupportedVersionException.class)
+    public void testUsableVersionOutOfRange() {
+        NodeApiVersions apiVersions = NodeApiVersions.create(Collections.singleton(
+                new ApiVersion(ApiKeys.PRODUCE.id, (short) 300, (short) 300)));
+        apiVersions.usableVersion(ApiKeys.PRODUCE);
     }
 
     @Test

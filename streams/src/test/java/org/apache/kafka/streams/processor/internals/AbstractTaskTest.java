@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
@@ -24,18 +25,19 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.AuthorizationException;
 import org.apache.kafka.common.errors.WakeupException;
-import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.state.internals.ThreadCache;
+import org.apache.kafka.test.MockStateRestoreListener;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Test;
 
 import java.util.Collections;
+import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 
 public class AbstractTaskTest {
@@ -77,10 +79,9 @@ public class AbstractTaskTest {
                                                       Collections.<String, String>emptyMap(),
                                                       Collections.<StateStore>emptyList()),
                                 consumer,
-                                new StoreChangelogReader(consumer, Time.SYSTEM, 5000),
+                                new StoreChangelogReader(consumer, Time.SYSTEM, 5000, new MockStateRestoreListener()),
                                 false,
                                 new StateDirectory("app", TestUtils.tempDirectory().getPath(), time),
-                                new ThreadCache("testCache", 0, new MockStreamsMetrics(new Metrics())),
                                 config) {
             @Override
             public void resume() {}
@@ -93,6 +94,46 @@ public class AbstractTaskTest {
 
             @Override
             public void close(final boolean clean) {}
+
+            @Override
+            public void closeSuspended(final boolean clean, final RuntimeException e) {
+
+            }
+
+            @Override
+            public Map<TopicPartition, Long> checkpointedOffsets() {
+                return null;
+            }
+
+            @Override
+            public boolean process() {
+                return false;
+            }
+
+            @Override
+            public boolean maybePunctuateStreamTime() {
+                return false;
+            }
+
+            @Override
+            public boolean maybePunctuateSystemTime() {
+                return false;
+            }
+
+            @Override
+            public List<ConsumerRecord<byte[], byte[]>> update(final TopicPartition partition, final List<ConsumerRecord<byte[], byte[]>> remaining) {
+                return null;
+            }
+
+            @Override
+            public int addRecords(final TopicPartition partition, final Iterable<ConsumerRecord<byte[], byte[]>> records) {
+                return 0;
+            }
+
+            @Override
+            public boolean commitNeeded() {
+                return false;
+            }
         };
     }
 

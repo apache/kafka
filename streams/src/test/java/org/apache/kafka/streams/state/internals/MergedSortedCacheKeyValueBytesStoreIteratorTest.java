@@ -29,9 +29,9 @@ import org.junit.Test;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertFalse;
 
-public class MergedSortedCacheKeyValueStoreIteratorTest {
+public class MergedSortedCacheKeyValueBytesStoreIteratorTest {
 
-    private final String namespace = "one";
+    private final String namespace = "0.0-one";
     private final StateSerdes<byte[], byte[]> serdes =  new StateSerdes<>("dummy", Serdes.ByteArray(), Serdes.ByteArray());
     private KeyValueStore<Bytes, byte[]> store;
     private ThreadCache cache;
@@ -55,7 +55,7 @@ public class MergedSortedCacheKeyValueStoreIteratorTest {
         final KeyValueIterator<Bytes, byte[]> storeIterator = new DelegatingPeekingKeyValueIterator<>("store", store.range(from, to));
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(namespace, from, to);
 
-        final MergedSortedCacheKeyValueStoreIterator<byte[], byte[]> iterator = new MergedSortedCacheKeyValueStoreIterator<>(cacheIterator, storeIterator, serdes);
+        final MergedSortedCacheKeyValueBytesStoreIterator iterator = new MergedSortedCacheKeyValueBytesStoreIterator(cacheIterator, storeIterator);
         byte[][] values = new byte[8][];
         int index = 0;
         int bytesIndex = 2;
@@ -73,8 +73,8 @@ public class MergedSortedCacheKeyValueStoreIteratorTest {
         final byte[][] bytes = {{0}, {1}};
         store.put(Bytes.wrap(bytes[0]), bytes[0]);
         cache.put(namespace, Bytes.wrap(bytes[1]), new LRUCacheEntry(null));
-        final MergedSortedCacheKeyValueStoreIterator<byte[], byte[]> iterator = createIterator();
-        assertArrayEquals(bytes[0], iterator.next().key);
+        final MergedSortedCacheKeyValueBytesStoreIterator iterator = createIterator();
+        assertArrayEquals(bytes[0], iterator.next().key.get());
         assertFalse(iterator.hasNext());
     }
 
@@ -83,8 +83,8 @@ public class MergedSortedCacheKeyValueStoreIteratorTest {
         final byte[][] bytes = {{0}, {1}};
         cache.put(namespace, Bytes.wrap(bytes[0]), new LRUCacheEntry(null));
         store.put(Bytes.wrap(bytes[1]), bytes[1]);
-        final MergedSortedCacheKeyValueStoreIterator<byte[], byte[]> iterator = createIterator();
-        assertArrayEquals(bytes[1], iterator.next().key);
+        final MergedSortedCacheKeyValueBytesStoreIterator iterator = createIterator();
+        assertArrayEquals(bytes[1], iterator.next().key.get());
         assertFalse(iterator.hasNext());
     }
 
@@ -93,7 +93,7 @@ public class MergedSortedCacheKeyValueStoreIteratorTest {
         final byte[][] bytes = {{0}};
         cache.put(namespace, Bytes.wrap(bytes[0]), new LRUCacheEntry(null));
         store.put(Bytes.wrap(bytes[0]), bytes[0]);
-        final MergedSortedCacheKeyValueStoreIterator<byte[], byte[]> iterator = createIterator();
+        final MergedSortedCacheKeyValueBytesStoreIterator iterator = createIterator();
         assertFalse(iterator.hasNext());
     }
 
@@ -131,14 +131,14 @@ public class MergedSortedCacheKeyValueStoreIteratorTest {
         cache.put(namespace, Bytes.wrap(bytes[8]), new LRUCacheEntry(null));
         cache.put(namespace, Bytes.wrap(bytes[11]), new LRUCacheEntry(null));
 
-        final MergedSortedCacheKeyValueStoreIterator<byte[], byte[]> iterator = createIterator();
-        assertArrayEquals(bytes[0], iterator.next().key);
-        assertArrayEquals(bytes[4], iterator.next().key);
-        assertArrayEquals(bytes[5], iterator.next().key);
-        assertArrayEquals(bytes[6], iterator.next().key);
-        assertArrayEquals(bytes[7], iterator.next().key);
-        assertArrayEquals(bytes[9], iterator.next().key);
-        assertArrayEquals(bytes[10], iterator.next().key);
+        final MergedSortedCacheKeyValueBytesStoreIterator iterator = createIterator();
+        assertArrayEquals(bytes[0], iterator.next().key.get());
+        assertArrayEquals(bytes[4], iterator.next().key.get());
+        assertArrayEquals(bytes[5], iterator.next().key.get());
+        assertArrayEquals(bytes[6], iterator.next().key.get());
+        assertArrayEquals(bytes[7], iterator.next().key.get());
+        assertArrayEquals(bytes[9], iterator.next().key.get());
+        assertArrayEquals(bytes[10], iterator.next().key.get());
         assertFalse(iterator.hasNext());
 
     }
@@ -148,7 +148,6 @@ public class MergedSortedCacheKeyValueStoreIteratorTest {
         final KeyValueStore<Bytes, byte[]> kv = new InMemoryKeyValueStore<>("one", Serdes.Bytes(), Serdes.ByteArray());
         final ThreadCache cache = new ThreadCache("testCache", 1000000L, new MockStreamsMetrics(new Metrics()));
         byte[][] bytes = {{0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9}, {10}};
-        final String namespace = "one";
         for (int i = 0; i < bytes.length - 1; i += 2) {
             kv.put(Bytes.wrap(bytes[i]), bytes[i]);
             cache.put(namespace, Bytes.wrap(bytes[i + 1]), new LRUCacheEntry(bytes[i + 1]));
@@ -159,15 +158,15 @@ public class MergedSortedCacheKeyValueStoreIteratorTest {
         final KeyValueIterator<Bytes, byte[]> storeIterator = kv.range(from, to);
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(namespace, from, to);
 
-        final MergedSortedCacheKeyValueStoreIterator<byte[], byte[]> iterator =
-                new MergedSortedCacheKeyValueStoreIterator<>(cacheIterator,
-                                                             storeIterator,
-                                                             serdes);
+        final MergedSortedCacheKeyValueBytesStoreIterator iterator =
+                new MergedSortedCacheKeyValueBytesStoreIterator(cacheIterator,
+                                                                storeIterator
+                );
         final byte[][] values = new byte[8][];
         int index = 0;
         int bytesIndex = 2;
         while (iterator.hasNext()) {
-            final byte[] keys = iterator.peekNextKey();
+            final byte[] keys = iterator.peekNextKey().get();
             values[index++] = keys;
             assertArrayEquals(bytes[bytesIndex++], keys);
             iterator.next();
@@ -175,9 +174,9 @@ public class MergedSortedCacheKeyValueStoreIteratorTest {
         iterator.close();
     }
 
-    private MergedSortedCacheKeyValueStoreIterator<byte[], byte[]> createIterator() {
+    private MergedSortedCacheKeyValueBytesStoreIterator createIterator() {
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.all(namespace);
         final KeyValueIterator<Bytes, byte[]> storeIterator = new DelegatingPeekingKeyValueIterator<>("store", store.all());
-        return new MergedSortedCacheKeyValueStoreIterator<>(cacheIterator, storeIterator, serdes);
+        return new MergedSortedCacheKeyValueBytesStoreIterator(cacheIterator, storeIterator);
     }
 }

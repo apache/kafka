@@ -123,14 +123,14 @@
     <h4><a id="streams_processor_topology" href="#streams_processor_topology">Processor Topology</a></h4>
 
     <p>
-        With the customized processors defined in the Processor API, developers can use the <code>TopologyBuilder</code> to build a processor topology
+        With the customized processors defined in the Processor API, developers can use <code>Topology</code> to build a processor topology
         by connecting these processors together:
     </p>
 
     <pre class="brush: java;">
-    TopologyBuilder builder = new TopologyBuilder();
+    Topology topology = new Topology();
 
-    builder.addSource("SOURCE", "src-topic")
+    topology.addSource("SOURCE", "src-topic")
     // add "PROCESS1" node which takes the source processor "SOURCE" as its upstream processor
     .addProcessor("PROCESS1", () -> new MyProcessor1(), "SOURCE")
 
@@ -161,55 +161,240 @@
         <li>Finally three sink nodes are added to complete the topology using the <code>addSink</code> method, each piping from a different parent processor node and writing to a separate topic.</li>
     </ul>
 
-    <h4><a id="streams_processor_statestore" href="#streams_processor_statestore">State Stores</a></h4>
+<h4><a id="streams_processor_statestore" href="#streams_processor_statestore">State Stores</a></h4>
+
+<p>
+In order to make state stores fault-tolerant (e.g., to recover from machine crashes) as well as to allow for state store migration without data loss (e.g., to migrate a stateful stream task from one machine to another when elastically adding or removing capacity from your application), a state store can be <strong>continuously backed up</strong> to a Kafka topic behind the scenes. 
+We sometimes refer to this topic as the state store's associated <em>changelog topic</em> or simply its <em>changelog</em>. 
+In the case of a machine failure, for example, the state store and thus the application's state can be fully restored from its changelog. 
+You can enable or disable this backup feature for a state store, and thus its fault tolerance.
+</p>
+
+<p>
+By default, persistent <strong>key-value stores</strong> are fault-tolerant. 
+They are backed by a <a href="https://kafka.apache.org/documentation.html#compaction">compacted</a> changelog topic. 
+The purpose of compacting this topic is to prevent the topic from growing indefinitely, to reduce the storage consumed in the associated Kafka cluster, and to minimize recovery time if a state store needs to be restored from its changelog topic.
+</p>
+
+<p>
+Similarly, persistent <strong>window stores</strong> are fault-tolerant. 
+They are backed by a topic that uses both <em>compaction</em> and <em>deletion</em>. 
+Using deletion in addition to compaction is required for the changelog topics of window stores because of the structure of the message keys that are being sent to the changelog topics: for window stores, the message keys are composite keys that include not only the &quot;normal&quot; key but also window timestamps. 
+For such composite keys it would not be sufficient to enable just compaction in order to prevent a changelog topic from growing out of bounds. 
+With deletion enabled, old windows that have expired will be cleaned up by Kafka's log cleaner as the log segments expire. 
+The default retention setting is <code>Windows#maintainMs()</code> + 1 day. This setting can be overriden by specifying <code>StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG</code> in the <code>StreamsConfig</code>.
+</p>
+
+<h4><a id="monitoring-the-restoration-progress-of-fault-tolerant-state-stores" href="#restoration_progress">Monitoring the Restoration Progress of Fault-tolerant State Stores</a></h4>
+
+<p>
+When starting up your application any fault-tolerant state stores don't need a restoration process as the persisted state is read from local disk. 
+But there could be situations when a full restore from the backing changelog topic is required (e.g., a failure wiped out the local state or your application runs in a stateless environment and persisted data is lost on re-starts).
+</p>
+
+<p>
+If you have a significant amount of data in the changelog topic, the restoration process could take a non-negligible amount of time. 
+Given that processing of new data won't start until the restoration process is completed, having a window into the progress of restoration is useful.
+</p>
+
+<p>
+In order to observe the restoration of all state stores you provide your application an instance of the <code>org.apache.kafka.streams.processor.StateRestoreListener</code> interface. 
+You set the <code>org.apache.kafka.streams.processor.StateRestoreListener</code> by calling the <code>KafkaStreams#setGlobalStateRestoreListener</code> method.
+</p>
+
+<p>
+ A basic implementation example that prints restoration status to the console:
+</p>
+
+<pre class="brush: java;">
+  import org.apache.kafka.common.TopicPartition;
+  import org.apache.kafka.streams.processor.StateRestoreListener;
+
+   public class ConsoleGlobalRestoreListerner implements StateRestoreListener {
+
+      @Override
+      public void onRestoreStart(final TopicPartition topicPartition,
+                                 final String storeName,
+                                 final long startingOffset,
+                                 final long endingOffset) {
+
+          System.out.print("Started restoration of " + storeName + " partition " + topicPartition.partition());
+          System.out.println(" total records to be restored " + (endingOffset - startingOffset));
+      }
+
+      @Override
+      public void onBatchRestored(final TopicPartition topicPartition,
+                                  final String storeName,
+                                  final long batchEndOffset,
+                                  final long numRestored) {
+
+          System.out.println("Restored batch " + numRestored + " for " + storeName + " partition " + topicPartition.partition());
+
+      }
+
+      @Override
+      public void onRestoreEnd(final TopicPartition topicPartition,
+                               final String storeName,
+                               final long totalRestored) {
+
+          System.out.println("Restoration complete for " + storeName + " partition " + topicPartition.partition());
+      }
+  }
+</pre>
+
+<blockquote>
+<p>
+  The <code>StateRestoreListener</code> instance is shared across all <code>org.apache.kafka.streams.processor.internals.StreamThread</code> instances and it is assumed all methods are stateless. 
+  If any stateful operations are desired, then the user will need to provide synchronization internally.
+</p>
+</blockquote>
+
+<h4> <a id="enable-disable-fault-tolerance-of-state-stores-store-changelogs" href="#disable-chagelogs">Enable / Disable Fault Tolerance of State Stores (Store Changelogs)</a></h4>
+
+<p>
+  You can enable or disable fault tolerance for a state store by enabling or disabling, respectively, the changelogging of the store through <code>enableLogging()</code> and <code>disableLogging()</code>. 
+  You can also fine-tune the associated topic’s configuration if needed.
+</p>
+
+<p>Example for disabling fault-tolerance:</p>
+
+<pre class="brush: java;">
+
+  import org.apache.kafka.streams.processor.StateStoreSupplier;
+  import org.apache.kafka.streams.state.Stores;
+
+  StateStoreSupplier countStoreSupplier = Stores.create("Counts")
+              .withKeys(Serdes.String())
+              .withValues(Serdes.Long())
+              .persistent()
+              .disableLogging() // disable backing up the store to a changelog topic
+              .build();
+
+</pre>
+
+<blockquote>
+<p>If the changelog is disabled then the attached state store is no longer fault tolerant and it can't have any standby replicas</p>
+</blockquote>
+
+<p>
+   Example for enabling fault tolerance, with additional changelog-topic configuration: You can add any log config 
+   from kafka.log.LogConfig|core/src/main/scala/kafka/log/LogConfig.scala#L61. Unrecognized configs will be ignored.
+</p>
+
+<pre class="brush: java;">
+
+  import org.apache.kafka.streams.processor.StateStoreSupplier;
+  import org.apache.kafka.streams.state.Stores;
+
+  Map&lt;String, String&gt; changelogConfig = new HashMap();
+  // override min.insync.replicas
+  changelogConfig.put("min.insyc.replicas", "1")
+
+  StateStoreSupplier countStoreSupplier = Stores.create("Counts")
+              .withKeys(Serdes.String())
+              .withValues(Serdes.Long())
+              .persistent()
+              .enableLogging(changelogConfig) // enable changelogging, with custom changelog settings
+              .build();
+
+</pre>
+
+<h4><a id="implementing-custom-state-stores" href="#implement-custom-store">Implementing custom State Stores</a></h4>
+
+<p>
+ Apart from using the built-in state store types, you can also implement your own. 
+ The primary interface to implement for the store is <code>org.apache.kafka.streams.processor.StateStore</code>. 
+ Beyond that, Kafka Streams also has a few extended interfaces such as <code>KeyValueStore</code>.
+</p>
+
+<p>
+  In addition to the actual store, you also need to provide a &quot;factory&quot; for the store by implementing the <code>org.apache.kafka.streams.processor.StateStoreSupplier</code> interface, which Kafka Streams uses to create instances of your store.
+</p>
+
+<p>
+  You also have the option of providing a <code>org.apache.kafka.streams.processor.StateRestoreCallback</code> instance used to restore the state store from its backing changelog topic. 
+  This is done via the <code>org.apache.kafka.streams.processor.ProcessorContext#register</code> call inside the <code>StateStore#init</code> all.
+</p>
+
+<pre class="brush: java;">
+  public void init(ProcessorContext context, StateStore store) {
+     context.register(store, false, stateRestoreCallBackIntance);
+   }    
+</pre>
+
+<p>
+  There is an additional interface <code>org.apache.kafka.streams.processor.BatchingStateRestoreCallback</code> that provides bulk restoration semantics vs. the single record-at-a-time restoration semantics offered by the <code>StateRestoreCallback</code> interface.
+</p>
+
+<p>
+  Addtionally there are two abstract classes that implement <code>StateRestoreCallback</code> or <code>BatchingStateRestoreCallback</code> in conjuntion with the <code>org.apache.kafka.streams.processor.StateRestoreListener</code> interface (<code>org.apache.kafka.streams.processor.AbstractNotifyingRestoreCallback</code> and <code>org.apache.kafka.streams.processor.AbstractNotifyingBatchingRestoreCallback</code> respectively) that provide the ability for the state store to recieve notification of restoration progress for that store. 
+  The <code>StateRestoreListener</code> in this case is per state store instance and is used for internal purposes such as updating config settings based on the status of the restoration process.
+</p>
+
+<h4><a id="connecting-processors-and-state-stores" href="#connecting-processors-state-stores">Connecting Processors and State Stores</a></h4>
+
+<p>
+Now that we have defined a processor (WordCountProcessor) and the state stores, we can now construct the processor topology by connecting these processors and state stores together by using the <code>Topology</code> instance. 
+In addition, users can add <em>source processors</em> with the specified Kafka topics to generate input data streams into the topology, and <em>sink processors</em> with the specified Kafka topics to generate output data streams out of the topology.
+</p>
+
+<pre class="brush: java;">
+       Topology topology = new Topology();
+
+      // add the source processor node that takes Kafka topic "source-topic" as input
+      topology.addSource("Source", "source-topic")
+
+      // add the WordCountProcessor node which takes the source processor as its upstream processor
+      .addProcessor("Process", () -> new WordCountProcessor(), "Source")
+
+      // add the count store associated with the WordCountProcessor processor
+      .addStateStore(countStoreSupplier, "Process")
+
+      // add the sink processor node that takes Kafka topic "sink-topic" as output
+      // and the WordCountProcessor node as its upstream processor
+      .addSink("Sink", "sink-topic", "Process");
+</pre>
+
+<p>There are several steps in the above implementation to build the topology, and here is a quick walk-through:</p>
+<ul>
+   <li>A source processor node named &quot;Source&quot; is added to the topology using the <code>addSource</code> method, with one Kafka topic &quot;source-topic&quot; fed to it.</li>
+   <li>A processor node named &quot;Process&quot; with the pre-defined <code>WordCountProcessor</code> logic is then added as the downstream processor of the &quot;Source&quot; node using the <code>addProcessor</code> method.</li>
+   <li>A predefined persistent key-value state store is created and associated with the &quot;Process&quot; node, using <code>countStoreSupplier</code>.</li>
+   <li>A sink processor node is then added to complete the topology using the <code>addSink</code> method, taking the &quot;Process&quot; node as its upstream processor and writing to a separate &quot;sink-topic&quot; Kafka topic.</li>
+</ul>
+
+<p>
+In this topology, the &quot;Process&quot; stream processor node is considered a downstream processor of the &quot;Source&quot; node, and an upstream processor of the &quot;Sink&quot; node. 
+As a result, whenever the &quot;Source&quot; node forward a newly fetched record from Kafka to its downstream &quot;Process&quot; node, <code>WordCountProcessor#process()</code> method is triggered to process the record and update the associated state store; and whenever <code>context#forward()</code> is called in the <code>WordCountProcessor#punctuate()</code> method, the aggregate key-value pair will be sent via the &quot;Sink&quot; processor node to the Kafka topic &quot;sink-topic&quot;. 
+Note that in the <code>WordCountProcessor</code> implementation, users need to refer to the same store name &quot;Counts&quot; when accessing the key-value store; otherwise an exception will be thrown at runtime, indicating that the state store cannot be found; also, if the state store itself is not associated with the processor in the <code>Topology</code> code, accessing it in the processor's <code>init()</code> method will also throw an exception at runtime, indicating the state store is not accessible from this processor.
+</p>
+
+
+    <h4><a id="streams_processor_describe" href="#streams_processor_describe">Describe a <code>Topology</code></a></h4>
 
     <p>
-        Note that the <code>Processor</code> API is not limited to only accessing the current records as they arrive in the <code>process()</code> method, but can also maintain processing states
-        that keep recently arrived records to use in stateful processing operations such as windowed joins or aggregation.
-        To take advantage of these states, users can define a state store by implementing the <code>StateStore</code> interface (the Kafka Streams library also has a few extended interfaces such as <code>KeyValueStore</code>);
-        in practice, though, users usually do not need to customize such a state store from scratch but can simply use the <code>Stores</code> factory to define a state store by specifying whether it should be persistent, log-backed, etc.
-        In the following example, a persistent key-value store named "Counts" with key type <code>String</code> and value type <code>Long</code> is created.
+        After a <code>Topology</code> is specified it is possible to retrieve a description of the corresponding DAG via <code>#describe()</code> that returns a <code>TopologyDescription</code>.
+        A <code>TopologyDescription</code> contains all added source, processor, and sink nodes as well as all attached stores.
+        For source and sink nodes one can access the specified input/output topic name/pattern.
+        For processor nodes the attached stores are added to the description.
+        Additionally, all nodes have a list to all their connected successor and predecessor nodes.
+        Thus, <code>TopologyDescritpion</code> allows to retrieve the DAG structure of the specified topology.
+        <br />
+        Note that global stores are listed explicitly as they are accessible by all nodes without the need to explicitly connect them.
+        Furthermore, nodes are grouped by <code>Sub-topologies</code>, where each sub-topology is a group of processor nodes that are directly connected to each other (i.e., either by a direct connection&mdash;but not a topic&mdash;or by sharing a store).
+        During execution, each <code>Sub-topology</code> will be processed by <a href="/{{version}}/documentation/streams/architecture#streams_architecture_tasks">one or multiple tasks</a>.
+        Thus, each <code>Sub-topology</code> describes an independent unit of works that can be executed by different threads in parallel.
+        <br />
+        Describing a <code>Topology</code> before starting your streams application with the specified topology is helpful to reason about tasks and thus maximum parallelism (we will talk about how to execute your written application later in this section).
+        It is also helpful to get insight into a <code>Topology</code> if it is not specified directly as described above but via Kafka Streams DSL (we will describe the DSL in the next section.
     </p>
-
-    <pre class="brush: java;">
-    StateStoreSupplier countStore = Stores.create("Counts")
-    .withKeys(Serdes.String())
-    .withValues(Serdes.Long())
-    .persistent()
-    .build();
-    </pre>
-
-    <p>
-        To take advantage of these state stores, developers can use the <code>TopologyBuilder.addStateStore</code> method when building the
-        processor topology to create the local state and associate it with the processor nodes that needs to access it; or they can connect a created
-        state store with the existing processor nodes through <code>TopologyBuilder.connectProcessorAndStateStores</code>.
-    </p>
-
-    <pre class="brush: java;">
-    TopologyBuilder builder = new TopologyBuilder();
-
-    builder.addSource("SOURCE", "src-topic")
-
-    .addProcessor("PROCESS1", MyProcessor1::new, "SOURCE")
-    // add the created state store "COUNTS" associated with processor "PROCESS1"
-    .addStateStore(countStore, "PROCESS1")
-    .addProcessor("PROCESS2", MyProcessor3::new /* the ProcessorSupplier that can generate MyProcessor3 */, "PROCESS1")
-    .addProcessor("PROCESS3", MyProcessor3::new /* the ProcessorSupplier that can generate MyProcessor3 */, "PROCESS1")
-
-    // connect the state store "COUNTS" with processor "PROCESS2"
-    .connectProcessorAndStateStores("PROCESS2", "COUNTS");
-
-    .addSink("SINK1", "sink-topic1", "PROCESS1")
-    .addSink("SINK2", "sink-topic2", "PROCESS2")
-    .addSink("SINK3", "sink-topic3", "PROCESS3");
-    </pre>
 
     In the next section we present another way to build the processor topology: the Kafka Streams DSL.
     <br>
 
     <h3><a id="streams_dsl" href="#streams_dsl">High-Level Streams DSL</a></h3>
 
-    To build a processor topology using the Streams DSL, developers can apply the <code>KStreamBuilder</code> class, which is extended from the <code>TopologyBuilder</code>.
+    To build a <code>Topology</code> using the Streams DSL, developers can apply the <code>StreamsBuilder</code> class.
     A simple example is included with the source code for Kafka in the <code>streams/examples</code> package. The rest of this section will walk
     through some code to demonstrate the key steps in creating a topology using the Streams DSL, but we recommend developers to read the full example source
     codes for details.
@@ -274,7 +459,7 @@
     </p>
 
     <pre class="brush: java;">
-    KStreamBuilder builder = new KStreamBuilder();
+    StreamsBuilder builder = new StreamsBuilder();
 
     KStream&lt;String, GenericRecord&gt; source1 = builder.stream("topic1", "topic2");
     KTable&lt;String, GenericRecord&gt; source2 = builder.table("topic3", "stateStoreName");
@@ -404,6 +589,22 @@
     KStream&lt;String, String&gt; materialized = joined.through("topic4");
     </pre>
     <br>
+
+    <h4><a id="streams_dsl_build" href="#streams_dsl_build">Generate the processor topology</a></h4>
+
+    <p>
+        Within the Streams DSL, while users are specifying the operations to create / transform various streams as described above, a <code>Topology</code> is constructed implicitly within the <code>StreamsBuilder</code>.
+        Users can generate the constructed topology at any given point in time by calling <code>build</code>:
+    </p>
+
+    <pre class="brush: java;">
+    Topology topology = builder.build();
+    </pre>
+
+    <p>
+        Users can investigate the generated <code>Topology</code> via its <code>describe</code> API, and continue building or modifying the topology until they are satisfied with it.
+        The topology then can be used to execute the application (we will talk about this later in this section).
+    </p>
 
     <h3><a id="streams_interactive_queries" href="#streams_interactive_queries">Interactive Queries</a></h3>
     <p>
@@ -551,7 +752,7 @@
 
     <pre class="brush: java;">
           StreamsConfig config = ...;
-          KStreamBuilder builder = ...;
+          StreamsBuilder builder = ...;
           KStream&lt;String, String&gt; textLines = ...;
 
           // Define the processing topology (here: WordCount)
@@ -563,7 +764,7 @@
           groupedByWord.count("CountsKeyValueStore");
 
           // Start an instance of the topology
-          KafkaStreams streams = new KafkaStreams(builder, config);
+          KafkaStreams streams = new KafkaStreams(builder.build(), config);
           streams.start();
         </pre>
 
@@ -607,7 +808,7 @@
 
     <pre class="brush: java;">
           StreamsConfig config = ...;
-          KStreamBuilder builder = ...;
+          StreamsBuilder builder = ...;
           KStream&lt;String, String&gt; textLines = ...;
 
           // Define the processing topology (here: WordCount)
@@ -717,7 +918,7 @@
         <code>StateStoreProvider#stores(String storeName, QueryableStoreType&lt;T&gt; queryableStoreType)</code> returns a <code>List</code> of state stores with the given <code>storeName</code> and of the type as defined by <code>queryableStoreType</code>.
     </p>
     <p>
-        An example implemention of the wrapper follows (Java 8+):
+        An example implementation of the wrapper follows (Java 8+):
     </p>
 
     <pre class="brush: java;">
@@ -755,19 +956,19 @@
 
     <pre class="brush: java;">
           StreamsConfig config = ...;
-          TopologyBuilder builder = ...;
+          Topology topology = ...;
           ProcessorSupplier processorSuppler = ...;
 
           // Create CustomStoreSupplier for store name the-custom-store
           MyCustomStoreSuppler customStoreSupplier = new MyCustomStoreSupplier("the-custom-store");
           // Add the source topic
-          builder.addSource("input", "inputTopic");
+          topology.addSource("input", "inputTopic");
           // Add a custom processor that reads from the source topic
-          builder.addProcessor("the-processor", processorSupplier, "input");
+          topology.addProcessor("the-processor", processorSupplier, "input");
           // Connect your custom state store to the custom processor above
-          builder.addStateStore(customStoreSupplier, "the-processor");
+          topology.addStateStore(customStoreSupplier, "the-processor");
 
-          KafkaStreams streams = new KafkaStreams(builder, config);
+          KafkaStreams streams = new KafkaStreams(topology, config);
           streams.start();
 
           // Get access to the custom store
@@ -830,7 +1031,7 @@
           // ... further settings may follow here ...
 
           StreamsConfig config = new StreamsConfig(props);
-          KStreamBuilder builder = new KStreamBuilder();
+          StreamsBuilder builder = new StreamsBuilder();
 
           KStream&lt;String, String&gt; textLines = builder.stream(stringSerde, stringSerde, "word-count-input");
 
@@ -843,7 +1044,7 @@
           groupedByWord.count("word-count");
 
           // Start an instance of the topology
-          KafkaStreams streams = new KafkaStreams(builder, streamsConfiguration);
+          KafkaStreams streams = new KafkaStreams(builder.build(), streamsConfiguration);
           streams.start();
 
           // Then, create and start the actual RPC service for remote access to this
@@ -921,6 +1122,181 @@
         <li>Through the RPC layer that was added to the application, we can communicate with these application instances over the network and query them for locally available state</li>
         <li>The application instances are able to serve such queries because they can directly query their own local state stores and respond via the RPC layer</li>
         <li>Collectively, this allows us to query the full state of the entire application</li>
+    </ul>
+
+    <h3><a id="streams_developer-guide_memory-management" href="#streams_developer-guide_memory-management">Memory Management</a></h3>
+
+
+    <h4><a id="streams_developer-guide_memory-management_record-cache" href="#streams_developer-guide_memory-management_record-cache">Record caches in the DSL</a></h4>
+    <p>
+    Developers of an application using the DSL have the option to specify, for an instance of a processing topology, the
+    total memory (RAM) size of a record cache that is leveraged by the following <code>KTable</code> instances:
+    </p>
+
+    <ol>
+        <li>Source <code>KTable</code>, i.e. <code>KTable</code> instances that are created via <code>StreamBuilder#table()</code> or <code>StreamBuilder#globalTable()</code>.</li>
+        <li>Aggregation <code>KTable</code>, i.e. instances of <code>KTable</code> that are created as a result of aggregations</li>
+    </ol>
+    <p>
+        For such <code>KTable</code> instances, the record cache is used for:
+    </p>
+    <ol>
+        <li>Internal caching and compacting of output records before they are written by the underlying stateful processor node to its internal state store.</li>
+        <li>Internal caching and compacting of output records before they are forwarded from the underlying stateful processor node to any of its downstream processor nodes</li>
+    </ol>
+    <p>
+        Here is a motivating example:
+    </p>
+
+    <ul>
+        <li>Imagine the input is a <code>KStream&lt;String, Integer&gt;</code> with the records <code>&lt;A, 1&gt;, &lt;D, 5&gt;, &lt;A, 20&gt;, &lt;A, 300&gt;</code>.
+            Note that the focus in this example is on the records with key == <code>A</code>
+        </li>
+        <li>
+            An aggregation computes the sum of record values, grouped by key, for the input above and returns a <code>KTable&lt;String, Integer&gt;</code>.
+            <ul>
+                <li><b>Without caching</b>, what is emitted for key <code>A</code> is a sequence of output records that represent changes in the
+                    resulting aggregation table (here, the parentheses denote changes, where the left and right numbers denote the new
+                    aggregate value and the previous aggregate value, respectively):
+                    <code>&lt;A, (1, null)&gt;, &lt;A, (21, 1)&gt;, &lt;A, (321, 21)&gt;</code>.</li>
+                <li>
+                    <b>With caching</b>, the aforementioned three output records for key <code>A</code> would likely be compacted in the cache,
+                    leading to a single output record <code>&lt;A, (321, null)&gt;</code> that is written to the aggregation's internal state store
+                    and being forwarded to any downstream operations.
+                </li>
+            </ul>
+        </li>
+    </ul>
+
+    <p>
+        The cache size is specified through the <code>cache.max.bytes.buffering</code> parameter, which is a global setting per processing topology:
+    </p>
+
+    <pre class="brush: java;">
+        // Enable record cache of size 10 MB.
+        Properties streamsConfiguration = new Properties();
+        streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 10 * 1024 * 1024L);
+    </pre>
+
+    <p>
+        This parameter controls the number of bytes allocated for caching.
+        Specifically, for a processor topology instance with <code>T</code> threads and <code>C</code> bytes allocated for caching,
+        each thread will have an even <code>C/T</code> bytes to construct its own cache and use as it sees fit among its tasks.
+        I.e., there are as many caches as there are threads, but no sharing of caches across threads happens.
+        The basic API for the cache is made of <code>put()</code> and <code>get()</code> calls.
+        Records are evicted using a simple LRU scheme once the cache size is reached.
+        The first time a keyed record <code>R1 = &lt;K1, V1&gt;</code> finishes processing at a node, it is marked as dirty in the cache.
+        Any other keyed record <code>R2 = &lt;K1, V2&gt;</code> with the same key <code>K1</code> that is processed on that node during that time will overwrite <code>&lt;K1, V1&gt;</code>, which we also refer to as "being compacted".
+        Note that this has the same effect as <a href="https://kafka.apache.org/documentation.html#compaction">Kafka's log compaction</a>, but happens (a) earlier, while the
+        records are still in memory, and (b) within your client-side application rather than on the server-side aka the Kafka broker.
+        Upon flushing <code>R2</code> is (1) forwarded to the next processing node and (2) written to the local state store.
+    </p>
+
+    <p>
+        The semantics of caching is that data is flushed to the state store and forwarded to the next downstream processor node
+        whenever the earliest of <code>commit.interval.ms</code> or <code>cache.max.bytes.buffering</code> (cache pressure) hits.
+        Both <code>commit.interval.ms</code> and <code>cache.max.bytes.buffering</code> are <b>global</b> parameters:  they apply to all processor nodes in
+        the topology, i.e., it is not possible to specify different parameters for each node.
+        Below we provide some example settings for both parameters based on desired scenarios.
+    </p>
+
+    <p>To turn off caching the cache size can be set to zero:</p>
+    <pre class="brush: java;">
+        // Disable record cache
+        Properties streamsConfiguration = new Properties();
+        streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
+    </pre>
+
+    <p>
+        Turning off caching might result in high write traffic for the underlying RocksDB store.
+        With default settings caching is enabled within Kafka Streams but RocksDB caching is disabled.
+        Thus, to avoid high write traffic it is recommended to enable RocksDB caching if Kafka Streams caching is turned off.
+    </p>
+
+    <p>
+        For example, the RocksDB Block Cache could be set to 100MB and Write Buffer size to 32 MB.
+    </p>
+    <p>
+        To enable caching but still have an upper bound on how long records will be cached, the commit interval can be set
+        appropriately (in this example, it is set to 1000 milliseconds):
+    </p>
+    <pre class="brush: java;">
+        Properties streamsConfiguration = new Properties();
+        // Enable record cache of size 10 MB.
+        streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 10 * 1024 * 1024L);
+        // Set commit interval to 1 second.
+        streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000);
+    </pre>
+
+    <p>
+        The illustration below shows the effect of these two configurations visually.
+        For simplicity we have records with 4 keys: blue, red, yellow and green. Without loss of generality, let's assume the cache has space for only 3 keys.
+        When the cache is disabled, we observer that all the input records will be output. With the cache enabled, we make the following observations.
+        First, most records are output at the end of a commit intervals (e.g., at <code>t1</code> one blue records is output, which is the final over-write of the blue key up to that time).
+        Second, some records are output because of cache pressure, i.e. before the end of a commit interval (cf. the red record right before t2).
+        With smaller cache sizes we expect cache pressure to be the primary factor that dictates when records are output. With large cache sizes, the commit interval will be the primary factor.
+        Third, the number of records output has been reduced (here: from 15 to 8).
+    </p>
+
+    <img class="centered" src="/{{version}}/images/streams-cache-and-commit-interval.png" style="width:500pt;height:400pt;">
+    <h4><a id="streams_developer-guide_memory-management_state-store-cache" href="#streams_developer-guide_memory-management_state-store-cache">State store caches in the Processor API</a></h4>
+
+    <p>
+        Developers of a Kafka Streams application using the Processor API have the option to specify, for an instance of a
+        processing topology, the total memory (RAM) size of the <i>state store cache</i> that is used for:
+    </p>
+
+    <ul><li>Internal <i>caching and compacting</i> of output records before they are written from a <b>stateful</b> processor node to its state stores.</li></ul>
+
+    <p>
+        Note that, unlike <a href="#streams_developer-guide_memory-management_record-cache">record caches</a> in the DSL, the state
+        store cache in the Processor API <i>will not cache or compact</i> any output records that are being forwarded downstream.
+        In other words, downstream processor nodes see all records, whereas the state stores see a reduced number of records.
+        It is important to note that this does not impact correctness of the system but is merely a performance optimization
+        for the state stores.
+    </p>
+    <p>
+        A note on terminology: we use the narrower term <i>state store caches</i> when we refer to the Processor API and the
+        broader term <i>record caches</i> when we are writing about the DSL.
+        We made a conscious choice to not expose the more general record caches to the Processor API so that we keep it simple and flexible.
+        For example, developers of the Processor API might chose to store a record in a state store while forwarding a different value downstream, i.e., they
+        might not want to use the unified record cache for both state store and forwarding downstream.
+    </p>
+    <p>
+        Following from the example first shown in section <a href="#streams_processor_statestore">State Stores</a>, to enable caching, you can
+        add the <code>enableCaching</code> call (note that caches are disabled by default and there is no explicit <code>disableCaching</code>
+        call) :
+    </p>
+    <pre class="brush: java;">
+        StateStoreSupplier countStoreSupplier =
+            Stores.create("Counts")
+                .withKeys(Serdes.String())
+                .withValues(Serdes.Long())
+                .persistent()
+                .enableCaching()
+                .build();
+    </pre>
+
+    <h4><a id="streams_developer-guide_memory-management_other_memory_usage" href="#streams_developer-guide_memory-management_other_memory_usage">Other memory usage</a></h4>
+    <p>
+    There are other modules inside Apache Kafka that allocate memory during runtime. They include the following:
+    </p>
+    <ul>
+        <li>Producer buffering, managed by the producer config <code>buffer.memory</code></li>
+
+        <li>Consumer buffering, currently not strictly managed, but can be indirectly controlled by fetch size, i.e.,
+            <code>fetch.max.bytes</code> and <code>fetch.max.wait.ms</code>.</li>
+
+        <li>Both producer and consumer also have separate TCP send / receive buffers that are not counted as the buffering memory.
+            These are controlled by the <code>send.buffer.bytes</code> / <code>receive.buffer.bytes</code> configs.</li>
+
+        <li>Deserialized objects buffering: after ``consumer.poll()`` returns records, they will be deserialized to extract
+            timestamp and buffered in the streams space.
+            Currently this is only indirectly controlled by <code>buffered.records.per.partition</code>.</li>
+
+        <li>RocksDB's own memory usage, both on-heap and off-heap; critical configs (for RocksDB version 4.1.0) include
+            <code>block_cache_size</code>, <code>write_buffer_size</code> and <code>max_write_buffer_number</code>.
+            These can be specified through the ``rocksdb.config.setter`` configuration.</li>
     </ul>
 
     <h3><a id="streams_configure_execute" href="#streams_configure_execute">Application Configuration and Execution</a></h3>
@@ -1044,8 +1420,6 @@
         groupedStream.count(supplier)
     </pre>
 
-
-
     <h4><a id="streams_execute" href="#streams_execute">Executing Your Kafka Streams Application</a></h4>
     <p>
         You can call Kafka Streams from anywhere in your application code.
@@ -1053,33 +1427,35 @@
     </p>
 
     <p>
-        First, you must create an instance of <code>KafkaStreams</code>. The first argument of the <code>KafkaStreams</code> constructor takes a topology
-        builder (either <code>KStreamBuilder</code> for the Kafka Streams DSL, or <code>TopologyBuilder</code> for the Processor API)
-        that is used to define a topology; The second argument is an instance of <code>StreamsConfig</code> mentioned above.
+        First, you must create an instance of <code>KafkaStreams</code>.
+        The first argument of the <code>KafkaStreams</code> constructor takes an instance of <code>Topology</code>.
+        This topology can be either created directly following the <code>Processor</code> API or implicitly via the <code>StreamsBuilder</code> in the higher-level Streams DSL.
+        The second argument is an instance of <code>StreamsConfig</code> mentioned above.
     </p>
 
     <pre class="brush: java;">
     import org.apache.kafka.streams.KafkaStreams;
+    import org.apache.kafka.streams.StreamsBuilder;
     import org.apache.kafka.streams.StreamsConfig;
-    import org.apache.kafka.streams.kstream.KStreamBuilder;
-    import org.apache.kafka.streams.processor.TopologyBuilder;
+    import org.apache.kafka.streams.Topology;
 
     // Use the builders to define the actual processing topology, e.g. to specify
     // from which input topics to read, which stream operations (filter, map, etc.)
     // should be called, and so on.
 
-    KStreamBuilder builder = ...;  // when using the Kafka Streams DSL
+    Topology topology = ...; // when using the Processor API
     //
     // OR
     //
-    TopologyBuilder builder = ...; // when using the Processor API
+    StreamsBuilder builder = ...;  // when using the Kafka Streams DSL
+    Topology topology = builder.build();
 
     // Use the configuration to tell your application where the Kafka cluster is,
     // which serializers/deserializers to use by default, to specify security settings,
     // and so on.
     StreamsConfig config = ...;
 
-    KafkaStreams streams = new KafkaStreams(builder, config);
+    KafkaStreams streams = new KafkaStreams(topology, config);
     </pre>
 
     <p>

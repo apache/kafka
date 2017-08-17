@@ -46,7 +46,7 @@ class KafkaHealthcheck(brokerId: Int,
   private[server] val sessionExpireListener = new SessionExpireListener
 
   def startup() {
-    zkUtils.zkClient.subscribeStateChanges(sessionExpireListener)
+    zkUtils.subscribeStateChanges(sessionExpireListener)
     register()
   }
 

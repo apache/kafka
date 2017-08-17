@@ -16,11 +16,11 @@
  */
 package org.apache.kafka.streams.processor;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.errors.TopologyBuilderException;
+import org.apache.kafka.streams.Topology;
+import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.processor.internals.InternalTopicConfig;
@@ -33,6 +33,7 @@ import org.apache.kafka.streams.processor.internals.StreamPartitionAssignor.Subs
 import org.apache.kafka.streams.state.KeyValueStore;
 
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -46,24 +47,29 @@ import java.util.regex.Pattern;
  * is a node in the graph that receives records from upstream nodes and writes them to a Kafka topic. This builder allows you
  * to construct an acyclic graph of these nodes, and the builder is then passed into a new {@link org.apache.kafka.streams.KafkaStreams}
  * instance that will then {@link org.apache.kafka.streams.KafkaStreams#start() begin consuming, processing, and producing records}.
+ *
+ * @deprecated use {@link Topology} instead
  */
-@InterfaceStability.Evolving
+@Deprecated
 public class TopologyBuilder {
 
     /**
      * NOTE this member would not needed by developers working with the processor APIs, but only used
      * for internal functionalities.
-     * @deprecated not part of public API and for internal usage only
      */
-    @Deprecated
     public final InternalTopologyBuilder internalTopologyBuilder = new InternalTopologyBuilder();
+
+    private Topology.AutoOffsetReset translateAutoOffsetReset(final TopologyBuilder.AutoOffsetReset resetPolicy) {
+        if (resetPolicy == null) {
+            return null;
+        }
+        return resetPolicy == TopologyBuilder.AutoOffsetReset.EARLIEST ? Topology.AutoOffsetReset.EARLIEST : Topology.AutoOffsetReset.LATEST;
+    }
 
     /**
      * NOTE this class would not needed by developers working with the processor APIs, but only used
      * for internal functionalities.
-     * @deprecated not part of public API and for internal usage only
      */
-    @Deprecated
     public static class TopicsInfo {
         public Set<String> sinkTopics;
         public Set<String> sourceTopics;
@@ -108,7 +114,7 @@ public class TopologyBuilder {
     }
 
     /**
-     * Enum used to define auto offset reset policy when creating {@link KStream} or {@link KTable}
+     * Enum used to define auto offset reset policy when creating {@link KStream} or {@link KTable}.
      */
     public enum AutoOffsetReset {
         EARLIEST, LATEST
@@ -119,8 +125,7 @@ public class TopologyBuilder {
      */
     public TopologyBuilder() {}
 
-    /** @deprecated This class is not part of public API and should never be used by a developer. */
-    @Deprecated
+    /** This class is not part of public API and should never be used by a developer. */
     public synchronized final TopologyBuilder setApplicationId(final String applicationId) {
         internalTopologyBuilder.setApplicationId(applicationId);
         return this;
@@ -140,7 +145,11 @@ public class TopologyBuilder {
      */
     public synchronized final TopologyBuilder addSource(final String name,
                                                         final String... topics) {
-        internalTopologyBuilder.addSource(null, name, null, null, null, topics);
+        try {
+            internalTopologyBuilder.addSource(null, name, null, null, null, topics);
+        } catch (final TopologyException e) {
+            throw new org.apache.kafka.streams.errors.TopologyBuilderException(e);
+        }
         return this;
     }
 
@@ -160,7 +169,11 @@ public class TopologyBuilder {
     public synchronized final TopologyBuilder addSource(final AutoOffsetReset offsetReset,
                                                         final String name,
                                                         final String... topics) {
-        internalTopologyBuilder.addSource(offsetReset, name, null, null, null, topics);
+        try {
+            internalTopologyBuilder.addSource(translateAutoOffsetReset(offsetReset), name, null, null, null, topics);
+        } catch (final TopologyException e) {
+            throw new org.apache.kafka.streams.errors.TopologyBuilderException(e);
+        }
         return this;
     }
 
@@ -178,8 +191,13 @@ public class TopologyBuilder {
      * @return this builder instance so methods can be chained together; never null
      */
     public synchronized final TopologyBuilder addSource(final TimestampExtractor timestampExtractor,
-                                                        final String name, final String... topics) {
-        internalTopologyBuilder.addSource(null, name, timestampExtractor, null, null, topics);
+                                                        final String name,
+                                                        final String... topics) {
+        try {
+            internalTopologyBuilder.addSource(null, name, timestampExtractor, null, null, topics);
+        } catch (final TopologyException e) {
+            throw new org.apache.kafka.streams.errors.TopologyBuilderException(e);
+        }
         return this;
     }
 
@@ -199,8 +217,14 @@ public class TopologyBuilder {
      * @return this builder instance so methods can be chained together; never null
      */
     public synchronized final TopologyBuilder addSource(final AutoOffsetReset offsetReset,
-                                                        final TimestampExtractor timestampExtractor, final String name, final String... topics) {
-        internalTopologyBuilder.addSource(offsetReset, name, timestampExtractor, null, null, topics);
+                                                        final TimestampExtractor timestampExtractor,
+                                                        final String name,
+                                                        final String... topics) {
+        try {
+            internalTopologyBuilder.addSource(translateAutoOffsetReset(offsetReset), name, timestampExtractor, null, null, topics);
+        } catch (final TopologyException e) {
+            throw new org.apache.kafka.streams.errors.TopologyBuilderException(e);
+        }
         return this;
     }
 
@@ -219,7 +243,11 @@ public class TopologyBuilder {
      */
     public synchronized final TopologyBuilder addSource(final String name,
                                                         final Pattern topicPattern) {
-        internalTopologyBuilder.addSource(null, name, null, null, null, topicPattern);
+        try {
+            internalTopologyBuilder.addSource(null, name, null, null, null, topicPattern);
+        } catch (final TopologyException e) {
+            throw new org.apache.kafka.streams.errors.TopologyBuilderException(e);
+        }
         return this;
     }
 
@@ -240,7 +268,11 @@ public class TopologyBuilder {
     public synchronized final TopologyBuilder addSource(final AutoOffsetReset offsetReset,
                                                         final String name,
                                                         final Pattern topicPattern) {
-        internalTopologyBuilder.addSource(offsetReset, name, null, null, null, topicPattern);
+        try {
+            internalTopologyBuilder.addSource(translateAutoOffsetReset(offsetReset), name, null, null, null, topicPattern);
+        } catch (final TopologyException e) {
+            throw new org.apache.kafka.streams.errors.TopologyBuilderException(e);
+        }
         return this;
     }
 
@@ -262,10 +294,13 @@ public class TopologyBuilder {
     public synchronized final TopologyBuilder addSource(final TimestampExtractor timestampExtractor,
                                                         final String name,
                                                         final Pattern topicPattern) {
-        internalTopologyBuilder.addSource(null, name, timestampExtractor, null, null, topicPattern);
+        try {
+            internalTopologyBuilder.addSource(null, name, timestampExtractor, null, null, topicPattern);
+        } catch (final TopologyException e) {
+            throw new org.apache.kafka.streams.errors.TopologyBuilderException(e);
+        }
         return this;
     }
-
 
     /**
      * Add a new source that consumes from topics matching the given pattern
@@ -287,10 +322,13 @@ public class TopologyBuilder {
                                                         final TimestampExtractor timestampExtractor,
                                                         final String name,
                                                         final Pattern topicPattern) {
-        internalTopologyBuilder.addSource(offsetReset, name, timestampExtractor, null, null, topicPattern);
+        try {
+            internalTopologyBuilder.addSource(translateAutoOffsetReset(offsetReset), name, timestampExtractor, null, null, topicPattern);
+        } catch (final TopologyException e) {
+            throw new org.apache.kafka.streams.errors.TopologyBuilderException(e);
+        }
         return this;
     }
-
 
     /**
      * Add a new source that consumes the named topics and forwards the records to child processor and/or sink nodes.
@@ -305,14 +343,17 @@ public class TopologyBuilder {
      *                           if not specified the default value deserializer defined in the configs will be used
      * @param topics             the name of one or more Kafka topics that this source is to consume
      * @return this builder instance so methods can be chained together; never null
-     * @throws TopologyBuilderException if processor is already added or if topics have already been registered by another source
+     * @throws org.apache.kafka.streams.errors.TopologyBuilderException if processor is already added or if topics have already been registered by another source
      */
-
     public synchronized final TopologyBuilder addSource(final String name,
                                                         final Deserializer keyDeserializer,
                                                         final Deserializer valDeserializer,
                                                         final String... topics) {
-        internalTopologyBuilder.addSource(null, name, null, keyDeserializer, valDeserializer, topics);
+        try {
+            internalTopologyBuilder.addSource(null, name, null, keyDeserializer, valDeserializer, topics);
+        } catch (final TopologyException e) {
+            throw new org.apache.kafka.streams.errors.TopologyBuilderException(e);
+        }
         return this;
     }
 
@@ -332,16 +373,19 @@ public class TopologyBuilder {
      *                           if not specified the default value deserializer defined in the configs will be used
      * @param topics             the name of one or more Kafka topics that this source is to consume
      * @return this builder instance so methods can be chained together; never null
-     * @throws TopologyBuilderException if processor is already added or if topics have already been registered by another source
+     * @throws org.apache.kafka.streams.errors.TopologyBuilderException if processor is already added or if topics have already been registered by another source
      */
-
     public synchronized final TopologyBuilder addSource(final AutoOffsetReset offsetReset,
                                                         final String name,
                                                         final TimestampExtractor timestampExtractor,
                                                         final Deserializer keyDeserializer,
                                                         final Deserializer valDeserializer,
                                                         final String... topics) {
-        internalTopologyBuilder.addSource(offsetReset, name, timestampExtractor, keyDeserializer, valDeserializer, topics);
+        try {
+            internalTopologyBuilder.addSource(translateAutoOffsetReset(offsetReset), name, timestampExtractor, keyDeserializer, valDeserializer, topics);
+        } catch (final TopologyException e) {
+            throw new org.apache.kafka.streams.errors.TopologyBuilderException(e);
+        }
         return this;
     }
 
@@ -374,7 +418,11 @@ public class TopologyBuilder {
                                                        final String topic,
                                                        final String processorName,
                                                        final ProcessorSupplier stateUpdateSupplier) {
-        internalTopologyBuilder.addGlobalStore(storeSupplier, sourceName, null, keyDeserializer, valueDeserializer, topic, processorName, stateUpdateSupplier);
+        try {
+            internalTopologyBuilder.addGlobalStore(storeSupplier, sourceName, null, keyDeserializer, valueDeserializer, topic, processorName, stateUpdateSupplier);
+        } catch (final TopologyException e) {
+            throw new org.apache.kafka.streams.errors.TopologyBuilderException(e);
+        }
         return this;
     }
 
@@ -409,7 +457,11 @@ public class TopologyBuilder {
                                                        final String topic,
                                                        final String processorName,
                                                        final ProcessorSupplier stateUpdateSupplier) {
-        internalTopologyBuilder.addGlobalStore(storeSupplier, sourceName, timestampExtractor, keyDeserializer, valueDeserializer, topic, processorName, stateUpdateSupplier);
+        try {
+            internalTopologyBuilder.addGlobalStore(storeSupplier, sourceName, timestampExtractor, keyDeserializer, valueDeserializer, topic, processorName, stateUpdateSupplier);
+        } catch (final TopologyException e) {
+            throw new org.apache.kafka.streams.errors.TopologyBuilderException(e);
+        }
         return this;
     }
 
@@ -429,13 +481,17 @@ public class TopologyBuilder {
      *                           if not specified the default value deserializer defined in the configs will be used
      * @param topicPattern       regular expression pattern to match Kafka topics that this source is to consume
      * @return this builder instance so methods can be chained together; never null
-     * @throws TopologyBuilderException if processor is already added or if topics have already been registered by name
+     * @throws org.apache.kafka.streams.errors.TopologyBuilderException if processor is already added or if topics have already been registered by name
      */
     public synchronized final TopologyBuilder addSource(final String name,
                                                         final Deserializer keyDeserializer,
                                                         final Deserializer valDeserializer,
                                                         final Pattern topicPattern) {
-        internalTopologyBuilder.addSource(null, name, null, keyDeserializer, valDeserializer, topicPattern);
+        try {
+            internalTopologyBuilder.addSource(null, name, null, keyDeserializer, valDeserializer, topicPattern);
+        } catch (final TopologyException e) {
+            throw new org.apache.kafka.streams.errors.TopologyBuilderException(e);
+        }
         return this;
     }
 
@@ -458,7 +514,7 @@ public class TopologyBuilder {
      *                           if not specified the default value deserializer defined in the configs will be used
      * @param topicPattern       regular expression pattern to match Kafka topics that this source is to consume
      * @return this builder instance so methods can be chained together; never null
-     * @throws TopologyBuilderException if processor is already added or if topics have already been registered by name
+     * @throws org.apache.kafka.streams.errors.TopologyBuilderException if processor is already added or if topics have already been registered by name
      */
     public synchronized final TopologyBuilder addSource(final AutoOffsetReset offsetReset,
                                                         final String name,
@@ -466,7 +522,11 @@ public class TopologyBuilder {
                                                         final Deserializer keyDeserializer,
                                                         final Deserializer valDeserializer,
                                                         final Pattern topicPattern) {
-        internalTopologyBuilder.addSource(offsetReset, name, timestampExtractor, keyDeserializer, valDeserializer, topicPattern);
+        try {
+            internalTopologyBuilder.addSource(translateAutoOffsetReset(offsetReset), name, timestampExtractor, keyDeserializer, valDeserializer, topicPattern);
+        } catch (final TopologyException e) {
+            throw new org.apache.kafka.streams.errors.TopologyBuilderException(e);
+        }
         return this;
     }
 
@@ -487,17 +547,20 @@ public class TopologyBuilder {
      *                           if not specified the default value deserializer defined in the configs will be used
      * @param topicPattern       regular expression pattern to match Kafka topics that this source is to consume
      * @return this builder instance so methods can be chained together; never null
-     * @throws TopologyBuilderException if processor is already added or if topics have already been registered by name
+     * @throws org.apache.kafka.streams.errors.TopologyBuilderException if processor is already added or if topics have already been registered by name
      */
     public synchronized final TopologyBuilder addSource(final AutoOffsetReset offsetReset,
                                                         final String name,
                                                         final Deserializer keyDeserializer,
                                                         final Deserializer valDeserializer,
                                                         final Pattern topicPattern) {
-        internalTopologyBuilder.addSource(offsetReset, name, null, keyDeserializer, valDeserializer, topicPattern);
+        try {
+            internalTopologyBuilder.addSource(translateAutoOffsetReset(offsetReset), name, null, keyDeserializer, valDeserializer, topicPattern);
+        } catch (final TopologyException e) {
+            throw new org.apache.kafka.streams.errors.TopologyBuilderException(e);
+        }
         return this;
     }
-
 
     /**
      * Add a new sink that forwards records from predecessor nodes (processors and/or sources) to the named Kafka topic.
@@ -517,7 +580,11 @@ public class TopologyBuilder {
     public synchronized final TopologyBuilder addSink(final String name,
                                                       final String topic,
                                                       final String... predecessorNames) {
-        internalTopologyBuilder.addSink(name, topic, null, null, null, predecessorNames);
+        try {
+            internalTopologyBuilder.addSink(name, topic, null, null, null, predecessorNames);
+        } catch (final TopologyException e) {
+            throw new org.apache.kafka.streams.errors.TopologyBuilderException(e);
+        }
         return this;
     }
 
@@ -548,7 +615,11 @@ public class TopologyBuilder {
                                                       final String topic,
                                                       final StreamPartitioner partitioner,
                                                       final String... predecessorNames) {
-        internalTopologyBuilder.addSink(name, topic, null, null, partitioner, predecessorNames);
+        try {
+            internalTopologyBuilder.addSink(name, topic, null, null, partitioner, predecessorNames);
+        } catch (final TopologyException e) {
+            throw new org.apache.kafka.streams.errors.TopologyBuilderException(e);
+        }
         return this;
     }
 
@@ -576,7 +647,11 @@ public class TopologyBuilder {
                                                       final Serializer keySerializer,
                                                       final Serializer valSerializer,
                                                       final String... predecessorNames) {
-        internalTopologyBuilder.addSink(name, topic, keySerializer, valSerializer, null, predecessorNames);
+        try {
+            internalTopologyBuilder.addSink(name, topic, keySerializer, valSerializer, null, predecessorNames);
+        } catch (final TopologyException e) {
+            throw new org.apache.kafka.streams.errors.TopologyBuilderException(e);
+        }
         return this;
     }
 
@@ -599,7 +674,7 @@ public class TopologyBuilder {
      * @see #addSink(String, String, String...)
      * @see #addSink(String, String, StreamPartitioner, String...)
      * @see #addSink(String, String, Serializer, Serializer, String...)
-     * @throws TopologyBuilderException if predecessor is not added yet, or if this processor's name is equal to the predecessor's name
+     * @throws org.apache.kafka.streams.errors.TopologyBuilderException if predecessor is not added yet, or if this processor's name is equal to the predecessor's name
      */
     public synchronized final <K, V> TopologyBuilder addSink(final String name,
                                                              final String topic,
@@ -607,7 +682,11 @@ public class TopologyBuilder {
                                                              final Serializer<V> valSerializer,
                                                              final StreamPartitioner<? super K, ? super V> partitioner,
                                                              final String... predecessorNames) {
-        internalTopologyBuilder.addSink(name, topic, keySerializer, valSerializer, partitioner, predecessorNames);
+        try {
+            internalTopologyBuilder.addSink(name, topic, keySerializer, valSerializer, partitioner, predecessorNames);
+        } catch (final TopologyException e) {
+            throw new org.apache.kafka.streams.errors.TopologyBuilderException(e);
+        }
         return this;
     }
 
@@ -619,12 +698,16 @@ public class TopologyBuilder {
      * @param predecessorNames the name of one or more source or processor nodes whose output records this processor should receive
      * and process
      * @return this builder instance so methods can be chained together; never null
-     * @throws TopologyBuilderException if predecessor is not added yet, or if this processor's name is equal to the predecessor's name
+     * @throws org.apache.kafka.streams.errors.TopologyBuilderException if predecessor is not added yet, or if this processor's name is equal to the predecessor's name
      */
     public synchronized final TopologyBuilder addProcessor(final String name,
                                                            final ProcessorSupplier supplier,
                                                            final String... predecessorNames) {
-        internalTopologyBuilder.addProcessor(name, supplier, predecessorNames);
+        try {
+            internalTopologyBuilder.addProcessor(name, supplier, predecessorNames);
+        } catch (final TopologyException e) {
+            throw new org.apache.kafka.streams.errors.TopologyBuilderException(e);
+        }
         return this;
     }
 
@@ -633,11 +716,15 @@ public class TopologyBuilder {
      *
      * @param supplier the supplier used to obtain this state store {@link StateStore} instance
      * @return this builder instance so methods can be chained together; never null
-     * @throws TopologyBuilderException if state store supplier is already added
+     * @throws org.apache.kafka.streams.errors.TopologyBuilderException if state store supplier is already added
      */
     public synchronized final TopologyBuilder addStateStore(final StateStoreSupplier supplier,
                                                             final String... processorNames) {
-        internalTopologyBuilder.addStateStore(supplier, processorNames);
+        try {
+            internalTopologyBuilder.addStateStore(supplier, processorNames);
+        } catch (final TopologyException e) {
+            throw new org.apache.kafka.streams.errors.TopologyBuilderException(e);
+        }
         return this;
     }
 
@@ -650,7 +737,13 @@ public class TopologyBuilder {
      */
     public synchronized final TopologyBuilder connectProcessorAndStateStores(final String processorName,
                                                                              final String... stateStoreNames) {
-        internalTopologyBuilder.connectProcessorAndStateStores(processorName, stateStoreNames);
+        if (stateStoreNames != null && stateStoreNames.length > 0) {
+            try {
+                internalTopologyBuilder.connectProcessorAndStateStores(processorName, stateStoreNames);
+            } catch (final TopologyException e) {
+                throw new org.apache.kafka.streams.errors.TopologyBuilderException(e);
+            }
+        }
         return this;
     }
 
@@ -660,10 +753,7 @@ public class TopologyBuilder {
      *
      * NOTE this function would not needed by developers working with the processor APIs, but only used
      * for the high-level DSL parsing functionalities.
-     *
-     * @deprecated not part of public API and for internal usage only
      */
-    @Deprecated
     protected synchronized final TopologyBuilder connectSourceStoreAndTopic(final String sourceStoreName,
                                                                             final String topic) {
         internalTopologyBuilder.connectSourceStoreAndTopic(sourceStoreName, topic);
@@ -678,10 +768,8 @@ public class TopologyBuilder {
      *
      * @param processorNames the name of the processors
      * @return this builder instance so methods can be chained together; never null
-     * @throws TopologyBuilderException if less than two processors are specified, or if one of the processors is not added yet
-     * @deprecated not part of public API and for internal usage only
+     * @throws org.apache.kafka.streams.errors.TopologyBuilderException if less than two processors are specified, or if one of the processors is not added yet
      */
-    @Deprecated
     public synchronized final TopologyBuilder connectProcessors(final String... processorNames) {
         internalTopologyBuilder.connectProcessors(processorNames);
         return this;
@@ -695,9 +783,7 @@ public class TopologyBuilder {
      *
      * @param topicName the name of the topic
      * @return this builder instance so methods can be chained together; never null
-     * @deprecated not part of public API and for internal usage only
      */
-    @Deprecated
     public synchronized final TopologyBuilder addInternalTopic(final String topicName) {
         internalTopologyBuilder.addInternalTopic(topicName);
         return this;
@@ -711,9 +797,7 @@ public class TopologyBuilder {
      *
      * @param sourceNodes a set of source node names
      * @return this builder instance so methods can be chained together; never null
-     * @deprecated not part of public API and for internal usage only
      */
-    @Deprecated
     public synchronized final TopologyBuilder copartitionSources(final Collection<String> sourceNodes) {
         internalTopologyBuilder.copartitionSources(sourceNodes);
         return this;
@@ -726,9 +810,7 @@ public class TopologyBuilder {
      * for the high-level DSL parsing functionalities.
      *
      * @return groups of node names
-     * @deprecated not part of public API and for internal usage only
      */
-    @Deprecated
     public synchronized Map<Integer, Set<String>> nodeGroups() {
         return internalTopologyBuilder.nodeGroups();
     }
@@ -741,9 +823,7 @@ public class TopologyBuilder {
      * for the high-level DSL parsing functionalities.
      *
      * @see org.apache.kafka.streams.KafkaStreams#KafkaStreams(TopologyBuilder, org.apache.kafka.streams.StreamsConfig)
-     * @deprecated not part of public API and for internal usage only
      */
-    @Deprecated
     public synchronized ProcessorTopology build(final Integer topicGroupId) {
         return internalTopologyBuilder.build(topicGroupId);
     }
@@ -755,9 +835,7 @@ public class TopologyBuilder {
      * for the high-level DSL parsing functionalities.
      *
      * @return ProcessorTopology
-     * @deprecated not part of public API and for internal usage only
      */
-    @Deprecated
     public synchronized ProcessorTopology buildGlobalStateTopology() {
         return internalTopologyBuilder.buildGlobalStateTopology();
     }
@@ -770,9 +848,7 @@ public class TopologyBuilder {
      * for the high-level DSL parsing functionalities.
      *
      * @return map containing all global {@link StateStore}s
-     * @deprecated not part of public API and for internal usage only
      */
-    @Deprecated
     public Map<String, StateStore> globalStateStores() {
         return internalTopologyBuilder.globalStateStores();
     }
@@ -785,11 +861,22 @@ public class TopologyBuilder {
      * for the high-level DSL parsing functionalities.
      *
      * @return groups of topic names
-     * @deprecated not part of public API and for internal usage only
      */
-    @Deprecated
     public synchronized Map<Integer, TopicsInfo> topicGroups() {
-        return internalTopologyBuilder.topicGroups();
+        final Map<Integer, InternalTopologyBuilder.TopicsInfo> topicGroupsWithNewTopicsInfo = internalTopologyBuilder.topicGroups();
+        final Map<Integer, TopicsInfo> topicGroupsWithDeprecatedTopicInfo = new HashMap<>();
+
+        for (final Map.Entry<Integer, InternalTopologyBuilder.TopicsInfo> entry : topicGroupsWithNewTopicsInfo.entrySet()) {
+            final InternalTopologyBuilder.TopicsInfo newTopicsInfo = entry.getValue();
+
+            topicGroupsWithDeprecatedTopicInfo.put(entry.getKey(), new TopicsInfo(
+                newTopicsInfo.sinkTopics,
+                newTopicsInfo.sourceTopics,
+                newTopicsInfo.repartitionSourceTopics,
+                newTopicsInfo.stateChangelogTopics));
+        }
+
+        return topicGroupsWithDeprecatedTopicInfo;
     }
 
     /**
@@ -799,9 +886,7 @@ public class TopologyBuilder {
      * for the high-level DSL parsing functionalities.
      *
      * @return the Pattern for matching all topics reading from earliest offset, never null
-     * @deprecated not part of public API and for internal usage only
      */
-    @Deprecated
     public synchronized Pattern earliestResetTopicsPattern() {
         return internalTopologyBuilder.earliestResetTopicsPattern();
     }
@@ -813,9 +898,7 @@ public class TopologyBuilder {
      * for the high-level DSL parsing functionalities.
      *
      * @return the Pattern for matching all topics reading from latest offset, never null
-     * @deprecated not part of public API and for internal usage only
      */
-    @Deprecated
     public synchronized Pattern latestResetTopicsPattern() {
         return internalTopologyBuilder.latestResetTopicsPattern();
     }
@@ -825,9 +908,7 @@ public class TopologyBuilder {
      * for the high-level DSL parsing functionalities.
      *
      * @return a mapping from state store name to a Set of source Topics.
-     * @deprecated not part of public API and for internal usage only
      */
-    @Deprecated
     public Map<String, List<String>> stateStoreNameToSourceTopics() {
         return internalTopologyBuilder.stateStoreNameToSourceTopics();
     }
@@ -840,9 +921,7 @@ public class TopologyBuilder {
      * for the high-level DSL parsing functionalities.
      *
      * @return groups of topic names
-     * @deprecated not part of public API and for internal usage only
      */
-    @Deprecated
     public synchronized Collection<Set<String>> copartitionGroups() {
         return internalTopologyBuilder.copartitionGroups();
     }
@@ -850,10 +929,7 @@ public class TopologyBuilder {
     /**
      * NOTE this function would not needed by developers working with the processor APIs, but only used
      * for the high-level DSL parsing functionalities.
-     *
-     * @deprecated not part of public API and for internal usage only
      */
-    @Deprecated
     public SubscriptionUpdates subscriptionUpdates() {
         return internalTopologyBuilder.subscriptionUpdates();
     }
@@ -861,10 +937,7 @@ public class TopologyBuilder {
     /**
      * NOTE this function would not needed by developers working with the processor APIs, but only used
      * for the high-level DSL parsing functionalities.
-     *
-     * @deprecated not part of public API and for internal usage only
      */
-    @Deprecated
     public synchronized Pattern sourceTopicPattern() {
         return internalTopologyBuilder.sourceTopicPattern();
     }
@@ -872,10 +945,7 @@ public class TopologyBuilder {
     /**
      * NOTE this function would not needed by developers working with the processor APIs, but only used
      * for the high-level DSL parsing functionalities.
-     *
-     * @deprecated not part of public API and for internal usage only
      */
-    @Deprecated
     public synchronized void updateSubscriptions(final SubscriptionUpdates subscriptionUpdates,
                                                  final String threadId) {
         internalTopologyBuilder.updateSubscriptions(subscriptionUpdates, threadId);

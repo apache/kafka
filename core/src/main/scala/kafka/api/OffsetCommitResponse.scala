@@ -23,6 +23,7 @@ import kafka.utils.Logging
 import kafka.common.TopicAndPartition
 import org.apache.kafka.common.protocol.Errors
 
+@deprecated("This object has been deprecated and will be removed in a future release.", "1.0.0")
 object OffsetCommitResponse extends Logging {
   val CurrentVersion: Short = 0
 
@@ -42,6 +43,7 @@ object OffsetCommitResponse extends Logging {
   }
 }
 
+@deprecated("This object has been deprecated and will be removed in a future release.", "1.0.0")
 case class OffsetCommitResponse(commitStatus: Map[TopicAndPartition, Errors],
                                 correlationId: Int = 0)
     extends RequestOrResponse() {
