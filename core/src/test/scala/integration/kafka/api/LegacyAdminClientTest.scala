@@ -230,7 +230,7 @@ class LegacyAdminClientTest extends IntegrationTestHarness with Logging {
     assertFalse(group.consumers.isEmpty)
 
     val member = group.consumers.get.head
-    assertEquals(clientId, member.clientId)
+    assertEquals(clientId + "-0", member.clientId)
     assertFalse(member.host.isEmpty)
     assertFalse(member.consumerId.isEmpty)
   }

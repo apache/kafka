@@ -29,7 +29,7 @@ import org.apache.kafka.common.serialization._
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.test.{MockConsumerInterceptor, MockProducerInterceptor}
 import org.junit.Assert._
-import org.junit.Test
+import org.junit.{Before, Test}
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable.Buffer
@@ -38,6 +38,12 @@ import kafka.server.KafkaServer
 
 /* We have some tests in this class instead of `BaseConsumerTest` in order to keep the build time under control. */
 class PlaintextConsumerTest extends BaseConsumerTest {
+
+  @Before
+  override def setUp() {
+    super.setUp
+    this.consumerConfig.remove(ConsumerConfig.CLIENT_ID_CONFIG)
+  }
 
   @Test
   def testHeaders() {
@@ -110,7 +116,8 @@ class PlaintextConsumerTest extends BaseConsumerTest {
       }
 
     }
-    
+
+    this.producerConfig.put(ProducerConfig.CLIENT_ID_CONFIG, producerClientId + "-new")
     val producer0 = new KafkaProducer(this.producerConfig, new ByteArraySerializer(), extendedSerializer)
     producers += producer0
     producer0.send(record)
@@ -244,6 +251,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   def testAutoCommitOnClose() {
     this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true")
     val consumer0 = new KafkaConsumer(this.consumerConfig, new ByteArrayDeserializer(), new ByteArrayDeserializer())
+    consumers += consumer0
 
     val numRecords = 10000
     sendRecords(numRecords)
@@ -270,6 +278,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   def testAutoCommitOnCloseAfterWakeup() {
     this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true")
     val consumer0 = new KafkaConsumer(this.consumerConfig, new ByteArrayDeserializer(), new ByteArrayDeserializer())
+    consumers += consumer0
 
     val numRecords = 10000
     sendRecords(numRecords)
@@ -901,7 +910,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
    */
   @Test
   def testMultiConsumerStickyAssignment() {
-    this.consumers.clear()
     this.consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "sticky-group")
     this.consumerConfig.setProperty(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, classOf[StickyAssignor].getName)
 
@@ -1053,6 +1061,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     // produce records
     val numRecords = 100
+    this.producerConfig.put(ProducerConfig.CLIENT_ID_CONFIG, producerClientId + "-new")
     val testProducer = new KafkaProducer[String, String](this.producerConfig, new StringSerializer, new StringSerializer)
     (0 until numRecords).map { i =>
       testProducer.send(new ProducerRecord(tp.topic(), tp.partition(), s"key $i", s"value $i"))
@@ -1104,6 +1113,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
     producerProps.put(ProducerConfig.INTERCEPTOR_CLASSES_CONFIG, "org.apache.kafka.test.MockProducerInterceptor")
     producerProps.put("mock.interceptor.append", appendStr)
+    producerProps.put(ProducerConfig.CLIENT_ID_CONFIG, producerClientId + "-new")
     val testProducer = new KafkaProducer(producerProps, new ByteArraySerializer(), new ByteArraySerializer())
     producers += testProducer
 

@@ -19,6 +19,7 @@ package kafka.api
 import java.util.Properties
 
 import kafka.utils.TestUtils
+import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.kafka.common.config.SaslConfigs
 import org.apache.kafka.common.errors.GroupAuthorizationException
@@ -61,6 +62,7 @@ abstract class SaslEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
     consumer2Config.putAll(consumerConfig)
     // consumer2 retrieves its credentials from the static JAAS configuration, so we test also this path
     consumer2Config.remove(SaslConfigs.SASL_JAAS_CONFIG)
+    consumer2Config.put(ConsumerConfig.CLIENT_ID_CONFIG, consumer2Config.get(ConsumerConfig.CLIENT_ID_CONFIG) + "-new")
 
     val consumer2 = TestUtils.createNewConsumer(brokerList,
                                                 securityProtocol = securityProtocol,

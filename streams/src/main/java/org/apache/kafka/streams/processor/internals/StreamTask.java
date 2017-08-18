@@ -23,7 +23,6 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
@@ -421,7 +420,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
                     try {
                         producer.abortTransaction();
                         transactionInFlight = false;
-                    } catch (final ProducerFencedException e) {
+                    } catch (final KafkaException e) {
                         // can be ignored: transaction got already aborted by brokers/transactional-coordinator if this happens
                     }
                 }
