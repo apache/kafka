@@ -646,7 +646,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             this.clientId = clientId;
             String groupId = config.getString(ConsumerConfig.GROUP_ID_CONFIG);
 
-            LogContext logContext = new LogContext("[Consumer clientId=" + clientId + " groupId=" + groupId + "]");
+            LogContext logContext = new LogContext("[Consumer clientId=" + clientId + ", groupId=" + groupId + "] ");
             this.log = logContext.logger(getClass());
 
             log.debug("Initializing the Kafka consumer");

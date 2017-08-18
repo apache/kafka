@@ -80,7 +80,7 @@ public class WorkerGroupMember {
             clientId = clientIdConfig.length() <= 0 ? "connect-" + CONNECT_CLIENT_ID_SEQUENCE.getAndIncrement() : clientIdConfig;
             String groupId = config.getString(DistributedConfig.GROUP_ID_CONFIG);
 
-            LogContext logContext = new LogContext("[Worker clientId=" + clientId + " groupId=" + groupId + "]");
+            LogContext logContext = new LogContext("[Worker clientId=" + clientId + ", groupId=" + groupId + "] ");
             this.log = logContext.logger(WorkerGroupMember.class);
 
             Map<String, String> metricsTags = new LinkedHashMap<>();
