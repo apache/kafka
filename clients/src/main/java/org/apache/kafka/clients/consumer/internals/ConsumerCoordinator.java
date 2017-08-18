@@ -648,11 +648,11 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             @Override
             public void onComplete(Map<TopicPartition, OffsetAndMetadata> offsets, Exception exception) {
                 if (exception != null) {
-                    log.warn("Auto-commit of offsets {} failed: {}", offsets, exception.getMessage());
+                    log.warn("Asynchronous auto-commit of offsets {} failed: {}", offsets, exception.getMessage());
                     if (exception instanceof RetriableException)
                         nextAutoCommitDeadline = Math.min(time.milliseconds() + retryBackoffMs, nextAutoCommitDeadline);
                 } else {
-                    log.debug("Completed auto-commit of offsets {}", offsets);
+                    log.debug("Completed asynchronous auto-commit of offsets {}", offsets);
                 }
             }
         });
@@ -671,7 +671,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 throw e;
             } catch (Exception e) {
                 // consistent with async auto-commit failures, we do not propagate the exception
-                log.warn("Auto-commit of offsets {} failed", allConsumedOffsets, e);
+                log.warn("Synchronous auto-commit of offsets {} failed: {}", allConsumedOffsets, e.getMessage());
             }
         }
     }
