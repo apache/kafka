@@ -24,6 +24,7 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.test.ReadOnlySessionStoreStub;
 import org.apache.kafka.test.StateStoreProviderStub;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -32,6 +33,8 @@ import java.util.Collections;
 import java.util.List;
 
 import static org.apache.kafka.test.StreamsTestUtils.toList;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.core.IsEqual.equalTo;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.fail;
@@ -124,5 +127,31 @@ public class CompositeReadOnlySessionStoreTest {
     @Test(expected = NullPointerException.class)
     public void shouldThrowNullPointerExceptionIfFetchingNullKey() {
         sessionStore.fetch(null);
+    }
+
+    @Test
+    public void shouldFetchKeyRangeAcrossStores() {
+        final ReadOnlySessionStoreStub<String, Long> secondUnderlying = new
+                ReadOnlySessionStoreStub<>();
+        stubProviderTwo.addStore(storeName, secondUnderlying);
+        underlyingSessionStore.put(new Windowed<>("a", new SessionWindow(0, 0)), 0L);
+        secondUnderlying.put(new Windowed<>("b", new SessionWindow(0, 0)), 10L);
+        final List<KeyValue<Windowed<String>, Long>> results = StreamsTestUtils.toList(sessionStore.fetch("a", "b"));
+        assertThat(results.size(), equalTo(2));
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNPEIfKeyIsNull() {
+        underlyingSessionStore.fetch(null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNPEIfFromKeyIsNull() {
+        underlyingSessionStore.fetch(null, "a");
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNPEIfToKeyIsNull() {
+        underlyingSessionStore.fetch("a", null);
     }
 }

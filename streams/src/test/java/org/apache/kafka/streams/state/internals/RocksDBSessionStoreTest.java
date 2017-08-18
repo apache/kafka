@@ -233,7 +233,7 @@ public class RocksDBSessionStoreTest {
     public void shouldThrowNullPointerExceptionOnPutNullKey() throws Exception {
         sessionStore.put(null, 1L);
     }
-
+    
     static List<KeyValue<Windowed<String>, Long>> toList(final KeyValueIterator<Windowed<String>, Long> iterator) {
         final List<KeyValue<Windowed<String>, Long>> results = new ArrayList<>();
         while (iterator.hasNext()) {
