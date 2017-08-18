@@ -297,15 +297,14 @@ public class StreamThread extends Thread implements ThreadDataProvider {
                     final Producer<byte[], byte[]> threadProducer,
                     final String threadClientId,
                     final String logPrefix) {
-            super(
-                    builder,
+            super(builder,
                   config,
                   streamsMetrics,
                   stateDirectory,
                   taskCreatedSensor,
                   storeChangelogReader,
                   time,
-                    logPrefix);
+                  logPrefix);
             this.cache = cache;
             this.clientSupplier = clientSupplier;
             this.threadProducer = threadProducer;
@@ -683,7 +682,7 @@ public class StreamThread extends Thread implements ThreadDataProvider {
         if (records != null && !records.isEmpty() && taskManager.hasActiveRunningTasks()) {
             streamsMetrics.pollTimeSensor.record(computeLatency(), timerStartedMs);
             addRecordsToTasks(records);
-            final long totalProcessed = processAndPunctuateStreamTime(recordsProcessedBeforeCommit);
+            final long totalProcessed = processAndMaybeCommit(recordsProcessedBeforeCommit);
             if (totalProcessed > 0) {
                 final long processLatency = computeLatency();
                 streamsMetrics.processTimeSensor.record(processLatency / (double) totalProcessed,
@@ -787,7 +786,7 @@ public class StreamThread extends Thread implements ThreadDataProvider {
      *                                     if UNLIMITED_RECORDS, then commit is never called
      * @return Number of records processed since last commit.
      */
-    private long processAndPunctuateStreamTime(final long recordsProcessedBeforeCommit) {
+    private long processAndMaybeCommit(final long recordsProcessedBeforeCommit) {
 
         long processed;
         long totalProcessedSinceLastMaybeCommit = 0;
@@ -818,7 +817,7 @@ public class StreamThread extends Thread implements ThreadDataProvider {
     private void punctuate() {
         final int punctuated = taskManager.punctuate();
         if (punctuated > 0) {
-            streamsMetrics.punctuateTimeSensor.record(computeLatency(), timerStartedMs);
+            streamsMetrics.punctuateTimeSensor.record(computeLatency() / (double) punctuated, timerStartedMs);
         }
     }
 
@@ -877,7 +876,7 @@ public class StreamThread extends Thread implements ThreadDataProvider {
     }
 
     private void maybeUpdateStandbyTasks(final long now) {
-        if (state == State.RUNNING && taskManager.readyToProcessStandbyTasks()) {
+        if (state == State.RUNNING && taskManager.hasStandbyRunningTasks()) {
             if (processStandbyRecords) {
                 if (!standbyRecords.isEmpty()) {
                     final Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> remainingStandbyRecords = new HashMap<>();

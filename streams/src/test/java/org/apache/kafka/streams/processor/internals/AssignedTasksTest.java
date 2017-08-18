@@ -235,77 +235,10 @@ public class AssignedTasksTest {
     }
 
 
-    @SuppressWarnings("unchecked")
-    @Test
-    public void shouldApplyActionToRunningTasks() {
-        TaskAction taskAction = EasyMock.createMock(TaskAction.class);
-        taskAction.apply(EasyMock.anyObject(AbstractTask.class));
-        EasyMock.expectLastCall();
-        mockTaskInitialization();
-
-        EasyMock.replay(t1, taskAction);
-
-        addAndInitTask();
-
-        assignedTasks.applyToRunningTasks(taskAction, false);
-
-        EasyMock.verify(taskAction);
-    }
-
-    @SuppressWarnings("unchecked")
-    @Test
-    public void shouldNotApplyActionToNotRunningTasks() {
-        final TaskAction taskAction = EasyMock.createMock(TaskAction.class);
-        EasyMock.expect(t1.initialize()).andReturn(false);
-
-        EasyMock.replay(t1, taskAction);
-
-        addAndInitTask();
-
-        assignedTasks.applyToRunningTasks(taskAction, false);
-
-        EasyMock.verify(taskAction);
-    }
-
-    @SuppressWarnings({"unchecked", "ThrowableNotThrown"})
-    @Test
-    public void shouldCloseTaskOnApplyToRunningIfProducerFencedException() {
-        final TaskAction taskAction = EasyMock.createMock(TaskAction.class);
-        taskAction.apply(EasyMock.anyObject(AbstractTask.class));
-        EasyMock.expectLastCall().andThrow(new ProducerFencedException("BOOM!"));
-        mockTaskInitialization();
-        t1.close(false);
-        EasyMock.expectLastCall();
-        EasyMock.replay(t1, taskAction);
-
-        addAndInitTask();
-
-        assignedTasks.applyToRunningTasks(taskAction, false);
-        assertTrue(assignedTasks.running().isEmpty());
-        EasyMock.verify(t1, taskAction);
-    }
-
     private void mockTaskInitialization() {
         EasyMock.expect(t1.initialize()).andReturn(true);
         EasyMock.expect(t1.partitions()).andReturn(Collections.singleton(tp1));
         EasyMock.expect(t1.changelogPartitions()).andReturn(Collections.<TopicPartition>emptyList());
-    }
-
-    @SuppressWarnings("unchecked")
-    @Test
-    public void shouldReturnExceptionAndNotCloseTaskOnApplyToRunningWhenRuntimeException() {
-        final TaskAction taskAction = EasyMock.createMock(TaskAction.class);
-        taskAction.apply(EasyMock.anyObject(AbstractTask.class));
-        EasyMock.expectLastCall().andThrow(new RuntimeException("KABOOM!"));
-        EasyMock.expect(taskAction.name()).andReturn("name");
-        mockTaskInitialization();
-        EasyMock.replay(t1, taskAction);
-
-        addAndInitTask();
-
-        assertThat(assignedTasks.applyToRunningTasks(taskAction, false), not(nullValue()));
-        assertThat(assignedTasks.runningTaskIds(), equalTo(Collections.singleton(taskId1)));
-        EasyMock.verify(t1, taskAction);
     }
 
     @Test

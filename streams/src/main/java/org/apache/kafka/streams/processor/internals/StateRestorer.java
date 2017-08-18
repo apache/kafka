@@ -113,7 +113,4 @@ public class StateRestorer {
         return endOffset < offsetLimit ? endOffset : offsetLimit;
     }
 
-    String storeName() {
-        return storeName;
-    }
 }

@@ -77,7 +77,7 @@ class TaskManager {
         standby.closeNonAssignedSuspendedTasks(threadMetadataProvider.standbyTasks());
         Map<TaskId, Set<TopicPartition>> assignedActiveTasks = threadMetadataProvider.activeTasks();
         active.closeNonAssignedSuspendedTasks(assignedActiveTasks);
-        addStreamTasks(assignment, assignedActiveTasks);
+        addStreamTasks(assignment);
         addStandbyTasks();
         final Set<TopicPartition> partitions = active.uninitializedPartitions();
         log.trace("{} pausing partitions: {}", logPrefix, partitions);
@@ -88,11 +88,12 @@ class TaskManager {
         this.threadMetadataProvider = threadMetadataProvider;
     }
 
-    private void addStreamTasks(final Collection<TopicPartition> assignment, final Map<TaskId, Set<TopicPartition>> assignedTasks) {
-        final Map<TaskId, Set<TopicPartition>> newTasks = new HashMap<>();
+    private void addStreamTasks(final Collection<TopicPartition> assignment) {
+        Map<TaskId, Set<TopicPartition>> assignedTasks = threadMetadataProvider.activeTasks();
         if (assignedTasks.isEmpty()) {
             return;
         }
+        final Map<TaskId, Set<TopicPartition>> newTasks = new HashMap<>();
         // collect newly assigned tasks and reopen re-assigned tasks
         log.debug("{} Adding assigned tasks as active: {}", logPrefix, assignedTasks);
         for (final Map.Entry<TaskId, Set<TopicPartition>> entry : assignedTasks.entrySet()) {
@@ -256,15 +257,16 @@ class TaskManager {
         }
         if (active.allTasksRunning()) {
             assignStandbyPartitions();
+            return true;
         }
-        return true;
+        return false;
     }
 
     boolean hasActiveRunningTasks() {
         return active.hasRunningTasks();
     }
 
-    boolean readyToProcessStandbyTasks() {
+    boolean hasStandbyRunningTasks() {
         return standby.hasRunningTasks();
     }
 

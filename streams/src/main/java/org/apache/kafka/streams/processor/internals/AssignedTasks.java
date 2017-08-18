@@ -132,7 +132,7 @@ class AssignedTasks {
         if (restored.isEmpty()) {
             return Collections.emptySet();
         }
-        log.trace("{} {} partitions restored for ", logPrefix, taskTypeName, restored);
+        log.trace("{} {} partitions restored for {}", logPrefix, taskTypeName, restored);
         final Set<TopicPartition> resume = new HashSet<>();
         restoredPartitions.addAll(restored);
         for (final Iterator<Map.Entry<TaskId, Task>> it = restoring.entrySet().iterator(); it.hasNext(); ) {
@@ -327,52 +327,50 @@ class AssignedTasks {
     }
 
     int commit() {
-        performTimedAction(commitAction);
+        applyToRunningTasks(commitAction);
         return running.size();
     }
 
     int maybeCommit() {
         committed = 0;
-        performTimedAction(maybeCommitAction);
+        applyToRunningTasks(maybeCommitAction);
         return committed;
-    }
-
-    private void performTimedAction(final TaskAction action) {
-        final RuntimeException exception = applyToRunningTasks(action, false);
-        if (exception != null) {
-            throw exception;
-        }
     }
 
     int process() {
         int processed = 0;
         for (final Task task : running.values()) {
-            if (task.process()) {
-                processed++;
-            }
-        }
-        return processed;
-    }
-
-    int punctuate() {
-        int processed = 0;
-        for (Task task : running.values()) {
             try {
-                if (task.maybePunctuateStreamTime()) {
+                if (task.process()) {
                     processed++;
                 }
-                if (task.maybePunctuateSystemTime()) {
-                    processed++;
-                }
-            } catch (KafkaException e) {
-                log.error("{} Failed to punctuate {} {} due to the following error:", logPrefix, taskTypeName, task.id(), e);
+            } catch (RuntimeException e) {
+                log.error("{} Failed to process {} {} due to the following error:", logPrefix, taskTypeName, task.id(), e);
                 throw e;
             }
         }
         return processed;
     }
 
-    RuntimeException applyToRunningTasks(final TaskAction action, final boolean throwException) {
+    int punctuate() {
+        int punctuated = 0;
+        for (Task task : running.values()) {
+            try {
+                if (task.maybePunctuateStreamTime()) {
+                    punctuated++;
+                }
+                if (task.maybePunctuateSystemTime()) {
+                    punctuated++;
+                }
+            } catch (KafkaException e) {
+                log.error("{} Failed to punctuate {} {} due to the following error:", logPrefix, taskTypeName, task.id(), e);
+                throw e;
+            }
+        }
+        return punctuated;
+    }
+
+    private void applyToRunningTasks(final TaskAction action) {
         RuntimeException firstException = null;
 
         for (Iterator<Task> it = running().iterator(); it.hasNext(); ) {
@@ -392,17 +390,15 @@ class AssignedTasks {
                           taskTypeName,
                           task.id(),
                           t);
-                if (throwException) {
-                    throw t;
-                }
-
                 if (firstException == null) {
                     firstException = t;
                 }
             }
         }
 
-        return firstException;
+        if (firstException != null) {
+            throw firstException;
+        }
     }
 
     void closeNonAssignedSuspendedTasks(final Map<TaskId, Set<TopicPartition>> newAssignment) {
