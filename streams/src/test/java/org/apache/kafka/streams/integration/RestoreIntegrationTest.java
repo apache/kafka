@@ -147,7 +147,7 @@ public class RestoreIntegrationTest {
         kafkaStreams.start();
 
         assertTrue(startupLatch.await(30, TimeUnit.SECONDS));
-        assertThat(restored.get(), equalTo((long)numberOfKeys));
+        assertThat(restored.get(), equalTo((long) numberOfKeys));
         assertThat(numReceived.get(), equalTo(0));
     }
 
@@ -171,9 +171,9 @@ public class RestoreIntegrationTest {
         consumerConfig.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, IntegerDeserializer.class);
         consumerConfig.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, IntegerDeserializer.class);
 
-        final Consumer consumer  = new KafkaConsumer(consumerConfig);
+        final Consumer consumer = new KafkaConsumer(consumerConfig);
         final List<TopicPartition> partitions = Arrays.asList(new TopicPartition(inputStream, 0),
-                                                        new TopicPartition(inputStream, 1));
+                                                              new TopicPartition(inputStream, 1));
 
         consumer.assign(partitions);
         consumer.seekToEnd(partitions);
