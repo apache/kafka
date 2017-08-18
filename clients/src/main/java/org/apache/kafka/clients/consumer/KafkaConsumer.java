@@ -646,8 +646,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             this.clientId = clientId;
             String groupId = config.getString(ConsumerConfig.GROUP_ID_CONFIG);
 
-            LogContext loggerFactory = new LogContext("[Consumer clientId=" + clientId + " groupId=" + groupId + "]");
-            this.log = loggerFactory.logger(getClass());
+            LogContext logContext = new LogContext("[Consumer clientId=" + clientId + " groupId=" + groupId + "]");
+            this.log = logContext.logger(getClass());
 
             log.debug("Initializing the Kafka consumer");
             this.requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
@@ -718,7 +718,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     new ApiVersions(),
                     throttleTimeSensor);
             this.client = new ConsumerNetworkClient(
-                    loggerFactory,
+                    logContext,
                     netClient,
                     metadata,
                     time,
@@ -729,7 +729,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             List<PartitionAssignor> assignors = config.getConfiguredInstances(
                     ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG,
                     PartitionAssignor.class);
-            this.coordinator = new ConsumerCoordinator(loggerFactory,
+            this.coordinator = new ConsumerCoordinator(logContext,
                     this.client,
                     groupId,
                     config.getInt(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG),
@@ -748,7 +748,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     config.getBoolean(ConsumerConfig.EXCLUDE_INTERNAL_TOPICS_CONFIG),
                     config.getBoolean(ConsumerConfig.LEAVE_GROUP_ON_CLOSE_CONFIG));
             this.fetcher = new Fetcher<>(
-                    loggerFactory,
+                    logContext,
                     this.client,
                     config.getInt(ConsumerConfig.FETCH_MIN_BYTES_CONFIG),
                     config.getInt(ConsumerConfig.FETCH_MAX_BYTES_CONFIG),
