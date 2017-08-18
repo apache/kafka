@@ -359,8 +359,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         isLeader = true;
 
-        log.debug("Performing assignment using strategy {} with subscriptions {}",
-                groupId, assignor.name(), subscriptions);
+        log.debug("Performing assignment using strategy {} with subscriptions {}", assignor.name(), subscriptions);
 
         Map<String, Assignment> assignment = assignor.assign(metadata.fetch(), subscriptions);
 
@@ -672,7 +671,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 throw e;
             } catch (Exception e) {
                 // consistent with async auto-commit failures, we do not propagate the exception
-                log.warn("Auto-commit of offsets {} failed: {}", allConsumedOffsets, e);
+                log.warn("Auto-commit of offsets {} failed", allConsumedOffsets, e);
             }
         }
     }
