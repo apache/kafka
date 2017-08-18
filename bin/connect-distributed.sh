@@ -20,7 +20,7 @@ then
         exit 1
 fi
 
-base_dir=$(dirname $0)
+base_dir="$(dirname "$0")"
 
 if [ "x$KAFKA_LOG4J_OPTS" = "x" ]; then
     export KAFKA_LOG4J_OPTS="-Dlog4j.configuration=file:$base_dir/../config/connect-log4j.properties"
@@ -42,4 +42,4 @@ case $COMMAND in
     ;;
 esac
 
-exec $(dirname $0)/kafka-run-class.sh $EXTRA_ARGS org.apache.kafka.connect.cli.ConnectDistributed "$@"
+exec "$(dirname "$0")"/kafka-run-class.sh $EXTRA_ARGS org.apache.kafka.connect.cli.ConnectDistributed "$@"

@@ -45,7 +45,7 @@ should_include_file() {
   fi
 }
 
-base_dir=$(dirname $0)/..
+base_dir="$(dirname "$0")"/..
 
 if [ -z "$SCALA_VERSION" ]; then
   SCALA_VERSION=2.11.12
