@@ -206,7 +206,7 @@ class Partition(val topic: String,
       allReplicas.foreach(id => getOrCreateReplica(id, partitionStateInfo.isNew))
 
       zkVersion = partitionStateInfo.basePartitionState.zkVersion
-      val isNewLeader = !(leaderReplicaIdOpt.isDefined && leaderReplicaIdOpt.get == localBrokerId)
+      val isNewLeader = leaderReplicaIdOpt.map(_ != localBrokerId).getOrElse(true)
 
       val leaderReplica = getReplica().get
       val curLeaderLogEndOffset = leaderReplica.logEndOffset.messageOffset
@@ -216,15 +216,16 @@ class Partition(val topic: String,
         val lastCaughtUpTimeMs = if (inSyncReplicas.contains(replica)) curTimeMs else 0L
         replica.resetLastCaughtUpTime(curLeaderLogEndOffset, curTimeMs, lastCaughtUpTimeMs)
       }
-      // we may need to increment high watermark since ISR could be down to 1
+
       if (isNewLeader) {
         // construct the high watermark metadata for the new leader replica
         leaderReplica.convertHWToLocalOffsetMetadata()
-        // mark local replica as the leader
+        // mark local replica as the leader after converting hw
         leaderReplicaIdOpt = Some(localBrokerId)
         // reset log end offset for remote replicas
         assignedReplicas.filter(_.brokerId != localBrokerId).foreach(_.updateLogReadResult(LogReadResult.UnknownLogReadResult))
       }
+      // we may need to increment high watermark since ISR could be down to 1
       (maybeIncrementLeaderHW(leaderReplica), isNewLeader)
     }
     // some delayed operations may be unblocked after HW changed
