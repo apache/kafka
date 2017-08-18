@@ -226,6 +226,11 @@ public class NetworkClient implements KafkaClient {
         return false;
     }
 
+    // Visible for testing
+    boolean canConnect(Node node, long now) {
+        return connectionStates.canConnect(node.idString(), now);
+    }
+
     /**
      * Disconnects the connection to a particular node, if there is one.
      * Any pending ClientRequests for this connection will receive disconnections.
@@ -234,6 +239,9 @@ public class NetworkClient implements KafkaClient {
      */
     @Override
     public void disconnect(String nodeId) {
+        if (connectionStates.isDisconnected(nodeId))
+            return;
+
         selector.close(nodeId);
         List<ApiKeys> requestTypes = new ArrayList<>();
         long now = time.milliseconds();

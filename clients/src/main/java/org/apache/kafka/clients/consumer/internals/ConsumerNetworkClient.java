@@ -263,8 +263,7 @@ public class ConsumerNetworkClient implements Closeable {
     }
 
     /**
-     * Poll for network IO and return immediately. This will not trigger wakeups,
-     * nor will it execute any delayed tasks.
+     * Poll for network IO and return immediately. This will not trigger wakeups.
      */
     public void pollNoWakeup() {
         poll(0, time.milliseconds(), null, true);
@@ -374,6 +373,16 @@ public class ConsumerNetworkClient implements Closeable {
         }
     }
 
+    public void disconnect(Node node) {
+        synchronized (this) {
+            failUnsentRequests(node, DisconnectException.INSTANCE);
+            client.disconnect(node.idString());
+        }
+
+        // We need to poll to ensure callbacks from in-flight requests on the disconnected socket are fired
+        pollNoWakeup();
+    }
+
     private void failExpiredRequests(long now) {
         // clear all expired unsent requests and fail their corresponding futures
         Collection<ClientRequest> expiredRequests = unsent.removeExpiredRequests(now, unsentExpiryMs);
@@ -383,7 +392,7 @@ public class ConsumerNetworkClient implements Closeable {
         }
     }
 
-    public void failUnsentRequests(Node node, RuntimeException e) {
+    private void failUnsentRequests(Node node, RuntimeException e) {
         // clear unsent requests to node and fail their corresponding futures
         synchronized (this) {
             Collection<ClientRequest> unsentRequests = unsent.remove(node);

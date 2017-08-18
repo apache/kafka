@@ -64,6 +64,8 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.singleton;
@@ -82,6 +84,7 @@ public class WorkerSinkTaskTest {
     private static final String TOPIC = "test";
     private static final int PARTITION = 12;
     private static final int PARTITION2 = 13;
+    private static final int PARTITION3 = 14;
     private static final long FIRST_OFFSET = 45;
     private static final Schema KEY_SCHEMA = Schema.INT32_SCHEMA;
     private static final int KEY = 12;
@@ -92,6 +95,7 @@ public class WorkerSinkTaskTest {
 
     private static final TopicPartition TOPIC_PARTITION = new TopicPartition(TOPIC, PARTITION);
     private static final TopicPartition TOPIC_PARTITION2 = new TopicPartition(TOPIC, PARTITION2);
+    private static final TopicPartition TOPIC_PARTITION3 = new TopicPartition(TOPIC, PARTITION3);
 
     private static final Map<String, String> TASK_PROPS = new HashMap<>();
     static {
@@ -122,7 +126,8 @@ public class WorkerSinkTaskTest {
     private KafkaConsumer<byte[], byte[]> consumer;
     private Capture<ConsumerRebalanceListener> rebalanceListener = EasyMock.newCapture();
 
-    private long recordsReturned;
+    private long recordsReturnedTp1;
+    private long recordsReturnedTp3;
 
     @Before
     public void setUp() {
@@ -141,7 +146,8 @@ public class WorkerSinkTaskTest {
                 WorkerSinkTask.class, new String[]{"createConsumer"},
                 taskId, sinkTask, statusListener, initialState, workerConfig, keyConverter, valueConverter, transformationChain, pluginLoader, time);
 
-        recordsReturned = 0;
+        recordsReturnedTp1 = 0;
+        recordsReturnedTp3 = 0;
     }
 
     @Test
@@ -636,6 +642,240 @@ public class WorkerSinkTaskTest {
         PowerMock.verifyAll();
     }
 
+    // Verify that when commitAsync is called but the supplied callback is not called by the consumer before a
+    // rebalance occurs, the async callback does not reset the last committed offset from the rebalance.
+    // See KAFKA-5731 for more information.
+    @Test
+    public void testCommitWithOutOfOrderCallback() throws Exception {
+        expectInitializeTask();
+
+        // iter 1
+        expectPollInitialAssignment();
+
+        // iter 2
+        expectConsumerPoll(1);
+        expectConversionAndTransformation(4);
+        sinkTask.put(EasyMock.<Collection<SinkRecord>>anyObject());
+        EasyMock.expectLastCall();
+
+        final Map<TopicPartition, OffsetAndMetadata> workerStartingOffsets = new HashMap<>();
+        workerStartingOffsets.put(TOPIC_PARTITION, new OffsetAndMetadata(FIRST_OFFSET));
+        workerStartingOffsets.put(TOPIC_PARTITION2, new OffsetAndMetadata(FIRST_OFFSET));
+
+        final Map<TopicPartition, OffsetAndMetadata> workerCurrentOffsets = new HashMap<>();
+        workerCurrentOffsets.put(TOPIC_PARTITION, new OffsetAndMetadata(FIRST_OFFSET + 1));
+        workerCurrentOffsets.put(TOPIC_PARTITION2, new OffsetAndMetadata(FIRST_OFFSET));
+
+        final List<TopicPartition> originalPartitions = asList(TOPIC_PARTITION, TOPIC_PARTITION2);
+        final List<TopicPartition> rebalancedPartitions = asList(TOPIC_PARTITION, TOPIC_PARTITION2, TOPIC_PARTITION3);
+        final Map<TopicPartition, OffsetAndMetadata> rebalanceOffsets = new HashMap<>();
+        rebalanceOffsets.put(TOPIC_PARTITION, workerCurrentOffsets.get(TOPIC_PARTITION));
+        rebalanceOffsets.put(TOPIC_PARTITION2, workerCurrentOffsets.get(TOPIC_PARTITION2));
+        rebalanceOffsets.put(TOPIC_PARTITION3, new OffsetAndMetadata(FIRST_OFFSET));
+
+        final Map<TopicPartition, OffsetAndMetadata> postRebalanceCurrentOffsets = new HashMap<>();
+        postRebalanceCurrentOffsets.put(TOPIC_PARTITION, new OffsetAndMetadata(FIRST_OFFSET + 3));
+        postRebalanceCurrentOffsets.put(TOPIC_PARTITION2, new OffsetAndMetadata(FIRST_OFFSET));
+        postRebalanceCurrentOffsets.put(TOPIC_PARTITION3, new OffsetAndMetadata(FIRST_OFFSET + 2));
+
+        // iter 3 - note that we return the current offset to indicate they should be committed
+        sinkTask.preCommit(workerCurrentOffsets);
+        EasyMock.expectLastCall().andReturn(workerCurrentOffsets);
+
+        // We need to delay the result of trying to commit offsets to Kafka via the consumer.commitAsync
+        // method. We do this so that we can test that the callback is not called until after the rebalance
+        // changes the lastCommittedOffsets. To fake this for tests we have the commitAsync build a function
+        // that will call the callback with the appropriate parameters, and we'll run that function later.
+        final AtomicReference<Runnable> asyncCallbackRunner = new AtomicReference<>();
+        final AtomicBoolean asyncCallbackRan = new AtomicBoolean();
+
+        consumer.commitAsync(EasyMock.eq(workerCurrentOffsets), EasyMock.<OffsetCommitCallback>anyObject());
+        EasyMock.expectLastCall().andAnswer(new IAnswer<Void>() {
+            @SuppressWarnings("unchecked")
+            @Override
+            public Void answer() throws Throwable {
+                // Grab the arguments passed to the consumer.commitAsync method
+                final Object[] args = EasyMock.getCurrentArguments();
+                final Map<TopicPartition, OffsetAndMetadata> offsets = (Map<TopicPartition, OffsetAndMetadata>) args[0];
+                final OffsetCommitCallback callback = (OffsetCommitCallback) args[1];
+                asyncCallbackRunner.set(new Runnable() {
+                    @Override
+                    public void run() {
+                        callback.onComplete(offsets, null);
+                        asyncCallbackRan.set(true);
+                    }
+                });
+                return null;
+            }
+        });
+
+        // Expect the next poll to discover and perform the rebalance, THEN complete the previous callback handler,
+        // and then return one record for TP1 and one for TP3.
+        final AtomicBoolean rebalanced = new AtomicBoolean();
+        EasyMock.expect(consumer.poll(EasyMock.anyLong())).andAnswer(
+                new IAnswer<ConsumerRecords<byte[], byte[]>>() {
+                    @Override
+                    public ConsumerRecords<byte[], byte[]> answer() throws Throwable {
+                        // Rebalance always begins with revoking current partitions ...
+                        rebalanceListener.getValue().onPartitionsRevoked(originalPartitions);
+                        // Respond to the rebalance
+                        Map<TopicPartition, Long> offsets = new HashMap<>();
+                        offsets.put(TOPIC_PARTITION, rebalanceOffsets.get(TOPIC_PARTITION).offset());
+                        offsets.put(TOPIC_PARTITION2, rebalanceOffsets.get(TOPIC_PARTITION2).offset());
+                        offsets.put(TOPIC_PARTITION3, rebalanceOffsets.get(TOPIC_PARTITION3).offset());
+                        sinkTaskContext.getValue().offset(offsets);
+                        rebalanceListener.getValue().onPartitionsAssigned(rebalancedPartitions);
+                        rebalanced.set(true);
+
+                        // Run the previous async commit handler
+                        asyncCallbackRunner.get().run();
+
+                         // And prep the two records to return
+                        long timestamp = RecordBatch.NO_TIMESTAMP;
+                        TimestampType timestampType = TimestampType.NO_TIMESTAMP_TYPE;
+                        List<ConsumerRecord<byte[], byte[]>> records = new ArrayList<>();
+                        records.add(new ConsumerRecord<>(TOPIC, PARTITION, FIRST_OFFSET + recordsReturnedTp1 + 1, timestamp, timestampType, 0L, 0, 0, RAW_KEY, RAW_VALUE));
+                        records.add(new ConsumerRecord<>(TOPIC, PARTITION3, FIRST_OFFSET + recordsReturnedTp3 + 1, timestamp, timestampType, 0L, 0, 0, RAW_KEY, RAW_VALUE));
+                        recordsReturnedTp1 += 1;
+                        recordsReturnedTp3 += 1;
+                        return new ConsumerRecords<>(Collections.singletonMap(new TopicPartition(TOPIC, PARTITION), records));
+                    }
+                });
+
+        // onPartitionsRevoked
+        sinkTask.preCommit(workerCurrentOffsets);
+        EasyMock.expectLastCall().andReturn(workerCurrentOffsets);
+        sinkTask.put(EasyMock.<Collection<SinkRecord>>anyObject());
+        EasyMock.expectLastCall();
+        sinkTask.close(workerCurrentOffsets.keySet());
+        EasyMock.expectLastCall();
+        consumer.commitSync(workerCurrentOffsets);
+        EasyMock.expectLastCall();
+
+        // onPartitionsAssigned - step 1
+        final long offsetTp1 = rebalanceOffsets.get(TOPIC_PARTITION).offset();
+        final long offsetTp2 = rebalanceOffsets.get(TOPIC_PARTITION2).offset();
+        final long offsetTp3 = rebalanceOffsets.get(TOPIC_PARTITION3).offset();
+        EasyMock.expect(consumer.position(TOPIC_PARTITION)).andReturn(offsetTp1);
+        EasyMock.expect(consumer.position(TOPIC_PARTITION2)).andReturn(offsetTp2);
+        EasyMock.expect(consumer.position(TOPIC_PARTITION3)).andReturn(offsetTp3);
+
+        // onPartitionsAssigned - step 2
+        sinkTask.open(rebalancedPartitions);
+        EasyMock.expectLastCall();
+
+        // onPartitionsAssigned - step 3 rewind
+        consumer.seek(TOPIC_PARTITION, offsetTp1);
+        EasyMock.expectLastCall();
+        consumer.seek(TOPIC_PARTITION2, offsetTp2);
+        EasyMock.expectLastCall();
+        consumer.seek(TOPIC_PARTITION3, offsetTp3);
+        EasyMock.expectLastCall();
+
+        // iter 4 - note that we return the current offset to indicate they should be committed
+        sinkTask.preCommit(postRebalanceCurrentOffsets);
+        EasyMock.expectLastCall().andReturn(postRebalanceCurrentOffsets);
+
+        final Capture<OffsetCommitCallback> callback = EasyMock.newCapture();
+        consumer.commitAsync(EasyMock.eq(postRebalanceCurrentOffsets), EasyMock.capture(callback));
+        EasyMock.expectLastCall().andAnswer(new IAnswer<Void>() {
+            @Override
+            public Void answer() throws Throwable {
+                callback.getValue().onComplete(postRebalanceCurrentOffsets, null);
+                return null;
+            }
+        });
+
+        // no actual consumer.commit() triggered
+        expectConsumerPoll(1);
+
+        sinkTask.put(EasyMock.<Collection<SinkRecord>>anyObject());
+        EasyMock.expectLastCall();
+
+        PowerMock.replayAll();
+
+        workerTask.initialize(TASK_CONFIG);
+        workerTask.initializeAndStart();
+        workerTask.iteration(); // iter 1 -- initial assignment
+
+        assertEquals(workerStartingOffsets, Whitebox.getInternalState(workerTask, "currentOffsets"));
+        assertEquals(workerStartingOffsets, Whitebox.getInternalState(workerTask, "lastCommittedOffsets"));
+
+        time.sleep(WorkerConfig.OFFSET_COMMIT_TIMEOUT_MS_DEFAULT);
+        workerTask.iteration(); // iter 2 -- deliver 2 records
+
+        sinkTaskContext.getValue().requestCommit();
+        workerTask.iteration(); // iter 3 -- commit in progress
+
+        assertTrue(asyncCallbackRan.get());
+        assertTrue(rebalanced.get());
+
+        // Check that the offsets were not reset by the out-of-order async commit callback
+        assertEquals(postRebalanceCurrentOffsets, Whitebox.getInternalState(workerTask, "currentOffsets"));
+        assertEquals(rebalanceOffsets, Whitebox.getInternalState(workerTask, "lastCommittedOffsets"));
+
+        time.sleep(WorkerConfig.OFFSET_COMMIT_TIMEOUT_MS_DEFAULT);
+        sinkTaskContext.getValue().requestCommit();
+        workerTask.iteration(); // iter 4 -- commit in progress
+
+        // Check that the offsets were not reset by the out-of-order async commit callback
+        assertEquals(postRebalanceCurrentOffsets, Whitebox.getInternalState(workerTask, "currentOffsets"));
+        assertEquals(postRebalanceCurrentOffsets, Whitebox.getInternalState(workerTask, "lastCommittedOffsets"));
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testDeliveryWithMutatingTransform() throws Exception {
+        expectInitializeTask();
+
+        expectPollInitialAssignment();
+
+        expectConsumerPoll(1);
+        expectConversionAndTransformation(1, "newtopic_");
+        sinkTask.put(EasyMock.<Collection<SinkRecord>>anyObject());
+        EasyMock.expectLastCall();
+
+        final Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
+        offsets.put(TOPIC_PARTITION, new OffsetAndMetadata(FIRST_OFFSET + 1));
+        offsets.put(TOPIC_PARTITION2, new OffsetAndMetadata(FIRST_OFFSET));
+        sinkTask.preCommit(offsets);
+        EasyMock.expectLastCall().andReturn(offsets);
+
+        final Capture<OffsetCommitCallback> callback = EasyMock.newCapture();
+        consumer.commitAsync(EasyMock.eq(offsets), EasyMock.capture(callback));
+        EasyMock.expectLastCall().andAnswer(new IAnswer<Void>() {
+            @Override
+            public Void answer() throws Throwable {
+                callback.getValue().onComplete(offsets, null);
+                return null;
+            }
+        });
+
+        expectConsumerPoll(0);
+        sinkTask.put(Collections.<SinkRecord>emptyList());
+        EasyMock.expectLastCall();
+
+        PowerMock.replayAll();
+
+        workerTask.initialize(TASK_CONFIG);
+        workerTask.initializeAndStart();
+
+        workerTask.iteration(); // initial assignment
+
+        workerTask.iteration(); // first record delivered
+
+        sinkTaskContext.getValue().requestCommit();
+        assertTrue(sinkTaskContext.getValue().isCommitRequested());
+        assertNotEquals(offsets, Whitebox.<Map<TopicPartition, OffsetAndMetadata>>getInternalState(workerTask, "lastCommittedOffsets"));
+        workerTask.iteration(); // triggers the commit
+        assertFalse(sinkTaskContext.getValue().isCommitRequested()); // should have been cleared
+        assertEquals(offsets, Whitebox.<Map<TopicPartition, OffsetAndMetadata>>getInternalState(workerTask, "lastCommittedOffsets"));
+        assertEquals(0, workerTask.commitFailures());
+
+        PowerMock.verifyAll();
+    }
+
     @Test
     public void testMissingTimestampPropagation() throws Exception {
         expectInitializeTask();
@@ -704,6 +944,9 @@ public class WorkerSinkTaskTest {
 
         sinkTask.close(new HashSet<>(partitions));
         EasyMock.expectLastCall().andThrow(e);
+
+        sinkTask.preCommit(EasyMock.<Map<TopicPartition, OffsetAndMetadata>>anyObject());
+        EasyMock.expectLastCall().andReturn(Collections.emptyMap());
 
         EasyMock.expect(consumer.poll(EasyMock.anyLong())).andAnswer(
                 new IAnswer<ConsumerRecords<byte[], byte[]>>() {
@@ -778,8 +1021,8 @@ public class WorkerSinkTaskTest {
                     public ConsumerRecords<byte[], byte[]> answer() throws Throwable {
                         List<ConsumerRecord<byte[], byte[]>> records = new ArrayList<>();
                         for (int i = 0; i < numMessages; i++)
-                            records.add(new ConsumerRecord<>(TOPIC, PARTITION, FIRST_OFFSET + recordsReturned + i, timestamp, timestampType, 0L, 0, 0, RAW_KEY, RAW_VALUE));
-                        recordsReturned += numMessages;
+                            records.add(new ConsumerRecord<>(TOPIC, PARTITION, FIRST_OFFSET + recordsReturnedTp1 + i, timestamp, timestampType, 0L, 0, 0, RAW_KEY, RAW_VALUE));
+                        recordsReturnedTp1 += numMessages;
                         return new ConsumerRecords<>(
                                 numMessages > 0 ?
                                         Collections.singletonMap(new TopicPartition(TOPIC, PARTITION), records) :
@@ -790,6 +1033,10 @@ public class WorkerSinkTaskTest {
     }
 
     private void expectConversionAndTransformation(final int numMessages) {
+        expectConversionAndTransformation(numMessages, null);
+    }
+
+    private void expectConversionAndTransformation(final int numMessages, final String topicPrefix) {
         EasyMock.expect(keyConverter.toConnectData(TOPIC, RAW_KEY)).andReturn(new SchemaAndValue(KEY_SCHEMA, KEY)).times(numMessages);
         EasyMock.expect(valueConverter.toConnectData(TOPIC, RAW_VALUE)).andReturn(new SchemaAndValue(VALUE_SCHEMA, VALUE)).times(numMessages);
 
@@ -798,7 +1045,18 @@ public class WorkerSinkTaskTest {
                 .andAnswer(new IAnswer<SinkRecord>() {
                     @Override
                     public SinkRecord answer() {
-                        return recordCapture.getValue();
+                        SinkRecord origRecord = recordCapture.getValue();
+                        return topicPrefix != null && !topicPrefix.isEmpty()
+                               ? origRecord.newRecord(
+                                       topicPrefix + origRecord.topic(),
+                                       origRecord.kafkaPartition(),
+                                       origRecord.keySchema(),
+                                       origRecord.key(),
+                                       origRecord.valueSchema(),
+                                       origRecord.value(),
+                                       origRecord.timestamp()
+                               )
+                               : origRecord;
                     }
                 }).times(numMessages);
     }
