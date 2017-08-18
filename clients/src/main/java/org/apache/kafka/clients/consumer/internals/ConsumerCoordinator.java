@@ -665,7 +665,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             try {
                 log.debug("Sending synchronous auto-commit of offsets {}", allConsumedOffsets);
                 if (!commitOffsetsSync(allConsumedOffsets, timeoutMs))
-                    log.debug("Auto-commit of offsets {} timed out before completion", allConsumedOffsets, groupId);
+                    log.debug("Auto-commit of offsets {} timed out before completion", allConsumedOffsets);
             } catch (WakeupException | InterruptException e) {
                 log.debug("Auto-commit of offsets {} was interrupted before completion", allConsumedOffsets);
                 // rethrow wakeups since they are triggered by the user
