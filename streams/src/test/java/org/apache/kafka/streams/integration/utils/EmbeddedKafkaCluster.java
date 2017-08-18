@@ -39,7 +39,7 @@ import java.util.Properties;
 import java.util.Set;
 
 /**
- * Runs an in-memory, "embedded" Kafka cluster with 1 ZooKeeper instance and 1 Kafka broker.
+ * Runs an in-memory, "embedded" Kafka cluster with 1 ZooKeeper instance and numBroker Kafka brokers.
  */
 public class EmbeddedKafkaCluster extends ExternalResource {
 

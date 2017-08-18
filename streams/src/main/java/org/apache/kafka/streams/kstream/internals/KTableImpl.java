@@ -29,18 +29,23 @@ import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
+import org.apache.kafka.streams.kstream.internals.onetomany.KTableJoinMergeProcessorSupplier;
+import org.apache.kafka.streams.kstream.internals.onetomany.KTableKTableRangeJoin;
 import org.apache.kafka.streams.kstream.internals.onetomany.KTableRepartitionerProcessorSupplier;
+import org.apache.kafka.streams.kstream.internals.onetomany.PartialKeyPartitioner;
 import org.apache.kafka.streams.kstream.internals.onetomany.RangeKeyValueGetterProviderAndProcessorSupplier;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.Stores;
 
 import java.io.FileNotFoundException;
 import java.io.PrintWriter;
 import java.io.UnsupportedEncodingException;
 import java.nio.charset.StandardCharsets;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.Objects;
 import java.util.Set;
@@ -73,8 +78,12 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     public static final String SOURCE_NAME = "KTABLE-SOURCE-";
 
     private static final String TOSTREAM_NAME = "KTABLE-TOSTREAM-";
+    
+    private static final String REPARTITION_NAME = "KTABLE-REPARTITION-";
 
     public static final String STATE_STORE_NAME = "STATE-STORE-";
+    
+    public static final String BY_RANGE = "KTABLE-JOIN-BYRANGE-";
 
     private final ProcessorSupplier<?, ?> processorSupplier;
 
@@ -634,11 +643,11 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
 		((KTableImpl<?,?,?>) other).enableSendingOldValues();
 		enableSendingOldValues();
 	
-        String repartitionerName = topology.newName(name + REPARTITON_RIGHT);
-        final String repartitionTopicName = name + "-joiner-repartition";
+        String repartitionerName = topology.newName(REPARTITION_NAME);
+        final String repartitionTopicName = name + "-" + JOINOTHER_NAME;
 
         topology.addInternalTopic(repartitionTopicName);
-        final String repartitionProcessorName = repartitionerName + "-processor";
+        final String repartitionProcessorName = repartitionerName + "-" + SELECT_NAME;
         final String repartitionSourceName = repartitionerName + "-source";
         final String repartitionSinkName = repartitionerName + "-sink";
         final String repartitionReceiverName = repartitionerName + "-table";
@@ -649,7 +658,8 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         
         topology.addProcessor(repartitionProcessorName, repartitionProcessor, ((AbstractStream<?>)other).sourceNodes.toArray(new String[0]));
 
-        PartialKeyPartitioner<K0, V, KO> partitioner = new PartialKeyPartitioner<>(leftKeyExtractor, keySerde, repartitionTopicName);
+        PartialKeyPartitioner<K0, V, K> partitioner = new PartialKeyPartitioner<>(leftKeyExtractor, keySerde, repartitionTopicName);
+        
         topology.addSink(repartitionSinkName, repartitionTopicName,
                 joinKeySerde.serializer(), valueOtherSerde.serializer(),
                 partitioner, repartitionProcessorName);
@@ -663,38 +673,32 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         
         topology.copartitionSources(sourcesNeedCopartitioning);
 
-        String joinName = topology.newName(JOINER);
-        String joinByRangeProcessor = joinName + "-BY_RANGE";
+        
+        String joinByRangeProcessor = topology.newName(BY_RANGE);
 
 
         final RangeKeyValueGetterProviderAndProcessorSupplier<K0, V0, K, V, VO> joinThis =
                 new RangeKeyValueGetterProviderAndProcessorSupplier(repartitionTopicName, ((KTableImpl<?, ?, ?>) other).valueGetterSupplier(), leftKeyExtractor, joiner);
         topology.addProcessor(repartitionReceiverName, joinThis, repartitionSourceName);
 
-        StateStoreSupplier aggregateStore = Stores.create(repartitionTopicName)
+        StateStoreSupplier repartitionStateStore = Stores.create(repartitionTopicName)
                 .withKeys(joinKeySerde)
-                .withValues(valueRightSerde)
+                .withValues(valueOtherSerde)
                 .persistent()
                 .build();
 
-        topology.addStateStore(aggregateStore, repartitionReceiverName);
+        topology.addStateStore(repartitionStateStore, repartitionReceiverName);
 
-        KTableKTableRangeJoin<K, V, KL, VL, VR> joinByRange = new KTableKTableRangeJoin<>(joinThis, joiner, joinPrefixFaker);
-        topology.addProcessor(joinByRangeProcessor, joinByRange, extractSourceName(left));
+        KTableKTableRangeJoin<K0, V0, K, V, VO> joinByRange = new KTableKTableRangeJoin<>(joinThis, joiner, joinPrefixFaker);
+        topology.addProcessor(joinByRangeProcessor, joinByRange, this.name);
 
         String joinOutputName = topology.newName(name + "-JOIN_OUTPUT");
         String joinOutputTableSource = joinOutputName + "-TABLESOURCE";
 
-        KTableJoinMergeProcessorSupplier<K, V, KL, VL, KR, VR> kts = new KTableJoinMergeProcessorSupplier<K,V,KL,VL,KR,VR>(left, joinThis, leftKeyExtractor, joiner);
+        KTableJoinMergeProcessorSupplier<K0, V0, K, V, KO, VO> kts = new KTableJoinMergeProcessorSupplier<>(this, joinThis, leftKeyExtractor, joiner);
         topology.addProcessor(joinOutputTableSource, kts, joinByRangeProcessor, repartitionReceiverName);
-        return new KTableImpl<K, V, V>(topology, joinOutputTableSource, kts, new HashSet<String>(sourcesNeedCopartitioning), joinKeySerde, joinValueSerde);
+        return new KTableImpl<K0,V,V0>(topology, joinOutputTableSource, kts, joinKeySerde, joinValueSerde,new HashSet<String>(sourcesNeedCopartitioning),null,false);
 
-	}
-		
-		
-		
-		
-		return null;
 	}
 
 }
