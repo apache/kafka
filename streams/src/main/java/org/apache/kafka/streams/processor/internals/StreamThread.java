@@ -806,11 +806,13 @@ public class StreamThread extends Thread implements ThreadDataProvider {
                 totalProcessedSinceLastMaybeCommit = 0;
                 maybeCommit(timerStartedMs);
             }
+            // commit any tasks that have requested a commit
+            final int committed = taskManager.maybeCommitActiveTasks();
+            if (committed > 0) {
+                streamsMetrics.commitTimeSensor.record(computeLatency() / (double) committed, timerStartedMs);
+            }
         } while (processed != 0);
 
-        // go over the tasks again to maybe commit
-        final int committed = taskManager.maybeCommitActiveTasks();
-        streamsMetrics.commitTimeSensor.record(computeLatency() / (double) committed, timerStartedMs);
         return totalProcessedSinceLastMaybeCommit;
     }
 
@@ -863,7 +865,9 @@ public class StreamThread extends Thread implements ThreadDataProvider {
             }
 
             int committed = taskManager.commitAll();
-            streamsMetrics.commitTimeSensor.record(computeLatency() / (double) committed, timerStartedMs);
+            if (committed > 0) {
+                streamsMetrics.commitTimeSensor.record(computeLatency() / (double) committed, timerStartedMs);
+            }
             if (log.isDebugEnabled()) {
                 log.info("{} Committed all active tasks {} and standby tasks {} in {}ms",
                         logPrefix,  taskManager.activeTaskIds(), taskManager.standbyTaskIds(), timerStartedMs - now);

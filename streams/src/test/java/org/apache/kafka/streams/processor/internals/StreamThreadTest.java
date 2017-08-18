@@ -23,20 +23,16 @@ import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.internals.PartitionAssignor;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.clients.producer.Producer;
-import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.kstream.internals.InternalStreamsBuilder;
 import org.apache.kafka.streams.kstream.internals.InternalStreamsBuilderTest;
-import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.assignment.AssignmentInfo;
 import org.apache.kafka.streams.state.HostInfo;
@@ -53,10 +49,8 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.lang.reflect.Field;
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -121,31 +115,6 @@ public class StreamThreadTest {
         new PartitionInfo("topic3", 2, Node.noNode(), new Node[0], new Node[0])
     );
 
-    private final Cluster metadata = new Cluster(
-        "cluster",
-        Collections.singleton(Node.noNode()),
-        infos,
-        Collections.<String>emptySet(),
-        Collections.<String>emptySet());
-
-    private final PartitionAssignor.Subscription subscription =
-        new PartitionAssignor.Subscription(Arrays.asList("topic1", "topic2", "topic3"), subscriptionUserData());
-
-    private ByteBuffer subscriptionUserData() {
-        final UUID uuid = UUID.randomUUID();
-        final ByteBuffer buf = ByteBuffer.allocate(4 + 16 + 4 + 4);
-        // version
-        buf.putInt(1);
-        // encode client processId
-        buf.putLong(uuid.getMostSignificantBits());
-        buf.putLong(uuid.getLeastSignificantBits());
-        // previously running tasks
-        buf.putInt(0);
-        // cached tasks
-        buf.putInt(0);
-        buf.rewind();
-        return buf;
-    }
 
     // task0 is unused
     private final TaskId task1 = new TaskId(0, 1);
@@ -169,88 +138,6 @@ public class StreamThreadTest {
         };
     }
 
-    private static class TestStreamTask extends StreamTask {
-        boolean committed = false;
-        private boolean suspended;
-        private boolean closed;
-        private boolean closedStateManager;
-        private static StateRestoreListener stateRestoreListener = new MockStateRestoreListener();
-
-        TestStreamTask(final TaskId id,
-                       final String applicationId,
-                       final Collection<TopicPartition> partitions,
-                       final ProcessorTopology topology,
-                       final Consumer<byte[], byte[]> consumer,
-                       final Producer<byte[], byte[]> producer,
-                       final Consumer<byte[], byte[]> restoreConsumer,
-                       final StreamsConfig config,
-                       final StreamsMetrics metrics,
-                       final StateDirectory stateDirectory) {
-            super(id,
-                applicationId,
-                partitions,
-                topology,
-                consumer,
-                new StoreChangelogReader(restoreConsumer, Time.SYSTEM, 5000, stateRestoreListener),
-                config,
-                metrics,
-                stateDirectory,
-                null,
-                new MockTime(),
-                producer);
-        }
-
-        @Override
-        void commit(final boolean startNewTransaction) {
-            super.commit(startNewTransaction);
-            committed = true;
-        }
-
-        @Override
-        protected void updateOffsetLimits() {}
-
-        @Override
-        public void resume() {
-            if (!suspended || closed) {
-                throw new IllegalStateException("Should not resume task that is not suspended or already closed.");
-            }
-            super.resume();
-            suspended = false;
-        }
-
-        @Override
-        void suspend(final boolean clean) {
-            if (suspended || closed) {
-                throw new IllegalStateException("Should not suspend task that is already suspended or closed.");
-            }
-            super.suspend(clean);
-            suspended = true;
-        }
-
-        @Override
-        public void close(final boolean clean) {
-            if (closed && clean) {
-                throw new IllegalStateException("Should not close task that is already closed.");
-            }
-            super.close(clean);
-            closed = true;
-        }
-
-        @Override
-        public void closeSuspended(final boolean clean, final RuntimeException firstException) {
-            if (closed && clean) {
-                throw new IllegalStateException("Should not close task that is not suspended or already closed.");
-            }
-            super.closeSuspended(clean, firstException);
-            closed = true;
-        }
-
-        @Override
-        void closeStateManager(final boolean writeCheckpoint) {
-            super.closeStateManager(writeCheckpoint);
-            closedStateManager = true;
-        }
-    }
 
     @SuppressWarnings("unchecked")
     @Test
@@ -647,7 +534,7 @@ public class StreamThreadTest {
 
         final StreamsConfig config = new StreamsConfig(props);
         final Consumer<byte[], byte[]> consumer = EasyMock.createNiceMock(Consumer.class);
-        final TaskManager taskManager = mockTaskMangerCommit(consumer, 1);
+        final TaskManager taskManager = mockTaskMangerCommit(consumer, 1, 1);
 
         StreamThread.StreamsMetricsThreadImpl streamsMetrics = new StreamThread.StreamsMetricsThreadImpl(metrics, "", "", Collections.<String, String>emptyMap());
         final StreamThread thread = new StreamThread(internalTopologyBuilder,
@@ -669,6 +556,38 @@ public class StreamThreadTest {
         EasyMock.verify(taskManager);
     }
 
+    @SuppressWarnings({"unchecked", "ThrowableNotThrown"})
+    @Test
+    public void shouldNotCauseExceptionIfNothingCommited() {
+        final long commitInterval = 1000L;
+        final Properties props = configProps(false);
+        props.setProperty(StreamsConfig.STATE_DIR_CONFIG, stateDir);
+        props.setProperty(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, Long.toString(commitInterval));
+
+        final StreamsConfig config = new StreamsConfig(props);
+        final Consumer<byte[], byte[]> consumer = EasyMock.createNiceMock(Consumer.class);
+        final TaskManager taskManager = mockTaskMangerCommit(consumer, 1, 0);
+
+        StreamThread.StreamsMetricsThreadImpl streamsMetrics = new StreamThread.StreamsMetricsThreadImpl(metrics, "", "", Collections.<String, String>emptyMap());
+        final StreamThread thread = new StreamThread(internalTopologyBuilder,
+                                                     clientId,
+                                                     "",
+                                                     config,
+                                                     processId,
+                                                     mockTime,
+                                                     streamsMetadataState,
+                                                     taskManager,
+                                                     streamsMetrics,
+                                                     clientSupplier,
+                                                     consumer,
+                                                     stateDirectory);
+        thread.maybeCommit(mockTime.milliseconds());
+        mockTime.sleep(commitInterval - 10L);
+        thread.maybeCommit(mockTime.milliseconds());
+
+        EasyMock.verify(taskManager);
+    }
+    
 
     @SuppressWarnings("unchecked")
     @Test
@@ -680,7 +599,7 @@ public class StreamThreadTest {
 
         final StreamsConfig config = new StreamsConfig(props);
         final Consumer<byte[], byte[]> consumer = EasyMock.createNiceMock(Consumer.class);
-        final TaskManager taskManager = mockTaskMangerCommit(consumer, 2);
+        final TaskManager taskManager = mockTaskMangerCommit(consumer, 2, 1);
 
         StreamThread.StreamsMetricsThreadImpl streamsMetrics = new StreamThread.StreamsMetricsThreadImpl(metrics, "", "", Collections.<String, String>emptyMap());
         final StreamThread thread = new StreamThread(internalTopologyBuilder,
@@ -703,11 +622,11 @@ public class StreamThreadTest {
     }
 
     @SuppressWarnings({"ThrowableNotThrown", "unchecked"})
-    private TaskManager mockTaskMangerCommit(final Consumer<byte[], byte[]> consumer, final int numberOfCommits) {
+    private TaskManager mockTaskMangerCommit(final Consumer<byte[], byte[]> consumer, final int numberOfCommits, final int commits) {
         final TaskManager taskManager = EasyMock.createMock(TaskManager.class);
         taskManager.setConsumer(EasyMock.anyObject(Consumer.class));
         EasyMock.expectLastCall();
-        EasyMock.expect(taskManager.commitAll()).andReturn(1).times(numberOfCommits);
+        EasyMock.expect(taskManager.commitAll()).andReturn(commits).times(numberOfCommits);
         EasyMock.replay(taskManager, consumer);
         return taskManager;
     }
