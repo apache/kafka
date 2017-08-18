@@ -285,32 +285,37 @@ object ProducerStateManager {
     new Field(ProducerEntriesField, new ArrayOf(ProducerSnapshotEntrySchema), "The entries in the producer table"))
 
   def readSnapshot(file: File): Iterable[ProducerIdEntry] = {
-    val buffer = Files.readAllBytes(file.toPath)
-    val struct = PidSnapshotMapSchema.read(ByteBuffer.wrap(buffer))
+    try {
+      val buffer = Files.readAllBytes(file.toPath)
+      val struct = PidSnapshotMapSchema.read(ByteBuffer.wrap(buffer))
 
-    val version = struct.getShort(VersionField)
-    if (version != ProducerSnapshotVersion)
-      throw new IllegalArgumentException(s"Unhandled snapshot file version $version")
+      val version = struct.getShort(VersionField)
+      if (version != ProducerSnapshotVersion)
+        throw new CorruptSnapshotException(s"Snapshot contained an unknown file version $version")
 
-    val crc = struct.getUnsignedInt(CrcField)
-    val computedCrc =  Crc32C.compute(buffer, ProducerEntriesOffset, buffer.length - ProducerEntriesOffset)
-    if (crc != computedCrc)
-      throw new CorruptSnapshotException(s"Snapshot file '$file' is corrupted (CRC is no longer valid). " +
-        s"Stored crc: $crc. Computed crc: $computedCrc")
+      val crc = struct.getUnsignedInt(CrcField)
+      val computedCrc =  Crc32C.compute(buffer, ProducerEntriesOffset, buffer.length - ProducerEntriesOffset)
+      if (crc != computedCrc)
+        throw new CorruptSnapshotException(s"Snapshot is corrupt (CRC is no longer valid). " +
+          s"Stored crc: $crc. Computed crc: $computedCrc")
 
-    struct.getArray(ProducerEntriesField).map { producerEntryObj =>
-      val producerEntryStruct = producerEntryObj.asInstanceOf[Struct]
-      val producerId: Long = producerEntryStruct.getLong(ProducerIdField)
-      val producerEpoch = producerEntryStruct.getShort(ProducerEpochField)
-      val seq = producerEntryStruct.getInt(LastSequenceField)
-      val offset = producerEntryStruct.getLong(LastOffsetField)
-      val timestamp = producerEntryStruct.getLong(TimestampField)
-      val offsetDelta = producerEntryStruct.getInt(OffsetDeltaField)
-      val coordinatorEpoch = producerEntryStruct.getInt(CoordinatorEpochField)
-      val currentTxnFirstOffset = producerEntryStruct.getLong(CurrentTxnFirstOffsetField)
-      val newEntry = ProducerIdEntry(producerId, producerEpoch, seq, offset, offsetDelta, timestamp,
-        coordinatorEpoch, if (currentTxnFirstOffset >= 0) Some(currentTxnFirstOffset) else None)
-      newEntry
+      struct.getArray(ProducerEntriesField).map { producerEntryObj =>
+        val producerEntryStruct = producerEntryObj.asInstanceOf[Struct]
+        val producerId: Long = producerEntryStruct.getLong(ProducerIdField)
+        val producerEpoch = producerEntryStruct.getShort(ProducerEpochField)
+        val seq = producerEntryStruct.getInt(LastSequenceField)
+        val offset = producerEntryStruct.getLong(LastOffsetField)
+        val timestamp = producerEntryStruct.getLong(TimestampField)
+        val offsetDelta = producerEntryStruct.getInt(OffsetDeltaField)
+        val coordinatorEpoch = producerEntryStruct.getInt(CoordinatorEpochField)
+        val currentTxnFirstOffset = producerEntryStruct.getLong(CurrentTxnFirstOffsetField)
+        val newEntry = ProducerIdEntry(producerId, producerEpoch, seq, offset, offsetDelta, timestamp,
+          coordinatorEpoch, if (currentTxnFirstOffset >= 0) Some(currentTxnFirstOffset) else None)
+        newEntry
+      }
+    } catch {
+      case e: SchemaException =>
+        throw new CorruptSnapshotException(s"Snapshot failed schema validation: ${e.getMessage}")
     }
   }
 
@@ -436,7 +441,7 @@ class ProducerStateManager(val topicPartition: TopicPartition,
       latestSnapshotFile match {
         case Some(file) =>
           try {
-            info(s"Loading producer state from snapshot file ${file.getName} for partition $topicPartition")
+            info(s"Loading producer state from snapshot file '$file' for partition $topicPartition")
             val loadedProducers = readSnapshot(file).filter { producerEntry =>
               isProducerRetained(producerEntry, logStartOffset) && !isProducerExpired(currentTime, producerEntry)
             }
@@ -445,9 +450,8 @@ class ProducerStateManager(val topicPartition: TopicPartition,
             lastMapOffset = lastSnapOffset
             return
           } catch {
-            case e: Exception =>
-              warn(s"Failed to load producer snapshot from ${file.getPath}. The producer state will be " +
-                "rebuilt from an earlier snapshot if possible or from the log if necessary.", e)
+            case e: CorruptSnapshotException =>
+              warn(s"Failed to load producer snapshot from '$file': ${e.getMessage}")
               Files.deleteIfExists(file.toPath)
           }
         case None =>
