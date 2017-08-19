@@ -608,7 +608,7 @@ class LogManager(logDirs: Array[File],
     * add it in the queue for deletion.
     * @param topicPartition TopicPartition that needs to be deleted
     */
-  def asyncDelete(topicPartition: TopicPartition) = {
+  def asyncDelete(topicPartition: TopicPartition): Log = {
     val removedLog: Log = logCreationOrDeletionLock synchronized {
       logs.remove(topicPartition)
     }
@@ -630,6 +630,8 @@ class LogManager(logDirs: Array[File],
           for (logSegment <- removedLog.logSegments) {
             logSegment.log.setFile(new File(renamedDir, logSegment.log.file.getName))
             logSegment.index.file = new File(renamedDir, logSegment.index.file.getName)
+            logSegment.timeIndex.file = new File(renamedDir, logSegment.timeIndex.file.getName)
+            logSegment.txnIndex.file = new File(renamedDir, logSegment.txnIndex.file.getName)
           }
 
           logsToBeDeleted.add(removedLog)
@@ -647,6 +649,7 @@ class LogManager(logDirs: Array[File],
     } else if (offlineLogDirs.nonEmpty) {
       throw new KafkaStorageException("Failed to delete log for " + topicPartition + " because it may be in one of the offline directories " + offlineLogDirs.mkString(","))
     }
+    removedLog
   }
 
   /**

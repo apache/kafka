@@ -310,4 +310,22 @@ class LogManagerTest {
       logDirs = logDirs,
       time = this.time)
   }
+
+  @Test
+  def testFilePointersAfterAsyncDelete() {
+    val log = logManager.getOrCreateLog(new TopicPartition(name, 0), logConfig)
+    val activeSegment = log.activeSegment
+    val logName = activeSegment.log.file.getName
+    val indexName = activeSegment.index.file.getName
+    val timeIndex = activeSegment.timeIndex.file.getName
+    val txnIndex = activeSegment.txnIndex.file.getName
+
+    val removedLog = logManager.asyncDelete(new TopicPartition(name, 0))
+    val removedSegment = removedLog.activeSegment
+
+    assertTrue(removedSegment.log.file.equals(new File(removedLog.dir, logName)))
+    assertTrue(removedSegment.index.file.equals(new File(removedLog.dir, indexName)))
+    assertTrue(removedSegment.timeIndex.file.equals(new File(removedLog.dir, timeIndex)))
+    assertTrue(removedSegment.txnIndex.file.equals(new File(removedLog.dir, txnIndex)))
+  }
 }
