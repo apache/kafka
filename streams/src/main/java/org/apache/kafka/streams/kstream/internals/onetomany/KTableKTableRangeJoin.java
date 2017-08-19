@@ -5,13 +5,13 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.kstream.internals.Change;
+import org.apache.kafka.streams.kstream.internals.KTableRangeValueGetter;
+import org.apache.kafka.streams.kstream.internals.KTableRangeValueGetterSupplier;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.state.KeyValueIterator;
-
-import java.util.Iterator;
 
 public class KTableKTableRangeJoin<K, V, KL, VL, VR> implements ProcessorSupplier<KL, Change<VL>> {
 
@@ -27,18 +27,16 @@ public class KTableKTableRangeJoin<K, V, KL, VL, VR> implements ProcessorSupplie
 
 	@Override
     public Processor<KL, Change<VL>> get() {
-        return new KTableKTableJoinProcessor(right,faker);
+        return new KTableKTableJoinProcessor(right);
     }
 	
 
     private class KTableKTableJoinProcessor extends AbstractProcessor<KL, Change<VL>> {
 
-        private ValueMapper<KL, K> faker;
 		private KTableRangeValueGetter<K, VR> rightValueGetter;
 
-        public KTableKTableJoinProcessor(KTableRangeValueGetterSupplier<K, VR> right,ValueMapper<KL, K> faker ) {
-            this.rightValueGetter = right.view();
-            this.faker = faker;
+        public KTableKTableJoinProcessor(KTableRangeValueGetterSupplier<K, VR> right) {
+            this.rightValueGetter = right.get();
         }
 
         @SuppressWarnings("unchecked")
@@ -59,7 +57,7 @@ public class KTableKTableRangeJoin<K, V, KL, VL, VR> implements ProcessorSupplie
 
             K prefixKey = faker.apply(key);
             
-           final KeyValueIterator<K,VR> rightValues = rightValueGetter.getRange(prefixKey);
+           final KeyValueIterator<K,VR> rightValues = rightValueGetter.prefixScan(prefixKey);
             
             while(rightValues.hasNext()){
                   KeyValue<K, VR> rightKeyValue = rightValues.next();

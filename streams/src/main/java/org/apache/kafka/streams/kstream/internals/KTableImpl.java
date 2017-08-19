@@ -658,7 +658,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         
         topology.addProcessor(repartitionProcessorName, repartitionProcessor, ((AbstractStream<?>)other).sourceNodes.toArray(new String[0]));
 
-        PartialKeyPartitioner<K0, V, K> partitioner = new PartialKeyPartitioner<>(leftKeyExtractor, keySerde, repartitionTopicName);
+        PartialKeyPartitioner<K0, VO, K> partitioner = new PartialKeyPartitioner<>(leftKeyExtractor, keySerde, repartitionTopicName);
         
         topology.addSink(repartitionSinkName, repartitionTopicName,
                 joinKeySerde.serializer(), valueOtherSerde.serializer(),
@@ -695,7 +695,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         String joinOutputName = topology.newName(name + "-JOIN_OUTPUT");
         String joinOutputTableSource = joinOutputName + "-TABLESOURCE";
 
-        KTableJoinMergeProcessorSupplier<K0, V0, K, V, KO, VO> kts = new KTableJoinMergeProcessorSupplier<>(this, joinThis, leftKeyExtractor, joiner);
+        KTableJoinMergeProcessorSupplier<K0, V0, K, V, KO, VO> kts = new KTableJoinMergeProcessorSupplier<>(this.valueGetterSupplier(), joinThis.valueGetterSupplier(), leftKeyExtractor, joiner);
         topology.addProcessor(joinOutputTableSource, kts, joinByRangeProcessor, repartitionReceiverName);
         return new KTableImpl<K0,V,V0>(topology, joinOutputTableSource, kts, joinKeySerde, joinValueSerde,new HashSet<String>(sourcesNeedCopartitioning),null,false);
 

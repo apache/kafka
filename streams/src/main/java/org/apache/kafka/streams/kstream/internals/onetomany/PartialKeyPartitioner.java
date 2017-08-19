@@ -2,6 +2,7 @@ package org.apache.kafka.streams.kstream.internals.onetomany;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 
@@ -20,6 +21,10 @@ public class PartialKeyPartitioner<K,V,K1> implements StreamPartitioner<K, V> {
     @Override
     public Integer partition(K key, V value, int numPartitions)
     {
-    	return Utils.murmurPartition(keySerializer.serialize(topic, extractor.apply(key)), numPartitions);
+    	/**
+    	 * maybe allow user to supply inner Streampartitioner?
+    	 * only works if left side is murmurpartitioned in this case
+    	 */
+    	return Utils.toPositive(Utils.murmur2(keySerializer.serialize(topic, extractor.apply(key)))) % numPartitions;
     }
 }
