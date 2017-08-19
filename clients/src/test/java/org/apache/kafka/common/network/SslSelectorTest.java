@@ -99,7 +99,7 @@ public class SslSelectorTest extends SelectorTest {
             String node = "0";
             // create connections
             InetSocketAddress addr = new InetSocketAddress("localhost", server.port);
-            selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
+            selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE, false);
 
             // send echo requests and receive responses
             int requests = 0;
@@ -145,7 +145,7 @@ public class SslSelectorTest extends SelectorTest {
         String node = "0";
         // create connections
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port);
-        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
+        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE, false);
 
         // send echo requests and receive responses
         while (!selector.isChannelReady(node)) {

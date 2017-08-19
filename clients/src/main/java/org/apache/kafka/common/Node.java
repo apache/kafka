@@ -28,18 +28,28 @@ public class Node {
     private final String host;
     private final int port;
     private final String rack;
+    private final boolean hasPriority;
+
+    public Node(int id, String host, int port, String rack) {
+        this(id, host, port, rack, false);
+    }
+
+    public Node(int id, String host, int port, boolean priority) {
+        this(id, host, port, null, priority);
+    }
 
     public Node(int id, String host, int port) {
         this(id, host, port, null);
     }
 
-    public Node(int id, String host, int port, String rack) {
+    public Node(int id, String host, int port, String rack, boolean hasPriority) {
         super();
         this.id = id;
         this.idString = Integer.toString(id);
         this.host = host;
         this.port = port;
         this.rack = rack;
+        this.hasPriority = hasPriority;
     }
 
     public static Node noNode() {
@@ -98,6 +108,13 @@ public class Node {
         return rack;
     }
 
+    /**
+     * True if this node has priority
+     */
+    public boolean hasPriority() {
+        return hasPriority;
+    }
+
     @Override
     public int hashCode() {
         final int prime = 31;
@@ -105,6 +122,7 @@ public class Node {
         result = prime * result + ((host == null) ? 0 : host.hashCode());
         result = prime * result + id;
         result = prime * result + port;
+        result = prime * result + (hasPriority ? 1231 : 1237);
         result = prime * result + ((rack == null) ? 0 : rack.hashCode());
         return result;
     }
@@ -127,6 +145,8 @@ public class Node {
             return false;
         if (port != other.port)
             return false;
+        if (hasPriority != other.hasPriority)
+            return false;
         if (rack == null) {
             if (other.rack != null)
                 return false;
@@ -137,7 +157,7 @@ public class Node {
 
     @Override
     public String toString() {
-        return host + ":" + port + " (id: " + idString + " rack: " + rack + ")";
+        return host + ":" + port + " (id: " + idString + " rack: " + rack + " hasPriority: " + hasPriority + ")";
     }
 
 }

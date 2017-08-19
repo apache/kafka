@@ -38,6 +38,7 @@ public class KafkaChannel {
     private long networkThreadTimeNanos;
     private final int maxReceiveSize;
     private final MemoryPool memoryPool;
+    private final boolean hasPriority;
     private NetworkReceive receive;
     private Send send;
     // Track connection and mute state of channels to enable outstanding requests on channels to be
@@ -46,7 +47,7 @@ public class KafkaChannel {
     private boolean muted;
     private ChannelState state;
 
-    public KafkaChannel(String id, TransportLayer transportLayer, Authenticator authenticator, int maxReceiveSize, MemoryPool memoryPool) throws IOException {
+    public KafkaChannel(String id, TransportLayer transportLayer, Authenticator authenticator, int maxReceiveSize, MemoryPool memoryPool, boolean hasPriority) throws IOException {
         this.id = id;
         this.transportLayer = transportLayer;
         this.authenticator = authenticator;
@@ -56,6 +57,7 @@ public class KafkaChannel {
         this.disconnected = false;
         this.muted = false;
         this.state = ChannelState.NOT_CONNECTED;
+        this.hasPriority = hasPriority;
     }
 
     public void close() throws IOException {
@@ -134,7 +136,7 @@ public class KafkaChannel {
 
     public boolean isInMutableState() {
         //some requests do not require memory, so if we do not know what the current (or future) request is
-        //(receive == null) we dont mute. we also dont mute if whatever memory required has already been
+        //(receive == null) we don't mute. we also don't mute if whatever memory required has already been
         //successfully allocated (if none is required for the currently-being-read request
         //receive.memoryAllocated() is expected to return true)
         if (receive == null || receive.memoryAllocated())
@@ -179,7 +181,7 @@ public class KafkaChannel {
         NetworkReceive result = null;
 
         if (receive == null) {
-            receive = new NetworkReceive(maxReceiveSize, id, memoryPool);
+            receive = new NetworkReceive(maxReceiveSize, id, memoryPool, this.hasPriority);
         }
 
         receive(receive);

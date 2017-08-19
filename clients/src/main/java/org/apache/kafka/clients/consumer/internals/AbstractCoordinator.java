@@ -601,7 +601,8 @@ public abstract class AbstractCoordinator implements Closeable {
                     AbstractCoordinator.this.coordinator = new Node(
                             Integer.MAX_VALUE - findCoordinatorResponse.node().id(),
                             findCoordinatorResponse.node().host(),
-                            findCoordinatorResponse.node().port());
+                            findCoordinatorResponse.node().port(),
+                            true);
                     log.info("Discovered coordinator {} for group {}.", coordinator, groupId);
                     client.tryConnect(coordinator);
                     heartbeat.resetTimeouts(time.milliseconds());

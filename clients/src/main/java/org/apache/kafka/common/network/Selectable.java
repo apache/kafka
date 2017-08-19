@@ -40,7 +40,7 @@ public interface Selectable {
      * @param receiveBufferSize The receive buffer for the socket
      * @throws IOException If we cannot begin connecting
      */
-    public void connect(String id, InetSocketAddress address, int sendBufferSize, int receiveBufferSize) throws IOException;
+    public void connect(String id, InetSocketAddress address, int sendBufferSize, int receiveBufferSize, boolean priority) throws IOException;
 
     /**
      * Wakeup this selector if it is blocked on I/O

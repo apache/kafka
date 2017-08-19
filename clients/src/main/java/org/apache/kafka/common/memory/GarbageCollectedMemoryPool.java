@@ -29,7 +29,7 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * An extension of SimpleMemoryPool that tracks allocated buffers and logs an error when they "leak"
  * (when they are garbage-collected without having been release()ed).
- * THIS IMPLEMENTATION IS A DEVELOPMENT/DEBUGGING AID AND IS NOT MEANT PRO PRODUCTION USE.
+ * THIS IMPLEMENTATION IS A DEVELOPMENT/DEBUGGING AID AND IS NOT MEANT FOR PRODUCTION USE.
  */
 public class GarbageCollectedMemoryPool extends SimpleMemoryPool implements AutoCloseable {
 

@@ -42,7 +42,7 @@ public interface ChannelBuilder extends AutoCloseable {
      * @param  memoryPool memory pool from which to allocate buffers, or null for none
      * @return KafkaChannel
      */
-    KafkaChannel buildChannel(String id, SelectionKey key, int maxReceiveSize, MemoryPool memoryPool) throws KafkaException;
+    KafkaChannel buildChannel(String id, SelectionKey key, int maxReceiveSize, MemoryPool memoryPool, boolean priority) throws KafkaException;
 
 
     /**

@@ -98,7 +98,7 @@ public class SslTransportLayerTest {
         sslClientConfigs.put(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, "HTTPS");
         createSelector(sslClientConfigs);
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
-        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
+        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE, false);
 
         NetworkTestUtils.checkClientConnection(selector, node, 100, 10);
     }
@@ -118,7 +118,7 @@ public class SslTransportLayerTest {
         sslClientConfigs.put(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, "HTTPS");
         createSelector(sslClientConfigs);
         InetSocketAddress addr = new InetSocketAddress("127.0.0.1", server.port());
-        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
+        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE, false);
 
         NetworkTestUtils.checkClientConnection(selector, node, 100, 10);
     }
@@ -138,7 +138,7 @@ public class SslTransportLayerTest {
         sslClientConfigs.put(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, "HTTPS");
         createSelector(sslClientConfigs);
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
-        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
+        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE, false);
 
         NetworkTestUtils.checkClientConnection(selector, node, 100, 10);
     }
@@ -156,7 +156,7 @@ public class SslTransportLayerTest {
         sslClientConfigs.put(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, "HTTPS");
         createSelector(sslClientConfigs);
         InetSocketAddress addr = new InetSocketAddress("127.0.0.1", server.port());
-        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
+        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE, false);
 
         NetworkTestUtils.waitForChannelClose(selector, node, ChannelState.AUTHENTICATE);
     }
@@ -206,7 +206,7 @@ public class SslTransportLayerTest {
 
         createSelector(sslClientConfigs);
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
-        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
+        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE, false);
 
         NetworkTestUtils.checkClientConnection(selector, node, 100, 10);
     }
@@ -227,7 +227,7 @@ public class SslTransportLayerTest {
         server = createEchoServer(SecurityProtocol.SSL);
         createSelector(sslClientConfigs);
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
-        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
+        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE, false);
 
         NetworkTestUtils.waitForChannelClose(selector, node, ChannelState.AUTHENTICATE);
     }
@@ -247,7 +247,7 @@ public class SslTransportLayerTest {
         sslClientConfigs.remove(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG);
         createSelector(sslClientConfigs);
         InetSocketAddress addr = new InetSocketAddress(serverHost, server.port());
-        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
+        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE, false);
 
         NetworkTestUtils.checkClientConnection(selector, node, 100, 10);
     }
@@ -263,7 +263,7 @@ public class SslTransportLayerTest {
         server = createEchoServer(SecurityProtocol.SSL);
         createSelector(sslClientConfigs);
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
-        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
+        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE, false);
 
         NetworkTestUtils.checkClientConnection(selector, node, 100, 10);
     }
@@ -284,7 +284,7 @@ public class SslTransportLayerTest {
 
         // Connect with client auth should work fine
         createSelector(sslClientConfigs);
-        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
+        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE, false);
         NetworkTestUtils.checkClientConnection(selector, node, 100, 10);
         selector.close();
 
@@ -293,7 +293,7 @@ public class SslTransportLayerTest {
         sslClientConfigs.remove(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG);
         sslClientConfigs.remove(SslConfigs.SSL_KEY_PASSWORD_CONFIG);
         createSelector(sslClientConfigs);
-        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
+        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE, false);
         NetworkTestUtils.waitForChannelClose(selector, node, ChannelState.AUTHENTICATE);
         selector.close();
         server.close();
@@ -304,7 +304,7 @@ public class SslTransportLayerTest {
 
         // Connect without client auth should work fine now
         createSelector(sslClientConfigs);
-        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
+        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE, false);
         NetworkTestUtils.checkClientConnection(selector, node, 100, 10);
     }
     
@@ -320,7 +320,7 @@ public class SslTransportLayerTest {
         server = createEchoServer(SecurityProtocol.SSL);
         createSelector(sslClientConfigs);
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
-        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
+        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE, false);
 
         NetworkTestUtils.waitForChannelClose(selector, node, ChannelState.AUTHENTICATE);
     }
@@ -340,7 +340,7 @@ public class SslTransportLayerTest {
         sslClientConfigs.remove(SslConfigs.SSL_KEY_PASSWORD_CONFIG);
         createSelector(sslClientConfigs);
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
-        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
+        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE, false);
 
         NetworkTestUtils.waitForChannelClose(selector, node, ChannelState.AUTHENTICATE);
     }
@@ -357,7 +357,7 @@ public class SslTransportLayerTest {
         server = createEchoServer(SecurityProtocol.SSL);
         createSelector(sslClientConfigs);
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
-        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
+        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE, false);
 
         NetworkTestUtils.checkClientConnection(selector, node, 100, 10);
     }
@@ -377,7 +377,7 @@ public class SslTransportLayerTest {
         sslClientConfigs.remove(SslConfigs.SSL_KEY_PASSWORD_CONFIG);
         createSelector(sslClientConfigs);
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
-        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
+        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE, false);
 
         NetworkTestUtils.checkClientConnection(selector, node, 100, 10);
     }
@@ -393,7 +393,7 @@ public class SslTransportLayerTest {
         server = createEchoServer(SecurityProtocol.SSL);
         createSelector(sslClientConfigs);
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
-        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
+        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE, false);
 
         NetworkTestUtils.checkClientConnection(selector, node, 100, 10);
     }
@@ -413,7 +413,7 @@ public class SslTransportLayerTest {
         sslClientConfigs.remove(SslConfigs.SSL_KEY_PASSWORD_CONFIG);
         createSelector(sslClientConfigs);
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
-        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
+        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE, false);
 
         NetworkTestUtils.checkClientConnection(selector, node, 100, 10);
     }
@@ -476,7 +476,7 @@ public class SslTransportLayerTest {
         server = createEchoServer(SecurityProtocol.SSL);
         createSelector(sslClientConfigs);
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
-        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
+        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE, false);
 
         NetworkTestUtils.checkClientConnection(selector, node, 100, 10);
     }
@@ -492,7 +492,7 @@ public class SslTransportLayerTest {
         server = createEchoServer(SecurityProtocol.SSL);
         createSelector(sslClientConfigs);
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
-        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
+        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE, false);
 
         NetworkTestUtils.waitForChannelClose(selector, node, ChannelState.AUTHENTICATE);
     }
@@ -509,7 +509,7 @@ public class SslTransportLayerTest {
         sslClientConfigs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Arrays.asList("TLSv1.1"));
         createSelector(sslClientConfigs);
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
-        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
+        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE, false);
 
         NetworkTestUtils.waitForChannelClose(selector, node, ChannelState.AUTHENTICATE);
     }
@@ -527,7 +527,7 @@ public class SslTransportLayerTest {
         sslClientConfigs.put(SslConfigs.SSL_CIPHER_SUITES_CONFIG, Arrays.asList(cipherSuites[1]));
         createSelector(sslClientConfigs);
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
-        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
+        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE, false);
 
         NetworkTestUtils.waitForChannelClose(selector, node, ChannelState.AUTHENTICATE);
     }
@@ -541,7 +541,7 @@ public class SslTransportLayerTest {
         server = createEchoServer(SecurityProtocol.SSL);
         createSelector(sslClientConfigs, 10, null, null);
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
-        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
+        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE, false);
 
         NetworkTestUtils.checkClientConnection(selector, node, 64000, 10);
     }
@@ -555,7 +555,7 @@ public class SslTransportLayerTest {
         server = createEchoServer(SecurityProtocol.SSL);
         createSelector(sslClientConfigs, null, 10, null);
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
-        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
+        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE, false);
 
         NetworkTestUtils.checkClientConnection(selector, node, 64000, 10);
     }
@@ -569,7 +569,7 @@ public class SslTransportLayerTest {
         server = createEchoServer(SecurityProtocol.SSL);
         createSelector(sslClientConfigs, null, null, 10);
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
-        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
+        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE, false);
 
         NetworkTestUtils.checkClientConnection(selector, node, 64000, 10);
     }
@@ -586,7 +586,7 @@ public class SslTransportLayerTest {
         String node = "0";
         server = createEchoServer(SecurityProtocol.SSL);
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
-        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
+        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE, false);
 
         String message = TestUtils.randomString(10 * 1024);
         NetworkTestUtils.waitForChannelReady(selector, node);
@@ -625,7 +625,7 @@ public class SslTransportLayerTest {
         clientChannelBuilder.configure(sslClientConfigs);
         this.selector = new Selector(5000, new Metrics(), new MockTime(), "MetricGroup", clientChannelBuilder);
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
-        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
+        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE, false);
 
         NetworkTestUtils.waitForChannelReady(selector, node);
 
