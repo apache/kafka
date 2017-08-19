@@ -17,7 +17,7 @@
 
 package kafka.log
 
-import java.io.{File, IOException, RandomAccessFile}
+import java.io.{File, RandomAccessFile}
 import java.nio.{ByteBuffer, MappedByteBuffer}
 import java.nio.channels.FileChannel
 import java.util.concurrent.locks.{Lock, ReentrantLock}
@@ -69,7 +69,7 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
         idx.position(0)
       else
         // if this is a pre-existing index, assume it is valid and set position to last entry
-        idx.position(roundDownToExactMultiple(idx.limit, entrySize))
+        idx.position(roundDownToExactMultiple(idx.limit(), entrySize))
       idx
     } finally {
       CoreUtils.swallow(raf.close())
@@ -80,11 +80,11 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
    * The maximum number of entries this index can hold
    */
   @volatile
-  private[this] var _maxEntries = mmap.limit / entrySize
+  private[this] var _maxEntries = mmap.limit() / entrySize
 
   /** The number of entries in this index */
   @volatile
-  protected var _entries = mmap.position / entrySize
+  protected var _entries = mmap.position() / entrySize
 
   /**
    * True iff there are no more slots available in this index
@@ -105,7 +105,7 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
     inLock(lock) {
       val raf = new RandomAccessFile(file, "rw")
       val roundedNewSize = roundDownToExactMultiple(newSize, entrySize)
-      val position = mmap.position
+      val position = mmap.position()
 
       /* Windows won't let us modify the file length while the file is mmapped :-( */
       if (OperatingSystem.IS_WINDOWS)
@@ -113,7 +113,7 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
       try {
         raf.setLength(roundedNewSize)
         mmap = raf.getChannel().map(FileChannel.MapMode.READ_WRITE, 0, roundedNewSize)
-        _maxEntries = mmap.limit / entrySize
+        _maxEntries = mmap.limit() / entrySize
         mmap.position(position)
       } finally {
         CoreUtils.swallow(raf.close())

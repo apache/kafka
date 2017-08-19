@@ -93,7 +93,7 @@ case class ProducerRequest(versionId: Short = ProducerRequest.CurrentVersion,
           val partitionMessageData = partitionAndData._2
           val bytes = partitionMessageData.buffer
           buffer.putInt(partition)
-          buffer.putInt(bytes.limit)
+          buffer.putInt(bytes.limit())
           buffer.put(bytes)
           bytes.rewind
         })
