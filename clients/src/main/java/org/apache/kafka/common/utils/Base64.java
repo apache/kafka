@@ -36,7 +36,6 @@ public final class Base64 {
             FACTORY = new Java7Factory();
     }
 
-
     private Base64() {}
 
     public static Encoder encoder() {
@@ -111,8 +110,6 @@ public final class Base64 {
                     throw (RuntimeException) throwable;
                 }
                 URL_ENCODE_NO_PADDING = encode.bindTo(juUrlEncoderNoPassing);
-
-
 
                 Class<?> juDecoderClass = Class.forName("java.util.Base64$Decoder");
                 MethodHandle getDecoder = lookup.findStatic(base64Class, "getDecoder",
