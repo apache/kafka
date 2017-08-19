@@ -46,7 +46,7 @@ import org.apache.kafka.common.requests.{ControlledShutdownRequest, ControlledSh
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.security.{JaasContext, JaasUtils}
-import org.apache.kafka.common.utils.{AppInfoParser, LogContext, Time}
+import org.apache.kafka.common.utils.{AppInfoParser, LogContext, PoisonPill, Time}
 import org.apache.kafka.common.{ClusterResource, Endpoint, Node}
 import org.apache.kafka.server.authorizer.Authorizer
 
@@ -161,7 +161,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
     // will keep increasing even if there is no incoming request
     if (time.milliseconds - socketServer.dataPlaneRequestChannel.lastDequeueTimeMs > config.requestMaxLocalTimeMs) {
       fatal(s"It has been more than ${config.requestMaxLocalTimeMs} ms since the last time any io-thread reads from RequestChannel. Shutdown broker now.")
-      Runtime.getRuntime.halt(1)
+      PoisonPill.die(config.heapDumpFolder, config.heapDumpTimeout)
     }
   }
 
