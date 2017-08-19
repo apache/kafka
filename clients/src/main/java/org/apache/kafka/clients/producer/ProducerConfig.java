@@ -19,6 +19,7 @@ package org.apache.kafka.clients.producer;
 import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.producer.internals.DefaultPartitioner;
+import org.apache.kafka.clients.producer.internals.ProducerMetadata;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
@@ -53,8 +54,12 @@ public class ProducerConfig extends AbstractConfig {
     /** <code>bootstrap.servers</code> */
     public static final String BOOTSTRAP_SERVERS_CONFIG = CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG;
 
+
     /** <code>client.dns.lookup</code> */
     public static final String CLIENT_DNS_LOOKUP_CONFIG = CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG;
+
+    public static final String METADATA_TOPIC_EXPIRY_MS_CONFIG = CommonClientConfigs.METADATA_TOPIC_EXPIRY_MS_CONFIG;
+    private static final String METADATA_TOPIC_EXPIRY_MS_DOC = CommonClientConfigs.METADATA_TOPIC_EXPIRY_MS_DOC;
 
     /** <code>metadata.max.age.ms</code> */
     public static final String METADATA_MAX_AGE_CONFIG = CommonClientConfigs.METADATA_MAX_AGE_CONFIG;
@@ -366,6 +371,11 @@ public class ProducerConfig extends AbstractConfig {
                                         60000,
                                         Importance.LOW,
                                         TRANSACTION_TIMEOUT_DOC)
+                                .define(METADATA_TOPIC_EXPIRY_MS_CONFIG,
+                                        Type.LONG,
+                                        ProducerMetadata.TOPIC_EXPIRY_MS,
+                                        Importance.LOW,
+                                        METADATA_TOPIC_EXPIRY_MS_DOC)
                                 .define(TRANSACTIONAL_ID_CONFIG,
                                         Type.STRING,
                                         null,

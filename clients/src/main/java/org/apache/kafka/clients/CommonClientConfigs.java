@@ -49,6 +49,9 @@ public class CommonClientConfigs {
     public static final String METADATA_MAX_AGE_CONFIG = "metadata.max.age.ms";
     public static final String METADATA_MAX_AGE_DOC = "The period of time in milliseconds after which we force a refresh of metadata even if we haven't seen any partition leadership changes to proactively discover any new brokers or partitions.";
 
+    public static final String METADATA_TOPIC_EXPIRY_MS_CONFIG = "metadata.topic.expiry.ms";
+    public static final String METADATA_TOPIC_EXPIRY_MS_DOC = "The period of time in milliseconds before we expire topic from metadata cache";
+
     public static final String SEND_BUFFER_CONFIG = "send.buffer.bytes";
     public static final String SEND_BUFFER_DOC = "The size of the TCP send buffer (SO_SNDBUF) to use when sending data. If the value is -1, the OS default will be used.";
     public static final int SEND_BUFFER_LOWER_BOUND = -1;

@@ -414,7 +414,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                         config.getLong(ProducerConfig.METADATA_MAX_AGE_CONFIG),
                         logContext,
                         clusterResourceListeners,
-                        Time.SYSTEM);
+                        Time.SYSTEM,
+                        config.getLong(ProducerConfig.METADATA_TOPIC_EXPIRY_MS_CONFIG));
                 this.metadata.bootstrap(addresses);
             }
             this.errors = this.metrics.sensor("errors");

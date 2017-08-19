@@ -33,21 +33,31 @@ import java.util.Set;
 
 public class ProducerMetadata extends Metadata {
     private static final long TOPIC_EXPIRY_NEEDS_UPDATE = -1L;
-    static final long TOPIC_EXPIRY_MS = 5 * 60 * 1000;
+    public static final long TOPIC_EXPIRY_MS = 5 * 60 * 1000;
 
     /* Topics with expiry time */
     private final Map<String, Long> topics = new HashMap<>();
     private final Logger log;
     private final Time time;
+    private final long topicExpiryMs;
 
+    public ProducerMetadata(long refreshBackoffMs,
+        long metadataExpireMs,
+        LogContext logContext,
+        ClusterResourceListeners clusterResourceListeners,
+        Time time) {
+        this(refreshBackoffMs, metadataExpireMs, logContext, clusterResourceListeners, time, TOPIC_EXPIRY_MS);
+    }
     public ProducerMetadata(long refreshBackoffMs,
                             long metadataExpireMs,
                             LogContext logContext,
                             ClusterResourceListeners clusterResourceListeners,
-                            Time time) {
+                            Time time,
+                            long topicExpiryMs) {
         super(refreshBackoffMs, metadataExpireMs, logContext, clusterResourceListeners);
         this.log = logContext.logger(ProducerMetadata.class);
         this.time = time;
+        this.topicExpiryMs = topicExpiryMs;
     }
 
     @Override
@@ -77,7 +87,7 @@ public class ProducerMetadata extends Metadata {
         if (expireMs == null) {
             return false;
         } else if (expireMs == TOPIC_EXPIRY_NEEDS_UPDATE) {
-            topics.put(topic, nowMs + TOPIC_EXPIRY_MS);
+            topics.put(topic, Long.MAX_VALUE - nowMs > topicExpiryMs ? nowMs + topicExpiryMs : Long.MAX_VALUE);
             return true;
         } else if (expireMs <= nowMs) {
             log.debug("Removing unused topic {} from the metadata list, expiryMs {} now {}", topic, expireMs, nowMs);
