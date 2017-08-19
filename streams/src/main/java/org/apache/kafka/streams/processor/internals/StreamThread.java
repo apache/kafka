@@ -152,6 +152,65 @@ public class StreamThread extends Thread implements ThreadDataProvider {
         void onChange(final Thread thread, final ThreadStateTransitionValidator newState, final ThreadStateTransitionValidator oldState);
     }
 
+    /**
+     * Set the {@link StreamThread.StateListener} to be notified when state changes. Note this API is internal to
+     * Kafka Streams and is not intended to be used by an external application.
+     */
+    public void setStateListener(final StreamThread.StateListener listener) {
+        stateListener = listener;
+    }
+
+    /**
+     * @return The state this instance is in
+     */
+    public State state() {
+        synchronized (stateLock) {
+            return state;
+        }
+    }
+
+    /**
+     * Sets the state
+     * @param newState New state
+     */
+    void setState(final State newState) {
+        synchronized (stateLock) {
+            final State oldState = state;
+
+            // there are cases when we shouldn't check if a transition is valid, e.g.,
+            // when, for testing, a thread is closed multiple times. We could either
+            // check here and immediately return for those cases, or add them to the transition
+            // diagram (but then the diagram would be confusing and have transitions like
+            // PENDING_SHUTDOWN->PENDING_SHUTDOWN).
+            if (newState != State.DEAD && (state == State.PENDING_SHUTDOWN || state == State.DEAD)) {
+                return;
+            }
+
+            if (!state.isValidTransition(newState)) {
+                log.warn("{} Unexpected state transition from {} to {}", logPrefix, oldState, newState);
+                throw new StreamsException(logPrefix + " Unexpected state transition from " + oldState + " to " + newState);
+            } else {
+                log.info("{} State transition from {} to {}.", logPrefix, oldState, newState);
+            }
+
+            state = newState;
+            if (stateListener != null) {
+                stateListener.onChange(this, state, oldState);
+            }
+        }
+    }
+
+    public synchronized boolean isInitialized() {
+        synchronized (stateLock) {
+            return state == State.RUNNING;
+        }
+    }
+
+    public synchronized boolean stillRunning() {
+        synchronized (stateLock) {
+            return state.isRunning();
+        }
+    }
 
     static class RebalanceListener implements ConsumerRebalanceListener {
         private final Time time;
@@ -1093,18 +1152,6 @@ public class StreamThread extends Thread implements ThreadDataProvider {
         setState(State.PENDING_SHUTDOWN);
     }
 
-    public synchronized boolean isInitialized() {
-        synchronized (stateLock) {
-            return state == State.RUNNING;
-        }
-    }
-
-    public synchronized boolean stillRunning() {
-        synchronized (stateLock) {
-            return state.isRunning();
-        }
-    }
-
     public Map<TaskId, Task> tasks() {
         return Collections.unmodifiableMap(taskManager.activeTasks());
     }
@@ -1169,55 +1216,6 @@ public class StreamThread extends Thread implements ThreadDataProvider {
     @Override
     public PartitionGrouper partitionGrouper() {
         return partitionGrouper;
-    }
-
-    /**
-     * Set the {@link StreamThread.StateListener} to be notified when state changes. Note this API is internal to
-     * Kafka Streams and is not intended to be used by an external application.
-     */
-    public void setStateListener(final StreamThread.StateListener listener) {
-        stateListener = listener;
-    }
-
-    /**
-     * @return The state this instance is in
-     */
-    public State state() {
-        synchronized (stateLock) {
-            return state;
-        }
-    }
-
-
-    /**
-     * Sets the state
-     * @param newState New state
-     */
-    void setState(final State newState) {
-        synchronized (stateLock) {
-            final State oldState = state;
-
-            // there are cases when we shouldn't check if a transition is valid, e.g.,
-            // when, for testing, a thread is closed multiple times. We could either
-            // check here and immediately return for those cases, or add them to the transition
-            // diagram (but then the diagram would be confusing and have transitions like
-            // PENDING_SHUTDOWN->PENDING_SHUTDOWN).
-            if (newState != State.DEAD && (state == State.PENDING_SHUTDOWN || state == State.DEAD)) {
-                return;
-            }
-
-            if (!state.isValidTransition(newState)) {
-                log.warn("{} Unexpected state transition from {} to {}", logPrefix, oldState, newState);
-                throw new StreamsException(logPrefix + " Unexpected state transition from " + oldState + " to " + newState);
-            } else {
-                log.info("{} State transition from {} to {}.", logPrefix, oldState, newState);
-            }
-
-            state = newState;
-            if (stateListener != null) {
-                stateListener.onChange(this, state, oldState);
-            }
-        }
     }
 
     /**

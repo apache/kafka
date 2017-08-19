@@ -130,45 +130,25 @@ public class KafkaStreams {
     private static final Logger log = LoggerFactory.getLogger(KafkaStreams.class);
     private static final String JMX_PREFIX = "kafka.streams";
     private static final int DEFAULT_CLOSE_TIMEOUT = 0;
-    private GlobalStreamThread globalStreamThread;
-
-    private final ScheduledExecutorService stateDirCleaner;
-    private final StreamThread[] threads;
-    private final Metrics metrics;
-    private final QueryableStoreProvider queryableStoreProvider;
 
     // processId is expected to be unique across JVMs and to be used
     // in userData of the subscription request to allow assignor be aware
     // of the co-location of stream thread's consumers. It is for internal
     // usage only and should not be exposed to users at all.
     private final UUID processId;
+
+    private final Metrics metrics;
     private final String logPrefix;
-    private final StreamsMetadataState streamsMetadataState;
     private final StreamsConfig config;
+    private final StreamThread[] threads;
     private final StateDirectory stateDirectory;
+    private final StreamsMetadataState streamsMetadataState;
+    private final ScheduledExecutorService stateDirCleaner;
+    private final QueryableStoreProvider queryableStoreProvider;
+
+    private GlobalStreamThread globalStreamThread;
+    private KafkaStreams.StateListener stateListener;
     private StateRestoreListener globalStateRestoreListener;
-    private final StateRestoreListener delegatingStateRestoreListener = new StateRestoreListener() {
-        @Override
-        public void onRestoreStart(final TopicPartition topicPartition, final String storeName, final long startingOffset, final long endingOffset) {
-            if (globalStateRestoreListener != null) {
-                globalStateRestoreListener.onRestoreStart(topicPartition, storeName, startingOffset, endingOffset);
-            }
-        }
-
-        @Override
-        public void onBatchRestored(final TopicPartition topicPartition, final String storeName, final long batchEndOffset, final long numRestored) {
-            if (globalStateRestoreListener != null) {
-                globalStateRestoreListener.onBatchRestored(topicPartition, storeName, batchEndOffset, numRestored);
-            }
-        }
-
-        @Override
-        public void onRestoreEnd(final TopicPartition topicPartition, final String storeName, final long totalRestored) {
-            if (globalStateRestoreListener != null) {
-                globalStateRestoreListener.onRestoreEnd(topicPartition, storeName, totalRestored);
-            }
-        }
-    };
 
     // container states
     /**
@@ -210,7 +190,7 @@ public class KafkaStreams {
      *
      * </pre>
      * Note the following:
-     * - Any state can go to PENDING_SHUTDOWN (during clean shutdown) or NOT_RUNNING (e.g., during an exception).
+     * - Any state can go to PENDING_SHUTDOWN (whenever close is called).
      * - It is theoretically possible for a thread to always be in the PARTITION_REVOKED state
      * (see {@code StreamThread} state diagram) and hence it is possible that this instance is always
      * on a REBALANCING state.
@@ -218,7 +198,7 @@ public class KafkaStreams {
      * the instance will be in the ERROR state. The user will need to close it.
      */
     public enum State {
-        CREATED(1, 2, 3, 5), REBALANCING(1, 2, 3, 4, 5), RUNNING(1, 3, 4, 5), PENDING_SHUTDOWN(4), NOT_RUNNING, ERROR;
+        CREATED(1, 3, 5), REBALANCING(2, 3, 5), RUNNING(1, 3, 5), PENDING_SHUTDOWN(4), NOT_RUNNING, ERROR;
 
         private final Set<Integer> validTransitions = new HashSet<>();
 
@@ -239,8 +219,6 @@ public class KafkaStreams {
 
     private final Object stateLock = new Object();
     private volatile State state = State.CREATED;
-    private KafkaStreams.StateListener stateListener = null;
-
 
     /**
      * Listen to {@link State} change events.
@@ -276,7 +254,6 @@ public class KafkaStreams {
      * @param newState New state
      */
     private void setState(final State newState) {
-
         synchronized (stateLock) {
 
             // there are cases when we shouldn't check if a transition is valid, e.g.,
@@ -290,7 +267,7 @@ public class KafkaStreams {
 
             final State oldState = state;
             if (!state.isValidTransition(newState)) {
-                log.warn("{} Unexpected state transition from {} to {}.", logPrefix, oldState, newState);
+                log.error("{} Unexpected state transition from {} to {}.", logPrefix, oldState, newState);
                 throw new StreamsException(logPrefix + " Unexpected state transition from " + oldState + " to " + newState);
             } else {
                 log.info("{} State transition from {} to {}.", logPrefix, oldState, newState);
@@ -310,6 +287,37 @@ public class KafkaStreams {
     public State state() {
         synchronized (stateLock) {
             return state;
+        }
+    }
+
+    private void validateStartOnce() {
+        synchronized (stateLock) {
+            if (state == State.CREATED) {
+                state = State.RUNNING;
+            } else {
+                throw new IllegalStateException("Cannot start again.");
+            }
+        }
+    }
+
+    private boolean isRunning() {
+        synchronized (stateLock) {
+            return state.isRunning();
+        }
+    }
+
+    private void validateIsRunning() {
+        if (!isRunning()) {
+            throw new IllegalStateException("KafkaStreams is not running. State is " + state + ".");
+        }
+    }
+    private boolean checkFirstTimeClosing() {
+        synchronized (stateLock) {
+            if (state.isCreatedOrRunning() || state == ERROR) {
+                state = PENDING_SHUTDOWN;
+                return true;
+            }
+            return false;
         }
     }
 
@@ -549,6 +557,28 @@ public class KafkaStreams {
             globalThreadState = globalStreamThread.state();
         }
 
+        final StateRestoreListener delegatingStateRestoreListener = new StateRestoreListener() {
+            @Override
+            public void onRestoreStart(final TopicPartition topicPartition, final String storeName, final long startingOffset, final long endingOffset) {
+                if (globalStateRestoreListener != null) {
+                    globalStateRestoreListener.onRestoreStart(topicPartition, storeName, startingOffset, endingOffset);
+                }
+            }
+
+            @Override
+            public void onBatchRestored(final TopicPartition topicPartition, final String storeName, final long batchEndOffset, final long numRestored) {
+                if (globalStateRestoreListener != null) {
+                    globalStateRestoreListener.onBatchRestored(topicPartition, storeName, batchEndOffset, numRestored);
+                }
+            }
+
+            @Override
+            public void onRestoreEnd(final TopicPartition topicPartition, final String storeName, final long totalRestored) {
+                if (globalStateRestoreListener != null) {
+                    globalStateRestoreListener.onRestoreEnd(topicPartition, storeName, totalRestored);
+                }
+            }
+        };
 
         for (int i = 0; i < threads.length; i++) {
             threads[i] = StreamThread.create(internalTopologyBuilder,
@@ -621,16 +651,6 @@ public class KafkaStreams {
 
     }
 
-    private void validateStartOnce() {
-        synchronized (stateLock) {
-            if (state == State.CREATED) {
-                state = State.RUNNING;
-            } else {
-                throw new IllegalStateException("Cannot start again.");
-            }
-        }
-    }
-
     /**
      * Start the {@code KafkaStreams} instance by starting all its threads.
      * <p>
@@ -675,17 +695,6 @@ public class KafkaStreams {
      */
     public void close() {
         close(DEFAULT_CLOSE_TIMEOUT, TimeUnit.SECONDS);
-    }
-
-
-    private boolean checkFirstTimeClosing() {
-        synchronized (stateLock) {
-            if (state.isCreatedOrRunning() || state == ERROR) {
-                state = PENDING_SHUTDOWN;
-                return true;
-            }
-            return false;
-        }
     }
 
     private void closeGlobalStreamThread() {
@@ -791,12 +800,6 @@ public class KafkaStreams {
         sb.append("\n");
 
         return sb.toString();
-    }
-
-    private boolean isRunning() {
-        synchronized (stateLock) {
-            return state.isRunning();
-        }
     }
 
     /**
@@ -975,11 +978,5 @@ public class KafkaStreams {
     public <T> T store(final String storeName, final QueryableStoreType<T> queryableStoreType) {
         validateIsRunning();
         return queryableStoreProvider.getStore(storeName, queryableStoreType);
-    }
-
-    private void validateIsRunning() {
-        if (!isRunning()) {
-            throw new IllegalStateException("KafkaStreams is not running. State is " + state + ".");
-        }
     }
 }
