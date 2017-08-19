@@ -27,6 +27,7 @@ import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.HeartbeatRequest;
 import org.apache.kafka.common.requests.HeartbeatResponse;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.test.TestUtils;
 import org.easymock.EasyMock;
@@ -48,7 +49,8 @@ public class ConsumerNetworkClientTest {
     private Cluster cluster = TestUtils.singletonCluster(topicName, 1);
     private Node node = cluster.nodes().get(0);
     private Metadata metadata = new Metadata(0, Long.MAX_VALUE, true);
-    private ConsumerNetworkClient consumerClient = new ConsumerNetworkClient(client, metadata, time, 100, 1000);
+    private ConsumerNetworkClient consumerClient = new ConsumerNetworkClient(new LogContext(),
+            client, metadata, time, 100, 1000);
 
     @Test
     public void send() {
@@ -105,7 +107,8 @@ public class ConsumerNetworkClientTest {
     @Test
     public void doNotBlockIfPollConditionIsSatisfied() {
         NetworkClient mockNetworkClient = EasyMock.mock(NetworkClient.class);
-        ConsumerNetworkClient consumerClient = new ConsumerNetworkClient(mockNetworkClient, metadata, time, 100, 1000);
+        ConsumerNetworkClient consumerClient = new ConsumerNetworkClient(new LogContext(),
+                mockNetworkClient, metadata, time, 100, 1000);
 
         // expect poll, but with no timeout
         EasyMock.expect(mockNetworkClient.poll(EasyMock.eq(0L), EasyMock.anyLong())).andReturn(Collections.<ClientResponse>emptyList());
@@ -127,7 +130,8 @@ public class ConsumerNetworkClientTest {
         long timeout = 4000L;
 
         NetworkClient mockNetworkClient = EasyMock.mock(NetworkClient.class);
-        ConsumerNetworkClient consumerClient = new ConsumerNetworkClient(mockNetworkClient, metadata, time, 100, 1000);
+        ConsumerNetworkClient consumerClient = new ConsumerNetworkClient(new LogContext(),
+                mockNetworkClient, metadata, time, 100, 1000);
 
         EasyMock.expect(mockNetworkClient.inFlightRequestCount()).andReturn(1);
         EasyMock.expect(mockNetworkClient.poll(EasyMock.eq(timeout), EasyMock.anyLong())).andReturn(Collections.<ClientResponse>emptyList());
@@ -149,7 +153,8 @@ public class ConsumerNetworkClientTest {
         long retryBackoffMs = 100L;
 
         NetworkClient mockNetworkClient = EasyMock.mock(NetworkClient.class);
-        ConsumerNetworkClient consumerClient = new ConsumerNetworkClient(mockNetworkClient, metadata, time, retryBackoffMs, 1000L);
+        ConsumerNetworkClient consumerClient = new ConsumerNetworkClient(new LogContext(),
+                mockNetworkClient, metadata, time, retryBackoffMs, 1000L);
 
         EasyMock.expect(mockNetworkClient.inFlightRequestCount()).andReturn(0);
         EasyMock.expect(mockNetworkClient.poll(EasyMock.eq(retryBackoffMs), EasyMock.anyLong())).andReturn(Collections.<ClientResponse>emptyList());
@@ -205,7 +210,7 @@ public class ConsumerNetworkClientTest {
             }
         };
         // Queue first send, sleep long enough for this to expire and then queue second send
-        consumerClient = new ConsumerNetworkClient(client, metadata, time, 100, unsentExpiryMs);
+        consumerClient = new ConsumerNetworkClient(new LogContext(), client, metadata, time, 100, unsentExpiryMs);
         RequestFuture<ClientResponse> future1 = consumerClient.send(node, heartbeat());
         assertEquals(1, consumerClient.pendingRequestCount());
         assertEquals(1, consumerClient.pendingRequestCount(node));
