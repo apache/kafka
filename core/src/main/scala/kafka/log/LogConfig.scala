@@ -47,7 +47,11 @@ object Defaults {
   val DeleteRetentionMs = kafka.server.Defaults.LogCleanerDeleteRetentionMs
   val MinCompactionLagMs = kafka.server.Defaults.LogCleanerMinCompactionLagMs
   val MinCleanableDirtyRatio = kafka.server.Defaults.LogCleanerMinCleanRatio
+
+  @deprecated(message = "This is a misleading variable name as it actually refers to the 'delete' cleanup policy. Use " +
+                        "`CleanupPolicy` instead.", since = "1.0.0")
   val Compact = kafka.server.Defaults.LogCleanupPolicy
+  
   val CleanupPolicy = kafka.server.Defaults.LogCleanupPolicy
   val UncleanLeaderElectionEnable = kafka.server.Defaults.UncleanLeaderElectionEnable
   val MinInSyncReplicas = kafka.server.Defaults.MinInSyncReplicas
