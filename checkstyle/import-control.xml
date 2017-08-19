@@ -196,6 +196,7 @@
 
     <subpackage name="utils">
       <allow pkg="org.apache.kafka.common" />
+      <allow class="com.sun.management.HotSpotDiagnosticMXBean" />
     </subpackage>
 
     <subpackage name="quotas">
