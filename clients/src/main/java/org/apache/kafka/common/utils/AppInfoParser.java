@@ -29,29 +29,29 @@ import org.slf4j.LoggerFactory;
 
 public class AppInfoParser {
     private static final Logger log = LoggerFactory.getLogger(AppInfoParser.class);
-    private static String version = "unknown";
-    private static String commitId = "unknown";
+    private static final String VERSION;
+    private static final String COMMIT_ID;
 
     static {
+        Properties props = new Properties();
         try (InputStream resourceStream = AppInfoParser.class.getResourceAsStream("/kafka/kafka-version.properties")) {
-            Properties props = new Properties();
             props.load(resourceStream);
-            version = props.getProperty("version", version).trim();
-            commitId = props.getProperty("commitId", commitId).trim();
         } catch (Exception e) {
             log.warn("Error while loading kafka-version.properties :" + e.getMessage());
         }
+        VERSION = props.getProperty("version", "unknown").trim();
+        COMMIT_ID = props.getProperty("commitId", "unknown").trim();
     }
 
     public static String getVersion() {
-        return version;
+        return VERSION;
     }
 
     public static String getCommitId() {
-        return commitId;
+        return COMMIT_ID;
     }
 
-    public static void registerAppInfo(String prefix, String id) {
+    public static synchronized void registerAppInfo(String prefix, String id) {
         try {
             ObjectName name = new ObjectName(prefix + ":type=app-info,id=" + id);
             AppInfo mBean = new AppInfo();
@@ -61,7 +61,7 @@ public class AppInfoParser {
         }
     }
 
-    public static void unregisterAppInfo(String prefix, String id) {
+    public static synchronized void unregisterAppInfo(String prefix, String id) {
         MBeanServer server = ManagementFactory.getPlatformMBeanServer();
         try {
             ObjectName name = new ObjectName(prefix + ":type=app-info,id=" + id);
