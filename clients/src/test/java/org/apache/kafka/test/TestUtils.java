@@ -22,11 +22,11 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.utils.Base64;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.xml.bind.DatatypeConverter;
 import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -292,7 +292,7 @@ public class TestUtils {
 
         // Convert into normal variant and add padding at the end.
         String originalClusterId = String.format("%s==", clusterId.replace("_", "/").replace("-", "+"));
-        byte[] decodedUuid = DatatypeConverter.parseBase64Binary(originalClusterId);
+        byte[] decodedUuid = Base64.decoder().decode(originalClusterId);
 
         // We expect 16 bytes, same as the input UUID.
         assertEquals(decodedUuid.length, 16);
