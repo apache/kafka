@@ -54,17 +54,19 @@ class StringDecoder(props: VerifiableProperties = null) extends Decoder[String] 
 }
 
 /**
-  * The string decoder translates bytes into strings. It uses UTF8 by default but takes
-  * an optional property serializer.encoding to control this.
+  * The long decoder translates bytes into longs.
   */
 class LongDecoder(props: VerifiableProperties = null) extends Decoder[Long] {
-  val encoding =
-    if(props == null)
-      "UTF8"
-    else
-      props.getString("serializer.encoding", "UTF8")
-
   def fromBytes(bytes: Array[Byte]): Long = {
     ByteBuffer.wrap(bytes).getLong
+  }
+}
+
+/**
+  * The integer decoder translates bytes into integers.
+  */
+class IntegerDecoder(props: VerifiableProperties = null) extends Decoder[Integer] {
+  def fromBytes(bytes: Array[Byte]): Integer = {
+    ByteBuffer.wrap(bytes).getInt()
   }
 }

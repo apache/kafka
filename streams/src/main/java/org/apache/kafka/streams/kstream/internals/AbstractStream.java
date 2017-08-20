@@ -18,7 +18,6 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windows;
@@ -33,16 +32,24 @@ import java.util.Set;
 
 public abstract class AbstractStream<K> {
 
-    protected final KStreamBuilder topology;
+    protected final InternalStreamsBuilder builder;
     protected final String name;
-    protected final Set<String> sourceNodes;
+    final Set<String> sourceNodes;
 
-    AbstractStream(final KStreamBuilder topology, String name, final Set<String> sourceNodes) {
+    // This copy-constructor will allow to extend KStream
+    // and KTable APIs with new methods without impacting the public interface.
+    public AbstractStream(AbstractStream<K> stream) {
+        this.builder = stream.builder;
+        this.name = stream.name;
+        this.sourceNodes = stream.sourceNodes;
+    }
+
+    AbstractStream(final InternalStreamsBuilder builder, String name, final Set<String> sourceNodes) {
         if (sourceNodes == null || sourceNodes.isEmpty()) {
             throw new IllegalArgumentException("parameter <sourceNodes> must not be null or empty");
         }
 
-        this.topology = topology;
+        this.builder = builder;
         this.name = name;
         this.sourceNodes = sourceNodes;
     }
@@ -53,13 +60,13 @@ public abstract class AbstractStream<K> {
         allSourceNodes.addAll(sourceNodes);
         allSourceNodes.addAll(other.sourceNodes);
 
-        topology.copartitionSources(allSourceNodes);
+        builder.internalTopologyBuilder.copartitionSources(allSourceNodes);
 
         return allSourceNodes;
     }
 
     String getOrCreateName(final String queryableStoreName, final String prefix) {
-        final String returnName = queryableStoreName != null ? queryableStoreName : topology.newStoreName(prefix);
+        final String returnName = queryableStoreName != null ? queryableStoreName : builder.newStoreName(prefix);
         Topic.validate(returnName);
         return returnName;
     }

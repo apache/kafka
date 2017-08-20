@@ -18,15 +18,22 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.streams.errors.TopologyBuilderException;
+import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.StreamsBuilderTest;
+import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.GlobalKTable;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
+import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
+import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
+import org.apache.kafka.streams.processor.internals.ProcessorTopology;
+import org.apache.kafka.streams.processor.internals.SourceNode;
 import org.apache.kafka.test.MockKeyValueMapper;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
@@ -34,8 +41,11 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.util.Collections;
+import java.util.concurrent.TimeUnit;
 
+import static org.hamcrest.core.IsInstanceOf.instanceOf;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThat;
 
 
 public class KStreamImplTest {
@@ -43,17 +53,17 @@ public class KStreamImplTest {
     final private Serde<String> stringSerde = Serdes.String();
     final private Serde<Integer> intSerde = Serdes.Integer();
     private KStream<String, String> testStream;
-    private KStreamBuilder builder;
+    private StreamsBuilder builder;
 
     @Before
     public void before() {
-        builder = new KStreamBuilder();
+        builder = new StreamsBuilder();
         testStream = builder.stream("source");
     }
 
     @Test
     public void testNumProcesses() {
-        final KStreamBuilder builder = new KStreamBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
         KStream<String, String> source1 = builder.stream(stringSerde, stringSerde, "topic-1", "topic-2");
 
@@ -145,12 +155,63 @@ public class KStreamImplTest {
             1 + // to
             2 + // through
             1, // process
-            builder.setApplicationId("X").build(null).processors().size());
+            StreamsBuilderTest.internalTopologyBuilder(builder).setApplicationId("X").build(null).processors().size());
     }
 
     @Test
-    public void testToWithNullValueSerdeDoesntNPE() {
+    public void shouldUseRecordMetadataTimestampExtractorWithThrough() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        KStream<String, String> stream1 = builder.stream(stringSerde, stringSerde, "topic-1", "topic-2");
+        KStream<String, String> stream2 = builder.stream(stringSerde, stringSerde, "topic-3", "topic-4");
+
+        stream1.to("topic-5");
+        stream2.through("topic-6");
+
+        ProcessorTopology processorTopology = StreamsBuilderTest.internalTopologyBuilder(builder).setApplicationId("X").build(null);
+        assertThat(processorTopology.source("topic-6").getTimestampExtractor(), instanceOf(FailOnInvalidTimestamp.class));
+        assertEquals(processorTopology.source("topic-4").getTimestampExtractor(), null);
+        assertEquals(processorTopology.source("topic-3").getTimestampExtractor(), null);
+        assertEquals(processorTopology.source("topic-2").getTimestampExtractor(), null);
+        assertEquals(processorTopology.source("topic-1").getTimestampExtractor(), null);
+    }
+
+    @Test
+    // TODO: this test should be refactored when we removed KStreamBuilder so that the created Topology contains internal topics as well
+    public void shouldUseRecordMetadataTimestampExtractorWhenInternalRepartitioningTopicCreated() {
         final KStreamBuilder builder = new KStreamBuilder();
+        KStream<String, String> kStream = builder.stream(stringSerde, stringSerde, "topic-1");
+        ValueJoiner<String, String, String> valueJoiner = MockValueJoiner.instance(":");
+        long windowSize = TimeUnit.MILLISECONDS.convert(1, TimeUnit.DAYS);
+        final KStream<String, String> stream = kStream
+                        .map(new KeyValueMapper<String, String, KeyValue<? extends String, ? extends String>>() {
+                            @Override
+                            public KeyValue<? extends String, ? extends String> apply(String key, String value) {
+                                return KeyValue.pair(value, value);
+                            }
+                        });
+        stream.join(kStream,
+                valueJoiner,
+                JoinWindows.of(windowSize).until(3 * windowSize),
+                Serdes.String(),
+                Serdes.String(),
+                Serdes.String())
+                .to(Serdes.String(), Serdes.String(), "output-topic");
+
+        ProcessorTopology processorTopology = builder.setApplicationId("X").build(null);
+        SourceNode originalSourceNode = processorTopology.source("topic-1");
+
+        for (SourceNode sourceNode: processorTopology.sources()) {
+            if (sourceNode.name().equals(originalSourceNode.name())) {
+                assertEquals(sourceNode.getTimestampExtractor(), null);
+            } else {
+                assertThat(sourceNode.getTimestampExtractor(), instanceOf(FailOnInvalidTimestamp.class));
+            }
+        }
+    }
+    
+    @Test
+    public void testToWithNullValueSerdeDoesntNPE() {
+        final StreamsBuilder builder = new StreamsBuilder();
         final KStream<String, String> inputStream = builder.stream(stringSerde, stringSerde, "input");
         inputStream.to(stringSerde, null, "output");
     }
@@ -185,7 +246,7 @@ public class KStreamImplTest {
         testStream.writeAsText(null);
     }
 
-    @Test(expected = TopologyBuilderException.class)
+    @Test(expected = TopologyException.class)
     public void shouldNotAllowEmptyFilePathOnWriteAsText() throws Exception {
         testStream.writeAsText("\t    \t");
     }

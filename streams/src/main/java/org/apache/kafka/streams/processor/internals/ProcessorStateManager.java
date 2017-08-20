@@ -18,9 +18,11 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.processor.BatchingStateRestoreCallback;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
@@ -58,7 +60,6 @@ public class ProcessorStateManager implements StateManager {
     private final Map<TopicPartition, Long> checkpointedOffsets;
     private final Map<String, StateRestoreCallback> restoreCallbacks; // used for standby tasks, keyed by state topic name
     private final Map<String, String> storeToChangelogTopic;
-    private final boolean eosEnabled;
 
     // TODO: this map does not work with customized grouper where multiple partitions
     // of the same topic can be assigned to the same topic.
@@ -93,7 +94,6 @@ public class ProcessorStateManager implements StateManager {
         this.isStandby = isStandby;
         restoreCallbacks = isStandby ? new HashMap<String, StateRestoreCallback>() : null;
         this.storeToChangelogTopic = storeToChangelogTopic;
-        this.eosEnabled = eosEnabled;
 
         if (!stateDirectory.lock(taskId, 5)) {
             throw new LockException(String.format("%s Failed to lock the state directory for task %s",
@@ -119,7 +119,7 @@ public class ProcessorStateManager implements StateManager {
             checkpoint = null;
         }
 
-        log.info("{} Created state store manager for task {} with the acquired state dir lock", logPrefix, taskId);
+        log.debug("{} Created state store manager for task {} with the acquired state dir lock", logPrefix, taskId);
     }
 
 
@@ -173,10 +173,11 @@ public class ProcessorStateManager implements StateManager {
         } else {
             log.trace("{} Restoring state store {} from changelog topic {}", logPrefix, store.name(), topic);
             final StateRestorer restorer = new StateRestorer(storePartition,
-                                                             stateRestoreCallback,
+                                                             new CompositeRestoreListener(stateRestoreCallback),
                                                              checkpointedOffsets.get(storePartition),
                                                              offsetLimit(storePartition),
-                                                             store.persistent());
+                                                             store.persistent(),
+                                                             store.name());
             changelogReader.register(restorer);
         }
 
@@ -205,19 +206,16 @@ public class ProcessorStateManager implements StateManager {
                                                              final List<ConsumerRecord<byte[], byte[]>> records) {
         final long limit = offsetLimit(storePartition);
         List<ConsumerRecord<byte[], byte[]>> remainingRecords = null;
+        final List<KeyValue<byte[], byte[]>> restoreRecords = new ArrayList<>();
 
         // restore states from changelog records
-        final StateRestoreCallback restoreCallback = restoreCallbacks.get(storePartition.topic());
+        final BatchingStateRestoreCallback restoreCallback = getBatchingRestoreCallback(restoreCallbacks.get(storePartition.topic()));
 
         long lastOffset = -1L;
         int count = 0;
         for (final ConsumerRecord<byte[], byte[]> record : records) {
             if (record.offset() < limit) {
-                try {
-                    restoreCallback.restore(record.key(), record.value());
-                } catch (final Exception e) {
-                    throw new ProcessorStateException(String.format("%s exception caught while trying to restore state from %s", logPrefix, storePartition), e);
-                }
+                restoreRecords.add(KeyValue.pair(record.key(), record.value()));
                 lastOffset = record.offset();
             } else {
                 if (remainingRecords == null) {
@@ -227,6 +225,14 @@ public class ProcessorStateManager implements StateManager {
                 remainingRecords.add(record);
             }
             count++;
+        }
+
+        if (!restoreRecords.isEmpty()) {
+            try {
+                restoreCallback.restoreAll(restoreRecords);
+            } catch (final Exception e) {
+                throw new ProcessorStateException(String.format("%s exception caught while trying to restore state from %s", logPrefix, storePartition), e);
+            }
         }
 
         // record the restored offset for its change log partition
@@ -349,7 +355,7 @@ public class ProcessorStateManager implements StateManager {
     }
 
     void registerGlobalStateStores(final List<StateStore> stateStores) {
-        log.info("{} Register global stores {}", logPrefix, stateStores);
+        log.debug("{} Register global stores {}", logPrefix, stateStores);
         for (final StateStore stateStore : stateStores) {
             globalStores.put(stateStore.name(), stateStore);
         }
@@ -358,5 +364,13 @@ public class ProcessorStateManager implements StateManager {
     @Override
     public StateStore getGlobalStore(final String name) {
         return globalStores.get(name);
+    }
+
+    private BatchingStateRestoreCallback getBatchingRestoreCallback(StateRestoreCallback callback) {
+        if (callback instanceof BatchingStateRestoreCallback) {
+            return (BatchingStateRestoreCallback) callback;
+        }
+
+        return new WrappedBatchingStateRestoreCallback(callback);
     }
 }

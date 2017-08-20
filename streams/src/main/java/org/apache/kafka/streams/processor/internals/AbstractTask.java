@@ -27,7 +27,6 @@ import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -38,19 +37,19 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
-public abstract class AbstractTask {
+public abstract class AbstractTask implements Task {
     private static final Logger log = LoggerFactory.getLogger(AbstractTask.class);
 
     final TaskId id;
     final String applicationId;
     final ProcessorTopology topology;
-    final Consumer consumer;
     final ProcessorStateManager stateMgr;
     final Set<TopicPartition> partitions;
-    InternalProcessorContext processorContext;
-    private final ThreadCache cache;
+    final Consumer consumer;
     final String logPrefix;
     final boolean eosEnabled;
+
+    InternalProcessorContext processorContext;
 
     /**
      * @throws ProcessorStateException if the state manager cannot be created
@@ -63,15 +62,13 @@ public abstract class AbstractTask {
                  final ChangelogReader changelogReader,
                  final boolean isStandby,
                  final StateDirectory stateDirectory,
-                 final ThreadCache cache,
                  final StreamsConfig config) {
         this.id = id;
         this.applicationId = applicationId;
         this.partitions = new HashSet<>(partitions);
         this.topology = topology;
         this.consumer = consumer;
-        this.cache = cache;
-        eosEnabled = StreamsConfig.EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
+        this.eosEnabled = StreamsConfig.EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
 
         logPrefix = String.format("%s [%s]", isStandby ? "standby-task" : "task", id());
 
@@ -90,36 +87,32 @@ public abstract class AbstractTask {
         }
     }
 
-    public abstract void resume();
-
-    public abstract void commit();
-    public abstract void suspend();
-    public abstract void close(final boolean clean);
-
-    public final TaskId id() {
+    @Override
+    public TaskId id() {
         return id;
     }
 
+    @Override
     public final String applicationId() {
         return applicationId;
     }
 
+    @Override
     public final Set<TopicPartition> partitions() {
         return partitions;
     }
 
+    @Override
     public final ProcessorTopology topology() {
         return topology;
     }
 
+    @Override
     public final ProcessorContext context() {
         return processorContext;
     }
 
-    public final ThreadCache cache() {
-        return cache;
-    }
-
+    @Override
     public StateStore getStore(final String name) {
         return stateMgr.getStore(name);
     }
@@ -168,11 +161,15 @@ public abstract class AbstractTask {
     }
 
     protected void updateOffsetLimits() {
-        log.debug("{} Updating store offset limits {}", logPrefix);
         for (final TopicPartition partition : partitions) {
             try {
                 final OffsetAndMetadata metadata = consumer.committed(partition); // TODO: batch API?
-                stateMgr.putOffsetLimit(partition, metadata != null ? metadata.offset() : 0L);
+                final long offset = metadata != null ? metadata.offset() : 0L;
+                stateMgr.putOffsetLimit(partition, offset);
+
+                if (log.isTraceEnabled()) {
+                    log.trace("{} Updating store offset limits {} for changelog {}", logPrefix, offset, partition);
+                }
             } catch (final AuthorizationException e) {
                 throw new ProcessorStateException(String.format("task [%s] AuthorizationException when initializing offsets for %s", id, partition), e);
             } catch (final WakeupException e) {
@@ -191,13 +188,13 @@ public abstract class AbstractTask {
     }
 
     void initializeStateStores() {
-        log.debug("{} Initializing state stores", logPrefix);
+        log.trace("{} Initializing state stores", logPrefix);
 
         // set initial offset limits
         updateOffsetLimits();
 
         for (final StateStore store : topology.stateStores()) {
-            log.trace("task [{}] Initializing store {}", id(), store.name());
+            log.trace("{} Initializing store {}", logPrefix, store.name());
             store.init(processorContext, store);
         }
     }

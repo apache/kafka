@@ -102,7 +102,7 @@ public class Stores {
                             @Override
                             public PersistentKeyValueFactory<K, V> persistent() {
                                 return new PersistentKeyValueFactory<K, V>() {
-                                    public boolean cachingEnabled;
+                                    boolean cachingEnabled;
                                     private long windowSize;
                                     private final Map<String, String> logConfig = new HashMap<>();
                                     private int numSegments = 0;
@@ -113,6 +113,9 @@ public class Stores {
 
                                     @Override
                                     public PersistentKeyValueFactory<K, V> windowed(final long windowSize, final long retentionPeriod, final int numSegments, final boolean retainDuplicates) {
+                                        if (numSegments < RocksDBWindowStoreSupplier.MIN_SEGMENTS) {
+                                            throw new IllegalArgumentException("numSegments must be >= " + RocksDBWindowStoreSupplier.MIN_SEGMENTS);
+                                        }
                                         this.windowSize = windowSize;
                                         this.numSegments = numSegments;
                                         this.retentionPeriod = retentionPeriod;

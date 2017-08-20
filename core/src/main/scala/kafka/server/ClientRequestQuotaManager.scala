@@ -27,10 +27,32 @@ class ClientRequestQuotaManager(private val config: ClientQuotaManagerConfig,
                          private val metrics: Metrics,
                          private val time: Time) extends ClientQuotaManager(config, metrics, QuotaType.Request, time) {
   val maxThrottleTimeMs = TimeUnit.SECONDS.toMillis(this.config.quotaWindowSizeSeconds)
-  val exemptSensor = createSensor(exemptSensorName, exemptMetricName)
+  def exemptSensor = getOrCreateSensor(exemptSensorName, exemptMetricName)
 
   def recordExempt(value: Double) {
     exemptSensor.record(value)
+  }
+
+  def maybeRecordAndThrottle(sanitizedUser: String, clientId: String, requestThreadTimeNanos: Long,
+      sendResponseCallback: Int => Unit, recordNetworkThreadTimeCallback: (Long => Unit) => Unit): Unit = {
+    if (quotasEnabled) {
+      val quotaSensors = getOrCreateQuotaSensors(sanitizedUser, clientId)
+      recordNetworkThreadTimeCallback(timeNanos => recordNoThrottle(quotaSensors, nanosToPercentage(timeNanos)))
+
+      recordAndThrottleOnQuotaViolation(
+          quotaSensors,
+          nanosToPercentage(requestThreadTimeNanos),
+          sendResponseCallback)
+    } else {
+      sendResponseCallback(0)
+    }
+  }
+
+  def maybeRecordExempt(requestThreadTimeNanos: Long, recordNetworkThreadTimeCallback: (Long => Unit) => Unit): Unit = {
+    if (quotasEnabled) {
+      recordNetworkThreadTimeCallback(timeNanos => recordExempt(nanosToPercentage(timeNanos)))
+      recordExempt(nanosToPercentage(requestThreadTimeNanos))
+    }
   }
 
   override protected def throttleTime(clientMetric: KafkaMetric, config: MetricConfig): Long = {
@@ -50,5 +72,7 @@ class ClientRequestQuotaManager(private val config: ClientQuotaManagerConfig,
   }
 
   private def exemptSensorName: String = "exempt-" + QuotaType.Request
+
+  private def nanosToPercentage(nanos: Long): Double = nanos * ClientQuotaManagerConfig.NanosToPercentagePerSecond
 
 }

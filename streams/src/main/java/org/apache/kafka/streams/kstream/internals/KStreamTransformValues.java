@@ -21,9 +21,12 @@ import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.ValueTransformer;
 import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
+import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.PunctuationType;
+import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
@@ -98,6 +101,12 @@ public class KStreamTransformValues<K, V, R> implements ProcessorSupplier<K, V> 
                     }
 
                     @Override
+                    public Cancellable schedule(final long interval, final PunctuationType type, final Punctuator callback) {
+                        return context.schedule(interval, type, callback);
+                    }
+
+                    @SuppressWarnings("deprecation")
+                    @Override
                     public void schedule(final long interval) {
                         context.schedule(interval);
                     }
@@ -160,6 +169,7 @@ public class KStreamTransformValues<K, V, R> implements ProcessorSupplier<K, V> 
             context.forward(key, valueTransformer.transform(value));
         }
 
+        @SuppressWarnings("deprecation")
         @Override
         public void punctuate(long timestamp) {
             if (valueTransformer.punctuate(timestamp) != null) {

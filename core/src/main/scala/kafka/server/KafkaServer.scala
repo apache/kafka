@@ -47,7 +47,7 @@ import org.apache.kafka.common.utils.{AppInfoParser, Time}
 import org.apache.kafka.common.{ClusterResource, Node}
 
 import scala.collection.JavaConverters._
-import scala.collection.{Map, mutable}
+import scala.collection.{Seq, Map, mutable}
 
 object KafkaServer {
   // Copy the subset of properties that are relevant to Logs
@@ -110,6 +110,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
   var socketServer: SocketServer = null
   var requestHandlerPool: KafkaRequestHandlerPool = null
 
+  var logDirFailureChannel: LogDirFailureChannel = null
   var logManager: LogManager = null
 
   var replicaManager: ReplicaManager = null
@@ -195,7 +196,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         info(s"Cluster ID = $clusterId")
 
         /* generate brokerId */
-        config.brokerId =  getBrokerId
+        val (brokerId, initialOfflineDirs) = getBrokerIdAndOfflineDirs
+        config.brokerId = brokerId
         this.logIdent = "[Kafka Server " + config.brokerId + "], "
 
         /* create and configure metrics */
@@ -211,8 +213,10 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         quotaManagers = QuotaFactory.instantiate(config, metrics, time)
         notifyClusterListeners(kafkaMetricsReporters ++ reporters.asScala)
 
+        logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size)
+
         /* start log manager */
-        logManager = LogManager(config, zkUtils, brokerState, kafkaScheduler, time, brokerTopicStats)
+        logManager = LogManager(config, initialOfflineDirs, zkUtils, brokerState, kafkaScheduler, time, brokerTopicStats, logDirFailureChannel)
         logManager.startup()
 
         metadataCache = new MetadataCache(config.brokerId)
@@ -307,7 +311,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
 
   protected def createReplicaManager(isShuttingDown: AtomicBoolean): ReplicaManager =
     new ReplicaManager(config, metrics, time, zkUtils, kafkaScheduler, logManager, isShuttingDown, quotaManagers.follower,
-      brokerTopicStats, metadataCache)
+      brokerTopicStats, metadataCache, logDirFailureChannel)
 
   private def initZk(): ZkUtils = {
     info(s"Connecting to zookeeper on ${config.zkConnect}")
@@ -332,7 +336,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
                                               secureAclsEnabled)
       zkClientForChrootCreation.makeSurePersistentPathExists(chroot)
       info(s"Created zookeeper path $chroot")
-      zkClientForChrootCreation.zkClient.close()
+      zkClientForChrootCreation.close()
     }
 
     val zkUtils = ZkUtils(config.zkConnect,
@@ -359,7 +363,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
 
     val socketTimeoutMs = config.controllerSocketTimeoutMs
 
-    def networkClientControlledShutdown(retries: Int): Boolean = {
+    def doControlledShutdown(retries: Int): Boolean = {
       val metadataUpdater = new ManualMetadataUpdater()
       val networkClient = {
         val channelBuilder = ChannelBuilders.clientChannelBuilder(
@@ -410,21 +414,20 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
           // Get the current controller info. This is to ensure we use the most recent info to issue the
           // controlled shutdown request
           val controllerId = zkUtils.getController()
-          zkUtils.getBrokerInfo(controllerId) match {
-            case Some(broker) =>
-              // if this is the first attempt, if the controller has changed or if an exception was thrown in a previous
-              // attempt, connect to the most recent controller
-              if (ioException || broker != prevController) {
+          //If this method returns None ignore and try again
+          zkUtils.getBrokerInfo(controllerId).foreach { broker =>
+            // if this is the first attempt, if the controller has changed or if an exception was thrown in a previous
+            // attempt, connect to the most recent controller
+            if (ioException || broker != prevController) {
 
-                ioException = false
+              ioException = false
 
-                if (prevController != null)
-                  networkClient.close(node(prevController).idString)
+              if (prevController != null)
+                networkClient.close(node(prevController).idString)
 
-                prevController = broker
-                metadataUpdater.setNodes(Seq(node(prevController)).asJava)
-              }
-            case None => //ignore and try again
+              prevController = broker
+              metadataUpdater.setNodes(Seq(node(prevController)).asJava)
+            }
           }
 
           // 2. issue a controlled shutdown to the controller
@@ -435,7 +438,9 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
                 throw new SocketTimeoutException(s"Failed to connect within $socketTimeoutMs ms")
 
               // send the controlled shutdown request
-              val controlledShutdownRequest = new ControlledShutdownRequest.Builder(config.brokerId)
+              val controlledShutdownApiVersion: Short = if (config.interBrokerProtocolVersion < KAFKA_0_9_0) 0 else 1
+              val controlledShutdownRequest = new ControlledShutdownRequest.Builder(config.brokerId,
+                controlledShutdownApiVersion)
               val request = networkClient.newClientRequest(node(prevController).idString, controlledShutdownRequest,
                 time.milliseconds(), true)
               val clientResponse = NetworkClientUtils.sendAndReceive(networkClient, request, time)
@@ -469,83 +474,6 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
       shutdownSucceeded
     }
 
-    def blockingChannelControlledShutdown(retries: Int): Boolean = {
-      var remainingRetries = retries
-      var channel: BlockingChannel = null
-      var prevController: Broker = null
-      var shutdownSucceeded: Boolean = false
-      try {
-        while (!shutdownSucceeded && remainingRetries > 0) {
-          remainingRetries = remainingRetries - 1
-
-          // 1. Find the controller and establish a connection to it.
-
-          // Get the current controller info. This is to ensure we use the most recent info to issue the
-          // controlled shutdown request
-          val controllerId = zkUtils.getController()
-          zkUtils.getBrokerInfo(controllerId) match {
-            case Some(broker) =>
-              if (channel == null || prevController == null || !prevController.equals(broker)) {
-                // if this is the first attempt or if the controller has changed, create a channel to the most recent
-                // controller
-                if (channel != null)
-                  channel.disconnect()
-
-                val brokerEndPoint = broker.getBrokerEndPoint(config.interBrokerListenerName)
-                channel = new BlockingChannel(brokerEndPoint.host,
-                  brokerEndPoint.port,
-                  BlockingChannel.UseDefaultBufferSize,
-                  BlockingChannel.UseDefaultBufferSize,
-                  config.controllerSocketTimeoutMs)
-                channel.connect()
-                prevController = broker
-              }
-            case None => //ignore and try again
-          }
-
-          // 2. issue a controlled shutdown to the controller
-          if (channel != null) {
-            var response: NetworkReceive = null
-            try {
-              // send the controlled shutdown request
-              val request = new kafka.api.ControlledShutdownRequest(0, correlationId.getAndIncrement, None, config.brokerId)
-              channel.send(request)
-
-              response = channel.receive()
-              val shutdownResponse = kafka.api.ControlledShutdownResponse.readFrom(response.payload())
-              if (shutdownResponse.error == Errors.NONE && shutdownResponse.partitionsRemaining != null &&
-                shutdownResponse.partitionsRemaining.isEmpty) {
-                shutdownSucceeded = true
-                info ("Controlled shutdown succeeded")
-              }
-              else {
-                info("Remaining partitions to move: %s".format(shutdownResponse.partitionsRemaining.mkString(",")))
-                info("Error code from controller: %d".format(shutdownResponse.error.code))
-              }
-            }
-            catch {
-              case ioe: java.io.IOException =>
-                channel.disconnect()
-                channel = null
-                warn("Error during controlled shutdown, possibly because leader movement took longer than the configured controller.socket.timeout.ms and/or request.timeout.ms: %s".format(ioe.getMessage))
-                // ignore and try again
-            }
-          }
-          if (!shutdownSucceeded) {
-            Thread.sleep(config.controlledShutdownRetryBackoffMs)
-            warn("Retrying controlled shutdown after the previous attempt failed...")
-          }
-        }
-      }
-      finally {
-        if (channel != null) {
-          channel.disconnect()
-          channel = null
-        }
-      }
-      shutdownSucceeded
-    }
-
     if (startupComplete.get() && config.controlledShutdownEnable) {
       // We request the controller to do a controlled shutdown. On failure, we backoff for a configured period
       // of time and try again for a configured number of retries. If all the attempt fails, we simply force
@@ -554,16 +482,10 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
 
       brokerState.newState(PendingControlledShutdown)
 
-      val shutdownSucceeded =
-        // Before 0.9.0.0, `ControlledShutdownRequest` did not contain `client_id` and it's a mandatory field in
-        // `RequestHeader`, which is used by `NetworkClient`
-        if (config.interBrokerProtocolVersion >= KAFKA_0_9_0)
-          networkClientControlledShutdown(config.controlledShutdownMaxRetries.intValue)
-        else blockingChannelControlledShutdown(config.controlledShutdownMaxRetries.intValue)
+      val shutdownSucceeded = doControlledShutdown(config.controlledShutdownMaxRetries.intValue)
 
       if (!shutdownSucceeded)
         warn("Proceeding to do an unclean shutdown as all the controlled shutdown attempts failed")
-
     }
   }
 
@@ -584,7 +506,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
       if (shutdownLatch.getCount > 0 && isShuttingDown.compareAndSet(false, true)) {
         CoreUtils.swallow(controlledShutdown())
         brokerState.newState(BrokerShuttingDown)
-        
+
         if (socketServer != null)
           CoreUtils.swallow(socketServer.shutdown())
         if (requestHandlerPool != null)
@@ -653,16 +575,25 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
     * <li> config has broker.id and there is no meta.properties file, creates new meta.properties and stores broker.id
     * <ol>
     *
-    * @return A brokerId.
+    * The log directories whose meta.properties can not be accessed due to IOException will be returned to the caller
+    *
+    * @return A 2-tuple containing the brokerId and a sequence of offline log directories.
     */
-  private def getBrokerId: Int =  {
+  private def getBrokerIdAndOfflineDirs: (Int, Seq[String]) =  {
     var brokerId = config.brokerId
     val brokerIdSet = mutable.HashSet[Int]()
+    val offlineDirs = mutable.ArrayBuffer.empty[String]
 
     for (logDir <- config.logDirs) {
-      val brokerMetadataOpt = brokerMetadataCheckpoints(logDir).read()
-      brokerMetadataOpt.foreach { brokerMetadata =>
-        brokerIdSet.add(brokerMetadata.brokerId)
+      try {
+        val brokerMetadataOpt = brokerMetadataCheckpoints(logDir).read()
+        brokerMetadataOpt.foreach { brokerMetadata =>
+          brokerIdSet.add(brokerMetadata.brokerId)
+        }
+      } catch {
+        case e : IOException =>
+          offlineDirs += logDir
+          error(s"Fail to read ${brokerMetaPropsFile} under log directory ${logDir}", e)
       }
     }
 
@@ -680,16 +611,17 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
     else if(brokerIdSet.size == 1) // pick broker.id from meta.properties
       brokerId = brokerIdSet.last
 
-    brokerId
+
+    (brokerId, offlineDirs)
   }
 
   private def checkpointBrokerId(brokerId: Int) {
     var logDirsWithoutMetaProps: List[String] = List()
 
-    for (logDir <- config.logDirs) {
-      val brokerMetadataOpt = brokerMetadataCheckpoints(logDir).read()
+    for (logDir <- logManager.liveLogDirs) {
+      val brokerMetadataOpt = brokerMetadataCheckpoints(logDir.getAbsolutePath).read()
       if(brokerMetadataOpt.isEmpty)
-          logDirsWithoutMetaProps ++= List(logDir)
+        logDirsWithoutMetaProps ++= List(logDir.getAbsolutePath)
     }
 
     for(logDir <- logDirsWithoutMetaProps) {

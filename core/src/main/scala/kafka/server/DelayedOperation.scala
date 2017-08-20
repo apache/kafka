@@ -349,7 +349,7 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
 
     def cancel(): List[T] = {
       val iter = operations.iterator()
-      var cancelled = new ListBuffer[T]()
+      val cancelled = new ListBuffer[T]()
       while (iter.hasNext) {
         val curr = iter.next()
         curr.cancel()

@@ -18,12 +18,12 @@ package org.apache.kafka.streams.tests;
 
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KGroupedStream;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
 
 import java.io.File;
 import java.util.Properties;
@@ -34,13 +34,16 @@ public class EosTestClient extends SmokeTestUtil {
     static final String APP_ID = "EosTest";
     private final String kafka;
     private final File stateDir;
+    private final boolean withRepartitioning;
+
     private KafkaStreams streams;
     private boolean uncaughtException;
 
-    EosTestClient(final File stateDir, final String kafka) {
+    EosTestClient(final String kafka, final File stateDir, final boolean withRepartitioning) {
         super();
-        this.stateDir = stateDir;
         this.kafka = kafka;
+        this.stateDir = stateDir;
+        this.withRepartitioning = withRepartitioning;
     }
 
     private boolean isRunning = true;
@@ -81,8 +84,8 @@ public class EosTestClient extends SmokeTestUtil {
         }
     }
 
-    private static KafkaStreams createKafkaStreams(final File stateDir,
-                                                   final String kafka) {
+    private KafkaStreams createKafkaStreams(final File stateDir,
+                                            final String kafka) {
         final Properties props = new Properties();
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID);
         props.put(StreamsConfig.STATE_DIR_CONFIG, stateDir.toString());
@@ -96,7 +99,7 @@ public class EosTestClient extends SmokeTestUtil {
         props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
 
 
-        final KStreamBuilder builder = new KStreamBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
         final KStream<String, Integer> data = builder.stream("data");
 
         data.to("echo");
@@ -144,7 +147,39 @@ public class EosTestClient extends SmokeTestUtil {
             "sum")
             .to(stringSerde, longSerde, "sum");
 
-        return new KafkaStreams(builder, props);
+        if (withRepartitioning) {
+            final KStream<String, Integer> repartitionedData = data.through("repartition");
+
+            repartitionedData.process(SmokeTestUtil.printProcessorSupplier("repartition"));
+
+            final KGroupedStream<String, Integer> groupedDataAfterRepartitioning = repartitionedData.groupByKey();
+            // max
+            groupedDataAfterRepartitioning
+                .aggregate(
+                    new Initializer<Integer>() {
+                        @Override
+                        public Integer apply() {
+                            return Integer.MIN_VALUE;
+                        }
+                    },
+                    new Aggregator<String, Integer, Integer>() {
+                        @Override
+                        public Integer apply(final String aggKey,
+                                             final Integer value,
+                                             final Integer aggregate) {
+                            return (value > aggregate) ? value : aggregate;
+                        }
+                    },
+                    intSerde,
+                    "max")
+                .to(stringSerde, intSerde, "max");
+
+            // count
+            groupedDataAfterRepartitioning.count("cnt")
+                .to(stringSerde, longSerde, "cnt");
+        }
+
+        return new KafkaStreams(builder.build(), props);
     }
 
 }

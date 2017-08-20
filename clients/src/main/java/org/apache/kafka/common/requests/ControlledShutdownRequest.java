@@ -31,7 +31,11 @@ public class ControlledShutdownRequest extends AbstractRequest {
         private final int brokerId;
 
         public Builder(int brokerId) {
-            super(ApiKeys.CONTROLLED_SHUTDOWN_KEY);
+            this(brokerId, null);
+        }
+
+        public Builder(int brokerId, Short desiredVersion) {
+            super(ApiKeys.CONTROLLED_SHUTDOWN_KEY, desiredVersion);
             this.brokerId = brokerId;
         }
 
@@ -49,7 +53,7 @@ public class ControlledShutdownRequest extends AbstractRequest {
             return bld.toString();
         }
     }
-    private int brokerId;
+    private final int brokerId;
 
     private ControlledShutdownRequest(int brokerId, short version) {
         super(version);
@@ -66,8 +70,6 @@ public class ControlledShutdownRequest extends AbstractRequest {
         short versionId = version();
         switch (versionId) {
             case 0:
-                throw new IllegalArgumentException("Version 0 is not supported. It is only supported by " +
-                        "the Scala request class for controlled shutdown");
             case 1:
                 return new ControlledShutdownResponse(Errors.forException(e), Collections.<TopicPartition>emptySet());
             default:

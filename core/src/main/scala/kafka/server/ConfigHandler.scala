@@ -25,6 +25,7 @@ import kafka.log.{LogConfig, LogManager}
 import kafka.security.CredentialProvider
 import kafka.server.Constants._
 import kafka.server.QuotaFactory.QuotaManagers
+import kafka.utils.Implicits._
 import kafka.utils.Logging
 import org.apache.kafka.common.config.ConfigDef.Validator
 import org.apache.kafka.common.config.ConfigException
@@ -32,7 +33,6 @@ import org.apache.kafka.common.metrics.Quota
 import org.apache.kafka.common.metrics.Quota._
 
 import scala.collection.JavaConverters._
-import scala.collection.mutable
 
 /**
   * The ConfigHandler is used to process config change notifications received by the DynamicConfigManager
@@ -55,7 +55,7 @@ class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaC
     if (logs.nonEmpty) {
       /* combine the default properties with the overrides in zk to create the new LogConfig */
       val props = new Properties()
-      props.putAll(logManager.defaultConfig.originals)
+      props ++= logManager.defaultConfig.originals.asScala
       topicConfig.asScala.foreach { case (key, value) =>
         if (!configNamesToExclude.contains(key)) props.put(key, value)
       }
@@ -199,12 +199,16 @@ object ThrottledReplicaListValidator extends Validator {
     def check(proposed: Seq[Any]): Unit = {
       if (!(proposed.forall(_.toString.trim.matches("([0-9]+:[0-9]+)?"))
         || proposed.headOption.exists(_.toString.trim.equals("*"))))
-        throw new ConfigException(name, value, s"$name  must match for format [partitionId],[brokerId]:[partitionId],[brokerId]:[partitionId],[brokerId] etc")
+        throw new ConfigException(name, value,
+          s"$name must be the literal '*' or a list of replicas in the following format: [partitionId],[brokerId]:[partitionId],[brokerId]:...")
     }
     value match {
       case scalaSeq: Seq[_] => check(scalaSeq)
       case javaList: java.util.List[_] => check(javaList.asScala)
-      case _ => throw new ConfigException(name, value, s"$name  must be a List but was ${value.getClass.getName}")
+      case _ => throw new ConfigException(name, value, s"$name must be a List but was ${value.getClass.getName}")
     }
   }
+
+  override def toString: String = "[partitionId],[brokerId]:[partitionId],[brokerId]:..."
+
 }

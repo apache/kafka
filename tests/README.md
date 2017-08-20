@@ -10,9 +10,9 @@ Running tests using docker
 --------------------------
 Docker containers can be used for running kafka system tests locally.
 * Requirements
-  - Docker 1.12.3 is installed and running on the machine.
-  - Test require a single kafka_*SNAPSHOT.tgz to be present in core/build/distributions.
-   This can be done by running ./gradlew clean releaseTarGz  
+  - Docker 1.12.3 (or higher) is installed and running on the machine.
+  - Test require a single kafka_*SNAPSHOT.tgz to be present in core/build/distributions, as well as the system test libs.
+   This can be done by running ./gradlew clean systemTestLibs releaseTarGz
 * Run all tests
 ```
 bash tests/docker/run_tests.sh
@@ -385,7 +385,7 @@ Preparation
 In these steps, we will create an IAM role which has permission to create and destroy EC2 instances,
 set up a keypair used for ssh access to the test driver and worker machines, and create a security group to allow the test driver and workers to all communicate via TCP.
 
-* [Create an IAM role](http://docs.aws.amazon.com/IAM/latest/UserGuide/Using_SettingUpUser.html#Using_CreateUser_console). We'll give this role the ability to launch or kill additional EC2 machines.
+* [Create an IAM role](http://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_create_for-user.html). We'll give this role the ability to launch or kill additional EC2 machines.
  - Create role "kafkatest-master"
  - Role type: Amazon EC2
  - Attach policy: AmazonEC2FullAccess (this will allow our test-driver to create and destroy EC2 instances)
@@ -393,7 +393,7 @@ set up a keypair used for ssh access to the test driver and worker machines, and
 * If you haven't already, [set up a keypair to use for SSH access](http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-key-pairs.html). For the purpose
 of this quickstart, let's say the keypair name is kafkatest, and you've saved the private key in kafktest.pem
 
-* Next, create a security group called "kafkatest".
+* Next, create a EC2 security group called "kafkatest".
  - After creating the group, inbound rules: allow SSH on port 22 from anywhere; also, allow access on all ports (0-65535) from other machines in the kafkatest group.
 
 Create the Test Driver
@@ -423,12 +423,19 @@ the test driver machine.
 
 * Start by making sure you're up to date, and install git and ducktape:
 
-        $ sudo apt-get update && sudo apt-get -y upgrade && sudo apt-get install -y git
+        $ sudo apt-get update && sudo apt-get -y upgrade && sudo apt-get install -y python-pip git
         $ pip install ducktape
 
 * Get Kafka:
 
         $ git clone https://git-wip-us.apache.org/repos/asf/kafka.git kafka
+
+* Update your AWS credentials:
+
+        export AWS_IAM_ROLE=$(curl -s http://169.254.169.254/latest/meta-data/iam/info | grep InstanceProfileArn | cut -d '"' -f 4 | cut -d '/' -f 2)
+        export AWS_ACCESS_KEY=$(curl -s http://169.254.169.254/latest/meta-data/iam/security-credentials/$AWS_IAM_ROLE | grep AccessKeyId | awk -F\" '{ print $4 }')
+        export AWS_SECRET_KEY=$(curl -s http://169.254.169.254/latest/meta-data/iam/security-credentials/$AWS_IAM_ROLE | grep SecretAccessKey | awk -F\" '{ print $4 }')
+        export AWS_SESSION_TOKEN=$(curl -s http://169.254.169.254/latest/meta-data/iam/security-credentials/$AWS_IAM_ROLE | grep Token | awk -F\" '{ print $4 }')
 
 * Install some dependencies:
 
@@ -461,6 +468,13 @@ the test driver machine.
 
         $ cd kafka/tests
         $ ducktape kafkatest/tests
+
+* Update Worker VM
+
+If you change code in a branch on your driver VM, you need to update your worker VM to pick up this change:
+
+        $ ./gradlew systemTestLibs
+        $ vagrant rsync
 
 * To halt your workers without destroying persistent state, run `vagrant halt`. Run `vagrant destroy -f` to destroy all traces of your workers.
 

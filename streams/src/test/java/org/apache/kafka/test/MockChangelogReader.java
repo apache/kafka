@@ -48,6 +48,11 @@ public class MockChangelogReader implements ChangelogReader {
         return Collections.emptyMap();
     }
 
+    @Override
+    public void clear() {
+        registered.clear();
+    }
+
     public boolean wasRegistered(final TopicPartition partition) {
         return registered.contains(partition);
     }

@@ -110,7 +110,7 @@ final class InFlightRequests {
      */
     public boolean isEmpty(String node) {
         Deque<NetworkClient.InFlightRequest> queue = requests.get(node);
-        return queue != null && !queue.isEmpty();
+        return queue == null || queue.isEmpty();
     }
 
     /**
@@ -141,22 +141,18 @@ final class InFlightRequests {
      * @return All the in-flight requests for that node that have been removed
      */
     public Iterable<NetworkClient.InFlightRequest> clearAll(String node) {
-        Deque<NetworkClient.InFlightRequest> reqs = requests.get(node);
-        if (reqs == null) {
-            return Collections.emptyList();
-        } else {
-            return requests.remove(node);
-        }
+        Deque<NetworkClient.InFlightRequest> reqs = requests.remove(node);
+        return (reqs == null) ? Collections.<NetworkClient.InFlightRequest>emptyList() : reqs;
     }
 
     /**
      * Returns a list of nodes with pending in-flight request, that need to be timed out
      *
      * @param now current time in milliseconds
-     * @param requestTimeout max time to wait for the request to be completed
+     * @param requestTimeoutMs max time to wait for the request to be completed
      * @return list of nodes
      */
-    public List<String> getNodesWithTimedOutRequests(long now, int requestTimeout) {
+    public List<String> getNodesWithTimedOutRequests(long now, int requestTimeoutMs) {
         List<String> nodeIds = new LinkedList<>();
         for (Map.Entry<String, Deque<NetworkClient.InFlightRequest>> requestEntry : requests.entrySet()) {
             String nodeId = requestEntry.getKey();
@@ -165,11 +161,10 @@ final class InFlightRequests {
             if (!deque.isEmpty()) {
                 NetworkClient.InFlightRequest request = deque.peekLast();
                 long timeSinceSend = now - request.sendTimeMs;
-                if (timeSinceSend > requestTimeout)
+                if (timeSinceSend > requestTimeoutMs)
                     nodeIds.add(nodeId);
             }
         }
-
         return nodeIds;
     }
     

@@ -338,12 +338,12 @@ object ProducerStateManager {
     buffer.flip()
 
     // now fill in the CRC
-    val crc = Crc32C.compute(buffer, ProducerEntriesOffset, buffer.limit - ProducerEntriesOffset)
+    val crc = Crc32C.compute(buffer, ProducerEntriesOffset, buffer.limit() - ProducerEntriesOffset)
     ByteUtils.writeUnsignedInt(buffer, CrcOffset, crc)
 
     val fos = new FileOutputStream(file)
     try {
-      fos.write(buffer.array, buffer.arrayOffset, buffer.limit)
+      fos.write(buffer.array, buffer.arrayOffset, buffer.limit())
     } finally {
       fos.close()
     }
@@ -638,9 +638,13 @@ class ProducerStateManager(val topicPartition: TopicPartition,
   }
 
   private def listSnapshotFiles: List[File] = {
-    if (logDir.exists && logDir.isDirectory)
-      logDir.listFiles.filter(f => f.isFile && isSnapshotFile(f.getName)).toList
-    else
+    if (logDir.exists && logDir.isDirectory) {
+      val files = logDir.listFiles
+      if (files != null)
+        files.filter(f => f.isFile && isSnapshotFile(f.getName)).toList
+      else
+        List.empty[File]
+    } else
       List.empty[File]
   }
 

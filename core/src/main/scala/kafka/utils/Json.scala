@@ -14,34 +14,27 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
- package kafka.utils
+package kafka.utils
 
-import kafka.common._
+import com.fasterxml.jackson.core.JsonProcessingException
+import com.fasterxml.jackson.databind.ObjectMapper
+import kafka.utils.json.JsonValue
 import scala.collection._
-import util.parsing.json.JSON
 
 /**
- *  A wrapper that synchronizes JSON in scala, which is not threadsafe.
+ * Provides methods for parsing JSON with Jackson and encoding to JSON with a simple and naive custom implementation.
  */
-object Json extends Logging {
-  val myConversionFunc = {input : String => input.toInt}
-  JSON.globalNumberParser = myConversionFunc
-  val lock = new Object
+object Json {
+
+  private val mapper = new ObjectMapper()
 
   /**
-   * Parse a JSON string into an object
+   * Parse a JSON string into a JsonValue if possible. `None` is returned if `input` is not valid JSON.
    */
-  def parseFull(input: String): Option[Any] = {
-    lock synchronized {
-      try {
-        JSON.parseFull(input)
-      } catch {
-        case t: Throwable =>
-          throw new KafkaException("Can't parse json string: %s".format(input), t)
-      }
-    }
-  }
-  
+  def parseFull(input: String): Option[JsonValue] =
+    try Option(mapper.readTree(input)).map(JsonValue(_))
+    catch { case _: JsonProcessingException => None }
+
   /**
    * Encode an object into a JSON string. This method accepts any type T where
    *   T => null | Boolean | String | Number | Map[String, T] | Array[T] | Iterable[T]
@@ -55,17 +48,15 @@ object Json extends Logging {
       case b: Boolean => b.toString
       case s: String => "\"" + s + "\""
       case n: Number => n.toString
-      case m: Map[_, _] => 
-        "{" + 
-          m.map(elem => 
-            elem match {
-            case t: Tuple2[_,_] => encode(t._1) + ":" + encode(t._2)
-            case _ => throw new IllegalArgumentException("Invalid map element (" + elem + ") in " + obj)
-          }).mkString(",") + 
-      "}"
+      case m: Map[_, _] => "{" +
+        m.map {
+          case (k, v) => encode(k) + ":" + encode(v)
+          case elem => throw new IllegalArgumentException(s"Invalid map element '$elem' in $obj")
+        }.mkString(",") + "}"
       case a: Array[_] => encode(a.toSeq)
       case i: Iterable[_] => "[" + i.map(encode).mkString(",") + "]"
-      case other: AnyRef => throw new IllegalArgumentException("Unknown arguement of type " + other.getClass + ": " + other)
+      case other: AnyRef => throw new IllegalArgumentException(s"Unknown argument of type ${other.getClass}: $other")
     }
   }
+
 }

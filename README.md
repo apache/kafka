@@ -127,6 +127,36 @@ Please note for this to work you should create/update `${GRADLE_USER_HOME}/gradl
     signing.password=
     signing.secretKeyRingFile=
 
+### Publishing the streams quickstart archetype artifact to maven ###
+For the Streams archetype project, one cannot use gradle to upload to maven; instead the `mvn deploy` command needs to be called at the quickstart folder:
+
+    cd streams/quickstart
+    mvn deploy
+
+Please note for this to work you should create/update user maven settings (typically, `${USER_HOME}/.m2/settings.xml`) to assign the following variables
+
+    <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0
+                           https://maven.apache.org/xsd/settings-1.0.0.xsd">
+    ...                           
+    <servers>
+       ...
+       <server>
+          <id>apache.snapshots.https</id>
+          <username>${maven_username}</username>
+          <password>${maven_password}</password>
+       </server>
+       <server>
+          <id>apache.releases.https</id>
+          <username>${maven_username}</username>
+          <password>${maven_password}</password>
+        </server>
+        ...
+     </servers>
+     ...
+
+
 ### Installing the jars to the local Maven repository ###
     ./gradlew installAll
 
@@ -164,6 +194,7 @@ directories.  Use -PxmlFindBugsReport=true to generate an XML report instead of 
 
 The following options should be set with a `-P` switch, for example `./gradlew -PmaxParallelForks=1 test`.
 
+* `commitId`: sets the build commit ID as .git/HEAD might not be correct if there are local commits added for build purposes.
 * `mavenUrl`: sets the URL of the maven deployment repository (`file://path/to/repo` can be used to point to a local repository).
 * `maxParallelForks`: limits the maximum number of processes for each task.
 * `showStandardStreams`: shows standard out and standard error of the test JVM(s) on the console.

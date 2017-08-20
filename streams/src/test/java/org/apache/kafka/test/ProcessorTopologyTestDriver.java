@@ -33,13 +33,16 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
+import org.apache.kafka.streams.Topology;
+import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
+import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.apache.kafka.streams.processor.internals.GlobalProcessorContextImpl;
 import org.apache.kafka.streams.processor.internals.GlobalStateManagerImpl;
 import org.apache.kafka.streams.processor.internals.GlobalStateUpdateTask;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
+import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorContextImpl;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
@@ -64,9 +67,9 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * This class makes it easier to write tests to verify the behavior of topologies created with a {@link TopologyBuilder}.
+ * This class makes it easier to write tests to verify the behavior of topologies created with a {@link Topology}.
  * You can test simple topologies that have a single processor, or very complex topologies that have multiple sources, processors,
- * and sinks. And because it starts with a {@link TopologyBuilder}, you can create topologies specific to your tests or you
+ * and sinks. And because it starts with a {@link Topology}, you can create topologies specific to your tests or you
  * can use and test code you already have that uses a builder to create topologies. Best of all, the class works without a real
  * Kafka broker, so the tests execute very quickly with very little overhead.
  * <p>
@@ -150,6 +153,7 @@ public class ProcessorTopologyTestDriver {
     private final Map<String, Queue<ProducerRecord<byte[], byte[]>>> outputRecordsByTopic = new HashMap<>();
     private final Set<String> internalTopics = new HashSet<>();
     private final Map<String, TopicPartition> globalPartitionsByTopic = new HashMap<>();
+    private final StateRestoreListener stateRestoreListener = new MockStateRestoreListener();
     private StreamTask task;
     private GlobalStateUpdateTask globalStateTask;
 
@@ -159,7 +163,7 @@ public class ProcessorTopologyTestDriver {
      * @param builder the topology builder that will be used to create the topology instance
      */
     public ProcessorTopologyTestDriver(final StreamsConfig config,
-                                       final TopologyBuilder builder) {
+                                       final InternalTopologyBuilder builder) {
         topology = builder.setApplicationId(APPLICATION_ID).build(null);
         final ProcessorTopology globalTopology  = builder.buildGlobalStateTopology();
 
@@ -174,7 +178,7 @@ public class ProcessorTopologyTestDriver {
         };
 
         // Identify internal topics for forwarding in process ...
-        for (final TopologyBuilder.TopicsInfo topicsInfo : builder.topicGroups().values()) {
+        for (final InternalTopologyBuilder.TopicsInfo topicsInfo : builder.topicGroups().values()) {
             internalTopics.addAll(topicsInfo.repartitionSourceTopics.keySet());
         }
 
@@ -205,7 +209,7 @@ public class ProcessorTopologyTestDriver {
             final GlobalStateManagerImpl stateManager = new GlobalStateManagerImpl(globalTopology, globalConsumer, stateDirectory);
             globalStateTask = new GlobalStateUpdateTask(globalTopology,
                                                         new GlobalProcessorContextImpl(config, stateManager, streamsMetrics, cache),
-                                                        stateManager
+                                                        stateManager, new LogAndContinueExceptionHandler()
             );
             globalStateTask.initialize();
         }
@@ -219,7 +223,8 @@ public class ProcessorTopologyTestDriver {
                                   new StoreChangelogReader(
                                       createRestoreConsumer(topology.storeToChangelogTopic()),
                                       Time.SYSTEM,
-                                      5000),
+                                      5000,
+                                      stateRestoreListener),
                                   config,
                                   streamsMetrics, stateDirectory,
                                   cache,
@@ -350,7 +355,7 @@ public class ProcessorTopologyTestDriver {
 
     /**
      * Get the {@link StateStore} with the given name. The name should have been supplied via
-     * {@link #ProcessorTopologyTestDriver(StreamsConfig, TopologyBuilder) this object's constructor}, and is
+     * {@link #ProcessorTopologyTestDriver(StreamsConfig, InternalTopologyBuilder) this object's constructor}, and is
      * presumed to be used by a Processor within the topology.
      * <p>
      * This is often useful in test cases to pre-populate the store before the test case instructs the topology to
@@ -366,7 +371,7 @@ public class ProcessorTopologyTestDriver {
 
     /**
      * Get the {@link KeyValueStore} with the given name. The name should have been supplied via
-     * {@link #ProcessorTopologyTestDriver(StreamsConfig, TopologyBuilder) this object's constructor}, and is
+     * {@link #ProcessorTopologyTestDriver(StreamsConfig, InternalTopologyBuilder) this object's constructor}, and is
      * presumed to be used by a Processor within the topology.
      * <p>
      * This is often useful in test cases to pre-populate the store before the test case instructs the topology to

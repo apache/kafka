@@ -72,72 +72,88 @@ public class StreamsKafkaClient {
 
     public static class Config extends AbstractConfig {
 
-        public static Config fromStreamsConfig(StreamsConfig streamsConfig) {
+        static Config fromStreamsConfig(StreamsConfig streamsConfig) {
             return new Config(streamsConfig.originals());
         }
 
-        public Config(Map<?, ?> originals) {
+        Config(Map<?, ?> originals) {
             super(CONFIG, originals, false);
         }
-    }
 
+    }
     private final KafkaClient kafkaClient;
     private final List<MetricsReporter> reporters;
     private final Config streamsConfig;
-
+    private final Map<String, String> defaultTopicConfigs = new HashMap<>();
     private static final int MAX_INFLIGHT_REQUESTS = 100;
 
-    public StreamsKafkaClient(final StreamsConfig streamsConfig) {
-        this(Config.fromStreamsConfig(streamsConfig));
+
+    StreamsKafkaClient(final Config streamsConfig,
+                       final KafkaClient kafkaClient,
+                       final List<MetricsReporter> reporters) {
+        this.streamsConfig = streamsConfig;
+        this.kafkaClient = kafkaClient;
+        this.reporters = reporters;
+        extractDefaultTopicConfigs(streamsConfig.originalsWithPrefix(StreamsConfig.TOPIC_PREFIX));
     }
 
-    public StreamsKafkaClient(final Config streamsConfig) {
-        this.streamsConfig = streamsConfig;
+    private void extractDefaultTopicConfigs(final Map<String, Object> configs) {
+        for (final Map.Entry<String, Object> entry : configs.entrySet()) {
+            if (entry.getValue() != null) {
+                defaultTopicConfigs.put(entry.getKey(), entry.getValue().toString());
+            }
+        }
+    }
 
+
+    public static StreamsKafkaClient create(final Config streamsConfig) {
         final Time time = new SystemTime();
 
         final Map<String, String> metricTags = new LinkedHashMap<>();
         metricTags.put("client-id", StreamsConfig.CLIENT_ID_CONFIG);
 
         final Metadata metadata = new Metadata(streamsConfig.getLong(
-            StreamsConfig.RETRY_BACKOFF_MS_CONFIG),
-            streamsConfig.getLong(StreamsConfig.METADATA_MAX_AGE_CONFIG),
-            false
-        );
+                StreamsConfig.RETRY_BACKOFF_MS_CONFIG),
+                                               streamsConfig.getLong(StreamsConfig.METADATA_MAX_AGE_CONFIG), false);
         final List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(streamsConfig.getList(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG));
         metadata.update(Cluster.bootstrap(addresses), Collections.<String>emptySet(), time.milliseconds());
 
         final MetricConfig metricConfig = new MetricConfig().samples(streamsConfig.getInt(CommonClientConfigs.METRICS_NUM_SAMPLES_CONFIG))
                 .timeWindow(streamsConfig.getLong(CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_CONFIG), TimeUnit.MILLISECONDS)
                 .tags(metricTags);
-        reporters = streamsConfig.getConfiguredInstances(ProducerConfig.METRIC_REPORTER_CLASSES_CONFIG,
-                MetricsReporter.class);
+        final List<MetricsReporter> reporters = streamsConfig.getConfiguredInstances(ProducerConfig.METRIC_REPORTER_CLASSES_CONFIG,
+                                                         MetricsReporter.class);
         // TODO: This should come from the KafkaStream
-        reporters.add(new JmxReporter("kafka.admin"));
+        reporters.add(new JmxReporter("kafka.admin.client"));
         final Metrics metrics = new Metrics(metricConfig, reporters, time);
 
         final ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(streamsConfig);
 
         final Selector selector = new Selector(
-            streamsConfig.getLong(StreamsConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG),
-            metrics,
-            time,
-            "kafka-client",
-            channelBuilder);
+                streamsConfig.getLong(StreamsConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG),
+                metrics,
+                time,
+                "kafka-client",
+                channelBuilder);
 
-        kafkaClient = new NetworkClient(
-            selector,
-            metadata,
-            streamsConfig.getString(StreamsConfig.CLIENT_ID_CONFIG),
-            MAX_INFLIGHT_REQUESTS, // a fixed large enough value will suffice
-            streamsConfig.getLong(StreamsConfig.RECONNECT_BACKOFF_MS_CONFIG),
-            streamsConfig.getLong(StreamsConfig.RECONNECT_BACKOFF_MAX_MS_CONFIG),
-            streamsConfig.getInt(StreamsConfig.SEND_BUFFER_CONFIG),
-            streamsConfig.getInt(StreamsConfig.RECEIVE_BUFFER_CONFIG),
-            streamsConfig.getInt(StreamsConfig.REQUEST_TIMEOUT_MS_CONFIG),
-            time,
-            true,
-            new ApiVersions());
+        final KafkaClient kafkaClient = new NetworkClient(
+                selector,
+                metadata,
+                streamsConfig.getString(StreamsConfig.CLIENT_ID_CONFIG),
+                MAX_INFLIGHT_REQUESTS, // a fixed large enough value will suffice
+                streamsConfig.getLong(StreamsConfig.RECONNECT_BACKOFF_MS_CONFIG),
+                streamsConfig.getLong(StreamsConfig.RECONNECT_BACKOFF_MAX_MS_CONFIG),
+                streamsConfig.getInt(StreamsConfig.SEND_BUFFER_CONFIG),
+                streamsConfig.getInt(StreamsConfig.RECEIVE_BUFFER_CONFIG),
+                streamsConfig.getInt(StreamsConfig.REQUEST_TIMEOUT_MS_CONFIG),
+                time,
+                true,
+                new ApiVersions());
+        return new StreamsKafkaClient(streamsConfig, kafkaClient, reporters);
+    }
+
+    public static StreamsKafkaClient create(final StreamsConfig streamsConfig) {
+        return create(Config.fromStreamsConfig(streamsConfig));
     }
 
     public void close() throws IOException {
@@ -161,7 +177,7 @@ public class StreamsKafkaClient {
             InternalTopicConfig internalTopicConfig = entry.getKey();
             Integer partitions = entry.getValue();
             final Properties topicProperties = internalTopicConfig.toProperties(windowChangeLogAdditionalRetention);
-            final Map<String, String> topicConfig = new HashMap<>();
+            final Map<String, String> topicConfig = new HashMap<>(defaultTopicConfigs);
             for (String key : topicProperties.stringPropertyNames()) {
                 topicConfig.put(key, topicProperties.getProperty(key));
             }
@@ -217,7 +233,7 @@ public class StreamsKafkaClient {
                 }
             }
             try {
-                kafkaClient.poll(streamsConfig.getLong(StreamsConfig.POLL_MS_CONFIG), Time.SYSTEM.milliseconds());
+                kafkaClient.poll(50, Time.SYSTEM.milliseconds());
             } catch (final Exception e) {
                 throw new StreamsException("Could not poll.", e);
             }
@@ -266,7 +282,7 @@ public class StreamsKafkaClient {
         while (Time.SYSTEM.milliseconds() < responseTimeout) {
             final List<ClientResponse> responseList;
             try {
-                responseList = kafkaClient.poll(streamsConfig.getLong(StreamsConfig.POLL_MS_CONFIG), Time.SYSTEM.milliseconds());
+                responseList = kafkaClient.poll(100, Time.SYSTEM.milliseconds());
             } catch (final IllegalStateException e) {
                 throw new StreamsException("Could not poll.", e);
             }

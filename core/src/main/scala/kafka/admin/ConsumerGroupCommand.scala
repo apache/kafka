@@ -25,6 +25,7 @@ import joptsimple.{OptionParser, OptionSpec}
 import kafka.api.{OffsetFetchRequest, OffsetFetchResponse, OffsetRequest, PartitionOffsetRequestInfo}
 import kafka.client.ClientUtils
 import kafka.common.{OffsetMetadataAndError, TopicAndPartition}
+import kafka.utils.Implicits._
 import kafka.consumer.SimpleConsumer
 import kafka.utils._
 import org.I0Itec.zkclient.exception.ZkNoNodeException
@@ -62,7 +63,7 @@ object ConsumerGroupCommand extends Logging {
         System.err.println("Note: This will only show information about consumers that use ZooKeeper (not those using the Java consumer API).\n")
         new ZkConsumerGroupService(opts)
       } else {
-        System.err.println("Note: This will only show information about consumers that use the Java consumer API (non-ZooKeeper-based consumers).\n")
+        System.err.println("Note: This will not show information about old Zookeeper-based consumers.\n")
         new KafkaConsumerGroupService(opts)
       }
     }
@@ -480,7 +481,7 @@ object ConsumerGroupCommand extends Logging {
       val consumer = getConsumer()
       consumer.assign(List(topicPartition).asJava)
       val offsetsForTimes = consumer.offsetsForTimes(Map(topicPartition -> timestamp).asJava)
-      if (offsetsForTimes != null && !offsetsForTimes.isEmpty)
+      if (offsetsForTimes != null && !offsetsForTimes.isEmpty && offsetsForTimes.get(topicPartition) != null)
         LogOffsetResult.LogOffset(offsetsForTimes.get(topicPartition).offset)
       else {
         getLogEndOffset(topicPartition)
@@ -514,7 +515,8 @@ object ConsumerGroupCommand extends Logging {
       properties.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "30000")
       properties.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, deserializer)
       properties.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, deserializer)
-      if (opts.options.has(opts.commandConfigOpt)) properties.putAll(Utils.loadProps(opts.options.valueOf(opts.commandConfigOpt)))
+      if (opts.options.has(opts.commandConfigOpt))
+        properties ++= Utils.loadProps(opts.options.valueOf(opts.commandConfigOpt))
 
       new KafkaConsumer(properties)
     }
@@ -709,7 +711,8 @@ object ConsumerGroupCommand extends Logging {
       "Pass in just a topic to delete the given topic's partition offsets and ownership information " +
       "for every consumer group. For instance --topic t1" + nl +
       "WARNING: Group deletion only works for old ZK-based consumer groups, and one has to use it carefully to only delete groups that are not active."
-    val NewConsumerDoc = "Use new consumer. This option requires that the 'bootstrap-server' option is used."
+    val NewConsumerDoc = "Use the new consumer implementation. This is the default, so this option is deprecated and " +
+      "will be removed in a future release."
     val TimeoutMsDoc = "The timeout that can be set for some use cases. For example, it can be used when describing the group " +
       "to specify the maximum amount of time in milliseconds to wait before the group stabilizes (when the group is just created, " +
       "or is going through some changes)."
@@ -807,6 +810,11 @@ object ConsumerGroupCommand extends Logging {
           CommandLineUtils.printUsageAndDie(parser, s"Option '$newConsumerOpt' is not valid with '$zkConnectOpt'.")
       } else {
         CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServerOpt)
+
+        if (options.has(newConsumerOpt)) {
+          Console.err.println("The --new-consumer option is deprecated and will be removed in a future major release." +
+            "The new consumer is used by default if the --bootstrap-server option is provided.")
+        }
 
         if (options.has(deleteOpt))
           CommandLineUtils.printUsageAndDie(parser, s"Option '$deleteOpt' is only valid with '$zkConnectOpt'. Note that " +

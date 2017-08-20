@@ -17,15 +17,27 @@
 package org.apache.kafka.common.network;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
+import java.io.ByteArrayOutputStream;
+import java.io.DataOutputStream;
+import java.nio.channels.ServerSocketChannel;
+import java.nio.channels.SocketChannel;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.nio.ByteBuffer;
 
+import java.util.Random;
+import org.apache.kafka.common.memory.MemoryPool;
+import org.apache.kafka.common.memory.SimpleMemoryPool;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.SecurityProtocol;
 import org.apache.kafka.common.utils.MockTime;
@@ -47,7 +59,7 @@ public class SelectorTest {
     protected Time time;
     protected Selector selector;
     protected ChannelBuilder channelBuilder;
-    private Metrics metrics;
+    protected Metrics metrics;
 
     @Before
     public void setUp() throws Exception {
@@ -268,6 +280,137 @@ public class SelectorTest {
         assertEquals(ChannelState.EXPIRED, selector.disconnected().get(id));
     }
 
+    @Test
+    public void testCloseOldestConnectionWithOneStagedReceive() throws Exception {
+        verifyCloseOldestConnectionWithStagedReceives(1);
+    }
+
+    @Test
+    public void testCloseOldestConnectionWithMultipleStagedReceives() throws Exception {
+        verifyCloseOldestConnectionWithStagedReceives(5);
+    }
+
+    private void verifyCloseOldestConnectionWithStagedReceives(int maxStagedReceives) throws Exception {
+        String id = "0";
+        blockingConnect(id);
+        KafkaChannel channel = selector.channel(id);
+
+        selector.mute(id);
+        for (int i = 0; i <= maxStagedReceives; i++) {
+            selector.send(createSend(id, String.valueOf(i)));
+            selector.poll(1000);
+        }
+
+        selector.unmute(id);
+        do {
+            selector.poll(1000);
+        } while (selector.completedReceives().isEmpty());
+
+        int stagedReceives = selector.numStagedReceives(channel);
+        int completedReceives = 0;
+        while (selector.disconnected().isEmpty()) {
+            time.sleep(6000); // The max idle time is 5000ms
+            selector.poll(0);
+            completedReceives += selector.completedReceives().size();
+            // With SSL, more receives may be staged from buffered data
+            int newStaged = selector.numStagedReceives(channel) - (stagedReceives - completedReceives);
+            if (newStaged > 0) {
+                stagedReceives += newStaged;
+                assertNotNull("Channel should not have been expired", selector.channel(id));
+                assertFalse("Channel should not have been disconnected", selector.disconnected().containsKey(id));
+            } else if (!selector.completedReceives().isEmpty()) {
+                assertEquals(1, selector.completedReceives().size());
+                assertTrue("Channel not found", selector.closingChannel(id) != null || selector.channel(id) != null);
+                assertFalse("Disconnect notified too early", selector.disconnected().containsKey(id));
+            }
+        }
+        assertEquals(stagedReceives, completedReceives);
+        assertNull("Channel not removed", selector.channel(id));
+        assertNull("Channel not removed", selector.closingChannel(id));
+        assertTrue("Disconnect not notified", selector.disconnected().containsKey(id));
+        assertTrue("Unexpected receive", selector.completedReceives().isEmpty());
+    }
+
+    @Test
+    public void testMuteOnOOM() throws Exception {
+        //clean up default selector, replace it with one that uses a finite mem pool
+        selector.close();
+        MemoryPool pool = new SimpleMemoryPool(900, 900, false, null);
+        selector = new Selector(NetworkReceive.UNLIMITED, 5000, metrics, time, "MetricGroup",
+            new HashMap<String, String>(), true, false, channelBuilder, pool);
+
+        try (ServerSocketChannel ss = ServerSocketChannel.open()) {
+            ss.bind(new InetSocketAddress(0));
+
+            InetSocketAddress serverAddress = (InetSocketAddress) ss.getLocalAddress();
+
+            Thread sender1 = createSender(serverAddress, randomPayload(900));
+            Thread sender2 = createSender(serverAddress, randomPayload(900));
+            sender1.start();
+            sender2.start();
+
+            //wait until everything has been flushed out to network (assuming payload size is smaller than OS buffer size)
+            //this is important because we assume both requests' prefixes (1st 4 bytes) have made it.
+            sender1.join(5000);
+            sender2.join(5000);
+
+            SocketChannel channelX = ss.accept(); //not defined if its 1 or 2
+            channelX.configureBlocking(false);
+            SocketChannel channelY = ss.accept();
+            channelY.configureBlocking(false);
+            selector.register("clientX", channelX);
+            selector.register("clientY", channelY);
+
+            List<NetworkReceive> completed = Collections.emptyList();
+            long deadline = System.currentTimeMillis() + 5000;
+            while (System.currentTimeMillis() < deadline && completed.isEmpty()) {
+                selector.poll(1000);
+                completed = selector.completedReceives();
+            }
+            assertEquals("could not read a single request within timeout", 1, completed.size());
+            NetworkReceive firstReceive = completed.get(0);
+            assertEquals(0, pool.availableMemory());
+            assertTrue(selector.isOutOfMemory());
+
+            selector.poll(10);
+            assertTrue(selector.completedReceives().isEmpty());
+            assertEquals(0, pool.availableMemory());
+            assertTrue(selector.isOutOfMemory());
+
+            firstReceive.close();
+            assertEquals(900, pool.availableMemory()); //memory has been released back to pool
+
+            completed = Collections.emptyList();
+            deadline = System.currentTimeMillis() + 5000;
+            while (System.currentTimeMillis() < deadline && completed.isEmpty()) {
+                selector.poll(1000);
+                completed = selector.completedReceives();
+            }
+            assertEquals("could not read a single request within timeout", 1, selector.completedReceives().size());
+            assertEquals(0, pool.availableMemory());
+            assertFalse(selector.isOutOfMemory());
+        }
+    }
+
+    private Thread createSender(InetSocketAddress serverAddress, byte[] payload) {
+        return new PlaintextSender(serverAddress, payload);
+    }
+
+    protected byte[] randomPayload(int sizeBytes) throws Exception {
+        Random random = new Random();
+        byte[] payload = new byte[sizeBytes + 4];
+        random.nextBytes(payload);
+        ByteArrayOutputStream prefixOs = new ByteArrayOutputStream();
+        DataOutputStream prefixDos = new DataOutputStream(prefixOs);
+        prefixDos.writeInt(sizeBytes);
+        prefixDos.flush();
+        prefixDos.close();
+        prefixOs.flush();
+        prefixOs.close();
+        byte[] prefix = prefixOs.toByteArray();
+        System.arraycopy(prefix, 0, payload, 0, prefix.length);
+        return payload;
+    }
 
     private String blockingRequest(String node, String s) throws IOException {
         selector.send(createSend(node, s));
