@@ -55,10 +55,10 @@ object LogDirsCommand {
         adminClient.close()
     }
 
-    private def formatAsJson(logDIrInfosByBroker: Map[Integer, Map[String, LogDirInfo]], topicSet: Set[String]): String = {
+    private def formatAsJson(logDirInfosByBroker: Map[Integer, Map[String, LogDirInfo]], topicSet: Set[String]): String = {
         Json.encode(Map(
             "version" -> 1,
-            "brokers" -> logDIrInfosByBroker.map { case (broker, logDirInfos) =>
+            "brokers" -> logDirInfosByBroker.map { case (broker, logDirInfos) =>
                 Map(
                     "broker" -> broker,
                     "logDirs" -> logDirInfos.map { case (logDir, logDirInfo) =>

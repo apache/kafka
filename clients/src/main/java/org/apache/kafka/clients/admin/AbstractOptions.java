@@ -18,6 +18,9 @@
 package org.apache.kafka.clients.admin;
 
 
+/*
+ * This class implements the common APIs that are shared by Options classes for various AdminClient commands
+ */
 public abstract class AbstractOptions<T extends AbstractOptions> {
 
     private Integer timeoutMs = null;

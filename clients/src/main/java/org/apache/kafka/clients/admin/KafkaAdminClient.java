@@ -1640,7 +1640,8 @@ public class KafkaAdminClient extends AdminClient {
                         TopicPartitionReplica replica = new TopicPartitionReplica(tp.topic(), tp.partition(), brokerId);
                         KafkaFutureImpl<Void> future = futures.get(replica);
                         if (future == null)
-                            continue;
+                            throw new IllegalArgumentException("The partition " + tp + " in the response from broker " + brokerId + " is not in the request");
+
                         if (error == Errors.NONE) {
                             future.complete(null);
                         } else {

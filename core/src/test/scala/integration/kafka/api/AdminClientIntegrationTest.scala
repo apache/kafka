@@ -222,15 +222,21 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
     val topic = "topic"
     val leaderByPartition = TestUtils.createTopic(zkUtils, topic, 10, 1, servers, new Properties())
     val partitionsByBroker = leaderByPartition.groupBy(_._2).mapValues(_.keys.toSeq)
-    val brokers = (0 until brokerCount).map(Integer.valueOf).toSeq
+    val brokers = (0 until brokerCount).map(Integer.valueOf)
     val logDirInfosByBroker = client.describeLogDirs(brokers.asJava).all.get
 
     (0 until brokerCount).foreach { brokerId =>
+      val server = servers.find(_.config.brokerId == brokerId).get
       val expectedPartitions = partitionsByBroker(brokerId)
       val logDirInfos = logDirInfosByBroker.get(brokerId)
-
       val replicaInfos = logDirInfos.asScala.flatMap(_._2.replicaInfos.asScala).filterKeys(_.topic == topic)
+
       assertEquals(expectedPartitions.toSet, replicaInfos.keys.map(_.partition).toSet)
+      logDirInfos.asScala.foreach { case (logDir, logDirInfo) =>
+        logDirInfo.replicaInfos.asScala.keys.foreach(tp =>
+          assertEquals(server.logManager.getLog(tp).get.dir.getParent, logDir)
+        )
+      }
     }
 
     client.close()
@@ -244,7 +250,7 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
     val replicas = leaderByPartition.map { case (partition, brokerId) => new TopicPartitionReplica(topic, partition, brokerId) }.toSeq
 
     val replicaDirInfos = client.describeReplicaLogDir(replicas.asJavaCollection).all.get
-    replicaDirInfos.asScala.foreach{ case (topicPartitionReplica, replicaDirInfo) =>
+    replicaDirInfos.asScala.foreach { case (topicPartitionReplica, replicaDirInfo) =>
       val server = servers.find(_.config.brokerId == topicPartitionReplica.brokerId()).get
       val tp = new TopicPartition(topicPartitionReplica.topic(), topicPartitionReplica.partition())
       assertEquals(server.logManager.getLog(tp).get.dir.getParent, replicaDirInfo.currentReplicaLogDir)

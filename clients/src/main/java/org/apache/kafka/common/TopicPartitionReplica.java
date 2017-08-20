@@ -20,7 +20,7 @@ import java.io.Serializable;
 
 
 /**
- * A topic name and partition number
+ * The topic name, partition number and the brokerId of the replica
  */
 public final class TopicPartitionReplica implements Serializable {
 

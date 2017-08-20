@@ -421,7 +421,10 @@ object ReassignPartitionsCommand extends Logging {
     val verifyOpt = parser.accepts("verify", "Verify if the reassignment completed as specified by the --reassignment-json-file option. If there is a throttle engaged for the replicas specified, and the rebalance has completed, the throttle will be removed")
     val reassignmentJsonFileOpt = parser.accepts("reassignment-json-file", "The JSON file with the partition reassignment configuration" +
                       "The format to use is - \n" +
-                      "{\"partitions\":\n\t[{\"topic\": \"foo\",\n\t  \"partition\": 1,\n\t  \"replicas\": [1,2,3] }],\n\"version\":1\n}")
+                      "{\"partitions\":\n\t[{\"topic\": \"foo\",\n\t  \"partition\": 1,\n\t  \"replicas\": [1,2,3],\n\t  \"log_dirs\": [\"dir1\",\"dir2\",\"dir3\"] }],\n\"version\":1\n}\n" +
+                      "Note that \"log_dirs\" is optional. When it is specified, its length must equal the length of the replicas list. The value in this list " +
+                      "can be either \"any\" or the absolution path of the log directory on the broker. If absolute log directory path is specified, it is currently required that " +
+                      "the replica has not already been created on that broker. The replica will then be created in the specified log directory on the broker later.")
                       .withRequiredArg
                       .describedAs("manual assignment json file path")
                       .ofType(classOf[String])
@@ -556,6 +559,16 @@ class ReassignPartitionsCommand(zkUtils: ZkUtils,
             proposedReplicaAssignment.asJava, new AlterReplicaDirOptions().timeoutMs(timeoutMs.toInt))
           alterReplicaDirResult.values().asScala.foreach { case (replica, future) => {
               try {
+                /*
+                 * Before KIP-113 is fully implemented, user can only specify the destination log directory of the replica
+                 * if the replica has not already been created on the broker; otherwise the log directory specified in the
+                 * json file will not be enforced. Therefore we want to verify that broker will return ReplicaNotAvailableException
+                 * for this replica.
+                 *
+                 * After KIP-113 is fully implemented, we will not need to verify that the broker returns this ReplicaNotAvailableException
+                 * in this step. And after the reassignment znode is created, we will need to repeated send AlterReplicaDirRequest to broker
+                 * if broker returns ReplicaNotAvailableException for any replica in the request.
+                 */
                 future.get()
                 throw new AdminCommandFailedException(s"Partition ${replica.topic()}-${replica.partition()} already exists on broker ${replica.brokerId()}." +
                   s" Reassign replica to another log directory on the same broker is currently not supported.")

@@ -371,7 +371,7 @@ public abstract class AdminClient implements AutoCloseable {
     /**
      * Query the replica log directory information for the specified replicas.
      *
-     * This operation is supported by brokers with version 0.11.1.0 or higher.
+     * This operation is supported by brokers with version 1.0.0 or higher.
      *
      * @param replicas      The replicas to query
      * @return              The DescribeReplicaLogDirResult
@@ -383,7 +383,7 @@ public abstract class AdminClient implements AutoCloseable {
     /**
      * Query the replica log directory information for the specified replicas.
      *
-     * This operation is supported by brokers with version 0.11.1.0 or higher.
+     * This operation is supported by brokers with version 1.0.0 or higher.
      *
      * @param replicas      The replicas to query
      * @param options       The options to use when querying replica dir info
