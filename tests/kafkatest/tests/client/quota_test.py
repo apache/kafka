@@ -78,7 +78,7 @@ class QuotaConfig(object):
     def configure_quota(self, kafka, producer_byte_rate, consumer_byte_rate, entity_args):
         node = kafka.nodes[0]
         cmd = "%s --zookeeper %s --alter --add-config producer_byte_rate=%d,consumer_byte_rate=%d" % \
-              (kafka.path.script("kafka-configs.sh", node), kafka.zk.connect_setting(), producer_byte_rate, consumer_byte_rate)
+              (kafka.path.script("kafka-configs.sh", node), kafka.zk_connect_setting(), producer_byte_rate, consumer_byte_rate)
         cmd += " --entity-type " + entity_args[0] + self.entity_name_opt(entity_args[1])
         if len(entity_args) > 2:
             cmd += " --entity-type " + entity_args[2] + self.entity_name_opt(entity_args[3])
