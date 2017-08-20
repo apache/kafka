@@ -1836,7 +1836,7 @@ public class Protocol {
                 new Field("topic", STRING, "The name of the topic."),
                 new Field("partitions", new ArrayOf(new Schema(
                     new Field("partition", INT32, "The id of the partition."),
-                    new Field("dir", STRING, "The absolute log directory path for the partition.")
+                    new Field("log_dir", STRING, "The absolute log directory path for the partition.")
                 )))
             ))));
 

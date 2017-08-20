@@ -70,8 +70,14 @@ public class DescribeReplicaLogDirResult {
     }
 
     static public class ReplicaLogDirInfo {
+        // The log directory of the primary replica of this partition on the given broker.
+        // Null if the primary replica is not found for this partition on the given broker.
         public final String currentReplicaLogDir;
+        // The log directory of the temporary replica of this partition on the given broker.
+        // Null if the temporary replica is not found for this partition on the given broker.
         public final String temporaryReplicaLogDir;
+        // The LEO of the primary replica  - LEO of the temporary replica.
+        // -1 if either primary or the temporary replica is not found for this partition on the given broker.
         public final long temporaryReplicaOffsetLag;
 
         public ReplicaLogDirInfo() {
@@ -88,7 +94,7 @@ public class DescribeReplicaLogDirResult {
         public String toString() {
             StringBuilder builder = new StringBuilder();
             if (temporaryReplicaLogDir != null) {
-                builder.append("ReplicaLogDirInfo(currentReplicaLogDir=")
+                builder.append("(currentReplicaLogDir=")
                     .append(currentReplicaLogDir)
                     .append(", temporaryReplicaLogDir=")
                     .append(temporaryReplicaLogDir)

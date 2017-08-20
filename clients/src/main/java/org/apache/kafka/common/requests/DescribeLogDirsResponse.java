@@ -171,7 +171,7 @@ public class DescribeLogDirsResponse extends AbstractResponse {
         @Override
         public String toString() {
             StringBuilder builder = new StringBuilder();
-            builder.append("ReplicaInfo(size=")
+            builder.append("(size=")
                 .append(size)
                 .append(", offsetLag=")
                 .append(offsetLag)

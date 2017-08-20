@@ -40,7 +40,7 @@ public class AlterReplicaDirRequest extends AbstractRequest {
 
     // partition level key names
     private static final String PARTITION_KEY_NAME = "partition";
-    private static final String DIR_KEY_NAME = "dir";
+    private static final String LOG_DIR_KEY_NAME = "log_dir";
 
     private final Map<TopicPartition, String> partitionDirs;
 
@@ -77,8 +77,8 @@ public class AlterReplicaDirRequest extends AbstractRequest {
             for (Object partitionStructObj : topicStruct.getArray(PARTITIONS_KEY_NAME)) {
                 Struct partitionStruct = (Struct) partitionStructObj;
                 int partition = partitionStruct.getInt(PARTITION_KEY_NAME);
-                String dir = partitionStruct.getString(DIR_KEY_NAME);
-                partitionDirs.put(new TopicPartition(topic, partition), dir);
+                String logDir = partitionStruct.getString(LOG_DIR_KEY_NAME);
+                partitionDirs.put(new TopicPartition(topic, partition), logDir);
             }
         }
     }
@@ -100,7 +100,7 @@ public class AlterReplicaDirRequest extends AbstractRequest {
             for (Map.Entry<Integer, String> dirsByPartitionEntry : dirsByTopicEntry.getValue().entrySet()) {
                 Struct partitionStruct = topicStruct.instance(PARTITIONS_KEY_NAME);
                 partitionStruct.set(PARTITION_KEY_NAME, dirsByPartitionEntry.getKey());
-                partitionStruct.set(DIR_KEY_NAME, dirsByPartitionEntry.getValue());
+                partitionStruct.set(LOG_DIR_KEY_NAME, dirsByPartitionEntry.getValue());
                 partitionStructArray.add(partitionStruct);
             }
             topicStruct.set(PARTITIONS_KEY_NAME, partitionStructArray.toArray());
