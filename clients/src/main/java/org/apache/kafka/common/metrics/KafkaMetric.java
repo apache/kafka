@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.metrics;
 
+import java.util.Objects;
+
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.utils.Time;
@@ -26,12 +28,23 @@ public final class KafkaMetric implements Metric {
     private final Object lock;
     private final Time time;
     private final Measurable measurable;
+    private final Gauge<?> gauge;
     private MetricConfig config;
 
     KafkaMetric(Object lock, MetricName metricName, Measurable measurable, MetricConfig config, Time time) {
+        this(lock, metricName, Objects.requireNonNull(measurable), null, config, time);
+    }
+
+    KafkaMetric(Object lock, MetricName metricName, Gauge<?> gauge, MetricConfig config, Time time) {
+        this(lock, metricName, null, Objects.requireNonNull(gauge), config, time);
+    }
+
+    private KafkaMetric(Object lock, MetricName metricName, Measurable measurable, Gauge<?> gauge,
+            MetricConfig config, Time time) {
         this.metricName = metricName;
         this.lock = lock;
         this.measurable = measurable;
+        this.gauge = gauge;
         this.config = config;
         this.time = time;
     }
@@ -48,7 +61,17 @@ public final class KafkaMetric implements Metric {
     @Override
     public double value() {
         synchronized (this.lock) {
-            return value(time.milliseconds());
+            return measurableValue(time.milliseconds());
+        }
+    }
+
+    @Override
+    public Object metricValue() {
+        synchronized (this.lock) {
+            if (this.measurable != null)
+                return measurableValue(time.milliseconds());
+            else
+                return this.gauge.value();
         }
     }
 
@@ -56,7 +79,9 @@ public final class KafkaMetric implements Metric {
         return this.measurable;
     }
 
-    double value(long timeMs) {
+    double measurableValue(long timeMs) {
+        if (this.measurable == null)
+            throw new IllegalStateException("Not a measurable metric");
         return this.measurable.measure(config, timeMs);
     }
 

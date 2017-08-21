@@ -14,29 +14,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common;
+package org.apache.kafka.common.metrics.stats;
+
+import org.apache.kafka.common.metrics.Gauge;
 
 /**
- * A numerical metric tracked for monitoring purposes
+ * A gauge with an immutable value.
  */
-public interface Metric {
+public class ImmutableValue<T> implements Gauge<T> {
+    private T value;
 
-    /**
-     * A name for this metric
-     */
-    public MetricName metricName();
+    public ImmutableValue(T value) {
+        this.value = value;
+    }
 
-    /**
-     * The value of the metric as double if the metric is measurable
-     * @throws IllegalStateException if this metric does not have a measurable double value
-     * @deprecated As of 1.0.0, use {@link #metricValue()} instead. This will be removed in a future major release.
-     */
-    @Deprecated
-    public double value();
-
-    /**
-     * The value of the metric, which may be measurable or a non-measurable gauge
-     */
-    public Object metricValue();
-
+    @Override
+    public T value() {
+        return value;
+    }
 }

@@ -294,6 +294,11 @@ public class MetadataResponse extends AbstractResponse {
         return errors;
     }
 
+    @Override
+    public Map<Errors, Integer> errorCounts() {
+        return errorCounts(errors());
+    }
+
     /**
      * Returns the set of topics with the specified error
      */

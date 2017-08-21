@@ -473,6 +473,21 @@ public class Metrics implements Closeable {
     }
 
     /**
+     * Add a metric to monitor the value of an object as a gauge. This metric won't be associated with any sensor.
+     * This is a way to expose existing values as metrics.
+     * @param metricName The name of the metric
+     * @param gauge The gauge associated with this metric
+     */
+    public void addMetric(MetricName metricName, Gauge<?> gauge) {
+        KafkaMetric m = new KafkaMetric(new Object(),
+                                        Utils.notNull(metricName),
+                                        Utils.notNull(gauge),
+                                        this.config,
+                                        this.time);
+        registerMetric(m);
+    }
+
+    /**
      * Remove a metric if it exists and return it. Return null otherwise. If a metric is removed, `metricRemoval`
      * will be invoked for each reporter.
      *

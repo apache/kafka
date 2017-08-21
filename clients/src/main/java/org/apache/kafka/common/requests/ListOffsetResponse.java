@@ -191,6 +191,14 @@ public class ListOffsetResponse extends AbstractResponse {
         return responseData;
     }
 
+    @Override
+    public Map<Errors, Integer> errorCounts() {
+        Map<Errors, Integer> errorCounts = new HashMap<>();
+        for (PartitionData response : responseData.values())
+            updateErrorCounts(errorCounts, response.error);
+        return errorCounts;
+    }
+
     public static ListOffsetResponse parse(ByteBuffer buffer, short version) {
         return new ListOffsetResponse(ApiKeys.LIST_OFFSETS.parseResponse(version, buffer));
     }

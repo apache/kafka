@@ -20,6 +20,7 @@ import java.nio.ByteBuffer
 
 import kafka.common.LongRef
 import kafka.message.{CompressionCodec, DefaultCompressionCodec, GZIPCompressionCodec, NoCompressionCodec, SnappyCompressionCodec}
+import kafka.utils.MockTime
 import org.apache.kafka.common.errors.{InvalidTimestampException, UnsupportedForMessageFormatException}
 import org.apache.kafka.common.record._
 import org.apache.kafka.test.TestUtils
@@ -29,6 +30,8 @@ import org.junit.Test
 import scala.collection.JavaConverters._
 
 class LogValidatorTest {
+
+  val time = new MockTime
 
   @Test
   def testLogAppendTimeNonCompressedV1() {
@@ -41,6 +44,7 @@ class LogValidatorTest {
     val records = createRecords(magicValue = magic, timestamp = 1234L, codec = CompressionType.NONE)
     val validatedResults = LogValidator.validateMessagesAndAssignOffsets(records,
       offsetCounter = new LongRef(0),
+      time= time,
       now = now,
       sourceCodec = NoCompressionCodec,
       targetCodec = NoCompressionCodec,
@@ -74,6 +78,7 @@ class LogValidatorTest {
     val validatedResults = LogValidator.validateMessagesAndAssignOffsets(
       records,
       offsetCounter = new LongRef(0),
+      time = time,
       now = now,
       sourceCodec = DefaultCompressionCodec,
       targetCodec = DefaultCompressionCodec,
@@ -111,6 +116,7 @@ class LogValidatorTest {
     val validatedResults = LogValidator.validateMessagesAndAssignOffsets(
       records,
       offsetCounter = new LongRef(0),
+      time = time,
       now = now,
       sourceCodec = DefaultCompressionCodec,
       targetCodec = DefaultCompressionCodec,
@@ -161,6 +167,7 @@ class LogValidatorTest {
 
     val validatingResults = LogValidator.validateMessagesAndAssignOffsets(records,
       offsetCounter = new LongRef(0),
+      time = time,
       now = System.currentTimeMillis(),
       sourceCodec = NoCompressionCodec,
       targetCodec = NoCompressionCodec,
@@ -223,6 +230,7 @@ class LogValidatorTest {
 
     val validatingResults = LogValidator.validateMessagesAndAssignOffsets(records,
       offsetCounter = new LongRef(0),
+      time = time,
       now = System.currentTimeMillis(),
       sourceCodec = NoCompressionCodec,
       targetCodec = GZIPCompressionCodec,
@@ -269,6 +277,7 @@ class LogValidatorTest {
     val records = createRecords(magicValue = RecordBatch.MAGIC_VALUE_V0, codec = CompressionType.GZIP)
     val validatedResults = LogValidator.validateMessagesAndAssignOffsets(records,
       offsetCounter = new LongRef(0),
+      time = time,
       now = System.currentTimeMillis(),
       sourceCodec = DefaultCompressionCodec,
       targetCodec = DefaultCompressionCodec,
@@ -306,6 +315,7 @@ class LogValidatorTest {
     val records = createRecords(magicValue = RecordBatch.MAGIC_VALUE_V1, codec = CompressionType.GZIP, timestamp = timestamp)
     val validatedResults = LogValidator.validateMessagesAndAssignOffsets(records,
       offsetCounter = new LongRef(0),
+      time = time,
       now = timestamp,
       sourceCodec = DefaultCompressionCodec,
       targetCodec = DefaultCompressionCodec,
@@ -356,6 +366,7 @@ class LogValidatorTest {
 
     val validatedResults = LogValidator.validateMessagesAndAssignOffsets(records,
       offsetCounter = new LongRef(0),
+      time = time,
       now = System.currentTimeMillis(),
       sourceCodec = DefaultCompressionCodec,
       targetCodec = DefaultCompressionCodec,
@@ -402,6 +413,7 @@ class LogValidatorTest {
     LogValidator.validateMessagesAndAssignOffsets(
       records,
       offsetCounter = new LongRef(0),
+      time = time,
       now = System.currentTimeMillis(),
       sourceCodec = NoCompressionCodec,
       targetCodec = NoCompressionCodec,
@@ -421,6 +433,7 @@ class LogValidatorTest {
     LogValidator.validateMessagesAndAssignOffsets(
       records,
       offsetCounter = new LongRef(0),
+      time = time,
       now = System.currentTimeMillis(),
       sourceCodec = NoCompressionCodec,
       targetCodec = NoCompressionCodec,
@@ -440,6 +453,7 @@ class LogValidatorTest {
     LogValidator.validateMessagesAndAssignOffsets(
       records,
       offsetCounter = new LongRef(0),
+      time = time,
       now = System.currentTimeMillis(),
       sourceCodec = DefaultCompressionCodec,
       targetCodec = DefaultCompressionCodec,
@@ -459,6 +473,7 @@ class LogValidatorTest {
     LogValidator.validateMessagesAndAssignOffsets(
       records,
       offsetCounter = new LongRef(0),
+      time = time,
       now = System.currentTimeMillis(),
       sourceCodec = DefaultCompressionCodec,
       targetCodec = DefaultCompressionCodec,
@@ -477,6 +492,7 @@ class LogValidatorTest {
     checkOffsets(records, 0)
     checkOffsets(LogValidator.validateMessagesAndAssignOffsets(records,
       offsetCounter = new LongRef(offset),
+      time = time,
       now = System.currentTimeMillis(),
       sourceCodec = NoCompressionCodec,
       targetCodec = NoCompressionCodec,
@@ -495,6 +511,7 @@ class LogValidatorTest {
     checkOffsets(records, 0)
     checkOffsets(LogValidator.validateMessagesAndAssignOffsets(records,
       offsetCounter = new LongRef(offset),
+      time = time,
       now = System.currentTimeMillis(),
       sourceCodec = DefaultCompressionCodec,
       targetCodec = DefaultCompressionCodec,
@@ -514,6 +531,7 @@ class LogValidatorTest {
     checkOffsets(records, 0)
     val messageWithOffset = LogValidator.validateMessagesAndAssignOffsets(records,
       offsetCounter = new LongRef(offset),
+      time = time,
       now = System.currentTimeMillis(),
       sourceCodec = NoCompressionCodec,
       targetCodec = NoCompressionCodec,
@@ -534,6 +552,7 @@ class LogValidatorTest {
     checkOffsets(records, 0)
     val messageWithOffset = LogValidator.validateMessagesAndAssignOffsets(records,
       offsetCounter = new LongRef(offset),
+      time = time,
       now = System.currentTimeMillis(),
       sourceCodec = NoCompressionCodec,
       targetCodec = NoCompressionCodec,
@@ -555,6 +574,7 @@ class LogValidatorTest {
     val compressedMessagesWithOffset = LogValidator.validateMessagesAndAssignOffsets(
       records,
       offsetCounter = new LongRef(offset),
+      time = time,
       now = System.currentTimeMillis(),
       sourceCodec = DefaultCompressionCodec,
       targetCodec = DefaultCompressionCodec,
@@ -576,6 +596,7 @@ class LogValidatorTest {
     val compressedMessagesWithOffset = LogValidator.validateMessagesAndAssignOffsets(
       records,
       offsetCounter = new LongRef(offset),
+      time = time,
       now = System.currentTimeMillis(),
       sourceCodec = DefaultCompressionCodec,
       targetCodec = DefaultCompressionCodec,
@@ -595,6 +616,7 @@ class LogValidatorTest {
     val offset = 1234567
     checkOffsets(LogValidator.validateMessagesAndAssignOffsets(records,
       offsetCounter = new LongRef(offset),
+      time = time,
       now = System.currentTimeMillis(),
       sourceCodec = NoCompressionCodec,
       targetCodec = NoCompressionCodec,
@@ -613,6 +635,7 @@ class LogValidatorTest {
     val offset = 1234567
     checkOffsets(LogValidator.validateMessagesAndAssignOffsets(records,
       offsetCounter = new LongRef(offset),
+      time = time,
       now = System.currentTimeMillis(),
       sourceCodec = NoCompressionCodec,
       targetCodec = NoCompressionCodec,
@@ -631,6 +654,7 @@ class LogValidatorTest {
     checkOffsets(records, 0)
     checkOffsets(LogValidator.validateMessagesAndAssignOffsets(records,
       offsetCounter = new LongRef(offset),
+      time = time,
       now = System.currentTimeMillis(),
       sourceCodec = DefaultCompressionCodec,
       targetCodec = DefaultCompressionCodec,
@@ -649,6 +673,7 @@ class LogValidatorTest {
     checkOffsets(records, 0)
     checkOffsets(LogValidator.validateMessagesAndAssignOffsets(records,
       offsetCounter = new LongRef(offset),
+      time = time,
       now = System.currentTimeMillis(),
       sourceCodec = DefaultCompressionCodec,
       targetCodec = DefaultCompressionCodec,
@@ -667,6 +692,7 @@ class LogValidatorTest {
     val records = MemoryRecords.withEndTransactionMarker(23423L, 5, endTxnMarker)
     LogValidator.validateMessagesAndAssignOffsets(records,
       offsetCounter = new LongRef(offset),
+      time = time,
       now = System.currentTimeMillis(),
       sourceCodec = NoCompressionCodec,
       targetCodec = NoCompressionCodec,
@@ -685,6 +711,7 @@ class LogValidatorTest {
     val records = MemoryRecords.withEndTransactionMarker(23423L, 5, endTxnMarker)
     val result = LogValidator.validateMessagesAndAssignOffsets(records,
       offsetCounter = new LongRef(offset),
+      time = time,
       now = System.currentTimeMillis(),
       sourceCodec = NoCompressionCodec,
       targetCodec = SnappyCompressionCodec,
@@ -708,6 +735,7 @@ class LogValidatorTest {
     checkOffsets(records, 0)
     checkOffsets(LogValidator.validateMessagesAndAssignOffsets(records,
       offsetCounter = new LongRef(offset),
+      time = time,
       now = System.currentTimeMillis(),
       sourceCodec = NoCompressionCodec,
       targetCodec = NoCompressionCodec,
@@ -727,6 +755,7 @@ class LogValidatorTest {
     checkOffsets(records, 0)
     checkOffsets(LogValidator.validateMessagesAndAssignOffsets(records,
       offsetCounter = new LongRef(offset),
+      time = time,
       now = System.currentTimeMillis(),
       sourceCodec = DefaultCompressionCodec,
       targetCodec = DefaultCompressionCodec,
@@ -745,6 +774,7 @@ class LogValidatorTest {
     val offset = 1234567
     checkOffsets(LogValidator.validateMessagesAndAssignOffsets(records,
       offsetCounter = new LongRef(offset),
+      time = time,
       now = System.currentTimeMillis(),
       sourceCodec = NoCompressionCodec,
       targetCodec = NoCompressionCodec,
@@ -763,6 +793,7 @@ class LogValidatorTest {
     checkOffsets(records, 0)
     checkOffsets(LogValidator.validateMessagesAndAssignOffsets(records,
       offsetCounter = new LongRef(offset),
+      time = time,
       now = System.currentTimeMillis(),
       sourceCodec = DefaultCompressionCodec,
       targetCodec = DefaultCompressionCodec,
@@ -782,6 +813,7 @@ class LogValidatorTest {
     checkOffsets(records, 0)
     checkOffsets(LogValidator.validateMessagesAndAssignOffsets(records,
       offsetCounter = new LongRef(offset),
+      time = time,
       now = System.currentTimeMillis(),
       sourceCodec = NoCompressionCodec,
       targetCodec = NoCompressionCodec,
@@ -801,6 +833,7 @@ class LogValidatorTest {
     checkOffsets(records, 0)
     checkOffsets(LogValidator.validateMessagesAndAssignOffsets(records,
       offsetCounter = new LongRef(offset),
+      time = time,
       now = System.currentTimeMillis(),
       sourceCodec = DefaultCompressionCodec,
       targetCodec = DefaultCompressionCodec,
@@ -822,6 +855,7 @@ class LogValidatorTest {
       new SimpleRecord("hello".getBytes), new SimpleRecord("there".getBytes), new SimpleRecord("beautiful".getBytes))
     checkOffsets(LogValidator.validateMessagesAndAssignOffsets(records,
       offsetCounter = new LongRef(offset),
+      time = time,
       now = System.currentTimeMillis(),
       sourceCodec = DefaultCompressionCodec,
       targetCodec = DefaultCompressionCodec,
@@ -843,6 +877,7 @@ class LogValidatorTest {
       new SimpleRecord("hello".getBytes), new SimpleRecord("there".getBytes), new SimpleRecord("beautiful".getBytes))
     checkOffsets(LogValidator.validateMessagesAndAssignOffsets(records,
       offsetCounter = new LongRef(offset),
+      time = time,
       now = System.currentTimeMillis(),
       sourceCodec = DefaultCompressionCodec,
       targetCodec = DefaultCompressionCodec,
@@ -862,6 +897,7 @@ class LogValidatorTest {
     checkOffsets(records, 0)
     checkOffsets(LogValidator.validateMessagesAndAssignOffsets(records,
       offsetCounter = new LongRef(offset),
+      time = time,
       now = System.currentTimeMillis(),
       sourceCodec = NoCompressionCodec,
       targetCodec = NoCompressionCodec,
@@ -881,6 +917,7 @@ class LogValidatorTest {
     checkOffsets(records, 0)
     checkOffsets(LogValidator.validateMessagesAndAssignOffsets(records,
       offsetCounter = new LongRef(offset),
+      time = time,
       now = System.currentTimeMillis(),
       sourceCodec = DefaultCompressionCodec,
       targetCodec = DefaultCompressionCodec,
@@ -898,6 +935,7 @@ class LogValidatorTest {
     val records = recordsWithInvalidInnerMagic(offset)
     LogValidator.validateMessagesAndAssignOffsets(records,
       offsetCounter = new LongRef(offset),
+      time = time,
       now = System.currentTimeMillis(),
       sourceCodec = SnappyCompressionCodec,
       targetCodec = SnappyCompressionCodec,
@@ -936,6 +974,7 @@ class LogValidatorTest {
     val records = MemoryRecords.readableRecords(buffer)
     LogValidator.validateMessagesAndAssignOffsets(records,
       offsetCounter = new LongRef(offset),
+      time = time,
       now = System.currentTimeMillis(),
       sourceCodec = sourceCodec,
       targetCodec = targetCodec,

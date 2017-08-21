@@ -141,6 +141,13 @@ public class DescribeGroupsResponse extends AbstractResponse {
         return groups;
     }
 
+    @Override
+    public Map<Errors, Integer> errorCounts() {
+        Map<Errors, Integer> errorCounts = new HashMap<>();
+        for (GroupMetadata response : groups.values())
+            updateErrorCounts(errorCounts, response.error);
+        return errorCounts;
+    }
 
     public static class GroupMetadata {
         private final Errors error;

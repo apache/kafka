@@ -14,29 +14,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common;
+package org.apache.kafka.common.metrics;
 
 /**
- * A numerical metric tracked for monitoring purposes
+ * A non-measurable gauge value that can be registered as a metric.
+ * This is separate from {@link Measurable} to avoid breaking the public API.
  */
-public interface Metric {
+public interface Gauge<T> {
 
     /**
-     * A name for this metric
+     * Returns the current value associated with this gauge
      */
-    public MetricName metricName();
-
-    /**
-     * The value of the metric as double if the metric is measurable
-     * @throws IllegalStateException if this metric does not have a measurable double value
-     * @deprecated As of 1.0.0, use {@link #metricValue()} instead. This will be removed in a future major release.
-     */
-    @Deprecated
-    public double value();
-
-    /**
-     * The value of the metric, which may be measurable or a non-measurable gauge
-     */
-    public Object metricValue();
+    public T value();
 
 }

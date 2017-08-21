@@ -19,6 +19,7 @@ package org.apache.kafka.common.record;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.network.TransportLayer;
 import org.apache.kafka.common.record.FileLogInputStream.FileChannelRecordBatch;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 
 import java.io.Closeable;
@@ -237,7 +238,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
     }
 
     @Override
-    public Records downConvert(byte toMagic, long firstOffset) {
+    public ConvertedRecords<? extends Records> downConvert(byte toMagic, long firstOffset, Time time) {
         List<? extends RecordBatch> batches = Utils.toList(batches().iterator());
         if (batches.isEmpty()) {
             // This indicates that the message is too large, which means that the buffer is not large
@@ -247,9 +248,9 @@ public class FileRecords extends AbstractRecords implements Closeable {
             // are not enough available bytes in the response to read the full message. Note that this is
             // only possible prior to KIP-74, after which the broker was changed to always return at least
             // one full message, even if it requires exceeding the max fetch size requested by the client.
-            return this;
+            return new ConvertedRecords<>(this, 0L, 0L, 0L);
         } else {
-            return downConvert(batches, toMagic, firstOffset);
+            return downConvert(batches, toMagic, firstOffset, time);
         }
     }
 

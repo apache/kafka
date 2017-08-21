@@ -40,7 +40,6 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.apache.kafka.common.security.scram.ScramMechanism.SCRAM_SHA_256;
-import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 public class SaslServerAuthenticatorTest {
@@ -100,8 +99,8 @@ public class SaslServerAuthenticatorTest {
         try {
             authenticator.authenticate();
             fail("Expected authenticate() to raise an exception");
-        } catch (IOException e) {
-            assertTrue(e.getCause() instanceof IllegalSaslStateException);
+        } catch (IllegalSaslStateException e) {
+            // expected exception
         }
     }
 

@@ -20,6 +20,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
+import org.apache.kafka.common.utils.Time;
 
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -54,6 +55,7 @@ public class MemoryRecordsBuilder {
     private final boolean isControlBatch;
     private final int partitionLeaderEpoch;
     private final int writeLimit;
+    private Time time;
 
     // Use a conservative estimate of the compression ratio. The producer overrides this using statistics
     // from previous batches before appending any records.
@@ -75,6 +77,8 @@ public class MemoryRecordsBuilder {
 
     private MemoryRecords builtRecords;
     private boolean aborted = false;
+    private long startNanos;
+    private RecordsProcessingInfo recordsProcessingInfo;
 
     public MemoryRecordsBuilder(ByteBufferOutputStream bufferStream,
                                 byte magic,
@@ -129,6 +133,7 @@ public class MemoryRecordsBuilder {
         bufferStream.position(initialPosition + batchHeaderSize);
         this.bufferStream = bufferStream;
         this.appendStream = new DataOutputStream(compressionType.wrapForOutput(this.bufferStream, magic));
+        this.recordsProcessingInfo = RecordsProcessingInfo.EMPTY;
     }
 
     /**
@@ -193,6 +198,11 @@ public class MemoryRecordsBuilder {
         return isTransactional;
     }
 
+    public MemoryRecordsBuilder withTime(Time time) {
+        this.time = time;
+        return this;
+    }
+
     /**
      * Close this builder and return the resulting buffer.
      * @return The built log buffer
@@ -236,6 +246,10 @@ public class MemoryRecordsBuilder {
                 shallowOffsetOfMaxTimestamp = offsetOfMaxTimestamp;
             return new RecordsInfo(maxTimestamp, shallowOffsetOfMaxTimestamp);
         }
+    }
+
+    public RecordsProcessingInfo recordsProcessingInfo() {
+        return recordsProcessingInfo;
     }
 
     public void setProducerState(long producerId, short producerEpoch, int baseSequence, boolean isTransactional) {
@@ -314,6 +328,9 @@ public class MemoryRecordsBuilder {
             buffer.flip();
             buffer.position(initialPosition);
             builtRecords = MemoryRecords.readableRecords(buffer.slice());
+
+            long buildTimeNanos = time == null ? 0 : time.nanoseconds() - startNanos;
+            recordsProcessingInfo = new RecordsProcessingInfo(builtRecords.sizeInBytes(), numRecords, buildTimeNanos);
         }
     }
 

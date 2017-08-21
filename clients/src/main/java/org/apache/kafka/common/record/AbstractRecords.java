@@ -18,6 +18,7 @@ package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.utils.AbstractIterator;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
@@ -59,11 +60,16 @@ public abstract class AbstractRecords implements Records {
      * need to drop records from the batch during the conversion. Some versions of librdkafka rely on this for
      * correctness.
      */
-    protected MemoryRecords downConvert(Iterable<? extends RecordBatch> batches, byte toMagic, long firstOffset) {
+    protected ConvertedRecords<MemoryRecords> downConvert(Iterable<? extends RecordBatch> batches, byte toMagic,
+            long firstOffset, Time time) {
         // maintain the batch along with the decompressed records to avoid the need to decompress again
         List<RecordBatchAndRecords> recordBatchAndRecordsList = new ArrayList<>();
         int totalSizeEstimate = 0;
+        long conversionCount = 0;
+        long tempMemory = 0;
+        long conversionTimeNanos = 0;
 
+        long startNanos = time.nanoseconds();
         for (RecordBatch batch : batches) {
             if (toMagic < RecordBatch.MAGIC_VALUE_V2 && batch.isControlBatch())
                 continue;
@@ -94,12 +100,17 @@ public abstract class AbstractRecords implements Records {
         for (RecordBatchAndRecords recordBatchAndRecords : recordBatchAndRecordsList) {
             if (recordBatchAndRecords.batch.magic() <= toMagic)
                 recordBatchAndRecords.batch.writeTo(buffer);
-            else
+            else {
+                conversionCount += recordBatchAndRecords.records.size();
                 buffer = convertRecordBatch(toMagic, buffer, recordBatchAndRecords);
+            }
         }
 
         buffer.flip();
-        return MemoryRecords.readableRecords(buffer);
+        if (conversionCount > 0)
+            conversionTimeNanos = time.nanoseconds() - startNanos;
+        return new ConvertedRecords<>(MemoryRecords.readableRecords(buffer), tempMemory,
+                conversionCount, conversionTimeNanos);
     }
 
     /**
