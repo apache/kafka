@@ -39,6 +39,7 @@ import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.CopyOnWriteMap;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
@@ -67,8 +68,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public final class RecordAccumulator {
 
-    private static final Logger log = LoggerFactory.getLogger(RecordAccumulator.class);
-
+    private final Logger log;
     private volatile boolean closed;
     private final AtomicInteger flushesInProgress;
     private final AtomicInteger appendsInProgress;
@@ -112,6 +112,20 @@ public final class RecordAccumulator {
                              Time time,
                              ApiVersions apiVersions,
                              TransactionManager transactionManager) {
+        this(null, batchSize, totalSize, compression, lingerMs, retryBackoffMs, metrics, time, apiVersions, transactionManager);
+    }
+
+    public RecordAccumulator(LogContext logContext,
+                             int batchSize,
+                             long totalSize,
+                             CompressionType compression,
+                             long lingerMs,
+                             long retryBackoffMs,
+                             Metrics metrics,
+                             Time time,
+                             ApiVersions apiVersions,
+                             TransactionManager transactionManager) {
+        this.log = logContext == null ? LoggerFactory.getLogger(getClass()) : logContext.logger(getClass());
         this.drainIndex = 0;
         this.closed = false;
         this.flushesInProgress = new AtomicInteger(0);
@@ -129,6 +143,7 @@ public final class RecordAccumulator {
         this.apiVersions = apiVersions;
         this.transactionManager = transactionManager;
         registerMetrics(metrics, metricGrpName);
+
     }
 
     private void registerMetrics(Metrics metrics, String metricGrpName) {

@@ -54,6 +54,7 @@ import org.apache.kafka.common.requests.InitProducerIdResponse;
 import org.apache.kafka.common.requests.ProduceRequest;
 import org.apache.kafka.common.requests.ProduceResponse;
 import org.apache.kafka.common.requests.RequestHeader;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
@@ -74,7 +75,7 @@ import static org.apache.kafka.common.record.RecordBatch.NO_TIMESTAMP;
  */
 public class Sender implements Runnable {
 
-    private static final Logger log = LoggerFactory.getLogger(Sender.class);
+    private final Logger log;
 
     /* the state of each nodes connection */
     private final KafkaClient client;
@@ -134,6 +135,37 @@ public class Sender implements Runnable {
                   long retryBackoffMs,
                   TransactionManager transactionManager,
                   ApiVersions apiVersions) {
+        this(null,
+                client,
+                metadata,
+                accumulator,
+                guaranteeMessageOrder,
+                maxRequestSize,
+                acks,
+                retries,
+                metrics,
+                time,
+                requestTimeout,
+                retryBackoffMs,
+                transactionManager,
+                apiVersions);
+    }
+
+    public Sender(LogContext logContext,
+                  KafkaClient client,
+                  Metadata metadata,
+                  RecordAccumulator accumulator,
+                  boolean guaranteeMessageOrder,
+                  int maxRequestSize,
+                  short acks,
+                  int retries,
+                  Metrics metrics,
+                  Time time,
+                  int requestTimeout,
+                  long retryBackoffMs,
+                  TransactionManager transactionManager,
+                  ApiVersions apiVersions) {
+        this.log = logContext == null ? LoggerFactory.getLogger(Sender.class) : logContext.logger(Sender.class);
         this.client = client;
         this.accumulator = accumulator;
         this.metadata = metadata;
@@ -149,6 +181,8 @@ public class Sender implements Runnable {
         this.apiVersions = apiVersions;
         this.transactionManager = transactionManager;
     }
+
+
 
     /**
      * The main run loop for the sender thread
