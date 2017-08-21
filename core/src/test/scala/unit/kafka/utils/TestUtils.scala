@@ -230,7 +230,9 @@ object TestUtils extends Logging {
     if (nodeId >= 0) props.put(KafkaConfig.BrokerIdProp, nodeId.toString)
     props.put(KafkaConfig.ListenersProp, listeners)
     if (logDirCount > 1) {
-      val logDirs = (1 to logDirCount).toList.map(i => TestUtils.tempDir().getAbsolutePath).mkString(",")
+      val logDirs = (1 to logDirCount).toList.map(i =>
+        if (i%2 == 0) TestUtils.tempDir().getAbsolutePath else TestUtils.tempRelativeDir("data")
+      ).mkString(",")
       props.put(KafkaConfig.LogDirsProp, logDirs)
     } else {
       props.put(KafkaConfig.LogDirProp, TestUtils.tempDir().getAbsolutePath)
