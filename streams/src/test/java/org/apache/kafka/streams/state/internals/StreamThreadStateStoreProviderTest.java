@@ -106,10 +106,12 @@ public class StreamThreadStateStoreProviderTest {
         stateDirectory = new StateDirectory(applicationId, stateConfigDir, new MockTime());
         taskOne = createStreamsTask(applicationId, streamsConfig, clientSupplier, topology,
                                     new TaskId(0, 0));
+        taskOne.initialize();
         tasks.put(new TaskId(0, 0),
                   taskOne);
         taskTwo = createStreamsTask(applicationId, streamsConfig, clientSupplier, topology,
                                     new TaskId(0, 1));
+        taskTwo.initialize();
         tasks.put(new TaskId(0, 1),
                   taskTwo);
 
@@ -200,7 +202,7 @@ public class StreamThreadStateStoreProviderTest {
     }
 
     private void mockThread(final boolean initialized) {
-        EasyMock.expect(threadMock.isInitialized()).andReturn(initialized);
+        EasyMock.expect(threadMock.isRunningAndNotRebalancing()).andReturn(initialized);
         EasyMock.expect(threadMock.tasks()).andStubReturn(tasks);
         EasyMock.replay(threadMock);
     }

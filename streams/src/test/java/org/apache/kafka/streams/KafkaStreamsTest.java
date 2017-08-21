@@ -138,7 +138,7 @@ public class KafkaStreamsTest {
 
         for (int i = 0; i < numThreads; i++) {
             final StreamThread tmpThread = threads[i];
-            tmpThread.close();
+            tmpThread.shutdown();
             TestUtils.waitForCondition(new TestCondition() {
                 @Override
                 public boolean conditionMet() {
@@ -187,7 +187,7 @@ public class KafkaStreamsTest {
         final java.lang.reflect.Field globalThreadField = streams.getClass().getDeclaredField("globalStreamThread");
         globalThreadField.setAccessible(true);
         final GlobalStreamThread globalStreamThread = (GlobalStreamThread) globalThreadField.get(streams);
-        globalStreamThread.close();
+        globalStreamThread.shutdown();
         TestUtils.waitForCondition(new TestCondition() {
             @Override
             public boolean conditionMet() {
@@ -478,7 +478,7 @@ public class KafkaStreamsTest {
         CLUSTER.createTopic(topic);
         final StreamsBuilder builder = new StreamsBuilder();
 
-        builder.stream(Serdes.String(), Serdes.String(), topic);
+        builder.table(Serdes.String(), Serdes.String(), topic, topic);
 
         final KafkaStreams streams = new KafkaStreams(builder.build(), props);
         final CountDownLatch latch = new CountDownLatch(1);
