@@ -26,6 +26,7 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.SecurityProtocol;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.security.authenticator.CredentialCache;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
@@ -36,8 +37,8 @@ import org.apache.kafka.test.TestUtils;
 public class NetworkTestUtils {
 
     public static NioEchoServer createEchoServer(ListenerName listenerName, SecurityProtocol securityProtocol,
-                                                 AbstractConfig serverConfig) throws Exception {
-        NioEchoServer server = new NioEchoServer(listenerName, securityProtocol, serverConfig, "localhost", null);
+            AbstractConfig serverConfig, CredentialCache credentialCache) throws Exception {
+        NioEchoServer server = new NioEchoServer(listenerName, securityProtocol, serverConfig, "localhost", null, credentialCache);
         server.start();
         return server;
     }
@@ -78,16 +79,16 @@ public class NetworkTestUtils {
         assertTrue(selector.isChannelReady(node));
     }
 
-    public static void waitForChannelClose(Selector selector, String node, ChannelState channelState) throws IOException {
+    public static void waitForChannelClose(Selector selector, String node, ChannelState.State channelState) throws IOException {
         boolean closed = false;
         for (int i = 0; i < 30; i++) {
             selector.poll(1000L);
-            if (selector.channel(node) == null) {
+            if (selector.channel(node) == null && selector.closingChannel(node) == null) {
                 closed = true;
                 break;
             }
         }
         assertTrue("Channel was not closed by timeout", closed);
-        assertEquals(channelState, selector.disconnected().get(node));
+        assertEquals(channelState, selector.disconnected().get(node).state());
     }
 }

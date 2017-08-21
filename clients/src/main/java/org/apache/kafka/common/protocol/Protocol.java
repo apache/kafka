@@ -1297,8 +1297,12 @@ public class Protocol {
             new Field("error_code", INT16),
             new Field("enabled_mechanisms", new ArrayOf(Type.STRING), "Array of mechanisms enabled in the server."));
 
-    public static final Schema[] SASL_HANDSHAKE_REQUEST = {SASL_HANDSHAKE_REQUEST_V0};
-    public static final Schema[] SASL_HANDSHAKE_RESPONSE = {SASL_HANDSHAKE_RESPONSE_V0};
+    // SASL_HANDSHAKE_REQUEST_V1 added to support SASL_AUTHENTICATE request to improve diagnostics
+    public static final Schema SASL_HANDSHAKE_REQUEST_V1 = SASL_HANDSHAKE_REQUEST_V0;
+    public static final Schema SASL_HANDSHAKE_RESPONSE_V1 = SASL_HANDSHAKE_RESPONSE_V0;
+
+    public static final Schema[] SASL_HANDSHAKE_REQUEST = {SASL_HANDSHAKE_REQUEST_V0, SASL_HANDSHAKE_REQUEST_V1};
+    public static final Schema[] SASL_HANDSHAKE_RESPONSE = {SASL_HANDSHAKE_RESPONSE_V0, SASL_HANDSHAKE_RESPONSE_V1};
 
     /* ApiVersion api */
     public static final Schema API_VERSIONS_REQUEST_V0 = new Schema();
@@ -1880,6 +1884,18 @@ public class Protocol {
     public static final Schema[] DESCRIBE_LOG_DIRS_REQUEST = {DESCRIBE_LOG_DIRS_REQUEST_V0};
     public static final Schema[] DESCRIBE_LOG_DIRS_RESPONSE = {DESCRIBE_LOG_DIRS_RESPONSE_V0};
 
+    /* SASL authentication api */
+    public static final Schema SASL_AUTHENTICATE_REQUEST_V0 = new Schema(
+            new Field("sasl_auth_bytes", BYTES, "SASL authentication bytes from client as defined by the SASL mechanism."));
+
+    public static final Schema SASL_AUTHENTICATE_RESPONSE_V0 = new Schema(
+            new Field("error_code", INT16),
+            new Field("error_message", NULLABLE_STRING),
+            new Field("sasl_auth_bytes", BYTES, "SASL authentication bytes from server as defined by the SASL mechanism."));
+    public static final Schema[] SASL_AUTHENTICATE_REQUEST = {SASL_AUTHENTICATE_REQUEST_V0};
+    public static final Schema[] SASL_AUTHENTICATE_RESPONSE = {SASL_AUTHENTICATE_RESPONSE_V0};
+
+
     /* an array of all requests and responses with all schema versions; a null value in the inner array means that the
      * particular version is not supported */
     public static final Schema[][] REQUESTS = new Schema[ApiKeys.MAX_API_KEY + 1][];
@@ -1927,6 +1943,7 @@ public class Protocol {
         REQUESTS[ApiKeys.ALTER_CONFIGS.id] = ALTER_CONFIGS_REQUEST;
         REQUESTS[ApiKeys.ALTER_REPLICA_DIR.id] = ALTER_REPLICA_DIR_REQUEST;
         REQUESTS[ApiKeys.DESCRIBE_LOG_DIRS.id] = DESCRIBE_LOG_DIRS_REQUEST;
+        REQUESTS[ApiKeys.SASL_AUTHENTICATE.id] = SASL_AUTHENTICATE_REQUEST;
 
         RESPONSES[ApiKeys.PRODUCE.id] = PRODUCE_RESPONSE;
         RESPONSES[ApiKeys.FETCH.id] = FETCH_RESPONSE;
@@ -1964,6 +1981,7 @@ public class Protocol {
         RESPONSES[ApiKeys.ALTER_CONFIGS.id] = ALTER_CONFIGS_RESPONSE;
         RESPONSES[ApiKeys.ALTER_REPLICA_DIR.id] = ALTER_REPLICA_DIR_RESPONSE;
         RESPONSES[ApiKeys.DESCRIBE_LOG_DIRS.id] = DESCRIBE_LOG_DIRS_RESPONSE;
+        RESPONSES[ApiKeys.SASL_AUTHENTICATE.id] = SASL_AUTHENTICATE_RESPONSE;
 
         /* set the minimum and maximum version of each api */
         for (ApiKeys api : ApiKeys.values()) {

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.network;
 
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 
 import java.io.Closeable;
@@ -30,6 +31,12 @@ public interface Authenticator extends Closeable {
      * If no further authentication needs to be done returns.
      */
     void authenticate() throws IOException;
+
+    /**
+     * Returns the first error encountered during authentication
+     * @return authentication error if authentication failed, Errors.NONE otherwise
+     */
+    Errors error();
 
     /**
      * Returns Principal using PrincipalBuilder
