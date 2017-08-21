@@ -55,7 +55,6 @@ object ConsumerPerformance {
     val consumerTimeout = new AtomicBoolean(false)
     var metrics: mutable.Map[MetricName, _ <: Metric] = null
     val joinGroupTimeInMs = new AtomicLong(0)
-    var fetchTimeInMs = 0L
 
     if (!config.hideHeader) {
       printHeader(config.showDetailedStats, config.useOldConsumer)
@@ -98,7 +97,7 @@ object ConsumerPerformance {
       consumerConnector.shutdown()
     }
     val elapsedSecs = (endMs - startMs) / 1000.0
-    fetchTimeInMs = (endMs - startMs) - joinGroupTimeInMs.get
+    val fetchTimeInMs = (endMs - startMs) - joinGroupTimeInMs.get
     if (!config.showDetailedStats) {
       val totalMBRead = (totalBytesRead.get * 1.0) / (1024 * 1024)
       print("%s, %s, %.4f, %.4f, %d, %.4f".format(
