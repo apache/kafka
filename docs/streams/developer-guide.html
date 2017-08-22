@@ -893,6 +893,7 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
             KeyValue&lt;String, Long&gt; next = range.next();
             System.out.println("count for " + next.key + ": " + value);
           }
+          range.close();
 
           // Get the values for all of the keys available in this application instance
           KeyValueIterator&lt;String, Long&gt; range = keyValueStore.all();
@@ -900,6 +901,7 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
             KeyValue&lt;String, Long&gt; next = range.next();
             System.out.println("count for " + next.key + ": " + value);
           }
+          range.close();
         </pre>
 
     <h4><a id="streams_developer-guide_interactive-queries_local-window-stores" href="#streams_developer-guide_interactive-queries_local-window-stores">Querying local window stores</a></h4>
@@ -945,6 +947,7 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
             long windowTimestamp = next.key;
             System.out.println("Count of 'world' @ time " + windowTimestamp + " is " + next.value);
           }
+          iterator.close();
         </pre>
 
     <h4><a id="streams_developer-guide_interactive-queries_custom-stores" href="#streams_developer-guide_interactive-queries_custom-stores">Querying local custom state stores</a></h4>
