@@ -219,11 +219,15 @@ public class KafkaStreams {
 
         synchronized (stateLock) {
             if (state == State.PENDING_SHUTDOWN && newState != State.NOT_RUNNING) {
-                // when the state is already in PENDING_SHUTDOWN, all other transitions will be
-                // refused but we do not throw exception here
+                // when the state is already in PENDING_SHUTDOWN, all other transitions than NOT_RUNNING (due to thread dying) will be
+                // refused but we do not throw exception here, to allow appropriate error handling
+                return false;
+            } else if (state == State.NOT_RUNNING && newState == State.PENDING_SHUTDOWN) {
+                // when the state is already in NOT_RUNNING, its transition to PENDING_SHUTDOWN (due to consecutive close calls)
+                // will be refused but we do not throw exception here, to allow idempotent close calls
                 return false;
             } else if (!state.isValidTransition(newState)) {
-                throw new StreamsException(logPrefix + " Unexpected state transition from " + oldState + " to " + newState);
+                throw new IllegalStateException(logPrefix + " Unexpected state transition from " + oldState + " to " + newState);
             } else {
                 log.info("{} State transition from {} to {}", logPrefix, oldState, newState);
             }
@@ -636,33 +640,37 @@ public class KafkaStreams {
      * @throws StreamsException if the Kafka brokers have version 0.10.0.x
      */
     public synchronized void start() throws IllegalStateException, StreamsException {
-        log.debug("{} Starting Kafka Stream process.", logPrefix);
+        log.debug("{} Starting Streams client", logPrefix);
 
         // first set state to RUNNING before kicking off the threads,
         // making sure the state will always transit to RUNNING before REBALANCING
-        setState(State.RUNNING);
+        if (setState(State.RUNNING)) {
+            checkBrokerVersionCompatibility();
 
-        checkBrokerVersionCompatibility();
-
-        if (globalStreamThread != null) {
-            globalStreamThread.start();
-        }
-
-        for (final StreamThread thread : threads) {
-            thread.start();
-        }
-
-        final Long cleanupDelay = config.getLong(StreamsConfig.STATE_CLEANUP_DELAY_MS_CONFIG);
-        stateDirCleaner.scheduleAtFixedRate(new Runnable() {
-            @Override
-            public void run() {
-                if (state == State.RUNNING) {
-                    stateDirectory.cleanRemovedTasks(cleanupDelay);
-                }
+            if (globalStreamThread != null) {
+                globalStreamThread.start();
             }
-        }, cleanupDelay, cleanupDelay, TimeUnit.MILLISECONDS);
 
-        log.info("{} Started Kafka Stream process", logPrefix);
+            for (final StreamThread thread : threads) {
+                thread.start();
+            }
+
+            final Long cleanupDelay = config.getLong(StreamsConfig.STATE_CLEANUP_DELAY_MS_CONFIG);
+            stateDirCleaner.scheduleAtFixedRate(new Runnable() {
+                @Override
+                public void run() {
+                    if (state == State.RUNNING) {
+                        stateDirectory.cleanRemovedTasks(cleanupDelay);
+                    }
+                }
+            }, cleanupDelay, cleanupDelay, TimeUnit.MILLISECONDS);
+
+            log.info("{} Started Streams client", logPrefix);
+        } else {
+            // if transition failed, it means it is not in CREATED state
+            // any more; return immediately in this case
+            log.warn("{} Already stopped, cannot re-start", logPrefix);
+        }
     }
 
     /**
@@ -685,11 +693,13 @@ public class KafkaStreams {
      * Note that this method must not be called in the {@code onChange} callback of {@link StateListener}.
      */
     public synchronized boolean close(final long timeout, final TimeUnit timeUnit) {
-        log.debug("{} Stopping Kafka Stream process.", logPrefix);
+        log.debug("{} Stopping Streams client", logPrefix);
 
         if (!setState(State.PENDING_SHUTDOWN)) {
             // if transition failed, it means it was either in PENDING_SHUTDOWN
             // or NOT_RUNNING already; return immediately in this case
+            log.info("{} Already stopped, do not proceed with the shutdown process", logPrefix);
+
             return true;
         } else {
             stateDirCleaner.shutdownNow();
@@ -715,7 +725,6 @@ public class KafkaStreams {
                     }
 
                     metrics.close();
-                    log.info("{} Stopped Kafka Streams process.", logPrefix);
                 }
             }, "kafka-streams-close-thread");
 
@@ -727,6 +736,9 @@ public class KafkaStreams {
             } catch (final InterruptedException e) {
                 Thread.interrupted();
             }
+
+            log.info("{} Stopped Streams client completely", logPrefix);
+
             setState(State.NOT_RUNNING);
             return !shutdown.isAlive();
         }

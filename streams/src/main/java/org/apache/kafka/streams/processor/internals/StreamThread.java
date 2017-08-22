@@ -180,6 +180,10 @@ public class StreamThread extends Thread implements ThreadDataProvider {
                 // when the state is already in PENDING_SHUTDOWN, all other transitions will be
                 // refused but we do not throw exception here
                 return false;
+            } else if (state == State.DEAD) {
+                // when the state is already in NOT_RUNNING, all its transitions
+                // will be refused but we do not throw exception here
+                return false;
             } else if (state == State.PARTITIONS_REVOKED && newState == State.PARTITIONS_REVOKED) {
                 // when the state is already in PARTITIONS_REVOKED, its transition to itself will be
                 // refused but we do not throw exception here
