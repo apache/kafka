@@ -471,7 +471,7 @@ public class KafkaConsumerTest {
 
         ConsumerRecords<String, String> records = consumer.poll(0);
         assertEquals(5, records.count());
-        assertEquals(55L, consumer.position(tp0));
+        assertEquals(55L, consumer.position(tp0, Long.MAX_VALUE));
         consumer.close(0, TimeUnit.MILLISECONDS);
     }
 
@@ -698,7 +698,7 @@ public class KafkaConsumerTest {
         }
 
         // make sure the position hasn't been updated
-        assertEquals(0, consumer.position(tp0));
+        assertEquals(0, consumer.position(tp0, Long.MAX_VALUE));
 
         // the next poll should return the completed fetch
         ConsumerRecords<String, String> records = consumer.poll(0);
@@ -862,8 +862,8 @@ public class KafkaConsumerTest {
 
         // verify that the fetch occurred as expected
         assertEquals(11, records.count());
-        assertEquals(1L, consumer.position(tp0));
-        assertEquals(10L, consumer.position(t2p0));
+        assertEquals(1L, consumer.position(tp0, Long.MAX_VALUE));
+        assertEquals(10L, consumer.position(t2p0, Long.MAX_VALUE));
 
         // subscription change
         consumer.subscribe(Arrays.asList(topic, topic3), getConsumerRebalanceListener(consumer));
@@ -893,8 +893,8 @@ public class KafkaConsumerTest {
 
         // verify that the fetch occurred as expected
         assertEquals(101, records.count());
-        assertEquals(2L, consumer.position(tp0));
-        assertEquals(100L, consumer.position(t3p0));
+        assertEquals(2L, consumer.position(tp0, Long.MAX_VALUE));
+        assertEquals(100L, consumer.position(t3p0, Long.MAX_VALUE));
 
         // verify that the offset commits occurred as expected
         assertTrue(commitReceived.get());
@@ -1038,7 +1038,7 @@ public class KafkaConsumerTest {
 
         ConsumerRecords<String, String> records = consumer.poll(0);
         assertEquals(1, records.count());
-        assertEquals(11L, consumer.position(tp0));
+        assertEquals(11L, consumer.position(tp0, Long.MAX_VALUE));
 
         // mock the offset commit response for to be revoked partitions
         AtomicBoolean commitReceived = prepareOffsetCommitResponse(client, coordinator, tp0, 11);
@@ -1103,7 +1103,7 @@ public class KafkaConsumerTest {
 
         ConsumerRecords<String, String> records = consumer.poll(0);
         assertEquals(1, records.count());
-        assertEquals(11L, consumer.position(tp0));
+        assertEquals(11L, consumer.position(tp0, Long.MAX_VALUE));
 
         // new manual assignment
         consumer.assign(Arrays.asList(t2p0));
@@ -1171,8 +1171,8 @@ public class KafkaConsumerTest {
         offsetResponse.put(tp0, 3L);
         offsetResponse.put(tp1, 3L);
         client.prepareResponse(listOffsetsResponse(offsetResponse, Errors.NONE));
-        assertEquals(3L, consumer.position(tp0));
-        assertEquals(3L, consumer.position(tp1));
+        assertEquals(3L, consumer.position(tp0, Long.MAX_VALUE));
+        assertEquals(3L, consumer.position(tp1, Long.MAX_VALUE));
 
         client.requests().clear();
         consumer.unsubscribe();

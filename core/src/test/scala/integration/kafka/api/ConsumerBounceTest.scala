@@ -115,9 +115,9 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
 
       if (records.nonEmpty) {
         consumer.commitSync()
-        assertEquals(consumer.position(tp), consumer.committed(tp).offset)
+        assertEquals(consumer.position(tp, Long.MaxValue), consumer.committed(tp).offset)
 
-        if (consumer.position(tp) == numRecords) {
+        if (consumer.position(tp, Long.MaxValue) == numRecords) {
           consumer.seekToBeginning(Collections.emptyList())
           consumed = 0
         }
@@ -151,16 +151,16 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
       if (coin == 0) {
         info("Seeking to end of log")
         consumer.seekToEnd(Collections.emptyList())
-        assertEquals(numRecords.toLong, consumer.position(tp))
+        assertEquals(numRecords.toLong, consumer.position(tp, Long.MaxValue))
       } else if (coin == 1) {
         val pos = TestUtils.random.nextInt(numRecords).toLong
         info("Seeking to " + pos)
         consumer.seek(tp, pos)
-        assertEquals(pos, consumer.position(tp))
+        assertEquals(pos, consumer.position(tp, Long.MaxValue))
       } else if (coin == 2) {
         info("Committing offset.")
         consumer.commitSync()
-        assertEquals(consumer.position(tp), consumer.committed(tp).offset)
+        assertEquals(consumer.position(tp, Long.MaxValue), consumer.committed(tp).offset)
       }
     }
   }

@@ -169,7 +169,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                 consumer.seekToBeginning(Collections.singletonList(topicPartition));
             }
 
-            long offset = consumer.position(topicPartition);
+            long offset = consumer.position(topicPartition, Long.MAX_VALUE);
             final Long highWatermark = highWatermarks.get(topicPartition);
             BatchingStateRestoreCallback
                 stateRestoreAdapter =

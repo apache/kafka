@@ -85,15 +85,15 @@ class LegacyAdminClientTest extends IntegrationTestHarness with Logging {
 
     sendRecords(producers.head, 10, tp)
     consumer.seekToBeginning(Collections.singletonList(tp))
-    assertEquals(0L, consumer.position(tp))
+    assertEquals(0L, consumer.position(tp, Long.MaxValue))
 
     client.deleteRecordsBefore(Map((tp, 5L))).get()
     consumer.seekToBeginning(Collections.singletonList(tp))
-    assertEquals(5L, consumer.position(tp))
+    assertEquals(5L, consumer.position(tp, Long.MaxValue))
 
     client.deleteRecordsBefore(Map((tp, DeleteRecordsRequest.HIGH_WATERMARK))).get()
     consumer.seekToBeginning(Collections.singletonList(tp))
-    assertEquals(10L, consumer.position(tp))
+    assertEquals(10L, consumer.position(tp, Long.MaxValue))
   }
 
   @Test

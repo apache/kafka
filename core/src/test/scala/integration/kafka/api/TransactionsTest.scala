@@ -168,7 +168,7 @@ class TransactionsTest extends KafkaServerTestHarness {
     assertEquals(2, readCommittedConsumer.assignment.size)
     readCommittedConsumer.seekToEnd(readCommittedConsumer.assignment)
     readCommittedConsumer.assignment.asScala.foreach { tp =>
-      assertEquals(1L, readCommittedConsumer.position(tp))
+      assertEquals(1L, readCommittedConsumer.position(tp, Long.MaxValue))
     }
 
     // undecided timestamps should not be searchable either

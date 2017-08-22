@@ -105,7 +105,7 @@ public class MockRestoreConsumer extends MockConsumer<byte[], byte[]> {
     }
 
     @Override
-    public synchronized long position(TopicPartition partition) {
+    public synchronized long position(TopicPartition partition, long timeout) {
         if (!partition.equals(assignedPartition))
             throw new IllegalStateException("RestoreConsumer: unassigned partition");
 

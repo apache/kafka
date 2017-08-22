@@ -137,7 +137,7 @@ public class StoreChangelogReader implements ChangelogReader {
                     logRestoreOffsets(restorer.partition(),
                                       restorer.checkpoint(),
                                       endOffsets.get(restorer.partition()));
-                    restorer.setStartingOffset(consumer.position(restorer.partition()));
+                    restorer.setStartingOffset(consumer.position(restorer.partition(), Long.MAX_VALUE));
                 } else {
                     consumer.seekToBeginning(Collections.singletonList(restorer.partition()));
                     needsPositionUpdate.add(restorer);
@@ -145,7 +145,7 @@ public class StoreChangelogReader implements ChangelogReader {
             }
 
             for (final StateRestorer restorer : needsPositionUpdate) {
-                final long position = consumer.position(restorer.partition());
+                final long position = consumer.position(restorer.partition(), Long.MAX_VALUE);
                 restorer.setStartingOffset(position);
                 logRestoreOffsets(restorer.partition(),
                                   position,
@@ -240,7 +240,7 @@ public class StoreChangelogReader implements ChangelogReader {
         }
 
         if (nextPosition == -1) {
-            nextPosition = consumer.position(restorer.partition());
+            nextPosition = consumer.position(restorer.partition(), Long.MAX_VALUE);
         }
 
         if (!restoreRecords.isEmpty()) {

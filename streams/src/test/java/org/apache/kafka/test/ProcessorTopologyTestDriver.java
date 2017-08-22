@@ -420,7 +420,7 @@ public class ProcessorTopologyTestDriver {
             public synchronized void seekToBeginning(final Collection<TopicPartition> partitions) {}
 
             @Override
-            public synchronized long position(final TopicPartition partition) {
+            public synchronized long position(final TopicPartition partition, final long timeout) {
                 return 0L;
             }
         };
@@ -447,7 +447,7 @@ public class ProcessorTopologyTestDriver {
             public synchronized void seekToBeginning(final Collection<TopicPartition> partitions) {}
 
             @Override
-            public synchronized long position(final TopicPartition partition) {
+            public synchronized long position(final TopicPartition partition, final long timeout) {
                 return 0L;
             }
         };

@@ -61,8 +61,8 @@ public class StateConsumerTest {
     @Test
     public void shouldSeekToInitialOffsets() throws Exception {
         stateConsumer.initialize();
-        assertEquals(20L, consumer.position(topicOne));
-        assertEquals(30L, consumer.position(topicTwo));
+        assertEquals(20L, consumer.position(topicOne, Long.MAX_VALUE));
+        assertEquals(30L, consumer.position(topicTwo, Long.MAX_VALUE));
     }
 
     @Test

@@ -228,7 +228,7 @@ public class EosTestDriver extends SmokeTestUtil {
             }
 
             for (final TopicPartition tp : partitions) {
-                final long offset = consumer.position(tp);
+                final long offset = consumer.position(tp, Long.MAX_VALUE);
                 committedOffsets.put(tp, offset);
             }
         }
@@ -257,7 +257,7 @@ public class EosTestDriver extends SmokeTestUtil {
                     throw new RuntimeException("FAIL: did receive more records than expected for " + tp
                         + " (expected EOL offset: " + readEndOffset + "; current offset: " + record.offset());
                 }
-                if (consumer.position(tp) >= readEndOffset) {
+                if (consumer.position(tp, Long.MAX_VALUE) >= readEndOffset) {
                     consumer.pause(Collections.singletonList(tp));
                 }
             }

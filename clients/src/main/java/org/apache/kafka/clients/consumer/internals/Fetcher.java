@@ -243,15 +243,18 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
     /**
      * Lookup and set offsets for any partitions which are awaiting an explicit reset.
      * @param partitions the partitions to reset
+     * @param timeout The amount of time to wait for the offset
+     *
+     * @throws org.apache.kafka.common.errors.TimeoutException: if one of the given partition is not available
      */
-    public void resetOffsetsIfNeeded(Set<TopicPartition> partitions) {
+    public void resetOffsetsIfNeeded(Set<TopicPartition> partitions, long timeout) {
         final Set<TopicPartition> needsOffsetReset = new HashSet<>();
         for (TopicPartition tp : partitions) {
             if (subscriptions.isAssigned(tp) && subscriptions.isOffsetResetNeeded(tp))
                 needsOffsetReset.add(tp);
         }
         if (!needsOffsetReset.isEmpty()) {
-            resetOffsets(needsOffsetReset);
+            resetOffsets(needsOffsetReset, timeout);
         }
     }
 
@@ -281,7 +284,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         }
 
         if (!needsOffsetReset.isEmpty()) {
-            resetOffsets(needsOffsetReset);
+            resetOffsets(needsOffsetReset, Long.MAX_VALUE);
         }
     }
 
@@ -400,15 +403,17 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
      * Reset offsets for the given partition using the offset reset strategy.
      *
      * @param partitions  The partitions that need offsets reset
+     * @param timeout The amount of time to wait for the offset
      * @throws org.apache.kafka.clients.consumer.NoOffsetForPartitionException If no offset reset strategy is defined
+     * @throws org.apache.kafka.common.errors.TimeoutException: if one of the given partition is not available
      */
-    private void resetOffsets(final Set<TopicPartition> partitions) {
+    private void resetOffsets(final Set<TopicPartition> partitions, long timeout) {
         final Map<TopicPartition, Long> offsetResets = new HashMap<>();
         final Set<TopicPartition> partitionsWithNoOffsets = new HashSet<>();
         for (final TopicPartition partition : partitions) {
             offsetResetStrategyTimestamp(partition, offsetResets, partitionsWithNoOffsets);
         }
-        final Map<TopicPartition, OffsetData> offsetsByTimes = retrieveOffsetsByTimes(offsetResets, Long.MAX_VALUE, false);
+        final Map<TopicPartition, OffsetData> offsetsByTimes = retrieveOffsetsByTimes(offsetResets, timeout, false);
         for (final TopicPartition partition : partitions) {
             final OffsetData offsetData = offsetsByTimes.get(partition);
             if (offsetData == null) {

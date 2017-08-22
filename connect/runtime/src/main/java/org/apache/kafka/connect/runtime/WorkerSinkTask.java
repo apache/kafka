@@ -524,7 +524,7 @@ class WorkerSinkTask extends WorkerTask {
             lastCommittedOffsets = new HashMap<>();
             currentOffsets = new HashMap<>();
             for (TopicPartition tp : partitions) {
-                long pos = consumer.position(tp);
+                long pos = consumer.position(tp, Long.MAX_VALUE);
                 lastCommittedOffsets.put(tp, new OffsetAndMetadata(pos));
                 currentOffsets.put(tp, new OffsetAndMetadata(pos));
                 log.debug("{} Assigned topic partition {} with offset {}", this, tp, pos);
