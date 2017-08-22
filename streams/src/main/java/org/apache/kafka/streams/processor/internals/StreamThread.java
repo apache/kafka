@@ -97,24 +97,23 @@ public class StreamThread extends Thread implements ThreadDataProvider {
      *          |           v
      *          |     +-----+-------+
      *          +---> | Pending     |
-     *          |     | Shutdown    |
-     *          |     +-----+-------+
-     *          |           |
-     *          |           v
-     *          |     +-----+-------+
-     *          +---> | Dead        |
+     *                | Shutdown    |
+     *                +-----+-------+
+     *                      |
+     *                      v
+     *                +-----+-------+
+     *                | Dead        |
      *                +-------------+
      * </pre>
      * <p>
      * Note the following:
-     * - Any state can go to PENDING_SHUTDOWN. That is because streams can be closed at any time.
-     * - Any state can go to DEAD. That is because exceptions can happen at any other state,
-     *   leading to the stream thread terminating.
+     * - Any state can go to PENDING_SHUTDOWN followed by a subsequent transition to DEAD.
      * - A streams thread can stay in PARTITIONS_REVOKED indefinitely, in the corner case when
      *   the coordinator repeatedly fails in-between revoking partitions and assigning new partitions.
      *
      */
     public enum State implements ThreadStateTransitionValidator {
+
         CREATED(1, 4), RUNNING(2, 4), PARTITIONS_REVOKED(2, 3, 4), PARTITIONS_ASSIGNED(1, 2, 4), PENDING_SHUTDOWN(5), DEAD;
 
         private final Set<Integer> validTransitions = new HashSet<>();
@@ -949,13 +948,13 @@ public class StreamThread extends Thread implements ThreadDataProvider {
         setState(State.PENDING_SHUTDOWN);
     }
 
-    public synchronized boolean isInitialized() {
+    public boolean isInitialized() {
         synchronized (stateLock) {
             return state == State.RUNNING;
         }
     }
 
-    public synchronized boolean stillRunning() {
+    public boolean stillRunning() {
         synchronized (stateLock) {
             return state.isRunning();
         }
@@ -1039,9 +1038,7 @@ public class StreamThread extends Thread implements ThreadDataProvider {
      * @return The state this instance is in
      */
     public State state() {
-        synchronized (stateLock) {
-            return state;
-        }
+        return state;
     }
 
 
@@ -1049,21 +1046,24 @@ public class StreamThread extends Thread implements ThreadDataProvider {
      * Sets the state
      * @param newState New state
      */
+
     boolean setState(final State newState) {
         State oldState;
         synchronized (stateLock) {
             oldState = state;
+
             // there are cases when we shouldn't check if a transition is valid, e.g.,
             // when, for testing, a thread is closed multiple times. We could either
             // check here and immediately return for those cases, or add them to the transition
             // diagram (but then the diagram would be confusing and have transitions like
             // PENDING_SHUTDOWN->PENDING_SHUTDOWN).
+            // note we could be going from PENDING_SHUTDOWN to DEAD, and we obviously want to allow that
+            // transition, hence the check newState != DEAD.
             if (newState != State.DEAD && (state == State.PENDING_SHUTDOWN || state == State.DEAD)) {
                 return false;
             }
-
             if (!state.isValidTransition(newState)) {
-                log.warn("{} Unexpected state transition from {} to {}", logPrefix, oldState, newState);
+                log.warn("{} Unexpected state transition from {} to {}.", logPrefix, oldState, newState);
                 throw new StreamsException(logPrefix + " Unexpected state transition from " + oldState + " to " + newState);
             } else {
                 log.info("{} State transition from {} to {}.", logPrefix, oldState, newState);
@@ -1115,6 +1115,7 @@ public class StreamThread extends Thread implements ThreadDataProvider {
     private void shutdown(final boolean cleanRun) {
         setState(State.PENDING_SHUTDOWN);
         log.info("{} Shutting down", logPrefix);
+        setState(State.PENDING_SHUTDOWN);
         taskManager.shutdown(cleanRun);
 
         try {

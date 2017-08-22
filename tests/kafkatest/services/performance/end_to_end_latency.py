@@ -73,7 +73,7 @@ class EndToEndLatencyService(PerformanceService):
     def start_cmd(self, node):
         args = self.args.copy()
         args.update({
-            'zk_connect': self.kafka.zk.connect_setting(),
+            'zk_connect': self.kafka.zk_connect_setting(),
             'bootstrap_servers': self.kafka.bootstrap_servers(self.security_config.security_protocol),
             'config_file': EndToEndLatencyService.CONFIG_FILE,
             'kafka_run_class': self.path.script("kafka-run-class.sh", node)

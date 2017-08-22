@@ -169,13 +169,12 @@ object ReplicationQuotasTestRig {
 
     def logOutput(config: ExperimentDef, replicas: Map[Int, Seq[Int]], newAssignment: Map[TopicAndPartition, Seq[Int]]): Unit = {
       val actual = zkUtils.getPartitionAssignmentForTopics(Seq(topicName))(topicName)
-      val existing = zkUtils.getReplicaAssignmentForTopics(newAssignment.map(_._1.topic).toSeq)
 
       //Long stats
       println("The replicas are " + replicas.toSeq.sortBy(_._1).map("\n" + _))
       println("This is the current replica assignment:\n" + actual.toSeq)
       println("proposed assignment is: \n" + newAssignment)
-      println("This is the assigment we eneded up with" + actual)
+      println("This is the assignment we ended up with" + actual)
 
       //Test Stats
       println(s"numBrokers: ${config.brokers}")

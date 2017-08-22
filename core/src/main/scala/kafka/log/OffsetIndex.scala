@@ -58,7 +58,7 @@ class OffsetIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writabl
   private[this] var _lastOffset = lastEntry.offset
   
   debug("Loaded index file %s with maxEntries = %d, maxIndexSize = %d, entries = %d, lastOffset = %d, file position = %d"
-    .format(file.getAbsolutePath, maxEntries, maxIndexSize, _entries, _lastOffset, mmap.position))
+    .format(file.getAbsolutePath, maxEntries, maxIndexSize, _entries, _lastOffset, mmap.position()))
 
   /**
    * The last entry in the index
@@ -144,7 +144,7 @@ class OffsetIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writabl
         mmap.putInt(position)
         _entries += 1
         _lastOffset = offset
-        require(_entries * entrySize == mmap.position, entries + " entries but file position in index is " + mmap.position + ".")
+        require(_entries * entrySize == mmap.position(), entries + " entries but file position in index is " + mmap.position() + ".")
       } else {
         throw new InvalidOffsetException("Attempt to append an offset (%d) to position %d no larger than the last offset appended (%d) to %s."
           .format(offset, entries, _lastOffset, file.getAbsolutePath))
