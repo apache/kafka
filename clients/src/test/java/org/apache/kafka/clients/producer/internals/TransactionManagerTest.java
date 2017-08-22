@@ -31,6 +31,7 @@ import org.apache.kafka.common.errors.OutOfOrderSequenceException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.TransactionalIdAuthorizationException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
@@ -636,6 +637,50 @@ public class TransactionManagerTest {
         sender.run(time.milliseconds());  // find coordinator
         sender.run(time.milliseconds());
         assertEquals(brokerNode, transactionManager.coordinator(CoordinatorType.TRANSACTION));
+    }
+
+    @Test
+    public void testUnsupportedFindCoordinator() {
+        transactionManager.initializeTransactions();
+        client.prepareUnsupportedVersionResponse(new MockClient.RequestMatcher() {
+            @Override
+            public boolean matches(AbstractRequest body) {
+                FindCoordinatorRequest findCoordinatorRequest = (FindCoordinatorRequest) body;
+                assertEquals(findCoordinatorRequest.coordinatorType(), CoordinatorType.TRANSACTION);
+                assertEquals(findCoordinatorRequest.coordinatorKey(), transactionalId);
+                return true;
+            }
+        });
+
+        sender.run(time.milliseconds()); // InitProducerRequest is queued
+        sender.run(time.milliseconds()); // FindCoordinator is queued after peeking InitProducerRequest
+        assertTrue(transactionManager.hasFatalError());
+        assertTrue(transactionManager.lastError() instanceof UnsupportedVersionException);
+    }
+
+    @Test
+    public void testUnsupportedInitTransactions() {
+        transactionManager.initializeTransactions();
+        prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.TRANSACTION, transactionalId);
+        sender.run(time.milliseconds()); // InitProducerRequest is queued
+        sender.run(time.milliseconds()); // FindCoordinator is queued after peeking InitProducerRequest
+
+        assertFalse(transactionManager.hasError());
+        assertNotNull(transactionManager.coordinator(CoordinatorType.TRANSACTION));
+
+        client.prepareUnsupportedVersionResponse(new MockClient.RequestMatcher() {
+            @Override
+            public boolean matches(AbstractRequest body) {
+                InitProducerIdRequest initProducerIdRequest = (InitProducerIdRequest) body;
+                assertEquals(initProducerIdRequest.transactionalId(), transactionalId);
+                assertEquals(initProducerIdRequest.transactionTimeoutMs(), transactionTimeoutMs);
+                return true;
+            }
+        });
+
+        sender.run(time.milliseconds()); // InitProducerRequest is dequeued
+        assertTrue(transactionManager.hasFatalError());
+        assertTrue(transactionManager.lastError() instanceof UnsupportedVersionException);
     }
 
     @Test
