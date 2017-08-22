@@ -283,9 +283,9 @@ public class GlobalStreamThread extends Thread {
             } catch (IOException e) {
                 log.error("{} Failed to close state maintainer due to the following error:", logPrefix, e);
             }
+            setState(DEAD);
 
             log.info("{} Shutdown complete", logPrefix);
-            setState(DEAD);
         }
     }
 

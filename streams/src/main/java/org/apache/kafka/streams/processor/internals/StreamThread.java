@@ -1152,8 +1152,8 @@ public class StreamThread extends Thread implements ThreadDataProvider {
         }
         streamsMetrics.removeAllSensors();
 
-        log.info("{} Shutdown complete", logPrefix);
         setState(State.DEAD);
+        log.info("{} Shutdown complete", logPrefix);
     }
 
     private RuntimeException unAssignChangeLogPartitions() {

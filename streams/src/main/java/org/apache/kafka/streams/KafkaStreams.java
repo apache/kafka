@@ -668,9 +668,10 @@ public class KafkaStreams {
 
             log.info("{} Started Streams client", logPrefix);
         } else {
-            // if transition failed, it means it is not in CREATED state
-            // any more; return immediately in this case
-            log.warn("{} Already stopped, cannot re-start", logPrefix);
+            // if transition failed but no exception is thrown; currently it is not possible
+            // since we do not allow calling start multiple times whether or not it is already shutdown.
+            // TODO: In the future if we lift this restriction this code path could then be triggered and be updated
+            log.error("{} Already stopped, cannot re-start", logPrefix);
         }
     }
 
@@ -738,9 +739,9 @@ public class KafkaStreams {
                 Thread.interrupted();
             }
 
+            setState(State.NOT_RUNNING);
             log.info("{} Stopped Streams client completely", logPrefix);
 
-            setState(State.NOT_RUNNING);
             return !shutdown.isAlive();
         }
     }
