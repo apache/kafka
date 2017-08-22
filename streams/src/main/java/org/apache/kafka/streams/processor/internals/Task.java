@@ -22,6 +22,7 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -64,4 +65,17 @@ public interface Task {
     String toString(String indent);
 
     int addRecords(TopicPartition partition, final Iterable<ConsumerRecord<byte[], byte[]>> records);
+
+    boolean hasStateStores();
+
+    /**
+     * initialize the task and return true if the task is ready to run, i.e, it has not state stores
+     * @return true if this task has no state stores that may need restoring.
+     */
+    boolean initialize();
+
+    /**
+     * @return any changelog partitions associated with this task
+     */
+    Collection<TopicPartition> changelogPartitions();
 }
