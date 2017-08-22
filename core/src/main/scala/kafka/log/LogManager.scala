@@ -74,7 +74,7 @@ class LogManager(logDirs: Array[File],
   private val _liveLogDirs: ConcurrentLinkedQueue[File] = createAndValidateLogDirs(logDirs, initialOfflineDirs)
 
   def liveLogDirs: Array[File] = {
-    if (_liveLogDirs.size() == logDirs.size)
+    if (_liveLogDirs.size == logDirs.size)
       logDirs
     else
       _liveLogDirs.asScala.toArray
@@ -416,10 +416,9 @@ class LogManager(logDirs: Array[File],
         CoreUtils.swallow(Files.createFile(new File(dir, Log.CleanShutdownFile).toPath))
       }
     } catch {
-      case e: ExecutionException => {
+      case e: ExecutionException =>
         error("There was an error in one of the threads during LogManager shutdown: " + e.getCause)
         throw e.getCause
-      }
     } finally {
       threadPools.foreach(_.shutdown())
       // regardless of whether the close succeeded, we need to unlock the data directories
@@ -607,8 +606,9 @@ class LogManager(logDirs: Array[File],
     * Rename the directory of the given topic-partition "logdir" as "logdir.uuid.delete" and
     * add it in the queue for deletion.
     * @param topicPartition TopicPartition that needs to be deleted
+    * @return the removed log
     */
-  def asyncDelete(topicPartition: TopicPartition) = {
+  def asyncDelete(topicPartition: TopicPartition): Log = {
     val removedLog: Log = logCreationOrDeletionLock synchronized {
       logs.remove(topicPartition)
     }
@@ -627,11 +627,7 @@ class LogManager(logDirs: Array[File],
           checkpointLogStartOffsetsInDir(removedLog.dir.getParentFile)
           removedLog.dir = renamedDir
           // change the file pointers for log and index file
-          for (logSegment <- removedLog.logSegments) {
-            logSegment.log.setFile(new File(renamedDir, logSegment.log.file.getName))
-            logSegment.index.file = new File(renamedDir, logSegment.index.file.getName)
-          }
-
+          removedLog.logSegments.foreach(_.updateDir(renamedDir))
           logsToBeDeleted.add(removedLog)
           removedLog.removeLogMetrics()
           info(s"Log for partition ${removedLog.topicPartition} is renamed to ${removedLog.dir.getAbsolutePath} and is scheduled for deletion")
@@ -647,6 +643,7 @@ class LogManager(logDirs: Array[File],
     } else if (offlineLogDirs.nonEmpty) {
       throw new KafkaStorageException("Failed to delete log for " + topicPartition + " because it may be in one of the offline directories " + offlineLogDirs.mkString(","))
     }
+    removedLog
   }
 
   /**
