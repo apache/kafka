@@ -119,22 +119,16 @@ public class RocksDBWindowStoreSupplierTest {
         context.setTime(1);
         store.put("a", "b");
         store.put("b", "c");
-        assertThat(store, is(instanceOf(CachingWindowStore.class)));
+        assertThat(((WrappedStateStore) store).wrappedStore(), is(instanceOf(CachingWindowStore.class)));
         assertThat(context.getCache().size(), is(2L));
     }
 
     @Test
-    public void shouldReturnRocksDbStoreWhenCachingAndLoggingDisabled() throws Exception {
-        store = createStore(false, false, 3);
-        assertThat(store, is(instanceOf(RocksDBWindowStore.class)));
+    public void shouldHaveMeteredStoreAsOuterMost() {
+        assertThat(createStore(false, false, 2), instanceOf(MeteredWindowStore.class));
+        assertThat(createStore(false, true, 2), instanceOf(MeteredWindowStore.class));
+        assertThat(createStore(true, false, 2), instanceOf(MeteredWindowStore.class));
     }
-
-    @Test
-    public void shouldReturnRocksDbStoreWhenCachingDisabled() throws Exception {
-        store = createStore(true, false, 3);
-        assertThat(store, is(instanceOf(RocksDBWindowStore.class)));
-    }
-
     @Test
     public void shouldHaveMeteredStoreWhenCached() throws Exception {
         store = createStore(false, true, 3);
