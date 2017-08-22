@@ -19,6 +19,7 @@ package kafka.api
 import java.util
 import java.util.{Collections, Properties}
 import java.util.concurrent.{ExecutionException, TimeUnit}
+import java.io.File
 
 import org.apache.kafka.clients.admin.KafkaAdminClientTest
 import org.apache.kafka.common.utils.{Time, Utils}
@@ -266,7 +267,7 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
     val tp = new TopicPartition(topic, 0)
 
     val replicaAssignment = servers.map { server =>
-      val logDir = server.config.logDirs(Random.nextInt(2))
+      val logDir = new File(server.config.logDirs(Random.nextInt(2))).getAbsolutePath
       new TopicPartitionReplica(topic, 0, server.config.brokerId) -> logDir
     }.toMap
 

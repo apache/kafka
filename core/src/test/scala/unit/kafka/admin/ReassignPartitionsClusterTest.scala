@@ -34,6 +34,8 @@ import scala.collection.Map
 import scala.collection.Seq
 import scala.util.Random
 
+import java.io.File
+
 class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
   val partitionId = 0
   var servers: Seq[KafkaServer] = null
@@ -63,7 +65,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
   def getRandomLogDirAssignment(brokerId: Int): String = {
     val server = servers.find(_.config.brokerId == brokerId).get
     val logDirs = server.config.logDirs
-    logDirs(Random.nextInt(logDirs.size))
+    new File(logDirs(Random.nextInt(logDirs.size))).getAbsolutePath
   }
 
   @After

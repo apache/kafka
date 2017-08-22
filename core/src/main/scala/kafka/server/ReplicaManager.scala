@@ -589,28 +589,29 @@ class ReplicaManager(val config: KafkaConfig,
   def describeLogDirs(partitions: Set[TopicPartition]): Map[String, LogDirInfo] = {
     val logsByDir = logManager.allLogs().groupBy(log => log.dir.getParent)
 
-    config.logDirs.toSet.map { dir: String =>
+    config.logDirs.toSet.map { logDir: String =>
+      val absolutePath = new File(logDir).getAbsolutePath
       try {
-        if (!logManager.isLogDirOnline(dir))
-          throw new KafkaStorageException(s"Log directory $dir is offline")
+        if (!logManager.isLogDirOnline(absolutePath))
+          throw new KafkaStorageException(s"Log directory $absolutePath is offline")
 
-        logsByDir.get(dir) match {
+        logsByDir.get(absolutePath) match {
           case Some(logs) =>
             val replicaInfos = logs.filter(log =>
               partitions.isEmpty || partitions.contains(log.topicPartition)
             ).map(log => log.topicPartition -> new ReplicaInfo(log.size, getLogEndOffsetLag(log.topicPartition), false)).toMap
 
-            (dir, new LogDirInfo(Errors.NONE, replicaInfos.asJava))
+            (absolutePath, new LogDirInfo(Errors.NONE, replicaInfos.asJava))
           case None =>
-            (dir, new LogDirInfo(Errors.NONE, Map.empty[TopicPartition, ReplicaInfo].asJava))
+            (absolutePath, new LogDirInfo(Errors.NONE, Map.empty[TopicPartition, ReplicaInfo].asJava))
         }
 
       } catch {
         case e: KafkaStorageException =>
-          (dir, new LogDirInfo(Errors.KAFKA_STORAGE_ERROR, Map.empty[TopicPartition, ReplicaInfo].asJava))
+          (absolutePath, new LogDirInfo(Errors.KAFKA_STORAGE_ERROR, Map.empty[TopicPartition, ReplicaInfo].asJava))
         case t: Throwable =>
-          error(s"Error while describing replica in dir $dir", t)
-          (dir, new LogDirInfo(Errors.forException(t), Map.empty[TopicPartition, ReplicaInfo].asJava))
+          error(s"Error while describing replica in dir $absolutePath", t)
+          (absolutePath, new LogDirInfo(Errors.forException(t), Map.empty[TopicPartition, ReplicaInfo].asJava))
       }
     }.toMap
   }

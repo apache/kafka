@@ -24,7 +24,7 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests._
 import org.junit.Assert._
 import org.junit.Test
-
+import java.io.File
 import scala.collection.JavaConverters._
 
 class DescribeLogDirsRequestTest extends BaseRequestTest {
@@ -39,8 +39,8 @@ class DescribeLogDirsRequestTest extends BaseRequestTest {
 
   @Test
   def testDescribeLogDirsRequest(): Unit = {
-    val onlineDir = servers.head.config.logDirs.head
-    val offlineDir = servers.head.config.logDirs.tail.head
+    val onlineDir = new File(servers.head.config.logDirs.head).getAbsolutePath
+    val offlineDir = new File(servers.head.config.logDirs.tail.head).getAbsolutePath
     servers.head.logDirFailureChannel.maybeAddOfflineLogDir(offlineDir, "", new java.io.IOException())
     TestUtils.createTopic(zkUtils, topic, partitionNum, 1, servers)
     TestUtils.produceMessages(servers, topic, 10)
@@ -50,7 +50,6 @@ class DescribeLogDirsRequestTest extends BaseRequestTest {
 
     assertEquals(Errors.KAFKA_STORAGE_ERROR, logDirInfos.get(offlineDir).error)
     assertEquals(0, logDirInfos.get(offlineDir).replicaInfos.size())
-
 
     assertEquals(Errors.NONE, logDirInfos.get(onlineDir).error)
     val replicaInfo0 = logDirInfos.get(onlineDir).replicaInfos.get(tp0)

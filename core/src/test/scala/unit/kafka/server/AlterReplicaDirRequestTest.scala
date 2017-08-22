@@ -19,6 +19,7 @@ package kafka.server
 
 import kafka.network.SocketServer
 import kafka.utils._
+import java.io.File
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests._
@@ -38,7 +39,7 @@ class AlterReplicaDirRequestTest extends BaseRequestTest {
   @Test
   def testAlterReplicaDirRequestBeforeTopicCreation() {
     val partitionNum = 5
-    val logDir = servers.head.config.logDirs.head
+    val logDir = new File(servers.head.config.logDirs.head).getAbsolutePath
     val partitionDirs = (0 until partitionNum).map(partition => new TopicPartition(topic, partition) -> logDir).toMap
     val alterReplicaDirResponse = sendAlterReplicaDirRequest(partitionDirs)
 
@@ -57,8 +58,8 @@ class AlterReplicaDirRequestTest extends BaseRequestTest {
 
   @Test
   def testAlterReplicaDirRequestErrorCode(): Unit = {
-    val validDir = servers.head.config.logDirs.head
-    val offlineDir = servers.head.config.logDirs.tail.head
+    val validDir = new File(servers.head.config.logDirs.head).getAbsolutePath
+    val offlineDir = new File(servers.head.config.logDirs.tail.head).getAbsolutePath
     servers.head.logDirFailureChannel.maybeAddOfflineLogDir(offlineDir, "", new java.io.IOException())
     TestUtils.createTopic(zkUtils, topic, 3, 1, servers)
 

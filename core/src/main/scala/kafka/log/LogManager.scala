@@ -528,6 +528,7 @@ class LogManager(logDirs: Array[File],
   }
 
   def updatePreferredLogDir(topicPartition: TopicPartition, logDir: String): Unit = {
+    // The logDir should be an absolute path
     preferredLogDirs.put(topicPartition, logDir)
   }
 
@@ -723,6 +724,7 @@ class LogManager(logDirs: Array[File],
 
   // logDir should be an absolute path
   def isLogDirOnline(logDir: String): Boolean = {
+    // The logDir should be an absolute path
     if (!logDirs.exists(_.getAbsolutePath == logDir))
       throw new LogDirNotFoundException(s"Log dir $logDir is not found in the config.")
 
