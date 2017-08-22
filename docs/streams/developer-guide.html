@@ -452,8 +452,9 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
 
     <h4><a id="streams_dsl_source" href="#streams_dsl_source">Creating Source Streams from Kafka</a></h4>
 
+    <p>
     You can easily read data from Kafka topics into your application. We support the following operations.
-    
+    </p>
     <table class="data-table" border="1">
         <tbody><tr>
             <th>Reading from Kafka</th>
@@ -470,10 +471,10 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
                 </p>
                 <pre class="brush: java;">
                     import org.apache.kafka.common.serialization.Serdes;
-                    import org.apache.kafka.streams.kstream.KStreamBuilder;
+                    import org.apache.kafka.streams.kstream.StreamsBuilder;
                     import org.apache.kafka.streams.kstream.KStream;
 
-                    KStreamBuilder builder = new KStreamBuilder();
+                    StreamsBuilder builder = new StreamsBuilder();
 
                     KStream&lt;String, Long&gt; wordCounts = builder.stream(
                         Serdes.String(), /* key serde */
@@ -498,17 +499,18 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
                     Slightly simplified, in the case of a KTable, the local KTable instance of every application instance will be populated
                     with data from only a subset of the partitions of the input topic. Collectively, i.e. across all application instances, all
                     the partitions of the input topic will be read and processed.
+                </p>
                 <p>
                 You may provide an optional name for the table (more precisely, for the internal state store that backs the table).
                 When a name is provided, the table can be queryied using <a href="#streams_interactive_queries">interactive queries</a>.
                 When a name is not provided the table will not queryable and an internal name will be provided for the state store.
-
+                </p>
                 <pre class="brush: java;">
                     import org.apache.kafka.common.serialization.Serdes;
-                    import org.apache.kafka.streams.kstream.KStreamBuilder;
+                    import org.apache.kafka.streams.kstream.StreamsBuilder;
                     import org.apache.kafka.streams.kstream.KTable;
 
-                    KStreamBuilder builder = new KStreamBuilder();
+                    StreamsBuilder builder = new StreamsBuilder();
 
                     KTable&lt;String, Long&gt; wordCounts = builder.table(
                         Serdes.String(), /* key serde */
@@ -537,18 +539,18 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
                     Slightly simplified, in the case of a GlobalKTable, the local GlobalKTable instance of every application instance will be
                     populated with data from all the partitions of the input topic. In other words, when using a global table, every application
                     instance will get its own, full copy of the topic's data.
-
+                </p>
                 <p>
                 You may provide an optional name for the table (more precisely, for the internal state store that backs the table).
                 When a name is provided, the table can be queryied using <a href="#streams_interactive_queries">interactive queries</a>.
                 When a name is not provided the table will not queryable and an internal name will be provided for the state store.
-
+                </p>
                 <pre class="brush: java;">
                     import org.apache.kafka.common.serialization.Serdes;
-                    import org.apache.kafka.streams.kstream.KStreamBuilder;
+                    import org.apache.kafka.streams.kstream.StreamsBuilder;
                     import org.apache.kafka.streams.kstream.GlobalKTable;
 
-                    KStreamBuilder builder = new KStreamBuilder();
+                    StreamsBuilder builder = new StreamsBuilder();
 
                     GlobalKTable&lt;String, Long&gt; wordCounts = builder.globalTable(
                         Serdes.String(), /* key serde */
