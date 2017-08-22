@@ -550,7 +550,7 @@ private[log] class Cleaner(val id: Int,
 
       // if any messages are to be retained, write them out
       val outputBuffer = result.output
-      if (outputBuffer.position > 0) {
+      if (outputBuffer.position() > 0) {
         outputBuffer.flip()
         val retained = MemoryRecords.readableRecords(outputBuffer)
         dest.append(firstOffset = retained.batches.iterator.next().baseOffset,
@@ -558,11 +558,11 @@ private[log] class Cleaner(val id: Int,
           largestTimestamp = result.maxTimestamp,
           shallowOffsetOfMaxTimestamp = result.shallowOffsetOfMaxTimestamp,
           records = retained)
-        throttler.maybeThrottle(outputBuffer.limit)
+        throttler.maybeThrottle(outputBuffer.limit())
       }
 
       // if we read bytes but didn't get even one complete message, our I/O buffer is too small, grow it and try again
-      if (readBuffer.limit > 0 && result.messagesRead == 0)
+      if (readBuffer.limit() > 0 && result.messagesRead == 0)
         growBuffers(maxLogMessageSize)
     }
     restoreBuffers()

@@ -673,20 +673,6 @@ public class KafkaStreams {
         close(DEFAULT_CLOSE_TIMEOUT, TimeUnit.SECONDS);
     }
 
-    private void closeGlobalStreamThread() {
-        if (globalStreamThread != null) {
-            globalStreamThread.shutdown();
-            if (!globalStreamThread.stillRunning()) {
-                try {
-                    globalStreamThread.join();
-                } catch (final InterruptedException e) {
-                    Thread.interrupted();
-                }
-            }
-            globalStreamThread = null;
-        }
-    }
-
     /**
      * Shutdown this {@code KafkaStreams} by signaling all the threads to stop, and then wait up to the timeout for the
      * threads to join.
@@ -696,6 +682,7 @@ public class KafkaStreams {
      * @param timeUnit unit of time used for timeout
      * @return {@code true} if all threads were successfully stopped&mdash;{@code false} if the timeout was reached
      * before all threads stopped
+     * Note that this method must not be called in the {@code onChange} callback of {@link StateListener}.
      */
     public synchronized boolean close(final long timeout, final TimeUnit timeUnit) {
         log.debug("{} Stopping Kafka Stream process.", logPrefix);
@@ -742,6 +729,23 @@ public class KafkaStreams {
             }
             setState(State.NOT_RUNNING);
             return !shutdown.isAlive();
+        }
+    }
+
+    private void closeGlobalStreamThread() {
+        if (globalStreamThread != null) {
+            // avoid deadlocks by stopping any further state reports
+            // from the thread since we're shutting down
+            globalStreamThread.setStateListener(null);
+            globalStreamThread.shutdown();
+            if (!globalStreamThread.stillRunning()) {
+                try {
+                    globalStreamThread.join();
+                } catch (final InterruptedException e) {
+                    Thread.interrupted();
+                }
+            }
+            globalStreamThread = null;
         }
     }
 

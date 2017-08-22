@@ -25,9 +25,10 @@ public class PlainSaslServerProvider extends Provider {
 
     private static final long serialVersionUID = 1L;
 
+    @SuppressWarnings("deprecation")
     protected PlainSaslServerProvider() {
         super("Simple SASL/PLAIN Server Provider", 1.0, "Simple SASL/PLAIN Server Provider for Kafka");
-        super.put("SaslServerFactory." + PlainSaslServer.PLAIN_MECHANISM, PlainSaslServerFactory.class.getName());
+        put("SaslServerFactory." + PlainSaslServer.PLAIN_MECHANISM, PlainSaslServerFactory.class.getName());
     }
 
     public static void initialize() {

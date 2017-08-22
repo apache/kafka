@@ -37,7 +37,7 @@ Port = collections.namedtuple('Port', ['name', 'number', 'open'])
 
 class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
-    PERSISTENT_ROOT = "/mnt"
+    PERSISTENT_ROOT = "/mnt/kafka"
     STDOUT_STDERR_CAPTURE = os.path.join(PERSISTENT_ROOT, "server-start-stdout-stderr.log")
     LOG4J_CONFIG = os.path.join(PERSISTENT_ROOT, "kafka-log4j.properties")
     # Logs such as controller.log, server.log, etc all go here
@@ -80,7 +80,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         :type topics: dict
         """
         Service.__init__(self, context, num_nodes)
-        JmxMixin.__init__(self, num_nodes, jmx_object_names, jmx_attributes or [])
+        JmxMixin.__init__(self, num_nodes, jmx_object_names, jmx_attributes or [],
+                          root=KafkaService.PERSISTENT_ROOT)
 
         self.zk = zk
 
@@ -94,7 +95,6 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.zk_set_acl = False
         self.server_prop_overides = server_prop_overides
         self.log_level = "DEBUG"
-        self.num_nodes = num_nodes
         self.zk_chroot = zk_chroot
 
         #
@@ -201,7 +201,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         # TODO - clean up duplicate configuration logic
         prop_file = cfg.render()
         prop_file += self.render('kafka.properties', node=node, broker_id=self.idx(node),
-                                 security_config=self.security_config)
+                                 security_config=self.security_config, num_nodes=self.num_nodes)
         return prop_file
 
     def start_cmd(self, node):
@@ -216,6 +216,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         return cmd
 
     def start_node(self, node):
+        node.account.mkdirs(KafkaService.PERSISTENT_ROOT)
         prop_file = self.prop_file(node)
         self.logger.info("kafka.properties:")
         self.logger.info(prop_file)
@@ -243,8 +244,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
     def pids(self, node):
         """Return process ids associated with running processes on the given node."""
         try:
-            cmd = "ps ax | grep -i kafka | grep java | grep -v grep | awk '{print $1}'"
-
+            cmd = "jcmd | grep -e kafka.Kafka | awk '{print $1}'"
             pid_arr = [pid for pid in node.account.ssh_capture(cmd, allow_fail=True, callback=int)]
             return pid_arr
         except (RemoteCommandError, ValueError) as e:
@@ -271,7 +271,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         JmxMixin.clean_node(self, node)
         self.security_config.clean_node(node)
         node.account.kill_process("kafka", clean_shutdown=False, allow_fail=True)
-        node.account.ssh("sudo rm -rf /mnt/*", allow_fail=False)
+        node.account.ssh("sudo rm -rf -- %s" % KafkaService.PERSISTENT_ROOT, allow_fail=False)
 
     def create_topic(self, topic_cfg, node=None):
         """Run the admin tool create topic command.
@@ -648,7 +648,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         if partitions:
             cmd += '  --partitions %s' % partitions
 
-        cmd += " 2>> /mnt/get_offset_shell.log | tee -a /mnt/get_offset_shell.log &"
+        cmd += " 2>> %s/get_offset_shell.log" % KafkaService.PERSISTENT_ROOT
+        cmd += " | tee -a %s/get_offset_shell.log &" % KafkaService.PERSISTENT_ROOT
         output = ""
         self.logger.debug(cmd)
         for line in node.account.ssh_capture(cmd):

@@ -172,9 +172,7 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
             cacheIterator, hasNextCondition, cacheFunction
         );
 
-        return new MergedSortedCacheWindowStoreIterator(filteredCacheIterator,
-                                                          underlyingIterator
-        );
+        return new MergedSortedCacheWindowStoreIterator(filteredCacheIterator, underlyingIterator);
     }
 
     @Override

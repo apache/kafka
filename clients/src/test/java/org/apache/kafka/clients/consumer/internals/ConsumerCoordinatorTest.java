@@ -51,6 +51,7 @@ import org.apache.kafka.common.requests.OffsetCommitResponse;
 import org.apache.kafka.common.requests.OffsetFetchResponse;
 import org.apache.kafka.common.requests.SyncGroupRequest;
 import org.apache.kafka.common.requests.SyncGroupResponse;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
@@ -123,7 +124,7 @@ public class ConsumerCoordinatorTest {
         this.metadata = new Metadata(0, Long.MAX_VALUE, true);
         this.metadata.update(cluster, Collections.<String>emptySet(), time.milliseconds());
         this.client = new MockClient(time, metadata);
-        this.consumerClient = new ConsumerNetworkClient(client, metadata, time, 100, 1000);
+        this.consumerClient = new ConsumerNetworkClient(new LogContext(), client, metadata, time, 100, 1000);
         this.metrics = new Metrics(time);
         this.rebalanceListener = new MockRebalanceListener();
         this.mockOffsetCommitCallback = new MockCommitCallback();
@@ -1664,6 +1665,7 @@ public class ConsumerCoordinatorTest {
                                                  final boolean autoCommitEnabled,
                                                  final boolean leaveGroup) {
         return new ConsumerCoordinator(
+                new LogContext(),
                 consumerClient,
                 groupId,
                 rebalanceTimeoutMs,

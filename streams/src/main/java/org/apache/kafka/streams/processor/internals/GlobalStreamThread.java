@@ -156,6 +156,12 @@ public class GlobalStreamThread extends Thread {
         return true;
     }
 
+    public boolean stillRunning() {
+        synchronized (stateLock) {
+            return state.isRunning();
+        }
+    }
+
     public GlobalStreamThread(final ProcessorTopology topology,
                               final StreamsConfig config,
                               final Consumer<byte[], byte[]> globalConsumer,
@@ -239,9 +245,18 @@ public class GlobalStreamThread extends Thread {
         final StateConsumer stateConsumer = initialize();
 
         if (stateConsumer == null) {
+            // during initialization, the caller thread would wait for the state consumer
+            // to restore the global state store before transiting to RUNNING state and return;
+            // if an error happens during the restoration process, the stateConsumer will be null
+            // and in this case we will transit the state to PENDING_SHUTDOWN and DEAD immediately.
+            // the exception will be thrown in the caller thread during start() function.
+            setState(State.PENDING_SHUTDOWN);
+            setState(State.DEAD);
+
+            log.warn("{} Error happened during initialization of the global state store; this thread has shutdown", logPrefix);
+
             return;
         }
-        // one could kill the thread before it had a chance to actually start
         setState(State.RUNNING);
 
         try {
@@ -309,11 +324,5 @@ public class GlobalStreamThread extends Thread {
         // one could call shutdown() multiple times, so ignore subsequent calls
         // if already shutting down or dead
         setState(PENDING_SHUTDOWN);
-    }
-
-    public boolean stillRunning() {
-        synchronized (stateLock) {
-            return state.isRunning();
-        }
     }
 }

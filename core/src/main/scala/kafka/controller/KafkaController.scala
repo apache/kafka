@@ -764,7 +764,7 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, time: Time, met
       topicDeleted || successful
     }.keys
     reassignedPartitions.foreach(p => removePartitionFromReassignedPartitions(p))
-    var partitionsToReassign: mutable.Map[TopicAndPartition, ReassignedPartitionsContext] = new mutable.HashMap
+    val partitionsToReassign = mutable.Map[TopicAndPartition, ReassignedPartitionsContext]()
     partitionsToReassign ++= partitionsBeingReassigned
     partitionsToReassign --= reassignedPartitions
     controllerContext.partitionsBeingReassigned ++= partitionsToReassign
