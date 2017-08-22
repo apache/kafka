@@ -189,6 +189,7 @@ public class StreamThread extends Thread implements ThreadDataProvider {
                 // refused but we do not throw exception here
                 return false;
             } else if (!state.isValidTransition(newState)) {
+                log.error("{} Unexpected state transition from {} to {}", logPrefix, oldState, newState);
                 throw new StreamsException(logPrefix + " Unexpected state transition from " + oldState + " to " + newState);
             } else {
                 log.info("{} State transition from {} to {}", logPrefix, oldState, newState);
