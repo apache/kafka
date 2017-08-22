@@ -695,6 +695,7 @@ public class KafkaStreams {
 
     private void closeGlobalStreamThread() {
         if (globalStreamThread != null) {
+            globalStreamThread.setStateListener(null);
             globalStreamThread.close();
             if (!globalStreamThread.stillRunning()) {
                 try {
