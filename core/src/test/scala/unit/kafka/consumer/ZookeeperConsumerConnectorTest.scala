@@ -17,7 +17,7 @@
 
 package kafka.consumer
 
-import java.util.{Collections, Properties}
+import java.util.Properties
 
 import org.junit.Assert._
 import kafka.common.MessageStreamsExistException
@@ -28,7 +28,6 @@ import kafka.serializer._
 import kafka.server._
 import kafka.utils.TestUtils._
 import kafka.utils._
-import org.I0Itec.zkclient.ZkClient
 import org.apache.log4j.{Level, Logger}
 import org.junit.{Test, After, Before}
 

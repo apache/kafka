@@ -22,14 +22,13 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.network.NetworkReceive;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.types.Struct;
-import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.MemoryRecords;
+import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.ProduceRequest;
 import org.apache.kafka.common.requests.ResponseHeader;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.test.DelayedReceive;
 import org.apache.kafka.test.MockSelector;
 import org.apache.kafka.test.TestUtils;
@@ -270,14 +269,21 @@ public class NetworkClientTest {
     public void testCallDisconnect() throws Exception {
         awaitReady(client, node);
         assertTrue("Expected NetworkClient to be ready to send to node " + node.idString(),
-            client.isReady(node, Time.SYSTEM.milliseconds()));
+            client.isReady(node, time.milliseconds()));
         assertFalse("Did not expect connection to node " + node.idString() + " to be failed",
             client.connectionFailed(node));
         client.disconnect(node.idString());
         assertFalse("Expected node " + node.idString() + " to be disconnected.",
-            client.isReady(node, Time.SYSTEM.milliseconds()));
+            client.isReady(node, time.milliseconds()));
         assertTrue("Expected connection to node " + node.idString() + " to be failed after disconnect",
             client.connectionFailed(node));
+        assertFalse(client.canConnect(node, time.milliseconds()));
+
+        // ensure disconnect does not reset blackout period if already disconnected
+        time.sleep(reconnectBackoffMsTest);
+        assertTrue(client.canConnect(node, time.milliseconds()));
+        client.disconnect(node.idString());
+        assertTrue(client.canConnect(node, time.milliseconds()));
     }
 
     private static class TestCallbackHandler implements RequestCompletionHandler {

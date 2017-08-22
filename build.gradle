@@ -82,7 +82,7 @@ ext {
 
   maxPermSizeArgs = []
   if (!JavaVersion.current().isJava8Compatible())
-    maxPermSizeArgs = ['-XX:MaxPermSize=512m']
+    maxPermSizeArgs += '-XX:MaxPermSize=512m'
 
   userMaxForks = project.hasProperty('maxParallelForks') ? maxParallelForks.toInteger() : null
 
@@ -137,14 +137,24 @@ subprojects {
   apply plugin: 'maven'
   apply plugin: 'signing'
   apply plugin: 'checkstyle'
-  apply plugin: 'findbugs'
+
+  if (!JavaVersion.current().isJava9Compatible())
+    apply plugin: 'findbugs'
 
   sourceCompatibility = 1.7
+  targetCompatibility = 1.7
 
   compileJava {
     options.encoding = 'UTF-8'
-    // Add unchecked once we drop support for Java 7 as @SuppressWarnings("unchecked") is too buggy in Java 7
     options.compilerArgs << "-Xlint:deprecation"
+    // -Xlint:unchecked is too buggy in Java 7, so we only enable for Java 8 or higher
+    if (JavaVersion.current().isJava8Compatible())
+      options.compilerArgs << "-Xlint:unchecked"
+    // --release is the recommended way to select the target release, but it's only supported in Java 9 so we also
+    // set --source and --target via `sourceCompatibility` and `targetCompatibility`. If/when Gradle supports `--release`
+    // natively (https://github.com/gradle/gradle/issues/2510), we should switch to that.
+    if (JavaVersion.current().isJava9Compatible())
+      options.compilerArgs << "--release" << "7"
   }
 
   uploadArchives {
@@ -349,17 +359,19 @@ subprojects {
   }
   test.dependsOn('checkstyleMain', 'checkstyleTest')
 
-  findbugs {
-    toolVersion = "3.0.1"
-    excludeFilter = file("$rootDir/gradle/findbugs-exclude.xml")
-    ignoreFailures = false
-  }
-  test.dependsOn('findbugsMain')
+  if (!JavaVersion.current().isJava9Compatible()) {
+    findbugs {
+      toolVersion = "3.0.1"
+      excludeFilter = file("$rootDir/gradle/findbugs-exclude.xml")
+      ignoreFailures = false
+    }
+    test.dependsOn('findbugsMain')
 
-  tasks.withType(FindBugs) {
-    reports {
-      xml.enabled (project.hasProperty('xmlFindBugsReport'))
-      html.enabled (!project.hasProperty('xmlFindBugsReport'))
+    tasks.withType(FindBugs) {
+      reports {
+        xml.enabled(project.hasProperty('xmlFindBugsReport'))
+        html.enabled(!project.hasProperty('xmlFindBugsReport'))
+      }
     }
   }
 

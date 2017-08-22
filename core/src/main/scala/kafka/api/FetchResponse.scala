@@ -33,7 +33,7 @@ object FetchResponsePartitionData {
     val messageSetSize = buffer.getInt
     val messageSetBuffer = buffer.slice()
     messageSetBuffer.limit(messageSetSize)
-    buffer.position(buffer.position + messageSetSize)
+    buffer.position(buffer.position() + messageSetSize)
     new FetchResponsePartitionData(error, hw, new ByteBufferMessageSet(messageSetBuffer))
   }
 

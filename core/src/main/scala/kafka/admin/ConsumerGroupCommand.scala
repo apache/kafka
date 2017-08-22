@@ -25,6 +25,7 @@ import joptsimple.{OptionParser, OptionSpec}
 import kafka.api.{OffsetFetchRequest, OffsetFetchResponse, OffsetRequest, PartitionOffsetRequestInfo}
 import kafka.client.ClientUtils
 import kafka.common.{OffsetMetadataAndError, TopicAndPartition}
+import kafka.utils.Implicits._
 import kafka.consumer.SimpleConsumer
 import kafka.utils._
 import org.I0Itec.zkclient.exception.ZkNoNodeException
@@ -514,7 +515,8 @@ object ConsumerGroupCommand extends Logging {
       properties.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "30000")
       properties.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, deserializer)
       properties.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, deserializer)
-      if (opts.options.has(opts.commandConfigOpt)) properties.putAll(Utils.loadProps(opts.options.valueOf(opts.commandConfigOpt)))
+      if (opts.options.has(opts.commandConfigOpt))
+        properties ++= Utils.loadProps(opts.options.valueOf(opts.commandConfigOpt))
 
       new KafkaConsumer(properties)
     }

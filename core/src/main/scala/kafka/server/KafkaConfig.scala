@@ -26,6 +26,7 @@ import kafka.coordinator.group.OffsetConfig
 import kafka.coordinator.transaction.{TransactionLog, TransactionStateManager}
 import kafka.message.{BrokerCompressionCodec, CompressionCodec, Message, MessageSet}
 import kafka.utils.CoreUtils
+import kafka.utils.Implicits._
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.common.config.ConfigDef.ValidList
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigException, SaslConfigs, SslConfigs, TopicConfig}
@@ -875,8 +876,8 @@ object KafkaConfig {
 
   def fromProps(defaults: Properties, overrides: Properties, doLog: Boolean): KafkaConfig = {
     val props = new Properties()
-    props.putAll(defaults)
-    props.putAll(overrides)
+    props ++= defaults
+    props ++= overrides
     fromProps(props, doLog)
   }
 

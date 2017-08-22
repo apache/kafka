@@ -29,6 +29,7 @@ import kafka.consumer._
 import kafka.message._
 import kafka.metrics.KafkaMetricsReporter
 import kafka.utils._
+import kafka.utils.Implicits._
 import org.apache.kafka.clients.consumer.{ConsumerConfig, ConsumerRecord}
 import org.apache.kafka.common.errors.WakeupException
 import org.apache.kafka.common.record.TimestampType
@@ -173,8 +174,8 @@ object ConsoleConsumer extends Logging {
   def getOldConsumerProps(config: ConsumerConfig): Properties = {
     val props = new Properties
 
-    props.putAll(config.consumerProps)
-    props.putAll(config.extraConsumerProps)
+    props ++= config.consumerProps
+    props ++= config.extraConsumerProps
     setAutoOffsetResetValue(config, props)
     props.put("zookeeper.connect", config.zkConnectionStr)
 
@@ -201,8 +202,8 @@ object ConsoleConsumer extends Logging {
   def getNewConsumerProps(config: ConsumerConfig): Properties = {
     val props = new Properties
 
-    props.putAll(config.consumerProps)
-    props.putAll(config.extraConsumerProps)
+    props ++= config.consumerProps
+    props ++= config.extraConsumerProps
     setAutoOffsetResetValue(config, props)
     props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, config.bootstrapServer)
     props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer")
