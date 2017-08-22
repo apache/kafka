@@ -40,6 +40,7 @@ import java.util.List;
 
 import static org.apache.kafka.streams.state.internals.ThreadCacheTest.memoryCacheEntrySize;
 import static org.apache.kafka.test.StreamsTestUtils.toList;
+import static org.apache.kafka.test.StreamsTestUtils.verifyKeyValueList;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertArrayEquals;
@@ -257,16 +258,6 @@ public class CachingWindowStoreTest {
         final List<KeyValue<Long, byte[]>> expected = Utils.mkList(KeyValue.pair(0L, bytesValue("0001")), KeyValue.pair(1L, bytesValue("0003")), KeyValue.pair(60000L, bytesValue("0005")));
         final List<KeyValue<Long, byte[]>> actual = toList(cachingStore.fetch(bytesKey("a"), 0, Long.MAX_VALUE));
         verifyKeyValueList(expected, actual);
-    }
-
-    private <K> void verifyKeyValueList(final List<KeyValue<K, byte[]>> expected, final List<KeyValue<K, byte[]>> actual) {
-        assertThat(actual.size(), equalTo(expected.size()));
-        for (int i = 0; i < actual.size(); i++) {
-            final KeyValue<K, byte[]> expectedKv = expected.get(i);
-            final KeyValue<K, byte[]> actualKv = actual.get(i);
-            assertThat(actualKv.key, equalTo(expectedKv.key));
-            assertThat(actualKv.value, equalTo(expectedKv.value));
-        }
     }
 
     @Test
