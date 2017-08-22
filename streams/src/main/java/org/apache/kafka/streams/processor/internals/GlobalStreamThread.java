@@ -146,7 +146,7 @@ public class GlobalStreamThread extends Thread {
                 // when the state is already in NOT_RUNNING, all its transitions
                 // will be refused but we do not throw exception here
                 return false;
-            }else if (!state.isValidTransition(newState)) {
+            } else if (!state.isValidTransition(newState)) {
                 throw new StreamsException(logPrefix + " Unexpected state transition from " + oldState + " to " + newState);
             } else {
                 log.info("{} State transition from {} to {}", logPrefix, oldState, newState);
