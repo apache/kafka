@@ -55,7 +55,7 @@ class LogManagerTest {
 
   @After
   def tearDown() {
-    if(logManager != null)
+    if (logManager != null)
       logManager.shutdown()
     Utils.delete(logDir)
     logManager.liveLogDirs.foreach(Utils.delete)
@@ -297,10 +297,8 @@ class LogManagerTest {
     logManager.checkpointLogRecoveryOffsets()
     val checkpoints = new OffsetCheckpointFile(new File(logDir, logManager.RecoveryPointCheckpointFile)).read()
 
-    topicPartitions.zip(logs).foreach {
-      case(tp, log) => {
-        assertEquals("Recovery point should equal checkpoint", checkpoints(tp), log.recoveryPoint)
-      }
+    topicPartitions.zip(logs).foreach { case (tp, log) =>
+      assertEquals("Recovery point should equal checkpoint", checkpoints(tp), log.recoveryPoint)
     }
   }
 
@@ -317,15 +315,28 @@ class LogManagerTest {
     val activeSegment = log.activeSegment
     val logName = activeSegment.log.file.getName
     val indexName = activeSegment.index.file.getName
-    val timeIndex = activeSegment.timeIndex.file.getName
-    val txnIndex = activeSegment.txnIndex.file.getName
+    val timeIndexName = activeSegment.timeIndex.file.getName
+    val txnIndexName = activeSegment.txnIndex.file.getName
+    val indexFilesOnDiskBeforeDelete = activeSegment.log.file.getParentFile.listFiles.filter(_.getName.endsWith("index"))
 
     val removedLog = logManager.asyncDelete(new TopicPartition(name, 0))
     val removedSegment = removedLog.activeSegment
+    val indexFilesAfterDelete = Seq(removedSegment.index.file, removedSegment.timeIndex.file,
+      removedSegment.txnIndex.file)
 
-    assertTrue(removedSegment.log.file.equals(new File(removedLog.dir, logName)))
-    assertTrue(removedSegment.index.file.equals(new File(removedLog.dir, indexName)))
-    assertTrue(removedSegment.timeIndex.file.equals(new File(removedLog.dir, timeIndex)))
-    assertTrue(removedSegment.txnIndex.file.equals(new File(removedLog.dir, txnIndex)))
+    assertEquals(removedSegment.log.file, new File(removedLog.dir, logName))
+    assertEquals(removedSegment.index.file, new File(removedLog.dir, indexName))
+    assertEquals(removedSegment.timeIndex.file, new File(removedLog.dir, timeIndexName))
+    assertEquals(removedSegment.txnIndex.file, new File(removedLog.dir, txnIndexName))
+
+    // Try to detect the case where a new index type was added and we forgot to update the pointer
+    // This will only catch cases where the index file is created eagerly instead of lazily
+    indexFilesOnDiskBeforeDelete.foreach { fileBeforeDelete =>
+      val fileInIndex = indexFilesAfterDelete.find(_.getName == fileBeforeDelete.getName)
+      assertEquals(s"Could not find index file ${fileBeforeDelete.getName} in indexFilesAfterDelete",
+        Some(fileBeforeDelete.getName), fileInIndex.map(_.getName))
+      assertNotEquals("File reference was not updated in index", fileBeforeDelete.getAbsolutePath,
+        fileInIndex.get.getAbsolutePath)
+    }
   }
 }
