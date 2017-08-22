@@ -112,4 +112,5 @@ public class StateRestorer {
     private Long readTo(final long endOffset) {
         return endOffset < offsetLimit ? endOffset : offsetLimit;
     }
+
 }

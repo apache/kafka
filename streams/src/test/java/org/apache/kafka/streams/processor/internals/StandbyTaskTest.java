@@ -165,7 +165,7 @@ public class StandbyTaskTest {
     public void testStorePartitions() throws Exception {
         StreamsConfig config = createConfig(baseDir);
         StandbyTask task = new StandbyTask(taskId, applicationId, topicPartitions, topology, consumer, changelogReader, config, null, stateDirectory);
-
+        task.initialize();
         assertEquals(Utils.mkSet(partition2), new HashSet<>(task.checkpointedOffsets().keySet()));
 
     }
@@ -188,7 +188,7 @@ public class StandbyTaskTest {
     public void testUpdate() throws Exception {
         StreamsConfig config = createConfig(baseDir);
         StandbyTask task = new StandbyTask(taskId, applicationId, topicPartitions, topology, consumer, changelogReader, config, null, stateDirectory);
-
+        task.initialize();
         restoreStateConsumer.assign(new ArrayList<>(task.checkpointedOffsets().keySet()));
 
         for (ConsumerRecord<Integer, Integer> record : Arrays.asList(
@@ -245,7 +245,7 @@ public class StandbyTaskTest {
 
         StreamsConfig config = createConfig(baseDir);
         StandbyTask task = new StandbyTask(taskId, applicationId, ktablePartitions, ktableTopology, consumer, changelogReader, config, null, stateDirectory);
-
+        task.initialize();
         restoreStateConsumer.assign(new ArrayList<>(task.checkpointedOffsets().keySet()));
 
         for (ConsumerRecord<Integer, Integer> record : Arrays.asList(
@@ -367,6 +367,7 @@ public class StandbyTaskTest {
                                                  null,
                                                  stateDirectory
         );
+        task.initialize();
 
 
         restoreStateConsumer.assign(new ArrayList<>(task.checkpointedOffsets().keySet()));
@@ -419,7 +420,7 @@ public class StandbyTaskTest {
                 closedStateManager.set(true);
             }
         };
-
+        task.initialize();
         try {
             task.close(true);
             fail("should have thrown exception");
