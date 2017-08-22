@@ -66,7 +66,9 @@ public class ShellTest {
             Shell.execCommand("head", "-c", "0", NONEXISTENT_PATH);
             fail("Expected to get an exception when trying to head a nonexistent file");
         } catch (Shell.ExitCodeException e) {
-            assertTrue(e.getMessage().contains("No such file"));
+            String message = e.getMessage();
+            assertTrue("Unexpected error message '" + message + "'",
+                    message.contains("No such file") || message.contains("illegal byte count"));
         }
     }
 }

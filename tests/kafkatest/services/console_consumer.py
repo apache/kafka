@@ -73,8 +73,8 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
     LOG_FILE = os.path.join(LOG_DIR, "console_consumer.log")
     LOG4J_CONFIG = os.path.join(PERSISTENT_ROOT, "tools-log4j.properties")
     CONFIG_FILE = os.path.join(PERSISTENT_ROOT, "console_consumer.properties")
-    JMX_TOOL_LOG = "/mnt/jmx_tool.log"
-    JMX_TOOL_ERROR_LOG = "/mnt/jmx_tool.err.log"
+    JMX_TOOL_LOG = os.path.join(PERSISTENT_ROOT, "jmx_tool.log")
+    JMX_TOOL_ERROR_LOG = os.path.join(PERSISTENT_ROOT, "jmx_tool.err.log")
 
     logs = {
         "consumer_stdout": {
@@ -120,7 +120,8 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
             print_timestamp             if True, print each message's timestamp as well
             isolation_level             How to handle transactional messages.
         """
-        JmxMixin.__init__(self, num_nodes, jmx_object_names, jmx_attributes or [])
+        JmxMixin.__init__(self, num_nodes, jmx_object_names, jmx_attributes or [],
+                          root=ConsoleConsumer.PERSISTENT_ROOT)
         BackgroundThreadService.__init__(self, context, num_nodes)
         self.kafka = kafka
         self.new_consumer = new_consumer
