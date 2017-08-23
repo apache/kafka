@@ -570,7 +570,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      *         format used for the offsets topic on the broker does not support transactions
      * @throws org.apache.kafka.common.errors.AuthorizationException fatal error indicating that the configured
      *         transactional.id is not authorized
-     * @throws KafkaException if the producer has encountered a previous fatal error or for any other unexpected error
+     * @throws KafkaException if the producer has encountered a previous fatal or abortable error, or for any
+     *         other unexpected error
      */
     public void sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets,
                                          String consumerGroupId) throws ProducerFencedException {
@@ -701,6 +702,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * if a transactional send finishes with a {@link ProducerFencedException}, a {@link org.apache.kafka.common.errors.OutOfOrderSequenceException},
      * a {@link org.apache.kafka.common.errors.UnsupportedVersionException}, or an
      * {@link org.apache.kafka.common.errors.AuthorizationException}, then the only option left is to call {@link #close()}.
+     * Fatal errors cause the producer to enter a defunct state in which future API calls will continue to raise
+     * the same underyling error wrapped in a new {@link KafkaException}.
      * </p>
      * <p>
      * It is a similar picture when idempotence is enabled, but no <code>transactional.id</code> has been configured.
