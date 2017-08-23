@@ -313,7 +313,7 @@ public class SaslServerAuthenticator implements Authenticator {
             if (apiKey != ApiKeys.API_VERSIONS && apiKey != ApiKeys.SASL_HANDSHAKE)
                 throw new IllegalSaslStateException("Unexpected Kafka request of type " + apiKey + " during SASL handshake.");
 
-            LOG.debug("Handle Kafka request {}", apiKey);
+            LOG.debug("Handling Kafka request {}", apiKey);
 
             InboundRequest inboundRequest = BrokerRequestUtils.parseInboundRequest(header, requestBuffer, requestContext);
             if (apiKey == ApiKeys.API_VERSIONS)

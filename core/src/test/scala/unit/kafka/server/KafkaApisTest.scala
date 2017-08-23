@@ -413,11 +413,8 @@ class KafkaApisTest {
 
   private def expectThrottleCallbackAndInvoke(capturedThrottleCallback: Capture[Int => Unit]): Unit = {
     EasyMock.expect(clientRequestQuotaManager.maybeRecordAndThrottle(
-      EasyMock.anyString(),
-      EasyMock.anyString(),
-      EasyMock.anyLong(),
-      EasyMock.capture(capturedThrottleCallback),
-      EasyMock.anyObject[(Long => Unit) => Unit]()))
+      EasyMock.anyObject[RequestChannel.Request](),
+      EasyMock.capture(capturedThrottleCallback)))
       .andAnswer(new IAnswer[Unit] {
         override def answer(): Unit = {
           val callback = capturedThrottleCallback.getValue

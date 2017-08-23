@@ -424,9 +424,10 @@ class KafkaApis(val requestChannel: RequestChannel,
                 s"from client id ${request.header.clientId} with ack=0\n" +
                 s"Topic and partition to exceptions: $exceptionsSummary"
             )
+            closeConnection(request)
+          } else {
+            sendNoOpResponseExemptThrottle(request)
           }
-
-          sendResponseExemptThrottle(request, None, closeIfNoResponse = errorInResponse)
         } else {
           sendResponseMaybeThrottle(request, requestThrottleMs =>
             new ProduceResponse(mergedResponseStatus.asJava, bandwidthThrottleTimeMs + requestThrottleMs))
@@ -1874,14 +1875,10 @@ class KafkaApis(val requestChannel: RequestChannel,
   private def handleError(request: RequestChannel.Request, e: Throwable) {
     val mayThrottle = e.isInstanceOf[ClusterAuthorizationException] || !ApiKeys.forId(request.header.apiKey).clusterAction
     error("Error when handling request %s".format(request.body[AbstractRequest]), e)
-    if (mayThrottle) {
-      sendResponseMaybeThrottle(request,
-        throttleTimeMs => Option(request.body[AbstractRequest].getErrorResponse(throttleTimeMs, e)),
-        closeIfNoResponse = true)
-    } else {
-      val response = Option(request.body[AbstractRequest].getErrorResponse(0, e))
-      sendResponseExemptThrottle(request, response, closeIfNoResponse = true)
-    }
+    if (mayThrottle)
+      sendErrorResponseMaybeThrottle(request, e)
+    else
+      sendErrorResponseExemptThrottle(request, e)
   }
 
   def handleAlterConfigsRequest(request: RequestChannel.Request): Unit = {
@@ -1954,54 +1951,56 @@ class KafkaApis(val requestChannel: RequestChannel,
       throw new ClusterAuthorizationException(s"Request $request is not authorized.")
   }
 
-  private def sendResponseMaybeThrottle(request: RequestChannel.Request,
-                                        createResponse: Int => AbstractResponse): Unit = {
-    sendResponseMaybeThrottle(request, throttleTimeMs => Some(createResponse(throttleTimeMs)),
-      closeIfNoResponse = false)
+  private def sendResponseMaybeThrottle(request: RequestChannel.Request, createResponse: Int => AbstractResponse): Unit = {
+    quotas.request.maybeRecordAndThrottle(request,
+      throttleTimeMs => sendResponse(request, Some(createResponse(throttleTimeMs))))
   }
 
-  private def sendResponseMaybeThrottle(request: RequestChannel.Request,
-                                        createResponse: Int => Option[AbstractResponse],
-                                        closeIfNoResponse: Boolean) {
-    if (request.apiRemoteCompleteTimeNanos == -1) {
-      // When this callback is triggered, the remote API call has completed
-      request.apiRemoteCompleteTimeNanos = time.nanoseconds
+  private def sendErrorResponseMaybeThrottle(request: RequestChannel.Request, error: Throwable) {
+    def sendError(throttleTimeMs: Int): Unit = {
+      val response = request.body[AbstractRequest].getErrorResponse(throttleTimeMs, error)
+      if (response == null)
+        closeConnection(request)
+      else
+        sendResponse(request, Some(response))
     }
-
-    quotas.request.maybeRecordAndThrottle(request.session.sanitizedUser, request.header.clientId,
-      request.requestThreadTimeNanos,
-      sendResponseCallback = throttleTimeMs => sendResponse(request, createResponse(throttleTimeMs), closeIfNoResponse),
-      recordNetworkThreadTimeCallback = callback => request.recordNetworkThreadTimeCallback = Some(callback))
+    quotas.request.maybeRecordAndThrottle(request, sendError)
   }
 
   private def sendResponseExemptThrottle(request: RequestChannel.Request, response: AbstractResponse): Unit = {
-    sendResponseExemptThrottle(request, Some(response), closeIfNoResponse = false)
+    quotas.request.maybeRecordExempt(request)
+    sendResponse(request, Some(response))
   }
 
-  private def sendResponseExemptThrottle(request: RequestChannel.Request,
-                                         response: Option[AbstractResponse],
-                                         closeIfNoResponse: Boolean): Unit = {
-    quotas.request.maybeRecordExempt(request.requestThreadTimeNanos,
-      callback => request.recordNetworkThreadTimeCallback = Some(callback))
-    sendResponse(request, response, closeIfNoResponse)
+  private def sendErrorResponseExemptThrottle(request: RequestChannel.Request, error: Throwable): Unit = {
+    quotas.request.maybeRecordExempt(request)
+    val response = request.body[AbstractRequest].getErrorResponse(0, error)
+    if (response == null)
+      closeConnection(request)
+    else
+      sendResponse(request, Some(response))
   }
 
-  private def sendResponse(request: RequestChannel.Request,
-                           responseOpt: Option[AbstractResponse],
-                           closeIfNoResponse: Boolean): Unit = {
-    val responseAction = responseOpt match {
-      case Some(_) => SendAction
-      // This case is used when the request handler has encountered an error, but the client
-      // does not expect a response (e.g. when produce request has acks set to 0)
-      case None if closeIfNoResponse => CloseConnectionAction
-      case None => NoOpAction
-    }
+  private def sendNoOpResponseExemptThrottle(request: RequestChannel.Request): Unit = {
+    quotas.request.maybeRecordExempt(request)
+    sendResponse(request, None)
+  }
 
-    val responseSend = responseOpt.map { response =>
-      val context = new BrokerRequestContext(request.connectionId, request.session.principal)
-      BrokerRequestUtils.buildOutboundSend(request.header, response, context)
+  private def closeConnection(request: RequestChannel.Request): Unit = {
+    // This case is used when the request handler has encountered an error, but the client
+    // does not expect a response (e.g. when produce request has acks set to 0)
+    requestChannel.sendResponse(new RequestChannel.Response(request, None, CloseConnectionAction))
+  }
+
+  private def sendResponse(request: RequestChannel.Request, responseOpt: Option[AbstractResponse]): Unit = {
+    responseOpt match {
+      case Some(response) =>
+        val context = new BrokerRequestContext(request.connectionId, request.session.principal)
+        val responseSend = BrokerRequestUtils.buildOutboundSend(request.header, response, context)
+        requestChannel.sendResponse(new RequestChannel.Response(request, Some(responseSend), SendAction))
+      case None =>
+        requestChannel.sendResponse(new RequestChannel.Response(request, None, NoOpAction))
     }
-    requestChannel.sendResponse(new RequestChannel.Response(request, responseSend, responseAction))
   }
 
 }

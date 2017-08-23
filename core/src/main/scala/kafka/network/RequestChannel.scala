@@ -67,7 +67,7 @@ object RequestChannel extends Logging {
     @volatile var apiRemoteCompleteTimeNanos = -1L
     @volatile var recordNetworkThreadTimeCallback: Option[Long => Unit] = None
 
-    val request = BrokerRequestUtils.parseInboundRequest(buffer, new BrokerRequestContext(connectionId, session.principal))
+    val request: InboundRequest = BrokerRequestUtils.parseInboundRequest(buffer, new BrokerRequestContext(connectionId, session.principal))
 
     def header: RequestHeader = request.header
 
@@ -232,7 +232,7 @@ class RequestChannel(val numProcessors: Int, val queueSize: Int) extends KafkaMe
     if (isTraceEnabled) {
       val requestHeader = response.request.header
       val apiKey = ApiKeys.forId(requestHeader.apiKey)
-      trace(s"Sending $apiKey to client ${requestHeader.clientId} of ${response.responseSend.size} bytes.")
+      trace(s"Sending $apiKey response to client ${requestHeader.clientId} of ${response.responseSend.size} bytes.")
     }
 
     responseQueues(response.processor).put(response)
