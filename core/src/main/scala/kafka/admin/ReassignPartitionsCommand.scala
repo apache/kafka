@@ -328,21 +328,21 @@ object ReassignPartitionsCommand extends Logging {
     replicaAssignment.map { case (replica, newLogDir) =>
       val status: ReassignmentStatus = replicaLogDirInfos.get(replica) match {
         case Some(replicaLogDirInfo) =>
-          if (replicaLogDirInfo.currentReplicaLogDir == null) {
+          if (replicaLogDirInfo.getCurrentReplicaLogDir == null) {
             println(s"Partition ${replica.topic()}-${replica.partition()} is not found in any live log dir on " +
               s"broker ${replica.brokerId()}. There is likely offline log directory on the broker.")
             ReassignmentFailed
-          } else if (replicaLogDirInfo.temporaryReplicaLogDir == newLogDir) {
+          } else if (replicaLogDirInfo.getTemporaryReplicaLogDir == newLogDir) {
             ReassignmentInProgress
-          } else if (replicaLogDirInfo.temporaryReplicaLogDir != null) {
+          } else if (replicaLogDirInfo.getTemporaryReplicaLogDir != null) {
             println(s"Partition ${replica.topic()}-${replica.partition()} on broker ${replica.brokerId()} " +
-              s"is being moved to log dir ${replicaLogDirInfo.temporaryReplicaLogDir} instead of $newLogDir")
+              s"is being moved to log dir ${replicaLogDirInfo.getTemporaryReplicaLogDir} instead of $newLogDir")
             ReassignmentFailed
-          } else if (replicaLogDirInfo.currentReplicaLogDir == newLogDir) {
+          } else if (replicaLogDirInfo.getCurrentReplicaLogDir == newLogDir) {
             ReassignmentCompleted
           } else {
             println(s"Partition ${replica.topic()}-${replica.partition()} on broker ${replica.brokerId()} " +
-              s"is not being moved from log dir ${replicaLogDirInfo.currentReplicaLogDir} to $newLogDir")
+              s"is not being moved from log dir ${replicaLogDirInfo.getCurrentReplicaLogDir} to $newLogDir")
             ReassignmentFailed
           }
         case None =>

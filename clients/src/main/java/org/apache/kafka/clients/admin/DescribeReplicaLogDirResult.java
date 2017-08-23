@@ -72,21 +72,21 @@ public class DescribeReplicaLogDirResult {
     static public class ReplicaLogDirInfo {
         // The log directory of the primary replica of this partition on the given broker.
         // Null if the primary replica is not found for this partition on the given broker.
-        public final String currentReplicaLogDir;
+        private final String currentReplicaLogDir;
         // Defined as max(HW of partition - LEO of the primary replica, 0).
-        public final long currentReplicaOffsetLag;
+        private final long currentReplicaOffsetLag;
         // The log directory of the temporary replica of this partition on the given broker.
         // Null if the temporary replica is not found for this partition on the given broker.
-        public final String temporaryReplicaLogDir;
+        private final String temporaryReplicaLogDir;
         // The LEO of the primary replica - LEO of the temporary replica.
         // -1 if either primary or the temporary replica is not found for this partition on the given broker.
-        public final long temporaryReplicaOffsetLag;
+        private final long temporaryReplicaOffsetLag;
 
-        public ReplicaLogDirInfo() {
+        ReplicaLogDirInfo() {
             this(null, DescribeLogDirsResponse.INVALID_OFFSET_LAG, null, DescribeLogDirsResponse.INVALID_OFFSET_LAG);
         }
 
-        public ReplicaLogDirInfo(String currentReplicaLogDir,
+        ReplicaLogDirInfo(String currentReplicaLogDir,
                                  long currentReplicaOffsetLag,
                                  String temporaryReplicaLogDir,
                                  long temporaryReplicaOffsetLag) {
@@ -94,6 +94,22 @@ public class DescribeReplicaLogDirResult {
             this.currentReplicaOffsetLag = currentReplicaOffsetLag;
             this.temporaryReplicaLogDir = temporaryReplicaLogDir;
             this.temporaryReplicaOffsetLag = temporaryReplicaOffsetLag;
+        }
+
+        public String getCurrentReplicaLogDir() {
+            return currentReplicaLogDir;
+        }
+
+        public long getCurrentReplicaOffsetLag() {
+            return currentReplicaOffsetLag;
+        }
+
+        public String getTemporaryReplicaLogDir() {
+            return temporaryReplicaLogDir;
+        }
+
+        public long getTemporaryReplicaOffsetLag() {
+            return temporaryReplicaOffsetLag;
         }
 
         @Override

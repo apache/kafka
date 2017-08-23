@@ -254,7 +254,7 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
     replicaDirInfos.asScala.foreach { case (topicPartitionReplica, replicaDirInfo) =>
       val server = servers.find(_.config.brokerId == topicPartitionReplica.brokerId()).get
       val tp = new TopicPartition(topicPartitionReplica.topic(), topicPartitionReplica.partition())
-      assertEquals(server.logManager.getLog(tp).get.dir.getParent, replicaDirInfo.currentReplicaLogDir)
+      assertEquals(server.logManager.getLog(tp).get.dir.getParent, replicaDirInfo.getCurrentReplicaLogDir)
     }
 
     client.close()

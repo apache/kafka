@@ -1629,10 +1629,10 @@ public class KafkaAdminClient extends AdminClient {
                         Errors error = responseEntry.getValue();
                         TopicPartitionReplica replica = new TopicPartitionReplica(tp.topic(), tp.partition(), brokerId);
                         KafkaFutureImpl<Void> future = futures.get(replica);
-                        if (future == null)
-                            throw new IllegalArgumentException("The partition " + tp + " in the response from broker " + brokerId + " is not in the request");
-
-                        if (error == Errors.NONE) {
+                        if (future == null) {
+                            handleFailure(new IllegalArgumentException(
+                                "The partition " + tp + " in the response from broker " + brokerId + " is not in the request"));
+                        } else if (error == Errors.NONE) {
                             future.complete(null);
                         } else {
                             future.completeExceptionally(error.exception());
@@ -1730,24 +1730,22 @@ public class KafkaAdminClient extends AdminClient {
                             continue;
 
                         for (Map.Entry<TopicPartition, DescribeLogDirsResponse.ReplicaInfo> replicaInfoEntry: logDirInfo.replicaInfos.entrySet()) {
-                            TopicPartition topicPartition = replicaInfoEntry.getKey();
+                            TopicPartition tp = replicaInfoEntry.getKey();
                             DescribeLogDirsResponse.ReplicaInfo replicaInfo = replicaInfoEntry.getValue();
-                            ReplicaLogDirInfo replicaLogDirInfo = replicaDirInfoByPartition.get(topicPartition);
-                            if (replicaLogDirInfo == null)
-                                throw new IllegalArgumentException("Partition " + topicPartition + " is in the response but not in the request");
-
-                            if (replicaInfo.isTemporary) {
-                                replicaDirInfoByPartition.put(topicPartition,
-                                                              new ReplicaLogDirInfo(replicaLogDirInfo.currentReplicaLogDir,
-                                                                                    replicaLogDirInfo.currentReplicaOffsetLag,
-                                                                                    logDir,
-                                                                                    replicaInfo.offsetLag));
+                            ReplicaLogDirInfo replicaLogDirInfo = replicaDirInfoByPartition.get(tp);
+                            if (replicaLogDirInfo == null) {
+                                handleFailure(new IllegalArgumentException(
+                                    "The partition " + tp + " in the response from broker " + brokerId + " is not in the request"));
+                            } else if (replicaInfo.isTemporary) {
+                                replicaDirInfoByPartition.put(tp, new ReplicaLogDirInfo(replicaLogDirInfo.getCurrentReplicaLogDir(),
+                                                                                        replicaLogDirInfo.getCurrentReplicaOffsetLag(),
+                                                                                        logDir,
+                                                                                        replicaInfo.offsetLag));
                             } else {
-                                replicaDirInfoByPartition.put(topicPartition,
-                                                              new ReplicaLogDirInfo(logDir,
-                                                                                    replicaInfo.offsetLag,
-                                                                                    replicaLogDirInfo.temporaryReplicaLogDir,
-                                                                                    replicaLogDirInfo.temporaryReplicaOffsetLag));
+                                replicaDirInfoByPartition.put(tp, new ReplicaLogDirInfo(logDir,
+                                                                                        replicaInfo.offsetLag,
+                                                                                        replicaLogDirInfo.getTemporaryReplicaLogDir(),
+                                                                                        replicaLogDirInfo.getTemporaryReplicaOffsetLag()));
                             }
                         }
                     }
