@@ -17,7 +17,7 @@
 
 package kafka.admin
 
-import java.text.SimpleDateFormat
+import java.text.{ParseException, SimpleDateFormat}
 import java.util.{Date, Properties}
 import javax.xml.datatype.DatatypeFactory
 
@@ -665,13 +665,18 @@ object ConsumerGroupCommand extends Logging {
       }
     }
 
-    private def getDateTime: java.lang.Long = {
+    private[admin] def getDateTime: java.lang.Long = {
       val datetime: String = opts.options.valueOf(opts.resetToDatetimeOpt) match {
         case ts if ts.split("T")(1).contains("+") || ts.split("T")(1).contains("-") || ts.split("T")(1).contains("Z") => ts.toString
         case ts => s"${ts}Z"
       }
-      val format = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSX")
-      val date = format.parse(datetime)
+      val date = {
+        try {
+          new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX").parse(datetime)
+        } catch {
+          case e: ParseException => new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSX").parse(datetime)
+        }
+      }
       date.getTime
     }
 
