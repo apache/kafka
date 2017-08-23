@@ -38,7 +38,7 @@ public class KStreamTransformValues<K, V, R> implements ProcessorSupplier<K, V> 
 
     private final ValueTransformerWithKeySupplier<K, V, R> valueTransformerWithKeySupplier;
 
-    public KStreamTransformValues(ValueTransformerWithKeySupplier<K, V, R> valueTransformerWithKeySupplier) {
+    public KStreamTransformValues(final ValueTransformerWithKeySupplier<K, V, R> valueTransformerWithKeySupplier) {
         this.valueTransformerWithKeySupplier = valueTransformerWithKeySupplier;
     }
 
@@ -52,7 +52,7 @@ public class KStreamTransformValues<K, V, R> implements ProcessorSupplier<K, V> 
         private final ValueTransformerWithKey<K, V, R> valueTransformerWithKey;
         private ProcessorContext context;
 
-        public KStreamTransformValuesProcessor(ValueTransformerWithKey<K, V, R> valueTransformerWithKey) {
+        public KStreamTransformValuesProcessor(final ValueTransformerWithKey<K, V, R> valueTransformerWithKey) {
             this.valueTransformerWithKey = valueTransformerWithKey;
         }
 

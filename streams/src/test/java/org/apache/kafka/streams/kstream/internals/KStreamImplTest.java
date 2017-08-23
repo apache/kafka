@@ -85,9 +85,9 @@ public class KStreamImplTest {
                 }
             });
 
-        KStream<String, Integer> stream2 = stream1.mapValues(new ValueMapperWithKey<String, String, Integer>() {
+        KStream<String, Integer> stream2 = stream1.mapValues(new ValueMapper<String, Integer>() {
             @Override
-            public Integer apply(String key, String value) {
+            public Integer apply(String value) {
                 return new Integer(value);
             }
         });
@@ -130,9 +130,9 @@ public class KStreamImplTest {
         );
 
         final int anyWindowSize = 1;
-        KStream<String, Integer> stream4 = streams2[0].join(streams3[0], new ValueJoinerWithKey<String, Integer, Integer, Integer>() {
+        KStream<String, Integer> stream4 = streams2[0].join(streams3[0], new ValueJoiner<Integer, Integer, Integer>() {
             @Override
-            public Integer apply(String key, Integer value1, Integer value2) {
+            public Integer apply(Integer value1, Integer value2) {
                 return value1 + value2;
             }
         }, JoinWindows.of(anyWindowSize), stringSerde, intSerde, intSerde);
@@ -211,7 +211,7 @@ public class KStreamImplTest {
             }
         }
     }
-    
+
     @Test
     public void testToWithNullValueSerdeDoesntNPE() {
         final StreamsBuilder builder = new StreamsBuilder();

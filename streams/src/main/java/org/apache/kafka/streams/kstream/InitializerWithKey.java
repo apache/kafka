@@ -17,7 +17,7 @@
 package org.apache.kafka.streams.kstream;
 
 /**
- * The {@code InitializerWithKey} interface for creating an initial value in aggregations with read-a only key.
+ * The {@code InitializerWithKey} interface for creating an initial value in aggregations with a read-only key.
  * Note that provided keys are read-only and should not be modified. Any key modification can result in corrupt
  * partitioning.
  * {@code InitializerWithKey} is used in combination with {@link Aggregator}.

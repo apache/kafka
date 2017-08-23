@@ -1316,7 +1316,7 @@ public interface KStream<K, V> {
      * <tr>
      * <td>&lt;K1:A&gt;</td>
      * <td></td>
-     * <td>&lt;K1:ValueJoiner(A,null)&gt;</td>
+     * <td></td>
      * </tr>
      * <tr>
      * <td>&lt;K2:B&gt;</td>
@@ -1396,7 +1396,7 @@ public interface KStream<K, V> {
      * <tr>
      * <td>&lt;K1:A&gt;</td>
      * <td></td>
-     * <td>&lt;K1:ValueJoiner(A,null)&gt;</td>
+     * <td></td>
      * </tr>
      * <tr>
      * <td>&lt;K2:B&gt;</td>
@@ -1417,7 +1417,7 @@ public interface KStream<K, V> {
      * If this requirement is not met, Kafka Streams will automatically repartition the data, i.e., it will create an
      * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
      * The repartitioning topic will be named "${applicationId}-XXX-repartition", where "applicationId" is
-     * user-specified in {@link  StreamsConfig} via parameter
+     * user-specified in {@link StreamsConfig} via parameter
      * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "XXX" is an internally generated name, and
      * "-repartition" is a fixed suffix.
      * You can retrieve all generated internal topic names via {@link KafkaStreams#toString()}.
@@ -2715,7 +2715,9 @@ public interface KStream<K, V> {
      * @return a {@code KStream} that contains join-records for each key and values computed by the given
      * {@link ValueJoiner}, one output for each input {@code KStream} record
      * @see #join(KTable, ValueJoiner)
+     * @see #join(KTable, ValueJoinerWithKey)
      * @see #leftJoin(GlobalKTable, KeyValueMapper, ValueJoiner)
+     * @see #leftJoin(GlobalKTable, KeyValueMapper, ValueJoinerWithKey)
      */
     <VT, VR> KStream<K, VR> leftJoin(final KTable<K, VT> table,
                                      final ValueJoiner<? super V, ? super VT, ? extends VR> joiner);
@@ -2793,9 +2795,11 @@ public interface KStream<K, V> {
      * @param <VT>          the value type of the table
      * @param <VR>          the value type of the result stream
      * @return a {@code KStream} that contains join-records for each key and values computed by the given
-     * {@link ValueJoiner}, one output for each input {@code KStream} record
+     * {@link ValueJoinerWithKey}, one output for each input {@code KStream} record
      * @see #join(KTable, ValueJoiner)
+     * @see #join(KTable, ValueJoinerWithKey)
      * @see #leftJoin(GlobalKTable, KeyValueMapper, ValueJoiner)
+     * @see #leftJoin(GlobalKTable, KeyValueMapper, ValueJoinerWithKey)
      */
     <VT, VR> KStream<K, VR> leftJoin(final KTable<K, VT> table,
                                      final ValueJoinerWithKey<? super K, ? super V, ? super VT, ? extends VR> joiner);
@@ -2875,7 +2879,9 @@ public interface KStream<K, V> {
      * @return a {@code KStream} that contains join-records for each key and values computed by the given
      * {@link ValueJoiner}, one output for each input {@code KStream} record
      * @see #join(KTable, ValueJoiner, Serde, Serde)
+     * @see #join(KTable, ValueJoinerWithKey, Serde, Serde)
      * @see #leftJoin(GlobalKTable, KeyValueMapper, ValueJoiner)
+     * @see #leftJoin(GlobalKTable, KeyValueMapper, ValueJoinerWithKey)
      */
     <VT, VR> KStream<K, VR> leftJoin(final KTable<K, VT> table,
                                      final ValueJoiner<? super V, ? super VT, ? extends VR> joiner,
@@ -2958,9 +2964,11 @@ public interface KStream<K, V> {
      * @param <VT>          the value type of the table
      * @param <VR>          the value type of the result stream
      * @return a {@code KStream} that contains join-records for each key and values computed by the given
-     * {@link ValueJoiner}, one output for each input {@code KStream} record
+     * {@link ValueJoinerWithKey}, one output for each input {@code KStream} record
      * @see #join(KTable, ValueJoiner, Serde, Serde)
+     * @see #join(KTable, ValueJoinerWithKey, Serde, Serde)
      * @see #leftJoin(GlobalKTable, KeyValueMapper, ValueJoiner)
+     * @see #leftJoin(GlobalKTable, KeyValueMapper, ValueJoinerWithKey)
      */
     <VT, VR> KStream<K, VR> leftJoin(final KTable<K, VT> table,
                                      final ValueJoinerWithKey<? super K, ? super V, ? super VT, ? extends VR> joiner,
@@ -2993,6 +3001,7 @@ public interface KStream<K, V> {
      * @return a {@code KStream} that contains join-records for each key and values computed by the given
      * {@link ValueJoiner}, one output for each input {@code KStream} record
      * @see #leftJoin(GlobalKTable, KeyValueMapper, ValueJoiner)
+     * @see #leftJoin(GlobalKTable, KeyValueMapper, ValueJoinerWithKey)
      */
     <GK, GV, RV> KStream<K, RV> join(final GlobalKTable<GK, GV> globalKTable,
                                      final KeyValueMapper<? super K, ? super V, ? extends GK> keyValueMapper,
@@ -3024,8 +3033,9 @@ public interface KStream<K, V> {
      * @param <GV>           the value type of the {@link GlobalKTable}
      * @param <RV>           the value type of the resulting {@code KStream}
      * @return a {@code KStream} that contains join-records for each key and values computed by the given
-     * {@link ValueJoiner}, one output for each input {@code KStream} record
+     * {@link ValueJoinerWithKey}, one output for each input {@code KStream} record
      * @see #leftJoin(GlobalKTable, KeyValueMapper, ValueJoiner)
+     * @see #leftJoin(GlobalKTable, KeyValueMapper, ValueJoinerWithKey)
      */
     <GK, GV, RV> KStream<K, RV> join(final GlobalKTable<GK, GV> globalKTable,
                                      final KeyValueMapper<? super K, ? super V, ? extends GK> keyValueMapper,
@@ -3061,6 +3071,7 @@ public interface KStream<K, V> {
      * @return a {@code KStream} that contains join-records for each key and values computed by the given
      * {@link ValueJoiner}, one output for each input {@code KStream} record
      * @see #join(GlobalKTable, KeyValueMapper, ValueJoiner)
+     * @see #join(GlobalKTable, KeyValueMapper, ValueJoinerWithKey)
      */
     <GK, GV, RV> KStream<K, RV> leftJoin(final GlobalKTable<GK, GV> globalKTable,
                                          final KeyValueMapper<? super K, ? super V, ? extends GK> keyValueMapper,
@@ -3091,15 +3102,16 @@ public interface KStream<K, V> {
      * @param globalKTable       the {@link GlobalKTable} to be joined with this stream
      * @param keyValueMapper     instance of {@link KeyValueMapper} used to map from the (key, value) of this stream
      *                           to the key of the {@link GlobalKTable}
-     * @param valueJoinerWithKey a {@link ValueJoinerWithKey} that computes the join result for a pair of matching records
+     * @param joiner             a {@link ValueJoinerWithKey} that computes the join result for a pair of matching records
      * @param <GK>               the key type of {@link GlobalKTable}
      * @param <GV>               the value type of the {@link GlobalKTable}
      * @param <RV>               the value type of the resulting {@code KStream}
      * @return a {@code KStream} that contains join-records for each key and values computed by the given
-     * {@link ValueJoiner}, one output for each input {@code KStream} record
+     * {@link ValueJoinerWithKey}, one output for each input {@code KStream} record
      * @see #join(GlobalKTable, KeyValueMapper, ValueJoiner)
+     * @see #join(GlobalKTable, KeyValueMapper, ValueJoinerWithKey)
      */
     <GK, GV, RV> KStream<K, RV> leftJoin(final GlobalKTable<GK, GV> globalKTable,
                                          final KeyValueMapper<? super K, ? super V, ? extends GK> keyValueMapper,
-                                         final ValueJoinerWithKey<? super K, ? super V, ? super GV, ? extends RV> valueJoinerWithKey);
+                                         final ValueJoinerWithKey<? super K, ? super V, ? super GV, ? extends RV> joiner);
 }

@@ -37,6 +37,7 @@ import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;
 
+import static org.apache.kafka.streams.kstream.internals.KStreamKStreamJoinTest.checkResult;
 import static org.junit.Assert.assertEquals;
 
 public class KStreamKTableLeftJoinTest {
@@ -56,8 +57,7 @@ public class KStreamKTableLeftJoinTest {
         stateDir = TestUtils.tempDirectory("kafka-test");
     }
 
-    @Test
-    public void testJoin() throws Exception {
+    private void testJoin(boolean withKey) {
         StreamsBuilder builder = new StreamsBuilder();
 
         final int[] expectedKeys = new int[]{0, 1, 2, 3};
@@ -69,7 +69,12 @@ public class KStreamKTableLeftJoinTest {
         processor = new MockProcessorSupplier<>();
         stream = builder.stream(intSerde, stringSerde, topic1);
         table = builder.table(intSerde, stringSerde, topic2, "anyStoreName");
-        stream.leftJoin(table, MockValueJoiner.TOSTRING_JOINER).process(processor);
+
+        if (withKey) {
+            stream.leftJoin(table, MockValueJoiner.TOSTRING_JOINER_WITH_KEY).process(processor);
+        } else {
+            stream.leftJoin(table, MockValueJoiner.TOSTRING_JOINER).process(processor);
+        }
 
         Collection<Set<String>> copartitionGroups = StreamsBuilderTest.getCopartitionedGroups(builder);
 
@@ -85,7 +90,7 @@ public class KStreamKTableLeftJoinTest {
             driver.process(topic1, expectedKeys[i], "X" + expectedKeys[i]);
         }
 
-        processor.checkAndClearProcessResult("0:X0+null", "1:X1+null");
+        checkResult(processor, withKey, "0:X0+null", "1:X1+null");
 
         // push two items to the other stream. this should not produce any item.
 
@@ -101,7 +106,7 @@ public class KStreamKTableLeftJoinTest {
             driver.process(topic1, expectedKey, "X" + expectedKey);
         }
 
-        processor.checkAndClearProcessResult("0:X0+Y0", "1:X1+Y1", "2:X2+null", "3:X3+null");
+        checkResult(processor, withKey, "0:X0+Y0", "1:X1+Y1", "2:X2+null", "3:X3+null");
 
         // push all items to the other stream. this should not produce any item
         for (int expectedKey : expectedKeys) {
@@ -116,7 +121,7 @@ public class KStreamKTableLeftJoinTest {
             driver.process(topic1, expectedKey, "X" + expectedKey);
         }
 
-        processor.checkAndClearProcessResult("0:X0+YY0", "1:X1+YY1", "2:X2+YY2", "3:X3+YY3");
+        checkResult(processor, withKey, "0:X0+YY0", "1:X1+YY1", "2:X2+YY2", "3:X3+YY3");
 
         // push two items with null to the other stream as deletes. this should not produce any item.
 
@@ -132,85 +137,16 @@ public class KStreamKTableLeftJoinTest {
             driver.process(topic1, expectedKey, "XX" + expectedKey);
         }
 
-        processor.checkAndClearProcessResult("0:XX0+null", "1:XX1+null", "2:XX2+YY2", "3:XX3+YY3");
+        checkResult(processor, withKey, "0:XX0+null", "1:XX1+null", "2:XX2+YY2", "3:XX3+YY3");
+    }
+
+    @Test
+    public void testJoin() throws Exception {
+        testJoin(false);
     }
 
     @Test
     public void testJoinWithKey() throws Exception {
-        StreamsBuilder builder = new StreamsBuilder();
-
-        final int[] expectedKeys = new int[]{0, 1, 2, 3};
-
-        KStream<Integer, String> stream;
-        KTable<Integer, String> table;
-        MockProcessorSupplier<Integer, String> processor;
-
-        processor = new MockProcessorSupplier<>();
-        stream = builder.stream(intSerde, stringSerde, topic1);
-        table = builder.table(intSerde, stringSerde, topic2, "anyStoreName");
-        stream.leftJoin(table, MockValueJoiner.TOSTRING_JOINER_WITH_KEY).process(processor);
-
-        Collection<Set<String>> copartitionGroups = StreamsBuilderTest.getCopartitionedGroups(builder);
-
-        assertEquals(1, copartitionGroups.size());
-        assertEquals(new HashSet<>(Arrays.asList(topic1, topic2)), copartitionGroups.iterator().next());
-
-        driver.setUp(builder, stateDir);
-        driver.setTime(0L);
-
-        // push two items to the primary stream. the other table is empty
-
-        for (int i = 0; i < 2; i++) {
-            driver.process(topic1, expectedKeys[i], "X" + expectedKeys[i]);
-        }
-
-        processor.checkAndClearProcessResult("0:0+X0+null", "1:1+X1+null");
-
-        // push two items to the other stream. this should not produce any item.
-
-        for (int i = 0; i < 2; i++) {
-            driver.process(topic2, expectedKeys[i], "Y" + expectedKeys[i]);
-        }
-
-        processor.checkAndClearProcessResult();
-
-        // push all four items to the primary stream. this should produce four items.
-
-        for (int expectedKey : expectedKeys) {
-            driver.process(topic1, expectedKey, "X" + expectedKey);
-        }
-
-        processor.checkAndClearProcessResult("0:0+X0+Y0", "1:1+X1+Y1", "2:2+X2+null", "3:3+X3+null");
-
-        // push all items to the other stream. this should not produce any item
-        for (int expectedKey : expectedKeys) {
-            driver.process(topic2, expectedKey, "YY" + expectedKey);
-        }
-
-        processor.checkAndClearProcessResult();
-
-        // push all four items to the primary stream. this should produce four items.
-
-        for (int expectedKey : expectedKeys) {
-            driver.process(topic1, expectedKey, "X" + expectedKey);
-        }
-
-        processor.checkAndClearProcessResult("0:0+X0+YY0", "1:1+X1+YY1", "2:2+X2+YY2", "3:3+X3+YY3");
-
-        // push two items with null to the other stream as deletes. this should not produce any item.
-
-        for (int i = 0; i < 2; i++) {
-            driver.process(topic2, expectedKeys[i], null);
-        }
-
-        processor.checkAndClearProcessResult();
-
-        // push all four items to the primary stream. this should produce four items.
-
-        for (int expectedKey : expectedKeys) {
-            driver.process(topic1, expectedKey, "XX" + expectedKey);
-        }
-
-        processor.checkAndClearProcessResult("0:0+XX0+null", "1:1+XX1+null", "2:2+XX2+YY2", "3:3+XX3+YY3");
+        testJoin(true);
     }
 }

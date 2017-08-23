@@ -24,13 +24,9 @@ import org.apache.kafka.streams.kstream.ValueTransformerWithKey;
 import org.apache.kafka.streams.kstream.ValueJoinerWithKey;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
-import org.apache.kafka.streams.kstream.ReducerWithKey;
-import org.apache.kafka.streams.kstream.Reducer;
-import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.ValueMapperWithKey;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.kstream.ValueTransformer;
-import org.apache.kafka.streams.kstream.InitializerWithKey;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.kstream.Windows;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
@@ -184,26 +180,6 @@ public abstract class AbstractStream<K> {
             @Override
             public ValueTransformerWithKey<K, V, VR> get() {
                 return withKey(valueTransformerSupplier.get());
-            }
-        };
-    }
-
-    static <K, V> ReducerWithKey<K, V> withKey(final Reducer<V> reducer) {
-        Objects.requireNonNull(reducer, "reducer can't be null");
-        return new ReducerWithKey<K, V>() {
-            @Override
-            public V apply(K key, V value1, V value2) {
-                return reducer.apply(value1, value2);
-            }
-        };
-    }
-
-    static <K, VA> InitializerWithKey<K, VA> withKey(final Initializer<VA> initializer) {
-        Objects.requireNonNull(initializer, "initializer can't be null");
-        return new InitializerWithKey<K, VA>() {
-            @Override
-            public VA apply(K key) {
-                return initializer.apply();
             }
         };
     }
