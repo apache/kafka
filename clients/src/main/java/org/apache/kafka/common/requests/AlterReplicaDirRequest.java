@@ -32,15 +32,15 @@ import java.util.Map;
 public class AlterReplicaDirRequest extends AbstractRequest {
 
     // request level key names
+    private static final String LOG_DIRS_KEY_NAME = "log_dirs";
+
+    // log dir level key names
+    private static final String LOG_DIR_KEY_NAME = "log_dir";
     private static final String TOPICS_KEY_NAME = "topics";
 
     // topic level key names
     private static final String TOPIC_KEY_NAME = "topic";
     private static final String PARTITIONS_KEY_NAME = "partitions";
-
-    // partition level key names
-    private static final String PARTITION_KEY_NAME = "partition";
-    private static final String LOG_DIR_KEY_NAME = "log_dir";
 
     private final Map<TopicPartition, String> partitionDirs;
 
@@ -71,14 +71,16 @@ public class AlterReplicaDirRequest extends AbstractRequest {
     public AlterReplicaDirRequest(Struct struct, short version) {
         super(version);
         partitionDirs = new HashMap<>();
-        for (Object topicStructObj : struct.getArray(TOPICS_KEY_NAME)) {
-            Struct topicStruct = (Struct) topicStructObj;
-            String topic = topicStruct.getString(TOPIC_KEY_NAME);
-            for (Object partitionStructObj : topicStruct.getArray(PARTITIONS_KEY_NAME)) {
-                Struct partitionStruct = (Struct) partitionStructObj;
-                int partition = partitionStruct.getInt(PARTITION_KEY_NAME);
-                String logDir = partitionStruct.getString(LOG_DIR_KEY_NAME);
-                partitionDirs.put(new TopicPartition(topic, partition), logDir);
+        for (Object logDirStructObj : struct.getArray(LOG_DIRS_KEY_NAME)) {
+            Struct logDirStruct = (Struct) logDirStructObj;
+            String logDir = logDirStruct.getString(LOG_DIR_KEY_NAME);
+            for (Object topicStructObj : logDirStruct.getArray(TOPICS_KEY_NAME)) {
+                Struct topicStruct = (Struct) topicStructObj;
+                String topic = topicStruct.getString(TOPIC_KEY_NAME);
+                for (Object partitionObj : topicStruct.getArray(PARTITIONS_KEY_NAME)) {
+                    int partition = (Integer) partitionObj;
+                    partitionDirs.put(new TopicPartition(topic, partition), logDir);
+                }
             }
         }
     }
@@ -90,23 +92,30 @@ public class AlterReplicaDirRequest extends AbstractRequest {
 
     @Override
     protected Struct toStruct() {
-        Struct struct = new Struct(ApiKeys.ALTER_REPLICA_DIR.requestSchema(version()));
-        Map<String, Map<Integer, String>> dirsByTopic = CollectionUtils.groupDataByTopic(partitionDirs);
-        List<Struct> topicStructArray = new ArrayList<>();
-        for (Map.Entry<String, Map<Integer, String>> dirsByTopicEntry : dirsByTopic.entrySet()) {
-            Struct topicStruct = struct.instance(TOPICS_KEY_NAME);
-            topicStruct.set(TOPIC_KEY_NAME, dirsByTopicEntry.getKey());
-            List<Struct> partitionStructArray = new ArrayList<>();
-            for (Map.Entry<Integer, String> dirsByPartitionEntry : dirsByTopicEntry.getValue().entrySet()) {
-                Struct partitionStruct = topicStruct.instance(PARTITIONS_KEY_NAME);
-                partitionStruct.set(PARTITION_KEY_NAME, dirsByPartitionEntry.getKey());
-                partitionStruct.set(LOG_DIR_KEY_NAME, dirsByPartitionEntry.getValue());
-                partitionStructArray.add(partitionStruct);
-            }
-            topicStruct.set(PARTITIONS_KEY_NAME, partitionStructArray.toArray());
-            topicStructArray.add(topicStruct);
+        Map<String, List<TopicPartition>> dirPartitions = new HashMap<>();
+        for (Map.Entry<TopicPartition, String> entry: partitionDirs.entrySet()) {
+            if (!dirPartitions.containsKey(entry.getValue()))
+                dirPartitions.put(entry.getValue(), new ArrayList<TopicPartition>());
+            dirPartitions.get(entry.getValue()).add(entry.getKey());
         }
-        struct.set(TOPICS_KEY_NAME, topicStructArray.toArray());
+
+        Struct struct = new Struct(ApiKeys.ALTER_REPLICA_DIR.requestSchema(version()));
+        List<Struct> logDirStructArray = new ArrayList<>();
+        for (Map.Entry<String, List<TopicPartition>> logDirEntry: dirPartitions.entrySet()) {
+            Struct logDirStruct = struct.instance(LOG_DIRS_KEY_NAME);
+            logDirStruct.set(LOG_DIR_KEY_NAME, logDirEntry.getKey());
+
+            List<Struct> topicStructArray = new ArrayList<>();
+            for (Map.Entry<String, List<Integer>> topicEntry: CollectionUtils.groupDataByTopic(logDirEntry.getValue()).entrySet()) {
+                Struct topicStruct = logDirStruct.instance(TOPICS_KEY_NAME);
+                topicStruct.set(TOPIC_KEY_NAME, topicEntry.getKey());
+                topicStruct.set(PARTITIONS_KEY_NAME, topicEntry.getValue().toArray());
+                topicStructArray.add(topicStruct);
+            }
+            logDirStruct.set(TOPICS_KEY_NAME, topicStructArray.toArray());
+            logDirStructArray.add(logDirStruct);
+        }
+        struct.set(LOG_DIRS_KEY_NAME, logDirStructArray.toArray());
         return struct;
     }
 

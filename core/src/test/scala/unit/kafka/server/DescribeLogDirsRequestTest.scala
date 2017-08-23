@@ -45,9 +45,11 @@ class DescribeLogDirsRequestTest extends BaseRequestTest {
     TestUtils.createTopic(zkUtils, topic, partitionNum, 1, servers)
     TestUtils.produceMessages(servers, topic, 10)
 
-    val logDirInfos = sendDescribeLogDirsRequest(Set.empty[TopicPartition]).logDirInfos()
-    assertEquals(logDirCount, logDirInfos.size())
+    val request = new DescribeLogDirsRequest.Builder(null).build()
+    val response = connectAndSend(request, ApiKeys.DESCRIBE_LOG_DIRS, controllerSocketServer)
+    val logDirInfos = DescribeLogDirsResponse.parse(response, request.version).logDirInfos()
 
+    assertEquals(logDirCount, logDirInfos.size())
     assertEquals(Errors.KAFKA_STORAGE_ERROR, logDirInfos.get(offlineDir).error)
     assertEquals(0, logDirInfos.get(offlineDir).replicaInfos.size())
 
@@ -61,10 +63,4 @@ class DescribeLogDirsRequestTest extends BaseRequestTest {
     assertEquals(servers.head.replicaManager.getLogEndOffsetLag(tp1), replicaInfo1.offsetLag)
   }
 
-  private def sendDescribeLogDirsRequest(partitions: Set[TopicPartition],
-                                      socketServer: SocketServer = controllerSocketServer): DescribeLogDirsResponse = {
-    val request = new DescribeLogDirsRequest.Builder(partitions.asJava).build()
-    val response = connectAndSend(request, ApiKeys.DESCRIBE_LOG_DIRS, socketServer)
-    DescribeLogDirsResponse.parse(response, request.version)
-  }
 }

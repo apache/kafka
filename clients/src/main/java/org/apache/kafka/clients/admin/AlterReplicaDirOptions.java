@@ -20,9 +20,8 @@ package org.apache.kafka.clients.admin;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import java.util.Map;
 
-
 /**
- * Options for {@link KafkaAdminClient#alterReplicaDir(Map, AlterReplicaDirOptions)}.
+ * Options for {@link AdminClient#alterReplicaDir(Map, AlterReplicaDirOptions)}.
  */
 @InterfaceStability.Evolving
 public class AlterReplicaDirOptions extends AbstractOptions<AlterReplicaDirOptions> {

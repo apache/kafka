@@ -44,6 +44,7 @@ public class DescribeLogDirsRequest extends AbstractRequest {
     public static class Builder extends AbstractRequest.Builder<DescribeLogDirsRequest> {
         private final Set<TopicPartition> topicPartitions;
 
+        // topicPartitions == null indicates requesting all partitions, and an empty list indicates requesting no partitions.
         public Builder(Set<TopicPartition> partitions) {
             super(ApiKeys.DESCRIBE_LOG_DIRS);
             this.topicPartitions = partitions;
@@ -67,17 +68,23 @@ public class DescribeLogDirsRequest extends AbstractRequest {
 
     public DescribeLogDirsRequest(Struct struct, short version) {
         super(version);
-        topicPartitions = new HashSet<>();
-        for (Object topicStructObj : struct.getArray(TOPICS_KEY_NAME)) {
-            Struct topicStruct = (Struct) topicStructObj;
-            String topic = topicStruct.getString(TOPIC_KEY_NAME);
-            for (Object partitionObj : topicStruct.getArray(PARTITIONS_KEY_NAME)) {
-                int partition = (Integer) partitionObj;
-                topicPartitions.add(new TopicPartition(topic, partition));
+
+        if (struct.getArray(TOPICS_KEY_NAME) == null) {
+            topicPartitions = null;
+        } else {
+            topicPartitions = new HashSet<>();
+            for (Object topicStructObj : struct.getArray(TOPICS_KEY_NAME)) {
+                Struct topicStruct = (Struct) topicStructObj;
+                String topic = topicStruct.getString(TOPIC_KEY_NAME);
+                for (Object partitionObj : topicStruct.getArray(PARTITIONS_KEY_NAME)) {
+                    int partition = (Integer) partitionObj;
+                    topicPartitions.add(new TopicPartition(topic, partition));
+                }
             }
         }
     }
 
+    // topicPartitions == null indicates requesting all partitions, and an empty list indicates requesting no partitions.
     public DescribeLogDirsRequest(Set<TopicPartition> topicPartitions, short version) {
         super(version);
         this.topicPartitions = topicPartitions;
@@ -86,6 +93,11 @@ public class DescribeLogDirsRequest extends AbstractRequest {
     @Override
     protected Struct toStruct() {
         Struct struct = new Struct(ApiKeys.DESCRIBE_LOG_DIRS.requestSchema(version()));
+        if (topicPartitions == null) {
+            struct.set(TOPICS_KEY_NAME, null);
+            return struct;
+        }
+
         Map<String, List<Integer>> partitionsByTopic = new HashMap<>();
         for (TopicPartition tp : topicPartitions) {
             if (!partitionsByTopic.containsKey(tp.topic())) {
@@ -117,6 +129,10 @@ public class DescribeLogDirsRequest extends AbstractRequest {
                     String.format("Version %d is not valid. Valid versions for %s are 0 to %d", versionId,
                         this.getClass().getSimpleName(), ApiKeys.DESCRIBE_LOG_DIRS.latestVersion()));
         }
+    }
+
+    public boolean isAllTopicPartitions() {
+        return topicPartitions == null;
     }
 
     public Set<TopicPartition> topicPartitions() {

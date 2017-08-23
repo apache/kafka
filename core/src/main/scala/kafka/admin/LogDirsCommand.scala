@@ -96,12 +96,6 @@ object LogDirsCommand {
           .describedAs("The server(s) to use for bootstrapping")
           .ofType(classOf[String])
         val describeOpt = parser.accepts("describe", "Describe the specified log directories on the specified brokers.")
-        val logDirListOpt = parser.accepts("log-dir-list", "list of log directories to be queried in the form \"dir1,dir2,dir3\". " +
-          "All log directories on the broker(s) will be queried if no log directory is specified.")
-          .withRequiredArg
-          .describedAs("Log directory list")
-          .defaultsTo("")
-          .ofType(classOf[String])
         val topicListOpt = parser.accepts("topic-list", "The list of topics to be queried in the form \"topic1,topic2,topic3\". " +
           "All topics will be queried if no topic list is specified")
           .withRequiredArg

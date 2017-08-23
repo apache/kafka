@@ -38,7 +38,7 @@ public class DescribeLogDirsResponse extends AbstractResponse {
 
     // dir level key names
     private static final String ERROR_CODE_KEY_NAME = "error_code";
-    private static final String PATH_KEY_NAME = "path";
+    private static final String LOG_DIR_KEY_NAME = "log_dir";
     private static final String TOPICS_KEY_NAME = "topics";
 
     // topic level key names
@@ -61,7 +61,7 @@ public class DescribeLogDirsResponse extends AbstractResponse {
         for (Object logDirStructObj : struct.getArray(LOG_DIRS_KEY_NAME)) {
             Struct logDirStruct = (Struct) logDirStructObj;
             Errors error = Errors.forCode(logDirStruct.getShort(ERROR_CODE_KEY_NAME));
-            String path = logDirStruct.getString(PATH_KEY_NAME);
+            String logDir = logDirStruct.getString(LOG_DIR_KEY_NAME);
             Map<TopicPartition, ReplicaInfo> replicaInfos = new HashMap<>();
 
             for (Object topicStructObj : logDirStruct.getArray(TOPICS_KEY_NAME)) {
@@ -79,7 +79,7 @@ public class DescribeLogDirsResponse extends AbstractResponse {
                 }
             }
 
-            logDirInfos.put(path, new LogDirInfo(error, replicaInfos));
+            logDirInfos.put(logDir, new LogDirInfo(error, replicaInfos));
         }
     }
 
@@ -100,7 +100,7 @@ public class DescribeLogDirsResponse extends AbstractResponse {
             LogDirInfo logDirInfo = logDirInfosEntry.getValue();
             Struct logDirStruct = struct.instance(LOG_DIRS_KEY_NAME);
             logDirStruct.set(ERROR_CODE_KEY_NAME, logDirInfo.error.code());
-            logDirStruct.set(PATH_KEY_NAME, logDirInfosEntry.getKey());
+            logDirStruct.set(LOG_DIR_KEY_NAME, logDirInfosEntry.getKey());
 
             Map<String, Map<Integer, ReplicaInfo>> replicaInfosByTopic = CollectionUtils.groupDataByTopic(logDirInfo.replicaInfos);
             List<Struct> topicStructArray = new ArrayList<>();

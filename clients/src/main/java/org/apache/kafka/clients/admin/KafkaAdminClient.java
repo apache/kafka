@@ -403,7 +403,7 @@ public class KafkaAdminClient extends AdminClient {
             thread.join();
 
             AppInfoParser.unregisterAppInfo(JMX_PREFIX, clientId);
-            
+
             log.debug("Kafka admin client closed.");
         } catch (InterruptedException e) {
             log.debug("Interrupted while joining I/O thread", e);
@@ -1588,17 +1588,7 @@ public class KafkaAdminClient extends AdminClient {
         return new AlterConfigsResult(new HashMap<ConfigResource, KafkaFuture<Void>>(futures));
     }
 
-    /**
-     * Change the log directory for the specified replicas. This API is currently only useful if it is used
-     * before the replica has been created on the broker. It will support moving replicas that have already been created after
-     * KIP-113 is fully implemented.
-     *
-     * This operation is supported by brokers with version 1.0.0 or higher.
-     *
-     * @param replicaAssignment  The replicas with their log directory absolute path
-     * @param options            The options to use when changing replica dir
-     * @return                   The AlterReplicaDirResult
-     */
+    @Override
     public AlterReplicaDirResult alterReplicaDir(Map<TopicPartitionReplica, String> replicaAssignment, final AlterReplicaDirOptions options) {
         final Map<TopicPartitionReplica, KafkaFutureImpl<Void>> futures = new HashMap<>(replicaAssignment.size());
 
@@ -1675,7 +1665,7 @@ public class KafkaAdminClient extends AdminClient {
                 @Override
                 public AbstractRequest.Builder createRequest(int timeoutMs) {
                     // Query selected partitions in all log directories
-                    return new DescribeLogDirsRequest.Builder(new HashSet<TopicPartition>());
+                    return new DescribeLogDirsRequest.Builder(null);
                 }
 
                 @Override
@@ -1748,10 +1738,16 @@ public class KafkaAdminClient extends AdminClient {
 
                             if (replicaInfo.isTemporary) {
                                 replicaDirInfoByPartition.put(topicPartition,
-                                    new ReplicaLogDirInfo(replicaLogDirInfo.currentReplicaLogDir, logDir, replicaInfo.offsetLag));
+                                                              new ReplicaLogDirInfo(replicaLogDirInfo.currentReplicaLogDir,
+                                                                                    replicaLogDirInfo.currentReplicaOffsetLag,
+                                                                                    logDir,
+                                                                                    replicaInfo.offsetLag));
                             } else {
                                 replicaDirInfoByPartition.put(topicPartition,
-                                    new ReplicaLogDirInfo(logDir, replicaLogDirInfo.temporaryReplicaLogDir, replicaLogDirInfo.temporaryReplicaOffsetLag));
+                                                              new ReplicaLogDirInfo(logDir,
+                                                                                    replicaInfo.offsetLag,
+                                                                                    replicaLogDirInfo.temporaryReplicaLogDir,
+                                                                                    replicaLogDirInfo.temporaryReplicaOffsetLag));
                             }
                         }
                     }

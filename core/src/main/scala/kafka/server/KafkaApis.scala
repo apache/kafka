@@ -54,7 +54,7 @@ import org.apache.kafka.common.{Node, TopicPartition}
 import org.apache.kafka.common.requests.SaslHandshakeResponse
 import org.apache.kafka.common.resource.{Resource => AdminResource}
 import org.apache.kafka.common.acl.{AccessControlEntry, AclBinding}
-import DescribeLogDirsResponse.{LogDirInfo, ReplicaInfo}
+import DescribeLogDirsResponse.LogDirInfo
 
 import scala.collection.{mutable, _}
 import scala.collection.JavaConverters._
@@ -1928,7 +1928,13 @@ class KafkaApis(val requestChannel: RequestChannel,
     val describeLogDirsDirRequest = request.body[DescribeLogDirsRequest]
     val logDirInfos = {
       if (authorize(request.session, Describe, Resource.ClusterResource)) {
-        replicaManager.describeLogDirs(describeLogDirsDirRequest.topicPartitions().asScala)
+        val partitions =
+          if (describeLogDirsDirRequest.isAllTopicPartitions)
+            replicaManager.logManager.allLogs().map(_.topicPartition).toSet
+          else
+            describeLogDirsDirRequest.topicPartitions().asScala
+
+        replicaManager.describeLogDirs(partitions)
       } else {
         Map.empty[String, LogDirInfo]
       }

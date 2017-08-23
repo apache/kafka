@@ -30,7 +30,7 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.TopicPartitionReplica
 import org.apache.kafka.common.errors.{LogDirNotFoundException, ReplicaNotAvailableException}
-import org.apache.kafka.clients.admin.{AdminClientConfig, AlterReplicaDirOptions, KafkaAdminClient, AdminClient => JAdminClient}
+import org.apache.kafka.clients.admin.{AdminClientConfig, AlterReplicaDirOptions, AdminClient => JAdminClient}
 import LogConfig._
 import joptsimple.OptionParser
 import org.apache.kafka.clients.admin.DescribeReplicaLogDirResult.ReplicaLogDirInfo
@@ -329,24 +329,24 @@ object ReassignPartitionsCommand extends Logging {
       val status: ReassignmentStatus = replicaLogDirInfos.get(replica) match {
         case Some(replicaLogDirInfo) =>
           if (replicaLogDirInfo.currentReplicaLogDir == null) {
-            println(s"Partition ${replica.topic()}-${replica.partition()} is not found in any live log dir on the " +
+            println(s"Partition ${replica.topic()}-${replica.partition()} is not found in any live log dir on " +
               s"broker ${replica.brokerId()}. There is likely offline log directory on the broker.")
             ReassignmentFailed
           } else if (replicaLogDirInfo.temporaryReplicaLogDir == newLogDir) {
             ReassignmentInProgress
           } else if (replicaLogDirInfo.temporaryReplicaLogDir != null) {
-            println(s"Partition ${replica.topic()}-${replica.partition()} on the broker ${replica.brokerId()} " +
+            println(s"Partition ${replica.topic()}-${replica.partition()} on broker ${replica.brokerId()} " +
               s"is being moved to log dir ${replicaLogDirInfo.temporaryReplicaLogDir} instead of $newLogDir")
             ReassignmentFailed
           } else if (replicaLogDirInfo.currentReplicaLogDir == newLogDir) {
             ReassignmentCompleted
           } else {
-            println(s"Partition ${replica.topic()}-${replica.partition()} on the broker ${replica.brokerId()} " +
+            println(s"Partition ${replica.topic()}-${replica.partition()} on broker ${replica.brokerId()} " +
               s"is not being moved from log dir ${replicaLogDirInfo.currentReplicaLogDir} to $newLogDir")
             ReassignmentFailed
           }
         case None =>
-          println(s"Partition ${replica.topic()}-${replica.partition()} is not found in any live log dir on the broker ${replica.brokerId()}.")
+          println(s"Partition ${replica.topic()}-${replica.partition()} is not found in any live log dir on broker ${replica.brokerId()}.")
           ReassignmentFailed
       }
       (replica, status)
@@ -555,7 +555,7 @@ class ReassignPartitionsCommand(zkUtils: ZkUtils,
           // between log directories on the same broker after KIP-113 is implemented.
           val adminClient = adminClientOpt.getOrElse(
             throw new AdminCommandFailedException("bootstrap-server needs to be provided in order to reassign replica to the specified log directory"))
-          val alterReplicaDirResult = adminClient.asInstanceOf[KafkaAdminClient].alterReplicaDir(
+          val alterReplicaDirResult = adminClient.alterReplicaDir(
             proposedReplicaAssignment.asJava, new AlterReplicaDirOptions().timeoutMs(timeoutMs.toInt))
           alterReplicaDirResult.values().asScala.foreach { case (replica, future) => {
               try {

@@ -262,7 +262,7 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
 
   @Test
   def testAlterReplicaLogDirBeforeTopicCreation(): Unit = {
-    val kafkaAdminClient = AdminClient.create(createConfig()).asInstanceOf[KafkaAdminClient]
+    val adminClient = AdminClient.create(createConfig())
     val topic = "topic"
     val tp = new TopicPartition(topic, 0)
 
@@ -271,7 +271,7 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
       new TopicPartitionReplica(topic, 0, server.config.brokerId) -> logDir
     }.toMap
 
-    kafkaAdminClient.alterReplicaDir(replicaAssignment.asJava, new AlterReplicaDirOptions()).values().asScala.values.foreach { future =>
+    adminClient.alterReplicaDir(replicaAssignment.asJava, new AlterReplicaDirOptions()).values().asScala.values.foreach { future =>
       try {
         future.get()
         fail("Future should fail with ReplicaNotAvailableException")
@@ -285,7 +285,7 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
       val logDir = server.logManager.getLog(tp).get.dir.getParent
       assertEquals(replicaAssignment(new TopicPartitionReplica(topic, 0, server.config.brokerId)), logDir)
     }
-    kafkaAdminClient.close()
+    adminClient.close()
   }
 
   @Test

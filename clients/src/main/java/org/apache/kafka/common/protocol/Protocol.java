@@ -1831,31 +1831,29 @@ public class Protocol {
     public static final Schema[] DELETE_ACLS_RESPONSE = {DELETE_ACLS_RESPONSE_V0};
 
     public static final Schema ALTER_REPLICA_DIR_REQUEST_V0 = new Schema(
-        new Field("topics",
-            new ArrayOf(new Schema(
-                new Field("topic", STRING, "The name of the topic."),
-                new Field("partitions", new ArrayOf(new Schema(
-                    new Field("partition", INT32, "The id of the partition."),
-                    new Field("log_dir", STRING, "The absolute log directory path for the partition.")
+        new Field("log_dirs", new ArrayOf(new Schema(
+                new Field("log_dir", STRING, "The absolute log directory path."),
+                new Field("topics", new ArrayOf(new Schema(
+                    new Field("topic", STRING, "The name of the topic."),
+                    new Field("partitions", new ArrayOf(INT32), "List of partition ids of the topic.")
                 )))
-            ))));
+        ))));
 
     public static final Schema ALTER_REPLICA_DIR_RESPONSE_V0 = new Schema(
         newThrottleTimeField(),
-        new Field("topics",
-            new ArrayOf(new Schema(
+        new Field("topics", new ArrayOf(new Schema(
                 new Field("topic", STRING, "The name of the topic."),
                 new Field("partitions", new ArrayOf(new Schema(
                     new Field("partition", INT32, "The id of the partition."),
                     new Field("error_code", INT16, "The error code for the partition.")
                 )))
-            ))));
+        ))));
 
     public static final Schema[] ALTER_REPLICA_DIR_REQUEST = {ALTER_REPLICA_DIR_REQUEST_V0};
     public static final Schema[] ALTER_REPLICA_DIR_RESPONSE = {ALTER_REPLICA_DIR_RESPONSE_V0};
 
     public static final Schema DESCRIBE_LOG_DIRS_REQUEST_V0 = new Schema(
-        new Field("topics", new ArrayOf(new Schema(
+        new Field("topics", ArrayOf.nullable(new Schema(
             new Field("topic", STRING, "The name of the topic."),
             new Field("partitions", new ArrayOf(INT32), "List of partition ids of the topic.")
         )))
@@ -1866,7 +1864,7 @@ public class Protocol {
         new Field("log_dirs",
             new ArrayOf(new Schema(
                 new Field("error_code", INT16, "The error code for the log directory."),
-                new Field("path", STRING, "The absolute log directory path."),
+                new Field("log_dir", STRING, "The absolute log directory path."),
                 new Field("topics", new ArrayOf(new Schema(
                     new Field("topic", STRING, "The name of the topic."),
                     new Field("partitions", new ArrayOf(new Schema(

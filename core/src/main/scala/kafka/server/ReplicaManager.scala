@@ -598,7 +598,7 @@ class ReplicaManager(val config: KafkaConfig,
         logsByDir.get(absolutePath) match {
           case Some(logs) =>
             val replicaInfos = logs.filter(log =>
-              partitions.isEmpty || partitions.contains(log.topicPartition)
+              partitions.contains(log.topicPartition)
             ).map(log => log.topicPartition -> new ReplicaInfo(log.size, getLogEndOffsetLag(log.topicPartition), false)).toMap
 
             (absolutePath, new LogDirInfo(Errors.NONE, replicaInfos.asJava))

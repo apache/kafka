@@ -346,6 +346,33 @@ public abstract class AdminClient implements AutoCloseable {
     public abstract AlterConfigsResult alterConfigs(Map<ConfigResource, Config> configs, AlterConfigsOptions options);
 
     /**
+     * Change the log directory for the specified replicas. This API is currently only useful if it is used
+     * before the replica has been created on the broker. It will support moving replicas that have already been created after
+     * KIP-113 is fully implemented.
+     *
+     * This operation is supported by brokers with version 1.0.0 or higher.
+     *
+     * @param replicaAssignment  The replicas with their log directory absolute path
+     * @return                   The AlterReplicaDirResult
+     */
+    public AlterReplicaDirResult alterReplicaDir(Map<TopicPartitionReplica, String> replicaAssignment) {
+        return alterReplicaDir(replicaAssignment, new AlterReplicaDirOptions());
+    }
+
+    /**
+     * Change the log directory for the specified replicas. This API is currently only useful if it is used
+     * before the replica has been created on the broker. It will support moving replicas that have already been created after
+     * KIP-113 is fully implemented.
+     *
+     * This operation is supported by brokers with version 1.0.0 or higher.
+     *
+     * @param replicaAssignment  The replicas with their log directory absolute path
+     * @param options            The options to use when changing replica dir
+     * @return                   The AlterReplicaDirResult
+     */
+    public abstract AlterReplicaDirResult alterReplicaDir(Map<TopicPartitionReplica, String> replicaAssignment, AlterReplicaDirOptions options);
+
+    /**
      * Query the information of all log directories on the given set of brokers
      *
      * This operation is supported by brokers with version 1.0.0 or higher.
