@@ -51,11 +51,13 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
+import static org.junit.Assert.assertTrue;
 
 @Category({IntegrationTest.class})
 public class KStreamRepartitionJoinTest {
@@ -354,9 +356,19 @@ public class KStreamRepartitionJoinTest {
     }
 
 
-    private void startStreams() {
+    private void startStreams() throws InterruptedException {
         kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration);
+        final CountDownLatch startupLatch = new CountDownLatch(1);
+        kafkaStreams.setStateListener(new KafkaStreams.StateListener() {
+            @Override
+            public void onChange(final KafkaStreams.State newState, final KafkaStreams.State oldState) {
+                if (newState == KafkaStreams.State.RUNNING && oldState == KafkaStreams.State.REBALANCING) {
+                    startupLatch.countDown();
+                }
+            }
+        });
         kafkaStreams.start();
+        assertTrue("streams failed to get into running state before timeout", startupLatch.await(1, TimeUnit.MINUTES));
     }
 
 
