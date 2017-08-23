@@ -70,19 +70,24 @@ class ReplicaVerificationTool(KafkaPathResolverMixin, BackgroundThreadService):
 
     def start_cmd(self, node):
         cmd = self.path.script("kafka-run-class.sh", node)
-        cmd += " kafka.tools.ReplicaVerificationTool"
+        cmd += " %s" % self.java_class_name()
         cmd += " --broker-list %s --topic-white-list %s --time -2 --report-interval-ms %s" % (self.kafka.bootstrap_servers(self.security_protocol), self.topic, self.report_interval_ms)
 
         cmd += " 2>> /mnt/replica_verification_tool.log | tee -a /mnt/replica_verification_tool.log &"
         return cmd
 
     def stop_node(self, node):
-        node.account.kill_process("java", clean_shutdown=True, allow_fail=True)
+        node.account.kill_java_processes(self.java_class_name(), clean_shutdown=True,
+                                         allow_fail=True)
 
         stopped = self.wait_node(node, timeout_sec=self.stop_timeout_sec)
         assert stopped, "Node %s: did not stop within the specified timeout of %s seconds" % \
                         (str(node.account), str(self.stop_timeout_sec))
 
     def clean_node(self, node):
-        node.account.kill_process("java", clean_shutdown=False, allow_fail=True)
+        node.account.kill_java_processes(self.java_class_name(), clean_shutdown=False,
+                                         allow_fail=True)
         node.account.ssh("rm -rf /mnt/replica_verification_tool.log", allow_fail=False)
+
+    def java_class_name(self):
+        return "kafka.tools.ReplicaVerificationTool"
