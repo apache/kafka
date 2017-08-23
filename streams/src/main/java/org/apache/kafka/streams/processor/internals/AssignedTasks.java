@@ -150,7 +150,7 @@ class AssignedTasks<T extends AbstractTask> {
         RuntimeException exception = null;
         for (final T task : tasks) {
             try {
-                task.close(false);
+                task.close(false, false);
             } catch (final RuntimeException e) {
                 log.error("{} Failed to close {}, {}", logPrefix, taskTypeName, task.id, e);
                 if (exception == null) {
@@ -178,7 +178,7 @@ class AssignedTasks<T extends AbstractTask> {
             } catch (final RuntimeException e) {
                 log.error("{} Suspending {} {} failed due to the following error:", logPrefix, taskTypeName, task.id, e);
                 try {
-                    task.close(false);
+                    task.close(false, false);
                 } catch (final Exception f) {
                     log.error("{} After suspending failed, closing the same {} {} failed again due to the following error:", logPrefix, taskTypeName, task.id, f);
                 }
@@ -193,7 +193,7 @@ class AssignedTasks<T extends AbstractTask> {
     private void closeZombieTask(final T task) {
         log.warn("{} Producer of {} {} fenced; closing zombie task", logPrefix, taskTypeName, task.id);
         try {
-            task.close(false);
+            task.close(false, true);
         } catch (final Exception e) {
             log.warn("{} Failed to close zombie {} due to {}, ignore and proceed", taskTypeName, logPrefix, e);
         }

@@ -133,7 +133,7 @@ public class AbstractTaskTest {
             public void suspend() {}
 
             @Override
-            public void close(final boolean clean) {}
+            public void close(final boolean clean, final boolean isZombie) {}
 
             @Override
             public boolean initialize() {

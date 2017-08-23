@@ -97,7 +97,8 @@ public abstract class AbstractTask {
 
     public abstract void commit();
     public abstract void suspend();
-    public abstract void close(final boolean clean);
+    public abstract void close(final boolean clean,
+                               final boolean isZombie);
 
     public TaskId id() {
         return id;

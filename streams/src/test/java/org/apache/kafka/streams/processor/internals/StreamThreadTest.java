@@ -229,20 +229,23 @@ public class StreamThreadTest {
         }
 
         @Override
-        public void close(final boolean clean) {
+        public void close(final boolean clean,
+                          final boolean isZombie) {
             if (closed && clean) {
                 throw new IllegalStateException("Should not close task that is already closed.");
             }
-            super.close(clean);
+            super.close(clean, isZombie);
             closed = true;
         }
 
         @Override
-        public void closeSuspended(final boolean clean, final RuntimeException firstException) {
+        public void closeSuspended(final boolean clean,
+                                   final boolean isZombie,
+                                   final RuntimeException firstException) {
             if (closed && clean) {
                 throw new IllegalStateException("Should not close task that is not suspended or already closed.");
             }
-            super.closeSuspended(clean, firstException);
+            super.closeSuspended(clean, isZombie, firstException);
             closed = true;
         }
 
@@ -1371,7 +1374,7 @@ public class StreamThreadTest {
                 changelogReader) {
 
             @Override
-            public void close(final boolean clean) {
+            public void close(final boolean clean, final boolean isZombie) {
                 throw new RuntimeException("KABOOM!");
             }
         };

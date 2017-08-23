@@ -167,7 +167,7 @@ public class AssignedTasksTest {
 
     @Test
     public void shouldCloseUnInitializedTasksOnSuspend() {
-        t1.close(false);
+        t1.close(false, false);
         EasyMock.expectLastCall();
         EasyMock.replay(t1);
 
@@ -192,7 +192,7 @@ public class AssignedTasksTest {
         mockInitializedTask();
         t1.suspend();
         EasyMock.expectLastCall().andThrow(new RuntimeException("KABOOM!"));
-        t1.close(false);
+        t1.close(false, false);
         EasyMock.expectLastCall();
         EasyMock.replay(t1);
 
@@ -205,7 +205,7 @@ public class AssignedTasksTest {
         mockInitializedTask();
         t1.suspend();
         EasyMock.expectLastCall().andThrow(new ProducerFencedException("KABOOM!"));
-        t1.close(false);
+        t1.close(false, true);
         EasyMock.expectLastCall();
         EasyMock.replay(t1);
 
@@ -253,7 +253,7 @@ public class AssignedTasksTest {
         mockInitializedTask();
         t1.commit();
         EasyMock.expectLastCall().andThrow(new ProducerFencedException(""));
-        t1.close(false);
+        t1.close(false, true);
         EasyMock.expectLastCall();
         EasyMock.replay(t1);
         assignedTasks.addNewTask(t1);
@@ -314,7 +314,7 @@ public class AssignedTasksTest {
     public void shouldCloseTaskOnProcessIfProducerFencedException() {
         mockInitializedTask();
         EasyMock.expect(t1.process()).andThrow(new ProducerFencedException(""));
-        t1.close(false);
+        t1.close(false, true);
         EasyMock.expectLastCall();
         EasyMock.replay(t1);
 
@@ -397,7 +397,7 @@ public class AssignedTasksTest {
     public void shouldCloseTaskOnPunctuateAndCommitIfProducerFencedException() {
         mockInitializedTask();
         EasyMock.expect(t1.maybePunctuate()).andThrow(new ProducerFencedException(""));
-        t1.close(false);
+        t1.close(false, true);
         EasyMock.expectLastCall();
         EasyMock.replay(t1);
         assignedTasks.addNewTask(t1);
