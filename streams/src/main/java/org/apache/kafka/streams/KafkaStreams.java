@@ -390,11 +390,11 @@ public class KafkaStreams {
                 StreamThread.State newState = (StreamThread.State) abstractNewState;
                 threadState.put(thread.getId(), newState);
 
-                if (newState == StreamThread.State.PARTITIONS_REVOKED) {
+                if (newState == StreamThread.State.PARTITIONS_REVOKED && state != State.REBALANCING) {
                     setState(State.REBALANCING);
                 } else if (newState == StreamThread.State.RUNNING && state != State.RUNNING) {
                     maybeSetRunning();
-                } else if (newState == StreamThread.State.DEAD) {
+                } else if (newState == StreamThread.State.DEAD && state != State.ERROR) {
                     maybeSetError();
                 }
             } else if (thread instanceof GlobalStreamThread) {
@@ -403,7 +403,7 @@ public class KafkaStreams {
                 globalThreadState = newState;
 
                 // special case when global thread is dead
-                if (newState == GlobalStreamThread.State.DEAD && setState(State.ERROR)) {
+                if (newState == GlobalStreamThread.State.DEAD && state != State.ERROR && setState(State.ERROR)) {
                     log.warn("{} Global thread has died. The instance will be in error state and should be closed.", logPrefix);
                 }
             }
