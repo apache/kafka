@@ -79,7 +79,16 @@ class ZookeeperService(KafkaPathResolverMixin, Service):
         start_cmd += "/mnt/zookeeper.properties 1>> %(path)s 2>> %(path)s &" % self.logs["zk_log"]
         node.account.ssh(start_cmd)
 
-        time.sleep(5)  # give it some time to start
+        wait_until(lambda: self.listening(node), timeout_sec=10, err_msg="Zookeeper node failed to start")
+
+    def listening(self, node):
+        try:
+            cmd = "nc -z %s %s" % (node.account.hostname, 2181)
+            node.account.ssh_output(cmd, allow_fail=False)
+            self.logger.debug("Zookeeper started accepting connections at: '%s:%s')", node.account.hostname, 2181)
+            return True
+        except (RemoteCommandError, ValueError) as e:
+            return False
 
     def pids(self, node):
         try:
