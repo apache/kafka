@@ -67,6 +67,7 @@ import org.junit.Test;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -1166,11 +1167,11 @@ public class TransactionManagerTest {
         assertFalse(transactionManager.isPartitionAdded(unauthorizedPartition));
         assertFalse(authorizedTopicProduceFuture.isDone());
 
-        prepareProduceResponse(Errors.NONE, pid, epoch);
-        sender.run(time.milliseconds());
-        assertFutureFailed(unauthorizedTopicProduceFuture);
+        sender.run(time.milliseconds());  // will abort produce requests to both the authorized and unauthorized partitions since the transaction has been aborted.
         assertTrue(authorizedTopicProduceFuture.isDone());
-        assertNotNull(authorizedTopicProduceFuture.get());
+        assertTrue(unauthorizedTopicProduceFuture.isDone());
+        assertFutureFailed(unauthorizedTopicProduceFuture);
+        assertFutureFailed(authorizedTopicProduceFuture);
 
         prepareEndTxnResponse(Errors.NONE, TransactionResult.ABORT, pid, epoch);
         transactionManager.beginAbort();
@@ -1682,8 +1683,7 @@ public class TransactionManagerTest {
 
         TransactionalRequestResult abortResult = transactionManager.beginAbort();
 
-        // we should resend the ProduceRequest before aborting
-        prepareProduceResponse(Errors.NONE, producerId, producerEpoch);
+        // the produce response will be aborted once the transaction begins abort.
         prepareEndTxnResponse(Errors.NONE, TransactionResult.ABORT, producerId, producerEpoch);
 
         sender.run(time.milliseconds());  // Resend ProduceRequest
@@ -1693,8 +1693,9 @@ public class TransactionManagerTest {
         assertTrue(abortResult.isSuccessful());
         assertTrue(transactionManager.isReady());  // make sure we are ready for a transaction now.
 
-        RecordMetadata recordMetadata = responseFuture.get();
-        assertEquals(tp0.topic(), recordMetadata.topic());
+        // ensure that the future failed
+        assertTrue(responseFuture.isDone());
+        assertFutureFailed(responseFuture);
     }
 
     @Test
@@ -1946,7 +1947,7 @@ public class TransactionManagerTest {
         assertTrue(drainedBatches.get(node1.id()).isEmpty());
     }
 
-    @Test
+    @Test(expected = ExecutionException.class)
     public void resendFailedProduceRequestAfterAbortableError() throws Exception {
         final long pid = 13131L;
         final short epoch = 1;
@@ -1960,17 +1961,23 @@ public class TransactionManagerTest {
 
         prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, epoch, pid);
         prepareProduceResponse(Errors.NOT_LEADER_FOR_PARTITION, pid, epoch);
-        sender.run(time.milliseconds()); // AddPartitions
-        sender.run(time.milliseconds()); // Produce
+        sender.run(time.milliseconds()); // Send AddPartitions and receive response
+        sender.run(time.milliseconds()); //  Send produce request and receive NOT_LEADER_FOR_PARTITION response.
 
         assertFalse(responseFuture.isDone());
 
         transactionManager.transitionToAbortableError(new KafkaException());
-        prepareProduceResponse(Errors.NONE, pid, epoch);
 
-        sender.run(time.milliseconds());
+        Deque<ProducerBatch> unsentBatches = accumulator.batches().get(tp0);
+
+        // The one unsent batch should have a reset sequence and should still be open.
+        assertEquals(1, unsentBatches.size());
+        assertEquals(RecordBatch.NO_SEQUENCE, unsentBatches.getFirst().baseSequence());
+        assertFalse(unsentBatches.getFirst().isClosed());
+
+        sender.run(time.milliseconds());  // abort the unsent batch.
         assertTrue(responseFuture.isDone());
-        assertNotNull(responseFuture.get());
+        responseFuture.get(); // should throw the exception which caused the transaction to be aborted.
     }
 
     @Test

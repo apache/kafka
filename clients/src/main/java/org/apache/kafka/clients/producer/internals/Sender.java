@@ -493,6 +493,9 @@ public class Sender implements Runnable {
     private void completeBatch(ProducerBatch batch, ProduceResponse.PartitionResponse response, long correlationId,
                                long now) {
         Errors error = response.error;
+        if (error != Errors.NONE)
+            maybeResetNextSequenceForPartition(batch.topicPartition, batch.baseSequence());
+
         if (error == Errors.MESSAGE_TOO_LARGE && batch.recordCount > 1 &&
                 (batch.magic() >= RecordBatch.MAGIC_VALUE_V2 || batch.isCompressed())) {
             // If the batch is too large, we split the batch and send the split batches again. We do not decrement
@@ -554,7 +557,19 @@ public class Sender implements Runnable {
             this.accumulator.unmutePartition(batch.topicPartition);
     }
 
+    private void maybeResetNextSequenceForPartition(TopicPartition topicPartition, int nextSequence) {
+        if (transactionManager != null)
+            if (transactionManager.isNextSequence(topicPartition, nextSequence))
+                // If we are retrying the first in flight request, then reset the next sequence number to be the
+                // the last ack'd sequence + 1. Subsequent batches will get the succeeding sequence numbers.
+                transactionManager.setNextSequence(topicPartition, nextSequence);
+
+    }
+
     private void reenqueueBatch(ProducerBatch batch, long currentTimeMs) {
+        if (transactionManager != null)
+            // Reset the sequence number for the retried batch. It will be set again on the next drain.
+            batch.unsetProducerState();
         this.accumulator.reenqueue(batch, currentTimeMs);
         this.sensors.recordRetries(batch.topicPartition.topic(), batch.recordCount);
     }
@@ -594,10 +609,6 @@ public class Sender implements Runnable {
                 transactionManager.transitionToFatalError(exception);
             } else if (transactionManager.isTransactional()) {
                 transactionManager.transitionToAbortableError(exception);
-            }
-
-            if (transactionManager.hasProducerId()) {
-
             }
         }
 

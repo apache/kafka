@@ -365,6 +365,7 @@ public class TransactionManager {
                     "You must either abort the ongoing transaction or reinitialize the transactional producer instead");
         setProducerIdAndEpoch(ProducerIdAndEpoch.NONE);
         this.sequenceNumbers.clear();
+        this.lastAckedSequence.clear();
     }
 
     /**
@@ -377,15 +378,6 @@ public class TransactionManager {
             sequenceNumbers.put(topicPartition, currentSequenceNumber);
         }
         return currentSequenceNumber;
-    }
-
-    synchronized void maybeCountSequenceNumber(ProducerBatch batch) {
-        if (batch.hasBeenCountedTowardSequence())
-            return;
-        incrementSequenceNumber(batch.topicPartition, batch.recordCount);
-        log.debug("ProducerId: {}; topic-partition: {}; incremented sequence number to {}",
-                producerIdAndEpoch().producerId, batch.topicPartition, sequenceNumber(batch.topicPartition));
-        batch.countSequenceNumber();
     }
 
     synchronized void incrementSequenceNumber(TopicPartition topicPartition, int increment) {
@@ -411,6 +403,13 @@ public class TransactionManager {
     synchronized boolean isNextSequence(TopicPartition topicPartition, int sequence) {
         return (!lastAckedSequence.containsKey(topicPartition) && sequence == 0) ||
                 (lastAckedSequence.containsKey(topicPartition) && (sequence - lastAckedSequence.get(topicPartition) == 1));
+    }
+
+    synchronized  void setNextSequence(TopicPartition topicPartition, int sequence) {
+        if (!sequenceNumbers.containsKey(topicPartition) && sequence != 0)
+            throw new IllegalStateException("Trying to set the sequence number for " + topicPartition + " to " + sequence +
+            ", but the sequence number was never set for this partition.");
+        sequenceNumbers.put(topicPartition, sequence);
     }
 
     synchronized TxnRequestHandler nextRequestHandler(boolean hasIncompleteBatches) {
