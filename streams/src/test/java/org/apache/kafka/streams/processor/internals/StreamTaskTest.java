@@ -758,7 +758,7 @@ public class StreamTaskTest {
     }
 
     @Test
-    public void shouldAbortTransactionOnZombieClosedIfEosEnabled() throws Exception {
+    public void shouldNotAbortTransactionOnZombieClosedIfEosEnabled() throws Exception {
         final MockProducer producer = new MockProducer();
         task = new StreamTask(taskId00, applicationId, partitions, topology, consumer, changelogReader,
             eosConfig, streamsMetrics, stateDirectory, null, time, producer);

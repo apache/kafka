@@ -416,9 +416,10 @@ public class StreamTask extends AbstractTask implements Punctuator {
                         if (!isZombie) {
                             producer.abortTransaction();
                         }
-                        transactionInFlight = false;
                     } catch (final ProducerFencedException e) {
                         // can be ignored: transaction got already aborted by brokers/transactional-coordinator if this happens
+                    } finally {
+                        transactionInFlight = false;
                     }
                 }
                 try {

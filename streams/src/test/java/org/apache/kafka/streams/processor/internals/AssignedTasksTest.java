@@ -196,7 +196,8 @@ public class AssignedTasksTest {
         EasyMock.expectLastCall();
         EasyMock.replay(t1);
 
-        assertThat(suspendTask(), not(nullValue()));
+        final RuntimeException expectedException = suspendTask();
+        assertThat(expectedException, not(nullValue()));
         EasyMock.verify(t1);
     }
 
