@@ -1041,6 +1041,9 @@ public class TransactionManager {
                 } else if (error == Errors.INVALID_PRODUCER_EPOCH) {
                     fatalError(error.exception());
                     return;
+                } else if (error == Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT) {
+                    fatalError(error.exception());
+                    return;
                 } else {
                     fatalError(new KafkaException("Unexpected error in TxnOffsetCommitResponse: " + error.message()));
                     return;

@@ -16,6 +16,11 @@
  */
 package org.apache.kafka.common.errors;
 
+/**
+ * Indicates that a request API or version needed by the client is not supported by the broker. This is
+ * typically a fatal error as Kafka clients will downgrade request versions as needed except in cases where
+ * a needed feature is not available in old versions.
+ */
 public class UnsupportedVersionException extends ApiException {
     private static final long serialVersionUID = 1L;
 

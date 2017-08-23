@@ -282,8 +282,8 @@ public class MockClient implements KafkaClient {
 
     /**
      * Prepare a response for a request matching the provided matcher. If the matcher does not
-     * match, {@link KafkaClient#send(ClientRequest, long)} will throw IllegalStateException
-     * @param matcher The matcher to apply
+     * match, {@link KafkaClient#send(ClientRequest, long)} will throw IllegalStateException.
+     * @param matcher The request matcher to apply
      * @param response The response body
      * @param disconnected Whether the request was disconnected
      */
@@ -292,8 +292,8 @@ public class MockClient implements KafkaClient {
     }
 
     /**
-     * Raise an unsupported version error on the next request. Raise an exception if the next request
-     * does not match the provided matcher function.
+     * Raise an unsupported version error on the next request if it matches the given matcher.
+     * If the matcher does not match, {@link KafkaClient#send(ClientRequest, long)} will throw IllegalStateException.
      * @param matcher The request matcher to apply
      */
     public void prepareUnsupportedVersionResponse(RequestMatcher matcher) {

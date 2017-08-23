@@ -461,7 +461,7 @@ public class Sender implements Runnable {
             log.warn("Cancelled request {} due to a version mismatch with node {}",
                     response, response.destination(), response.versionMismatch());
             for (ProducerBatch batch : batches.values())
-                completeBatch(batch, new ProduceResponse.PartitionResponse(Errors.INVALID_REQUEST), correlationId, now);
+                completeBatch(batch, new ProduceResponse.PartitionResponse(Errors.UNSUPPORTED_VERSION), correlationId, now);
         } else {
             log.trace("Received produce response from node {} with correlation id {}", response.destination(), correlationId);
             // if we have a response, parse it
@@ -590,7 +590,8 @@ public class Sender implements Runnable {
                 transactionManager.resetProducerId();
             } else if (exception instanceof ClusterAuthorizationException
                     || exception instanceof TransactionalIdAuthorizationException
-                    || exception instanceof ProducerFencedException) {
+                    || exception instanceof ProducerFencedException
+                    || exception instanceof UnsupportedVersionException) {
                 transactionManager.transitionToFatalError(exception);
             } else if (transactionManager.isTransactional()) {
                 transactionManager.transitionToAbortableError(exception);

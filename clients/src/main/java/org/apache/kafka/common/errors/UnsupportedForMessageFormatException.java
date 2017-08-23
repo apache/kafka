@@ -17,7 +17,8 @@
 package org.apache.kafka.common.errors;
 
 /**
- * The message format version does not support the requested function.
+ * The message format version does not support the requested function. For example, if idempotence is
+ * requested and the broker is on an old message format, then this error will be returned
  */
 public class UnsupportedForMessageFormatException extends ApiException {
     private static final long serialVersionUID = 1L;
