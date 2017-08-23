@@ -658,6 +658,9 @@ public class Selector implements Selectable, AutoCloseable {
 
         channel.disconnect();
 
+        //avoid inconsistent connection states, see KAFKA-5417
+        connected.remove(channel.id());
+
         // Keep track of closed channels with pending receives so that all received records
         // may be processed. For example, when producer with acks=0 sends some records and
         // closes its connections, a single poll() in the broker may receive records and
