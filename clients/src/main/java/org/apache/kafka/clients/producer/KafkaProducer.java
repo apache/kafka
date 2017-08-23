@@ -311,10 +311,12 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             clientId = config.getString(ProducerConfig.CLIENT_ID_CONFIG);
             if (clientId.length() <= 0)
                 clientId = "producer-" + PRODUCER_CLIENT_ID_SEQUENCE.getAndIncrement();
+
+            String transactionalId = userProvidedConfigs.containsKey(ProducerConfig.TRANSACTIONAL_ID_CONFIG) ?
+                    (String) userProvidedConfigs.get(ProducerConfig.TRANSACTIONAL_ID_CONFIG) : null;
             LogContext logContext = new LogContext("[Producer clientId=" + clientId +
-                    (!userProvidedConfigs.containsKey(ProducerConfig.TRANSACTIONAL_ID_CONFIG) ? "] " :
-                            String.format(", transactionalId=%s] ", userProvidedConfigs.get(ProducerConfig.TRANSACTIONAL_ID_CONFIG))));
-            log = logContext.logger(getClass());
+                    transactionalId == null ? "] " : ", transactionalId=" + transactionalId + "] ");
+            log = logContext.logger(KafkaProducer.class);
             log.trace("Starting the Kafka producer");
 
             Map<String, String> metricTags = Collections.singletonMap("client-id", clientId);

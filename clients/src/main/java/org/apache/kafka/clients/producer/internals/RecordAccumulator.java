@@ -89,6 +89,7 @@ public final class RecordAccumulator {
     /**
      * Create a new record accumulator
      *
+     * @param logContext The log context used for logging
      * @param batchSize The size to use when allocating {@link MemoryRecords} instances
      * @param totalSize The maximum memory the record accumulator can use.
      * @param compression The compression codec for the records
@@ -103,18 +104,6 @@ public final class RecordAccumulator {
      * @param transactionManager The shared transaction state object which tracks producer IDs, epochs, and sequence
      *                           numbers per partition.
      */
-    public RecordAccumulator(int batchSize,
-                             long totalSize,
-                             CompressionType compression,
-                             long lingerMs,
-                             long retryBackoffMs,
-                             Metrics metrics,
-                             Time time,
-                             ApiVersions apiVersions,
-                             TransactionManager transactionManager) {
-        this(null, batchSize, totalSize, compression, lingerMs, retryBackoffMs, metrics, time, apiVersions, transactionManager);
-    }
-
     public RecordAccumulator(LogContext logContext,
                              int batchSize,
                              long totalSize,
@@ -125,7 +114,7 @@ public final class RecordAccumulator {
                              Time time,
                              ApiVersions apiVersions,
                              TransactionManager transactionManager) {
-        this.log = logContext == null ? LoggerFactory.getLogger(getClass()) : logContext.logger(getClass());
+        this.log = logContext.logger(RecordAccumulator.class);
         this.drainIndex = 0;
         this.closed = false;
         this.flushesInProgress = new AtomicInteger(0);

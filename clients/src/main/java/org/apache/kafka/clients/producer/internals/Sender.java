@@ -122,35 +122,6 @@ public class Sender implements Runnable {
     /* all the state related to transactions, in particular the producer id, producer epoch, and sequence numbers */
     private final TransactionManager transactionManager;
 
-    public Sender(KafkaClient client,
-                  Metadata metadata,
-                  RecordAccumulator accumulator,
-                  boolean guaranteeMessageOrder,
-                  int maxRequestSize,
-                  short acks,
-                  int retries,
-                  Metrics metrics,
-                  Time time,
-                  int requestTimeout,
-                  long retryBackoffMs,
-                  TransactionManager transactionManager,
-                  ApiVersions apiVersions) {
-        this(null,
-                client,
-                metadata,
-                accumulator,
-                guaranteeMessageOrder,
-                maxRequestSize,
-                acks,
-                retries,
-                metrics,
-                time,
-                requestTimeout,
-                retryBackoffMs,
-                transactionManager,
-                apiVersions);
-    }
-
     public Sender(LogContext logContext,
                   KafkaClient client,
                   Metadata metadata,
@@ -165,7 +136,7 @@ public class Sender implements Runnable {
                   long retryBackoffMs,
                   TransactionManager transactionManager,
                   ApiVersions apiVersions) {
-        this.log = logContext == null ? LoggerFactory.getLogger(Sender.class) : logContext.logger(Sender.class);
+        this.log = logContext.logger(Sender.class);
         this.client = client;
         this.accumulator = accumulator;
         this.metadata = metadata;
