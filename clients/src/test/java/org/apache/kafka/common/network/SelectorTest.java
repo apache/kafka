@@ -16,26 +16,6 @@
  */
 package org.apache.kafka.common.network;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
-
-import java.io.ByteArrayOutputStream;
-import java.io.DataOutputStream;
-import java.nio.channels.ServerSocketChannel;
-import java.nio.channels.SocketChannel;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.io.IOException;
-import java.net.InetSocketAddress;
-import java.net.ServerSocket;
-import java.nio.ByteBuffer;
-
-import java.util.Random;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.memory.SimpleMemoryPool;
 import org.apache.kafka.common.metrics.Metrics;
@@ -44,9 +24,36 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
+import org.easymock.IMocksControl;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+
+import java.io.ByteArrayOutputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
+import java.net.InetSocketAddress;
+import java.net.ServerSocket;
+import java.nio.ByteBuffer;
+import java.nio.channels.SelectionKey;
+import java.nio.channels.ServerSocketChannel;
+import java.nio.channels.SocketChannel;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Random;
+import java.util.Set;
+
+import static org.easymock.EasyMock.createControl;
+import static org.easymock.EasyMock.expect;
+import static org.easymock.EasyMock.expectLastCall;
+
 
 /**
  * A set of tests for the selector. These use a test harness that runs a simple socket server that echos back responses.
@@ -331,6 +338,8 @@ public class SelectorTest {
         assertTrue("Unexpected receive", selector.completedReceives().isEmpty());
     }
 
+
+
     @Test
     public void testMuteOnOOM() throws Exception {
         //clean up default selector, replace it with one that uses a finite mem pool
@@ -411,6 +420,46 @@ public class SelectorTest {
         System.arraycopy(prefix, 0, payload, 0, prefix.length);
         return payload;
     }
+
+    /**
+     * Tests that a connect and disconnect in a single poll invocation results in the channel id being
+     * in `disconnected`, but not `connected`.
+     */
+    @Test
+    public void testConnectDisconnectDuringInSinglePoll() throws Exception {
+        IMocksControl control = createControl();
+
+        // channel is connected, not ready and it throws an exception during prepare
+        KafkaChannel kafkaChannel = control.createMock(KafkaChannel.class);
+        expect(kafkaChannel.id()).andStubReturn("1");
+        expect(kafkaChannel.socketDescription()).andStubReturn("");
+        expect(kafkaChannel.state()).andStubReturn(ChannelState.NOT_CONNECTED);
+        expect(kafkaChannel.finishConnect()).andReturn(true);
+        expect(kafkaChannel.isConnected()).andStubReturn(true);
+        // record void method invocations
+        kafkaChannel.disconnect();
+        kafkaChannel.close();
+        expect(kafkaChannel.ready()).andReturn(false);
+        // prepare throws an exception
+        kafkaChannel.prepare();
+        expectLastCall().andThrow(new IOException());
+
+        SelectionKey selectionKey = control.createMock(SelectionKey.class);
+        expect(selectionKey.channel()).andReturn(SocketChannel.open());
+        expect(selectionKey.readyOps()).andStubReturn(SelectionKey.OP_CONNECT);
+
+        control.replay();
+
+        selectionKey.attach(kafkaChannel);
+        Set<SelectionKey> selectionKeys = Utils.mkSet(selectionKey);
+        selector.pollSelectionKeys(selectionKeys, false, System.nanoTime());
+
+        assertFalse(selector.connected().contains(kafkaChannel.id()));
+        assertTrue(selector.disconnected().containsKey(kafkaChannel.id()));
+
+        control.verify();
+    }
+
 
     private String blockingRequest(String node, String s) throws IOException {
         selector.send(createSend(node, s));
