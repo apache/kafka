@@ -210,6 +210,28 @@ public class KafkaStreams {
     private final Object stateLock = new Object();
     private volatile State state = State.CREATED;
 
+    private boolean waitOnState(final State targetState, final long waitMs) {
+        long begin = System.currentTimeMillis();
+        synchronized (stateLock) {
+            long elapsedMs = 0L;
+            while (state != State.NOT_RUNNING) {
+                if (waitMs >= elapsedMs) {
+                    long remainingMs = waitMs - elapsedMs;
+                    try {
+                        stateLock.wait(remainingMs);
+                    } catch (final InterruptedException e) {
+                        // it is ok: just move on to the next iteration
+                    }
+                } else {
+                    log.debug("{} Cannot transit to {} within {}ms", logPrefix, targetState, waitMs);
+                    return false;
+                }
+                elapsedMs = System.currentTimeMillis() - begin;
+            }
+            return true;
+        }
+    }
+
     /**
      * Sets the state
      * @param newState New state
@@ -233,8 +255,10 @@ public class KafkaStreams {
                 log.info("{} State transition from {} to {}", logPrefix, oldState, newState);
             }
             state = newState;
+            stateLock.notifyAll();
         }
 
+        // we need to call the user customized state listener outside the state lock to avoid potential deadlocks
         if (stateListener != null) {
             stateListener.onChange(state, oldState);
         }
@@ -700,30 +724,7 @@ public class KafkaStreams {
         if (!setState(State.PENDING_SHUTDOWN)) {
             // if transition failed, it means it was either in PENDING_SHUTDOWN
             // or NOT_RUNNING already; just check that all threads have been stopped
-            log.info("{} Already in the pending shutdown state, wait to complete shutdown within timeout", logPrefix);
-
-            long waitMs = TimeUnit.MILLISECONDS.convert(timeout, timeUnit);
-            long begin = System.currentTimeMillis();
-            long delay = 50L;
-
-            while (state != State.NOT_RUNNING) {
-                long elapsedMs = System.currentTimeMillis() - begin;
-                if (waitMs > elapsedMs) {
-                    long maxWait = waitMs - elapsedMs;
-                    delay = maxWait / 2 > delay ? delay * 2 : maxWait;
-                    try {
-                        Thread.sleep(delay);
-                    } catch (final InterruptedException e) {
-                        Thread.interrupted();
-                    }
-                } else {
-                    log.info("{} Streams client did not stop completely within the timeout", logPrefix);
-                    return false;
-                }
-            }
-
-            log.info("{} Streams client stopped completely", logPrefix);
-            return true;
+            log.info("{} Already in the pending shutdown state, wait to complete shutdown", logPrefix);
         } else {
             stateDirCleaner.shutdownNow();
 
@@ -750,14 +751,14 @@ public class KafkaStreams {
                                 thread.join();
                             }
                         } catch (final InterruptedException ex) {
-                            Thread.interrupted();
+                            Thread.currentThread().interrupt();
                         }
                     }
                     if (globalStreamThread != null && !globalStreamThread.stillRunning()) {
                         try {
                             globalStreamThread.join();
                         } catch (final InterruptedException e) {
-                            Thread.interrupted();
+                            Thread.currentThread().interrupt();
                         }
                         globalStreamThread = null;
                     }
@@ -769,19 +770,14 @@ public class KafkaStreams {
 
             shutdownThread.setDaemon(true);
             shutdownThread.start();
-            try {
-                shutdownThread.join(TimeUnit.MILLISECONDS.convert(timeout, timeUnit));
-            } catch (final InterruptedException e) {
-                Thread.interrupted();
-            }
+        }
 
-            if (shutdownThread.isAlive()) {
-                log.info("{} Streams client cannot stop completely within the timeout", logPrefix);
-                return false;
-            } else {
-                log.info("{} Streams client stopped completely", logPrefix);
-                return true;
-            }
+        if (waitOnState(State.NOT_RUNNING, TimeUnit.MILLISECONDS.convert(timeout, timeUnit))) {
+            log.info("{} Streams client stopped completely", logPrefix);
+            return true;
+        } else {
+            log.info("{} Streams client cannot stop completely within the timeout", logPrefix);
+            return false;
         }
     }
 

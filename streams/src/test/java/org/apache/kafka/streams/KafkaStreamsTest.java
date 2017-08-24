@@ -107,7 +107,7 @@ public class KafkaStreamsTest {
         final StateListenerStub stateListener = new StateListenerStub();
         streams.setStateListener(stateListener);
         streams.close();
-        Assert.assertEquals(streams.state(), KafkaStreams.State.NOT_RUNNING);
+        Assert.assertEquals(KafkaStreams.State.NOT_RUNNING, streams.state());
     }
 
     @Test
