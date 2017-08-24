@@ -18,6 +18,7 @@ package org.apache.kafka.clients;
 
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.utils.Time;
@@ -48,16 +49,22 @@ public class MockClient implements KafkaClient {
     };
 
     private static class FutureResponse {
-        public final AbstractResponse responseBody;
-        public final boolean disconnected;
-        public final RequestMatcher requestMatcher;
-        public Node node;
+        private final Node node;
+        private final RequestMatcher requestMatcher;
+        private final AbstractResponse responseBody;
+        private final boolean disconnected;
+        private final boolean isUnsupportedRequest;
 
-        public FutureResponse(AbstractResponse responseBody, boolean disconnected, RequestMatcher requestMatcher, Node node) {
+        public FutureResponse(Node node,
+                              RequestMatcher requestMatcher,
+                              AbstractResponse responseBody,
+                              boolean disconnected,
+                              boolean isUnsupportedRequest) {
+            this.node = node;
+            this.requestMatcher = requestMatcher;
             this.responseBody = responseBody;
             this.disconnected = disconnected;
-            this.requestMatcher = requestMatcher;
-            this.node = node;
+            this.isUnsupportedRequest = isUnsupportedRequest;
         }
 
     }
@@ -156,8 +163,15 @@ public class MockClient implements KafkaClient {
             AbstractRequest abstractRequest = request.requestBuilder().build(version);
             if (!futureResp.requestMatcher.matches(abstractRequest))
                 throw new IllegalStateException("Request matcher did not match next-in-line request " + abstractRequest);
+
+            UnsupportedVersionException unsupportedVersionException = null;
+            if (futureResp.isUnsupportedRequest)
+                unsupportedVersionException = new UnsupportedVersionException("Api " +
+                        request.apiKey() + " with version " + version);
+
             ClientResponse resp = new ClientResponse(request.makeHeader(version), request.callback(), request.destination(),
-                    request.createdTimeMs(), time.milliseconds(), futureResp.disconnected, null, futureResp.responseBody);
+                    request.createdTimeMs(), time.milliseconds(), futureResp.disconnected,
+                    unsupportedVersionException, futureResp.responseBody);
             responses.add(resp);
             iterator.remove();
             return;
@@ -241,7 +255,7 @@ public class MockClient implements KafkaClient {
     }
 
     public void prepareResponseFrom(AbstractResponse response, Node node) {
-        prepareResponseFrom(ALWAYS_TRUE, response, node, false);
+        prepareResponseFrom(ALWAYS_TRUE, response, node, false, false);
     }
 
     /**
@@ -255,7 +269,7 @@ public class MockClient implements KafkaClient {
     }
 
     public void prepareResponseFrom(RequestMatcher matcher, AbstractResponse response, Node node) {
-        prepareResponseFrom(matcher, response, node, false);
+        prepareResponseFrom(matcher, response, node, false, false);
     }
 
     public void prepareResponse(AbstractResponse response, boolean disconnected) {
@@ -263,22 +277,35 @@ public class MockClient implements KafkaClient {
     }
 
     public void prepareResponseFrom(AbstractResponse response, Node node, boolean disconnected) {
-        prepareResponseFrom(ALWAYS_TRUE, response, node, disconnected);
+        prepareResponseFrom(ALWAYS_TRUE, response, node, disconnected, false);
     }
 
     /**
      * Prepare a response for a request matching the provided matcher. If the matcher does not
-     * match, {@link KafkaClient#send(ClientRequest, long)} will throw IllegalStateException
-     * @param matcher The matcher to apply
+     * match, {@link KafkaClient#send(ClientRequest, long)} will throw IllegalStateException.
+     * @param matcher The request matcher to apply
      * @param response The response body
      * @param disconnected Whether the request was disconnected
      */
     public void prepareResponse(RequestMatcher matcher, AbstractResponse response, boolean disconnected) {
-        prepareResponseFrom(matcher, response, null, disconnected);
+        prepareResponseFrom(matcher, response, null, disconnected, false);
     }
 
-    public void prepareResponseFrom(RequestMatcher matcher, AbstractResponse response, Node node, boolean disconnected) {
-        futureResponses.add(new FutureResponse(response, disconnected, matcher, node));
+    /**
+     * Raise an unsupported version error on the next request if it matches the given matcher.
+     * If the matcher does not match, {@link KafkaClient#send(ClientRequest, long)} will throw IllegalStateException.
+     * @param matcher The request matcher to apply
+     */
+    public void prepareUnsupportedVersionResponse(RequestMatcher matcher) {
+        prepareResponseFrom(matcher, null, null, false, true);
+    }
+
+    private void prepareResponseFrom(RequestMatcher matcher,
+                                     AbstractResponse response,
+                                     Node node,
+                                     boolean disconnected,
+                                     boolean isUnsupportedVersion) {
+        futureResponses.add(new FutureResponse(node, matcher, response, disconnected, isUnsupportedVersion));
     }
 
     public void waitForRequests(final int minRequests, long maxWaitMs) throws InterruptedException {
