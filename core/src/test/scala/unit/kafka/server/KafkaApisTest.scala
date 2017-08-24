@@ -28,7 +28,6 @@ import kafka.coordinator.group.GroupCoordinator
 import kafka.coordinator.transaction.TransactionCoordinator
 import kafka.log.{Log, TimestampOffset}
 import kafka.network.RequestChannel
-import kafka.network.RequestChannel.Session
 import kafka.security.auth.Authorizer
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server._
@@ -395,8 +394,9 @@ class KafkaApisTest {
     val request = builder.build()
     val header = new RequestHeader(builder.apiKey.id, request.version, "", 0)
     val buffer = request.serialize(header)
-    val session = Session(KafkaPrincipal.ANONYMOUS, InetAddress.getLocalHost)
-    (request, new RequestChannel.Request(1, "1", session, 0, new ListenerName(""), SecurityProtocol.PLAINTEXT,
+    val context = new RequestContext(header, "1", InetAddress.getLocalHost, KafkaPrincipal.ANONYMOUS,
+      new ListenerName(""), SecurityProtocol.PLAINTEXT)
+    (request, new RequestChannel.Request(processor = 1, context = context, startTimeNanos =  0,
       MemoryPool.NONE, buffer))
   }
 

@@ -39,9 +39,7 @@ import org.apache.log4j.Logger
 import scala.reflect.ClassTag
 
 object RequestChannel extends Logging {
-  val AllDone = new Request(processor = 1, connectionId = "2", Session(KafkaPrincipal.ANONYMOUS, InetAddress.getLocalHost),
-    startTimeNanos = 0, listenerName = new ListenerName(""), securityProtocol = SecurityProtocol.PLAINTEXT,
-    MemoryPool.NONE, shutdownReceive)
+  val AllDone = new Request(processor = 1, context = null, startTimeNanos = 0, MemoryPool.NONE, shutdownReceive)
   private val requestLogger = Logger.getLogger("kafka.request.logger")
 
   private def shutdownReceive: ByteBuffer = {
@@ -55,8 +53,10 @@ object RequestChannel extends Logging {
     val sanitizedUser = QuotaId.sanitize(principal.getName)
   }
 
-  class Request(val processor: Int, val connectionId: String, val session: Session, startTimeNanos: Long,
-                val listenerName: ListenerName, val securityProtocol: SecurityProtocol, memoryPool: MemoryPool,
+  class Request(val processor: Int,
+                val context: RequestContext,
+                val startTimeNanos: Long,
+                private val memoryPool: MemoryPool,
                 @volatile private var buffer: ByteBuffer) {
     // These need to be volatile because the readers are in the network thread and the writers are in the request
     // handler threads or the purgatory threads
@@ -67,10 +67,13 @@ object RequestChannel extends Logging {
     @volatile var apiRemoteCompleteTimeNanos = -1L
     @volatile var recordNetworkThreadTimeCallback: Option[Long => Unit] = None
 
-    val request: InboundRequest = BrokerRequestUtils.parseInboundRequest(buffer, new BrokerRequestContext(connectionId, session.principal))
+    val session = Session(context.principal, context.clientAddress)
+    val request: RequestAndSize = context.parseRequest(buffer)
 
-    def header: RequestHeader = request.header
-
+    def header: RequestHeader = context.header
+    def connectionId: String = context.connectionId
+    def listenerName: ListenerName = context.listenerName
+    def securityProtocol: SecurityProtocol = context.securityProtocol
     def sizeOfBodyInBytes: Int = request.sizeOfBodyInBytes
 
     //most request types are parsed entirely into objects at this point. for those we can release the underlying buffer.
@@ -169,6 +172,10 @@ object RequestChannel extends Logging {
         memoryPool.release(buffer)
         buffer = null
       }
+    }
+
+    def buildResponseSend(response: AbstractResponse): Send = {
+      context.buildResponse(response)
     }
 
     override def toString = s"Request(processor=$processor, " +

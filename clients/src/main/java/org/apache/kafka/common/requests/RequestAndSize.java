@@ -16,13 +16,11 @@
  */
 package org.apache.kafka.common.requests;
 
-public class InboundRequest {
-    public final RequestHeader header;
+public class RequestAndSize {
     public final AbstractRequest body;
     public final int sizeOfBodyInBytes;
 
-    public InboundRequest(RequestHeader header, AbstractRequest body, int sizeOfBodyInBytes) {
-        this.header = header;
+    public RequestAndSize(AbstractRequest body, int sizeOfBodyInBytes) {
         this.body = body;
         this.sizeOfBodyInBytes = sizeOfBodyInBytes;
     }

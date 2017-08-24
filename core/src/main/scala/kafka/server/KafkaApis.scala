@@ -1995,8 +1995,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   private def sendResponse(request: RequestChannel.Request, responseOpt: Option[AbstractResponse]): Unit = {
     responseOpt match {
       case Some(response) =>
-        val context = new BrokerRequestContext(request.connectionId, request.session.principal)
-        val responseSend = BrokerRequestUtils.buildOutboundSend(request.header, response, context)
+        val responseSend = request.buildResponseSend(response)
         requestChannel.sendResponse(new RequestChannel.Response(request, Some(responseSend), SendAction))
       case None =>
         requestChannel.sendResponse(new RequestChannel.Response(request, None, NoOpAction))

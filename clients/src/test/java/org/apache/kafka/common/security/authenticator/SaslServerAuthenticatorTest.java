@@ -19,8 +19,10 @@ package org.apache.kafka.common.security.authenticator;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.errors.IllegalSaslStateException;
 import org.apache.kafka.common.network.InvalidReceiveException;
+import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.network.TransportLayer;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.SecurityProtocol;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.security.JaasContext;
@@ -33,6 +35,7 @@ import org.junit.Test;
 
 import javax.security.auth.Subject;
 import java.io.IOException;
+import java.net.InetAddress;
 import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.HashMap;
@@ -113,7 +116,8 @@ public class SaslServerAuthenticatorTest {
         jaasConfig.addEntry("jaasContext", PlainLoginModule.class.getName(), new HashMap<String, Object>());
         JaasContext jaasContext = new JaasContext("jaasContext", JaasContext.Type.SERVER, jaasConfig);
         Subject subject = new Subject();
-        return new SaslServerAuthenticator("node", jaasContext, subject, null, "localhost", new CredentialCache());
+        return new SaslServerAuthenticator("node", jaasContext, subject, null, InetAddress.getLocalHost(),
+                new CredentialCache(), new ListenerName("ssl"), SecurityProtocol.SASL_SSL);
     }
 
 }

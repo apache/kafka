@@ -39,6 +39,7 @@ import org.apache.kafka.common.network.{ChannelBuilders, KafkaChannel, ListenerN
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.kafka.common.protocol.types.SchemaException
+import org.apache.kafka.common.requests.{RequestContext, RequestHeader}
 import org.apache.kafka.common.utils.{KafkaThread, Time}
 
 import scala.collection._
@@ -538,11 +539,12 @@ private[kafka] class Processor(val id: Int,
         val openChannel = selector.channel(receive.source)
         // Only methods that are safe to call on a disconnected channel should be invoked on 'openOrClosingChannel'.
         val openOrClosingChannel = if (openChannel != null) openChannel else selector.closingChannel(receive.source)
-        val session = RequestChannel.Session(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, openOrClosingChannel.principal.getName), openOrClosingChannel.socketAddress)
-
-        val req = new RequestChannel.Request(processor = id, connectionId = receive.source, session = session,
-          startTimeNanos = time.nanoseconds, listenerName = listenerName, securityProtocol = securityProtocol,
-          memoryPool, receive.payload)
+        val principal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, openOrClosingChannel.principal.getName)
+        val header = RequestHeader.parse(receive.payload)
+        val context = new RequestContext(header, receive.source, openOrClosingChannel.socketAddress, principal,
+          listenerName, securityProtocol)
+        val req = new RequestChannel.Request(processor = id, context = context,
+          startTimeNanos = time.nanoseconds, memoryPool, receive.payload)
         requestChannel.sendRequest(req)
         selector.mute(receive.source)
       } catch {

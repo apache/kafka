@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.protocol.Protocol;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -89,11 +90,16 @@ public class RequestHeader extends AbstractRequestResponse {
     }
 
     public static RequestHeader parse(ByteBuffer buffer) {
-        short apiKey = buffer.getShort();
-        short apiVersion = buffer.getShort();
-        Schema schema = Protocol.requestHeaderSchema(apiKey, apiVersion);
-        buffer.rewind();
-        return new RequestHeader(schema.read(buffer));
+        try {
+            short apiKey = buffer.getShort();
+            short apiVersion = buffer.getShort();
+            Schema schema = Protocol.requestHeaderSchema(apiKey, apiVersion);
+            buffer.rewind();
+            return new RequestHeader(schema.read(buffer));
+        } catch (Throwable  ex) {
+            throw new InvalidRequestException("Error parsing request header. Our best guess of the apiKey is: " +
+                    buffer.getShort(0), ex);
+        }
     }
 
     @Override
