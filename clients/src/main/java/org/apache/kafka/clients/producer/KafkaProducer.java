@@ -515,34 +515,42 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * Needs to be called before any other methods when the transactional.id is set in the configuration.
      *
      * This method does the following:
-     *   1. Ensures any transactions initiated by previous instances of the producer
-     *      are completed. If the previous instance had failed with a transaction in
+     *   1. Ensures any transactions initiated by previous instances of the producer with the same
+     *      transactional.id are completed. If the previous instance had failed with a transaction in
      *      progress, it will be aborted. If the last transaction had begun completion,
      *      but not yet finished, this method awaits its completion.
      *   2. Gets the internal producer id and epoch, used in all future transactional
      *      messages issued by the producer.
      *
-     * @throws IllegalStateException if the TransactionalId for the producer is not set
-     *         in the configuration.
+     * @throws IllegalStateException if no transactional.id has been configured
+     * @throws org.apache.kafka.common.errors.UnsupportedVersionException fatal error indicating the broker
+     *         does not support transactions (i.e. if its version is lower than 0.11.0.0)
+     * @throws org.apache.kafka.common.errors.AuthorizationException fatal error indicating that the configured
+     *         transactional.id is not authorized
+     * @throws KafkaException if the producer has encountered a previous fatal error or for any other unexpected error
      */
     public void initTransactions() {
-        if (transactionManager == null)
-            throw new IllegalStateException("Cannot call initTransactions without setting a transactional id.");
+        throwIfNoTransactionManager();
         TransactionalRequestResult result = transactionManager.initializeTransactions();
         sender.wakeup();
         result.await();
     }
 
     /**
-     * Should be called before the start of each new transaction.
+     * Should be called before the start of each new transaction. Note that prior to the first invocation
+     * of this method, you must invoke {@link #initTransactions()} exactly one time.
      *
-     * @throws ProducerFencedException if another producer is with the same
-     *         transactional.id is active.
+     * @throws IllegalStateException if no transactional.id has been configured or if {@link #initTransactions()}
+     *         has not yet been invoked
+     * @throws ProducerFencedException if another producer with the same transactional.id is active
+     * @throws org.apache.kafka.common.errors.UnsupportedVersionException fatal error indicating the broker
+     *         does not support transactions (i.e. if its version is lower than 0.11.0.0)
+     * @throws org.apache.kafka.common.errors.AuthorizationException fatal error indicating that the configured
+     *         transactional.id is not authorized
+     * @throws KafkaException if the producer has encountered a previous fatal error or for any other unexpected error
      */
     public void beginTransaction() throws ProducerFencedException {
-        // Set the transactional bit in the producer.
-        if (transactionManager == null)
-            throw new IllegalStateException("Cannot use transactional methods without enabling transactions");
+        throwIfNoTransactionManager();
         transactionManager.beginTransaction();
     }
 
@@ -554,13 +562,20 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * This method should be used when you need to batch consumed and produced messages
      * together, typically in a consume-transform-produce pattern.
      *
-     * @throws ProducerFencedException if another producer with the same
-     *         transactional.id is active.
+     * @throws IllegalStateException if no transactional.id has been configured or no transaction has been started
+     * @throws ProducerFencedException fatal error indicating another producer with the same transactional.id is active
+     * @throws org.apache.kafka.common.errors.UnsupportedVersionException fatal error indicating the broker
+     *         does not support transactions (i.e. if its version is lower than 0.11.0.0)
+     * @throws org.apache.kafka.common.errors.UnsupportedForMessageFormatException  fatal error indicating the message
+     *         format used for the offsets topic on the broker does not support transactions
+     * @throws org.apache.kafka.common.errors.AuthorizationException fatal error indicating that the configured
+     *         transactional.id is not authorized
+     * @throws KafkaException if the producer has encountered a previous fatal or abortable error, or for any
+     *         other unexpected error
      */
     public void sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets,
                                          String consumerGroupId) throws ProducerFencedException {
-        if (transactionManager == null)
-            throw new IllegalStateException("Cannot send offsets to transaction since transactions are not enabled.");
+        throwIfNoTransactionManager();
         TransactionalRequestResult result = transactionManager.sendOffsetsToTransaction(offsets, consumerGroupId);
         sender.wakeup();
         result.await();
@@ -573,12 +588,17 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * errors, this method will throw the last received exception immediately and the transaction will not be committed.
      * So all {@link #send(ProducerRecord)} calls in a transaction must succeed in order for this method to succeed.
      *
-     * @throws ProducerFencedException if another producer with the same
-     *         transactional.id is active.
+     * @throws IllegalStateException if no transactional.id has been configured or no transaction has been started
+     * @throws ProducerFencedException fatal error indicating another producer with the same transactional.id is active
+     * @throws org.apache.kafka.common.errors.UnsupportedVersionException fatal error indicating the broker
+     *         does not support transactions (i.e. if its version is lower than 0.11.0.0)
+     * @throws org.apache.kafka.common.errors.AuthorizationException fatal error indicating that the configured
+     *         transactional.id is not authorized
+     * @throws KafkaException if the producer has encountered a previous fatal or abortable error, or for any
+     *         other unexpected error
      */
     public void commitTransaction() throws ProducerFencedException {
-        if (transactionManager == null)
-            throw new IllegalStateException("Cannot commit transaction since transactions are not enabled");
+        throwIfNoTransactionManager();
         TransactionalRequestResult result = transactionManager.beginCommit();
         sender.wakeup();
         result.await();
@@ -589,12 +609,16 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * This call will throw an exception immediately if any prior {@link #send(ProducerRecord)} calls failed with a
      * {@link ProducerFencedException} or an instance of {@link org.apache.kafka.common.errors.AuthorizationException}.
      *
-     * @throws ProducerFencedException if another producer with the same
-     *         transactional.id is active.
+     * @throws IllegalStateException if no transactional.id has been configured or no transaction has been started
+     * @throws ProducerFencedException fatal error indicating another producer with the same transactional.id is active
+     * @throws org.apache.kafka.common.errors.UnsupportedVersionException fatal error indicating the broker
+     *         does not support transactions (i.e. if its version is lower than 0.11.0.0)
+     * @throws org.apache.kafka.common.errors.AuthorizationException fatal error indicating that the configured
+     *         transactional.id is not authorized
+     * @throws KafkaException if the producer has encountered a previous fatal error or for any other unexpected error
      */
     public void abortTransaction() throws ProducerFencedException {
-        if (transactionManager == null)
-            throw new IllegalStateException("Cannot abort transaction since transactions are not enabled.");
+        throwIfNoTransactionManager();
         TransactionalRequestResult result = transactionManager.beginAbort();
         sender.wakeup();
         result.await();
@@ -676,7 +700,25 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * <p>
      * Some transactional send errors cannot be resolved with a call to {@link #abortTransaction()}.  In particular,
      * if a transactional send finishes with a {@link ProducerFencedException}, a {@link org.apache.kafka.common.errors.OutOfOrderSequenceException},
-     * or any {@link org.apache.kafka.common.errors.AuthorizationException}, then the only option left is to call {@link #close()}.
+     * a {@link org.apache.kafka.common.errors.UnsupportedVersionException}, or an
+     * {@link org.apache.kafka.common.errors.AuthorizationException}, then the only option left is to call {@link #close()}.
+     * Fatal errors cause the producer to enter a defunct state in which future API calls will continue to raise
+     * the same underyling error wrapped in a new {@link KafkaException}.
+     * </p>
+     * <p>
+     * It is a similar picture when idempotence is enabled, but no <code>transactional.id</code> has been configured.
+     * In this case, {@link org.apache.kafka.common.errors.UnsupportedVersionException} and
+     * {@link org.apache.kafka.common.errors.AuthorizationException} are considered fatal errors. However,
+     * {@link ProducerFencedException} does not need to be handled. Additionally, it is possible to continue
+     * sending after receiving an {@link org.apache.kafka.common.errors.OutOfOrderSequenceException}, but doing so
+     * can result in out of order delivery of pending messages. To ensure proper ordering, you should close the
+     * producer and create a new instance.
+     * </p>
+     * <p>
+     * If the message format of the destination topic is not upgraded to 0.11.0.0, idempotent and transactional
+     * produce requests will fail with an {@link org.apache.kafka.common.errors.UnsupportedForMessageFormatException}
+     * error. If this is encountered during a transaction, it is possible to abort and continue. But note that future
+     * sends to the same topic will continue receiving the same exception until the topic is upgraded.
      * </p>
      * <p>
      * Note that callbacks will generally execute in the I/O thread of the producer and so should be reasonably fast or
@@ -688,6 +730,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * @param callback A user-supplied callback to execute when the record has been acknowledged by the server (null
      *        indicates no callback)
      *
+     * @throws IllegalStateException if a transactional.id has been configured and no transaction has been started
      * @throws InterruptException If the thread is interrupted while blocked
      * @throws SerializationException If the key or value are not valid objects given the configured serializers
      * @throws TimeoutException If the time taken for fetching metadata or allocating memory for the record has surpassed <code>max.block.ms</code>.
@@ -1038,6 +1081,12 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 partition :
                 partitioner.partition(
                         record.topic(), record.key(), serializedKey, record.value(), serializedValue, cluster);
+    }
+
+    private void throwIfNoTransactionManager() {
+        if (transactionManager == null)
+            throw new IllegalStateException("Cannot use transactional methods without enabling transactions " +
+                    "by setting the " + ProducerConfig.TRANSACTIONAL_ID_CONFIG + " configuration property");
     }
 
     private static class ClusterAndWaitTime {

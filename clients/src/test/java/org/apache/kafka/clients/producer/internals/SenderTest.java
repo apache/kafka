@@ -30,6 +30,8 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.errors.UnsupportedForMessageFormatException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.MetricConfig;
@@ -72,10 +74,10 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
-import static org.junit.Assert.assertNull;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -492,8 +494,74 @@ public class SenderTest {
             assertTrue(e.getCause() instanceof ClusterAuthorizationException);
         }
 
-        // cluster authorization is a fatal error for the producer
+        // cluster authorization errors are fatal, so we should continue seeing it on future sends
+        assertTrue(transactionManager.hasFatalError());
         assertSendFailure(ClusterAuthorizationException.class);
+    }
+
+    @Test
+    public void testUnsupportedForMessageFormatInProduceRequest() throws Exception {
+        final long producerId = 343434L;
+        TransactionManager transactionManager = new TransactionManager();
+        setupWithTransactionState(transactionManager);
+
+        client.setNode(new Node(1, "localhost", 33343));
+        prepareAndReceiveInitProducerId(producerId, Errors.NONE);
+        assertTrue(transactionManager.hasProducerId());
+
+        Future<RecordMetadata> future = accumulator.append(tp0, time.milliseconds(), "key".getBytes(), "value".getBytes(),
+                null, null, MAX_BLOCK_TIMEOUT).future;
+        client.prepareResponse(new MockClient.RequestMatcher() {
+            @Override
+            public boolean matches(AbstractRequest body) {
+                return body instanceof ProduceRequest && ((ProduceRequest) body).isIdempotent();
+            }
+        }, produceResponse(tp0, -1, Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT, 0));
+
+        sender.run(time.milliseconds());
+        assertTrue(future.isDone());
+        try {
+            future.get();
+            fail("Future should have raised UnsupportedForMessageFormat");
+        } catch (ExecutionException e) {
+            assertTrue(e.getCause() instanceof UnsupportedForMessageFormatException);
+        }
+
+        // unsupported for message format is not a fatal error
+        assertFalse(transactionManager.hasError());
+    }
+
+    @Test
+    public void testUnsupportedVersionInProduceRequest() throws Exception {
+        final long producerId = 343434L;
+        TransactionManager transactionManager = new TransactionManager();
+        setupWithTransactionState(transactionManager);
+
+        client.setNode(new Node(1, "localhost", 33343));
+        prepareAndReceiveInitProducerId(producerId, Errors.NONE);
+        assertTrue(transactionManager.hasProducerId());
+
+        Future<RecordMetadata> future = accumulator.append(tp0, time.milliseconds(), "key".getBytes(), "value".getBytes(),
+                null, null, MAX_BLOCK_TIMEOUT).future;
+        client.prepareUnsupportedVersionResponse(new MockClient.RequestMatcher() {
+            @Override
+            public boolean matches(AbstractRequest body) {
+                return body instanceof ProduceRequest && ((ProduceRequest) body).isIdempotent();
+            }
+        });
+
+        sender.run(time.milliseconds());
+        assertTrue(future.isDone());
+        try {
+            future.get();
+            fail("Future should have raised UnsupportedVersionException");
+        } catch (ExecutionException e) {
+            assertTrue(e.getCause() instanceof UnsupportedVersionException);
+        }
+
+        // unsupported version errors are fatal, so we should continue seeing it on future sends
+        assertTrue(transactionManager.hasFatalError());
+        assertSendFailure(UnsupportedVersionException.class);
     }
 
     @Test
