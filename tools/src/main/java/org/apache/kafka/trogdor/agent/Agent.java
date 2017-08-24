@@ -132,10 +132,6 @@ public final class Agent {
                         Iterator<Fault> pending = pendingFaults.iterateByStart();
                         while (pending.hasNext()) {
                             Fault fault = pending.next();
-                            if (now < fault.spec().startMs()) {
-                                nextWakeMs = Math.min(nextWakeMs, fault.spec().startMs());
-                                break;
-                            }
                             toStart.add(fault);
                             long endMs = fault.spec().startMs() + fault.spec().durationMs();
                             nextWakeMs = Math.min(nextWakeMs, endMs);

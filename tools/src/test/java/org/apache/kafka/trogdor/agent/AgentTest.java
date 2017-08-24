@@ -133,28 +133,28 @@ public class AgentTest {
 
         final NoOpFaultSpec fooSpec = new NoOpFaultSpec(10, 2);
         client.putFault(new CreateAgentFaultRequest("foo", fooSpec));
-        new ExpectedFaults().addFault("foo", FaultState.PENDING).waitFor(client);
+        new ExpectedFaults().addFault("foo", FaultState.RUNNING).waitFor(client);
 
         final NoOpFaultSpec barSpec = new NoOpFaultSpec(20, 3);
         client.putFault(new CreateAgentFaultRequest("bar", barSpec));
         time.sleep(11);
         new ExpectedFaults().
             addFault("foo", FaultState.RUNNING).
-            addFault("bar", FaultState.PENDING).
+            addFault("bar", FaultState.RUNNING).
             waitFor(client);
 
         final NoOpFaultSpec bazSpec = new NoOpFaultSpec(1, 11);
         client.putFault(new CreateAgentFaultRequest("baz", bazSpec));
         new ExpectedFaults().
             addFault("foo", FaultState.RUNNING).
-            addFault("bar", FaultState.PENDING).
+            addFault("bar", FaultState.RUNNING).
             addFault("baz", FaultState.RUNNING).
             waitFor(client);
 
         time.sleep(2);
         new ExpectedFaults().
             addFault("foo", FaultState.DONE).
-            addFault("bar", FaultState.PENDING).
+            addFault("bar", FaultState.RUNNING).
             addFault("baz", FaultState.DONE).
             waitFor(client);
 
