@@ -41,6 +41,7 @@ import java.util.List;
 import static org.apache.kafka.streams.state.internals.ThreadCacheTest.memoryCacheEntrySize;
 import static org.apache.kafka.test.StreamsTestUtils.toList;
 import static org.apache.kafka.test.StreamsTestUtils.verifyKeyValueList;
+import static org.apache.kafka.test.StreamsTestUtils.verifyWindowedKey;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertArrayEquals;
@@ -126,14 +127,6 @@ public class CachingWindowStoreTest {
         verifyWindowedKey(iterator.next(), new Windowed<>(bytesKey("b"), new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE)), "b");
         assertFalse(iterator.hasNext());
         assertEquals(2, cache.size());
-    }
-
-    private void verifyWindowedKey(final KeyValue<Windowed<Bytes>, byte[]> actual,
-                                   final Windowed<Bytes> expectedKey,
-                                   final String expectedValue) {
-        assertThat(actual.key.window(), equalTo(expectedKey.window()));
-        assertThat(actual.key.key(), equalTo(expectedKey.key()));
-        assertThat(actual.value, equalTo(bytesValue(expectedValue)));
     }
 
 
