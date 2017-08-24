@@ -31,6 +31,8 @@ import org.apache.kafka.common.errors.OutOfOrderSequenceException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.TransactionalIdAuthorizationException;
+import org.apache.kafka.common.errors.UnsupportedForMessageFormatException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
@@ -636,6 +638,81 @@ public class TransactionManagerTest {
         sender.run(time.milliseconds());  // find coordinator
         sender.run(time.milliseconds());
         assertEquals(brokerNode, transactionManager.coordinator(CoordinatorType.TRANSACTION));
+    }
+
+    @Test
+    public void testUnsupportedFindCoordinator() {
+        transactionManager.initializeTransactions();
+        client.prepareUnsupportedVersionResponse(new MockClient.RequestMatcher() {
+            @Override
+            public boolean matches(AbstractRequest body) {
+                FindCoordinatorRequest findCoordinatorRequest = (FindCoordinatorRequest) body;
+                assertEquals(findCoordinatorRequest.coordinatorType(), CoordinatorType.TRANSACTION);
+                assertEquals(findCoordinatorRequest.coordinatorKey(), transactionalId);
+                return true;
+            }
+        });
+
+        sender.run(time.milliseconds()); // InitProducerRequest is queued
+        sender.run(time.milliseconds()); // FindCoordinator is queued after peeking InitProducerRequest
+        assertTrue(transactionManager.hasFatalError());
+        assertTrue(transactionManager.lastError() instanceof UnsupportedVersionException);
+    }
+
+    @Test
+    public void testUnsupportedInitTransactions() {
+        transactionManager.initializeTransactions();
+        prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.TRANSACTION, transactionalId);
+        sender.run(time.milliseconds()); // InitProducerRequest is queued
+        sender.run(time.milliseconds()); // FindCoordinator is queued after peeking InitProducerRequest
+
+        assertFalse(transactionManager.hasError());
+        assertNotNull(transactionManager.coordinator(CoordinatorType.TRANSACTION));
+
+        client.prepareUnsupportedVersionResponse(new MockClient.RequestMatcher() {
+            @Override
+            public boolean matches(AbstractRequest body) {
+                InitProducerIdRequest initProducerIdRequest = (InitProducerIdRequest) body;
+                assertEquals(initProducerIdRequest.transactionalId(), transactionalId);
+                assertEquals(initProducerIdRequest.transactionTimeoutMs(), transactionTimeoutMs);
+                return true;
+            }
+        });
+
+        sender.run(time.milliseconds()); // InitProducerRequest is dequeued
+        assertTrue(transactionManager.hasFatalError());
+        assertTrue(transactionManager.lastError() instanceof UnsupportedVersionException);
+    }
+
+    @Test
+    public void testUnsupportedForMessageFormatInTxnOffsetCommit() {
+        final String consumerGroupId = "consumer";
+        final long pid = 13131L;
+        final short epoch = 1;
+        final TopicPartition tp = new TopicPartition("foo", 0);
+
+        doInitTransactions(pid, epoch);
+
+        transactionManager.beginTransaction();
+        TransactionalRequestResult sendOffsetsResult = transactionManager.sendOffsetsToTransaction(
+                singletonMap(tp, new OffsetAndMetadata(39L)), consumerGroupId);
+
+        prepareAddOffsetsToTxnResponse(Errors.NONE, consumerGroupId, pid, epoch);
+        sender.run(time.milliseconds());  // AddOffsetsToTxn Handled, TxnOffsetCommit Enqueued
+        sender.run(time.milliseconds());  // FindCoordinator Enqueued
+
+        prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.GROUP, consumerGroupId);
+        sender.run(time.milliseconds());  // FindCoordinator Returned
+
+        prepareTxnOffsetCommitResponse(consumerGroupId, pid, epoch, singletonMap(tp, Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT));
+        sender.run(time.milliseconds());  // TxnOffsetCommit Handled
+
+        assertTrue(transactionManager.hasError());
+        assertTrue(transactionManager.lastError() instanceof UnsupportedForMessageFormatException);
+        assertTrue(sendOffsetsResult.isCompleted());
+        assertFalse(sendOffsetsResult.isSuccessful());
+        assertTrue(sendOffsetsResult.error() instanceof UnsupportedForMessageFormatException);
+        assertFatalError(UnsupportedForMessageFormatException.class);
     }
 
     @Test
