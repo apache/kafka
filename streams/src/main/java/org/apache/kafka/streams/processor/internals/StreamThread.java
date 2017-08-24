@@ -206,12 +206,11 @@ public class StreamThread extends Thread implements ThreadDataProvider {
     }
 
     public synchronized boolean isRunningAndNotRebalancing() {
-        synchronized (stateLock) {
-            return state == State.RUNNING;
-        }
+        // we do not need to grab stateLock since it is a single read
+        return state == State.RUNNING;
     }
 
-    private synchronized boolean isRunning() {
+    public synchronized boolean isRunning() {
         synchronized (stateLock) {
             return state == State.RUNNING || state == State.PARTITIONS_REVOKED || state == State.PARTITIONS_ASSIGNED;
         }

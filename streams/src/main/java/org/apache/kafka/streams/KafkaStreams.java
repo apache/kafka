@@ -222,8 +222,8 @@ public class KafkaStreams {
                 // when the state is already in PENDING_SHUTDOWN, all other transitions than NOT_RUNNING (due to thread dying) will be
                 // refused but we do not throw exception here, to allow appropriate error handling
                 return false;
-            } else if (state == State.NOT_RUNNING && newState == State.PENDING_SHUTDOWN) {
-                // when the state is already in NOT_RUNNING, its transition to PENDING_SHUTDOWN (due to consecutive close calls)
+            } else if (state == State.NOT_RUNNING && (newState == State.PENDING_SHUTDOWN || newState == State.NOT_RUNNING)) {
+                // when the state is already in NOT_RUNNING, its transition to PENDING_SHUTDOWN or NOT_RUNNING (due to consecutive close calls)
                 // will be refused but we do not throw exception here, to allow idempotent close calls
                 return false;
             } else if (!state.isValidTransition(newState)) {
@@ -695,71 +695,93 @@ public class KafkaStreams {
      * Note that this method must not be called in the {@code onChange} callback of {@link StateListener}.
      */
     public synchronized boolean close(final long timeout, final TimeUnit timeUnit) {
-        log.debug("{} Stopping Streams client", logPrefix);
+        log.debug("{} Stopping Streams client with timeoutMillis = {} ms.", logPrefix, timeUnit.toMillis(timeout));
 
         if (!setState(State.PENDING_SHUTDOWN)) {
             // if transition failed, it means it was either in PENDING_SHUTDOWN
-            // or NOT_RUNNING already; return immediately in this case
-            log.info("{} Already stopped, do not proceed with the shutdown process", logPrefix);
+            // or NOT_RUNNING already; just check that all threads have been stopped
+            log.info("{} Already in the pending shutdown state, wait to complete shutdown within timeout", logPrefix);
 
+            long waitMs = TimeUnit.MILLISECONDS.convert(timeout, timeUnit);
+            long begin = System.currentTimeMillis();
+            long delay = 50L;
+
+            while (state != State.NOT_RUNNING) {
+                long elapsedMs = System.currentTimeMillis() - begin;
+                if (waitMs > elapsedMs) {
+                    long maxWait = waitMs - elapsedMs;
+                    delay = maxWait / 2 > delay ? delay * 2 : maxWait;
+                    try {
+                        Thread.sleep(delay);
+                    } catch (final InterruptedException e) {
+                        Thread.interrupted();
+                    }
+                } else {
+                    log.info("{} Streams client did not stop completely within the timeout", logPrefix);
+                    return false;
+                }
+            }
+
+            log.info("{} Streams client stopped completely", logPrefix);
             return true;
         } else {
             stateDirCleaner.shutdownNow();
+
+            // notify all the threads to stop; avoid deadlocks by stopping any
+            // further state reports from the thread since we're shutting down
+            for (final StreamThread thread : threads) {
+                thread.setStateListener(null);
+                thread.shutdown();
+            }
+            if (globalStreamThread != null) {
+                globalStreamThread.setStateListener(null);
+                globalStreamThread.shutdown();
+            }
+
+            // wait for all threads to join in a separate thread;
             // save the current thread so that if it is a stream thread
             // we don't attempt to join it and cause a deadlock
-            final Thread shutdown = new Thread(new Runnable() {
+            final Thread shutdownThread = new Thread(new Runnable() {
                 @Override
                 public void run() {
-                    // signal the threads to stop and wait
-                    for (final StreamThread thread : threads) {
-                        // avoid deadlocks by stopping any further state reports
-                        // from the thread since we're shutting down
-                        thread.setStateListener(null);
-                        thread.shutdown();
-                    }
-                    closeGlobalStreamThread();
                     for (final StreamThread thread : threads) {
                         try {
-                            thread.join();
+                            if (!thread.isRunning()) {
+                                thread.join();
+                            }
                         } catch (final InterruptedException ex) {
                             Thread.interrupted();
                         }
                     }
+                    if (globalStreamThread != null && !globalStreamThread.stillRunning()) {
+                        try {
+                            globalStreamThread.join();
+                        } catch (final InterruptedException e) {
+                            Thread.interrupted();
+                        }
+                        globalStreamThread = null;
+                    }
 
                     metrics.close();
+                    setState(State.NOT_RUNNING);
                 }
             }, "kafka-streams-close-thread");
 
-            // shutdown in a separate thread
-            shutdown.setDaemon(true);
-            shutdown.start();
+            shutdownThread.setDaemon(true);
+            shutdownThread.start();
             try {
-                shutdown.join(TimeUnit.MILLISECONDS.convert(timeout, timeUnit));
+                shutdownThread.join(TimeUnit.MILLISECONDS.convert(timeout, timeUnit));
             } catch (final InterruptedException e) {
                 Thread.interrupted();
             }
 
-            setState(State.NOT_RUNNING);
-            log.info("{} Stopped Streams client completely", logPrefix);
-
-            return !shutdown.isAlive();
-        }
-    }
-
-    private void closeGlobalStreamThread() {
-        if (globalStreamThread != null) {
-            // avoid deadlocks by stopping any further state reports
-            // from the thread since we're shutting down
-            globalStreamThread.setStateListener(null);
-            globalStreamThread.shutdown();
-            if (!globalStreamThread.stillRunning()) {
-                try {
-                    globalStreamThread.join();
-                } catch (final InterruptedException e) {
-                    Thread.interrupted();
-                }
+            if (shutdownThread.isAlive()) {
+                log.info("{} Streams client cannot stop completely within the timeout", logPrefix);
+                return false;
+            } else {
+                log.info("{} Streams client stopped completely", logPrefix);
+                return true;
             }
-            globalStreamThread = null;
         }
     }
 
