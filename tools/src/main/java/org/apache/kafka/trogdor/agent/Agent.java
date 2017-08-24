@@ -26,7 +26,6 @@ import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.trogdor.common.Node;
 import org.apache.kafka.trogdor.common.Platform;
-import org.apache.kafka.trogdor.common.SignalLogger;
 import org.apache.kafka.trogdor.fault.Fault;
 import org.apache.kafka.trogdor.fault.FaultSet;
 import org.apache.kafka.trogdor.fault.FaultSpec;
@@ -327,13 +326,18 @@ public final class Agent {
         String configPath = res.getString("config");
         String nodeName = res.getString("node_name");
 
-        SignalLogger.register();
         Platform platform = Platform.Config.parse(nodeName, configPath);
         JsonRestServer restServer =
             new JsonRestServer(Node.Util.getTrogdorAgentPort(platform.curNode()));
         AgentRestResource resource = new AgentRestResource();
         Agent agent = new Agent(platform, Time.SYSTEM, restServer, resource);
         restServer.start(resource);
+        Runtime.getRuntime().addShutdownHook(new Thread() {
+            @Override
+            public void run() {
+                log.error("Agent shutting down...");
+            }
+        });
         agent.waitForShutdown();
     }
 };
