@@ -46,7 +46,13 @@ class KafkaRequestHandler(id: Int,
       // time_window is independent of the number of threads, each recorded idle
       // time should be discounted by # threads.
       val startSelectTime = time.nanoseconds
-      requestChannel.receiveRequest(300) match {
+
+      val req = requestChannel.receiveRequest(300)
+      val endTime = time.nanoseconds
+      val idleTime = endTime - startSelectTime
+      aggregateIdleMeter.mark(idleTime / totalHandlerThreads)
+
+      req match {
         case RequestChannel.ShutdownRequest =>
           debug("Kafka request handler %d on broker %d received shut down command".format(id, brokerId))
           latch.countDown()
@@ -54,11 +60,7 @@ class KafkaRequestHandler(id: Int,
 
         case request: RequestChannel.Request =>
           try {
-            val endTime = time.nanoseconds
             request.requestDequeueTimeNanos = endTime
-            val idleTime = endTime - startSelectTime
-            aggregateIdleMeter.mark(idleTime / totalHandlerThreads)
-
             trace("Kafka request handler %d on broker %d handling request %s".format(id, brokerId, request))
             apis.handle(request)
           } catch {

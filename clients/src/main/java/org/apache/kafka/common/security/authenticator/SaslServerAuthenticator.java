@@ -20,6 +20,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.IllegalSaslStateException;
+import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.UnsupportedSaslMechanismException;
 import org.apache.kafka.common.network.Authenticator;
 import org.apache.kafka.common.network.ListenerName;
@@ -31,12 +32,11 @@ import org.apache.kafka.common.network.TransportLayer;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.SecurityProtocol;
-import org.apache.kafka.common.protocol.types.SchemaException;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.ApiVersionsRequest;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
-import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.requests.RequestAndSize;
+import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.requests.SaslHandshakeRequest;
 import org.apache.kafka.common.requests.SaslHandshakeResponse;
@@ -311,7 +311,7 @@ public class SaslServerAuthenticator implements Authenticator {
         try {
             ByteBuffer requestBuffer = ByteBuffer.wrap(requestBytes);
             RequestHeader header = RequestHeader.parse(requestBuffer);
-            ApiKeys apiKey = ApiKeys.forId(header.apiKey());
+            ApiKeys apiKey = header.apiKey();
 
             // A valid Kafka request header was received. SASL authentication tokens are now expected only
             // following a SaslHandshakeRequest since this is not a GSSAPI client token from a Kafka 0.9.0.x client.
@@ -332,7 +332,7 @@ public class SaslServerAuthenticator implements Authenticator {
                 handleApiVersionsRequest(requestContext, (ApiVersionsRequest) requestAndSize.request);
             else
                 clientMechanism = handleHandshakeRequest(requestContext, (SaslHandshakeRequest) requestAndSize.request);
-        } catch (SchemaException | IllegalArgumentException e) {
+        } catch (InvalidRequestException e) {
             if (saslState == SaslState.GSSAPI_OR_HANDSHAKE_REQUEST) {
                 // SchemaException is thrown if the request is not in Kafka format. IllegalArgumentException is thrown
                 // if the API key is invalid. For compatibility with 0.9.0.x where the first packet is a GSSAPI token

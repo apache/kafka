@@ -58,15 +58,18 @@ public class RequestContext {
             ApiVersionsRequest apiVersionsRequest = new ApiVersionsRequest((short) 0, header.apiVersion());
             return new RequestAndSize(apiVersionsRequest, 0);
         } else {
+            ApiKeys apiKey = header.apiKey();
             try {
-                ApiKeys apiKey = ApiKeys.forId(header.apiKey());
                 short apiVersion = header.apiVersion();
                 Struct struct = apiKey.parseRequest(apiVersion, buffer);
                 AbstractRequest body = AbstractRequest.parseRequest(apiKey, apiVersion, struct);
                 return new RequestAndSize(body, struct.sizeOf());
             } catch (Throwable ex) {
-                throw new InvalidRequestException("Error getting request for apiKey: " + header.apiKey() +
-                        " and apiVersion: " + header.apiVersion() + " connectionId: " + connectionId, ex);
+                throw new InvalidRequestException("Error getting request for apiKey: " + apiKey +
+                        ", apiVersion: " + header.apiVersion() +
+                        ", connectionId: " + connectionId +
+                        ", listenerName: " + listenerName +
+                        ", principal: " + principal, ex);
             }
         }
     }
@@ -83,7 +86,7 @@ public class RequestContext {
     }
 
     private boolean isUnsupportedApiVersionsRequest() {
-        return header.apiKey() == API_VERSIONS.id && !Protocol.apiVersionSupported(API_VERSIONS.id, header.apiVersion());
+        return header.apiKey() == API_VERSIONS && !Protocol.apiVersionSupported(API_VERSIONS.id, header.apiVersion());
     }
 
 }

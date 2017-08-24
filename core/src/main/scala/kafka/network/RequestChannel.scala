@@ -23,7 +23,7 @@ import java.util.concurrent._
 
 import com.yammer.metrics.core.Gauge
 import kafka.metrics.KafkaMetricsGroup
-import kafka.network.RequestChannel.{ShutdownRequest, ChannelRequest}
+import kafka.network.RequestChannel.{ShutdownRequest, BaseRequest}
 import kafka.server.QuotaId
 import kafka.utils.{Logging, NotNothing}
 import org.apache.kafka.common.memory.MemoryPool
@@ -39,8 +39,8 @@ import scala.reflect.ClassTag
 object RequestChannel extends Logging {
   private val requestLogger = Logger.getLogger("kafka.request.logger")
 
-  sealed trait ChannelRequest
-  case object ShutdownRequest extends ChannelRequest
+  sealed trait BaseRequest
+  case object ShutdownRequest extends BaseRequest
 
   case class Session(principal: KafkaPrincipal, clientAddress: InetAddress) {
     val sanitizedUser = QuotaId.sanitize(principal.getName)
@@ -49,8 +49,8 @@ object RequestChannel extends Logging {
   class Request(val processor: Int,
                 val context: RequestContext,
                 val startTimeNanos: Long,
-                private val memoryPool: MemoryPool,
-                @volatile private var buffer: ByteBuffer) extends ChannelRequest {
+                val memoryPool: MemoryPool,
+                @volatile private var buffer: ByteBuffer) extends BaseRequest {
     // These need to be volatile because the readers are in the network thread and the writers are in the request
     // handler threads or the purgatory threads
     @volatile var requestDequeueTimeNanos = -1L
@@ -61,32 +61,29 @@ object RequestChannel extends Logging {
     @volatile var recordNetworkThreadTimeCallback: Option[Long => Unit] = None
 
     val session = Session(context.principal, context.clientAddress)
-    val request: RequestAndSize = context.parseRequest(buffer)
+    private val bodyAndSize: RequestAndSize = context.parseRequest(buffer)
 
     def header: RequestHeader = context.header
-    def connectionId: String = context.connectionId
-    def listenerName: ListenerName = context.listenerName
-    def securityProtocol: SecurityProtocol = context.securityProtocol
-    def sizeOfBodyInBytes: Int = request.size
+    def sizeOfBodyInBytes: Int = bodyAndSize.size
 
     //most request types are parsed entirely into objects at this point. for those we can release the underlying buffer.
     //some (like produce, or any time the schema contains fields of types BYTES or NULLABLE_BYTES) retain a reference
     //to the buffer. for those requests we cannot release the buffer early, but only when request processing is done.
-    if (!Protocol.requiresDelayedDeallocation(header.apiKey)) {
+    if (!Protocol.requiresDelayedDeallocation(header.apiKey.id)) {
       releaseBuffer()
     }
 
     def requestDesc(details: Boolean): String = s"$header -- ${body[AbstractRequest].toString(details)}"
 
     def body[T <: AbstractRequest](implicit classTag: ClassTag[T], nn: NotNothing[T]): T = {
-      request.request match {
+      bodyAndSize.request match {
         case r: T => r
         case r =>
           throw new ClassCastException(s"Expected request with type ${classTag.runtimeClass}, but found ${r.getClass}")
       }
     }
 
-    trace("Processor %d received request : %s".format(processor, requestDesc(true)))
+    trace(s"Processor $processor received request: ${requestDesc(true)}")
 
     def requestThreadTimeNanos = {
       if (apiLocalCompleteTimeNanos == -1L) apiLocalCompleteTimeNanos = Time.SYSTEM.nanoseconds
@@ -116,7 +113,7 @@ object RequestChannel extends Logging {
       val responseSendTime = nanosToMs(endTimeNanos - responseDequeueTimeNanos)
       val totalTime = nanosToMs(endTimeNanos - startTimeNanos)
       val fetchMetricNames =
-        if (header.apiKey == ApiKeys.FETCH.id) {
+        if (header.apiKey == ApiKeys.FETCH) {
           val isFromFollower = body[FetchRequest].isFromFollower
           Seq(
             if (isFromFollower) RequestMetrics.followFetchMetricName
@@ -124,7 +121,7 @@ object RequestChannel extends Logging {
           )
         }
         else Seq.empty
-      val metricNames = fetchMetricNames :+ ApiKeys.forId(header.apiKey).name
+      val metricNames = fetchMetricNames :+ header.apiKey.name
       metricNames.foreach { metricName =>
         val m = RequestMetrics.metricsMap(metricName)
         m.requestRate.mark()
@@ -155,8 +152,18 @@ object RequestChannel extends Logging {
         val apiThrottleTimeMs = nanosToMs(responseCompleteTimeNanos - apiRemoteCompleteTimeNanos)
         val responseQueueTimeMs = nanosToMs(responseDequeueTimeNanos - responseCompleteTimeNanos)
         val responseSendTimeMs = nanosToMs(endTimeNanos - responseDequeueTimeNanos)
-        requestLogger.debug("Completed request:%s from connection %s;totalTime:%f,requestQueueTime:%f,localTime:%f,remoteTime:%f,throttleTime:%f,responseQueueTime:%f,sendTime:%f,securityProtocol:%s,principal:%s,listener:%s"
-          .format(requestDesc(detailsEnabled), connectionId, totalTimeMs, requestQueueTimeMs, apiLocalTimeMs, apiRemoteTimeMs, apiThrottleTimeMs, responseQueueTimeMs, responseSendTimeMs, securityProtocol, session.principal, listenerName.value))
+
+        requestLogger.debug(s"Completed request:${requestDesc(detailsEnabled)} from connection ${context.connectionId};" +
+          s"totalTime:$totalTimeMs," +
+          s"requestQueueTime:$requestQueueTimeMs," +
+          s"localTime:$apiLocalTimeMs," +
+          s"remoteTime:$apiRemoteTimeMs," +
+          s"throttleTime:$apiThrottleTimeMs," +
+          s"responseQueueTime:$responseQueueTimeMs," +
+          s"sendTime:$responseSendTimeMs," +
+          s"securityProtocol:${context.securityProtocol}," +
+          s"principal:${context.principal}," +
+          s"listener:${context.listenerName}")
       }
     }
 
@@ -167,15 +174,11 @@ object RequestChannel extends Logging {
       }
     }
 
-    def buildResponseSend(response: AbstractResponse): Send = {
-      context.buildResponse(response)
-    }
-
     override def toString = s"Request(processor=$processor, " +
-      s"connectionId=$connectionId, " +
+      s"connectionId=${context.connectionId}, " +
       s"session=$session, " +
-      s"listenerName=$listenerName, " +
-      s"securityProtocol=$securityProtocol, " +
+      s"listenerName=${context.listenerName}, " +
+      s"securityProtocol=${context.securityProtocol}, " +
       s"buffer=$buffer)"
 
   }
@@ -197,7 +200,7 @@ object RequestChannel extends Logging {
 
 class RequestChannel(val numProcessors: Int, val queueSize: Int) extends KafkaMetricsGroup {
   private var responseListeners: List[(Int) => Unit] = Nil
-  private val requestQueue = new ArrayBlockingQueue[ChannelRequest](queueSize)
+  private val requestQueue = new ArrayBlockingQueue[BaseRequest](queueSize)
   private val responseQueues = new Array[BlockingQueue[RequestChannel.Response]](numProcessors)
   for(i <- 0 until numProcessors)
     responseQueues(i) = new LinkedBlockingQueue[RequestChannel.Response]()
@@ -231,8 +234,8 @@ class RequestChannel(val numProcessors: Int, val queueSize: Int) extends KafkaMe
   def sendResponse(response: RequestChannel.Response) {
     if (isTraceEnabled) {
       val requestHeader = response.request.header
-      val apiKey = ApiKeys.forId(requestHeader.apiKey)
-      trace(s"Sending $apiKey response to client ${requestHeader.clientId} of ${response.responseSend.size} bytes.")
+      trace(s"Sending ${requestHeader.apiKey} response to client ${requestHeader.clientId} of " +
+        s"${response.responseSend.size} bytes.")
     }
 
     responseQueues(response.processor).put(response)
@@ -241,11 +244,11 @@ class RequestChannel(val numProcessors: Int, val queueSize: Int) extends KafkaMe
   }
 
   /** Get the next request or block until specified time has elapsed */
-  def receiveRequest(timeout: Long): RequestChannel.ChannelRequest =
+  def receiveRequest(timeout: Long): RequestChannel.BaseRequest =
     requestQueue.poll(timeout, TimeUnit.MILLISECONDS)
 
   /** Get the next request or block until there is one */
-  def receiveRequest(): RequestChannel.ChannelRequest =
+  def receiveRequest(): RequestChannel.BaseRequest =
     requestQueue.take()
 
   /** Get a response for the given processor if there is one */

@@ -456,8 +456,7 @@ public class RequestResponseTest {
     @Test
     public void verifyFetchResponseFullWrite() throws Exception {
         FetchResponse fetchResponse = createFetchResponse();
-        RequestHeader header = new RequestHeader(ApiKeys.FETCH.id, ApiKeys.FETCH.latestVersion(),
-                "client", 15);
+        RequestHeader header = new RequestHeader(ApiKeys.FETCH, ApiKeys.FETCH.latestVersion(), "client", 15);
 
         Send send = fetchResponse.toSend("1", header);
         ByteBufferChannel channel = new ByteBufferChannel(send.size());

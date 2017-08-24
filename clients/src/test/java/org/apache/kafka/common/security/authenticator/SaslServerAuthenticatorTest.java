@@ -78,7 +78,7 @@ public class SaslServerAuthenticatorTest {
         Map<String, ?> configs = Collections.singletonMap(SaslConfigs.SASL_ENABLED_MECHANISMS,
                 Collections.singletonList(SCRAM_SHA_256.mechanismName()));
 
-        final RequestHeader header = new RequestHeader(ApiKeys.METADATA.id, (short) 0, "clientId", 13243);
+        final RequestHeader header = new RequestHeader(ApiKeys.METADATA, (short) 0, "clientId", 13243);
         final Struct headerStruct = header.toStruct();
 
         final Capture<ByteBuffer> size = EasyMock.newCapture();

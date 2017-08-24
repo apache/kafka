@@ -17,6 +17,7 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.errors.InvalidRequestException;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Protocol;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -32,13 +33,17 @@ public class RequestHeader extends AbstractRequestResponse {
     private static final String CLIENT_ID_FIELD_NAME = "client_id";
     private static final String CORRELATION_ID_FIELD_NAME = "correlation_id";
 
-    private final short apiKey;
+    private final ApiKeys apiKey;
     private final short apiVersion;
     private final String clientId;
     private final int correlationId;
 
     public RequestHeader(Struct struct) {
-        apiKey = struct.getShort(API_KEY_FIELD_NAME);
+        short apiKey = struct.getShort(API_KEY_FIELD_NAME);
+        if (!ApiKeys.hasId(apiKey))
+            throw new InvalidRequestException("Unknown API key " + apiKey);
+
+        this.apiKey = ApiKeys.forId(apiKey);
         apiVersion = struct.getShort(API_VERSION_FIELD_NAME);
 
         // only v0 of the controlled shutdown request is missing the clientId
@@ -49,7 +54,7 @@ public class RequestHeader extends AbstractRequestResponse {
         correlationId = struct.getInt(CORRELATION_ID_FIELD_NAME);
     }
 
-    public RequestHeader(short apiKey, short version, String clientId, int correlation) {
+    public RequestHeader(ApiKeys apiKey, short version, String clientId, int correlation) {
         this.apiKey = apiKey;
         this.apiVersion = version;
         this.clientId = clientId;
@@ -57,9 +62,9 @@ public class RequestHeader extends AbstractRequestResponse {
     }
 
     public Struct toStruct() {
-        Schema schema = Protocol.requestHeaderSchema(apiKey, apiVersion);
+        Schema schema = Protocol.requestHeaderSchema(apiKey.id, apiVersion);
         Struct struct = new Struct(schema);
-        struct.set(API_KEY_FIELD_NAME, apiKey);
+        struct.set(API_KEY_FIELD_NAME, apiKey.id);
         struct.set(API_VERSION_FIELD_NAME, apiVersion);
 
         // only v0 of the controlled shutdown request is missing the clientId
@@ -69,7 +74,7 @@ public class RequestHeader extends AbstractRequestResponse {
         return struct;
     }
 
-    public short apiKey() {
+    public ApiKeys apiKey() {
         return apiKey;
     }
 
@@ -96,6 +101,8 @@ public class RequestHeader extends AbstractRequestResponse {
             Schema schema = Protocol.requestHeaderSchema(apiKey, apiVersion);
             buffer.rewind();
             return new RequestHeader(schema.read(buffer));
+        } catch (InvalidRequestException e) {
+            throw e;
         } catch (Throwable  ex) {
             throw new InvalidRequestException("Error parsing request header. Our best guess of the apiKey is: " +
                     buffer.getShort(0), ex);
@@ -104,7 +111,11 @@ public class RequestHeader extends AbstractRequestResponse {
 
     @Override
     public String toString() {
-        return toStruct().toString();
+        return "RequestHeader(apiKey=" + apiKey +
+                ", apiVersion=" + apiVersion +
+                ", clientId=" + clientId +
+                ", correlationId=" + correlationId +
+                ")";
     }
 
     @Override
@@ -121,11 +132,10 @@ public class RequestHeader extends AbstractRequestResponse {
 
     @Override
     public int hashCode() {
-        int result = (int) apiKey;
+        int result = apiKey != null ? apiKey.hashCode() : 0;
         result = 31 * result + (int) apiVersion;
         result = 31 * result + (clientId != null ? clientId.hashCode() : 0);
         result = 31 * result + correlationId;
         return result;
     }
-
 }

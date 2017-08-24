@@ -392,7 +392,9 @@ class KafkaApisTest {
 
   private def buildRequest[T <: AbstractRequest](builder: AbstractRequest.Builder[T]): (T, RequestChannel.Request) = {
     val request = builder.build()
-    val buffer = request.serialize(new RequestHeader(builder.apiKey.id, request.version, "", 0))
+    val buffer = request.serialize(new RequestHeader(builder.apiKey, request.version, "", 0))
+
+    // read the header from the buffer first so that the body can be read next from the Request constructor
     val header = RequestHeader.parse(buffer)
     val context = new RequestContext(header, "1", InetAddress.getLocalHost, KafkaPrincipal.ANONYMOUS,
       new ListenerName(""), SecurityProtocol.PLAINTEXT)
