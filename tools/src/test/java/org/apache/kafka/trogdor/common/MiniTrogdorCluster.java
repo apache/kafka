@@ -120,7 +120,7 @@ public class MiniTrogdorCluster implements AutoCloseable {
             if (data != null)
                 return data;
             data = new NodeData();
-            data.hostname = String.format("127.0.0.%d", nodeIndex + 1);
+            data.hostname = "127.0.0.1";
             nodeIndex++;
             nodes.put(nodeName, data);
             return data;

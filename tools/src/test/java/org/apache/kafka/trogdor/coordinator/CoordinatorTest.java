@@ -194,14 +194,18 @@ public class CoordinatorTest {
                 addFault("netpart", spec).
                 waitFor(coordinatorClient);
             new ExpectedLines().
-                addLine("sudo iptables -A INPUT -p tcp -s 127.0.0.3 -j DROP").
+                addLine("sudo iptables -A INPUT -p tcp -s 127.0.0.1 -j DROP " +
+                        "-m comment --comment node03").
                 waitFor("node01", runner);
             new ExpectedLines().
-                addLine("sudo iptables -A INPUT -p tcp -s 127.0.0.3 -j DROP").
+                addLine("sudo iptables -A INPUT -p tcp -s 127.0.0.1 -j DROP " +
+                        "-m comment --comment node03").
                 waitFor("node02", runner);
             new ExpectedLines().
-                addLine("sudo iptables -A INPUT -p tcp -s 127.0.0.1 -j DROP").
-                addLine("sudo iptables -A INPUT -p tcp -s 127.0.0.2 -j DROP").
+                addLine("sudo iptables -A INPUT -p tcp -s 127.0.0.1 -j DROP " +
+                        "-m comment --comment node01").
+                addLine("sudo iptables -A INPUT -p tcp -s 127.0.0.1 -j DROP " +
+                        "-m comment --comment node02").
                 waitFor("node03", runner);
         }
     }

@@ -30,6 +30,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.TreeMap;
+import java.util.TreeSet;
 
 public class NetworkPartitionFault implements Fault {
     private static final Logger log = LoggerFactory.getLogger(NetworkPartitionFault.class);
@@ -80,19 +82,20 @@ public class NetworkPartitionFault implements Fault {
     private void runIptablesCommands(Platform platform, String iptablesAction) throws Exception {
         Node curNode = platform.curNode();
         Topology topology = platform.topology();
-        Set<InetAddress> toBlock = new HashSet<>();
+        TreeSet<String> toBlock = new TreeSet<>();
         for (Set<String> partition : partitions) {
             if (!partition.contains(curNode.name())) {
                 for (String nodeName : partition) {
-                    Node node = topology.node(nodeName);
-                    toBlock.add(InetAddress.getByName(node.hostname()));
+                    toBlock.add(nodeName);
                 }
             }
         }
-        for (InetAddress addr : toBlock) {
+        for (String nodeName : toBlock) {
+            Node node = topology.node(nodeName);
+            InetAddress addr = InetAddress.getByName(node.hostname());
             platform.runCommand(new String[] {
                 "sudo", "iptables", iptablesAction, "INPUT", "-p", "tcp", "-s",
-                addr.getHostAddress(), "-j", "DROP"
+                addr.getHostAddress(), "-j", "DROP", "-m", "comment", "--comment", nodeName
             });
         }
     }
