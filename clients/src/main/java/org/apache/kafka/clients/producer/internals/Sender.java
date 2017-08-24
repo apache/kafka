@@ -569,7 +569,7 @@ public class Sender implements Runnable {
     private void reenqueueBatch(ProducerBatch batch, long currentTimeMs) {
         if (transactionManager != null)
             // Reset the sequence number for the retried batch. It will be set again on the next drain.
-            batch.unsetProducerState();
+            batch.reopenBatchAndResetProducerState();
         this.accumulator.reenqueue(batch, currentTimeMs);
         this.sensors.recordRetries(batch.topicPartition.topic(), batch.recordCount);
     }

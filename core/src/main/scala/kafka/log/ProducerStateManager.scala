@@ -96,6 +96,14 @@ private[log] case class ProducerIdEntry(producerId: Long, batchMetadata: mutable
     false
   }
 
+  def removeBatchesOlderThan(offset: Long) = {
+    val retainedMetadata = batchMetadata.filter(_.lastOffset >= offset)
+    if (retainedMetadata.size != batchMetadata.size) {
+      batchMetadata.clear()
+      retainedMetadata.foreach(batchMetadata.enqueue(_))
+    }
+ }
+
   def duplicateOf(batch: RecordBatch): Option[BatchMetadata] = {
     if (batch.producerEpoch() != producerEpoch)
       return None
@@ -103,6 +111,7 @@ private[log] case class ProducerIdEntry(producerId: Long, batchMetadata: mutable
     hasBatchWithSequenceRange(batch.baseSequence(), batch.lastSequence())
  }
 
+  // Return the batch metadata of the cached batch having the exact sequence range, if any.
   def hasBatchWithSequenceRange(firstSeq: Int, lastSeq:Int) : Option[BatchMetadata] = {
     val duplicate = batchMetadata.filter{ case(metadata) =>
       firstSeq == metadata.firstSeq && lastSeq == metadata.lastSeq
@@ -672,6 +681,7 @@ class ProducerStateManager(val topicPartition: TopicPartition,
   def oldestSnapshotOffset: Option[Long] = oldestSnapshotFile.map(file => offsetFromFilename(file.getName))
 
   private def isProducerRetained(producerIdEntry: ProducerIdEntry, logStartOffset: Long): Boolean = {
+    producerIdEntry.removeBatchesOlderThan(logStartOffset)
     producerIdEntry.lastOffset >= logStartOffset
   }
 

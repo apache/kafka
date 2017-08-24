@@ -122,7 +122,7 @@ class ProducerBounceTest extends KafkaServerTestHarness {
 
     val producerConfig = new Properties()
     producerConfig.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true")
-    producerConfig.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "1")
+    producerConfig.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "5")
     val producerConfigWithCompression = new Properties()
     producerConfigWithCompression ++= producerConfig
     producerConfigWithCompression.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, "lz4")
