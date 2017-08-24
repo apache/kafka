@@ -34,6 +34,9 @@ import org.apache.kafka.test.MockMetricsReporter;
 import org.apache.kafka.test.MockStateRestoreListener;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
+import org.apache.log4j.AppenderSkeleton;
+import org.apache.log4j.Logger;
+import org.apache.log4j.spi.LoggingEvent;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.ClassRule;
@@ -41,8 +44,10 @@ import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
 import java.io.File;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
@@ -530,4 +535,41 @@ public class KafkaStreamsTest {
             mapStates.put(newState, prevCount + 1);
         }
     }
+
+    @Test
+    public void testLogContext() {
+        final UnitTestAppender appender = new UnitTestAppender();
+        final Logger logger = Logger.getRootLogger();
+        logger.addAppender(appender);
+        try {
+            Logger.getLogger(KafkaStreams.class);
+            streams.start();
+        }
+        finally {
+            logger.removeAppender(appender);
+            streams.close();
+        }
+        final LoggingEvent firstLogEntry = appender.log.get(0);
+        Assert.assertEquals("org.apache.kafka.streams.KafkaStreams", firstLogEntry.getLoggerName());
+        Assert.assertTrue(firstLogEntry.getMessage().toString().contains("[stream-client="));
+    }
+
+    class UnitTestAppender extends AppenderSkeleton {
+        private final List<LoggingEvent> log = new ArrayList<LoggingEvent>();
+
+        @Override
+        public boolean requiresLayout() {
+            return false;
+        }
+
+        @Override
+        protected void append(final LoggingEvent loggingEvent) {
+            log.add(loggingEvent);
+        }
+
+        @Override
+        public void close() {
+        }
+    }
+
 }

@@ -30,6 +30,7 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -56,7 +57,6 @@ import org.apache.kafka.streams.state.internals.QueryableStoreProvider;
 import org.apache.kafka.streams.state.internals.StateStoreProvider;
 import org.apache.kafka.streams.state.internals.StreamThreadStateStoreProvider;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -128,7 +128,7 @@ import static org.apache.kafka.streams.StreamsConfig.PROCESSING_GUARANTEE_CONFIG
 @InterfaceStability.Evolving
 public class KafkaStreams {
 
-    private static final Logger log = LoggerFactory.getLogger(KafkaStreams.class);
+    private final Logger log;
     private static final String JMX_PREFIX = "kafka.streams";
     private static final int DEFAULT_CLOSE_TIMEOUT = 0;
     private GlobalStreamThread globalStreamThread;
@@ -143,7 +143,6 @@ public class KafkaStreams {
     // of the co-location of stream thread's consumers. It is for internal
     // usage only and should not be exposed to users at all.
     private final UUID processId;
-    private final String logPrefix;
     private final StreamsMetadataState streamsMetadataState;
     private final StreamsConfig config;
     private final StateDirectory stateDirectory;
@@ -298,10 +297,10 @@ public class KafkaStreams {
 
             oldState = state;
             if (!state.isValidTransition(newState)) {
-                log.warn("{} Unexpected state transition from {} to {}.", logPrefix, oldState, newState);
-                throw new StreamsException(logPrefix + " Unexpected state transition from " + oldState + " to " + newState);
+                log.warn("Unexpected state transition from {} to {}.", oldState, newState);
+                throw new StreamsException("Unexpected state transition from " + oldState + " to " + newState);
             } else {
-                log.info("{} State transition from {} to {}.", logPrefix, oldState, newState);
+                log.info("State transition from {} to {}.", oldState, newState);
             }
             state = newState;
         }
@@ -361,8 +360,7 @@ public class KafkaStreams {
                             return;
                         }
                     }
-                    log.warn("{} All stream threads have died. The Kafka Streams instance will be in an error state and should be closed.",
-                            logPrefix);
+                    log.warn("All stream threads have died. The Kafka Streams instance will be in an error state and should be closed.");
                     setState(ERROR);
                 }
             }
@@ -377,8 +375,7 @@ public class KafkaStreams {
                 // if we are pending a shutdown, it's ok for all threads to die, in fact
                 // it is expected. Otherwise, it is an error
                 if (state != PENDING_SHUTDOWN) {
-                    log.warn("{} Global Stream thread has died. The Kafka Streams instance will be in an error state and should be closed.",
-                            logPrefix);
+                    log.warn("Global Stream thread has died. The Kafka Streams instance will be in an error state and should be closed.");
                     setState(ERROR);
                 }
             }
@@ -517,7 +514,9 @@ public class KafkaStreams {
         if (clientId.length() <= 0)
             clientId = applicationId + "-" + processId;
 
-        this.logPrefix = String.format("stream-client [%s]", clientId);
+        LogContext logContext = new LogContext("[stream-client=" + clientId + "] ");
+
+        this.log=logContext.logger(getClass());
 
         final List<MetricsReporter> reporters = config.getConfiguredInstances(StreamsConfig.METRIC_REPORTER_CLASSES_CONFIG,
             MetricsReporter.class);
@@ -540,7 +539,7 @@ public class KafkaStreams {
         final ProcessorTopology globalTaskTopology = internalTopologyBuilder.buildGlobalStateTopology();
 
         if (config.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG) < 0) {
-            log.warn("{} Negative cache size passed in. Reverting to cache size of 0 bytes.", logPrefix);
+            log.warn("Negative cache size passed in. Reverting to cache size of 0 bytes.");
         }
 
         final long cacheSizeBytes = Math.max(0, config.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG) /
@@ -626,7 +625,7 @@ public class KafkaStreams {
         try {
             client.close();
         } catch (final IOException e) {
-            log.warn("{} Could not close StreamKafkaClient.", logPrefix, e);
+            log.warn("Could not close StreamKafkaClient.", e);
         }
 
     }
@@ -653,7 +652,7 @@ public class KafkaStreams {
      * @throws StreamsException if the Kafka brokers have version 0.10.0.x
      */
     public synchronized void start() throws IllegalStateException, StreamsException {
-        log.debug("{} Starting Kafka Stream process.", logPrefix);
+        log.debug("Starting Kafka Stream process.");
         validateStartOnce();
         checkBrokerVersionCompatibility();
 
@@ -677,7 +676,7 @@ public class KafkaStreams {
             }
         }, cleanupDelay, cleanupDelay, TimeUnit.MILLISECONDS);
 
-        log.info("{} Started Kafka Stream process", logPrefix);
+        log.info("Started Kafka Stream process");
     }
 
     /**
@@ -720,7 +719,7 @@ public class KafkaStreams {
      * Note that this method must not be called in the {@code onChange} callback of {@link StateListener}.
      */
     public synchronized boolean close(final long timeout, final TimeUnit timeUnit) {
-        log.debug("{} Stopping Kafka Stream process.", logPrefix);
+        log.debug("Stopping Kafka Stream process.");
 
         // only clean up once
         if (!checkFirstTimeClosing()) {
@@ -752,7 +751,7 @@ public class KafkaStreams {
                 }
 
                 metrics.close();
-                log.info("{} Stopped Kafka Streams process.", logPrefix);
+                log.info("Stopped Kafka Streams process.");
             }
         }, "kafka-streams-close-thread");
         shutdown.setDaemon(true);
