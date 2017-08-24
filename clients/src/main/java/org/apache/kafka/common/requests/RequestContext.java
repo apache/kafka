@@ -73,6 +73,7 @@ public class RequestContext {
 
     public Send buildResponse(AbstractResponse body) {
         if (isUnsupportedApiVersionsRequest()) {
+            // Use v0 when serializing an unhandled ApiVersion response
             RequestHeader updatedHeader = new RequestHeader(header.apiKey(), (short) 0, header.clientId(),
                     header.correlationId());
             return body.toSend(connectionId, updatedHeader);

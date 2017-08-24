@@ -19,18 +19,16 @@ package kafka.network
 
 import java.net.InetAddress
 import java.nio.ByteBuffer
-import java.util.Collections
 import java.util.concurrent._
 
 import com.yammer.metrics.core.Gauge
 import kafka.metrics.KafkaMetricsGroup
+import kafka.network.RequestChannel.{ShutdownRequest, ChannelRequest}
 import kafka.server.QuotaId
 import kafka.utils.{Logging, NotNothing}
-import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.network.{ListenerName, Send}
 import org.apache.kafka.common.protocol.{ApiKeys, Protocol, SecurityProtocol}
-import org.apache.kafka.common.record.{MemoryRecords, RecordBatch}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.Time
@@ -39,15 +37,10 @@ import org.apache.log4j.Logger
 import scala.reflect.ClassTag
 
 object RequestChannel extends Logging {
-  val AllDone = new Request(processor = 1, context = null, startTimeNanos = 0, MemoryPool.NONE, shutdownReceive)
   private val requestLogger = Logger.getLogger("kafka.request.logger")
 
-  private def shutdownReceive: ByteBuffer = {
-    val emptyProduceRequest = new ProduceRequest.Builder(RecordBatch.CURRENT_MAGIC_VALUE, 0, 0,
-      Collections.emptyMap[TopicPartition, MemoryRecords]).build()
-    val emptyRequestHeader = new RequestHeader(ApiKeys.PRODUCE.id, emptyProduceRequest.version, "", 0)
-    emptyProduceRequest.serialize(emptyRequestHeader)
-  }
+  sealed trait ChannelRequest
+  case object ShutdownRequest extends ChannelRequest
 
   case class Session(principal: KafkaPrincipal, clientAddress: InetAddress) {
     val sanitizedUser = QuotaId.sanitize(principal.getName)
@@ -57,7 +50,7 @@ object RequestChannel extends Logging {
                 val context: RequestContext,
                 val startTimeNanos: Long,
                 private val memoryPool: MemoryPool,
-                @volatile private var buffer: ByteBuffer) {
+                @volatile private var buffer: ByteBuffer) extends ChannelRequest {
     // These need to be volatile because the readers are in the network thread and the writers are in the request
     // handler threads or the purgatory threads
     @volatile var requestDequeueTimeNanos = -1L
@@ -204,7 +197,7 @@ object RequestChannel extends Logging {
 
 class RequestChannel(val numProcessors: Int, val queueSize: Int) extends KafkaMetricsGroup {
   private var responseListeners: List[(Int) => Unit] = Nil
-  private val requestQueue = new ArrayBlockingQueue[RequestChannel.Request](queueSize)
+  private val requestQueue = new ArrayBlockingQueue[ChannelRequest](queueSize)
   private val responseQueues = new Array[BlockingQueue[RequestChannel.Response]](numProcessors)
   for(i <- 0 until numProcessors)
     responseQueues(i) = new LinkedBlockingQueue[RequestChannel.Response]()
@@ -248,11 +241,11 @@ class RequestChannel(val numProcessors: Int, val queueSize: Int) extends KafkaMe
   }
 
   /** Get the next request or block until specified time has elapsed */
-  def receiveRequest(timeout: Long): RequestChannel.Request =
+  def receiveRequest(timeout: Long): RequestChannel.ChannelRequest =
     requestQueue.poll(timeout, TimeUnit.MILLISECONDS)
 
   /** Get the next request or block until there is one */
-  def receiveRequest(): RequestChannel.Request =
+  def receiveRequest(): RequestChannel.ChannelRequest =
     requestQueue.take()
 
   /** Get a response for the given processor if there is one */
@@ -270,6 +263,9 @@ class RequestChannel(val numProcessors: Int, val queueSize: Int) extends KafkaMe
   def shutdown() {
     requestQueue.clear()
   }
+
+  def sendShutdownRequest(): Unit = requestQueue.put(ShutdownRequest)
+
 }
 
 object RequestMetrics {
