@@ -572,27 +572,31 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
     </table>
 
     <h4><a id="streams_dsl_transform" href="#streams_dsl_transform">Transform a stream</a></h4>
-
-    <code>KStream</code> and <code>KTable</code> support a variety of transformation operations. Each of these operations can be translated into one or more
-    connected processors into the underlying processor topology. Since <code>KStream</code> and <code>KTable</code> are strongly typed, all these transformation
-    operations are defined as generics functions where users could specify the input and output data types.
-
-    Some <code>KStream</code> transformations may generate one or more <code>KStream</code> objects (e.g., filter and map on <code>KStream</code> generate another <code>KStream</code>,
-    while branch on <code>KStream</code> can generate multiple <code>KStream</code>) while some others may generate a <code>KTable</code> object (e.g., aggregation) interpreted
-    as the changelog stream to the resulted relation. This allows Kafka Streams to continuously update the computed value upon arrivals
-    of late records after it has already been produced to the downstream transformation operators. As for <code>KTable</code>, all its transformation
-    operations can only generate another <code>KTable</code> (though the Kafka Streams DSL does provide a special function to convert a <code>KTable</code>
-    representation into a <code>KStream</code>, which we will describe later). Nevertheless, all these transformation methods can be chained
-    together to compose a complex processor topology.
-
+    <p>
+    <code>KStream</code> and <code>KTable</code> support a variety of transformation operations. Each of these operations
+    can be translated into one or more connected processors into the underlying processor topology. Since <code>KStream</code>
+    and <code>KTable</code> are strongly typed, all these transformation operations are defined as generics functions where
+    users could specify the input and output data types.
+    </p>
+    <p>
+    Some <code>KStream</code> transformations may generate one or more <code>KStream</code> objects (e.g., filter and
+    map on <code>KStream</code> generate another <code>KStream</code>, while branch on <code>KStream</code> can generate
+    multiple <code>KStream</code> instances) while some others may generate a <code>KTable</code> object (e.g., aggregation) interpreted
+    as the changelog stream to the resulted relation. This allows Kafka Streams to continuously update the computed value upon arrival
+    of late records after it has already been produced to the downstream transformation operators. As for <code>KTable</code>,
+    all its transformation operations can only generate another <code>KTable</code> (though the Kafka Streams DSL does
+    provide a special function to convert a <code>KTable</code> representation into a <code>KStream</code>, which we will
+    describe later). Nevertheless, all these transformation methods can be chained together to compose a complex processor topology.
+    </p>
+    <p>
     We describe these transformation operations in the following subsections, categorizing them into two categories:
     stateless and stateful transformations.
-
+    </p>
     <h5><a id="streams_dsl_transformations_stateless" href="#streams_dsl_transformations_stateless">Stateless transformations</a></h5>
+    <p>
     Stateless transformations, by definition, do not depend on any state for processing, and hence implementation-wise they do not
     require a state store associated with the stream processor.
-
-
+    </p>
     <table class="data-table" border="1">
         <tbody><tr>
             <th>Transformation</th>
@@ -601,14 +605,17 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
         <tr>
             <td><b>Branch</b>: <code>KStream &rarr; KStream</code></td>
             <td>
-                Branch (or split) a <code>KStream</code> based on the supplied predicates into one or more <code>KStream</code> instances.<p>
-
+                <p>
+                Branch (or split) a <code>KStream</code> based on the supplied predicates into one or more <code>KStream</code> instances.
+                </p>
+                <p>
                 Predicates are evaluated in order. A record is placed to one and only one output stream on the first match:
                 if the n-th predicate evaluates to true, the record is placed to n-th stream. If no predicate matches,
-                the record is dropped.<p>
-
+                the record is dropped.
+                </p>
+                <p>
                 Branching is useful, for example, to route records to different downstream topics.
-
+                </p>
                 <pre class="brush: java;">
                     KStream&lt;String, Long&gt; stream = ...;
                     KStream&lt;String, Long&gt;[] branches = stream.branch(
@@ -626,8 +633,9 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
         <tr>
             <td><b>Filter</b>: <code>KStream &rarr; KStream or KTable &rarr; KTable</code></td>
             <td>
+                <p>
                 Evaluates a boolean function for each element and retains those for which the function returns true.
-
+                </p>
                 <pre class="brush: java;">
                      KStream&lt;String, Long&gt; stream = ...;
 
@@ -643,14 +651,15 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
                            return value > 0;
                          }
                        });
-	     </pre>
+	            </pre>
             </td>
         </tr>
         <tr>
             <td><b>Inverse Filter</b>: <code>KStream &rarr; KStream or KTable &rarr; KTable</code></td>
             <td>
+                <p>
                 Evaluates a boolean function for each element and drops those for which the function returns true.
-
+                </p>
                 <pre class="brush: java;">
                      KStream&lt;String, Long&gt; stream = ...;
 
@@ -666,18 +675,21 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
                             return value <= 0;
                         }
                      });
-         </pre>
+                </pre>
             </td>
         </tr>
         <tr>
             <td><b>FlatMap</b>: <code>KStream &rarr; KStream </code></td>
             <td>
+                <p>
                 Takes one record and produces zero, one, or more records. You can modify the record keys and values,
-                including their types.<p>
+                including their types.
+                </p>
 
+                <p>
                 Marks the stream for data re-partitioning: Applying a grouping or a join after <code>flatMap</code> will result in
                 re-partitioning of the records. If possible use <code>flatMapValues</code> instead, which will not cause data re-partitioning.
-
+                </p>
                 <pre class="brush: java;">
                      KStream&lt;Long, String> stream = ...;
                      KStream&lt;String, Integer&gt; transformed = stream.flatMap(
@@ -692,18 +704,20 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
                          }
                      );
                      // Java 7 example: cf. `map` for how to create `KeyValueMapper` instances
-         </pre>
+                </pre>
             </td>
         </tr>
         <tr>
             <td><b>FlatMap (values only)</b>: <code>KStream &rarr; KStream </code></td>
             <td>
+                <p>
                 Takes one record and produces zero, one, or more records, while retaining the key of the original record.
                 You can modify the record values and the value type.
-
+                </p>
+                <p>
                 <code>flatMapValues</code> is preferable to <code>flatMap</code> because it will not cause data re-partitioning. However,
                 it does not allow you to modify the key or key type like <code>flatMap</code> does.
-
+                </p>
                 <pre class="brush: java;">
                    // Split a sentence into words.
                    KStream&lt;byte[], String&gt; sentences = ...;
@@ -716,11 +730,13 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
         <tr>
             <td><b>Foreach</b>: <code>KStream &rarr; void or KTable &rarr; void </code></td>
             <td>
-                Terminal operation. Performs a stateless action on each record.<p>
-
+                <p>
+                Terminal operation. Performs a stateless action on each record.
+                </p>
+                <p>
                 Note on processing guarantees: Any side effects of an action (such as writing to external systems)
                 are not trackable by Kafka, which means they will typically not benefit from Kafka's processing guarantees.
-
+                </p>
                 <pre class="brush: java;">
                        KStream&lt;String, Long&gt; stream = ...;
 
@@ -736,30 +752,35 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
                                  System.out.println(key + " => " + value);
                                }
                        });
-               </pre>
+                </pre>
             </td>
         </tr>
         <tr>
             <td><b>GroupByKey</b>: <code>KStream &rarr; KGroupedStream </code></td>
             <td>
-                Groups the records by the existing key.<p>
-
+                <p>
+                Groups the records by the existing key.
+                </p>
+                <p>
                 Grouping is a prerequisite for aggregating a stream or a table and ensures that data is properly
-                partitioned ("keyed") for subsequent operations.<p>
-
+                partitioned ("keyed") for subsequent operations.
+                </p>
+                <p>
                 <b>When to set explicit serdes</b>: Variants of <code>groupByKey</code> exist to override the configured default serdes of
                 your application, which you must do if the key and/or value types of the resulting <code>KGroupedStream</code> do
-                not match the configured default serdes.<p>
-
+                not match the configured default serdes.
+                </p>
+                <p>
                 <b>Note:</b>
                 Grouping vs. Windowing: A related operation is windowing, which lets you control how to "sub-group" the
                 grouped records of the same key into so-called windows for stateful operations such as windowed aggregations
-                or windowed joins.<p>
-
+                or windowed joins.
+                </p>
+                <p>
                 Causes data re-partitioning if and only if the stream was marked for re-partitioning. <code>groupByKey</code> is
                 preferable to <code>groupBy</code> because it re-partitions data only if the stream was already marked for re-partitioning.
                 However, <code>groupByKey</code> does not allow you to modify the key or key type like <code>groupBy</code> does.
-
+                </p>
                 <pre class="brush: java;">
                        KStream&lt;byte[], String&gt; stream = ...;
 
@@ -773,30 +794,35 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
                            Serdes.ByteArray(), /* key */
                            Serdes.String()     /* value */
                        );
-               </pre>
+                </pre>
             </td>
         </tr>
         <tr>
             <td><b>GroupBy</b>: <code>KStream &rarr; KGroupedStream or KTable &rarr; KGroupedTable</code></td>
             <td>
+                <p>
                 Groups the records by a new key, which may be of a different key type. When grouping a table,
-                you may also specify a new value and value type. groupBy is a shorthand for selectKey(...).groupByKey().<p>
-
+                you may also specify a new value and value type. groupBy is a shorthand for selectKey(...).groupByKey().
+                </p>
+                <p>
                 Grouping is a prerequisite for aggregating a stream or a table and ensures that data is properly
-                partitioned ("keyed") for subsequent operations.<p>
-
+                partitioned ("keyed") for subsequent operations.
+                </p>
+                <p>
                 <b>When to set explicit serdes</b>: Variants of groupBy exist to override the configured default serdes of your
                 application, which you must do if the key and/or value types of the resulting KGroupedStream or
                 KGroupedTable do not match the configured default serdes.
-
+                </p>
+                <p>
                 <b>Note:</b>
                 Grouping vs. Windowing: A related operation is windowing, which lets you control how to “sub-group” the
                 grouped records of the same key into so-called windows for stateful operations such as windowed aggregations
-                or windowed joins.<p>
-
+                or windowed joins.
+                </p>
+                <p>
                 <b>Always causes data re-partitioning:</b> groupBy always causes data re-partitioning. If possible use groupByKey
                 instead, which will re-partition data only if required.
-
+                </p>
                 <pre class="brush: java;">
                        KStream&lt;byte[], String&gt; stream = ...;
                        KTable&lt;byte[], String&gt; table = ...;
@@ -843,16 +869,20 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
                             Serdes.String(), /* key (note: type was modified) */
                             Serdes.Integer() /* value (note: type was modified) */
                        );
-               </pre>
+                </pre>
             </td>
         </tr>
         <tr>
             <td><b>Map</b>: <code>KStream &rarr; KStream</code></td>
             <td>
-                Takes one record and produces one record. You can modify the record key and value, including their types.<p>
+                <p>
+                Takes one record and produces one record. You can modify the record key and value, including their types.
+                </p>
 
+                <p>
                 <b>Marks the stream for data re-partitioning:</b> Applying a grouping or a join after <code>flatMap</code> will result in
-                re-partitioning of the records. If possible use <code>mapValues</code> instead, which will not cause data re-partitioning.<p>
+                re-partitioning of the records. If possible use <code>mapValues</code> instead, which will not cause data re-partitioning.
+                </p>
 
                 <pre class="brush: java;">
                        KStream&lt;byte[], String&gt; stream = ...;
@@ -871,17 +901,20 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
                                return new KeyValue&lt;&gt;(value.toLowerCase(), value.length());
                            }
                        });
-               </pre>
+                </pre>
             </td>
         </tr>
         <tr>
             <td><b>Map (values only)</b>: <code>KStream &rarr; KStream or KTable &rarr; KTable</code></td>
             <td>
+                <p>
                 Takes one record and produces one record, while retaining the key of the original record. You can modify
-                the record value and the value type.<p>
-
+                the record value and the value type.
+                </p>
+                <p>
                 <code>mapValues</code> is preferable to <code>map</code> because it will not cause data re-partitioning. However, it does not
                 allow you to modify the key or key type like <code>map</code> does.
+                </p>
 
                 <pre class="brush: java;">
                        KStream&lt;byte[], String> stream = ...;
@@ -897,14 +930,15 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
                              return s.toUpperCase();
                           }
                        });
-               </pre>
+                </pre>
             </td>
         </tr>
         <tr>
             <td><b>Print</b>: <code>KStream &rarr; void or KTable &rarr; void</code></td>
             <td>
+                <p>
                 Terminal operation. Prints the records to <code>System.out</code>. See Javadocs for serde and <code>toString()</code> caveats.
-
+                </p>
                 <pre class="brush: java;">
                        KStream&lt;byte[], String&gt; stream = ...;
                        stream.print();
@@ -912,16 +946,19 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
                        // Several variants of `print` exist to e.g. override the
                        // default serdes for record keys and record values.
                        stream.print(Serdes.ByteArray(), Serdes.String());
-               </pre>
+                </pre>
             </td>
         </tr>
         <tr>
             <td><b>SelectKey</b>: <code>KStream &rarr; KStream</code></td>
             <td>
-                Assigns a new key, possibly of a new key type, to each record.<p>
-
+                <p>
+                Assigns a new key, possibly of a new key type, to each record.
+                </p>
+                <p>
                 Marks the stream for data re-partitioning: Applying a grouping or a join after <code>flatMap</code> will result in
                 re-partitioning of the records.
+                </p>
 
                 <pre class="brush: java;">
                        KStream&lt;byte[], String&gt; stream = ...;
@@ -938,28 +975,30 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
                               return value.split(" ")[0];
                            }
                          });
-               </pre>
+                </pre>
             </td>
         </tr>
         <tr>
             <td><b>Table to Stream</b>: <code>KTable &rarr; KStream</code></td>
             <td>
+                <p>
                 Converts this table into a stream.
-
+                </p>
                 <pre class="brush: java;">
                        KTable&lt;byte[], String> table = ...;
 
                        // Also, a variant of `toStream` exists that allows you
                        // to select a new key for the resulting stream.
                        KStream&lt;byte[], String> stream = table.toStream();
-               </pre>
+                </pre>
             </td>
         </tr>
         <tr>
             <td><b>WriteAsText</b>: <code>KStream &rarr; void or KTable &rarr; void</code></td>
             <td>
+                <p>
                 Terminal operation. Write the records to a file. See Javadocs for serde and <code>toString()</code> caveats.
-
+                </p>
                 <pre class="brush: java;">
                        KStream&lt;byte[], String&gt; stream = ...;
                        stream.writeAsText("/path/to/local/output.txt");
@@ -967,7 +1006,7 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
                        // Several variants of `writeAsText` exist to e.g. override the
                        // default serdes for record keys and record values.
                        stream.writeAsText("/path/to/local/output.txt", Serdes.ByteArray(), Serdes.String());
-               </pre>
+                </pre>
             </td>
         </tr>
         </tbody>
