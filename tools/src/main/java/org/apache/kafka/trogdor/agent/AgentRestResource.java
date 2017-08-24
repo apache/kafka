@@ -57,7 +57,7 @@ public class AgentRestResource {
     @GET
     @Path("/faults")
     public AgentFaultsResponse getAgentFaults() throws Throwable {
-        return agent().getFaults();
+        return agent().faults();
     }
 
     @PUT

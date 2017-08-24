@@ -258,21 +258,21 @@ public final class Agent {
         return startTimeMs;
     }
 
-    public AgentFaultsResponse getFaults() {
+    public AgentFaultsResponse faults() {
         Map<String, AgentFaultsResponse.FaultData> faultData = new TreeMap<>();
         lock.lock();
         try {
-            getFaultsImpl(faultData, pendingFaults, FaultState.PENDING);
-            getFaultsImpl(faultData, runningFaults, FaultState.RUNNING);
-            getFaultsImpl(faultData, doneFaults, FaultState.DONE);
+            updateFaultsResponse(faultData, pendingFaults, FaultState.PENDING);
+            updateFaultsResponse(faultData, runningFaults, FaultState.RUNNING);
+            updateFaultsResponse(faultData, doneFaults, FaultState.DONE);
         } finally {
             lock.unlock();
         }
         return new AgentFaultsResponse(faultData);
     }
 
-    private void getFaultsImpl(Map<String, AgentFaultsResponse.FaultData> faultData,
-                               FaultSet faultSet, FaultState state) {
+    private void updateFaultsResponse(Map<String, AgentFaultsResponse.FaultData> faultData,
+                                      FaultSet faultSet, FaultState state) {
         for (Iterator<Fault> iter = faultSet.iterateByStart();
                 iter.hasNext(); ) {
             Fault fault = iter.next();
