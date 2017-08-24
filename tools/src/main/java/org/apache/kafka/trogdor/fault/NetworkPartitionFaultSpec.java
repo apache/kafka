@@ -27,30 +27,15 @@ import java.util.Objects;
 /**
  * The specification for a fault that creates a network partition.
  */
-public class NetworkPartitionFaultSpec implements FaultSpec {
-    private final long startMs;
-    private final long durationMs;
+public class NetworkPartitionFaultSpec extends AbstractFaultSpec {
     private final List<List<String>> partitions;
 
     @JsonCreator
     public NetworkPartitionFaultSpec(@JsonProperty("startMs") long startMs,
                          @JsonProperty("durationMs") long durationMs,
                          @JsonProperty("partitions") List<List<String>> partitions) {
-        this.startMs = startMs;
-        this.durationMs = durationMs;
+        super(startMs, durationMs);
         this.partitions = partitions;
-    }
-
-    @JsonProperty
-    @Override
-    public long startMs() {
-        return startMs;
-    }
-
-    @JsonProperty
-    @Override
-    public long durationMs() {
-        return durationMs;
     }
 
     @JsonProperty
@@ -63,14 +48,14 @@ public class NetworkPartitionFaultSpec implements FaultSpec {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         NetworkPartitionFaultSpec that = (NetworkPartitionFaultSpec) o;
-        return Objects.equals(startMs, that.startMs) &&
-            Objects.equals(durationMs, that.durationMs) &&
+        return Objects.equals(startMs(), that.startMs()) &&
+            Objects.equals(durationMs(), that.durationMs()) &&
             Objects.equals(partitions, that.partitions);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(startMs, durationMs, partitions);
+        return Objects.hash(startMs(), durationMs(), partitions);
     }
 
     @Override

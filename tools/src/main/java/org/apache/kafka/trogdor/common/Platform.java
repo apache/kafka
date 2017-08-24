@@ -21,6 +21,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 
 import java.io.File;
 import java.io.IOException;
+import org.apache.kafka.common.utils.Utils;
 
 /**
  * Defines a cluster topology
@@ -44,7 +45,7 @@ public interface Platform {
                     "in the root JSON configuration object");
             }
             String platformName = platformNode.textValue();
-            return ClassUtil.construct(platformName,
+            return Utils.newParameterizedInstance(platformName,
                 String.class, curNodeName,
                 JsonNode.class, root);
         }

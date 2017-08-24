@@ -15,37 +15,35 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.trogdor.rest;
+package org.apache.kafka.trogdor.fault;
 
-import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import org.apache.kafka.trogdor.common.JsonUtil;
-import org.apache.kafka.trogdor.fault.FaultSpec;
-import org.apache.kafka.trogdor.fault.FaultState;
 
-import java.util.Map;
-import java.util.Objects;
 
 /**
- * Response to GET /faults
+ * A base class that can be used for FaultSpecs. 
  */
-public class AgentFaultsResponse extends FaultDataMap {
-    @JsonCreator
-    public AgentFaultsResponse(@JsonProperty("faults") Map<String, FaultData> faults) {
-        super(faults);
+public abstract class AbstractFaultSpec implements FaultSpec {
+    private final long startMs;
+    private final long durationMs;
+
+    protected AbstractFaultSpec(@JsonProperty("startMs") long startMs,
+                             @JsonProperty("durationMs") long durationMs) {
+        this.startMs = startMs;
+        this.durationMs = durationMs;
     }
 
+    @JsonProperty
     @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        AgentFaultsResponse that = (AgentFaultsResponse) o;
-        return super.equals(that);
+    public long startMs() {
+        return startMs;
     }
 
+    @JsonProperty
     @Override
-    public int hashCode() {
-        return super.hashCode();
+    public long durationMs() {
+        return durationMs;
     }
 
     @Override

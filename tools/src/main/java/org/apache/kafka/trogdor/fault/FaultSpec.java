@@ -19,7 +19,8 @@ package org.apache.kafka.trogdor.fault;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
-import org.apache.kafka.trogdor.common.ClassUtil;
+import org.apache.kafka.common.utils.Utils;
+
 
 /**
  * The specification for a fault.
@@ -38,7 +39,7 @@ public interface FaultSpec {
             }
             String faultClassName = faultSpecClassName.substring(0,
                     faultSpecClassName.length() - SPEC_STRING.length());
-            return ClassUtil.construct(faultClassName,
+            return Utils.newParameterizedInstance(faultClassName,
                 String.class, faultId,
                 FaultSpec.class, faultSpec);
         }

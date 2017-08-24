@@ -29,53 +29,10 @@ import java.util.Objects;
 /**
  * Response to GET /faults
  */
-public class CoordinatorFaultsResponse {
-    private final Map<String, FaultData> faults;
-
-    public static class FaultData  {
-        private final FaultSpec spec;
-        private final FaultState state;
-
-        @JsonCreator
-        public FaultData(@JsonProperty("spec") FaultSpec spec,
-                @JsonProperty("status") FaultState state) {
-            this.spec = spec;
-            this.state = state;
-        }
-
-        @JsonProperty
-        public FaultSpec spec() {
-            return spec;
-        }
-
-        @JsonProperty
-        public FaultState state() {
-            return state;
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
-            FaultData that = (FaultData) o;
-            return Objects.equals(spec, that.spec) &&
-                Objects.equals(state, that.state);
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(spec, state);
-        }
-    }
-
+public class CoordinatorFaultsResponse extends FaultDataMap {
     @JsonCreator
     public CoordinatorFaultsResponse(@JsonProperty("faults") Map<String, FaultData> faults) {
-        this.faults = faults;
-    }
-
-    @JsonProperty
-    public Map<String, FaultData> faults() {
-        return faults;
+        super(faults);
     }
 
     @Override
@@ -83,12 +40,12 @@ public class CoordinatorFaultsResponse {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         CoordinatorFaultsResponse that = (CoordinatorFaultsResponse) o;
-        return Objects.equals(faults, that.faults);
+        return super.equals(that);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hashCode(faults);
+        return super.hashCode();
     }
 
     @Override

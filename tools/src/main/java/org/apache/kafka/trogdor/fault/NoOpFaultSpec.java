@@ -28,27 +28,11 @@ import java.util.Objects;
  *
  * This fault type exists mainly to test the fault injection system.
  */
-public class NoOpFaultSpec implements FaultSpec {
-    private final long startMs;
-    private final long durationMs;
-
+public class NoOpFaultSpec extends AbstractFaultSpec {
     @JsonCreator
     public NoOpFaultSpec(@JsonProperty("startMs") long startMs,
                          @JsonProperty("durationMs") long durationMs) {
-        this.startMs = startMs;
-        this.durationMs = durationMs;
-    }
-
-    @JsonProperty
-    @Override
-    public long startMs() {
-        return startMs;
-    }
-
-    @JsonProperty
-    @Override
-    public long durationMs() {
-        return durationMs;
+        super(startMs, durationMs);
     }
 
     @Override
@@ -56,17 +40,12 @@ public class NoOpFaultSpec implements FaultSpec {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         NoOpFaultSpec that = (NoOpFaultSpec) o;
-        return Objects.equals(startMs, that.startMs) &&
-            Objects.equals(durationMs, that.durationMs);
+        return Objects.equals(startMs(), that.startMs()) &&
+            Objects.equals(durationMs(), that.durationMs());
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(startMs, durationMs);
-    }
-
-    @Override
-    public String toString() {
-        return JsonUtil.toJsonString(this);
+        return Objects.hash(startMs(), durationMs());
     }
 }
