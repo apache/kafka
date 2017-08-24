@@ -16,30 +16,16 @@
  */
 package org.apache.kafka.common.security.auth;
 
-import java.util.Map;
-import java.security.Principal;
+import javax.security.sasl.SaslServer;
 
-import org.apache.kafka.common.network.TransportLayer;
-import org.apache.kafka.common.network.Authenticator;
-import org.apache.kafka.common.KafkaException;
+public class SaslAuthenticationContext implements AuthenticationContext {
+    private final SaslServer server;
 
-/**
- * DefaultPrincipalBuilder which return transportLayer's peer Principal
- * @deprecated As of Kafka 1.0.0
- **/
-@Deprecated
-public class DefaultPrincipalBuilder implements PrincipalBuilder {
-
-    public void configure(Map<String, ?> configs) {}
-
-    public Principal buildPrincipal(TransportLayer transportLayer, Authenticator authenticator) throws KafkaException {
-        try {
-            return transportLayer.peerPrincipal();
-        } catch (Exception e) {
-            throw new KafkaException("Failed to build principal due to: ", e);
-        }
+    public SaslAuthenticationContext(SaslServer server) {
+        this.server = server;
     }
 
-    public void close() throws KafkaException {}
-
+    public SaslServer server() {
+        return server;
+    }
 }

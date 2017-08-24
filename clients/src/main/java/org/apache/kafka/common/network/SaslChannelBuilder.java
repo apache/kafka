@@ -120,8 +120,7 @@ public class SaslChannelBuilder implements ChannelBuilder {
             else
                 authenticator = new SaslClientAuthenticator(id, loginManager.subject(), loginManager.serviceName(),
                         socketChannel.socket().getInetAddress().getHostName(), clientSaslMechanism, handshakeRequestEnable);
-            // Both authenticators don't use `PrincipalBuilder`, so we pass `null` for now. Reconsider if this changes.
-            authenticator.configure(transportLayer, null, this.configs);
+            authenticator.configure(transportLayer, this.configs);
             return new KafkaChannel(id, transportLayer, authenticator, maxReceiveSize, memoryPool != null ? memoryPool : MemoryPool.NONE);
         } catch (Exception e) {
             log.info("Failed to create channel due to ", e);
@@ -129,6 +128,7 @@ public class SaslChannelBuilder implements ChannelBuilder {
         }
     }
 
+    @Override
     public void close()  {
         if (loginManager != null) {
             loginManager.release();
@@ -136,7 +136,7 @@ public class SaslChannelBuilder implements ChannelBuilder {
         }
     }
 
-    protected TransportLayer buildTransportLayer(String id, SelectionKey key, SocketChannel socketChannel) throws IOException {
+    private TransportLayer buildTransportLayer(String id, SelectionKey key, SocketChannel socketChannel) throws IOException {
         if (this.securityProtocol == SecurityProtocol.SASL_SSL) {
             return SslTransportLayer.create(id, key,
                 sslFactory.createSslEngine(socketChannel.socket().getInetAddress().getHostName(), socketChannel.socket().getPort()));

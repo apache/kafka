@@ -31,14 +31,11 @@ import kafka.metrics.KafkaMetricsGroup
 import kafka.security.CredentialProvider
 import kafka.server.KafkaConfig
 import kafka.utils._
-import org.apache.kafka.common.errors.InvalidRequestException
 import org.apache.kafka.common.memory.{MemoryPool, SimpleMemoryPool}
 import org.apache.kafka.common.metrics._
 import org.apache.kafka.common.metrics.stats.Rate
 import org.apache.kafka.common.network.{ChannelBuilder, ChannelBuilders, KafkaChannel, ListenerName, Selectable, Send, Selector => KSelector}
 import org.apache.kafka.common.protocol.SecurityProtocol
-import org.apache.kafka.common.security.auth.KafkaPrincipal
-import org.apache.kafka.common.protocol.types.SchemaException
 import org.apache.kafka.common.requests.{RequestContext, RequestHeader}
 import org.apache.kafka.common.utils.{KafkaThread, LogContext, Time}
 
@@ -547,10 +544,9 @@ private[kafka] class Processor(val id: Int,
       try {
         openOrClosingChannel(receive.source) match {
           case Some(channel) =>
-            val principal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, channel.principal.getName)
             val header = RequestHeader.parse(receive.payload)
             val context = new RequestContext(header, receive.source, channel.socketAddress,
-              principal, listenerName, securityProtocol)
+              channel.principal, listenerName, securityProtocol)
             val req = new RequestChannel.Request(processor = id, context = context,
               startTimeNanos = time.nanoseconds, memoryPool, receive.payload)
             requestChannel.sendRequest(req)

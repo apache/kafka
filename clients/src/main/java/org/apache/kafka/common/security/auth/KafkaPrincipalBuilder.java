@@ -16,30 +16,20 @@
  */
 package org.apache.kafka.common.security.auth;
 
-import java.util.Map;
-import java.security.Principal;
-
-import org.apache.kafka.common.network.TransportLayer;
-import org.apache.kafka.common.network.Authenticator;
-import org.apache.kafka.common.KafkaException;
-
 /**
- * DefaultPrincipalBuilder which return transportLayer's peer Principal
- * @deprecated As of Kafka 1.0.0
- **/
-@Deprecated
-public class DefaultPrincipalBuilder implements PrincipalBuilder {
-
-    public void configure(Map<String, ?> configs) {}
-
-    public Principal buildPrincipal(TransportLayer transportLayer, Authenticator authenticator) throws KafkaException {
-        try {
-            return transportLayer.peerPrincipal();
-        } catch (Exception e) {
-            throw new KafkaException("Failed to build principal due to: ", e);
-        }
-    }
-
-    public void close() throws KafkaException {}
-
+ * Pluggable principal builder interface which supports both SSL authentication through
+ * {@link SslAuthenticationContext} and SASL through {@link SaslAuthenticationContext}.
+ *
+ * Note that the {@link org.apache.kafka.common.Configurable} and {@link java.io.Closeable}
+ * interfaces are respected if implemented.
+ */
+public interface KafkaPrincipalBuilder {
+    /**
+     * Build a kafka principal from the authentication context.
+     * @param context The authentication context (either {@link SslAuthenticationContext} or
+     *        {@link SaslAuthenticationContext})
+     * @return The built principal which may provide additional enrichment through a subclass of
+     *        {@link KafkaPrincipalBuilder}.
+     */
+    KafkaPrincipal build(AuthenticationContext context);
 }

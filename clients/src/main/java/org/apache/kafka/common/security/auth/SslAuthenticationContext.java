@@ -16,30 +16,17 @@
  */
 package org.apache.kafka.common.security.auth;
 
-import java.util.Map;
-import java.security.Principal;
+import javax.net.ssl.SSLSession;
 
-import org.apache.kafka.common.network.TransportLayer;
-import org.apache.kafka.common.network.Authenticator;
-import org.apache.kafka.common.KafkaException;
+public class SslAuthenticationContext implements AuthenticationContext {
+    private final SSLSession session;
 
-/**
- * DefaultPrincipalBuilder which return transportLayer's peer Principal
- * @deprecated As of Kafka 1.0.0
- **/
-@Deprecated
-public class DefaultPrincipalBuilder implements PrincipalBuilder {
-
-    public void configure(Map<String, ?> configs) {}
-
-    public Principal buildPrincipal(TransportLayer transportLayer, Authenticator authenticator) throws KafkaException {
-        try {
-            return transportLayer.peerPrincipal();
-        } catch (Exception e) {
-            throw new KafkaException("Failed to build principal due to: ", e);
-        }
+    public SslAuthenticationContext(SSLSession session) {
+        this.session = session;
     }
 
-    public void close() throws KafkaException {}
+    public SSLSession session() {
+        return session;
+    }
 
 }

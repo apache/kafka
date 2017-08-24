@@ -26,7 +26,6 @@ import org.apache.kafka.common.protocol.SecurityProtocol;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.security.JaasContext;
-import org.apache.kafka.common.security.auth.PrincipalBuilder;
 import org.apache.kafka.common.security.plain.PlainLoginModule;
 import org.easymock.Capture;
 import org.easymock.EasyMock;
@@ -51,7 +50,6 @@ public class SaslServerAuthenticatorTest {
     public void testOversizeRequest() throws IOException {
         SaslServerAuthenticator authenticator = setupAuthenticator();
         TransportLayer transportLayer = EasyMock.mock(TransportLayer.class);
-        PrincipalBuilder principalBuilder = null; // SASL authenticator does not currently use principal builder
         Map<String, ?> configs = Collections.singletonMap(SaslConfigs.SASL_ENABLED_MECHANISMS,
                 Collections.singletonList(SCRAM_SHA_256.mechanismName()));
 
@@ -66,7 +64,7 @@ public class SaslServerAuthenticatorTest {
 
         EasyMock.replay(transportLayer);
 
-        authenticator.configure(transportLayer, principalBuilder, configs);
+        authenticator.configure(transportLayer, configs);
         authenticator.authenticate();
     }
 
@@ -74,7 +72,6 @@ public class SaslServerAuthenticatorTest {
     public void testUnexpectedRequestType() throws IOException {
         SaslServerAuthenticator authenticator = setupAuthenticator();
         TransportLayer transportLayer = EasyMock.mock(TransportLayer.class);
-        PrincipalBuilder principalBuilder = null; // SASL authenticator does not currently use principal builder
         Map<String, ?> configs = Collections.singletonMap(SaslConfigs.SASL_ENABLED_MECHANISMS,
                 Collections.singletonList(SCRAM_SHA_256.mechanismName()));
 
@@ -102,7 +99,7 @@ public class SaslServerAuthenticatorTest {
 
         EasyMock.replay(transportLayer);
 
-        authenticator.configure(transportLayer, principalBuilder, configs);
+        authenticator.configure(transportLayer, configs);
         try {
             authenticator.authenticate();
             fail("Expected authenticate() to raise an exception");

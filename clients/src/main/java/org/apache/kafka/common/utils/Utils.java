@@ -711,6 +711,11 @@ public class Utils {
             throw exception;
     }
 
+    public static void closeQuietly(Object obj, String name) {
+        if (obj instanceof AutoCloseable)
+            closeQuietly((AutoCloseable) obj, name);
+    }
+
     /**
      * Closes {@code closeable} and if an exception is thrown, it is logged at the WARN level.
      */
@@ -719,7 +724,7 @@ public class Utils {
             try {
                 closeable.close();
             } catch (Throwable t) {
-                log.warn("Failed to close {}", name, t);
+                log.warn("Failed to close {} with type {}", name, closeable.getClass().getName(), t);
             }
         }
     }

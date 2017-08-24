@@ -38,7 +38,6 @@ import org.apache.kafka.common.requests.SaslHandshakeRequest;
 import org.apache.kafka.common.requests.SaslHandshakeResponse;
 import org.apache.kafka.common.security.auth.AuthCallbackHandler;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
-import org.apache.kafka.common.security.auth.PrincipalBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -92,7 +91,12 @@ public class SaslClientAuthenticator implements Authenticator {
     // Request header for which response from the server is pending
     private RequestHeader currentRequestHeader;
 
-    public SaslClientAuthenticator(String node, Subject subject, String servicePrincipal, String host, String mechanism, boolean handshakeRequestEnable) throws IOException {
+    public SaslClientAuthenticator(String node,
+                                   Subject subject,
+                                   String servicePrincipal,
+                                   String host,
+                                   String mechanism,
+                                   boolean handshakeRequestEnable) throws IOException {
         this.node = node;
         this.subject = subject;
         this.host = host;
@@ -102,7 +106,7 @@ public class SaslClientAuthenticator implements Authenticator {
         this.correlationId = -1;
     }
 
-    public void configure(TransportLayer transportLayer, PrincipalBuilder principalBuilder, Map<String, ?> configs) throws KafkaException {
+    public void configure(TransportLayer transportLayer, Map<String, ?> configs) throws KafkaException {
         try {
             this.transportLayer = transportLayer;
             this.configs = configs;
@@ -252,7 +256,7 @@ public class SaslClientAuthenticator implements Authenticator {
         return serverPacket;
     }
 
-    public Principal principal() {
+    public KafkaPrincipal principal() {
         return new KafkaPrincipal(KafkaPrincipal.USER_TYPE, clientPrincipalName);
     }
 

@@ -1,0 +1,107 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.apache.kafka.common.security.auth;
+
+import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.kafka.common.network.Authenticator;
+import org.apache.kafka.common.network.TransportLayer;
+import org.apache.kafka.common.security.kerberos.KerberosName;
+import org.apache.kafka.common.security.kerberos.KerberosShortNamer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import javax.net.ssl.SSLPeerUnverifiedException;
+import javax.net.ssl.SSLSession;
+import javax.security.sasl.SaslServer;
+import java.io.IOException;
+import java.security.Principal;
+
+/**
+ * Default implementation of {@link KafkaPrincipalBuilder} which provides basic support for
+ * SSL authentication and SASL authentication. In the latter case, when GSSAPI is used, this
+ * class applies {@link org.apache.kafka.common.security.kerberos.KerberosShortNamer} to transform
+ * the name.
+ */
+public class DefaultKafkaPrincipalBuilder implements KafkaPrincipalBuilder, AutoCloseable {
+    private static final Logger log = LoggerFactory.getLogger(DefaultKafkaPrincipalBuilder.class);
+
+    private final PrincipalBuilder oldPrincipalBuilder;
+    private final Authenticator authenticator;
+    private final TransportLayer transportLayer;
+    private final KerberosShortNamer kerberosShortNamer;
+
+    public DefaultKafkaPrincipalBuilder(PrincipalBuilder oldPrincipalBuilder,
+                                        Authenticator authenticator,
+                                        TransportLayer transportLayer,
+                                        KerberosShortNamer kerberosShortNamer) {
+        this.oldPrincipalBuilder = oldPrincipalBuilder;
+        this.authenticator = authenticator;
+        this.transportLayer = transportLayer;
+        this.kerberosShortNamer = kerberosShortNamer;
+    }
+
+    @Override
+    public KafkaPrincipal build(AuthenticationContext context) {
+        if (context instanceof PlaintextAuthenticationContext) {
+            if (oldPrincipalBuilder != null)
+                return convertToKafkaPrincipal(oldPrincipalBuilder.buildPrincipal(transportLayer, authenticator));
+
+            return KafkaPrincipal.ANONYMOUS;
+        } else if (context instanceof SslAuthenticationContext) {
+            SSLSession sslSession = ((SslAuthenticationContext) context).session();
+
+            if (oldPrincipalBuilder != null)
+                return convertToKafkaPrincipal(oldPrincipalBuilder.buildPrincipal(transportLayer, authenticator));
+
+            try {
+                return convertToKafkaPrincipal(sslSession.getPeerPrincipal());
+            } catch (SSLPeerUnverifiedException se) {
+                return KafkaPrincipal.ANONYMOUS;
+            }
+        } else if (context instanceof SaslAuthenticationContext) {
+            SaslServer saslServer = ((SaslAuthenticationContext) context).server();
+            if (SaslConfigs.GSSAPI_MECHANISM.equals(saslServer.getMechanismName()))
+                return applyKerberosShortNamer(saslServer.getAuthorizationID());
+            else
+                return new KafkaPrincipal(KafkaPrincipal.USER_TYPE, saslServer.getAuthorizationID());
+        } else {
+            throw new IllegalArgumentException("Unhandled authentication context type: " + context.getClass().getName());
+        }
+    }
+
+    private KafkaPrincipal applyKerberosShortNamer(String authorizationId) {
+        KerberosName kerberosName = KerberosName.parse(authorizationId);
+        try {
+            String shortName = kerberosShortNamer.shortName(kerberosName);
+            return new KafkaPrincipal(KafkaPrincipal.USER_TYPE, shortName);
+        } catch (IOException e) {
+            log.error("Failed to set name for '{}' based on Kerberos authentication rules.", kerberosName, e);
+            return KafkaPrincipal.ANONYMOUS;
+        }
+    }
+
+    private KafkaPrincipal convertToKafkaPrincipal(Principal principal) {
+        return new KafkaPrincipal(KafkaPrincipal.USER_TYPE, principal.getName());
+    }
+
+    @Override
+    public void close() {
+        if (oldPrincipalBuilder != null)
+            oldPrincipalBuilder.close();
+    }
+
+}
