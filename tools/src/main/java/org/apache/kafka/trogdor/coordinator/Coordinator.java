@@ -159,7 +159,7 @@ public final class Coordinator {
                     }
                 }
             } catch (Throwable t) {
-                log.warn("CoordinatorRunnable shutting down with exception", t);
+                log.error("CoordinatorRunnable shutting down with exception", t);
             } finally {
                 log.info("CoordinatorRunnable shutting down.");
                 restServer.stop();
@@ -294,7 +294,7 @@ public final class Coordinator {
             .newArgumentParser("trogdor-coordinator")
             .defaultHelp(true)
             .description("The Trogdor fault injection coordinator");
-        parser.addArgument("--config")
+        parser.addArgument("--coordinator.config")
             .action(store())
             .required(true)
             .type(String.class)

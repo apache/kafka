@@ -200,7 +200,7 @@ public final class Agent {
                     }
                 }
             } catch (Throwable t) {
-                log.warn("Unhandled exception in AgentRunnable", t);
+                log.error("Unhandled exception in AgentRunnable", t);
             } finally {
                 log.info("AgentRunnable shutting down.");
                 restServer.stop();
@@ -297,7 +297,7 @@ public final class Agent {
             .newArgumentParser("trogdor-agent")
             .defaultHelp(true)
             .description("The Trogdor fault injection agent");
-        parser.addArgument("--config")
+        parser.addArgument("--agent.config")
             .action(store())
             .required(true)
             .type(String.class)
