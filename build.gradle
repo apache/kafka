@@ -837,8 +837,15 @@ project(':tools') {
     compile libs.jacksonDatabind
     compile libs.slf4jlog4j
 
+    compile libs.jacksonJaxrsJsonProvider
+    compile libs.jerseyContainerServlet
+    compile libs.jettyServer
+    compile libs.jettyServlet
+    compile libs.jettyServlets
+
     testCompile project(':clients')
     testCompile libs.junit
+    testCompile project(':clients').sourceSets.test.output
   }
 
   javadoc {
