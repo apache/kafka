@@ -1348,6 +1348,77 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
                 </p>
             </td>
         </tr>
+        <tr>
+            <td><b>Count</b>: <code>KGroupedStream &rarr; KTable or KGroupedTable &rarr; KTable</code></td>
+            <td>
+                <p>
+                    <b>Rolling aggregation</b>. Counts the number of records by the grouped key.
+                    Several variants of <code>count</code> exist, see Javadocs for details.
+                </p>
+                <pre class="brush: java;">
+                    KGroupedStream<String, Long> groupedStream = ...;
+                    KGroupedTable<String, Long> groupedTable = ...;
+
+                    // Counting a KGroupedStream
+                    KTable<String, Long> aggregatedStream = groupedStream.count(
+                        "counted-stream-store" /* state store name */);
+
+                    // Counting a KGroupedTable
+                    KTable<String, Long> aggregatedTable = groupedTable.count(
+                        "counted-table-store" /* state store name */);
+                </pre>
+                <p>
+                    Detailed behavior for <code>KGroupedStream</code>:
+                </p>
+                <ul>
+                    <li>Input records with null keys or values are ignored.
+                </ul>
+                <p>
+                    Detailed behavior for <code>KGroupedTable</code>:
+                </p>
+                <ul>
+                    <li>Input records with <code>null</code> keys are ignored. Records with <code>null</code>
+                        values are not ignored but interpreted as “tombstones” for the corresponding key, which
+                        indicate the deletion of the key from the table.
+                </ul>
+            </td>
+        </tr>
+        <tr>
+            <td><b>Count (Windowed)</b>: <code>KGroupedStream &rarr; KTable</code></td>
+            <td>
+                <p>
+                    Windowed aggregation. Counts the number of records, per window, by the grouped key.
+                </p>
+                <p>
+                    The windowed <code>count</code> turns a <code>KGroupedStream<K, V></code> into a windowed <code>KTable<Windowed<K>, V></code>.
+                </p>
+                <p>
+                    Several variants of count exist, see Javadocs for details.
+                </p>
+                <pre class="brush: java;">
+                    import java.util.concurrent.TimeUnit;
+                    KGroupedStream<String, Long> groupedStream = ...;
+
+                    // Counting a KGroupedStream with time-based windowing (here: with 5-minute tumbling windows)
+                    KTable<Windowed<String>, Long> aggregatedStream = groupedStream.count(
+                        TimeWindows.of(TimeUnit.MINUTES.toMillis(5)), /* time-based window */
+                        "time-windowed-counted-stream-store" /* state store name */);
+
+                    // Counting a KGroupedStream with session-based windowing (here: with 5-minute inactivity gaps)
+                    KTable<Windowed<String>, Long> aggregatedStream = groupedStream.count(
+                        SessionWindows.with(TimeUnit.MINUTES.toMillis(5)), /* session window */
+                        "sessionized-counted-stream-store" /* state store name */);
+                </pre>
+                <p>
+                    Detailed behavior:
+                </p>
+                <ul>
+                    <li>Input records with <code>null</code> keys or values are ignored. (Note: As a result of a known bug in Kafka 0.11.0.0,
+                        records with <code>null</code> values are not ignored yet. You can work around this, for example, by manually
+                        filtering out <code>null</code> values prior to grouping the stream.)
+                </ul>
+            </td>
+        </tr>
         </tbody>
     </table>
 
