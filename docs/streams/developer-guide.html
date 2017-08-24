@@ -575,7 +575,7 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
     <p>
     <code>KStream</code> and <code>KTable</code> support a variety of transformation operations. Each of these operations
     can be translated into one or more connected processors into the underlying processor topology. Since <code>KStream</code>
-    and <code>KTable</code> are strongly typed, all these transformation operations are defined as generics functions where
+    and <code>KTable</code> are strongly typed, all these transformation operations are defined as generic functions where
     users could specify the input and output data types.
     </p>
     <p>
@@ -1014,13 +1014,342 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
 
 
     <h5><a id="streams_dsl_transformations_stateful" href="#streams_dsl_transformations_stateful">Stateful transformations</a></h5>
-    Stateless transformations, by definition, do not depend on any state for processing, and hence implementation-wise they do not
-    require a state store associated with the stream processor.Stateful transformations, by definition, depend on state for processing
-    inputs and producing outputs, and hence implementation-wise they require a state store associated with the stream processor. For
-    example, in aggregating operations, a windowing state store is used to store the latest aggregation results per window; in join
-    operations, a windowing state store is used to store all the records received so far within the defined window boundary.
+    <h6><a id="treams_dsl_transformations_stateful_overview" href="#streams_dsl_transformations_stateful_overview">Overview</a></h6>
+    <p>
+        Stateful transformations, by definition, depend on state for processing inputs and producing outputs, and
+        hence implementation-wise they require a state store associated with the stream processor. For example,
+        in aggregating operations, a windowing state store is used to store the latest aggregation results per window;
+        in join operations, a windowing state store is used to store all the records received so far within the
+        defined window boundary.
+    </p>
+    <p>
+        Note, that state stores are fault-tolerant. In case of failure, Kafka Streams guarantees to fully restore
+        all state stores prior to resuming the processing.
+    </p>
+    <p>
+        Available stateful transformations in the DSL include:
+    <ul>
+        <li><a href=#streams_dsl_aggregations>Aggregating</a>
+        <li><a href="#streams_dsl_joins">Joining</a>
+        <li><a href="#streams_dsl_windowing">Windowing (as part of aggregations and joins)</a>
+        <li>Applying custom processors and transformers, which may be stateful, for Processor API integration
+    </ul>
+    </p>
+    <p>
+        The following diagram shows their relationships:
+    </p>
+    <figure>
+        <img class="centerd" src="/{{version}}/images/streams-stateful_operations.png" style="width:500pt;">
+        <figcaption style="text-align: center;"><i>Stateful transformations in the DSL</i></figcaption>
+    </figure>
+
+    <p>
+        We will discuss the various stateful transformations in detail in the subsequent sections. However, let’s start
+        with a first example of a stateful application: the canonical WordCount algorithm.
+    </p>
+    <p>
+        WordCount example in Java 8+, using lambda expressions:
+    </p>
+    <pre class="brush: java;">
+        // We assume record values represent lines of text.  For the sake of this example, we ignore
+        // whatever may be stored in the record keys.
+        KStream<String, String> textLines = ...;
+
+        KStream<String, Long> wordCounts = textLines
+            // Split each text line, by whitespace, into words.  The text lines are the record
+            // values, i.e. we can ignore whatever data is in the record keys and thus invoke
+            // `flatMapValues` instead of the more generic `flatMap`.
+            .flatMapValues(value -> Arrays.asList(value.toLowerCase().split("\\W+")))
+            // Group the stream by word to ensure the key of the record is the word.
+            .groupBy((key, word) -> word)
+            // Count the occurrences of each word (record key).
+            //
+            // This will change the stream type from `KGroupedStream<String, String>` to
+            // `KTable<String, Long>` (word -> count).  We must provide a name for
+            // the resulting KTable, which will be used to name e.g. its associated
+            // state store and changelog topic.
+            .count("Counts")
+            // Convert the `KTable<String, Long>` into a `KStream<String, Long>`.
+            .toStream();
+    </pre>
+    <p>
+        WordCount example in Java 7:
+    </p>
+    <pre class="brush: java;">
+        // Code below is equivalent to the previous Java 8+ example above.
+        KStream<String, String> textLines = ...;
+
+        KStream<String, Long> wordCounts = textLines
+            .flatMapValues(new ValueMapper<String, Iterable<String>>() {
+                @Override
+                public Iterable<String> apply(String value) {
+                    return Arrays.asList(value.toLowerCase().split("\\W+"));
+                }
+            })
+            .groupBy(new KeyValueMapper<String, String, String>>() {
+                @Override
+                public String apply(String key, String word) {
+                    return word;
+                }
+            })
+            .count("Counts")
+            .toStream();
+    </pre>
+
+    <h6><a id="streams_dsl_aggregations" href="#streams_dsl_aggregations">Aggregate a stream</a></h6>
+    <p>
+        Once records are grouped by key via <code>groupByKey</code> or <code>groupBy</code> – and
+        thus represented as either a <code>KGroupedStream</code> or a
+        <code>KGroupedTable</code> -- they can be aggregated via an operation such as
+        <code>reduce</code>. Aggregations are <i>key-based</i> operations, i.e.
+        they always operate over records (notably record values) <i>of the same key</i>. You may
+        choose to perform aggregations on
+        <a href="#streams_dsl_windowing">windowed</a> or non-windowed data.
+    </p>
+    <table class="data-table" border="1">
+        <tbody>
+        <tr>
+            <th>Transformation</th>
+            <th>Description</th>
+        </tr>
+        <tr>
+            <td><b>Aggregate</b>: <code>KGroupedStream &rarr; KTable</code> or <code>KGroupedTable
+                &rarr; KTable</code></td>
+            <td>
+                <p>
+                    <b>Rolling aggregation</b>. Aggregates the values of (non-windowed) records by
+                    the grouped key. Aggregating is a generalization of <code>reduce</code> and allows, for example, the
+                    aggregate value to have a different type than the input values.
+                </p>
+                <p>
+                    When aggregating a grouped stream, you must provide an initializer (think:
+                    <code>aggValue = 0</code>) and an “adder”
+                    aggregator (think: <code>aggValue + curValue</code>). When aggregating a <i>grouped</i>
+                    table, you must additionally provide a “subtractor” aggregator (think: <code>aggValue - oldValue</code>).
+                </p>
+                <p>
+                    Several variants of <code>aggregate</code> exist, see Javadocs for details.
+                </p>
+                <pre class="brush: java;">
+                    KGroupedStream<byte[], String> groupedStream = ...;
+                    KGroupedTable<byte[], String> groupedTable = ...;
+
+                    // Java 8+ examples, using lambda expressions
+
+                    // Aggregating a KGroupedStream (note how the value type changes from String to Long)
+                    KTable<byte[], Long> aggregatedStream = groupedStream.aggregate(
+                        () -> 0L, /* initializer */
+                        (aggKey, newValue, aggValue) -> aggValue + newValue.length(), /* adder */
+                        Serdes.Long(), /* serde for aggregate value */
+                        "aggregated-stream-store" /* state store name */);
+
+                    // Aggregating a KGroupedTable (note how the value type changes from String to Long)
+                    KTable<byte[], Long> aggregatedTable = groupedTable.aggregate(
+                        () -> 0L, /* initializer */
+                        (aggKey, newValue, aggValue) -> aggValue + newValue.length(), /* adder */
+                        (aggKey, oldValue, aggValue) -> aggValue - oldValue.length(), /* subtractor */
+                        Serdes.Long(), /* serde for aggregate value */
+                        "aggregated-table-store" /* state store name */);
 
 
+                    // Java 7 examples
+
+                    // Aggregating a KGroupedStream (note how the value type changes from String to Long)
+                    KTable<byte[], Long> aggregatedStream = groupedStream.aggregate(
+                        new Initializer<Long>() { /* initializer */
+                          @Override
+                          public Long apply() {
+                            return 0L;
+                          }
+                        },
+                        new Aggregator<byte[], String, Long>() { /* adder */
+                          @Override
+                          public Long apply(byte[] aggKey, String newValue, Long aggValue) {
+                            return aggValue + newValue.length();
+                          }
+                        },
+                        Serdes.Long(),
+                        "aggregated-stream-store");
+
+                    // Aggregating a KGroupedTable (note how the value type changes from String to Long)
+                    KTable<byte[], Long> aggregatedTable = groupedTable.aggregate(
+                        new Initializer<Long>() { /* initializer */
+                          @Override
+                          public Long apply() {
+                            return 0L;
+                          }
+                        },
+                        new Aggregator<byte[], String, Long>() { /* adder */
+                          @Override
+                          public Long apply(byte[] aggKey, String newValue, Long aggValue) {
+                            return aggValue + newValue.length();
+                          }
+                        },
+                        new Aggregator<byte[], String, Long>() { /* subtractor */
+                          @Override
+                          public Long apply(byte[] aggKey, String oldValue, Long aggValue) {
+                            return aggValue - oldValue.length();
+                          }
+                        },
+                        Serdes.Long(),
+                        "aggregated-table-store");
+                </pre>
+                <p>
+                    Detailed behavior of <code>KGroupedStream</code>:
+                </p>
+                <ul>
+                    <li>Input records with <code>null</code> keys are ignored in general.
+                    <li>When a record key is received for the first time, the initializer is called
+                        (and called before the adder).
+                    <li>Whenever a record with a non-null value is received, the adder is called.
+                </ul>
+                <p>
+                    Detailed behavior of KGroupedTable:
+                </p>
+                <ul>
+                    <li>Input records with null keys are ignored in general.
+                    <li>When a record key is received for the first time, the initializer is called
+                        (and called before the adder and subtractor). Note that, in contrast to <code>KGroupedStream</code>, over
+                        time the initializer may be called more
+                        than once for a key as a result of having received input tombstone records
+                        for that key (see below).
+                    <li>When the first non-<code>null</code> value is received for a key (think:
+                        INSERT), then only the adder is called.
+                    <li>When subsequent non-<code>null</code> values are received for a key (think:
+                        UPDATE), then (1) the subtractor is called
+                        with the old value as stored in the table and (2) the adder is called with
+                        the new value of the input record
+                        that was just received. The order of execution for the subtractor and adder
+                        is not defined.
+                    <li>When a tombstone record – i.e. a record with a <code>null</code> value – is
+                        received for a key (think: DELETE), then
+                        only the subtractor is called. Note that, whenever the subtractor returns a
+                    <code>null</code> value itself, then the
+                    corresponding key is removed from the resulting KTable. If that happens, any
+                    next input record for that key will trigger the initializer again.
+                </ul>
+                <p>
+                    See the example at the bottom of this section for a visualization of the
+                    aggregation semantics.
+                </p>
+            </td>
+        </tr>
+        <tr>
+            <td><b>Aggregate (windowed)</b>: <code>KGroupedStream &rarr; KTable</code></td>
+            <td>
+                <p>
+                    <b>Windowed aggregation</b>. Aggregates the values of records, per window, by
+                    the grouped key. Aggregating is a generalization of
+                    <code>reduce</code> and allows, for example, the aggregate value to have a
+                    different type than the input values.
+                </p>
+                <p>
+                    You must provide an initializer (think: <code>aggValue = 0</code>), “adder”
+                    aggregator (think: <code>aggValue + curValue</code>),
+                    and a window. When windowing based on sessions, you must additionally provide a
+                    “session merger” aggregator (think:
+                    <code>mergedAggValue = leftAggValue + rightAggValue</code>).
+                </p>
+                <p>
+                    The windowed <code>aggregate</code> turns a <code>KGroupedStream
+                    <K , V></code> into a windowed <code>KTable<Windowed<K>, V></code>.
+                </p>
+                <p>
+                    Several variants of <code>aggregate</code> exist, see Javadocs for details.
+                </p>
+
+                <pre class="brush: java;">
+                    import java.util.concurrent.TimeUnit;
+                    KGroupedStream<String, Long> groupedStream = ...;
+
+                    // Java 8+ examples, using lambda expressions
+
+                    // Aggregating with time-based windowing (here: with 5-minute tumbling windows)
+                    KTable<Windowed<String>, Long> timeWindowedAggregatedStream = groupedStream.aggregate(
+                        () -> 0L, /* initializer */
+                        (aggKey, newValue, aggValue) -> aggValue + newValue, /* adder */
+                        TimeWindows.of(TimeUnit.MINUTES.toMillis(5)), /* time-based window */
+                        Serdes.Long(), /* serde for aggregate value */
+                        "time-windowed-aggregated-stream-store" /* state store name */);
+
+                    // Aggregating with session-based windowing (here: with an inactivity gap of 5 minutes)
+                    KTable<Windowed<String>, Long> sessionizedAggregatedStream = groupedStream.aggregate(
+                        () -> 0L, /* initializer */
+                        (aggKey, newValue, aggValue) -> aggValue + newValue, /* adder */
+                        (aggKey, leftAggValue, rightAggValue) -> leftAggValue + rightAggValue, /* session merger */
+                        SessionWindows.with(TimeUnit.MINUTES.toMillis(5)), /* session window */
+                        Serdes.Long(), /* serde for aggregate value */
+                        "sessionized-aggregated-stream-store" /* state store name */);
+
+                    // Java 7 examples
+
+                    // Aggregating with time-based windowing (here: with 5-minute tumbling windows)
+                    KTable<Windowed<String>, Long> timeWindowedAggregatedStream = groupedStream.aggregate(
+                        new Initializer<Long>() { /* initializer */
+                          @Override
+                          public Long apply() {
+                            return 0L;
+                          }
+                        },
+                        new Aggregator<String, Long, Long>() { /* adder */
+                          @Override
+                          public Long apply(String aggKey, Long newValue, Long aggValue) {
+                            return aggValue + newValue;
+                          }
+                        },
+                        TimeWindows.of(TimeUnit.MINUTES.toMillis(5)), /* time-based window */
+                        Serdes.Long(), /* serde for aggregate value */
+                        "time-windowed-aggregated-stream-store" /* state store name */);
+
+                    // Aggregating with session-based windowing (here: with an inactivity gap of 5 minutes)
+                    KTable<Windowed<String>, Long> sessionizedAggregatedStream = groupedStream.aggregate(
+                        new Initializer<Long>() { /* initializer */
+                          @Override
+                          public Long apply() {
+                            return 0L;
+                          }
+                        },
+                        new Aggregator<String, Long, Long>() { /* adder */
+                          @Override
+                          public Long apply(String aggKey, Long newValue, Long aggValue) {
+                            return aggValue + newValue;
+                          }
+                        },
+                        new Merger<String, Long>() { /* session merger */
+                          @Override
+                          public Long apply(String aggKey, Long leftAggValue, Long rightAggValue) {
+                            return rightAggValue + leftAggValue;
+                          }
+                        },
+                        SessionWindows.with(TimeUnit.MINUTES.toMillis(5)), /* session window */
+                        Serdes.Long(), /* serde for aggregate value */
+                        "sessionized-aggregated-stream-store" /* state store name */);
+                </pre>
+
+                <p>
+                    Detailed behavior:
+                </p>
+                <ul>
+                    <li>The windowed aggregate behaves similar to the rolling aggregate described
+                        above. The additional twist is that the behavior applies per window.
+                    <li>Input records with <code>null</code> keys are ignored in general.
+                    <li>When a record key is received for the first time for a given window, the
+                        initializer is called (and called before the adder).
+                    <li>Whenever a record with a non-<code>null</code> value is received for a given window, the
+                        adder is called.
+                        (Note: As a result of a known bug in Kafka 0.11.0.0, the adder is currently
+                        also called for <code>null</code> values. You can work around this, for example, by
+                        manually filtering out <code>null</code> values prior to grouping the stream.)
+                    <li>When using session windows: the session merger is called whenever two
+                        sessions are being merged.
+                </ul>
+                <p>
+                See the example at the bottom of this section for a visualization of the aggregation semantics.
+                </p>
+            </td>
+        </tr>
+        </tbody>
+    </table>
 
     <h6><a id="streams_dsl_windowing" href="#streams_dsl_windowing">Windowing a stream</a></h6>
     A stream processor may need to divide data records into time buckets, i.e. to <b>window</b> the stream by time. This is usually needed for join and aggregation operations, etc. Kafka Streams currently defines the following types of windows:
@@ -1066,14 +1395,7 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
     Depending on the operands the following join operations are supported: <b>inner joins</b>, <b>outer joins</b> and <b>left joins</b>.
     Their <a href="https://cwiki.apache.org/confluence/display/KAFKA/Kafka+Streams+Join+Semantics">semantics</a> are similar to the corresponding operators in relational databases.
 
-    <h6><a id="streams_dsl_aggregations" href="#streams_dsl_aggregations">Aggregate a stream</a></h6>
-    An <b>aggregation</b> operation takes one input stream, and yields a new stream by combining multiple input records into a single output record. Examples of aggregations are computing counts or sum. An aggregation over record streams usually needs to be performed on a windowing basis because otherwise the number of records that must be maintained for performing the aggregation may grow indefinitely.
 
-    <p>
-        In the Kafka Streams DSL, an input stream of an aggregation can be a <code>KStream</code> or a <code>KTable</code>, but the output stream will always be a <code>KTable</code>.
-        This allows Kafka Streams to update an aggregate value upon the late arrival of further records after the value was produced and emitted.
-        When such late arrival happens, the aggregating <code>KStream</code> or <code>KTable</code> simply emits a new aggregate value. Because the output is a <code>KTable</code>, the new value is considered to overwrite the old value with the same key in subsequent processing steps.
-    </p>
 
     <h4><a id="streams_dsl_sink" href="#streams_dsl_sink">Write streams back to Kafka</a></h4>
 
