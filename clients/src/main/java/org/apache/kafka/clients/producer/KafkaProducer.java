@@ -715,6 +715,12 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * producer and create a new instance.
      * </p>
      * <p>
+     * If the message format of the destination topic is not upgraded to 0.11.0.0, produce requests will
+     * fail with an {@link org.apache.kafka.common.errors.UnsupportedForMessageFormatException} error. If this is
+     * encountered during a transaction, it is possible to abort and continue. But note that future sends to
+     * the same topic will continue receiving the same exception until the topic is upgraded.
+     * </p>
+     * <p>
      * Note that callbacks will generally execute in the I/O thread of the producer and so should be reasonably fast or
      * they will delay the sending of messages from other threads. If you want to execute blocking or computationally
      * expensive callbacks it is recommended to use your own {@link java.util.concurrent.Executor} in the callback body
