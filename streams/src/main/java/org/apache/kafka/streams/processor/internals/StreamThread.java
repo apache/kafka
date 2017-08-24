@@ -982,7 +982,7 @@ public class StreamThread extends Thread {
 
         for (final AbstractTask task : allTasks()) {
             try {
-                task.close(cleanRun);
+                task.close(cleanRun, false);
             } catch (final RuntimeException e) {
                 log.error("{} Failed while closing {} {} due to the following error:",
                           logPrefix,
@@ -1042,7 +1042,7 @@ public class StreamThread extends Thread {
             if (!task.partitions().equals(assignedPartitionsForTask)) {
                 log.debug("{} Closing suspended and not re-assigned task {}", logPrefix, task.id());
                 try {
-                    task.closeSuspended(true, null);
+                    task.closeSuspended(true, false, null);
                 } catch (final Exception e) {
                     log.error("{} Failed to close suspended task {} due to the following error:", logPrefix, task.id, e);
                 } finally {
@@ -1060,7 +1060,7 @@ public class StreamThread extends Thread {
             if (!newStandbyTaskIds.contains(task.id)) {
                 log.debug("{} Closing suspended and not re-assigned standby task {}", logPrefix, task.id());
                 try {
-                    task.close(true);
+                    task.close(true, false);
                 } catch (final Exception e) {
                     log.error("{} Failed to remove suspended standby task {} due to the following error:", logPrefix, task.id(), e);
                 } finally {
