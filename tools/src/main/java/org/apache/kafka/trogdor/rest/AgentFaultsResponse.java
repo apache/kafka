@@ -20,11 +20,8 @@ package org.apache.kafka.trogdor.rest;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import org.apache.kafka.trogdor.common.JsonUtil;
-import org.apache.kafka.trogdor.fault.FaultSpec;
-import org.apache.kafka.trogdor.fault.FaultState;
 
 import java.util.Map;
-import java.util.Objects;
 
 /**
  * Response to GET /faults
