@@ -1419,6 +1419,181 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
                 </ul>
             </td>
         </tr>
+        <tr>
+            <td><b>Reduce</b>: <code>KGroupedStream &rarr; KTable or KGroupedTable &rarr; KTable</code></td>
+            <td>
+                <p>
+                <b>Rolling aggregation</b>. Combines the values of (non-windowed) records by the grouped key. The current record value is
+                combined with the last reduced value, and a new reduced value is returned. The result value type cannot be changed,
+                unlike <code>aggregate</code>.
+                </p>
+
+                <p>
+                When reducing a grouped stream, you must provide an “adder” reducer (think: <code>aggValue + curValue</code>).
+                When reducing a grouped table, you must additionally provide a “subtractor” reducer (think: <code>aggValue - oldValue</code>).
+                </p>
+                <p>
+                Several variants of <code>reduce</code> exist, see Javadocs for details.
+                </p>
+                <pre class="brush: java;">
+                    KGroupedStream<String, Long> groupedStream = ...;
+                    KGroupedTable<String, Long> groupedTable = ...;
+
+                    // Java 8+ examples, using lambda expressions
+
+                    // Reducing a KGroupedStream
+                    KTable<String, Long> aggregatedStream = groupedStream.reduce(
+                        (aggValue, newValue) -> aggValue + newValue, /* adder */
+                        "reduced-stream-store" /* state store name */);
+
+                    // Reducing a KGroupedTable
+                    KTable<String, Long> aggregatedTable = groupedTable.reduce(
+                        (aggValue, newValue) -> aggValue + newValue, /* adder */
+                        (aggValue, oldValue) -> aggValue - oldValue, /* subtractor */
+                        "reduced-table-store" /* state store name */);
+
+
+                    // Java 7 examples
+
+                    // Reducing a KGroupedStream
+                    KTable<String, Long> aggregatedStream = groupedStream.reduce(
+                        new Reducer<Long>() { /* adder */
+                          @Override
+                          public Long apply(Long aggValue, Long newValue) {
+                            return aggValue + newValue;
+                          }
+                        },
+                        "reduced-stream-store" /* state store name */);
+
+                    // Reducing a KGroupedTable
+                    KTable<String, Long> aggregatedTable = groupedTable.reduce(
+                        new Reducer<Long>() { /* adder */
+                          @Override
+                          public Long apply(Long aggValue, Long newValue) {
+                            return aggValue + newValue;
+                          }
+                        },
+                        new Reducer<Long>() { /* subtractor */
+                          @Override
+                          public Long apply(Long aggValue, Long oldValue) {
+                            return aggValue - oldValue;
+                          }
+                        },
+                        "reduced-table-store" /* state store name */);
+                </pre>
+                <p>
+                    Detailed behavior for <code>KGroupedStream</code>:
+                </p>
+                <ul>
+                    <li>Input records with <code>null</code> keys are ignored in general.
+                    <li>When a record key is received for the first time, then the value of that
+                        record is used as the initial aggregate value.
+                    <li>Whenever a record with a non-<code>null</code> value is received, the adder is called.
+                </ul>
+                <p>
+                Detailed behavior for <code>KGroupedTable</code>:
+                </p>
+                <ul>
+                    <li>Input records with null keys are ignored in general.
+                    <li>When a record key is received for the first time, then the value of that
+                        record is used as the initial aggregate value.
+                        Note that, in contrast to KGroupedStream, over time this initialization step
+                        may happen more than once for a key as a
+                        result of having received input tombstone records for that key (see below).
+                    <li>When the first non-<code>null</code> value is received for a key (think: INSERT), then
+                        only the adder is called.
+                    <li>When subsequent non-<code>null</code> values are received for a key (think: UPDATE), then
+                        (1) the subtractor is called with the
+                        old value as stored in the table and (2) the adder is called with the new
+                        value of the input record that was just received.
+                        The order of execution for the subtractor and adder is not defined.
+                    <li>When a tombstone record – i.e. a record with a <code>null</code> value – is received
+                        for a key (think: DELETE), then only the
+                        subtractor is called. Note that, whenever the subtractor returns a <code>null</code>
+                        value itself, then the corresponding key
+                        is removed from the resulting KTable. If that happens, any next input
+                        record for that key will re-initialize its aggregate value.
+                </ul>
+                <p>
+                See the example at the bottom of this section for a visualization of the
+                aggregation semantics.
+                <p>
+            </td>
+        </tr>
+        <tr>
+            <td><b>Reduce (windowed)</b>: <code>KGroupedStream &rarr; KTable</code></td>
+            <td>
+                <p>
+                Windowed aggregation. Combines the values of records, per window, by the grouped key. The current record value
+                is combined with the last reduced value, and a new reduced value is returned. Records with null key or value are
+                ignored. The result value type cannot be changed, unlike aggregate. (KGroupedStream details)
+                </p>
+                <p>
+                The windowed reduce turns a KGroupedStream<K, V> into a windowed KTable<Windowed<K>, V>.
+                </p>
+                <p>
+                Several variants of reduce exist, see Javadocs for details.
+                </p>
+                <pre class="brush: java;">
+                    import java.util.concurrent.TimeUnit;
+                    KGroupedStream<String, Long> groupedStream = ...;
+
+                    // Java 8+ examples, using lambda expressions
+
+                    // Aggregating with time-based windowing (here: with 5-minute tumbling windows)
+                    KTable<Windowed<String>, Long> timeWindowedAggregatedStream = groupedStream.reduce(
+                        (aggValue, newValue) -> aggValue + newValue, /* adder */
+                        TimeWindows.of(TimeUnit.MINUTES.toMillis(5)), /* time-based window */
+                        "time-windowed-reduced-stream-store" /* state store name */);
+
+                    // Aggregating with session-based windowing (here: with an inactivity gap of 5 minutes)
+                    KTable<Windowed<String>, Long> sessionzedAggregatedStream = groupedStream.reduce(
+                        (aggValue, newValue) -> aggValue + newValue, /* adder */
+                        SessionWindows.with(TimeUnit.MINUTES.toMillis(5)), /* session window */
+                        "sessionized-reduced-stream-store" /* state store name */);
+
+
+                    // Java 7 examples
+
+                    // Aggregating with time-based windowing (here: with 5-minute tumbling windows)
+                    KTable<Windowed<String>, Long> timeWindowedAggregatedStream = groupedStream.reduce(
+                        new Reducer<Long>() { /* adder */
+                          @Override
+                          public Long apply(Long aggValue, Long newValue) {
+                            return aggValue + newValue;
+                          }
+                        },
+                        TimeWindows.of(TimeUnit.MINUTES.toMillis(5)), /* time-based window */
+                        "time-windowed-reduced-stream-store" /* state store name */);
+
+                    // Aggregating with session-based windowing (here: with an inactivity gap of 5 minutes)
+                    KTable<Windowed<String>, Long> timeWindowedAggregatedStream = groupedStream.reduce(
+                        new Reducer<Long>() { /* adder */
+                          @Override
+                          public Long apply(Long aggValue, Long newValue) {
+                            return aggValue + newValue;
+                          }
+                        },
+                        SessionWindows.with(TimeUnit.MINUTES.toMillis(5)), /* session window */
+                        "sessionized-reduced-stream-store" /* state store name */);
+                </pre>
+
+                <p>
+                Detailed behavior:
+                </p>
+                <ul>
+                    <li>The windowed reduce behaves similar to the rolling reduce described above. The additional twist is that
+                        the behavior applies per window.
+                    <li>Input records with <code>null</code> keys are ignored in general.
+                    <li>When a record key is received for the first time for a given window, then the value of that record is
+                    used as the initial aggregate value.
+                    <li>Whenever a record with a non-<code>null</code> value is received for a given window, the adder is called. (Note: As
+                    a result of a known bug in Kafka 0.11.0.0, the adder is currently also called for <code>null</code> values. You can work
+                    around this, for example, by manually filtering out <code>null</code> values prior to grouping the stream.)
+                    <li>See the example at the bottom of this section for a visualization of the aggregation semantics.
+                </ul>
+            </td>
+        </tr>
         </tbody>
     </table>
 
