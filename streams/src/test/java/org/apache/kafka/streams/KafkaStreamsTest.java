@@ -541,14 +541,15 @@ public class KafkaStreamsTest {
         final UnitTestAppender appender = new UnitTestAppender();
         final Logger logger = Logger.getRootLogger();
         logger.addAppender(appender);
+
         try {
             Logger.getLogger(KafkaStreams.class);
             streams.start();
-        }
-        finally {
+        } finally {
             logger.removeAppender(appender);
             streams.close();
         }
+
         final LoggingEvent firstLogEntry = appender.log.get(0);
         Assert.assertEquals("org.apache.kafka.streams.KafkaStreams", firstLogEntry.getLoggerName());
         Assert.assertTrue(firstLogEntry.getMessage().toString().contains("[stream-client="));

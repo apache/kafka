@@ -516,7 +516,7 @@ public class KafkaStreams {
 
         LogContext logContext = new LogContext("[stream-client=" + clientId + "] ");
 
-        this.log=logContext.logger(getClass());
+        this.log = logContext.logger(getClass());
 
         final List<MetricsReporter> reporters = config.getConfiguredInstances(StreamsConfig.METRIC_REPORTER_CLASSES_CONFIG,
             MetricsReporter.class);
