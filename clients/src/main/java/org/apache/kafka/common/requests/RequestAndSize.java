@@ -17,12 +17,11 @@
 package org.apache.kafka.common.requests;
 
 public class RequestAndSize {
-    public final AbstractRequest body;
-    public final int sizeOfBodyInBytes;
+    public final AbstractRequest request;
+    public final int size;
 
-    public RequestAndSize(AbstractRequest body, int sizeOfBodyInBytes) {
-        this.body = body;
-        this.sizeOfBodyInBytes = sizeOfBodyInBytes;
+    public RequestAndSize(AbstractRequest request, int size) {
+        this.request = request;
+        this.size = size;
     }
-
 }

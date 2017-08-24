@@ -67,7 +67,7 @@ object RequestChannel extends Logging {
     def connectionId: String = context.connectionId
     def listenerName: ListenerName = context.listenerName
     def securityProtocol: SecurityProtocol = context.securityProtocol
-    def sizeOfBodyInBytes: Int = request.sizeOfBodyInBytes
+    def sizeOfBodyInBytes: Int = request.size
 
     //most request types are parsed entirely into objects at this point. for those we can release the underlying buffer.
     //some (like produce, or any time the schema contains fields of types BYTES or NULLABLE_BYTES) retain a reference
@@ -79,7 +79,7 @@ object RequestChannel extends Logging {
     def requestDesc(details: Boolean): String = s"$header -- ${body[AbstractRequest].toString(details)}"
 
     def body[T <: AbstractRequest](implicit classTag: ClassTag[T], nn: NotNothing[T]): T = {
-      request.body match {
+      request.request match {
         case r: T => r
         case r =>
           throw new ClassCastException(s"Expected request with type ${classTag.runtimeClass}, but found ${r.getClass}")

@@ -328,9 +328,9 @@ public class SaslServerAuthenticator implements Authenticator {
                     KafkaPrincipal.ANONYMOUS, listenerName, securityProtocol);
             RequestAndSize requestAndSize = requestContext.parseRequest(requestBuffer);
             if (apiKey == ApiKeys.API_VERSIONS)
-                handleApiVersionsRequest(requestContext, (ApiVersionsRequest) requestAndSize.body);
+                handleApiVersionsRequest(requestContext, (ApiVersionsRequest) requestAndSize.request);
             else
-                clientMechanism = handleHandshakeRequest(requestContext, (SaslHandshakeRequest) requestAndSize.body);
+                clientMechanism = handleHandshakeRequest(requestContext, (SaslHandshakeRequest) requestAndSize.request);
         } catch (SchemaException | IllegalArgumentException e) {
             if (saslState == SaslState.GSSAPI_OR_HANDSHAKE_REQUEST) {
                 // SchemaException is thrown if the request is not in Kafka format. IllegalArgumentException is thrown
