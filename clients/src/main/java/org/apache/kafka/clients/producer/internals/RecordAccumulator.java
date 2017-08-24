@@ -131,7 +131,6 @@ public final class RecordAccumulator {
         this.apiVersions = apiVersions;
         this.transactionManager = transactionManager;
         registerMetrics(metrics, metricGrpName);
-
     }
 
     private void registerMetrics(Metrics metrics, String metricGrpName) {

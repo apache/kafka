@@ -152,8 +152,6 @@ public class Sender implements Runnable {
         this.transactionManager = transactionManager;
     }
 
-
-
     /**
      * The main run loop for the sender thread
      */
