@@ -509,7 +509,6 @@ public class SenderTest {
         prepareAndReceiveInitProducerId(producerId, Errors.NONE);
         assertTrue(transactionManager.hasProducerId());
 
-        // cluster authorization is a fatal error for the producer
         Future<RecordMetadata> future = accumulator.append(tp0, time.milliseconds(), "key".getBytes(), "value".getBytes(),
                 null, null, MAX_BLOCK_TIMEOUT).future;
         client.prepareResponse(new MockClient.RequestMatcher() {
@@ -528,6 +527,7 @@ public class SenderTest {
             assertTrue(e.getCause() instanceof UnsupportedForMessageFormatException);
         }
 
+        // unsupported for message format is not a fatal error
         assertFalse(transactionManager.hasError());
     }
 
@@ -554,7 +554,7 @@ public class SenderTest {
         assertTrue(future.isDone());
         try {
             future.get();
-            fail("Future should have raised ClusterAuthorizationException");
+            fail("Future should have raised UnsupportedVersionException");
         } catch (ExecutionException e) {
             assertTrue(e.getCause() instanceof UnsupportedVersionException);
         }
