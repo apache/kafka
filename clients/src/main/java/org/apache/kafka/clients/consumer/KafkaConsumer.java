@@ -652,7 +652,13 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             if (clientId.length() <= 0)
                 clientId = "consumer-" + CONSUMER_CLIENT_ID_SEQUENCE.getAndIncrement();
             this.clientId = clientId;
-            Map<String, String> metricsTags = Collections.singletonMap("client-id", clientId);
+
+            String groupId = config.getString(ConsumerConfig.GROUP_ID_CONFIG);
+            Map<String, String> metricsTags = new HashMap<>();
+
+            metricsTags.put("client-id", clientId);
+            metricsTags.put("group-id", groupId);
+
             MetricConfig metricConfig = new MetricConfig().samples(config.getInt(ConsumerConfig.METRICS_NUM_SAMPLES_CONFIG))
                     .timeWindow(config.getLong(ConsumerConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG), TimeUnit.MILLISECONDS)
                     .recordLevel(Sensor.RecordingLevel.forName(config.getString(ConsumerConfig.METRICS_RECORDING_LEVEL_CONFIG)))
@@ -720,7 +726,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG,
                     PartitionAssignor.class);
             this.coordinator = new ConsumerCoordinator(this.client,
-                                                       config.getString(ConsumerConfig.GROUP_ID_CONFIG),
+                                                       groupId,
                                                        config.getInt(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG),
                                                        config.getInt(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG),
                                                        config.getInt(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG),
