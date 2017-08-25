@@ -565,7 +565,7 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
                     <li>You must specificy serdes explicitly if the key and/or value types of the records in the Kafka input topic do not
                         match the configured default serdes.</li>
                 </ul>
-                Several variants of <code>globalTable<code> exist to e.g. specify explicit serdes.
+                Several variants of <code>globalTable</code> exist to e.g. specify explicit serdes.
 
             </td>
         </tbody>
@@ -1044,7 +1044,7 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
     </figure>
 
     <p>
-        We will discuss the various stateful transformations in detail in the subsequent sections. However, let’s start
+        We will discuss the various stateful transformations in detail in the subsequent sections. However, let's start
         with a first example of a stateful application: the canonical WordCount algorithm.
     </p>
     <p>
@@ -1053,9 +1053,9 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
     <pre class="brush: java;">
         // We assume record values represent lines of text.  For the sake of this example, we ignore
         // whatever may be stored in the record keys.
-        KStream<String, String> textLines = ...;
+        KStream&lt;String, String&gt; textLines = ...;
 
-        KStream<String, Long> wordCounts = textLines
+        KStream&lt;String, Long&gt; wordCounts = textLines
             // Split each text line, by whitespace, into words.  The text lines are the record
             // values, i.e. we can ignore whatever data is in the record keys and thus invoke
             // `flatMapValues` instead of the more generic `flatMap`.
@@ -1064,12 +1064,12 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
             .groupBy((key, word) -> word)
             // Count the occurrences of each word (record key).
             //
-            // This will change the stream type from `KGroupedStream<String, String>` to
-            // `KTable<String, Long>` (word -> count).  We must provide a name for
+            // This will change the stream type from `KGroupedStream&lt;String, String&gt;` to
+            // `KTable&lt;String, Long&gt;` (word -> count).  We must provide a name for
             // the resulting KTable, which will be used to name e.g. its associated
             // state store and changelog topic.
             .count("Counts")
-            // Convert the `KTable<String, Long>` into a `KStream<String, Long>`.
+            // Convert the `KTable&lt;String, Long&gt;` into a `KStream&lt;String, Long&gt;`.
             .toStream();
     </pre>
     <p>
@@ -1077,16 +1077,16 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
     </p>
     <pre class="brush: java;">
         // Code below is equivalent to the previous Java 8+ example above.
-        KStream<String, String> textLines = ...;
+        KStream&lt;String, String&gt; textLines = ...;
 
-        KStream<String, Long> wordCounts = textLines
-            .flatMapValues(new ValueMapper<String, Iterable<String>>() {
+        KStream&lt;String, Long&gt; wordCounts = textLines
+            .flatMapValues(new ValueMapper&lt;String, Iterable&lt;String&gt;&gt;() {
                 @Override
-                public Iterable<String> apply(String value) {
+                public Iterable&lt;String&gt; apply(String value) {
                     return Arrays.asList(value.toLowerCase().split("\\W+"));
                 }
             })
-            .groupBy(new KeyValueMapper<String, String, String>>() {
+            .groupBy(new KeyValueMapper&lt;String, String, String&gt;&gt;() {
                 @Override
                 public String apply(String key, String word) {
                     return word;
@@ -1098,7 +1098,7 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
 
     <h6><a id="streams_dsl_aggregations" href="#streams_dsl_aggregations">Aggregate a stream</a></h6>
     <p>
-        Once records are grouped by key via <code>groupByKey</code> or <code>groupBy</code> – and
+        Once records are grouped by key via <code>groupByKey</code> or <code>groupBy</code> -- and
         thus represented as either a <code>KGroupedStream</code> or a
         <code>KGroupedTable</code> -- they can be aggregated via an operation such as
         <code>reduce</code>. Aggregations are <i>key-based</i> operations, i.e.
@@ -1123,28 +1123,28 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
                 </p>
                 <p>
                     When aggregating a grouped stream, you must provide an initializer (think:
-                    <code>aggValue = 0</code>) and an “adder”
+                    <code>aggValue = 0</code>) and an "adder"
                     aggregator (think: <code>aggValue + curValue</code>). When aggregating a <i>grouped</i>
-                    table, you must additionally provide a “subtractor” aggregator (think: <code>aggValue - oldValue</code>).
+                    table, you must additionally provide a "subtractor" aggregator (think: <code>aggValue - oldValue</code>).
                 </p>
                 <p>
                     Several variants of <code>aggregate</code> exist, see Javadocs for details.
                 </p>
                 <pre class="brush: java;">
-                    KGroupedStream<byte[], String> groupedStream = ...;
-                    KGroupedTable<byte[], String> groupedTable = ...;
+                    KGroupedStream&lt;byte[], String&gt; groupedStream = ...;
+                    KGroupedTable&lt;byte[], String&gt; groupedTable = ...;
 
                     // Java 8+ examples, using lambda expressions
 
                     // Aggregating a KGroupedStream (note how the value type changes from String to Long)
-                    KTable<byte[], Long> aggregatedStream = groupedStream.aggregate(
+                    KTable&lt;byte[], Long&gt; aggregatedStream = groupedStream.aggregate(
                         () -> 0L, /* initializer */
                         (aggKey, newValue, aggValue) -> aggValue + newValue.length(), /* adder */
                         Serdes.Long(), /* serde for aggregate value */
                         "aggregated-stream-store" /* state store name */);
 
                     // Aggregating a KGroupedTable (note how the value type changes from String to Long)
-                    KTable<byte[], Long> aggregatedTable = groupedTable.aggregate(
+                    KTable&lt;byte[], Long&gt; aggregatedTable = groupedTable.aggregate(
                         () -> 0L, /* initializer */
                         (aggKey, newValue, aggValue) -> aggValue + newValue.length(), /* adder */
                         (aggKey, oldValue, aggValue) -> aggValue - oldValue.length(), /* subtractor */
@@ -1155,14 +1155,14 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
                     // Java 7 examples
 
                     // Aggregating a KGroupedStream (note how the value type changes from String to Long)
-                    KTable<byte[], Long> aggregatedStream = groupedStream.aggregate(
-                        new Initializer<Long>() { /* initializer */
+                    KTable&lt;byte[], Long&gt; aggregatedStream = groupedStream.aggregate(
+                        new Initializer&lt;Long&gt;() { /* initializer */
                           @Override
                           public Long apply() {
                             return 0L;
                           }
                         },
-                        new Aggregator<byte[], String, Long>() { /* adder */
+                        new Aggregator&lt;byte[], String, Long&gt;() { /* adder */
                           @Override
                           public Long apply(byte[] aggKey, String newValue, Long aggValue) {
                             return aggValue + newValue.length();
@@ -1172,20 +1172,20 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
                         "aggregated-stream-store");
 
                     // Aggregating a KGroupedTable (note how the value type changes from String to Long)
-                    KTable<byte[], Long> aggregatedTable = groupedTable.aggregate(
-                        new Initializer<Long>() { /* initializer */
+                    KTable&lt;byte[], Long&gt; aggregatedTable = groupedTable.aggregate(
+                        new Initializer&lt;Long&gt;() { /* initializer */
                           @Override
                           public Long apply() {
                             return 0L;
                           }
                         },
-                        new Aggregator<byte[], String, Long>() { /* adder */
+                        new Aggregator&lt;byte[], String, Long&gt;() { /* adder */
                           @Override
                           public Long apply(byte[] aggKey, String newValue, Long aggValue) {
                             return aggValue + newValue.length();
                           }
                         },
-                        new Aggregator<byte[], String, Long>() { /* subtractor */
+                        new Aggregator&lt;byte[], String, Long&gt;() { /* subtractor */
                           @Override
                           public Long apply(byte[] aggKey, String oldValue, Long aggValue) {
                             return aggValue - oldValue.length();
@@ -1221,7 +1221,7 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
                         the new value of the input record
                         that was just received. The order of execution for the subtractor and adder
                         is not defined.
-                    <li>When a tombstone record – i.e. a record with a <code>null</code> value – is
+                    <li>When a tombstone record -- i.e. a record with a <code>null</code> value -- is
                         received for a key (think: DELETE), then
                         only the subtractor is called. Note that, whenever the subtractor returns a
                     <code>null</code> value itself, then the
@@ -1244,15 +1244,15 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
                     different type than the input values.
                 </p>
                 <p>
-                    You must provide an initializer (think: <code>aggValue = 0</code>), “adder”
+                    You must provide an initializer (think: <code>aggValue = 0</code>), "adder"
                     aggregator (think: <code>aggValue + curValue</code>),
                     and a window. When windowing based on sessions, you must additionally provide a
-                    “session merger” aggregator (think:
+                    "session merger" aggregator (think:
                     <code>mergedAggValue = leftAggValue + rightAggValue</code>).
                 </p>
                 <p>
                     The windowed <code>aggregate</code> turns a <code>KGroupedStream
-                    <K , V></code> into a windowed <code>KTable<Windowed<K>, V></code>.
+                    &lt;K , V&gt;</code> into a windowed <code>KTable&lt;Windowed&lt;K&gt;, V&gt;</code>.
                 </p>
                 <p>
                     Several variants of <code>aggregate</code> exist, see Javadocs for details.
@@ -1260,12 +1260,12 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
 
                 <pre class="brush: java;">
                     import java.util.concurrent.TimeUnit;
-                    KGroupedStream<String, Long> groupedStream = ...;
+                    KGroupedStream&lt;String, Long&gt; groupedStream = ...;
 
                     // Java 8+ examples, using lambda expressions
 
                     // Aggregating with time-based windowing (here: with 5-minute tumbling windows)
-                    KTable<Windowed<String>, Long> timeWindowedAggregatedStream = groupedStream.aggregate(
+                    KTable&lt;Windowed&lt;String&gt;, Long&gt; timeWindowedAggregatedStream = groupedStream.aggregate(
                         () -> 0L, /* initializer */
                         (aggKey, newValue, aggValue) -> aggValue + newValue, /* adder */
                         TimeWindows.of(TimeUnit.MINUTES.toMillis(5)), /* time-based window */
@@ -1273,7 +1273,7 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
                         "time-windowed-aggregated-stream-store" /* state store name */);
 
                     // Aggregating with session-based windowing (here: with an inactivity gap of 5 minutes)
-                    KTable<Windowed<String>, Long> sessionizedAggregatedStream = groupedStream.aggregate(
+                    KTable&lt;Windowed&lt;String&gt;, Long&gt; sessionizedAggregatedStream = groupedStream.aggregate(
                         () -> 0L, /* initializer */
                         (aggKey, newValue, aggValue) -> aggValue + newValue, /* adder */
                         (aggKey, leftAggValue, rightAggValue) -> leftAggValue + rightAggValue, /* session merger */
@@ -1284,14 +1284,14 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
                     // Java 7 examples
 
                     // Aggregating with time-based windowing (here: with 5-minute tumbling windows)
-                    KTable<Windowed<String>, Long> timeWindowedAggregatedStream = groupedStream.aggregate(
-                        new Initializer<Long>() { /* initializer */
+                    KTable&lt;Windowed&lt;String&gt;, Long&gt; timeWindowedAggregatedStream = groupedStream.aggregate(
+                        new Initializer&lt;Long&gt;() { /* initializer */
                           @Override
                           public Long apply() {
                             return 0L;
                           }
                         },
-                        new Aggregator<String, Long, Long>() { /* adder */
+                        new Aggregator&lt;String, Long, Long&gt;() { /* adder */
                           @Override
                           public Long apply(String aggKey, Long newValue, Long aggValue) {
                             return aggValue + newValue;
@@ -1302,20 +1302,20 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
                         "time-windowed-aggregated-stream-store" /* state store name */);
 
                     // Aggregating with session-based windowing (here: with an inactivity gap of 5 minutes)
-                    KTable<Windowed<String>, Long> sessionizedAggregatedStream = groupedStream.aggregate(
-                        new Initializer<Long>() { /* initializer */
+                    KTable&lt;Windowed&lt;String&gt;, Long&gt; sessionizedAggregatedStream = groupedStream.aggregate(
+                        new Initializer&lt;Long&gt;() { /* initializer */
                           @Override
                           public Long apply() {
                             return 0L;
                           }
                         },
-                        new Aggregator<String, Long, Long>() { /* adder */
+                        new Aggregator&lt;String, Long, Long&gt;() { /* adder */
                           @Override
                           public Long apply(String aggKey, Long newValue, Long aggValue) {
                             return aggValue + newValue;
                           }
                         },
-                        new Merger<String, Long>() { /* session merger */
+                        new Merger&lt;String, Long&gt;() { /* session merger */
                           @Override
                           public Long apply(String aggKey, Long leftAggValue, Long rightAggValue) {
                             return rightAggValue + leftAggValue;
@@ -1356,15 +1356,15 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
                     Several variants of <code>count</code> exist, see Javadocs for details.
                 </p>
                 <pre class="brush: java;">
-                    KGroupedStream<String, Long> groupedStream = ...;
-                    KGroupedTable<String, Long> groupedTable = ...;
+                    KGroupedStream&lt;String, Long&gt; groupedStream = ...;
+                    KGroupedTable&lt;String, Long&gt; groupedTable = ...;
 
                     // Counting a KGroupedStream
-                    KTable<String, Long> aggregatedStream = groupedStream.count(
+                    KTable&lt;String, Long&gt; aggregatedStream = groupedStream.count(
                         "counted-stream-store" /* state store name */);
 
                     // Counting a KGroupedTable
-                    KTable<String, Long> aggregatedTable = groupedTable.count(
+                    KTable&lt;String, Long&gt; aggregatedTable = groupedTable.count(
                         "counted-table-store" /* state store name */);
                 </pre>
                 <p>
@@ -1378,7 +1378,7 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
                 </p>
                 <ul>
                     <li>Input records with <code>null</code> keys are ignored. Records with <code>null</code>
-                        values are not ignored but interpreted as “tombstones” for the corresponding key, which
+                        values are not ignored but interpreted as "tombstones" for the corresponding key, which
                         indicate the deletion of the key from the table.
                 </ul>
             </td>
@@ -1390,22 +1390,22 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
                     Windowed aggregation. Counts the number of records, per window, by the grouped key.
                 </p>
                 <p>
-                    The windowed <code>count</code> turns a <code>KGroupedStream<K, V></code> into a windowed <code>KTable<Windowed<K>, V></code>.
+                    The windowed <code>count</code> turns a <code>KGroupedStream<&lt;K, V&gt;</code> into a windowed <code>KTable&lt;Windowed&lt;K&gt;, V&gt;</code>.
                 </p>
                 <p>
                     Several variants of count exist, see Javadocs for details.
                 </p>
                 <pre class="brush: java;">
                     import java.util.concurrent.TimeUnit;
-                    KGroupedStream<String, Long> groupedStream = ...;
+                    KGroupedStream&lt;String, Long&gt; groupedStream = ...;
 
                     // Counting a KGroupedStream with time-based windowing (here: with 5-minute tumbling windows)
-                    KTable<Windowed<String>, Long> aggregatedStream = groupedStream.count(
+                    KTable&lt;Windowed&lt;String&gt;, Long&gt; aggregatedStream = groupedStream.count(
                         TimeWindows.of(TimeUnit.MINUTES.toMillis(5)), /* time-based window */
                         "time-windowed-counted-stream-store" /* state store name */);
 
                     // Counting a KGroupedStream with session-based windowing (here: with 5-minute inactivity gaps)
-                    KTable<Windowed<String>, Long> aggregatedStream = groupedStream.count(
+                    KTable&lt;Windowed&lt;String&gt;, Long&gt; aggregatedStream = groupedStream.count(
                         SessionWindows.with(TimeUnit.MINUTES.toMillis(5)), /* session window */
                         "sessionized-counted-stream-store" /* state store name */);
                 </pre>
@@ -1429,25 +1429,25 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
                 </p>
 
                 <p>
-                When reducing a grouped stream, you must provide an “adder” reducer (think: <code>aggValue + curValue</code>).
-                When reducing a grouped table, you must additionally provide a “subtractor” reducer (think: <code>aggValue - oldValue</code>).
+                When reducing a grouped stream, you must provide an "adder" reducer (think: <code>aggValue + curValue</code>).
+                When reducing a grouped table, you must additionally provide a "subtractor" reducer (think: <code>aggValue - oldValue</code>).
                 </p>
                 <p>
                 Several variants of <code>reduce</code> exist, see Javadocs for details.
                 </p>
                 <pre class="brush: java;">
-                    KGroupedStream<String, Long> groupedStream = ...;
-                    KGroupedTable<String, Long> groupedTable = ...;
+                    KGroupedStream&lt;String, Long&gt; groupedStream = ...;
+                    KGroupedTable&lt;String, Long&gt; groupedTable = ...;
 
                     // Java 8+ examples, using lambda expressions
 
                     // Reducing a KGroupedStream
-                    KTable<String, Long> aggregatedStream = groupedStream.reduce(
+                    KTable&lt;String, Long&gt; aggregatedStream = groupedStream.reduce(
                         (aggValue, newValue) -> aggValue + newValue, /* adder */
                         "reduced-stream-store" /* state store name */);
 
                     // Reducing a KGroupedTable
-                    KTable<String, Long> aggregatedTable = groupedTable.reduce(
+                    KTable&lt;String, Long&gt; aggregatedTable = groupedTable.reduce(
                         (aggValue, newValue) -> aggValue + newValue, /* adder */
                         (aggValue, oldValue) -> aggValue - oldValue, /* subtractor */
                         "reduced-table-store" /* state store name */);
@@ -1456,8 +1456,8 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
                     // Java 7 examples
 
                     // Reducing a KGroupedStream
-                    KTable<String, Long> aggregatedStream = groupedStream.reduce(
-                        new Reducer<Long>() { /* adder */
+                    KTable&lt;String, Long&gt; aggregatedStream = groupedStream.reduce(
+                        new Reducer&lt;Long&gt;() { /* adder */
                           @Override
                           public Long apply(Long aggValue, Long newValue) {
                             return aggValue + newValue;
@@ -1466,14 +1466,14 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
                         "reduced-stream-store" /* state store name */);
 
                     // Reducing a KGroupedTable
-                    KTable<String, Long> aggregatedTable = groupedTable.reduce(
-                        new Reducer<Long>() { /* adder */
+                    KTable&lt;String, Long&gt; aggregatedTable = groupedTable.reduce(
+                        new Reducer&lt;Long&gt;() { /* adder */
                           @Override
                           public Long apply(Long aggValue, Long newValue) {
                             return aggValue + newValue;
                           }
                         },
-                        new Reducer<Long>() { /* subtractor */
+                        new Reducer&lt;Long&gt;() { /* subtractor */
                           @Override
                           public Long apply(Long aggValue, Long oldValue) {
                             return aggValue - oldValue;
@@ -1507,7 +1507,7 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
                         old value as stored in the table and (2) the adder is called with the new
                         value of the input record that was just received.
                         The order of execution for the subtractor and adder is not defined.
-                    <li>When a tombstone record – i.e. a record with a <code>null</code> value – is received
+                    <li>When a tombstone record -- i.e. a record with a <code>null</code> value -- is received
                         for a key (think: DELETE), then only the
                         subtractor is called. Note that, whenever the subtractor returns a <code>null</code>
                         value itself, then the corresponding key
@@ -1529,25 +1529,25 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
                 ignored. The result value type cannot be changed, unlike aggregate. (KGroupedStream details)
                 </p>
                 <p>
-                The windowed reduce turns a KGroupedStream<K, V> into a windowed KTable<Windowed<K>, V>.
+                The windowed reduce turns a <code>KGroupedStream&lt;K, V&gt;</code> into a windowed <code>KTable&lt;Windowed&lt;K&gt;, V&gt;</code>.
                 </p>
                 <p>
                 Several variants of reduce exist, see Javadocs for details.
                 </p>
                 <pre class="brush: java;">
                     import java.util.concurrent.TimeUnit;
-                    KGroupedStream<String, Long> groupedStream = ...;
+                    KGroupedStream&lt;String, Long&gt; groupedStream = ...;
 
                     // Java 8+ examples, using lambda expressions
 
                     // Aggregating with time-based windowing (here: with 5-minute tumbling windows)
-                    KTable<Windowed<String>, Long> timeWindowedAggregatedStream = groupedStream.reduce(
+                    KTable&lt;Windowed&lt;String&gt;, Long&gt; timeWindowedAggregatedStream = groupedStream.reduce(
                         (aggValue, newValue) -> aggValue + newValue, /* adder */
                         TimeWindows.of(TimeUnit.MINUTES.toMillis(5)), /* time-based window */
                         "time-windowed-reduced-stream-store" /* state store name */);
 
                     // Aggregating with session-based windowing (here: with an inactivity gap of 5 minutes)
-                    KTable<Windowed<String>, Long> sessionzedAggregatedStream = groupedStream.reduce(
+                    KTable&lt;Windowed&lt;String&gt;, Long&gt; sessionzedAggregatedStream = groupedStream.reduce(
                         (aggValue, newValue) -> aggValue + newValue, /* adder */
                         SessionWindows.with(TimeUnit.MINUTES.toMillis(5)), /* session window */
                         "sessionized-reduced-stream-store" /* state store name */);
@@ -1556,8 +1556,8 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
                     // Java 7 examples
 
                     // Aggregating with time-based windowing (here: with 5-minute tumbling windows)
-                    KTable<Windowed<String>, Long> timeWindowedAggregatedStream = groupedStream.reduce(
-                        new Reducer<Long>() { /* adder */
+                    KTable&lt;Windowed&lt;String&gt;, Long&gt; timeWindowedAggregatedStream = groupedStream.reduce(
+                        new Reducer&lt;Long&gt;() { /* adder */
                           @Override
                           public Long apply(Long aggValue, Long newValue) {
                             return aggValue + newValue;
@@ -1567,8 +1567,8 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
                         "time-windowed-reduced-stream-store" /* state store name */);
 
                     // Aggregating with session-based windowing (here: with an inactivity gap of 5 minutes)
-                    KTable<Windowed<String>, Long> timeWindowedAggregatedStream = groupedStream.reduce(
-                        new Reducer<Long>() { /* adder */
+                    KTable&lt;Windowed&lt;String&gt;, Long&gt; timeWindowedAggregatedStream = groupedStream.reduce(
+                        new Reducer&lt;Long&gt;() { /* adder */
                           @Override
                           public Long apply(Long aggValue, Long newValue) {
                             return aggValue + newValue;
@@ -1593,6 +1593,237 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
                     <li>See the example at the bottom of this section for a visualization of the aggregation semantics.
                 </ul>
             </td>
+        </tr>
+        </tbody>
+    </table>
+
+    <p>
+        <b>Example of semantics for stream aggregations</b>: A <code>KGroupedStream &rarr; KTable</code> example is shown below. The streams and the table are
+        initially empty. We use bold font in the column for "KTable <code>aggregated</code>" to highlight changed state. An entry such as <code>(hello, 1)</code>
+        denotes a record with key <code>hello</code> and value <code>1</code>. To improve the readability of the semantics table we assume that all records are
+        processed in timestamp order.
+    </p>
+    <pre class="brush: java;">
+        // Key: word, value: count
+        KStream&lt;String, Integer&gt; wordCounts = ...;
+
+        KGroupedStream&lt;String, Integer&gt; groupedStream = wordCounts
+            .groupByKey(Serdes.String(), Serdes.Integer());
+
+        KTable&lt;String, Integer&gt; aggregated = groupedStream.aggregate(
+            () -> 0, /* initializer */
+            (aggKey, newValue, aggValue) -> aggValue + newValue, /* adder */
+            Serdes.Integer(), /* serde for aggregate value */
+            "aggregated-stream-store" /* state store name */);
+    </pre>
+
+    <p>
+        <b>Impact of <a href=#streams_developer-guide_memory-management_record-cache>record caches</a></b>: For illustration purposes,
+        the column "KTable <code>aggregated</code>" below shows the table's state changes over
+        time in a very granular way. In practice, you would observe state changes in such a granular way only when record caches are
+        disabled (default: enabled). When record caches are enabled, what might happen for example is that the output results of the
+        rows with timestamps 4 and 5 would be compacted, and there would only be a single state update for the key <code>kafka</code> in the KTable
+        (here: from <code>(kafka 1)</code> directly to <code>(kafka, 3)</code>. Typically, you should only disable record caches for testing or debugging purposes
+        -- under normal circumstances it is better to leave record caches enabled.
+    </p>
+    <table class="data-table" border="1">
+        <thead>
+        <col>
+        <colgroup span="2"></colgroup>
+        <colgroup span="2"></colgroup>
+        <col>
+        <tr>
+            <th scope="col"></th>
+            <th colspan="2">KStream wordCounts</th>
+            <th colspan="2">KGroupedStream groupedStream</th>
+            <th scope="col">KTable aggregated</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr>
+            <th scope="col">Timestamp</th>
+            <th scope="col">Input record</th>
+            <th scope="col">Grouping</th>
+            <th scope="col">Initializer</th>
+            <th scope="col">Adder</th>
+            <th scope="col">State</th>
+        </tr>
+        <tr>
+            <td>1</td>
+            <td>(hello, 1)</td>
+            <td>(hello, 1)</td>
+            <td>0 (for hello)</td>
+            <td>(hello, 0 + 1)</td>
+            <td>(hello, 1)</td>
+        </tr>
+        <tr>
+            <td>2</td>
+            <td>(kafka, 1)</td>
+            <td>(kafka, 1)</td>
+            <td>0 (for kafka)</td>
+            <td>(kafka, 0 + 1)</td>
+            <td>(hello, 1), (kafka, 1)</td>
+        </tr>
+        <tr>
+            <td>3</td>
+            <td>(streams, 1)</td>
+            <td>(streams, 1)</td>
+            <td>0 (for streams)</td>
+            <td>(streams, 0 + 1)</td>
+            <td>(hello, 1), (kafka, 1), (streams, 1)</td>
+        </tr>
+        <tr>
+            <td>4</td>
+            <td>(kafka, 1)</td>
+            <td>(kafka, 1)</td>
+            <td></td>
+            <td>(kafka, 1 + 1)</td>
+            <td>(hello, 1), (kafka, 2), (streams, 1)</td>
+        </tr>
+        <tr>
+            <td>5</td>
+            <td>(kafka, 1)</td>
+            <td>(kafka, 1)</td>
+            <td></td>
+            <td>(kafka, 2 + 1)</td>
+            <td>(hello, 1), (kafka, 3), (streams, 1)</td>
+        </tr>
+        <tr>
+            <td>6</td>
+            <td>(streams, 1)</td>
+            <td>(streams, 1)</td>
+            <td></td>
+            <td>(streams, 1 + 1)</td>
+            <td>(hello, 1), (kafka, 3), (streams, 2)</td>
+        </tr>
+        </tbody>
+    </table>
+    <p>
+    Example of semantics for table aggregations: A <code>KGroupedTable &rarr; KTable</code> example is shown below. The tables are initially empty.
+    We use bold font in the column for "KTable <code>aggregated</code>" to highlight changed state. An entry such as <code>(hello, 1)</code> denotes a
+    record with key <code>hello</code> and value <code>1</code>. To improve the readability of the semantics table we assume that all records are processed
+    in timestamp order.
+    </p>
+    <pre class="brush: java;">
+        // Key: username, value: user region (abbreviated to "E" for "Europe", "A" for "Asia")
+        KTable&lt;String, String&gt; userProfiles = ...;
+
+        // Re-group `userProfiles`.  Don't read too much into what the grouping does:
+        // its prime purpose in this example is to show the *effects* of the grouping
+        // in the subsequent aggregation.
+        KGroupedTable&lt;String, Integer&gt; groupedTable = userProfiles
+            .groupBy((user, region) -> KeyValue.pair(region, user.length()), Serdes.String(), Serdes.Integer());
+
+        KTable&lt;String, Integer&gt; aggregated = groupedTable.aggregate(
+            () -> 0, /* initializer */
+            (aggKey, newValue, aggValue) -> aggValue + newValue, /* adder */
+            (aggKey, oldValue, aggValue) -> aggValue - oldValue, /* subtractor */
+            Serdes.Integer(), /* serde for aggregate value */
+            "aggregated-table-store" /* state store name */);
+    </pre>
+    <p>
+        <b>Impact of <a href=#streams_developer-guide_memory-management_record-cache>record caches</a></b>:
+        For illustration purposes, the column "KTable <code>aggregated</code>" below shows
+        the table's state changes over time in a very granular way. In practice, you would observe state changes
+        in such a granular way only when record caches are disabled (default: enabled). When record caches are enabled,
+        what might happen for example is that the output results of the rows with timestamps 4 and 5 would be
+        compacted, and there would only be a single state update for the key <code>kafka</code> in the KTable
+        (here: from <code>(kafka 1)</code> directly to <code>(kafka, 3)</code>. Typically, you should only disable
+        record caches for testing or debugging purposes -- under normal circumstances it is better to leave record caches enabled.
+    </p>
+    <table class="data-table" border="1">
+        <thead>
+        <col>
+        <colgroup span="2"></colgroup>
+        <colgroup span="2"></colgroup>
+        <col>
+        <tr>
+            <th scope="col"></th>
+            <th colspan="3">KTable userProfiles</th>
+            <th colspan="3">KGroupedTable groupedTable</th>
+            <th scope="col">KTable aggregated</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr>
+            <th scope="col">Timestamp</th>
+            <th scope="col">Input record</th>
+            <th scope="col">Interpreted as</th>
+            <th scope="col">Grouping</th>
+            <th scope="col">Initializer</th>
+            <th scope="col">Adder</th>
+            <th scope="col">Subtractor</th>
+            <th scope="col">State</th>
+        </tr>
+        <tr>
+            <td>1</td>
+            <td>(alice, E)</td>
+            <td>INSERT alice</td>
+            <td>(E, 5)</td>
+            <td>0 (for E)</td>
+            <td>(E, 0 + 5)</td>
+            <td></td>
+            <td>(E, 5)</td>
+        </tr>
+        <tr>
+            <td>2</td>
+            <td>(bob, A)</td>
+            <td>INSERT bob</td>
+            <td>(A, 3)</td>
+            <td>0 (for A)</td>
+            <td>(A, 0 + 3)</td>
+            <td></td>
+            <td>(A, 3), (E, 5)</td>
+        </tr>
+        <tr>
+            <td>3</td>
+            <td>(charlie, A)</td>
+            <td>INSERT charlie</td>
+            <td>(A, 7)</td>
+            <td></td>
+            <td>(A, 3 + 7)</td>
+            <td></td>
+            <td>(A, 10), (E, 5)</td>
+        </tr>
+        <tr>
+            <td>4</td>
+            <td>(alice, A)</td>
+            <td>UPDATE alice</td>
+            <td>(A, 5)</td>
+            <td></td>
+            <td>(A, 10 + 5)</td>
+            <td>(E, 5 - 5)</td>
+            <td>(A, 15), (E, 0)</td>
+        </tr>
+        <tr>
+            <td>5</td>
+            <td>(charlie, null)</td>
+            <td>DELETE charlie</td>
+            <td>(null, 7)</td>
+            <td></td>
+            <td></td>
+            <td>(A, 15 - 7)</td>
+            <td>(A, 8), (E, 0)</td>
+        </tr>
+        <tr>
+            <td>6</td>
+            <td>(null, E)</td>
+            <td>ignored</td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td>(A, 8), (E, 0)</td>
+        </tr>
+        <tr>
+            <td>7</td>
+            <td>(bob, E)</td>
+            <td>UPDATE bob</td>
+            <td>(E, 3)</td>
+            <td></td>
+            <td>(E, 0 + 3)</td>
+            <td>(A, 8 - 3)</td>
+            <td>(A, 5), (E, 3)</td>
         </tr>
         </tbody>
     </table>
