@@ -195,7 +195,7 @@ public final class RecordAccumulator {
             synchronized (dq) {
                 if (closed)
                     throw new IllegalStateException("Cannot send after the producer is closed.");
-                RecordAppendResult appendResult = tryAppend(tp, timestamp, key, value, headers, callback, dq);
+                RecordAppendResult appendResult = tryAppend(timestamp, key, value, headers, callback, dq);
                 if (appendResult != null)
                     return appendResult;
             }
@@ -210,7 +210,7 @@ public final class RecordAccumulator {
                 if (closed)
                     throw new IllegalStateException("Cannot send after the producer is closed.");
 
-                RecordAppendResult appendResult = tryAppend(tp, timestamp, key, value, headers, callback, dq);
+                RecordAppendResult appendResult = tryAppend(timestamp, key, value, headers, callback, dq);
                 if (appendResult != null) {
                     // Somebody else found us a batch, return the one we waited for! Hopefully this doesn't happen often...
                     return appendResult;
@@ -251,7 +251,7 @@ public final class RecordAccumulator {
      *  and memory records built) in one of the following cases (whichever comes first): right before send,
      *  if it is expired, or when the producer is closed.
      */
-    private RecordAppendResult tryAppend(TopicPartition tp, long timestamp, byte[] key, byte[] value, Header[] headers,
+    private RecordAppendResult tryAppend(long timestamp, byte[] key, byte[] value, Header[] headers,
                                          Callback callback, Deque<ProducerBatch> deque) {
         ProducerBatch last = deque.peekLast();
         if (last != null) {

@@ -75,7 +75,6 @@ public final class ProducerBatch {
     private long drainedMs;
     private String expiryErrorMessage;
     private boolean retry;
-    private boolean countedTowardSequence;
 
     public ProducerBatch(TopicPartition tp, MemoryRecordsBuilder recordsBuilder, long now) {
         this(tp, recordsBuilder, now, false);
@@ -90,7 +89,6 @@ public final class ProducerBatch {
         this.produceFuture = new ProduceRequestResult(topicPartition);
         this.retry = false;
         this.isSplitBatch = isSplitBatch;
-        this.countedTowardSequence = false;
         float compressionRatioEstimation = CompressionRatioEstimator.estimation(topicPartition.topic(),
                                                                                 recordsBuilder.compressionType());
         recordsBuilder.setEstimatedCompressionRatio(compressionRatioEstimation);
