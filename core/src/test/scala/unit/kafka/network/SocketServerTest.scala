@@ -273,7 +273,7 @@ class SocketServerTest extends JUnitSuite {
     try {
       overrideServer.startup()
       val socket1 = connect(overrideServer)
-      TestUtils.waitUntilTrue(() => connectionCount == 1 && !openChannel.isEmpty, "Failed to create channel")
+      TestUtils.waitUntilTrue(() => connectionCount == 1 && openChannel.isDefined, "Failed to create channel")
       val channel1 = openChannel.getOrElse(throw new RuntimeException("Channel not found"))
 
       // Create new connection with same id when `channel1` is still open and in Selector.channels
@@ -288,7 +288,7 @@ class SocketServerTest extends JUnitSuite {
       val request = sendRequestsUntilStagedReceive(overrideServer, socket1, serializedBytes)
       time.sleep(idleTimeMs + 1)
       TestUtils.waitUntilTrue(() => openChannel.isEmpty, "Idle channel not closed")
-      TestUtils.waitUntilTrue(() => openOrClosingChannel.nonEmpty, "Channel removed without processing staged receives")
+      TestUtils.waitUntilTrue(() => openOrClosingChannel.isDefined, "Channel removed without processing staged receives")
 
       // Create new connection with same id when when `channel1` is in Selector.closingChannels
       // Check that new connection is closed and openOrClosingChannel still contains `channel1`
@@ -302,7 +302,7 @@ class SocketServerTest extends JUnitSuite {
 
       // Check that new connections can be created with the same id since `channel1` is no longer in Selector
       connect(overrideServer)
-      TestUtils.waitUntilTrue(() => connectionCount == 1 && !openChannel.isEmpty, "Failed to open new channel")
+      TestUtils.waitUntilTrue(() => connectionCount == 1 && openChannel.isDefined, "Failed to open new channel")
       val newChannel = openChannel.getOrElse(throw new RuntimeException("Channel not found"))
       assertNotSame(channel1, newChannel)
       newChannel.disconnect()
@@ -315,8 +315,8 @@ class SocketServerTest extends JUnitSuite {
 
   private def sendRequestsUntilStagedReceive(server: SocketServer, socket: Socket, requestBytes: Array[Byte]): RequestChannel.Request = {
     def sendTwoRequestsReceiveOne(): RequestChannel.Request = {
-      sendRequest(socket, requestBytes, flush=false)
-      sendRequest(socket, requestBytes, flush=true)
+      sendRequest(socket, requestBytes, flush = false)
+      sendRequest(socket, requestBytes, flush = true)
       server.requestChannel.receiveRequest(2000)
     }
     val (request, hasStagedReceives) = TestUtils.computeUntilTrue(sendTwoRequestsReceiveOne()) { req =>
@@ -328,7 +328,7 @@ class SocketServerTest extends JUnitSuite {
       }
       hasStagedReceives
     }
-    assertTrue("Receives not staged", hasStagedReceives)
+    assertTrue(s"Receives not staged for ${org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS} ms", hasStagedReceives)
     request
   }
 
