@@ -501,6 +501,9 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 		public RocksDbPrefixIterator(String name, RocksIterator newIterator,
 				StateSerdes<K, V> serdes, K prefix) {
 			super(name, newIterator, serdes);
+			rawPrefix = serdes.rawKey(prefix);
+			newIterator.seek(rawPrefix);
+			
 		}
 		
 		@Override

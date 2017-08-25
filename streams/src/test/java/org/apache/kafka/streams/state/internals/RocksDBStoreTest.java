@@ -25,6 +25,7 @@ import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
+import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.RocksDBConfigSetter;
 import org.apache.kafka.test.MockProcessorContext;
 import org.apache.kafka.test.NoOpRecordCollector;
@@ -44,6 +45,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.io.IOException;
+
 import org.rocksdb.Options;
 
 public class RocksDBStoreTest {
@@ -52,6 +54,8 @@ public class RocksDBStoreTest {
     private RocksDBStore<String, String> subject;
     private MockProcessorContext context;
     private File dir;
+
+	
 
     @Before
     public void setUp() throws Exception {
@@ -118,6 +122,31 @@ public class RocksDBStoreTest {
         assertEquals(subject.get("1"), "a");
         assertEquals(subject.get("2"), "b");
         assertEquals(subject.get("3"), "c");
+    }
+    
+    @Test
+    public void shouldPrefixScan() {
+        List<KeyValue<String, String>> entries = new ArrayList<>();
+        entries.add(new KeyValue<>("aaa", "a"));
+        entries.add(new KeyValue<>("aab", "b"));
+        entries.add(new KeyValue<>("aac", "c"));
+
+        subject.init(context, subject);
+        subject.putAll(entries);
+        subject.flush();
+
+        KeyValueIterator<String, String> results = null;
+        results = subject.prefixScan("aa");
+        
+        KeyValue<String, String> element = results.next();
+        assertEquals(element.key, "aaa");
+        assertEquals(element.value, "a");
+        element = results.next();
+        assertEquals(element.key, "aab");
+        assertEquals(element.value, "b");
+        element = results.next();
+        assertEquals(element.key, "aac");
+        assertEquals(element.value, "c");
     }
 
     @Test

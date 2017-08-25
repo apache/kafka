@@ -630,19 +630,19 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         return sendOldValues;
     }
 
-	@Override
-	public <K0, V0, KO, VO> KTable<K0, V0> oneToManyJoin(KTable<KO, VO> other,
-			ValueMapper<VO, K> keyExtractor,
-			ValueMapper<K, K0> joinPrefixFaker,
-			ValueMapper<K0, K> leftKeyExtractor, ValueJoiner<V, VO, V0> joiner,
-			Serde<KO> keyOtherSerde,
-			Serde<VO> valueOtherSerde,
-			Serde<K0> joinKeySerde,
-			Serde<V0> joinValueSerde) {
-	
-		((KTableImpl<?,?,?>) other).enableSendingOldValues();
-		enableSendingOldValues();
-	
+    @Override
+    public <K0, V0, KO, VO> KTable<K0, V0> oneToManyJoin(KTable<KO, VO> other,
+            ValueMapper<VO, K> keyExtractor,
+            ValueMapper<K, K0> joinPrefixFaker,
+            ValueMapper<K0, K> leftKeyExtractor, ValueJoiner<V, VO, V0> joiner,
+            Serde<KO> keyOtherSerde,
+            Serde<VO> valueOtherSerde,
+            Serde<K0> joinKeySerde,
+            Serde<V0> joinValueSerde) {
+
+        ((KTableImpl<?,?,?>) other).enableSendingOldValues();
+        enableSendingOldValues();
+
         String repartitionerName = topology.newName(REPARTITION_NAME);
         final String repartitionTopicName = name + "-" + JOINOTHER_NAME;
 
@@ -689,13 +689,13 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
 
         topology.addStateStore(repartitionStateStore, repartitionReceiverName);
 
-        KTableKTableRangeJoin<K0, V0, K, V, VO> joinByRange = new KTableKTableRangeJoin<>(joinThis, joiner, joinPrefixFaker);
+        KTableKTableRangeJoin<K0, V0, K, V, VO> joinByRange = new KTableKTableRangeJoin<K0, V0, K, V, VO>(joinThis.valueGetterSupplier(), joiner, joinPrefixFaker);
         topology.addProcessor(joinByRangeProcessor, joinByRange, this.name);
 
         String joinOutputName = topology.newName(name + "-JOIN_OUTPUT");
         String joinOutputTableSource = joinOutputName + "-TABLESOURCE";
 
-        KTableJoinMergeProcessorSupplier<K0, V0, K, V, KO, VO> kts = new KTableJoinMergeProcessorSupplier<>(this.valueGetterSupplier(), joinThis.valueGetterSupplier(), leftKeyExtractor, joiner);
+        KTableJoinMergeProcessorSupplier<K0, V0, K, V, KO, VO> kts = new KTableJoinMergeProcessorSupplier<K0, V0, K, V, KO, VO>(this.valueGetterSupplier(), joinThis.valueGetterSupplier(), leftKeyExtractor, joiner);
         topology.addProcessor(joinOutputTableSource, kts, joinByRangeProcessor, repartitionReceiverName);
         return new KTableImpl<K0,V,V0>(topology, joinOutputTableSource, kts, joinKeySerde, joinValueSerde,new HashSet<String>(sourcesNeedCopartitioning),null,false);
 

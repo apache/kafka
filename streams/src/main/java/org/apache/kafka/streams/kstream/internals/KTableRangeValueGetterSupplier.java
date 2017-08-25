@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-public interface KTableRangeValueGetterSupplier<K, V> {
+public interface KTableRangeValueGetterSupplier<K, V> extends KTableValueGetterSupplier<K, V>{
 
     KTableRangeValueGetter<K, V> get();
 

@@ -13,16 +13,16 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 
-public class RangeKeyValueGetterProviderAndProcessorSupplier<K, V, KL, VL, VR> implements ProcessorSupplier<K, VR>
+public class RangeKeyValueGetterProviderAndProcessorSupplier<K0, V0, K, V, VO> implements ProcessorSupplier<K0, VO>
 {
 
     String topicName;
     //    KTableSource<K, VR> kts;
-    ValueMapper<K, KL> mapper;
-    KTableValueGetterSupplier<KL, VL> leftValueGetterSupplier;
-    ValueJoiner<VL, VR, V> joiner;
+    ValueMapper<K0, K> mapper;
+    KTableValueGetterSupplier<K, V> leftValueGetterSupplier;
+    ValueJoiner<V, VO, V0> joiner;
 
-    public RangeKeyValueGetterProviderAndProcessorSupplier(String topicName, KTableValueGetterSupplier<KL, VL> leftValueGetter , ValueMapper<K, KL> mapper, ValueJoiner<VL, VR, V> joiner)
+    public RangeKeyValueGetterProviderAndProcessorSupplier(String topicName, KTableValueGetterSupplier<K, V> leftValueGetter , ValueMapper<K0, K> mapper, ValueJoiner<V, VO, V0> joiner)
     {
         this.topicName = topicName;
         this.mapper = mapper;
@@ -32,14 +32,14 @@ public class RangeKeyValueGetterProviderAndProcessorSupplier<K, V, KL, VL, VR> i
 
 
     @Override
-    public Processor<K, VR> get()
+    public Processor<K0, VO> get()
     {
 
-        return new AbstractProcessor<K, VR>()
+        return new AbstractProcessor<K0, VO>()
         {
 
-            KeyValueStore<K, VR> store;
-            KTableValueGetter<KL, VL> leftValues;
+            KeyValueStore<K0, VO> store;
+            KTableValueGetter<K, V> leftValues;
 
             @Override
             public void init(ProcessorContext context)
@@ -47,18 +47,18 @@ public class RangeKeyValueGetterProviderAndProcessorSupplier<K, V, KL, VL, VR> i
                 super.init(context);
                 leftValues = leftValueGetterSupplier.get();
                 leftValues.init(context);
-                store = (KeyValueStore<K, VR>) context.getStateStore(topicName);
+                store = (KeyValueStore<K0, VO>) context.getStateStore(topicName);
             }
 
             @Override
-            public void process(K key, VR value)
+            public void process(K0 key, VO value)
             {
-                VR oldVal = store.get(key);
+                VO oldVal = store.get(key);
                 store.put(key, value);
 
-                V newValue = null;
-                V oldValue = null;
-                VL value2 = null;
+                V0 newValue = null;
+                V0 oldValue = null;
+                V value2 = null;
 
                 if (value != null || oldVal != null)
                     value2 = leftValues.get(mapper.apply(key));
@@ -76,8 +76,8 @@ public class RangeKeyValueGetterProviderAndProcessorSupplier<K, V, KL, VL, VR> i
     }
 
     
-    public KTableRangeValueGetterSupplier<K, VR> valueGetterSupplier() {
-    	return new KTableSourceValueGetterSupplier<K, VR>(topicName);
+    public KTableRangeValueGetterSupplier<K0, VO> valueGetterSupplier() {
+    	return new KTableSourceValueGetterSupplier<K0, VO>(topicName);
     }
     
     
