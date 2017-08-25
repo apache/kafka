@@ -344,7 +344,7 @@ public class KafkaAdminClient extends AdminClient {
                      Metrics metrics, KafkaClient client, TimeoutProcessorFactory timeoutProcessorFactory) {
         this.defaultTimeoutMs = config.getInt(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG);
         this.clientId = clientId;
-        LogContext logContext = new LogContext("[Consumer clientId=" + clientId + "] ");
+        LogContext logContext = new LogContext("[AdminClient clientId=" + clientId + "] ");
         this.log = logContext.logger(KafkaAdminClient.class);
         this.time = time;
         this.metadata = metadata;
