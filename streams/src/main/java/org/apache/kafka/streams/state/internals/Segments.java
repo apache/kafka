@@ -85,9 +85,7 @@ class Segments {
             if (previousSegment == null) {
                 newSegment.openDB(context);
                 maxSegmentId = segmentId > maxSegmentId ? segmentId : maxSegmentId;
-                if (minSegmentId == Long.MAX_VALUE) {
-                    minSegmentId = maxSegmentId;
-                }
+                minSegmentId = segmentId < minSegmentId ? segmentId : minSegmentId;
             }
             return previousSegment == null ? newSegment : previousSegment;
         } else {
