@@ -19,12 +19,22 @@ package org.apache.kafka.streams.state;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
+import org.apache.kafka.streams.state.internals.InMemoryKeyValueStore;
 import org.apache.kafka.streams.state.internals.InMemoryKeyValueStoreSupplier;
 import org.apache.kafka.streams.state.internals.InMemoryLRUCacheStoreSupplier;
+import org.apache.kafka.streams.state.internals.KeyValueStateStoreBuilder;
+import org.apache.kafka.streams.state.internals.MemoryNavigableLRUCache;
 import org.apache.kafka.streams.state.internals.RocksDBKeyValueStoreSupplier;
 import org.apache.kafka.streams.state.internals.RocksDBSessionStoreSupplier;
 import org.apache.kafka.streams.state.internals.RocksDBWindowStoreSupplier;
+import org.apache.kafka.streams.state.internals.RocksDbKeyValueBytesStoreSupplier;
+import org.apache.kafka.streams.state.internals.RocksDbSessionBytesStoreSupplier;
+import org.apache.kafka.streams.state.internals.RocksDbWindowBytesStoreSupplier;
+import org.apache.kafka.streams.state.internals.SessionStateStoreBuilder;
+import org.apache.kafka.streams.state.internals.WindowStateStoreBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -40,12 +50,87 @@ public class Stores {
 
     private static final Logger log = LoggerFactory.getLogger(Stores.class);
 
+    public static KeyValueBytesStoreSupplier persistentKeyValueStore(final String name) {
+        return new RocksDbKeyValueBytesStoreSupplier(name);
+    }
+
+    public static KeyValueBytesStoreSupplier inMemoryKeyValueStore(final String name) {
+        return new KeyValueBytesStoreSupplier() {
+            @Override
+            public String name() {
+                return name;
+            }
+
+            @Override
+            public KeyValueStore<Bytes, byte[]> get() {
+                return new InMemoryKeyValueStore<>(name, Serdes.Bytes(), Serdes.ByteArray());
+            }
+
+            @Override
+            public String metricsScope() {
+                return "in-memory-state";
+            }
+        };
+    }
+
+    public static KeyValueBytesStoreSupplier lruMap(final String name, final int maxCacheSize) {
+        return new KeyValueBytesStoreSupplier() {
+            @Override
+            public String name() {
+                return name;
+            }
+
+            @Override
+            public KeyValueStore<Bytes, byte[]> get() {
+                return new MemoryNavigableLRUCache<>(name, maxCacheSize, Serdes.Bytes(), Serdes.ByteArray());
+            }
+
+            @Override
+            public String metricsScope() {
+                return "in-memory-lru-state";
+            }
+        };
+    }
+
+    public static WindowBytesStoreSupplier persistentWindowStore(final String name,
+                                                                 final long retentionPeriod,
+                                                                 final int numSegments,
+                                                                 final long windowSize,
+                                                                 final boolean retainDuplicates) {
+        return new RocksDbWindowBytesStoreSupplier(name, retentionPeriod, numSegments, windowSize, retainDuplicates);
+    }
+
+    public static SessionBytesStoreSupplier persistentSessionStore(final String name,
+                                                                   final long retentionPeriod) {
+        return new RocksDbSessionBytesStoreSupplier(name, retentionPeriod);
+    }
+
+
+    public static <K, V> StateStoreBuilder<WindowStore<K, V>> windowStoreBuilder(final WindowBytesStoreSupplier supplier,
+                                                                                 final Serde<K> keySerde,
+                                                                                 final Serde<V> valueSerde) {
+        return new WindowStateStoreBuilder<>(supplier, keySerde, valueSerde, Time.SYSTEM);
+    }
+
+    public static <K, V> StateStoreBuilder<KeyValueStore<K, V>> keyValueStoreBuilder(final KeyValueBytesStoreSupplier supplier,
+                                                                                     final Serde<K> keySerde,
+                                                                                     final Serde<V> valueSerde) {
+        return new KeyValueStateStoreBuilder<>(supplier, keySerde, valueSerde, Time.SYSTEM);
+    }
+
+    public static <K, V> StateStoreBuilder<SessionStore<K, V>> sessionStoreBuilder(final SessionBytesStoreSupplier supplier,
+                                                                                   final Serde<K> keySerde,
+                                                                                   final Serde<V> valueSerde) {
+        return new SessionStateStoreBuilder<>(supplier, keySerde, valueSerde, Time.SYSTEM);
+    }
+
     /**
      * Begin to create a new {@link org.apache.kafka.streams.processor.StateStoreSupplier} instance.
      *
      * @param name the name of the store
      * @return the factory that can be used to specify other options or configurations for the store; never null
      */
+    @Deprecated
     public static StoreFactory create(final String name) {
         return new StoreFactory() {
             @Override

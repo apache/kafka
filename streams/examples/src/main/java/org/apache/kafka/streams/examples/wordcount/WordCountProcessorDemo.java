@@ -27,8 +27,10 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
+import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.StateStoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 
 import java.util.Locale;
@@ -123,7 +125,10 @@ public class WordCountProcessorDemo {
         builder.addSource("Source", "streams-plaintext-input");
 
         builder.addProcessor("Process", new MyProcessorSupplier(), "Source");
-        builder.addStateStore(Stores.create("Counts").withStringKeys().withIntegerValues().inMemory().build(), "Process");
+        KeyValueBytesStoreSupplier counts = Stores.inMemoryKeyValueStore("Counts");
+        StateStoreBuilder<KeyValueStore<String, Integer>> storeBuilder =
+                Stores.keyValueStoreBuilder(counts, Serdes.String(), Serdes.Integer());
+        builder.addStateStore(storeBuilder, "Process");
 
         builder.addSink("Sink", "streams-wordcount-processor-output", "Process");
 

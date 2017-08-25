@@ -34,7 +34,7 @@ import java.util.Map;
 public class RocksDBSessionStoreSupplier<K, V> extends AbstractStoreSupplier<K, V, SessionStore> implements WindowStoreSupplier<SessionStore> {
 
     private static final String METRIC_SCOPE = "rocksdb-session";
-    private static final int NUM_SEGMENTS = 3;
+    static final int NUM_SEGMENTS = 3;
     private final long retentionPeriod;
     private final boolean cached;
 
