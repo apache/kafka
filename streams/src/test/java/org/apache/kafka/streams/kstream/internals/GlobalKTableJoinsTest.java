@@ -17,16 +17,16 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.GlobalKTable;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 
 import java.io.File;
@@ -38,7 +38,7 @@ import static org.junit.Assert.assertEquals;
 
 public class GlobalKTableJoinsTest {
 
-    private final KStreamBuilder builder = new KStreamBuilder();
+    private final StreamsBuilder builder = new StreamsBuilder();
     private final Map<String, String> results = new HashMap<>();
     private final String streamTopic = "stream";
     private final String globalTopic = "global";
@@ -47,7 +47,8 @@ public class GlobalKTableJoinsTest {
     private KStream<String, String> stream;
     private KeyValueMapper<String, String, String> keyValueMapper;
     private ForeachAction<String, String> action;
-    private KStreamTestDriver driver = null;
+    @Rule
+    public final KStreamTestDriver driver = new KStreamTestDriver();
 
     @Before
     public void setUp() throws Exception {
@@ -68,16 +69,8 @@ public class GlobalKTableJoinsTest {
         };
     }
 
-    @After
-    public void cleanup() {
-        if (driver != null) {
-            driver.close();
-        }
-        driver = null;
-    }
-
     @Test
-    public void shouldLeftJoinWithStream() throws Exception {
+    public void shouldLeftJoinWithStream() {
         stream.leftJoin(global, keyValueMapper, MockValueJoiner.TOSTRING_JOINER)
                 .foreach(action);
 
@@ -91,7 +84,7 @@ public class GlobalKTableJoinsTest {
     }
 
     @Test
-    public void shouldInnerJoinWithStream() throws Exception {
+    public void shouldInnerJoinWithStream() {
         stream.join(global, keyValueMapper,  MockValueJoiner.TOSTRING_JOINER)
                 .foreach(action);
 
@@ -103,7 +96,7 @@ public class GlobalKTableJoinsTest {
     }
 
     private void verifyJoin(final Map<String, String> expected, final String joinInput) {
-        driver = new KStreamTestDriver(builder, stateDir);
+        driver.setUp(builder, stateDir);
         driver.setTime(0L);
         // write some data to the global table
         driver.process(globalTopic, "a", "A");

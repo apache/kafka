@@ -26,9 +26,7 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.Punctuator;
 
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
 public class ProcessorNode<K, V> {
@@ -102,7 +100,7 @@ public class ProcessorNode<K, V> {
     public void init(ProcessorContext context) {
         this.context = context;
         try {
-            nodeMetrics = new NodeMetrics(context.metrics(), name, "task." + context.taskId());
+            nodeMetrics = new NodeMetrics(context.metrics(), name, context);
             nodeMetrics.metrics.measureLatencyNs(time, initDelegate, nodeMetrics.nodeCreationSensor);
         } catch (Exception e) {
             throw new StreamsException(String.format("failed to initialize processor %s", name), e);
@@ -163,29 +161,34 @@ public class ProcessorNode<K, V> {
 
     protected static final class NodeMetrics  {
         final StreamsMetricsImpl metrics;
-        final Map<String, String> metricTags;
 
         final Sensor nodeProcessTimeSensor;
         final Sensor nodePunctuateTimeSensor;
         final Sensor sourceNodeForwardSensor;
+        final Sensor sourceNodeSkippedDueToDeserializationError;
         final Sensor nodeCreationSensor;
         final Sensor nodeDestructionSensor;
 
 
-        public NodeMetrics(StreamsMetrics metrics, String name, String sensorNamePrefix) {
+        public NodeMetrics(final StreamsMetrics metrics, final String name, final ProcessorContext context) {
             final String scope = "processor-node";
-            final String tagKey = "processor-node-id";
-            final String tagValue = name;
+            final String tagKey = "task-id";
+            final String tagValue = context.taskId().toString();
             this.metrics = (StreamsMetricsImpl) metrics;
-            this.metricTags = new LinkedHashMap<>();
-            this.metricTags.put(tagKey, tagValue);
 
             // these are all latency metrics
-            this.nodeProcessTimeSensor = metrics.addLatencyAndThroughputSensor(scope, sensorNamePrefix + "." + name, "process", Sensor.RecordingLevel.DEBUG, tagKey, tagValue);
-            this.nodePunctuateTimeSensor = metrics.addLatencyAndThroughputSensor(scope, sensorNamePrefix + "." + name, "punctuate", Sensor.RecordingLevel.DEBUG, tagKey, tagValue);
-            this.nodeCreationSensor = metrics.addLatencyAndThroughputSensor(scope, sensorNamePrefix + "." + name, "create", Sensor.RecordingLevel.DEBUG, tagKey, tagValue);
-            this.nodeDestructionSensor = metrics.addLatencyAndThroughputSensor(scope, sensorNamePrefix + "." + name, "destroy", Sensor.RecordingLevel.DEBUG, tagKey, tagValue);
-            this.sourceNodeForwardSensor = metrics.addThroughputSensor(scope, sensorNamePrefix + "." + name, "forward", Sensor.RecordingLevel.DEBUG, tagKey, tagValue);
+            this.nodeProcessTimeSensor = metrics.addLatencyAndThroughputSensor(scope, name, "process",
+                    Sensor.RecordingLevel.DEBUG, tagKey, tagValue);
+            this.nodePunctuateTimeSensor = metrics.addLatencyAndThroughputSensor(scope, name, "punctuate",
+                    Sensor.RecordingLevel.DEBUG, tagKey, tagValue);
+            this.nodeCreationSensor = metrics.addLatencyAndThroughputSensor(scope, name, "create",
+                    Sensor.RecordingLevel.DEBUG, tagKey, tagValue);
+            this.nodeDestructionSensor = metrics.addLatencyAndThroughputSensor(scope, name, "destroy",
+                    Sensor.RecordingLevel.DEBUG, tagKey, tagValue);
+            this.sourceNodeForwardSensor = metrics.addThroughputSensor(scope, name, "forward",
+                    Sensor.RecordingLevel.DEBUG, tagKey, tagValue);
+            this.sourceNodeSkippedDueToDeserializationError = metrics.addThroughputSensor(scope, name, "skippedDueToDeserializationError",
+                    Sensor.RecordingLevel.DEBUG, tagKey, tagValue);
         }
 
         public void removeAllSensors() {
@@ -194,6 +197,7 @@ public class ProcessorNode<K, V> {
             metrics.removeSensor(sourceNodeForwardSensor);
             metrics.removeSensor(nodeCreationSensor);
             metrics.removeSensor(nodeDestructionSensor);
+            metrics.removeSensor(sourceNodeSkippedDueToDeserializationError);
         }
     }
 }

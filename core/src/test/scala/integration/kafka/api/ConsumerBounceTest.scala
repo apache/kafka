@@ -59,7 +59,7 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
   this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "3000")
   this.consumerConfig.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
 
-  override def generateConfigs() = {
+  override def generateConfigs = {
     FixedPortTestUtils.createBrokerConfigs(serverCount, zkConnect, enableControlledShutdown = false)
       .map(KafkaConfig.fromProps(_, serverConfig))
   }
@@ -76,6 +76,8 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
   override def tearDown() {
     try {
       executor.shutdownNow()
+      // Wait for any active tasks to terminate to ensure consumer is not closed while being used from another thread
+      assertTrue("Executor did not terminate", executor.awaitTermination(5000, TimeUnit.MILLISECONDS))
     } finally {
       super.tearDown()
     }
@@ -339,6 +341,7 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
     waitForRebalance(2000, rebalanceFuture, consumer2)
 
     // Trigger another rebalance and shutdown all brokers
+    // This consumer poll() doesn't complete and `tearDown` shuts down the executor and closes the consumer
     createConsumerToRebalance()
     servers.foreach(server => killBroker(server.config.brokerId))
 
@@ -383,13 +386,11 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
       info("Closing consumer with timeout " + closeTimeoutMs + " ms.")
       consumer.close(closeTimeoutMs, TimeUnit.MILLISECONDS)
       val timeTakenMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime - startNanos)
-      maxCloseTimeMs match {
-        case Some(ms) => assertTrue("Close took too long " + timeTakenMs, timeTakenMs < ms + closeGraceTimeMs)
-        case None =>
+      maxCloseTimeMs.foreach { ms =>
+        assertTrue("Close took too long " + timeTakenMs, timeTakenMs < ms + closeGraceTimeMs)
       }
-      minCloseTimeMs match {
-        case Some(ms) => assertTrue("Close finished too quickly " + timeTakenMs, timeTakenMs >= ms)
-        case None =>
+      minCloseTimeMs.foreach { ms =>
+        assertTrue("Close finished too quickly " + timeTakenMs, timeTakenMs >= ms)
       }
       info("consumer.close() completed in " + timeTakenMs + " ms.")
     }, 0)

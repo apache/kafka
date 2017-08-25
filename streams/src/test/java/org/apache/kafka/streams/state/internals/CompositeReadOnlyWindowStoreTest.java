@@ -18,6 +18,7 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
+import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.test.StateStoreProviderStub;
@@ -34,6 +35,8 @@ import java.util.List;
 import java.util.NoSuchElementException;
 
 import static java.util.Arrays.asList;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.core.IsEqual.equalTo;
 import static org.junit.Assert.assertEquals;
 
 public class CompositeReadOnlyWindowStoreTest {
@@ -161,6 +164,32 @@ public class CompositeReadOnlyWindowStoreTest {
 
         windowStoreIteratorException.expect(NoSuchElementException.class);
         windowStoreIterator.next();
+    }
+
+    @Test
+    public void shouldFetchKeyRangeAcrossStores() {
+        final ReadOnlyWindowStoreStub<String, String> secondUnderlying = new
+                ReadOnlyWindowStoreStub<>(WINDOW_SIZE);
+        stubProviderTwo.addStore(storeName, secondUnderlying);
+        underlyingWindowStore.put("a", "a", 0L);
+        secondUnderlying.put("b", "b", 0L);
+        List<KeyValue<Windowed<String>, String>> results = StreamsTestUtils.toList(windowStore.fetch("a", "b", 0, 1));
+        assertThat(results.size(), equalTo(2));
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNPEIfKeyIsNull() {
+        windowStore.fetch(null, 0, 0);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNPEIfFromKeyIsNull() {
+        windowStore.fetch(null, "a", 0, 0);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNPEIfToKeyIsNull() {
+        windowStore.fetch("a", null, 0, 0);
     }
 
 }

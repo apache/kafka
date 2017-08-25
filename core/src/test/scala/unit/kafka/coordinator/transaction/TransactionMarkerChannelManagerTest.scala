@@ -422,12 +422,12 @@ class TransactionMarkerChannelManagerTest {
 
   @Test
   def shouldCreateMetricsOnStarting(): Unit = {
-    val metrics = Metrics.defaultRegistry.allMetrics
+    val metrics = Metrics.defaultRegistry.allMetrics.asScala
 
-    assertEquals(1, Metrics.defaultRegistry.allMetrics.asScala
+    assertEquals(1, metrics
       .filterKeys(_.getMBeanName == "kafka.coordinator.transaction:type=TransactionMarkerChannelManager,name=UnknownDestinationQueueSize")
       .size)
-    assertEquals(1, Metrics.defaultRegistry.allMetrics.asScala
+    assertEquals(1, metrics
       .filterKeys(_.getMBeanName == "kafka.coordinator.transaction:type=TransactionMarkerChannelManager,name=LogAppendRetryQueueSize")
       .size)
   }

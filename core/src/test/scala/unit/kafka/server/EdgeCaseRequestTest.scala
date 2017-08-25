@@ -37,7 +37,7 @@ import scala.collection.JavaConverters._
 
 class EdgeCaseRequestTest extends KafkaServerTestHarness {
 
-  def generateConfigs() = {
+  def generateConfigs = {
     val props = TestUtils.createBrokerConfig(1, zkConnect)
     props.setProperty(KafkaConfig.AutoCreateTopicsEnableProp, "false")
     List(KafkaConfig.fromProps(props))

@@ -23,12 +23,12 @@ import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.Transformer;
 import org.apache.kafka.streams.kstream.TransformerSupplier;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -144,7 +144,7 @@ public class EosIntegrationTest {
                                    final String inputTopic,
                                    final String throughTopic,
                                    final String outputTopic) throws Exception {
-        final KStreamBuilder builder = new KStreamBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
         final KStream<Long, Long> input = builder.stream(inputTopic);
         KStream<Long, Long> output = input;
         if (throughTopic != null) {
@@ -155,7 +155,7 @@ public class EosIntegrationTest {
         for (int i = 0; i < numberOfRestarts; ++i) {
             final long factor = i;
             final KafkaStreams streams = new KafkaStreams(
-                builder,
+                builder.build(),
                 StreamsTestUtils.getStreamsConfig(
                     applicationId,
                     CLUSTER.bootstrapServers(),
@@ -192,7 +192,7 @@ public class EosIntegrationTest {
                                 put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT));
                             }
                         }),
-                    inputTopic,
+                    outputTopic,
                     inputData.size()
                 );
 
@@ -235,11 +235,11 @@ public class EosIntegrationTest {
 
     @Test
     public void shouldBeAbleToPerformMultipleTransactions() throws Exception {
-        final KStreamBuilder builder = new KStreamBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
         builder.stream(SINGLE_PARTITION_INPUT_TOPIC).to(SINGLE_PARTITION_OUTPUT_TOPIC);
 
         final KafkaStreams streams = new KafkaStreams(
-            builder,
+            builder.build(),
             StreamsTestUtils.getStreamsConfig(
                 applicationId,
                 CLUSTER.bootstrapServers(),
@@ -578,7 +578,7 @@ public class EosIntegrationTest {
         commitRequested = new AtomicInteger(0);
         errorInjected = new AtomicBoolean(false);
         injectGC = new AtomicBoolean(false);
-        final KStreamBuilder builder = new KStreamBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
         String[] storeNames = null;
         if (withState) {
@@ -657,7 +657,7 @@ public class EosIntegrationTest {
             .to(SINGLE_PARTITION_OUTPUT_TOPIC);
 
         final KafkaStreams streams = new KafkaStreams(
-            builder,
+            builder.build(),
             StreamsTestUtils.getStreamsConfig(
                 applicationId,
                 CLUSTER.bootstrapServers(),

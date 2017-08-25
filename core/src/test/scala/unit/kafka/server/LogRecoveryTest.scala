@@ -99,7 +99,7 @@ class LogRecoveryTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testHWCheckpointNoFailuresSingleLogSegment {
+  def testHWCheckpointNoFailuresSingleLogSegment(): Unit = {
     val numMessages = 2L
     sendMessages(numMessages.toInt)
 
@@ -116,7 +116,7 @@ class LogRecoveryTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testHWCheckpointWithFailuresSingleLogSegment {
+  def testHWCheckpointWithFailuresSingleLogSegment(): Unit = {
     var leader = waitUntilLeaderIsElectedOrChanged(zkUtils, topic, partitionId)
 
     assertEquals(0L, hwFile1.read.getOrElse(topicPartition, 0L))
@@ -167,7 +167,7 @@ class LogRecoveryTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testHWCheckpointNoFailuresMultipleLogSegments {
+  def testHWCheckpointNoFailuresMultipleLogSegments(): Unit = {
     sendMessages(20)
     val hw = 20L
     // give some time for follower 1 to record leader HW of 600
@@ -183,7 +183,7 @@ class LogRecoveryTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testHWCheckpointWithFailuresMultipleLogSegments {
+  def testHWCheckpointWithFailuresMultipleLogSegments(): Unit = {
     var leader = waitUntilLeaderIsElectedOrChanged(zkUtils, topic, partitionId)
 
     sendMessages(2)

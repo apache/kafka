@@ -40,9 +40,9 @@ class KafkaRequestHandler(id: Int,
   private val latch = new CountDownLatch(1)
 
   def run() {
-    while (true) {
+    while(true) {
+      var req: RequestChannel.Request = null
       try {
-        var req : RequestChannel.Request = null
         while (req == null) {
           // We use a single meter for aggregate idle percentage for the thread pool.
           // Since meter is calculated as total_recorded_value / time_window and
@@ -69,6 +69,9 @@ class KafkaRequestHandler(id: Int,
           latch.countDown()
           Exit.exit(e.statusCode)
         case e: Throwable => error("Exception when handling request", e)
+      } finally {
+        if (req != null)
+          req.dispose()
       }
     }
   }

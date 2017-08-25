@@ -16,13 +16,9 @@
 */
 package kafka.utils
 
-import java.util
-import java.util.Comparator
-
 import joptsimple.OptionParser
 import org.apache.kafka.common.{Metric, MetricName}
 
-import scala.collection.immutable.ListMap
 import scala.collection.mutable
 
 object ToolsUtils {
@@ -32,9 +28,8 @@ object ToolsUtils {
       hostPort.split(",")
     else
       Array(hostPort)
-    val validHostPort = hostPorts.filter {
-      hostPortData =>
-        org.apache.kafka.common.utils.Utils.getPort(hostPortData) != null
+    val validHostPort = hostPorts.filter { hostPortData =>
+      org.apache.kafka.common.utils.Utils.getPort(hostPortData) != null
     }
     val isValid = !validHostPort.isEmpty && validHostPort.size == hostPorts.length
     if(!isValid)

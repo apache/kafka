@@ -53,7 +53,7 @@ public class TopicConfig {
         "we would fsync after every message; if it were 5 we would fsync after every five messages. " +
         "In general we recommend you not set this and use replication for durability and allow the " +
         "operating system's background flush capabilities as it is more efficient. This setting can " +
-        "be overridden on a per-topic basis (see <a href=\"#topic-config\">the per-topic configuration section</a>).";
+        "be overridden on a per-topic basis (see <a href=\"#topicconfigs\">the per-topic configuration section</a>).";
 
     public static final String FLUSH_MS_CONFIG = "flush.ms";
     public static final String FLUSH_MS_DOC = "This setting allows specifying a time interval at which we will " +
@@ -78,7 +78,7 @@ public class TopicConfig {
         "is increased and there are consumers older than 0.10.2, the consumers' fetch size must also be increased so that " +
         "the they can fetch record batches this large.</p>" +
         "<p>In the latest message format version, records are always grouped into batches for efficiency. In previous " +
-        "message format versions, uncompressed records are not grouped into batches and this limit only applies to a" +
+        "message format versions, uncompressed records are not grouped into batches and this limit only applies to a " +
         "single record in that case.</p>";
 
     public static final String INDEX_INTERVAL_BYTES_CONFIG = "index.interval.bytes";
