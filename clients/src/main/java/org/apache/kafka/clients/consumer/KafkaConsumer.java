@@ -652,7 +652,12 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             if (clientId.length() <= 0)
                 clientId = "consumer-" + CONSUMER_CLIENT_ID_SEQUENCE.getAndIncrement();
             this.clientId = clientId;
-            Map<String, String> metricsTags = Collections.singletonMap("client-id", clientId);
+            String groupId = config.getString(ConsumerConfig.GROUP_ID_CONFIG);
+
+            Map<String, String> metricsTags = new HashMap<>();
+            metricsTags.put("group-id", groupId);
+            metricsTags.put("client-id", clientId);
+                                    
             MetricConfig metricConfig = new MetricConfig().samples(config.getInt(ConsumerConfig.METRICS_NUM_SAMPLES_CONFIG))
                     .timeWindow(config.getLong(ConsumerConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG), TimeUnit.MILLISECONDS)
                     .recordLevel(Sensor.RecordingLevel.forName(config.getString(ConsumerConfig.METRICS_RECORDING_LEVEL_CONFIG)))
