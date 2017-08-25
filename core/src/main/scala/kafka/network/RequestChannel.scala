@@ -49,7 +49,7 @@ object RequestChannel extends Logging {
   class Request(val processor: Int,
                 val context: RequestContext,
                 val startTimeNanos: Long,
-                val memoryPool: MemoryPool,
+                memoryPool: MemoryPool,
                 @volatile private var buffer: ByteBuffer) extends BaseRequest {
     // These need to be volatile because the readers are in the network thread and the writers are in the request
     // handler threads or the purgatory threads
@@ -163,7 +163,7 @@ object RequestChannel extends Logging {
           s"sendTime:$responseSendTimeMs," +
           s"securityProtocol:${context.securityProtocol}," +
           s"principal:${context.principal}," +
-          s"listener:${context.listenerName}")
+          s"listener:${context.listenerName.value}")
       }
     }
 

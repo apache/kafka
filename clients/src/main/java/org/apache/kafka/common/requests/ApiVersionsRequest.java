@@ -84,7 +84,8 @@ public class ApiVersionsRequest extends AbstractRequest {
             case 1:
                 return new ApiVersionsResponse(throttleTimeMs, Errors.forException(e), Collections.<ApiVersionsResponse.ApiVersion>emptyList());
             default:
-                return new ApiVersionsResponse(Errors.UNSUPPORTED_VERSION, Collections.<ApiVersionsResponse.ApiVersion>emptyList());
+                throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
+                        version, this.getClass().getSimpleName(), ApiKeys.API_VERSIONS.latestVersion()));
         }
     }
 

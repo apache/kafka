@@ -27,12 +27,12 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
     public static final String THROTTLE_TIME_KEY_NAME = "throttle_time_ms";
     public static final int DEFAULT_THROTTLE_TIME = 0;
 
-    public Send toSend(String destination, RequestHeader requestHeader) {
-        return new NetworkSend(destination, serialize(requestHeader.apiVersion(), requestHeader.toResponseHeader()));
+    protected Send toSend(String destination, ResponseHeader header, short apiVersion) {
+        return new NetworkSend(destination, serialize(apiVersion, header));
     }
 
     /**
-     * Visible for testing, typically {@link #toSend(String, RequestHeader)} should be used instead.
+     * Visible for testing, typically {@link #toSend(String, ResponseHeader, short)} should be used instead.
      */
     public ByteBuffer serialize(short version, ResponseHeader responseHeader) {
         return serialize(responseHeader.toStruct(), toStruct(version));

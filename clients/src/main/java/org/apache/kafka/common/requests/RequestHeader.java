@@ -24,6 +24,8 @@ import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 
+import static java.util.Objects.requireNonNull;
+
 /**
  * The header for a request in the Kafka protocol
  */
@@ -55,7 +57,7 @@ public class RequestHeader extends AbstractRequestResponse {
     }
 
     public RequestHeader(ApiKeys apiKey, short version, String clientId, int correlation) {
-        this.apiKey = apiKey;
+        this.apiKey = requireNonNull(apiKey);
         this.apiVersion = version;
         this.clientId = clientId;
         this.correlationId = correlation;
@@ -132,7 +134,7 @@ public class RequestHeader extends AbstractRequestResponse {
 
     @Override
     public int hashCode() {
-        int result = apiKey != null ? apiKey.hashCode() : 0;
+        int result = apiKey.hashCode();
         result = 31 * result + (int) apiVersion;
         result = 31 * result + (clientId != null ? clientId.hashCode() : 0);
         result = 31 * result + correlationId;
