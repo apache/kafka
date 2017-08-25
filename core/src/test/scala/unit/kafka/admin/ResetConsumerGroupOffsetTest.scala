@@ -14,17 +14,12 @@ package kafka.admin
 
 import java.io.{BufferedWriter, File, FileWriter}
 import java.text.{ParseException, SimpleDateFormat}
-import java.util.concurrent.{ExecutorService, Executors, TimeUnit}
-import java.util.{Calendar, Collections, Date, Properties}
+import java.util.{Calendar, Date, Properties}
 
 import kafka.admin.ConsumerGroupCommand.{ConsumerGroupCommandOptions, KafkaConsumerGroupService}
-import kafka.admin.{AdminUtils, ConsumerGroupCommand}
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
-import org.apache.kafka.clients.consumer.KafkaConsumer
-import org.apache.kafka.common.errors.WakeupException
-import org.apache.kafka.common.serialization.StringDeserializer
 import org.junit.{After, Before, Test}
 
 import scala.collection.mutable.ArrayBuffer
@@ -330,7 +325,7 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
     AdminUtils.deleteTopic(zkUtils, topic1)
   }
 
-  private def produceConsumeAndShutdown(consumerGroupCommand: KafkaConsumerGroupService, numConsumers: Int = 1, topic: String, totalMessages: Int) {
+  private def produceConsumeAndShutdown(consumerGroupCommand: KafkaConsumerGroupService, numConsumers: Int, topic: String, totalMessages: Int) {
     TestUtils.produceMessages(servers, topic, totalMessages, acks = 1, 100 * 1000)
     val executor = createConsumerGroupExecutor(brokerList, numConsumers, group, topic)
 
