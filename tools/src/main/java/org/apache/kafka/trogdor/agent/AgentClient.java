@@ -31,8 +31,6 @@ import org.apache.kafka.trogdor.rest.CreateAgentFaultRequest;
 import org.apache.kafka.trogdor.rest.Empty;
 import org.apache.kafka.trogdor.rest.JsonRestServer;
 import org.apache.kafka.trogdor.rest.JsonRestServer.HttpResponse;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import static net.sourceforge.argparse4j.impl.Arguments.store;
 import static net.sourceforge.argparse4j.impl.Arguments.storeTrue;
@@ -41,8 +39,6 @@ import static net.sourceforge.argparse4j.impl.Arguments.storeTrue;
  * A client for the Trogdor agent.
  */
 public class AgentClient {
-    private static final Logger log = LoggerFactory.getLogger(AgentClient.class);
-
     /**
      * The URL target.
      */

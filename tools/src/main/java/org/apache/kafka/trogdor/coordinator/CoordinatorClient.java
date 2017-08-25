@@ -31,8 +31,6 @@ import org.apache.kafka.trogdor.rest.CreateCoordinatorFaultRequest;
 import org.apache.kafka.trogdor.rest.Empty;
 import org.apache.kafka.trogdor.rest.JsonRestServer;
 import org.apache.kafka.trogdor.rest.JsonRestServer.HttpResponse;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import static net.sourceforge.argparse4j.impl.Arguments.store;
 import static net.sourceforge.argparse4j.impl.Arguments.storeTrue;
@@ -41,8 +39,6 @@ import static net.sourceforge.argparse4j.impl.Arguments.storeTrue;
  * A client for the Trogdor coordinator.
  */
 public class CoordinatorClient {
-    private static final Logger log = LoggerFactory.getLogger(CoordinatorClient.class);
-
     /**
      * The URL target.
      */

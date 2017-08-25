@@ -66,7 +66,7 @@ public class JsonRestServer {
         this.jettyServer = new Server();
         this.connector = new ServerConnector(jettyServer);
         if (port > 0) {
-            connector.setPort(Integer.valueOf(port));
+            connector.setPort(port);
         }
         jettyServer.setConnectors(new Connector[]{connector});
     }
@@ -153,8 +153,8 @@ public class JsonRestServer {
             connection.setRequestProperty("User-Agent", "kafka");
             connection.setRequestProperty("Accept", "application/json");
 
-            // connection.getResponseCode() implicitly calls getInputStream, so always set to true.
-            // On the other hand, leaving this out breaks nothing.
+            // connection.getResponseCode() implicitly calls getInputStream, so always set
+            // this to true.
             connection.setDoInput(true);
 
             connection.setUseCaches(false);

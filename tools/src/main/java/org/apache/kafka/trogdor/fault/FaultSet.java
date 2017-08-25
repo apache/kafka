@@ -17,17 +17,12 @@
 
 package org.apache.kafka.trogdor.fault;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.util.Iterator;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.TreeMap;
 
 public class FaultSet {
-    private static final Logger log = LoggerFactory.getLogger(FaultSet.class);
-
     private final static long NS_PER_MS = 1000000L;
 
     /**
@@ -65,6 +60,9 @@ public class FaultSet {
 
     /**
      * Insert a new fault to a TreeMap.
+     *
+     * If there is already a fault with the given key, the fault will be stored
+     * with the next available key.
      */
     private void insertUnique(TreeMap<Long, Fault> map, long key, Fault fault) {
         while (true) {
@@ -89,6 +87,10 @@ public class FaultSet {
         removeUnique(byEnd, endMs * NS_PER_MS, fault);
     }
 
+    /**
+     * Helper function to remove a fault from a map.  We will search every
+     * element of the map equal to or higher than the given key.
+     */
     private void removeUnique(TreeMap<Long, Fault> map, long key, Fault fault) {
         while (true) {
             Map.Entry<Long, Fault> existing = map.ceilingEntry(key);

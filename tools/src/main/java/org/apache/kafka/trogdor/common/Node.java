@@ -20,7 +20,7 @@ package org.apache.kafka.trogdor.common;
 import java.util.Set;
 
 /**
- * Defines a cluster topology
+ * Defines a node in a cluster topology
  */
 public interface Node {
     public static class Util {

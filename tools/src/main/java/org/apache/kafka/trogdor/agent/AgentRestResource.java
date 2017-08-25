@@ -20,8 +20,6 @@ import org.apache.kafka.trogdor.rest.AgentFaultsResponse;
 import org.apache.kafka.trogdor.rest.AgentStatusResponse;
 import org.apache.kafka.trogdor.rest.CreateAgentFaultRequest;
 import org.apache.kafka.trogdor.rest.Empty;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import javax.servlet.ServletContext;
 import javax.ws.rs.Consumes;
@@ -37,8 +35,6 @@ import java.util.concurrent.atomic.AtomicReference;
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
 public class AgentRestResource {
-    private static final Logger log = LoggerFactory.getLogger(AgentRestResource.class);
-
     private final AtomicReference<Agent> agent = new AtomicReference<>(null);
 
     @javax.ws.rs.core.Context

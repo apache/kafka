@@ -20,8 +20,6 @@ import org.apache.kafka.trogdor.rest.CoordinatorFaultsResponse;
 import org.apache.kafka.trogdor.rest.CoordinatorStatusResponse;
 import org.apache.kafka.trogdor.rest.CreateCoordinatorFaultRequest;
 import org.apache.kafka.trogdor.rest.Empty;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import javax.servlet.ServletContext;
 import javax.ws.rs.Consumes;
@@ -37,8 +35,6 @@ import java.util.concurrent.atomic.AtomicReference;
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
 public class CoordinatorRestResource {
-    private static final Logger log = LoggerFactory.getLogger(CoordinatorRestResource.class);
-
     private final AtomicReference<Coordinator> coordinator = new AtomicReference<Coordinator>();
 
     @javax.ws.rs.core.Context
