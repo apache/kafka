@@ -292,15 +292,25 @@ public class Selector implements Selectable, AutoCloseable {
      */
     public void send(Send send) {
         String connectionId = send.destination();
-        if (closingChannels.containsKey(connectionId))
+        KafkaChannel channel = channelOrFail(connectionId);
+        if (closingChannels.containsKey(connectionId)) {
+            channel.state(ChannelState.FAILED_SEND);
+            // ensure notification via `disconnected`
             this.failedSends.add(connectionId);
-        else {
-            KafkaChannel channel = channelOrFail(connectionId, false);
+        } else {
             try {
                 channel.setSend(send);
-            } catch (CancelledKeyException e) {
+            } catch (Exception e) {
+                // update the state for consistency, the channel will be discarded after `close`
+                channel.state(ChannelState.FAILED_SEND);
+                // ensure notification via `disconnected`
                 this.failedSends.add(connectionId);
                 close(channel, false);
+                if (!(e instanceof CancelledKeyException)) {
+                    log.error("Unexpected exception during send, closing connection {} and rethrowing exception {}",
+                            connectionId, e);
+                    throw e;
+                }
             }
         }
     }
@@ -535,8 +545,7 @@ public class Selector implements Selectable, AutoCloseable {
 
     @Override
     public void mute(String id) {
-        KafkaChannel channel = channelOrFail(id, true);
-        mute(channel);
+        mute(channelOrFail(id));
     }
 
     private void mute(KafkaChannel channel) {
@@ -546,8 +555,7 @@ public class Selector implements Selectable, AutoCloseable {
 
     @Override
     public void unmute(String id) {
-        KafkaChannel channel = channelOrFail(id, true);
-        unmute(channel);
+        unmute(channelOrFail(id));
     }
 
     private void unmute(KafkaChannel channel) {
@@ -593,6 +601,7 @@ public class Selector implements Selectable, AutoCloseable {
         this.completedReceives.clear();
         this.connected.clear();
         this.disconnected.clear();
+
         // Remove closed channels after all their staged receives have been processed or if a send was requested
         for (Iterator<Map.Entry<String, KafkaChannel>> it = closingChannels.entrySet().iterator(); it.hasNext(); ) {
             KafkaChannel channel = it.next().getValue();
@@ -603,12 +612,10 @@ public class Selector implements Selectable, AutoCloseable {
                 it.remove();
             }
         }
-        for (String channel : this.failedSends) {
-            KafkaChannel failedChannel = closingChannels.get(channel);
-            if (failedChannel != null)
-                failedChannel.state(ChannelState.FAILED_SEND);
+
+        for (String channel : this.failedSends)
             this.disconnected.put(channel, ChannelState.FAILED_SEND);
-        }
+
         this.failedSends.clear();
         this.madeReadProgressLastPoll = false;
     }
@@ -702,9 +709,12 @@ public class Selector implements Selectable, AutoCloseable {
         return channel != null && channel.ready();
     }
 
-    private KafkaChannel channelOrFail(String id, boolean maybeClosing) {
+    /**
+     * Return the channel associated with `id`. Note that this method also returns the channel if it's closing.
+     */
+    private KafkaChannel channelOrFail(String id) {
         KafkaChannel channel = this.channels.get(id);
-        if (channel == null && maybeClosing)
+        if (channel == null)
             channel = this.closingChannels.get(id);
         if (channel == null)
             throw new IllegalStateException("Attempt to retrieve channel for which there is no connection. Connection id " + id + " existing connections " + channels.keySet());
