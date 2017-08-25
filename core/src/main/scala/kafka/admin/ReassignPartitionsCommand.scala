@@ -40,6 +40,7 @@ object ReassignPartitionsCommand extends Logging {
   case class Throttle(value: Long, postUpdateAction: () => Unit = () => ())
 
   private[admin] val NoThrottle = Throttle(-1)
+  private[admin] val AnyLogDir = "any"
 
   def main(args: Array[String]): Unit = {
 
@@ -224,7 +225,7 @@ object ReassignPartitionsCommand extends Logging {
           "topic" -> topic,
           "partition" -> partition,
           "replicas" -> replicas,
-          "log_dirs" -> replicas.map(r => replicaLogDirAssignment.getOrElse(new TopicPartitionReplica(topic, partition, r), "any"))
+          "log_dirs" -> replicas.map(r => replicaLogDirAssignment.getOrElse(new TopicPartitionReplica(topic, partition, r), AnyLogDir))
         )
       }
     ))
@@ -245,7 +246,7 @@ object ReassignPartitionsCommand extends Logging {
       val newReplicas = partitionFields("replicas").to[Seq[Int]]
       val newLogDirs = partitionFields.get("log_dirs") match {
         case Some(jsonValue) => jsonValue.to[Seq[String]]
-        case None => newReplicas.map(r => "any")
+        case None => newReplicas.map(r => AnyLogDir)
       }
       if (newReplicas.size != newLogDirs.size)
         throw new AdminCommandFailedException(s"Size of replicas list $newReplicas is different from " +
@@ -253,7 +254,7 @@ object ReassignPartitionsCommand extends Logging {
       partitionAssignment += (TopicAndPartition(topic, partition) -> newReplicas)
       replicaAssignment ++= newReplicas.zip(newLogDirs).map { case (replica, logDir) =>
         new TopicPartitionReplica(topic, partition, replica) -> logDir
-      }.filter(_._2 != "any")
+      }.filter(_._2 != AnyLogDir)
     }
     (partitionAssignment, replicaAssignment)
   }
@@ -623,3 +624,4 @@ sealed trait ReassignmentStatus { def status: Int }
 case object ReassignmentCompleted extends ReassignmentStatus { val status = 1 }
 case object ReassignmentInProgress extends ReassignmentStatus { val status = 0 }
 case object ReassignmentFailed extends ReassignmentStatus { val status = -1 }
+

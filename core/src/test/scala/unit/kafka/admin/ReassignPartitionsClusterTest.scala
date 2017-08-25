@@ -95,7 +95,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
 
     //Then the replica should be on 101
     assertEquals(Seq(101), zkUtils.getPartitionAssignmentForTopics(Seq(topicName)).get(topicName).get(partition))
-    // The replica should be in the expected log directory on broker 102
+    // The replica should be in the expected log directory on broker 101
     val replica = new TopicPartitionReplica(topicName, 0, 101)
     assertEquals(expectedLogDir, adminClient.describeReplicaLogDir(Collections.singleton(replica)).all().get.get(replica).getCurrentReplicaLogDir)
   }
@@ -127,7 +127,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     //Then the replicas should span all three brokers
     val actual = zkUtils.getPartitionAssignmentForTopics(Seq(topicName))(topicName)
     assertEquals(Seq(100, 101, 102), actual.values.flatten.toSeq.distinct.sorted)
-    // The replica should be in the expected log directory on broker 101
+    // The replica should be in the expected log directory on broker 102
     assertEquals(expectedLogDir, adminClient.describeReplicaLogDir(Collections.singleton(replica)).all().get.get(replica).getCurrentReplicaLogDir)
   }
 
@@ -379,26 +379,40 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
 
   @Test(expected = classOf[AdminCommandFailedException])
   def shouldFailIfProposedHasInvalidLogDir() {
-    //Given a single replica on server 100
+    // Given a single replica on server 100
     startBrokers(Seq(100, 101))
     adminClient = createAdminClient(servers)
     createTopic(zkUtils, topicName, Map(0 -> Seq(100)), servers = servers)
 
-    //When we execute an assignment that specifies an invalid brokerID (102: invalid broker ID in this case)
+    // When we execute an assignment that specifies an invalid log directory
     val topicJson: String = s"""{"version":1,"partitions":[{"topic":"$topicName","partition":0,"replicas":[101],"log_dirs":["invalidDir"]}]}"""
     ReassignPartitionsCommand.executeAssignment(zkUtils, Some(adminClient), topicJson, NoThrottle)
   }
 
   @Test(expected = classOf[AdminCommandFailedException])
   def shouldFailIfProposedMoveReplicaWithinBroker() {
-    //Given a single replica on server 100
+    // Given a single replica on server 100
     startBrokers(Seq(100, 101))
     adminClient = createAdminClient(servers)
     val logDir = getRandomLogDirAssignment(100)
     createTopic(zkUtils, topicName, Map(0 -> Seq(100)), servers = servers)
 
-    //When we execute an assignment that specifies an invalid brokerID (102: invalid broker ID in this case)
+    // When we execute an assignment that specifies log directory for an existing replica on the broker
+    // This test can be removed after KIP-113 is fully implemented, which allows us to change log directory of existing replicas on a broker
     val topicJson: String = s"""{"version":1,"partitions":[{"topic":"$topicName","partition":0,"replicas":[100],"log_dirs":["$logDir"]}]}"""
+    ReassignPartitionsCommand.executeAssignment(zkUtils, Some(adminClient), topicJson, NoThrottle)
+  }
+
+  @Test(expected = classOf[AdminCommandFailedException])
+  def shouldFailIfProposedHasInconsistentReplicasAndLogDirs() {
+    // Given a single replica on server 100
+    startBrokers(Seq(100, 101))
+    adminClient = createAdminClient(servers)
+    val logDir = getRandomLogDirAssignment(100)
+    createTopic(zkUtils, topicName, Map(0 -> Seq(100)), servers = servers)
+
+    // When we execute an assignment whose length of replicas doesn't match that of replicas
+    val topicJson: String = s"""{"version":1,"partitions":[{"topic":"$topicName","partition":0,"replicas":[101],"log_dirs":["$logDir", "$logDir"]}]}"""
     ReassignPartitionsCommand.executeAssignment(zkUtils, Some(adminClient), topicJson, NoThrottle)
   }
 

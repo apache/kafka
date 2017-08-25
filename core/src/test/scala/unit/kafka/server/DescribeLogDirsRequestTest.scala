@@ -17,7 +17,6 @@
 
 package kafka.server
 
-import kafka.network.SocketServer
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
@@ -25,7 +24,6 @@ import org.apache.kafka.common.requests._
 import org.junit.Assert._
 import org.junit.Test
 import java.io.File
-import scala.collection.JavaConverters._
 
 class DescribeLogDirsRequestTest extends BaseRequestTest {
 
@@ -41,7 +39,7 @@ class DescribeLogDirsRequestTest extends BaseRequestTest {
   def testDescribeLogDirsRequest(): Unit = {
     val onlineDir = new File(servers.head.config.logDirs.head).getAbsolutePath
     val offlineDir = new File(servers.head.config.logDirs.tail.head).getAbsolutePath
-    servers.head.logDirFailureChannel.maybeAddOfflineLogDir(offlineDir, "", new java.io.IOException())
+    servers.head.replicaManager.handleLogDirFailure(offlineDir)
     TestUtils.createTopic(zkUtils, topic, partitionNum, 1, servers)
     TestUtils.produceMessages(servers, topic, 10)
 
