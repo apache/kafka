@@ -53,10 +53,10 @@ import org.apache.kafka.common.requests.InitProducerIdResponse;
 import org.apache.kafka.common.requests.ProduceRequest;
 import org.apache.kafka.common.requests.ProduceResponse;
 import org.apache.kafka.common.requests.RequestHeader;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -73,7 +73,7 @@ import static org.apache.kafka.common.record.RecordBatch.NO_TIMESTAMP;
  */
 public class Sender implements Runnable {
 
-    private static final Logger log = LoggerFactory.getLogger(Sender.class);
+    private final Logger log;
 
     /* the state of each nodes connection */
     private final KafkaClient client;
@@ -120,7 +120,8 @@ public class Sender implements Runnable {
     /* all the state related to transactions, in particular the producer id, producer epoch, and sequence numbers */
     private final TransactionManager transactionManager;
 
-    public Sender(KafkaClient client,
+    public Sender(LogContext logContext,
+                  KafkaClient client,
                   Metadata metadata,
                   RecordAccumulator accumulator,
                   boolean guaranteeMessageOrder,
@@ -133,6 +134,7 @@ public class Sender implements Runnable {
                   long retryBackoffMs,
                   TransactionManager transactionManager,
                   ApiVersions apiVersions) {
+        this.log = logContext.logger(Sender.class);
         this.client = client;
         this.accumulator = accumulator;
         this.metadata = metadata;
