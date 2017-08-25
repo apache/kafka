@@ -43,7 +43,7 @@ import java.util.Random;
 
 import static org.apache.kafka.streams.state.internals.RocksDBSessionStoreTest.toList;
 import static org.apache.kafka.test.StreamsTestUtils.verifyKeyValueList;
-import static org.apache.kafka.test.StreamsTestUtils.verifyWindowedKey;
+import static org.apache.kafka.test.StreamsTestUtils.verifyWindowedKeyValue;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -101,8 +101,8 @@ public class CachingSessionStoreTest {
         final KeyValueIterator<Windowed<Bytes>, byte[]> a = cachingStore.findSessions(keyA, 0, 0);
         final KeyValueIterator<Windowed<Bytes>, byte[]> b = cachingStore.findSessions(keyB, 0, 0);
 
-        verifyWindowedKey(a.next(), new Windowed<>(keyA, new SessionWindow(0, 0)), "1");
-        verifyWindowedKey(b.next(), new Windowed<>(keyB, new SessionWindow(0, 0)), "1");
+        verifyWindowedKeyValue(a.next(), new Windowed<>(keyA, new SessionWindow(0, 0)), "1");
+        verifyWindowedKeyValue(b.next(), new Windowed<>(keyB, new SessionWindow(0, 0)), "1");
         assertFalse(a.hasNext());
         assertFalse(b.hasNext());
     }
@@ -117,9 +117,9 @@ public class CachingSessionStoreTest {
         assertEquals(3, cache.size());
 
         final KeyValueIterator<Windowed<Bytes>, byte[]> all = cachingStore.findSessions(keyA, keyB, 0, 0);
-        verifyWindowedKey(all.next(), new Windowed<>(keyA, new SessionWindow(0, 0)), "1");
-        verifyWindowedKey(all.next(), new Windowed<>(keyAA, new SessionWindow(0, 0)), "1");
-        verifyWindowedKey(all.next(), new Windowed<>(keyB, new SessionWindow(0, 0)), "1");
+        verifyWindowedKeyValue(all.next(), new Windowed<>(keyA, new SessionWindow(0, 0)), "1");
+        verifyWindowedKeyValue(all.next(), new Windowed<>(keyAA, new SessionWindow(0, 0)), "1");
+        verifyWindowedKeyValue(all.next(), new Windowed<>(keyB, new SessionWindow(0, 0)), "1");
         assertFalse(all.hasNext());
     }
 
@@ -132,8 +132,8 @@ public class CachingSessionStoreTest {
         assertEquals(3, cache.size());
 
         final KeyValueIterator<Windowed<Bytes>, byte[]> some = cachingStore.findSessions(keyAA, keyB, 0, 0);
-        verifyWindowedKey(some.next(), new Windowed<>(keyAA, new SessionWindow(0, 0)), "1");
-        verifyWindowedKey(some.next(), new Windowed<>(keyB, new SessionWindow(0, 0)), "1");
+        verifyWindowedKeyValue(some.next(), new Windowed<>(keyAA, new SessionWindow(0, 0)), "1");
+        verifyWindowedKeyValue(some.next(), new Windowed<>(keyB, new SessionWindow(0, 0)), "1");
         assertFalse(some.hasNext());
     }
 

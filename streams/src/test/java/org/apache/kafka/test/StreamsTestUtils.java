@@ -80,9 +80,9 @@ public class StreamsTestUtils {
         }
     }
 
-    public static void verifyWindowedKey(final KeyValue<Windowed<Bytes>, byte[]> actual,
-                                   final Windowed<Bytes> expectedKey,
-                                   final String expectedValue) {
+    public static void verifyWindowedKeyValue(final KeyValue<Windowed<Bytes>, byte[]> actual,
+                                              final Windowed<Bytes> expectedKey,
+                                              final String expectedValue) {
         assertThat(actual.key.window(), equalTo(expectedKey.window()));
         assertThat(actual.key.key(), equalTo(expectedKey.key()));
         assertThat(actual.value, equalTo(expectedValue.getBytes()));

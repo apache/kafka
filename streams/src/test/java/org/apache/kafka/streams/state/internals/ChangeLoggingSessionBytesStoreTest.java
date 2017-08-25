@@ -108,6 +108,7 @@ public class ChangeLoggingSessionBytesStoreTest {
         final Bytes binaryKey = SessionKeySerde.bytesToBinary(key1);
         assertTrue(sent.containsKey(binaryKey));
         assertNull(sent.get(binaryKey));
+        EasyMock.verify(inner);
     }
 
     @Test
