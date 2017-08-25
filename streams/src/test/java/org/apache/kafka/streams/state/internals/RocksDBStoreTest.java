@@ -127,12 +127,12 @@ public class RocksDBStoreTest {
     @Test
     public void shouldPrefixScan() {
         List<KeyValue<String, String>> entries = new ArrayList<>();
-        entries.add(new KeyValue<>("a", "before aa"));
-        entries.add(new KeyValue<>("aa", "a"));
         entries.add(new KeyValue<>("aaa", "a"));
         entries.add(new KeyValue<>("aab", "b"));
+        entries.add(new KeyValue<>("a", "before aa"));
+        entries.add(new KeyValue<>("aa", "a"));
         entries.add(new KeyValue<>("aac", "c"));
-        entries.add(new KeyValue<>("abc", "d"));
+        entries.add(new KeyValue<>("abc", "after aa"));
         
 
         subject.init(context, subject);
