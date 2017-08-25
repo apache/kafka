@@ -325,7 +325,7 @@ class SocketServerTest extends JUnitSuite {
       receiveRequest(server.requestChannel)
     }
     val (request, hasStagedReceives) = TestUtils.computeUntilTrue(sendTwoRequestsReceiveOne()) { req =>
-      val connectionId = req.connectionId
+      val connectionId = req.context.connectionId
       val hasStagedReceives = server.processor(0).numStagedReceives(connectionId) > 0
       if (!hasStagedReceives) {
         processRequest(server.requestChannel, req)
