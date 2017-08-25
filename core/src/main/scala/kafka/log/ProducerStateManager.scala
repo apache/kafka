@@ -17,7 +17,7 @@
 package kafka.log
 
 import java.io._
-import java.nio.ByteBuffer
+import java.nio.{BufferUnderflowException, ByteBuffer}
 import java.nio.file.Files
 
 import kafka.common.KafkaException
@@ -378,6 +378,8 @@ object ProducerStateManager {
     catch {
       case e: SchemaException =>
         throw new CorruptSnapshotException(s"Snapshot failed schema validation: ${e.getMessage}")
+      case e: BufferUnderflowException =>
+        throw new CorruptSnapshotException(s"Could not detect the version of the snapshot schema: ${e.getMessage}")
     }
   }
 
