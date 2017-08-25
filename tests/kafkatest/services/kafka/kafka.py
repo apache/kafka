@@ -239,7 +239,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
         self.start_jmx_tool(self.idx(node), node)
         if len(self.pids(node)) == 0:
-            raise Exception("No process ids recorded on node %s" % str(node))
+            raise Exception("No process ids recorded on node %s" % node.account.hostname)
 
     def pids(self, node):
         """Return process ids associated with running processes on the given node."""
