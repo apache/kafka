@@ -48,6 +48,7 @@ private[log] case class TxnMetadata(producerId: Long, var firstOffset: LogOffset
 }
 
 private[log] object ProducerIdEntry {
+  private[log] val NumBatchesToRetain = 5
   def empty(producerId: Long) = new ProducerIdEntry(producerId, mutable.Queue[BatchMetadata](), RecordBatch.NO_PRODUCER_EPOCH, -1, None)
 }
 
@@ -69,7 +70,7 @@ private[log] case class ProducerIdEntry(producerId: Long, batchMetadata: mutable
                                         var producerEpoch: Short, var coordinatorEpoch: Int,
                                         var currentTxnFirstOffset: Option[Long]) {
 
-  private val NumBatchesToRetain = 5
+
 
   def firstSeq: Int = if (batchMetadata.isEmpty) RecordBatch.NO_SEQUENCE else batchMetadata.front.firstSeq
   def firstOffset: Long = if (batchMetadata.isEmpty) -1L else batchMetadata.front.firstOffset
@@ -81,7 +82,7 @@ private[log] case class ProducerIdEntry(producerId: Long, batchMetadata: mutable
   def addBatchMetadata(producerEpoch: Short, lastSeq: Int, lastOffset: Long, offsetDelta: Int, timestamp: Long) = {
     maybeUpdateEpoch(producerEpoch)
 
-    if (batchMetadata.size == NumBatchesToRetain)
+    if (batchMetadata.size == ProducerIdEntry.NumBatchesToRetain)
       batchMetadata.dequeue()
 
     batchMetadata.enqueue(BatchMetadata(lastSeq, lastOffset, offsetDelta, timestamp))

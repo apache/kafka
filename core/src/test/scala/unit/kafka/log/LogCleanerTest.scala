@@ -281,23 +281,26 @@ class LogCleanerTest extends JUnitSuite {
     assertEquals(List(0, 2, 3, 4, 5), offsetsInLog(log))
 
     appendProducer(Seq(1, 3))
+    appendProducer(Seq(4))
+    appendProducer(Seq(5))
+    appendProducer(Seq(6))
     log.appendAsLeader(commitMarker(producerId, producerEpoch), leaderEpoch = 0, isFromClient = false)
     log.roll()
 
     // the first cleaning preserves the commit marker (at offset 3) since there were still records for the transaction
     dirtyOffset = cleaner.doClean(LogToClean(tp, log, dirtyOffset, 100L), deleteHorizonMs = Long.MaxValue)._1
-    assertEquals(List(2, 1, 3), keysInLog(log))
-    assertEquals(List(3, 4, 5, 6, 7, 8), offsetsInLog(log))
+    assertEquals(List(2, 1, 3, 4, 5, 6), keysInLog(log))
+    assertEquals(List(3, 4, 5, 6, 7, 8, 9, 10, 11), offsetsInLog(log))
 
     // delete horizon forced to 0 to verify marker is not removed early
     dirtyOffset = cleaner.doClean(LogToClean(tp, log, dirtyOffset, 100L), deleteHorizonMs = 0L)._1
-    assertEquals(List(2, 1, 3), keysInLog(log))
-    assertEquals(List(3, 4, 5, 6, 7, 8), offsetsInLog(log))
+    assertEquals(List(2, 1, 3, 4, 5, 6), keysInLog(log))
+    assertEquals(List(3, 4, 5, 6, 7, 8, 9, 10, 11), offsetsInLog(log))
 
     // clean again with large delete horizon and verify the marker is removed
     dirtyOffset = cleaner.doClean(LogToClean(tp, log, dirtyOffset, 100L), deleteHorizonMs = Long.MaxValue)._1
-    assertEquals(List(2, 1, 3), keysInLog(log))
-    assertEquals(List(4, 5, 6, 7, 8), offsetsInLog(log))
+    assertEquals(List(2, 1, 3, 4, 5, 6), keysInLog(log))
+    assertEquals(List(4, 5, 6, 7, 8, 9, 10, 11), offsetsInLog(log))
   }
 
   @Test
@@ -332,19 +335,22 @@ class LogCleanerTest extends JUnitSuite {
     assertEquals(List(2, 3, 4), offsetsInLog(log)) // commit marker is still retained
     assertEquals(List(1, 2, 3, 4), lastOffsetsPerBatchInLog(log)) // empty batch is retained
 
-    // append a new record from the producer to allow cleaning of the empty batch
-    appendProducer(Seq(1))
+    // append a new records from the producer to allow cleaning of the empty batch
+    for (i <- Range(1, ProducerIdEntry.NumBatchesToRetain + 1)) {
+      appendProducer(Seq(i))
+    }
+
     log.roll()
 
     dirtyOffset = cleaner.doClean(LogToClean(tp, log, dirtyOffset, 100L), deleteHorizonMs = Long.MaxValue)._1
-    assertEquals(List(2, 3, 1), keysInLog(log))
-    assertEquals(List(2, 3, 4, 5), offsetsInLog(log)) // commit marker is still retained
-    assertEquals(List(2, 3, 4, 5), lastOffsetsPerBatchInLog(log)) // empty batch should be gone
+    assertEquals(List(1, 2, 3, 4, 5), keysInLog(log))
+    assertEquals(List(2, 5, 6, 7, 8, 9), offsetsInLog(log)) // commit marker is still retained
+    assertEquals(List(2, 5, 6, 7, 8, 9), lastOffsetsPerBatchInLog(log)) // empty batch should be gone
 
     dirtyOffset = cleaner.doClean(LogToClean(tp, log, dirtyOffset, 100L), deleteHorizonMs = Long.MaxValue)._1
-    assertEquals(List(2, 3, 1), keysInLog(log))
-    assertEquals(List(3, 4, 5), offsetsInLog(log)) // commit marker is gone
-    assertEquals(List(3, 4, 5), lastOffsetsPerBatchInLog(log)) // empty batch is gone
+    assertEquals(List(1, 2, 3, 4, 5), keysInLog(log))
+    assertEquals(List(5, 6, 7, 8, 9), offsetsInLog(log)) // commit marker is gone
+    assertEquals(List(5, 6, 7, 8, 9), lastOffsetsPerBatchInLog(log)) // empty batch is gone
   }
 
   @Test
@@ -362,19 +368,21 @@ class LogCleanerTest extends JUnitSuite {
     appendProducer(Seq(1))
     appendProducer(Seq(2, 3))
     log.appendAsLeader(abortMarker(producerId, producerEpoch), leaderEpoch = 0, isFromClient = false)
-    appendProducer(Seq(3))
+    for (i <- Range(3, ProducerIdEntry.NumBatchesToRetain + 3)) {
+      appendProducer(Seq(i))
+    }
     log.appendAsLeader(commitMarker(producerId, producerEpoch), leaderEpoch = 0, isFromClient = false)
     log.roll()
 
     // delete horizon set to 0 to verify marker is not removed early
     val dirtyOffset = cleaner.doClean(LogToClean(tp, log, 0L, 100L), deleteHorizonMs = 0L)._1
-    assertEquals(List(3), keysInLog(log))
-    assertEquals(List(3, 4, 5), offsetsInLog(log))
+    assertEquals(List(3, 4, 5, 6, 7), keysInLog(log))
+    assertEquals(List(3, 4, 5, 6, 7, 8, 9), offsetsInLog(log))
 
-    // clean again with large delete horizon and verify the marker is removed
+    // clean again with large delete horizon and verify the abort marker is removed
     cleaner.doClean(LogToClean(tp, log, dirtyOffset, 100L), deleteHorizonMs = Long.MaxValue)
-    assertEquals(List(3), keysInLog(log))
-    assertEquals(List(4, 5), offsetsInLog(log))
+    assertEquals(List(3, 4, 5, 6, 7), keysInLog(log))
+    assertEquals(List(4, 5, 6, 7, 8, 9), offsetsInLog(log))
   }
 
   @Test
@@ -417,20 +425,22 @@ class LogCleanerTest extends JUnitSuite {
     assertEquals(List(2), offsetsInLog(log)) // abort marker is still retained
     assertEquals(List(1, 2), lastOffsetsPerBatchInLog(log)) // empty batch is retained
 
-    // now update the last sequence so that the empty batch can be removed
-    appendProducer(Seq(1))
+    // now create enough batches so that the empty batch can be removed
+    for (i <- Range(0, ProducerIdEntry.NumBatchesToRetain)) {
+      appendProducer(Seq(1))
+    }
     log.roll()
 
     dirtyOffset = cleaner.doClean(LogToClean(tp, log, dirtyOffset, 100L), deleteHorizonMs = Long.MaxValue)._1
     assertAbortedTransactionIndexed()
     assertEquals(List(1), keysInLog(log))
-    assertEquals(List(2, 3), offsetsInLog(log)) // abort marker is not yet gone because we read the empty batch
-    assertEquals(List(2, 3), lastOffsetsPerBatchInLog(log)) // but we do not preserve the empty batch
+    assertEquals(List(2, 7), offsetsInLog(log)) // abort marker is not yet gone because we read the empty batch
+    assertEquals(List(2, 3, 4, 5, 6, 7), lastOffsetsPerBatchInLog(log)) // but we do not preserve the original empty batch
 
     dirtyOffset = cleaner.doClean(LogToClean(tp, log, dirtyOffset, 100L), deleteHorizonMs = Long.MaxValue)._1
     assertEquals(List(1), keysInLog(log))
-    assertEquals(List(3), offsetsInLog(log)) // abort marker is gone
-    assertEquals(List(3), lastOffsetsPerBatchInLog(log))
+    assertEquals(List(7), offsetsInLog(log)) // abort marker is gone
+    assertEquals(List(3, 4, 5, 6, 7), lastOffsetsPerBatchInLog(log))
 
     // we do not bother retaining the aborted transaction in the index
     assertEquals(0, log.collectAbortedTransactions(0L, 100L).size)
@@ -539,7 +549,7 @@ class LogCleanerTest extends JUnitSuite {
     log.roll()
 
     cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 0L, log.activeSegment.baseOffset))
-    assertEquals(List(1, 3, 4), lastOffsetsPerBatchInLog(log))
+    assertEquals(List(1, 2, 3, 4), lastOffsetsPerBatchInLog(log))
     assertEquals(Map(1L -> 0, 2L -> 1, 3L -> 0), lastSequencesInLog(log))
     assertEquals(List(0, 1), keysInLog(log))
     assertEquals(List(3, 4), offsetsInLog(log))
@@ -562,20 +572,24 @@ class LogCleanerTest extends JUnitSuite {
     log.roll()
 
     cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 0L, log.activeSegment.baseOffset))
-    assertEquals(List(2, 3), lastOffsetsPerBatchInLog(log))
+    assertEquals(List(0, 2, 3), lastOffsetsPerBatchInLog(log))
     assertEquals(Map(producerId -> 2), lastSequencesInLog(log))
     assertEquals(List(), keysInLog(log))
     assertEquals(List(3), offsetsInLog(log))
 
-    // Append a new entry from the producer and verify that the empty batch is cleaned up
-    appendProducer(Seq(1, 5))
+    // Append new entries from the producer and verify that the empty batches are cleaned up
+    for (i <- Range(0, ProducerIdEntry.NumBatchesToRetain)) {
+      appendProducer(Seq(1, 5))
+    }
+
     log.roll()
     cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 0L, log.activeSegment.baseOffset))
 
-    assertEquals(List(3, 5), lastOffsetsPerBatchInLog(log))
-    assertEquals(Map(producerId -> 4), lastSequencesInLog(log))
+    // We now retain the last 5 batches.
+    assertEquals(List(3, 5, 7, 9, 11, 13), lastOffsetsPerBatchInLog(log))
+    assertEquals(Map(producerId -> 12), lastSequencesInLog(log))
     assertEquals(List(1, 5), keysInLog(log))
-    assertEquals(List(3, 4, 5), offsetsInLog(log))
+    assertEquals(List(3, 12, 13), offsetsInLog(log))
   }
 
   @Test
