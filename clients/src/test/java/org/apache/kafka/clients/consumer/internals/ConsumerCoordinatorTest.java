@@ -121,7 +121,7 @@ public class ConsumerCoordinatorTest {
     public void setup() {
         this.time = new MockTime();
         this.subscriptions = new SubscriptionState(OffsetResetStrategy.EARLIEST);
-        this.metadata = new Metadata(0, Long.MAX_VALUE, true);
+        this.metadata = new Metadata(0, Long.MAX_VALUE, false);
         this.metadata.update(cluster, Collections.<String>emptySet(), time.milliseconds());
         this.client = new MockClient(time, metadata);
         this.consumerClient = new ConsumerNetworkClient(new LogContext(), client, metadata, time, 100, 1000);

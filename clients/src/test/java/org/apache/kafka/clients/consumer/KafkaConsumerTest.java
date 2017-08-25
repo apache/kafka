@@ -1447,7 +1447,7 @@ public class KafkaConsumerTest {
     }
 
     private Metadata createMetadata() {
-        return new Metadata(0, Long.MAX_VALUE, true);
+        return new Metadata(0, Long.MAX_VALUE, false);
     }
 
     private Node prepareRebalance(MockClient client, Node node, final Set<String> subscribedTopics, PartitionAssignor assignor, List<TopicPartition> partitions, Node coordinator) {

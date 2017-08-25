@@ -120,7 +120,7 @@ public class FetcherTest {
     private int fetchSize = 1000;
     private long retryBackoffMs = 100;
     private MockTime time = new MockTime(1);
-    private Metadata metadata = new Metadata(0, Long.MAX_VALUE, true);
+    private Metadata metadata = new Metadata(0, Long.MAX_VALUE, false);
     private MockClient client = new MockClient(time, metadata);
     private Cluster cluster = TestUtils.singletonCluster(topicName, 2);
     private Node node = cluster.nodes().get(0);

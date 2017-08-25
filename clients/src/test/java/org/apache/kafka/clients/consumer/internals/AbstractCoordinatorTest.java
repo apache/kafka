@@ -75,7 +75,7 @@ public class AbstractCoordinatorTest {
         this.mockTime = new MockTime();
         this.mockClient = new MockClient(mockTime);
 
-        Metadata metadata = new Metadata(100L, 60 * 60 * 1000L, true);
+        Metadata metadata = new Metadata(100L, 60 * 60 * 1000L, false);
         this.consumerClient = new ConsumerNetworkClient(new LogContext(), mockClient, metadata, mockTime,
                 retryBackoffMs, REQUEST_TIMEOUT_MS);
         Metrics metrics = new Metrics();
