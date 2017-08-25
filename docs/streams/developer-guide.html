@@ -566,7 +566,7 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
                     <li>You must specificy serdes explicitly if the key and/or value types of the records in the Kafka input topic do not
                         match the configured default serdes.</li>
                 </ul>
-                Several variants of <code>globalTable<code> exist to e.g. specify explicit serdes.
+                Several variants of <code>globalTable</code> exist to e.g. specify explicit serdes.
 
             </td>
         </tbody>
@@ -729,7 +729,7 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
             </td>
         </tr>
         <tr>
-            <td><b>Foreach</b>: <code>KStream &rarr; void or KTable &rarr; void </code></td>
+            <td><b>Foreach</b>: <code>KStream &rarr; void </code></td>
             <td>
                 <p>
                 Terminal operation. Performs a stateless action on each record.
@@ -935,7 +935,7 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
             </td>
         </tr>
         <tr>
-            <td><b>Print</b>: <code>KStream &rarr; void or KTable &rarr; void</code></td>
+            <td><b>Print</b>: <code>KStream &rarr; void </code></td>
             <td>
                 <p>
                 Terminal operation. Prints the records to <code>System.out</code>. See Javadocs for serde and <code>toString()</code> caveats.
@@ -995,7 +995,7 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
             </td>
         </tr>
         <tr>
-            <td><b>WriteAsText</b>: <code>KStream &rarr; void or KTable &rarr; void</code></td>
+            <td><b>WriteAsText</b>: <code>KStream &rarr; void </code></td>
             <td>
                 <p>
                 Terminal operation. Write the records to a file. See Javadocs for serde and <code>toString()</code> caveats.
