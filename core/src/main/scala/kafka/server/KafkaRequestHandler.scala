@@ -41,42 +41,43 @@ class KafkaRequestHandler(id: Int,
 
   def run() {
     while(true) {
-      var req: RequestChannel.Request = null
-      try {
-        while (req == null) {
-          // We use a single meter for aggregate idle percentage for the thread pool.
-          // Since meter is calculated as total_recorded_value / time_window and
-          // time_window is independent of the number of threads, each recorded idle
-          // time should be discounted by # threads.
-          val startSelectTime = time.nanoseconds
-          req = requestChannel.receiveRequest(300)
-          val endTime = time.nanoseconds
-          if (req != null)
-            req.requestDequeueTimeNanos = endTime
-          val idleTime = endTime - startSelectTime
-          aggregateIdleMeter.mark(idleTime / totalHandlerThreads)
-        }
+      // We use a single meter for aggregate idle percentage for the thread pool.
+      // Since meter is calculated as total_recorded_value / time_window and
+      // time_window is independent of the number of threads, each recorded idle
+      // time should be discounted by # threads.
+      val startSelectTime = time.nanoseconds
 
-        if (req eq RequestChannel.AllDone) {
+      val req = requestChannel.receiveRequest(300)
+      val endTime = time.nanoseconds
+      val idleTime = endTime - startSelectTime
+      aggregateIdleMeter.mark(idleTime / totalHandlerThreads)
+
+      req match {
+        case RequestChannel.ShutdownRequest =>
           debug("Kafka request handler %d on broker %d received shut down command".format(id, brokerId))
           latch.countDown()
           return
-        }
-        trace("Kafka request handler %d on broker %d handling request %s".format(id, brokerId, req))
-        apis.handle(req)
-      } catch {
-        case e: FatalExitError =>
-          latch.countDown()
-          Exit.exit(e.statusCode)
-        case e: Throwable => error("Exception when handling request", e)
-      } finally {
-        if (req != null)
-          req.dispose()
+
+        case request: RequestChannel.Request =>
+          try {
+            request.requestDequeueTimeNanos = endTime
+            trace("Kafka request handler %d on broker %d handling request %s".format(id, brokerId, request))
+            apis.handle(request)
+          } catch {
+            case e: FatalExitError =>
+              latch.countDown()
+              Exit.exit(e.statusCode)
+            case e: Throwable => error("Exception when handling request", e)
+          } finally {
+              request.releaseBuffer()
+          }
+
+        case null => // continue
       }
     }
   }
 
-  def initiateShutdown(): Unit = requestChannel.sendRequest(RequestChannel.AllDone)
+  def initiateShutdown(): Unit = requestChannel.sendShutdownRequest()
 
   def awaitShutdown(): Unit = latch.await()
 

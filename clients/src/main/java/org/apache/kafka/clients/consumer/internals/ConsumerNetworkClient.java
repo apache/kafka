@@ -26,7 +26,6 @@ import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.WakeupException;
-import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.utils.LogContext;
@@ -489,10 +488,9 @@ public class ConsumerNetworkClient implements Closeable {
                 future.raise(e);
             } else if (response.wasDisconnected()) {
                 RequestHeader requestHeader = response.requestHeader();
-                ApiKeys api = ApiKeys.forId(requestHeader.apiKey());
                 int correlation = requestHeader.correlationId();
                 log.debug("Cancelled {} request {} with correlation id {} due to node {} being disconnected",
-                        api, requestHeader, correlation, response.destination());
+                        requestHeader.apiKey(), requestHeader, correlation, response.destination());
                 future.raise(DisconnectException.INSTANCE);
             } else if (response.versionMismatch() != null) {
                 future.raise(response.versionMismatch());
