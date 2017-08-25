@@ -58,9 +58,9 @@ import org.apache.kafka.common.serialization.ExtendedSerializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.KafkaThread;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.net.InetSocketAddress;
 import java.util.Collections;
@@ -224,7 +224,7 @@ import static org.apache.kafka.common.serialization.ExtendedSerializer.Wrapper.e
  */
 public class KafkaProducer<K, V> implements Producer<K, V> {
 
-    private static final Logger log = LoggerFactory.getLogger(KafkaProducer.class);
+    private final Logger log;
     private static final AtomicInteger PRODUCER_CLIENT_ID_SEQUENCE = new AtomicInteger(1);
     private static final String JMX_PREFIX = "kafka.producer";
     public static final String NETWORK_THREAD_PREFIX = "kafka-producer-network-thread";
@@ -305,13 +305,19 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     @SuppressWarnings("unchecked")
     private KafkaProducer(ProducerConfig config, Serializer<K> keySerializer, Serializer<V> valueSerializer) {
         try {
-            log.trace("Starting the Kafka producer");
             Map<String, Object> userProvidedConfigs = config.originals();
             this.producerConfig = config;
             this.time = Time.SYSTEM;
             clientId = config.getString(ProducerConfig.CLIENT_ID_CONFIG);
             if (clientId.length() <= 0)
                 clientId = "producer-" + PRODUCER_CLIENT_ID_SEQUENCE.getAndIncrement();
+
+            String transactionalId = userProvidedConfigs.containsKey(ProducerConfig.TRANSACTIONAL_ID_CONFIG) ?
+                    (String) userProvidedConfigs.get(ProducerConfig.TRANSACTIONAL_ID_CONFIG) : null;
+            LogContext logContext = new LogContext(String.format("[Producer clientId=%s, transactionalId=%s", clientId, transactionalId));
+            log = logContext.logger(KafkaProducer.class);
+            log.trace("Starting the Kafka producer");
+
             Map<String, String> metricTags = Collections.singletonMap("client-id", clientId);
             MetricConfig metricConfig = new MetricConfig().samples(config.getInt(ProducerConfig.METRICS_NUM_SAMPLES_CONFIG))
                     .timeWindow(config.getLong(ProducerConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG), TimeUnit.MILLISECONDS)
@@ -354,13 +360,14 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
 
             this.maxBlockTimeMs = config.getLong(ProducerConfig.MAX_BLOCK_MS_CONFIG);
             this.requestTimeoutMs = config.getInt(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG);
-            this.transactionManager = configureTransactionState(config);
-            int retries = configureRetries(config, transactionManager != null);
-            int maxInflightRequests = configureInflightRequests(config, transactionManager != null);
-            short acks = configureAcks(config, transactionManager != null);
+            this.transactionManager = configureTransactionState(config, log);
+            int retries = configureRetries(config, transactionManager != null, log);
+            int maxInflightRequests = configureInflightRequests(config, transactionManager != null, log);
+            short acks = configureAcks(config, transactionManager != null, log);
 
             this.apiVersions = new ApiVersions();
-            this.accumulator = new RecordAccumulator(config.getInt(ProducerConfig.BATCH_SIZE_CONFIG),
+            this.accumulator = new RecordAccumulator(logContext,
+                    config.getInt(ProducerConfig.BATCH_SIZE_CONFIG),
                     this.totalMemorySize,
                     this.compressionType,
                     config.getLong(ProducerConfig.LINGER_MS_CONFIG),
@@ -388,7 +395,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                     true,
                     apiVersions,
                     throttleTimeSensor);
-            this.sender = new Sender(client,
+            this.sender = new Sender(logContext,
+                    client,
                     this.metadata,
                     this.accumulator,
                     maxInflightRequests == 1,
@@ -416,7 +424,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         }
     }
 
-    private static TransactionManager configureTransactionState(ProducerConfig config) {
+    private static TransactionManager configureTransactionState(ProducerConfig config, Logger log) {
 
         TransactionManager transactionManager = null;
 
@@ -450,7 +458,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         return transactionManager;
     }
 
-    private static int configureRetries(ProducerConfig config, boolean idempotenceEnabled) {
+    private static int configureRetries(ProducerConfig config, boolean idempotenceEnabled, Logger log) {
         boolean userConfiguredRetries = false;
         if (config.originals().containsKey(ProducerConfig.RETRIES_CONFIG)) {
             userConfiguredRetries = true;
@@ -468,7 +476,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         return config.getInt(ProducerConfig.RETRIES_CONFIG);
     }
 
-    private static int configureInflightRequests(ProducerConfig config, boolean idempotenceEnabled) {
+    private static int configureInflightRequests(ProducerConfig config, boolean idempotenceEnabled, Logger log) {
         boolean userConfiguredInflights = false;
         if (config.originals().containsKey(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION)) {
             userConfiguredInflights = true;
@@ -484,7 +492,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         return config.getInt(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION);
     }
 
-    private static short configureAcks(ProducerConfig config, boolean idempotenceEnabled) {
+    private static short configureAcks(ProducerConfig config, boolean idempotenceEnabled, Logger log) {
         boolean userConfiguredAcks = false;
         short acks = (short) parseAcks(config.getString(ProducerConfig.ACKS_CONFIG));
         if (config.originals().containsKey(ProducerConfig.ACKS_CONFIG)) {
