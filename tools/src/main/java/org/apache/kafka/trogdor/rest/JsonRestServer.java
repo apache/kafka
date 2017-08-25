@@ -178,7 +178,14 @@ public class JsonRestServer {
                 is.close();
                 return new HttpResponse<>(result, null);
             } else {
+                // If the resposne code was not in the 200s, we assume that this is an error
+                // response.
                 InputStream es = connection.getErrorStream();
+                if (es == null) {
+                    // Handle the case where HttpURLConnection#getErrorStream returns null.
+                    return new HttpResponse<>(null, new ErrorResponse(responseCode, ""));
+                }
+                // Try to read the error response JSON.
                 ErrorResponse error = JsonUtil.JSON_SERDE.readValue(es, ErrorResponse.class);
                 es.close();
                 return new HttpResponse<>(null, error);

@@ -17,12 +17,9 @@
 
 package org.apache.kafka.trogdor.fault;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import org.junit.Test;
 
-import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 import java.util.NoSuchElementException;
@@ -32,8 +29,6 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.fail;
 
 public class FaultSetTest {
-    private static final Logger log = LoggerFactory.getLogger(FaultSetTest.class);
-
     private static final NoOpFault FAULT_A =
         new NoOpFault("faultA", new NoOpFaultSpec(0, 100));
 
@@ -46,19 +41,11 @@ public class FaultSetTest {
     private static final NoOpFault FAULT_D =
         new NoOpFault("faultD", new NoOpFaultSpec(50, 10));
 
-    private static final List<Fault> FAULTS_IN_START_ORDER = new ArrayList<Fault>() {{
-            add(FAULT_A);
-            add(FAULT_B);
-            add(FAULT_C);
-            add(FAULT_D);
-        }};
+    private static final List<Fault> FAULTS_IN_START_ORDER =
+        Arrays.<Fault>asList(FAULT_A, FAULT_B, FAULT_C, FAULT_D);
 
-    private static final List<Fault> FAULTS_IN_END_ORDER = new ArrayList<Fault>() {{
-            add(FAULT_D);
-            add(FAULT_B);
-            add(FAULT_C);
-            add(FAULT_A);
-        }};
+    private static final List<Fault> FAULTS_IN_END_ORDER =
+        Arrays.<Fault>asList(FAULT_D, FAULT_B, FAULT_C, FAULT_A);
 
     @Test
     public void testIterateByStart() throws Exception {

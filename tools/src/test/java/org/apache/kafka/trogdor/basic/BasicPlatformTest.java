@@ -23,8 +23,6 @@ import org.apache.kafka.trogdor.common.Platform;
 
 import org.junit.Rule;
 import org.junit.rules.Timeout;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.junit.Test;
 
 import java.io.File;
@@ -36,8 +34,6 @@ import java.nio.file.Files;
 import static org.junit.Assert.assertEquals;
 
 public class BasicPlatformTest {
-    private static final Logger log = LoggerFactory.getLogger(BasicPlatformTest.class);
-
     @Rule
     final public Timeout globalTimeout = Timeout.millis(120000);
 

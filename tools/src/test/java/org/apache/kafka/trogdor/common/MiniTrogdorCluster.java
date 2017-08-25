@@ -58,8 +58,6 @@ public class MiniTrogdorCluster implements AutoCloseable {
         private BasicPlatform.CommandRunner commandRunner =
                 new BasicPlatform.ShellCommandRunner();
 
-        private int nodeIndex = 0;
-
         private static class NodeData {
             String hostname;
             AgentRestResource agentRestResource = null;
@@ -121,7 +119,6 @@ public class MiniTrogdorCluster implements AutoCloseable {
                 return data;
             data = new NodeData();
             data.hostname = "127.0.0.1";
-            nodeIndex++;
             nodes.put(nodeName, data);
             return data;
         }
