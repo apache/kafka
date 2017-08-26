@@ -128,7 +128,6 @@ public class MeteredKeyValueBytesStoreTest {
     }
 
     private KafkaMetric metric(final String name) {
-        Map<MetricName, KafkaMetric> metrics = this.metrics.metrics();
         return this.metrics.metric(new MetricName(name, "stream-scope-metrics", "", this.tags));
     }
 
