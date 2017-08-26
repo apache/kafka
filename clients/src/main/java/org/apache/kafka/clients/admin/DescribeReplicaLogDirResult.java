@@ -70,30 +70,30 @@ public class DescribeReplicaLogDirResult {
     }
 
     static public class ReplicaLogDirInfo {
-        // The log directory of the primary replica of this partition on the given broker.
-        // Null if the primary replica is not found for this partition on the given broker.
+        // The current log directory of the replica of this partition on the given broker.
+        // Null if no replica is not found for this partition on the given broker.
         private final String currentReplicaLogDir;
-        // Defined as max(HW of partition - LEO of the primary replica, 0).
+        // Defined as max(HW of partition - LEO of the replica, 0).
         private final long currentReplicaOffsetLag;
-        // The log directory of the temporary replica of this partition on the given broker.
-        // Null if the temporary replica is not found for this partition on the given broker.
-        private final String temporaryReplicaLogDir;
-        // The LEO of the primary replica - LEO of the temporary replica.
-        // -1 if either primary or the temporary replica is not found for this partition on the given broker.
-        private final long temporaryReplicaOffsetLag;
+        // The future log directory of the replica of this partition on the given broker.
+        // Null if the replica of this partition is not being moved to another log directory on the given broker.
+        private final String futureReplicaLogDir;
+        // The LEO of the replica - LEO of the future log of this replica in the destination log directory.
+        // -1 if either there is not replica for this partition or the replica of this partition is not being moved to another log directory on the given broker.
+        private final long futureReplicaOffsetLag;
 
         ReplicaLogDirInfo() {
             this(null, DescribeLogDirsResponse.INVALID_OFFSET_LAG, null, DescribeLogDirsResponse.INVALID_OFFSET_LAG);
         }
 
         ReplicaLogDirInfo(String currentReplicaLogDir,
-                                 long currentReplicaOffsetLag,
-                                 String temporaryReplicaLogDir,
-                                 long temporaryReplicaOffsetLag) {
+                          long currentReplicaOffsetLag,
+                          String futureReplicaLogDir,
+                          long futureReplicaOffsetLag) {
             this.currentReplicaLogDir = currentReplicaLogDir;
             this.currentReplicaOffsetLag = currentReplicaOffsetLag;
-            this.temporaryReplicaLogDir = temporaryReplicaLogDir;
-            this.temporaryReplicaOffsetLag = temporaryReplicaOffsetLag;
+            this.futureReplicaLogDir = futureReplicaLogDir;
+            this.futureReplicaOffsetLag = futureReplicaOffsetLag;
         }
 
         public String getCurrentReplicaLogDir() {
@@ -104,24 +104,24 @@ public class DescribeReplicaLogDirResult {
             return currentReplicaOffsetLag;
         }
 
-        public String getTemporaryReplicaLogDir() {
-            return temporaryReplicaLogDir;
+        public String getFutureReplicaLogDir() {
+            return futureReplicaLogDir;
         }
 
-        public long getTemporaryReplicaOffsetLag() {
-            return temporaryReplicaOffsetLag;
+        public long getFutureReplicaOffsetLag() {
+            return futureReplicaOffsetLag;
         }
 
         @Override
         public String toString() {
             StringBuilder builder = new StringBuilder();
-            if (temporaryReplicaLogDir != null) {
+            if (futureReplicaLogDir != null) {
                 builder.append("(currentReplicaLogDir=")
                     .append(currentReplicaLogDir)
-                    .append(", temporaryReplicaLogDir=")
-                    .append(temporaryReplicaLogDir)
-                    .append(", temporaryReplicaOffsetLag=")
-                    .append(temporaryReplicaOffsetLag)
+                    .append(", futureReplicaLogDir=")
+                    .append(futureReplicaLogDir)
+                    .append(", futureReplicaOffsetLag=")
+                    .append(futureReplicaOffsetLag)
                     .append(")");
             } else {
                 builder.append("ReplicaLogDirInfo(currentReplicaLogDir=").append(currentReplicaLogDir).append(")");

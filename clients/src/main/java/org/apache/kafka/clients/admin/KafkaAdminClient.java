@@ -1736,7 +1736,7 @@ public class KafkaAdminClient extends AdminClient {
                             if (replicaLogDirInfo == null) {
                                 handleFailure(new IllegalArgumentException(
                                     "The partition " + tp + " in the response from broker " + brokerId + " is not in the request"));
-                            } else if (replicaInfo.isTemporary) {
+                            } else if (replicaInfo.isFuture) {
                                 replicaDirInfoByPartition.put(tp, new ReplicaLogDirInfo(replicaLogDirInfo.getCurrentReplicaLogDir(),
                                                                                         replicaLogDirInfo.getCurrentReplicaOffsetLag(),
                                                                                         logDir,
@@ -1744,8 +1744,8 @@ public class KafkaAdminClient extends AdminClient {
                             } else {
                                 replicaDirInfoByPartition.put(tp, new ReplicaLogDirInfo(logDir,
                                                                                         replicaInfo.offsetLag,
-                                                                                        replicaLogDirInfo.getTemporaryReplicaLogDir(),
-                                                                                        replicaLogDirInfo.getTemporaryReplicaOffsetLag()));
+                                                                                        replicaLogDirInfo.getFutureReplicaLogDir(),
+                                                                                        replicaLogDirInfo.getFutureReplicaOffsetLag()));
                             }
                         }
                     }

@@ -72,7 +72,7 @@ object LogDirsCommand {
                                     "partition" -> topicPartition.toString,
                                     "size" -> replicaInfo.size,
                                     "offsetLag" -> replicaInfo.offsetLag,
-                                    "isTemporary" -> replicaInfo.isTemporary
+                                    "isFuture" -> replicaInfo.isFuture
                                 )
                             }
                         )

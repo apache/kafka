@@ -1871,8 +1871,8 @@ public class Protocol {
                         new Field("partition", INT32, "The id of the partition."),
                         new Field("size", INT64, "The size of the log segments of the partition in bytes."),
                         new Field("offset_lag", INT64,
-                            "The lag of the replica's LEO w.r.t. partition's HW (if it is a primary replica) or primary replica's LEO (if it is a temporary replica)"),
-                        new Field("is_temporary", BOOLEAN, "True if this is a temporary log created by AlterReplicaDirRequest.")
+                            "The lag of the log's LEO w.r.t. partition's HW (if it is the current log for the partition) or current replica's LEO (if it is the future log for the partition)"),
+                        new Field("is_future", BOOLEAN, "True if this log is created by AlterReplicaDirRequest and will replace the current log of the replica in the future.")
                     )))
                 )))
             ))));

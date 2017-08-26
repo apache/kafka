@@ -333,11 +333,11 @@ object ReassignPartitionsCommand extends Logging {
             println(s"Partition ${replica.topic()}-${replica.partition()} is not found in any live log dir on " +
               s"broker ${replica.brokerId()}. There is likely offline log directory on the broker.")
             ReassignmentFailed
-          } else if (replicaLogDirInfo.getTemporaryReplicaLogDir == newLogDir) {
+          } else if (replicaLogDirInfo.getFutureReplicaLogDir == newLogDir) {
             ReassignmentInProgress
-          } else if (replicaLogDirInfo.getTemporaryReplicaLogDir != null) {
+          } else if (replicaLogDirInfo.getFutureReplicaLogDir != null) {
             println(s"Partition ${replica.topic()}-${replica.partition()} on broker ${replica.brokerId()} " +
-              s"is being moved to log dir ${replicaLogDirInfo.getTemporaryReplicaLogDir} instead of $newLogDir")
+              s"is being moved to log dir ${replicaLogDirInfo.getFutureReplicaLogDir} instead of $newLogDir")
             ReassignmentFailed
           } else if (replicaLogDirInfo.getCurrentReplicaLogDir == newLogDir) {
             ReassignmentCompleted

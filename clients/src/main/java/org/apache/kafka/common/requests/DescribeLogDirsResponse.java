@@ -49,7 +49,7 @@ public class DescribeLogDirsResponse extends AbstractResponse {
     private static final String PARTITION_KEY_NAME = "partition";
     private static final String SIZE_KEY_NAME = "size";
     private static final String OFFSET_LAG_KEY_NAME = "offset_lag";
-    private static final String IS_TEMPORARY_KEY_NAME = "is_temporary";
+    private static final String IS_FUTURE_KEY_NAME = "is_future";
 
     private final int throttleTimeMs;
     private final Map<String, LogDirInfo> logDirInfos;
@@ -73,8 +73,8 @@ public class DescribeLogDirsResponse extends AbstractResponse {
                     int partition = partitionStruct.getInt(PARTITION_KEY_NAME);
                     long size = partitionStruct.getLong(SIZE_KEY_NAME);
                     long offsetLag = partitionStruct.getLong(OFFSET_LAG_KEY_NAME);
-                    boolean isTemporary = partitionStruct.getBoolean(IS_TEMPORARY_KEY_NAME);
-                    ReplicaInfo replicaInfo = new ReplicaInfo(size, offsetLag, isTemporary);
+                    boolean isFuture = partitionStruct.getBoolean(IS_FUTURE_KEY_NAME);
+                    ReplicaInfo replicaInfo = new ReplicaInfo(size, offsetLag, isFuture);
                     replicaInfos.put(new TopicPartition(topic, partition), replicaInfo);
                 }
             }
@@ -115,7 +115,7 @@ public class DescribeLogDirsResponse extends AbstractResponse {
                     partitionStruct.set(PARTITION_KEY_NAME, replicaInfosByPartitionEntry.getKey());
                     partitionStruct.set(SIZE_KEY_NAME, replicaInfo.size);
                     partitionStruct.set(OFFSET_LAG_KEY_NAME, replicaInfo.offsetLag);
-                    partitionStruct.set(IS_TEMPORARY_KEY_NAME, replicaInfo.isTemporary);
+                    partitionStruct.set(IS_FUTURE_KEY_NAME, replicaInfo.isFuture);
                     partitionStructArray.add(partitionStruct);
                 }
                 topicStruct.set(PARTITIONS_KEY_NAME, partitionStructArray.toArray());
@@ -160,12 +160,12 @@ public class DescribeLogDirsResponse extends AbstractResponse {
 
         public final long size;
         public final long offsetLag;
-        public final boolean isTemporary;
+        public final boolean isFuture;
 
-        public ReplicaInfo(long size, long offsetLag, boolean isTemporary) {
+        public ReplicaInfo(long size, long offsetLag, boolean isFuture) {
             this.size = size;
             this.offsetLag = offsetLag;
-            this.isTemporary = isTemporary;
+            this.isFuture = isFuture;
         }
 
         @Override
@@ -175,8 +175,8 @@ public class DescribeLogDirsResponse extends AbstractResponse {
                 .append(size)
                 .append(", offsetLag=")
                 .append(offsetLag)
-                .append(", isTemporary=")
-                .append(isTemporary)
+                .append(", isFuture=")
+                .append(isFuture)
                 .append(")");
             return builder.toString();
         }

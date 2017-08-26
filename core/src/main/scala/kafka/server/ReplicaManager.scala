@@ -583,8 +583,8 @@ class ReplicaManager(val config: KafkaConfig,
    *
    * Each LogDirInfo specifies the following information for a given log directory:
    * 1) Error of the log directory, e.g. whether the log is online or offline
-   * 2) size and lag of primary and temporary logs in the given log directory. A replica is included only if
-   *    its partition is queried. There may be temporary logs on the broker after KIP-113 is implemented.
+   * 2) size and lag of current and future logs for each partition in the given log directory. Only logs of the queried partitions
+   *    are included. There may be future logs (which will replace the current logs of the partition in the future) on the broker after KIP-113 is implemented.
    */
   def describeLogDirs(partitions: Set[TopicPartition]): Map[String, LogDirInfo] = {
     val logsByDir = logManager.allLogs().groupBy(log => log.dir.getParent)
