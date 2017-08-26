@@ -20,6 +20,7 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.state.internals.WindowStoreUtils;
 
 import java.nio.ByteBuffer;
 import java.util.Map;
@@ -35,14 +36,21 @@ public class WindowedDeserializer<T> implements Deserializer<Windowed<T>> {
     private static final int TIMESTAMP_SIZE = 8;
 
     private Deserializer<T> inner;
-
+    private Long windowSize;
     // Default constructor needed by Kafka
     public WindowedDeserializer() {}
 
     public WindowedDeserializer(Deserializer<T> inner) {
         this.inner = inner;
+        this.windowSize = Long.MAX_VALUE;
     }
 
+    public WindowedDeserializer(Deserializer<T> inner, long windowSize){
+        this.inner = inner;
+        this.windowSize = windowSize;
+    }
+    
+    @SuppressWarnings("unchecked")
     @Override
     public void configure(Map<String, ?> configs, boolean isKey) {
         if (inner == null) {
@@ -64,13 +72,15 @@ public class WindowedDeserializer<T> implements Deserializer<Windowed<T>> {
     public Windowed<T> deserialize(String topic, byte[] data) {
 
         byte[] bytes = new byte[data.length - TIMESTAMP_SIZE];
-
+        
+        System.out.println("deserialize method cDs.alled");
         System.arraycopy(data, 0, bytes, 0, bytes.length);
-
+        
         long start = ByteBuffer.wrap(data).getLong(data.length - TIMESTAMP_SIZE);
-
-        // always read as unlimited window
-        return new Windowed<T>(inner.deserialize(topic, bytes), new UnlimitedWindow(start));
+        
+        return windowSize != Long.MAX_VALUE ? new Windowed<T>(inner.deserialize(topic, bytes), 
+               WindowStoreUtils.timeWindowForSize(start, windowSize)) :
+            new Windowed<T>(inner.deserialize(topic, bytes), new UnlimitedWindow(start));
     }
 
 
