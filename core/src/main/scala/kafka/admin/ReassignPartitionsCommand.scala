@@ -407,7 +407,8 @@ object ReassignPartitionsCommand extends Logging {
 
   class ReassignPartitionsCommandOptions(args: Array[String]) {
     val parser = new OptionParser(false)
-    val bootstrapServerOpt = parser.accepts("bootstrap-server", "REQUIRED: the server(s) to use for bootstrapping")
+    val bootstrapServerOpt = parser.accepts("bootstrap-server", "the server(s) to use for bootstrapping. REQUIRED if " +
+                      "an absolution path of the log directory is specified for any replica in the reassignment json file")
                       .withRequiredArg
                       .describedAs("Server(s) to use for bootstrapping")
                       .ofType(classOf[String])
@@ -446,7 +447,7 @@ object ReassignPartitionsCommand extends Logging {
                       .describedAs("throttle")
                       .defaultsTo("-1")
                       .ofType(classOf[Long])
-    val timeoutOpt = parser.accepts("timeout", "The maximum time in ms allowed to wait for partition reassignment execution to be successfully initiated on the respective brokers")
+    val timeoutOpt = parser.accepts("timeout", "The maximum time in ms allowed to wait for partition reassignment execution to be successfully initiated")
                       .withRequiredArg()
                       .describedAs("timeout")
                       .defaultsTo("10000")
@@ -567,7 +568,7 @@ class ReassignPartitionsCommand(zkUtils: ZkUtils,
                  * for this replica.
                  *
                  * After KIP-113 is fully implemented, we will not need to verify that the broker returns this ReplicaNotAvailableException
-                 * in this step. And after the reassignment znode is created, we will need to repeated send AlterReplicaDirRequest to broker
+                 * in this step. And after the reassignment znode is created, we will need to re-send AlterReplicaDirRequest to broker
                  * if broker returns ReplicaNotAvailableException for any replica in the request.
                  */
                 future.get()

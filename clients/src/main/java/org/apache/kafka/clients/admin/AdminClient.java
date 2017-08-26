@@ -413,7 +413,7 @@ public abstract class AdminClient implements AutoCloseable {
      * This operation is supported by brokers with version 1.0.0 or higher.
      *
      * @param replicas      The replicas to query
-     * @param options       The options to use when querying replica dir info
+     * @param options       The options to use when querying replica log dir info
      * @return              The DescribeReplicaLogDirResult
      */
     public abstract DescribeReplicaLogDirResult describeReplicaLogDir(Collection<TopicPartitionReplica> replicas, DescribeReplicaLogDirOptions options);

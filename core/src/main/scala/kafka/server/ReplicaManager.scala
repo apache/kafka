@@ -578,8 +578,7 @@ class ReplicaManager(val config: KafkaConfig,
   }
 
   /*
-   * Get the LogDirInfo for the specified list of log directories and partitions.
-   * All partitions will be queried if an empty set of partitions is specified.
+   * Get the LogDirInfo for the specified list of partitions.
    *
    * Each LogDirInfo specifies the following information for a given log directory:
    * 1) Error of the log directory, e.g. whether the log is online or offline
