@@ -147,7 +147,7 @@ class AssignedTasks {
                 if (log.isTraceEnabled()) {
                     final HashSet<TopicPartition> outstandingPartitions = new HashSet<>(task.changelogPartitions());
                     outstandingPartitions.removeAll(restoredPartitions);
-                    log.trace("{} partition restoration not complete for {} {} partitions:",
+                    log.trace("{} partition restoration not complete for {} {} partitions: {}",
                               logPrefix,
                               taskTypeName,
                               task.id(),
