@@ -154,10 +154,11 @@ public class ConnectorsResource {
     @POST
     @Path("/{connector}/restart")
     public void restartConnector(final @PathParam("connector") String connector,
-                                 final @QueryParam("forward") Boolean forward) throws Throwable {
+                                 final @QueryParam("forward") Boolean forward,
+                                 final @QueryParam("tasks") Boolean tasks) throws Throwable {
         FutureCallback<Void> cb = new FutureCallback<>();
-        herder.restartConnector(connector, cb);
-        completeOrForwardRequest(cb, "/connectors/" + connector + "/restart", "POST", null, forward);
+        herder.restartConnector(connector, tasks, cb);
+        completeOrForwardRequest(cb, "/connectors/" + connector + "/restart", "POST", null, forward, tasks);
     }
 
     @PUT
