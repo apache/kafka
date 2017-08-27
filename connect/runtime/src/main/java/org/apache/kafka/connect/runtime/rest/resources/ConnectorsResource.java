@@ -210,12 +210,12 @@ public class ConnectorsResource {
         List<TaskInfo> tasks = completeOrForwardRequest(cb, "/connectors/" + connector + "/tasks", "GET", null, new TypeReference<List<TaskInfo>>() {
         }, forward);
 
-        for (TaskInfo: tasks) {
-            FutureCallback<Void> cb = new FutureCallback<>();
+        for (TaskInfo task: tasks) {
+            FutureCallback<Void> restart_cb = new FutureCallback<>();
             ConnectorTaskId taskId = task.id();
-            Integer taskNum = task.id().task()
-            herder.restartTask(taskId, cb);
-            completeOrForwardRequest(cb, "/connectors/" + connector + "/tasks/" + taskNum + "/restart", "POST", null, forward);
+            Integer taskNum = task.id().task();
+            herder.restartTask(taskId, restart_cb);
+            completeOrForwardRequest(restart_cb, "/connectors/" + connector + "/tasks/" + taskNum + "/restart", "POST", null, forward);
         }
     }
 
