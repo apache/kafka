@@ -215,7 +215,7 @@ public class KafkaStreams {
         synchronized (stateLock) {
             long elapsedMs = 0L;
             while (state != State.NOT_RUNNING) {
-                if (waitMs >= elapsedMs) {
+                if (waitMs > elapsedMs) {
                     long remainingMs = waitMs - elapsedMs;
                     try {
                         stateLock.wait(remainingMs);
