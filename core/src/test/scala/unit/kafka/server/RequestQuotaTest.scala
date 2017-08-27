@@ -298,7 +298,7 @@ class RequestQuotaTest extends BaseRequestTest {
   private def requestResponse(socket: Socket, clientId: String, correlationId: Int, requestBuilder: AbstractRequest.Builder[_ <: AbstractRequest]): Struct = {
     val apiKey = requestBuilder.apiKey
     val request = requestBuilder.build()
-    val header = new RequestHeader(apiKey.id, request.version, clientId, correlationId)
+    val header = new RequestHeader(apiKey, request.version, clientId, correlationId)
     val response = requestAndReceive(socket, request.serialize(header).array)
     val responseBuffer = skipResponseHeader(response)
     apiKey.parseResponse(request.version, responseBuffer)
@@ -326,7 +326,7 @@ class RequestQuotaTest extends BaseRequestTest {
     override def toString: String = {
       val requestTime = requestTimeMetricValue(clientId)
       val throttleTime = throttleTimeMetricValue(clientId)
-      s"Client $clientId apiKey ${apiKey} requests $correlationId requestTime $requestTime throttleTime $throttleTime"
+      s"Client $clientId apiKey $apiKey requests $correlationId requestTime $requestTime throttleTime $throttleTime"
     }
   }
 

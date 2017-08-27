@@ -39,7 +39,7 @@ public class RequestHeaderTest {
         rawBuffer.flip();
 
         RequestHeader deserialized = RequestHeader.parse(rawBuffer);
-        assertEquals(ApiKeys.CONTROLLED_SHUTDOWN_KEY.id, deserialized.apiKey());
+        assertEquals(ApiKeys.CONTROLLED_SHUTDOWN_KEY, deserialized.apiKey());
         assertEquals(0, deserialized.apiVersion());
         assertEquals(correlationId, deserialized.correlationId());
         assertEquals("", deserialized.clientId());
@@ -55,7 +55,7 @@ public class RequestHeaderTest {
 
     @Test
     public void testRequestHeader() {
-        RequestHeader header = new RequestHeader((short) 10, (short) 1, "", 10);
+        RequestHeader header = new RequestHeader(ApiKeys.FIND_COORDINATOR, (short) 1, "", 10);
         ByteBuffer buffer = toBuffer(header.toStruct());
         RequestHeader deserialized = RequestHeader.parse(buffer);
         assertEquals(header, deserialized);
@@ -63,7 +63,7 @@ public class RequestHeaderTest {
 
     @Test
     public void testRequestHeaderWithNullClientId() {
-        RequestHeader header = new RequestHeader((short) 10, (short) 1, null, 10);
+        RequestHeader header = new RequestHeader(ApiKeys.FIND_COORDINATOR, (short) 1, null, 10);
         Struct headerStruct = header.toStruct();
         ByteBuffer buffer = toBuffer(headerStruct);
         RequestHeader deserialized = RequestHeader.parse(buffer);
