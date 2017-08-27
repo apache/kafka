@@ -392,12 +392,13 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
     val factory = new KafkaAdminClientTest.FailureInjectingTimeoutProcessorFactory()
     val client = KafkaAdminClientTest.createInternal(new AdminClientConfig(config), factory)
     val future = client.createTopics(Seq("mytopic", "mytopic2").map(new NewTopic(_, 1, 1)).asJava,
-        new CreateTopicsOptions().validateOnly(true))
+        new CreateTopicsOptions().validateOnly(true)).all()
+    assertFutureExceptionTypeEquals(future, classOf[TimeoutException])
     val future2 = client.createTopics(Seq("mytopic3", "mytopic4").map(new NewTopic(_, 1, 1)).asJava,
-        new CreateTopicsOptions().validateOnly(true))
-    future.all().get
-    future2.all().get
+      new CreateTopicsOptions().validateOnly(true)).all()
+    future2.get
     client.close()
+    assertEquals(1, factory.failuresInjected)
   }
 }
 

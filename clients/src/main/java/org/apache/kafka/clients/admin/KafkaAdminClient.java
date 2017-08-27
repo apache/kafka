@@ -465,6 +465,10 @@ public class KafkaAdminClient extends AdminClient {
          */
         final void fail(long now, Throwable throwable) {
             if (aborted) {
+                // If the call was aborted while in flight due to a timeout, deliver a
+                // TimeoutException.  In this case, we do not get any more retries - the call has
+                // failed. We increment tries anyway in order to display an accurate log message.
+                tries++;
                 if (log.isDebugEnabled()) {
                     log.debug("{} aborted at {} after {} attempt(s)", this, now, tries,
                         new Exception(prettyPrintException(throwable)));
@@ -472,7 +476,9 @@ public class KafkaAdminClient extends AdminClient {
                 handleFailure(new TimeoutException("Aborted due to timeout."));
                 return;
             }
-            // If this is an UnsupportedVersionException that we can retry, do so.
+            // If this is an UnsupportedVersionException that we can retry, do so.  Note that a
+            // protocol downgrade will not count against the total number of retries we get for
+            // this RPC. That is why 'tries' is not incremented.
             if ((throwable instanceof UnsupportedVersionException) &&
                      handleUnsupportedVersionException((UnsupportedVersionException) throwable)) {
                 log.trace("{} attempting protocol downgrade.", this);
