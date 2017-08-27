@@ -30,13 +30,8 @@ public class MockChangelogReader implements ChangelogReader {
     private final Set<TopicPartition> registered = new HashSet<>();
 
     @Override
-    public void validatePartitionExists(final TopicPartition topicPartition, final String storeName) {
-
-    }
-
-    @Override
-    public void register(final StateRestorer restorationInfo) {
-        registered.add(restorationInfo.partition());
+    public void register(final StateRestorer restorer) {
+        registered.add(restorer.partition());
     }
 
     @Override

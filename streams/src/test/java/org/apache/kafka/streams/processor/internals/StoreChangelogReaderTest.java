@@ -21,12 +21,8 @@ import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.TimeoutException;
-import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.test.MockRestoreCallback;
 import org.apache.kafka.test.MockStateRestoreListener;
@@ -36,7 +32,6 @@ import org.junit.Test;
 
 import java.util.Collection;
 import java.util.Collections;
-import java.util.List;
 import java.util.Map;
 
 import static org.apache.kafka.test.MockStateRestoreListener.RESTORE_BATCH;
@@ -53,93 +48,13 @@ public class StoreChangelogReaderTest {
     private final CompositeRestoreListener restoreListener = new CompositeRestoreListener(callback);
     private final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
     private final StateRestoreListener stateRestoreListener = new MockStateRestoreListener();
-    private final StoreChangelogReader changelogReader = new StoreChangelogReader(consumer, new MockTime(), 0, stateRestoreListener);
+    private final StoreChangelogReader changelogReader = new StoreChangelogReader(consumer, stateRestoreListener);
     private final TopicPartition topicPartition = new TopicPartition("topic", 0);
-    private final PartitionInfo partitionInfo = new PartitionInfo(topicPartition.topic(), 0, null, null, null);
 
     @Before
     public void setUp() {
         restoreListener.setGlobalRestoreListener(stateRestoreListener);
     }
-
-    @SuppressWarnings("unchecked")
-    @Test
-    public void shouldThrowStreamsExceptionWhenTimeoutExceptionThrown() throws Exception {
-        final MockConsumer<byte[], byte[]> consumer = new MockConsumer(OffsetResetStrategy.EARLIEST) {
-            @Override
-            public Map<String, List<PartitionInfo>> listTopics() {
-                throw new TimeoutException("KABOOM!");
-            }
-        };
-        final StoreChangelogReader changelogReader = new StoreChangelogReader(consumer, new MockTime(), 0, stateRestoreListener);
-        try {
-            changelogReader.validatePartitionExists(topicPartition, "store");
-            fail("Should have thrown streams exception");
-        } catch (final StreamsException e) {
-            // pass
-        }
-    }
-
-    @Test(expected = StreamsException.class)
-    public void shouldThrowStreamsExceptionIfPartitionDoesntExistAfterMaxWait() throws Exception {
-        changelogReader.validatePartitionExists(topicPartition, "store");
-    }
-
-    @SuppressWarnings("unchecked")
-    @Test
-    public void shouldFallbackToPartitionsForIfPartitionNotInAllPartitionsList() throws Exception {
-        final MockConsumer<byte[], byte[]> consumer = new MockConsumer(OffsetResetStrategy.EARLIEST) {
-            @Override
-            public List<PartitionInfo> partitionsFor(final String topic) {
-                return Collections.singletonList(partitionInfo);
-            }
-        };
-
-        final StoreChangelogReader changelogReader = new StoreChangelogReader(consumer, new
-            MockTime(), 10, stateRestoreListener);
-        changelogReader.validatePartitionExists(topicPartition, "store");
-    }
-
-    @SuppressWarnings("unchecked")
-    @Test
-    public void shouldThrowStreamsExceptionIfTimeoutOccursDuringPartitionsFor() throws Exception {
-        final MockConsumer<byte[], byte[]> consumer = new MockConsumer(OffsetResetStrategy.EARLIEST) {
-            @Override
-            public List<PartitionInfo> partitionsFor(final String topic) {
-                throw new TimeoutException("KABOOM!");
-            }
-        };
-        final StoreChangelogReader changelogReader = new StoreChangelogReader(consumer, new
-            MockTime(), 5, stateRestoreListener);
-        try {
-            changelogReader.validatePartitionExists(topicPartition, "store");
-            fail("Should have thrown streams exception");
-        } catch (final StreamsException e) {
-            // pass
-        }
-    }
-
-    @Test
-    public void shouldPassIfTopicPartitionExists() throws Exception {
-        consumer.updatePartitions(topicPartition.topic(), Collections.singletonList(partitionInfo));
-        changelogReader.validatePartitionExists(topicPartition, "store");
-    }
-
-    @SuppressWarnings("unchecked")
-    @Test
-    public void shouldRequestPartitionInfoIfItDoesntExist() throws Exception {
-        final MockConsumer<byte[], byte[]> consumer = new MockConsumer(OffsetResetStrategy.EARLIEST) {
-            @Override
-            public Map<String, List<PartitionInfo>> listTopics() {
-                return Collections.emptyMap();
-            }
-        };
-
-        consumer.updatePartitions(topicPartition.topic(), Collections.singletonList(partitionInfo));
-        final StoreChangelogReader changelogReader = new StoreChangelogReader(consumer, Time.SYSTEM, 5000, stateRestoreListener);
-        changelogReader.validatePartitionExists(topicPartition, "store");
-    }
-
 
     @Test
     public void shouldThrowExceptionIfConsumerHasCurrentSubscription() throws Exception {
