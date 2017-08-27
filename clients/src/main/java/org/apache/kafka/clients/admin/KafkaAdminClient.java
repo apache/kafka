@@ -127,9 +127,6 @@ public class KafkaAdminClient extends AdminClient {
      */
     private static final long INVALID_SHUTDOWN_TIME = -1;
 
-    /**
-     * Contextual Logger for logging purpose
-     */
     private final Logger log;
 
     /**
@@ -361,7 +358,7 @@ public class KafkaAdminClient extends AdminClient {
         this.maxRetries = config.getInt(AdminClientConfig.RETRIES_CONFIG);
         config.logUnused();
         AppInfoParser.registerAppInfo(JMX_PREFIX, clientId);
-        log.debug("Kafka admin client created");
+        log.debug("Kafka admin client initialized");
         thread.start();
     }
 
@@ -375,23 +372,23 @@ public class KafkaAdminClient extends AdminClient {
         while (true) {
             if (hardShutdownTimeMs.compareAndSet(prev, newHardShutdownTimeMs)) {
                 if (prev == INVALID_SHUTDOWN_TIME) {
-                    log.debug("initiating close operation.");
+                    log.debug("Initiating close operation.");
                 } else {
-                    log.debug("moving hard shutdown time forward.");
+                    log.debug("Moving hard shutdown time forward.");
                 }
                 client.wakeup(); // Wake the thread, if it is blocked inside poll().
                 break;
             }
             prev = hardShutdownTimeMs.get();
             if (prev < newHardShutdownTimeMs) {
-                log.debug("hard shutdown time is already earlier than requested.");
+                log.debug("Hard shutdown time is already earlier than requested.");
                 newHardShutdownTimeMs = prev;
                 break;
             }
         }
         if (log.isDebugEnabled()) {
             long deltaMs = Math.max(0, newHardShutdownTimeMs - time.milliseconds());
-            log.debug("waiting for the I/O thread to exit. Hard shutdown in {} ms.", deltaMs);
+            log.debug("Waiting for the I/O thread to exit. Hard shutdown in {} ms.", deltaMs);
         }
         try {
             // Wait for the thread to be joined.
@@ -399,9 +396,9 @@ public class KafkaAdminClient extends AdminClient {
 
             AppInfoParser.unregisterAppInfo(JMX_PREFIX, clientId);
             
-            log.debug("closed.");
+            log.debug("Kafka admin client closed.");
         } catch (InterruptedException e) {
-            log.debug("interrupted while joining I/O thread", e);
+            log.debug("Interrupted while joining I/O thread", e);
             Thread.currentThread().interrupt();
         }
     }
@@ -657,15 +654,15 @@ public class KafkaAdminClient extends AdminClient {
             }
             Cluster cluster = metadata.fetch();
             if (cluster.nodes().isEmpty()) {
-                log.trace("metadata is not ready yet. No cluster nodes found.");
+                log.trace("Metadata is not ready yet. No cluster nodes found.");
                 return metadata.requestUpdate();
             }
             if (cluster.controller() == null) {
-                log.trace("metadata is not ready yet. No controller found.");
+                log.trace("Metadata is not ready yet. No controller found.");
                 return metadata.requestUpdate();
             }
             if (prevMetadataVersion != null) {
-                log.trace("metadata is now ready.");
+                log.trace("Metadata is now ready.");
             }
             return null;
         }
@@ -679,7 +676,7 @@ public class KafkaAdminClient extends AdminClient {
             int numTimedOut = processor.handleTimeouts(newCalls,
                     "Timed out waiting for a node assignment.");
             if (numTimedOut > 0)
-                log.debug("timed out {} new calls.", numTimedOut);
+                log.debug("Timed out {} new calls.", numTimedOut);
         }
 
         /**
@@ -695,7 +692,7 @@ public class KafkaAdminClient extends AdminClient {
                     "Timed out waiting to send the call.");
             }
             if (numTimedOut > 0)
-                log.debug("timed out {} call(s) with assigned nodes.", numTimedOut);
+                log.debug("Timed out {} call(s) with assigned nodes.", numTimedOut);
         }
 
         /**
@@ -736,7 +733,7 @@ public class KafkaAdminClient extends AdminClient {
                     String.format("Error choosing node for %s: no node found.", call.callName)));
                 return;
             }
-            log.trace("assigned {} to {}", call, node);
+            log.trace("Assigned {} to {}", call, node);
             getOrCreateListValue(callsToSend, node).add(call);
         }
 
@@ -765,7 +762,7 @@ public class KafkaAdminClient extends AdminClient {
                 if (!client.ready(node, now)) {
                     long nodeTimeout = client.connectionDelay(node, now);
                     pollTimeout = Math.min(pollTimeout, nodeTimeout);
-                    log.trace("client is not ready to send to {}.  Must delay {} ms", node, nodeTimeout);
+                    log.trace("Client is not ready to send to {}.  Must delay {} ms", node, nodeTimeout);
                     continue;
                 }
                 Call call = calls.remove(0);
@@ -779,7 +776,7 @@ public class KafkaAdminClient extends AdminClient {
                     continue;
                 }
                 ClientRequest clientRequest = client.newClientRequest(node.idString(), requestBuilder, now, true);
-                log.trace("sending {} to {}. correlationId={}", requestBuilder, node, clientRequest.correlationId());
+                log.trace("Sending {} to {}. correlationId={}", requestBuilder, node, clientRequest.correlationId());
                 client.send(clientRequest, now);
                 getOrCreateListValue(callsInFlight, node.idString()).add(call);
                 correlationIdToCalls.put(clientRequest.correlationId(), call);
@@ -809,7 +806,7 @@ public class KafkaAdminClient extends AdminClient {
                 Call call = contexts.get(0);
                 if (processor.callHasExpired(call)) {
                     if (call.aborted) {
-                        log.warn("aborted call {} is still in callsInFlight.", call);
+                        log.warn("Aborted call {} is still in callsInFlight.", call);
                     } else {
                         log.debug("Closing connection to {} to time out {}", nodeId, call);
                         call.aborted = true;
@@ -822,7 +819,7 @@ public class KafkaAdminClient extends AdminClient {
                 }
             }
             if (numTimedOut > 0)
-                log.debug("timed out {} call(s) in flight.", numTimedOut);
+                log.debug("Timed out {} call(s) in flight.", numTimedOut);
         }
 
         /**
@@ -883,14 +880,14 @@ public class KafkaAdminClient extends AdminClient {
         private synchronized boolean threadShouldExit(long now, long curHardShutdownTimeMs,
                 Map<Node, List<Call>> callsToSend, Map<Integer, Call> correlationIdToCalls) {
             if (newCalls.isEmpty() && callsToSend.isEmpty() && correlationIdToCalls.isEmpty()) {
-                log.trace("all work has been completed, and the I/O thread is now exiting.");
+                log.trace("All work has been completed, and the I/O thread is now exiting.");
                 return true;
             }
             if (now > curHardShutdownTimeMs) {
-                log.info("forcing a hard I/O thread shutdown.  Requests in progress will be aborted.");
+                log.info("Forcing a hard I/O thread shutdown.  Requests in progress will be aborted.");
                 return true;
             }
-            log.debug("hard shutdown in {} ms.", curHardShutdownTimeMs - now);
+            log.debug("Hard shutdown in {} ms.", curHardShutdownTimeMs - now);
             return false;
         }
 
@@ -917,7 +914,7 @@ public class KafkaAdminClient extends AdminClient {
             Integer prevMetadataVersion = null;
 
             long now = time.milliseconds();
-            log.trace("thread starting");
+            log.trace("Thread starting");
             while (true) {
                 // Check if the AdminClient thread should shut down.
                 long curHardShutdownTimeMs = hardShutdownTimeMs.get();
@@ -945,7 +942,7 @@ public class KafkaAdminClient extends AdminClient {
                 }
 
                 // Wait for network responses.
-                log.trace("entering KafkaClient#poll(timeout={})", pollTimeout);
+                log.trace("Entering KafkaClient#poll(timeout={})", pollTimeout);
                 List<ClientResponse> responses = client.poll(pollTimeout, now);
                 log.trace("KafkaClient#poll retrieved {} response(s)", responses.size());
 
@@ -963,11 +960,11 @@ public class KafkaAdminClient extends AdminClient {
             numTimedOut += timeoutProcessor.handleTimeouts(correlationIdToCalls.values(),
                     "The AdminClient thread has exited.");
             if (numTimedOut > 0) {
-                log.debug("timed out {} remaining operations.", numTimedOut);
+                log.debug("Timed out {} remaining operations.", numTimedOut);
             }
             closeQuietly(client, "KafkaClient");
             closeQuietly(metrics, "Metrics");
-            log.debug("exiting AdminClientRunnable thread.");
+            log.debug("Exiting AdminClientRunnable thread.");
         }
 
         /**
@@ -982,7 +979,7 @@ public class KafkaAdminClient extends AdminClient {
          */
         void enqueue(Call call, long now) {
             if (log.isDebugEnabled()) {
-                log.debug("queueing {} with a timeout {} ms from now.", call, call.deadlineMs - now);
+                log.debug("Queueing {} with a timeout {} ms from now.", call, call.deadlineMs - now);
             }
             boolean accepted = false;
             synchronized (this) {
@@ -994,7 +991,7 @@ public class KafkaAdminClient extends AdminClient {
             if (accepted) {
                 client.wakeup(); // wake the thread if it is in poll()
             } else {
-                log.debug("the AdminClient thread has exited. Timing out {}.", call);
+                log.debug("The AdminClient thread has exited. Timing out {}.", call);
                 call.fail(Long.MAX_VALUE, new TimeoutException("The AdminClient thread has exited."));
             }
         }
@@ -1009,7 +1006,7 @@ public class KafkaAdminClient extends AdminClient {
          */
         void call(Call call, long now) {
             if (hardShutdownTimeMs.get() != INVALID_SHUTDOWN_TIME) {
-                log.debug("the AdminClient is not accepting new calls. Timing out {}.", call);
+                log.debug("The AdminClient is not accepting new calls. Timing out {}.", call);
                 call.fail(Long.MAX_VALUE, new TimeoutException("The AdminClient thread is not accepting new calls."));
             } else {
                 enqueue(call, now);
