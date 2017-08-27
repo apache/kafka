@@ -79,6 +79,7 @@ class TaskManager {
         active.closeNonAssignedSuspendedTasks(assignedActiveTasks);
         addStreamTasks(assignment);
         addStandbyTasks();
+        changelogReader.refreshChangelogInfo();
         final Set<TopicPartition> partitions = active.uninitializedPartitions();
         log.trace("{} pausing partitions: {}", logPrefix, partitions);
         consumer.pause(partitions);
