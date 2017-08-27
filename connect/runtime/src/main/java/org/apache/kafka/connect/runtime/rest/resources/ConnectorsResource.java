@@ -154,11 +154,10 @@ public class ConnectorsResource {
     @POST
     @Path("/{connector}/restart")
     public void restartConnector(final @PathParam("connector") String connector,
-                                 final @QueryParam("forward") Boolean forward,
-                                 final @QueryParam("tasks") Boolean tasks) throws Throwable {
+                                 final @QueryParam("forward") Boolean forward) throws Throwable {
         FutureCallback<Void> cb = new FutureCallback<>();
-        herder.restartConnector(connector, tasks, cb);
-        completeOrForwardRequest(cb, "/connectors/" + connector + "/restart", "POST", null, forward, tasks);
+        herder.restartConnector(connector, cb);
+        completeOrForwardRequest(cb, "/connectors/" + connector + "/restart", "POST", null, forward);
     }
 
     @PUT
@@ -200,6 +199,24 @@ public class ConnectorsResource {
     public ConnectorStateInfo.TaskState getTaskStatus(final @PathParam("connector") String connector,
                                                       final @PathParam("task") Integer task) throws Throwable {
         return herder.taskStatus(new ConnectorTaskId(connector, task));
+    }
+
+    @POST
+    @Path("/{connector}/tasks/restart")
+    public void restartTasks(final @PathParam("connector") String connector,
+                             final @QueryParam("forward") Boolean forward) throws Throwable {
+        FutureCallback<List<TaskInfo>> cb = new FutureCallback<>();
+        herder.taskConfigs(connector, cb);
+        List<TaskInfo> tasks = completeOrForwardRequest(cb, "/connectors/" + connector + "/tasks", "GET", null, new TypeReference<List<TaskInfo>>() {
+        }, forward);
+
+        for (TaskInfo: tasks) {
+            FutureCallback<Void> cb = new FutureCallback<>();
+            ConnectorTaskId taskId = task.id();
+            Integer taskNum = task.id().task()
+            herder.restartTask(taskId, cb);
+            completeOrForwardRequest(cb, "/connectors/" + connector + "/tasks/" + taskNum + "/restart", "POST", null, forward);
+        }
     }
 
     @POST
