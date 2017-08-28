@@ -235,26 +235,19 @@ public class FetchResponse extends AbstractResponse {
     }
 
     @Override
-    public Send toSend(String dest, RequestHeader requestHeader) {
-        return toSend(toStruct(requestHeader.apiVersion()), throttleTimeMs, dest, requestHeader);
-    }
-
-    public Send toSend(int throttleTimeMs, String dest, RequestHeader requestHeader) {
-        return toSend(toStruct(requestHeader.apiVersion()), throttleTimeMs, dest, requestHeader);
-    }
-
-    private Send toSend(Struct responseStruct, int throttleTimeMs, String dest, RequestHeader requestHeader) {
-        Struct responseHeader = new ResponseHeader(requestHeader.correlationId()).toStruct();
+    protected Send toSend(String dest, ResponseHeader responseHeader, short apiVersion) {
+        Struct responseHeaderStruct = responseHeader.toStruct();
+        Struct responseBodyStruct = toStruct(apiVersion);
 
         // write the total size and the response header
-        ByteBuffer buffer = ByteBuffer.allocate(responseHeader.sizeOf() + 4);
-        buffer.putInt(responseHeader.sizeOf() + responseStruct.sizeOf());
-        responseHeader.writeTo(buffer);
+        ByteBuffer buffer = ByteBuffer.allocate(responseHeaderStruct.sizeOf() + 4);
+        buffer.putInt(responseHeaderStruct.sizeOf() + responseBodyStruct.sizeOf());
+        responseHeaderStruct.writeTo(buffer);
         buffer.rewind();
 
         List<Send> sends = new ArrayList<>();
         sends.add(new ByteBufferSend(dest, buffer));
-        addResponseData(responseStruct, throttleTimeMs, dest, sends);
+        addResponseData(responseBodyStruct, throttleTimeMs, dest, sends);
         return new MultiSend(dest, sends);
     }
 

@@ -20,7 +20,7 @@ package kafka.log
 import java.io.File
 import java.nio.ByteBuffer
 import java.nio.channels.FileChannel
-import java.nio.file.{OpenOption, StandardOpenOption}
+import java.nio.file.StandardOpenOption
 
 import kafka.server.LogOffsetMetadata
 import kafka.utils.TestUtils

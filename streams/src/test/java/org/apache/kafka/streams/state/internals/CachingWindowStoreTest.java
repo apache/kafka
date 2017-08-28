@@ -40,6 +40,8 @@ import java.util.List;
 
 import static org.apache.kafka.streams.state.internals.ThreadCacheTest.memoryCacheEntrySize;
 import static org.apache.kafka.test.StreamsTestUtils.toList;
+import static org.apache.kafka.test.StreamsTestUtils.verifyKeyValueList;
+import static org.apache.kafka.test.StreamsTestUtils.verifyWindowedKeyValue;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertArrayEquals;
@@ -121,18 +123,10 @@ public class CachingWindowStoreTest {
         cachingStore.put(bytesKey("b"), bytesValue("b"));
 
         final KeyValueIterator<Windowed<Bytes>, byte[]> iterator = cachingStore.fetch(bytesKey("a"), bytesKey("b"), 10, 10);
-        verifyWindowedKey(iterator.next(), new Windowed<>(bytesKey("a"), new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE)), "a");
-        verifyWindowedKey(iterator.next(), new Windowed<>(bytesKey("b"), new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE)), "b");
+        verifyWindowedKeyValue(iterator.next(), new Windowed<>(bytesKey("a"), new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE)), "a");
+        verifyWindowedKeyValue(iterator.next(), new Windowed<>(bytesKey("b"), new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE)), "b");
         assertFalse(iterator.hasNext());
         assertEquals(2, cache.size());
-    }
-
-    private void verifyWindowedKey(final KeyValue<Windowed<Bytes>, byte[]> actual,
-                                   final Windowed<Bytes> expectedKey,
-                                   final String expectedValue) {
-        assertThat(actual.key.window(), equalTo(expectedKey.window()));
-        assertThat(actual.key.key(), equalTo(expectedKey.key()));
-        assertThat(actual.value, equalTo(bytesValue(expectedValue)));
     }
 
 
@@ -215,8 +209,8 @@ public class CachingWindowStoreTest {
 
         final KeyValueIterator<Windowed<Bytes>, byte[]> fetchRange =
             cachingStore.fetch(key, bytesKey("2"), DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE);
-        verifyWindowedKey(fetchRange.next(), new Windowed<>(key, new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE)), "a");
-        verifyWindowedKey(fetchRange.next(), new Windowed<>(key, new TimeWindow(DEFAULT_TIMESTAMP + WINDOW_SIZE, DEFAULT_TIMESTAMP + WINDOW_SIZE + WINDOW_SIZE)), "b");
+        verifyWindowedKeyValue(fetchRange.next(), new Windowed<>(key, new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE)), "a");
+        verifyWindowedKeyValue(fetchRange.next(), new Windowed<>(key, new TimeWindow(DEFAULT_TIMESTAMP + WINDOW_SIZE, DEFAULT_TIMESTAMP + WINDOW_SIZE + WINDOW_SIZE)), "b");
         assertFalse(fetchRange.hasNext());
     }
 
@@ -257,16 +251,6 @@ public class CachingWindowStoreTest {
         final List<KeyValue<Long, byte[]>> expected = Utils.mkList(KeyValue.pair(0L, bytesValue("0001")), KeyValue.pair(1L, bytesValue("0003")), KeyValue.pair(60000L, bytesValue("0005")));
         final List<KeyValue<Long, byte[]>> actual = toList(cachingStore.fetch(bytesKey("a"), 0, Long.MAX_VALUE));
         verifyKeyValueList(expected, actual);
-    }
-
-    private <K> void verifyKeyValueList(final List<KeyValue<K, byte[]>> expected, final List<KeyValue<K, byte[]>> actual) {
-        assertThat(actual.size(), equalTo(expected.size()));
-        for (int i = 0; i < actual.size(); i++) {
-            final KeyValue<K, byte[]> expectedKv = expected.get(i);
-            final KeyValue<K, byte[]> actualKv = actual.get(i);
-            assertThat(actualKv.key, equalTo(expectedKv.key));
-            assertThat(actualKv.value, equalTo(expectedKv.value));
-        }
     }
 
     @Test
