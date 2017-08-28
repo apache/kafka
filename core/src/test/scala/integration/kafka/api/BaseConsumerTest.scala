@@ -29,6 +29,8 @@ import scala.collection.mutable.{ArrayBuffer, Buffer}
 import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.common.errors.WakeupException
 import org.apache.kafka.common.internals.Topic
+import kafka.admin.AdminUtils
+import java.util.Properties
 
 /**
  * Integration tests for the new consumer that cover basic usage as well as server failures

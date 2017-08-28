@@ -724,12 +724,15 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     val newTopic = "newTopic"
     val topicPartition = new TopicPartition(newTopic, 0)
     val newTopicResource = new Resource(Topic, newTopic)
+    val props = new Properties
+    props.setProperty(ConsumerConfig.AUTO_CREATE_TOPIC_ENABLE_CONFIG, "true")
+    val consumer = TestUtils.createNewConsumer(TestUtils.getBrokerListStrFromServers(servers), groupId = group, securityProtocol = SecurityProtocol.PLAINTEXT, props = Some(props))
     addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Read)), newTopicResource)
     addAndVerifyAcls(groupReadAcl(groupResource), groupResource)
     addAndVerifyAcls(clusterAcl(Resource.ClusterResource), Resource.ClusterResource)
     try {
-      this.consumers.head.assign(List(topicPartition).asJava)
-      consumeRecords(this.consumers.head)
+      consumer.assign(List(topicPartition).asJava)
+      consumeRecords(consumer)
       Assert.fail("should have thrown exception")
     } catch {
       case e: TopicAuthorizationException =>
@@ -740,7 +743,8 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Create)), Resource.ClusterResource)
 
     sendRecords(numRecords, topicPartition)
-    consumeRecords(this.consumers.head, topic = newTopic, part = 0)
+    consumeRecords(consumer, topic = newTopic, part = 0)
+    consumer.close()
   }
 
   @Test(expected = classOf[AuthorizationException])

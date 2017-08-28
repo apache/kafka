@@ -35,6 +35,7 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable.Buffer
 import kafka.server.QuotaType
 import kafka.server.KafkaServer
+import kafka.admin.AdminUtils
 
 /* We have some tests in this class instead of `BaseConsumerTest` in order to keep the build time under control. */
 class PlaintextConsumerTest extends BaseConsumerTest {
@@ -1506,6 +1507,33 @@ class PlaintextConsumerTest extends BaseConsumerTest {
         assertNull("Metric should not hanve been created " + metricName, broker.metrics.metric(metricName))
     }
     servers.foreach(assertNoExemptRequestMetric(_))
+  }
+
+  @Test
+  def testCreateNewTopicIfSettingAutoCreationEnable() {
+    val newTopic = "new-topic"
+
+    var consumer0 =createNewConsumer
+    try {
+      consumer0.subscribe(List(newTopic).asJava)
+      assertFalse(AdminUtils.topicExists(this.zkUtils, newTopic))
+    } finally {
+      consumer0.close()
+    }
+    val props = new Properties(this.consumerConfig)
+    props.put(ConsumerConfig.AUTO_CREATE_TOPIC_ENABLE_CONFIG, "true")
+    val consumer1 =  TestUtils.createNewConsumer(brokerList,
+         securityProtocol = this.securityProtocol,
+         trustStoreFile = this.trustStoreFile,
+         saslProperties = this.clientSaslProperties,
+         props = Some(props))
+    try {
+      consumer1.subscribe(List(newTopic).asJava)
+      consumer1.poll(0)
+      assertTrue(AdminUtils.topicExists(this.zkUtils, newTopic))
+    } finally {
+      consumer1.close()
+    }
   }
 
   def runMultiConsumerSessionTimeoutTest(closeConsumer: Boolean): Unit = {

@@ -252,6 +252,11 @@ public class ConsumerConfig extends AbstractConfig {
             " consumers will not be able to read up to the high watermark when there are in flight transactions.</p><p> Further, when in <code>read_committed</mode> the seekToEnd method will" +
             " return the LSO";
 
+    /** <code>auto.create.topics.enable</code> */
+    public static final String AUTO_CREATE_TOPIC_ENABLE_CONFIG = "auto.create.topics.enable";
+    public static final String AUTO_CREATE_TOPIC_ENABLE_DOC = "Enable auto creation of topic if it is enabled in broker too";
+    public static final boolean DEFAULT_AUTO_CREATE_TOPIC_ENABLE = true;
+
     public static final String DEFAULT_ISOLATION_LEVEL = IsolationLevel.READ_UNCOMMITTED.toString().toLowerCase(Locale.ROOT);
     
     static {
@@ -437,6 +442,11 @@ public class ConsumerConfig extends AbstractConfig {
                                         in(IsolationLevel.READ_COMMITTED.toString().toLowerCase(Locale.ROOT), IsolationLevel.READ_UNCOMMITTED.toString().toLowerCase(Locale.ROOT)),
                                         Importance.MEDIUM,
                                         ISOLATION_LEVEL_DOC)
+                                .define(AUTO_CREATE_TOPIC_ENABLE_CONFIG,
+                                        Type.BOOLEAN,
+                                        DEFAULT_AUTO_CREATE_TOPIC_ENABLE,
+                                        Importance.MEDIUM,
+                                        AUTO_CREATE_TOPIC_ENABLE_DOC)
                                 // security support
                                 .define(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
                                         Type.STRING,
