@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
@@ -29,7 +28,6 @@ import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.AbstractProcessorContext;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
-import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.RocksDBConfigSetter;
 import org.apache.kafka.test.MockProcessorContext;
@@ -236,7 +234,7 @@ public class RocksDBStoreTest {
         final List<KeyValue<byte[], byte[]>> entries = getKeyValueEntries();
 
         subject.init(context, subject);
-        
+
         context.restore(subject.name(), entries);
 
         assertEquals(subject.get("1"), "a");
@@ -336,7 +334,8 @@ public class RocksDBStoreTest {
     private static class ConfigurableProcessorContext extends AbstractProcessorContext {
         private final File stateDir;
 
-        ConfigurableProcessorContext(StreamsConfig config, File stateDir) {
+        ConfigurableProcessorContext(final StreamsConfig config,
+                                     final File stateDir) {
             super(null, null, config, null, null, null);
             this.stateDir = stateDir;
         }
@@ -347,12 +346,14 @@ public class RocksDBStoreTest {
         }
 
         @Override
-        public StateStore getStateStore(String name) {
+        public StateStore getStateStore(final String name) {
             return null;
         }
 
         @Override
-        public Cancellable schedule(long interval, PunctuationType type, Punctuator callback) {
+        public Cancellable schedule(final long interval,
+                                    final PunctuationType type,
+                                    final Punctuator callback) {
             return null;
         }
 
