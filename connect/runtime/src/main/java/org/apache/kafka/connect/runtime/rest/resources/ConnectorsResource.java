@@ -211,11 +211,11 @@ public class ConnectorsResource {
         }, forward);
 
         for (TaskInfo task: tasks) {
-            FutureCallback<Void> restart_cb = new FutureCallback<>();
+            FutureCallback<Void> restartCb = new FutureCallback<>();
             ConnectorTaskId taskId = task.id();
             Integer taskNum = task.id().task();
-            herder.restartTask(taskId, restart_cb);
-            completeOrForwardRequest(restart_cb, "/connectors/" + connector + "/tasks/" + taskNum + "/restart", "POST", null, forward);
+            herder.restartTask(taskId, restartCb);
+            completeOrForwardRequest(restartCb, "/connectors/" + connector + "/tasks/" + taskNum + "/restart", "POST", null, forward);
         }
     }
 
@@ -282,9 +282,11 @@ public class ConnectorsResource {
         } catch (TimeoutException e) {
             // This timeout is for the operation itself. None of the timeout error codes are relevant, so internal server
             // error is the best option
-            throw new ConnectRestException(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), "Request timed out");
+            throw new ConnectRestException(
+              Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), "Request timed out");
         } catch (InterruptedException e) {
-            throw new ConnectRestException(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), "Request interrupted");
+            throw new ConnectRestException(
+              Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), "Request interrupted");
         }
     }
 

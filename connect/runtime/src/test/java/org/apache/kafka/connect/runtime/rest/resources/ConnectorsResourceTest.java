@@ -430,6 +430,35 @@ public class ConnectorsResourceTest {
     }
 
     @Test
+    public void testRestartTasksRedirect() throws Throwable {
+        final Capture<Callback<List<TaskInfo>>> cb = Capture.newInstance();
+        herder.taskConfigs(EasyMock.eq(CONNECTOR_NAME), EasyMock.capture(cb));
+        expectAndCallbackResult(cb, TASK_INFOS);
+
+        ConnectorTaskId taskId0 = new ConnectorTaskId(CONNECTOR_NAME, 0);
+        ConnectorTaskId taskId1 = new ConnectorTaskId(CONNECTOR_NAME, 1);
+
+        final Capture<Callback<Void>> restartCb = Capture.newInstance();
+        herder.restartTask(EasyMock.eq(taskId0), EasyMock.capture(restartCb));
+        expectAndCallbackNotLeaderException(restartCb);
+        herder.restartTask(EasyMock.eq(taskId1), EasyMock.capture(restartCb));
+        expectAndCallbackNotLeaderException(restartCb);
+
+        EasyMock.expect(RestServer.httpRequest(EasyMock.eq("http://leader:8083/connectors/" + CONNECTOR_NAME + "/tasks/0/restart?forward=false"),
+                EasyMock.eq("POST"), EasyMock.isNull(), EasyMock.<TypeReference>anyObject()))
+                .andReturn(new RestServer.HttpResponse<>(202, new HashMap<String, List<String>>(), null));
+        EasyMock.expect(RestServer.httpRequest(EasyMock.eq("http://leader:8083/connectors/" + CONNECTOR_NAME + "/tasks/1/restart?forward=false"),
+                EasyMock.eq("POST"), EasyMock.isNull(), EasyMock.<TypeReference>anyObject()))
+                .andReturn(new RestServer.HttpResponse<>(202, new HashMap<String, List<String>>(), null));
+
+        PowerMock.replayAll();
+
+        connectorsResource.restartTasks(CONNECTOR_NAME, true);
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
     public void testRestartTaskLeaderRedirect() throws Throwable {
         ConnectorTaskId taskId = new ConnectorTaskId(CONNECTOR_NAME, 0);
 
