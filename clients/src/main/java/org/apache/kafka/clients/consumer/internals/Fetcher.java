@@ -738,7 +738,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                 future.raise(error);
                 return;
             } else if (error == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
-                log.warn("Received unknown topic or partition error in ListOffset request for partition {}. The topic/partition " +
+                log.warn("Received 'unknown topic or partition' in ListOffset request for partition {}. The topic/partition " +
                         "may not exist or the user may not have Describe access to it.", topicPartition);
                 future.raise(error);
                 return;
@@ -866,10 +866,10 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                 }
             } else if (error == Errors.NOT_LEADER_FOR_PARTITION ||
                        error == Errors.KAFKA_STORAGE_ERROR) {
-                log.debug("Error in fetch for partition {}: {}", tp, error.exceptionName());
+                log.debug("Failure in fetch for partition {}: {}", tp, error.exceptionName());
                 this.metadata.requestUpdate();
             } else if (error == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
-                log.warn("Received unknown topic or partition error in fetch for partition {}. The topic/partition " +
+                log.warn("Received 'unknown topic or partition' in fetch for partition {}. The topic/partition " +
                         "may not exist or the user may not have Describe access to it", tp);
                 this.metadata.requestUpdate();
             } else if (error == Errors.OFFSET_OUT_OF_RANGE) {
