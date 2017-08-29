@@ -56,12 +56,10 @@ public class MockProcessorContext extends AbstractProcessorContext implements Re
     private final Map<String, StateStore> storeMap = new LinkedHashMap<>();
     private final Map<String, StateRestoreCallback> restoreFuncs = new HashMap<>();
 
-    public MockProcessorContext(final StreamsConfig config) {
-        this(null, null, null, null, config, null, null);
-    }
+    private long timestamp = -1L;
 
     public MockProcessorContext(final File stateDir, final StreamsConfig config) {
-        this(stateDir, null, null, null, config, null, null);
+        this(stateDir, null, null, new Metrics(), config, null, null);
     }
 
     public MockProcessorContext(final StateSerdes<?, ?> serdes, final RecordCollector collector) {
@@ -118,12 +116,6 @@ public class MockProcessorContext extends AbstractProcessorContext implements Re
             throw new UnsupportedOperationException("No RecordCollector specified");
         }
         return recordCollector;
-    }
-
-    public void setTime(final long timestamp) {
-        if (recordContext != null) {
-            recordContext = new ProcessorRecordContext(timestamp, recordContext.offset(), recordContext.partition(), recordContext.topic());
-        }
     }
 
     // serdes will override whatever specified in the configs
@@ -219,15 +211,21 @@ public class MockProcessorContext extends AbstractProcessorContext implements Re
         }
     }
 
-    /*
-    @Override
-    public void setRecordContext(final RecordContext recordContext) {
-        this.recordContext = recordContext;
+    // allow only setting time but not other fields in for record context,
+    // and also not throwing exceptions if record context is not available.
+    public void setTime(final long timestamp) {
+        if (recordContext != null) {
+            recordContext = new ProcessorRecordContext(timestamp, recordContext.offset(), recordContext.partition(), recordContext.topic());
+        }
+        this.timestamp = timestamp;
     }
 
     @Override
-    public RecordContext recordContext() {
-        return recordContext;
+    public long timestamp() {
+        if (recordContext == null) {
+            return timestamp;
+        }
+        return recordContext.timestamp();
     }
 
     @Override
@@ -255,14 +253,6 @@ public class MockProcessorContext extends AbstractProcessorContext implements Re
     }
 
     @Override
-    public long timestamp() {
-        if (recordContext == null) {
-            return timestamp;
-        }
-        return recordContext.timestamp();
-    }
-
-    @Override
     public Map<String, Object> appConfigs() {
         return Collections.emptyMap();
     }
@@ -271,7 +261,6 @@ public class MockProcessorContext extends AbstractProcessorContext implements Re
     public Map<String, Object> appConfigsWithPrefix(final String prefix) {
         return Collections.emptyMap();
     }
-    */
 
     Map<String, StateStore> allStateStores() {
         return Collections.unmodifiableMap(storeMap);
