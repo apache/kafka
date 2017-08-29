@@ -296,4 +296,45 @@ public class StoreChangelogReaderTest {
         consumer.assign(Collections.singletonList(topicPartition));
     }
 
+    @Test
+    public void shouldCompleteImmediatelyWhenEndOffsetIs0() {
+        final Collection<TopicPartition> expected = Collections.singleton(topicPartition);
+        setupConsumer(0, topicPartition);
+        changelogReader.register(new StateRestorer(topicPartition, callback, null, Long.MAX_VALUE, true));
+        final Collection<TopicPartition> restored = changelogReader.restore();
+        assertThat(restored, equalTo(expected));
+    }
+
+    @Test
+    public void shouldRestorePartitionsRegisteredPostInitialization() {
+        final MockRestoreCallback callbackTwo = new MockRestoreCallback();
+
+        setupConsumer(1, topicPartition);
+        consumer.updateEndOffsets(Collections.singletonMap(topicPartition, 10L));
+        changelogReader.register(new StateRestorer(topicPartition, callback, null, Long.MAX_VALUE, false));
+
+        assertTrue(changelogReader.restore().isEmpty());
+
+        final TopicPartition postInitialization = new TopicPartition("other", 0);
+        consumer.updateBeginningOffsets(Collections.singletonMap(postInitialization, 0L));
+        consumer.updateEndOffsets(Collections.singletonMap(postInitialization, 3L));
+
+        changelogReader.register(new StateRestorer(postInitialization, callbackTwo, null, Long.MAX_VALUE, false));
+
+        addRecords(9, topicPartition, 1);
+
+        final Collection<TopicPartition> expected = Utils.mkSet(topicPartition, postInitialization);
+
+        consumer.assign(expected);
+        addRecords(3, postInitialization, 0);
+        assertThat(changelogReader.restore(), equalTo(expected));
+        assertThat(callback.restored.size(), equalTo(10));
+        assertThat(callbackTwo.restored.size(), equalTo(3));
+    }
+
+    private void addRecords(final long messages, final TopicPartition topicPartition, final int startingOffset) {
+        for (int i = 0; i < messages; i++) {
+            consumer.addRecord(new ConsumerRecord<>(topicPartition.topic(), topicPartition.partition(), startingOffset + i, new byte[0], new byte[0]));
+        }
+    }
 }
