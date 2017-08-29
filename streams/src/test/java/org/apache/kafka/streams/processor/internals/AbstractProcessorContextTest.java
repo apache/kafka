@@ -16,15 +16,9 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.processor.Cancellable;
-import org.apache.kafka.streams.processor.PunctuationType;
-import org.apache.kafka.streams.processor.Punctuator;
-import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.state.RocksDBConfigSetter;
-import org.apache.kafka.streams.state.internals.ThreadCache;
+import org.apache.kafka.test.MockProcessorContext;
 import org.apache.kafka.test.MockStateStoreSupplier;
 import org.junit.Before;
 import org.junit.Test;
@@ -39,8 +33,14 @@ import static org.junit.Assert.fail;
 
 public class AbstractProcessorContextTest {
 
-    private final MockStreamsMetrics metrics = new MockStreamsMetrics(new Metrics());
-    private final AbstractProcessorContext context = new TestProcessorContext(metrics);
+    private static Properties config;
+    static {
+        config = minimalStreamsConfig();
+        // Value must be a string to test className -> class conversion
+        config.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, RocksDBConfigSetter.class.getName());
+        config.put("user.supplied.config", "user-suppplied-value");
+    }
+    private final AbstractProcessorContext context = new MockProcessorContext(new StreamsConfig(config));
     private final MockStateStoreSupplier.MockStateStore stateStore = new MockStateStoreSupplier.MockStateStore("store", false);
     private final RecordContext recordContext = new RecordContextStub(10, System.currentTimeMillis(), 1, "foo");
 
@@ -148,55 +148,5 @@ public class AbstractProcessorContextTest {
     @Test
     public void appConfigsShouldReturnUnrecognizedValues() {
         assertThat((String) context.appConfigs().get("user.supplied.config"), equalTo("user-suppplied-value"));
-    }
-
-
-    private static class TestProcessorContext extends AbstractProcessorContext {
-        static Properties config;
-        static {
-            config = minimalStreamsConfig();
-            // Value must be a string to test className -> class conversion
-            config.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, RocksDBConfigSetter.class.getName());
-            config.put("user.supplied.config", "user-suppplied-value");
-        }
-
-        TestProcessorContext(final MockStreamsMetrics metrics) {
-            super(new TaskId(0, 0), "appId", new StreamsConfig(config), metrics, new StateManagerStub(), new ThreadCache("name", 0, metrics));
-        }
-
-        @Override
-        public StateStore getStateStore(final String name) {
-            return null;
-        }
-
-        @Override
-        public Cancellable schedule(long interval, PunctuationType type, Punctuator callback) {
-            return null;
-        }
-
-        @Override
-        public void schedule(final long interval) {
-
-        }
-
-        @Override
-        public <K, V> void forward(final K key, final V value) {
-
-        }
-
-        @Override
-        public <K, V> void forward(final K key, final V value, final int childIndex) {
-
-        }
-
-        @Override
-        public <K, V> void forward(final K key, final V value, final String childName) {
-
-        }
-
-        @Override
-        public void commit() {
-
-        }
     }
 }
