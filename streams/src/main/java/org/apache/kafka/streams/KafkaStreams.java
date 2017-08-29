@@ -778,7 +778,7 @@ public class KafkaStreams {
             shutdownThread.start();
         }
 
-        if (waitOnState(State.NOT_RUNNING, TimeUnit.MILLISECONDS.convert(timeout, timeUnit))) {
+        if (waitOnState(State.NOT_RUNNING, timeUnit.toMillis(timeout))) {
             log.info("{} Streams client stopped completely", logPrefix);
             return true;
         } else {
