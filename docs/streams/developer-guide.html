@@ -1014,7 +1014,7 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
 
 
     <h5><a id="streams_dsl_transformations_stateful" href="#streams_dsl_transformations_stateful">Stateful transformations</a></h5>
-    <h6><a id="treams_dsl_transformations_stateful_overview" href="#streams_dsl_transformations_stateful_overview">Overview</a></h6>
+    <h6><a id="streams_dsl_transformations_stateful_overview" href="#streams_dsl_transformations_stateful_overview">Overview</a></h6>
     <p>
         Stateful transformations, by definition, depend on state for processing inputs and producing outputs, and
         hence implementation-wise they require a state store associated with the stream processor. For example,
@@ -1029,17 +1029,17 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
     <p>
         Available stateful transformations in the DSL include:
     <ul>
-        <li><a href=#streams_dsl_aggregations>Aggregating</a>
-        <li><a href="#streams_dsl_joins">Joining</a>
-        <li><a href="#streams_dsl_windowing">Windowing (as part of aggregations and joins)</a>
-        <li>Applying custom processors and transformers, which may be stateful, for Processor API integration
+        <li><a href=#streams_dsl_aggregations>Aggregating</a></li>
+        <li><a href="#streams_dsl_joins">Joining</a></li>
+        <li><a href="#streams_dsl_windowing">Windowing (as part of aggregations and joins)</a></li>
+        <li>Applying custom processors and transformers, which may be stateful, for Processor API integration</li>
     </ul>
     </p>
     <p>
         The following diagram shows their relationships:
     </p>
     <figure>
-        <img class="centerd" src="/{{version}}/images/streams-stateful_operations.png" style="width:500pt;">
+        <img class="centered" src="/{{version}}/images/streams-stateful_operations.png" style="width:500pt;">
         <figcaption style="text-align: center;"><i>Stateful transformations in the DSL</i></figcaption>
     </figure>
 
@@ -1198,35 +1198,35 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
                     Detailed behavior of <code>KGroupedStream</code>:
                 </p>
                 <ul>
-                    <li>Input records with <code>null</code> keys are ignored in general.
+                    <li>Input records with <code>null</code> keys are ignored in general.</li>
                     <li>When a record key is received for the first time, the initializer is called
-                        (and called before the adder).
-                    <li>Whenever a record with a non-null value is received, the adder is called.
+                        (and called before the adder).</li>
+                    <li>Whenever a record with a non-null value is received, the adder is called.</li>
                 </ul>
                 <p>
                     Detailed behavior of KGroupedTable:
                 </p>
                 <ul>
-                    <li>Input records with null keys are ignored in general.
+                    <li>Input records with null keys are ignored in general.</li>
                     <li>When a record key is received for the first time, the initializer is called
                         (and called before the adder and subtractor). Note that, in contrast to <code>KGroupedStream</code>, over
                         time the initializer may be called more
                         than once for a key as a result of having received input tombstone records
-                        for that key (see below).
+                        for that key (see below).</li>
                     <li>When the first non-<code>null</code> value is received for a key (think:
-                        INSERT), then only the adder is called.
+                        INSERT), then only the adder is called.</li>
                     <li>When subsequent non-<code>null</code> values are received for a key (think:
                         UPDATE), then (1) the subtractor is called
                         with the old value as stored in the table and (2) the adder is called with
                         the new value of the input record
                         that was just received. The order of execution for the subtractor and adder
-                        is not defined.
+                        is not defined.</li>
                     <li>When a tombstone record -- i.e. a record with a <code>null</code> value -- is
                         received for a key (think: DELETE), then
                         only the subtractor is called. Note that, whenever the subtractor returns a
                     <code>null</code> value itself, then the
                     corresponding key is removed from the resulting KTable. If that happens, any
-                    next input record for that key will trigger the initializer again.
+                    next input record for that key will trigger the initializer again.</li>
                 </ul>
                 <p>
                     See the example at the bottom of this section for a visualization of the
@@ -1331,17 +1331,17 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
                 </p>
                 <ul>
                     <li>The windowed aggregate behaves similar to the rolling aggregate described
-                        above. The additional twist is that the behavior applies per window.
-                    <li>Input records with <code>null</code> keys are ignored in general.
+                        above. The additional twist is that the behavior applies per window.</li>
+                    <li>Input records with <code>null</code> keys are ignored in general.</li>
                     <li>When a record key is received for the first time for a given window, the
-                        initializer is called (and called before the adder).
+                        initializer is called (and called before the adder).</li>
                     <li>Whenever a record with a non-<code>null</code> value is received for a given window, the
                         adder is called.
                         (Note: As a result of a known bug in Kafka 0.11.0.0, the adder is currently
                         also called for <code>null</code> values. You can work around this, for example, by
-                        manually filtering out <code>null</code> values prior to grouping the stream.)
+                        manually filtering out <code>null</code> values prior to grouping the stream.)</li>
                     <li>When using session windows: the session merger is called whenever two
-                        sessions are being merged.
+                        sessions are being merged.</li>
                 </ul>
                 <p>
                 See the example at the bottom of this section for a visualization of the aggregation semantics.
@@ -1371,7 +1371,7 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
                     Detailed behavior for <code>KGroupedStream</code>:
                 </p>
                 <ul>
-                    <li>Input records with null keys or values are ignored.
+                    <li>Input records with null keys or values are ignored.</li>
                 </ul>
                 <p>
                     Detailed behavior for <code>KGroupedTable</code>:
@@ -1379,7 +1379,7 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
                 <ul>
                     <li>Input records with <code>null</code> keys are ignored. Records with <code>null</code>
                         values are not ignored but interpreted as "tombstones" for the corresponding key, which
-                        indicate the deletion of the key from the table.
+                        indicate the deletion of the key from the table.</li>
                 </ul>
             </td>
         </tr>
@@ -1415,7 +1415,7 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
                 <ul>
                     <li>Input records with <code>null</code> keys or values are ignored. (Note: As a result of a known bug in Kafka 0.11.0.0,
                         records with <code>null</code> values are not ignored yet. You can work around this, for example, by manually
-                        filtering out <code>null</code> values prior to grouping the stream.)
+                        filtering out <code>null</code> values prior to grouping the stream.)</li>
                 </ul>
             </td>
         </tr>
@@ -1485,34 +1485,34 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
                     Detailed behavior for <code>KGroupedStream</code>:
                 </p>
                 <ul>
-                    <li>Input records with <code>null</code> keys are ignored in general.
+                    <li>Input records with <code>null</code> keys are ignored in general.</li>
                     <li>When a record key is received for the first time, then the value of that
-                        record is used as the initial aggregate value.
-                    <li>Whenever a record with a non-<code>null</code> value is received, the adder is called.
+                        record is used as the initial aggregate value.</li>
+                    <li>Whenever a record with a non-<code>null</code> value is received, the adder is called.</li>
                 </ul>
                 <p>
                 Detailed behavior for <code>KGroupedTable</code>:
                 </p>
                 <ul>
-                    <li>Input records with null keys are ignored in general.
+                    <li>Input records with null keys are ignored in general.</li>
                     <li>When a record key is received for the first time, then the value of that
                         record is used as the initial aggregate value.
                         Note that, in contrast to KGroupedStream, over time this initialization step
                         may happen more than once for a key as a
-                        result of having received input tombstone records for that key (see below).
+                        result of having received input tombstone records for that key (see below).</li>
                     <li>When the first non-<code>null</code> value is received for a key (think: INSERT), then
-                        only the adder is called.
+                        only the adder is called.</li>
                     <li>When subsequent non-<code>null</code> values are received for a key (think: UPDATE), then
                         (1) the subtractor is called with the
                         old value as stored in the table and (2) the adder is called with the new
                         value of the input record that was just received.
-                        The order of execution for the subtractor and adder is not defined.
+                        The order of execution for the subtractor and adder is not defined.</li>
                     <li>When a tombstone record -- i.e. a record with a <code>null</code> value -- is received
                         for a key (think: DELETE), then only the
                         subtractor is called. Note that, whenever the subtractor returns a <code>null</code>
                         value itself, then the corresponding key
                         is removed from the resulting KTable. If that happens, any next input
-                        record for that key will re-initialize its aggregate value.
+                        record for that key will re-initialize its aggregate value.</li>
                 </ul>
                 <p>
                 See the example at the bottom of this section for a visualization of the
@@ -1583,14 +1583,14 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
                 </p>
                 <ul>
                     <li>The windowed reduce behaves similar to the rolling reduce described above. The additional twist is that
-                        the behavior applies per window.
-                    <li>Input records with <code>null</code> keys are ignored in general.
+                        the behavior applies per window.</li>
+                    <li>Input records with <code>null</code> keys are ignored in general.</li>
                     <li>When a record key is received for the first time for a given window, then the value of that record is
-                    used as the initial aggregate value.
+                    used as the initial aggregate value.</li>
                     <li>Whenever a record with a non-<code>null</code> value is received for a given window, the adder is called. (Note: As
                     a result of a known bug in Kafka 0.11.0.0, the adder is currently also called for <code>null</code> values. You can work
-                    around this, for example, by manually filtering out <code>null</code> values prior to grouping the stream.)
-                    <li>See the example at the bottom of this section for a visualization of the aggregation semantics.
+                    around this, for example, by manually filtering out <code>null</code> values prior to grouping the stream.)</li>
+                    <li>See the example at the bottom of this section for a visualization of the aggregation semantics.</li>
                 </ul>
             </td>
         </tr>
@@ -1923,7 +1923,7 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
 
 
     <figure>
-        <img class="centerd" src="/{{version}}/images/streams-interactive-queries-01.png" style="width:600pt;">
+        <img class="centered" src="/{{version}}/images/streams-interactive-queries-01.png" style="width:600pt;">
         <figcaption style="text-align: center;"><i>Without interactive queries: increased complexity and heavier footprint of architecture</i></figcaption>
     </figure>
 
@@ -2021,7 +2021,7 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
     </p>
 
     <figure>
-        <img class="centerd" src="/{{version}}/images/streams-interactive-queries-api-01.png" style="width:500pt;">
+        <img class="centered" src="/{{version}}/images/streams-interactive-queries-api-01.png" style="width:500pt;">
         <figcaption style="text-align: center;"><i>Every application instance can directly query any of its local state stores</i></figcaption>
     </figure>
 
