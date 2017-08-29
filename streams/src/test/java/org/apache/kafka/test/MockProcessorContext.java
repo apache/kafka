@@ -252,16 +252,6 @@ public class MockProcessorContext extends AbstractProcessorContext implements Re
         return recordContext.offset();
     }
 
-    @Override
-    public Map<String, Object> appConfigs() {
-        return Collections.emptyMap();
-    }
-
-    @Override
-    public Map<String, Object> appConfigsWithPrefix(final String prefix) {
-        return Collections.emptyMap();
-    }
-
     Map<String, StateStore> allStateStores() {
         return Collections.unmodifiableMap(storeMap);
     }
