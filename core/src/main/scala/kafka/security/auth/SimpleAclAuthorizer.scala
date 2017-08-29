@@ -66,7 +66,7 @@ object SimpleAclAuthorizer {
   private case class VersionedAcls(acls: Set[Acl], zkVersion: Int)
 }
 
-class SimpleAclAuthorizer extends Authorizer with Logging {
+class SimpleAclAuthorizer extends CachedAuthorizer with Logging {
   private val authorizerLogger = Logger.getLogger("kafka.authorizer.logger")
   private var superUsers = Set.empty[KafkaPrincipal]
   private var shouldAllowEveryoneIfNoAclIsFound = false
@@ -118,7 +118,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
     aclChangeListener.init()
   }
 
-  override def authorize(session: Session, operation: Operation, resource: Resource): Boolean = {
+  def authorizeUncached(session: Session, operation: Operation, resource: Resource): Boolean = {
     val principal = session.principal
     val host = session.clientAddress.getHostAddress
     val acls = getAcls(resource) ++ getAcls(new Resource(resource.resourceType, Resource.WildCardResource))
@@ -344,6 +344,8 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
     } else {
       aclCache.remove(resource)
     }
+    // any time we get new Acls, we need to invalidate the authorizer's cache
+    this.invalidateAuthorizerCache()
   }
 
   private def updateAclChangedFlag(resource: Resource) {
