@@ -315,6 +315,19 @@ public class ProcessorTopologyTest {
         assertThat(result, containsString("child-two:\n\t\tchildren:\t[child-two-one]"));
     }
 
+    @Test
+    public void shouldConsiderTimeStamps() throws Exception {
+        int partition = 10;
+        driver = new ProcessorTopologyTestDriver(config, createSimpleTopology(partition).internalTopologyBuilder);
+        driver.process(INPUT_TOPIC_1, "key1", "value1", STRING_SERIALIZER, STRING_SERIALIZER, 10L);
+        driver.process(INPUT_TOPIC_1, "key2", "value2", STRING_SERIALIZER, STRING_SERIALIZER, 20L);
+        driver.process(INPUT_TOPIC_1, "key3", "value3", STRING_SERIALIZER, STRING_SERIALIZER, 30L);
+        assertNextOutputRecord(OUTPUT_TOPIC_1, "key1", "value1", partition, 10L);
+        assertNextOutputRecord(OUTPUT_TOPIC_1, "key2", "value2", partition, 20L);
+        assertNextOutputRecord(OUTPUT_TOPIC_1, "key3", "value3", partition, 30L);
+    }
+
+
     private void assertNextOutputRecord(String topic, String key, String value) {
         ProducerRecord<String, String> record = driver.readOutput(topic, STRING_DESERIALIZER, STRING_DESERIALIZER);
         assertEquals(topic, record.topic());
@@ -329,6 +342,15 @@ public class ProcessorTopologyTest {
         assertEquals(key, record.key());
         assertEquals(value, record.value());
         assertEquals(partition, record.partition());
+    }
+
+    private void assertNextOutputRecord(String topic, String key, String value, Integer partition, Long timestamp) {
+        ProducerRecord<String, String> record = driver.readOutput(topic, STRING_DESERIALIZER, STRING_DESERIALIZER);
+        assertEquals(topic, record.topic());
+        assertEquals(key, record.key());
+        assertEquals(value, record.value());
+        assertEquals(partition, record.partition());
+        assertEquals(timestamp, record.timestamp());
     }
 
     private void assertNoOutputRecord(String topic) {
