@@ -402,7 +402,9 @@ public class SchemaBuilder implements Schema {
         builder.name = schema.name();
         builder.doc = schema.doc();
         builder.optional = schema.isOptional();
-        builder.parameters = schema.parameters();
+        if(null!=schema.parameters()) {
+            builder.parameters = new LinkedHashMap<>(schema.parameters());
+        }
         builder.defaultValue = schema.defaultValue();
         builder.version = schema.version();
         if (Type.MAP == schema.type()) {
