@@ -317,7 +317,7 @@ public class ProcessorTopologyTest {
 
     @Test
     public void shouldConsiderTimeStamps() throws Exception {
-        int partition = 10;
+        final int partition = 10;
         driver = new ProcessorTopologyTestDriver(config, createSimpleTopology(partition).internalTopologyBuilder);
         driver.process(INPUT_TOPIC_1, "key1", "value1", STRING_SERIALIZER, STRING_SERIALIZER, 10L);
         driver.process(INPUT_TOPIC_1, "key2", "value2", STRING_SERIALIZER, STRING_SERIALIZER, 20L);
