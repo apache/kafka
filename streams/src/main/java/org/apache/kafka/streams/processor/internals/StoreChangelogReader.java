@@ -95,8 +95,12 @@ public class StoreChangelogReader implements ChangelogReader {
 
     private void initialize() {
         if (!consumer.subscription().isEmpty()) {
-            throw new IllegalStateException("Restore consumer should not subscribed to any topics (" + consumer.subscription() + ")");
+            throw new IllegalStateException("Restore consumer should not be subscribed to any topics (" + consumer.subscription() + ")");
         }
+
+        // first refresh the changelog partition information from brokers, since initialize is only called when
+        // the needsInitializing map is not empty, meaning we do not know the metadata for some of them yet
+        refreshChangelogInfo();
 
         Map<TopicPartition, StateRestorer> initializable = new HashMap<>();
         for (Map.Entry<TopicPartition, StateRestorer> entry : needsInitializing.entrySet()) {
@@ -113,33 +117,31 @@ public class StoreChangelogReader implements ChangelogReader {
         } catch (final TimeoutException e) {
             // if timeout exception gets thrown we just give up this time and retry in the next run loop
             log.debug("{} Could not fetch end offset for {}; will fall back to partition by partition fetching", logPrefix, initializable);
-            initializable.clear();
+            return;
         }
 
-        if (!initializable.isEmpty()) {
-            Iterator<TopicPartition> iter = initializable.keySet().iterator();
-            while (iter.hasNext()) {
-                final TopicPartition topicPartition = iter.next();
-                final Long offset = endOffsets.get(topicPartition);
+        Iterator<TopicPartition> iter = initializable.keySet().iterator();
+        while (iter.hasNext()) {
+            final TopicPartition topicPartition = iter.next();
+            final Long offset = endOffsets.get(topicPartition);
 
-                // offset should not be null; but since the consumer API does not guarantee it
-                // we add this check just in case
-                if (offset != null) {
-                    // do not need to check restorer since it will never by null
-                    final StateRestorer restorer = needsInitializing.get(topicPartition);
-                    if (restorer.checkpoint() >= offset) {
-                        restorer.setRestoredOffset(restorer.checkpoint());
-                        iter.remove();
-                    } else if (restorer.offsetLimit() == 0 || endOffsets.get(topicPartition) == 0) {
-                        restorer.setRestoredOffset(0);
-                        iter.remove();
-                    } else {
-                        restorer.setEndingOffset(offset);
-                    }
-                    needsInitializing.remove(topicPartition);
-                } else {
+            // offset should not be null; but since the consumer API does not guarantee it
+            // we add this check just in case
+            if (offset != null) {
+                // do not need to check restorer since it will never by null
+                final StateRestorer restorer = needsInitializing.get(topicPartition);
+                if (restorer.checkpoint() >= offset) {
+                    restorer.setRestoredOffset(restorer.checkpoint());
                     iter.remove();
+                } else if (restorer.offsetLimit() == 0 || endOffsets.get(topicPartition) == 0) {
+                    restorer.setRestoredOffset(0);
+                    iter.remove();
+                } else {
+                    restorer.setEndingOffset(offset);
                 }
+                needsInitializing.remove(topicPartition);
+            } else {
+                iter.remove();
             }
         }
 
@@ -147,18 +149,10 @@ public class StoreChangelogReader implements ChangelogReader {
         if (!initializable.isEmpty()) {
             startRestoration(initializable);
         }
-
-        // if there are still some restorers whose changelog partitions are not known yet,
-        // try to fetch all metadata info once and in the next run loop we will retry again
-        if (!needsInitializing.isEmpty()) {
-            log.debug("{} Changelog partitions {} metadata are unknown so they cannot be used for restoration;" +
-                    "will retry in the next run loop", logPrefix, needsInitializing.keySet());
-            refreshChangelogInfo();
-        }
     }
 
     private void startRestoration(final Map<TopicPartition, StateRestorer> initializable) {
-        log.debug("{} Starting restoring state stores from changelog topics {}", logPrefix, initializable.keySet());
+        log.debug("{} Start restoring state stores from changelog topics {}", logPrefix, initializable.keySet());
 
         final Set<TopicPartition> assignment = new HashSet<>(consumer.assignment());
         assignment.addAll(initializable.keySet());
@@ -206,12 +200,11 @@ public class StoreChangelogReader implements ChangelogReader {
         return completed;
     }
 
-    @Override
-    public void refreshChangelogInfo() {
+    private void refreshChangelogInfo() {
         try {
             partitionInfo.putAll(consumer.listTopics());
         } catch (final TimeoutException e) {
-            log.debug("{} Could not fetch topic metadata; will fall back to partition by partition fetching", logPrefix);
+            log.debug("{} Could not fetch topic metadata within the timeout, will retry in the next run loop", logPrefix);
         }
     }
 

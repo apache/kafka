@@ -28,11 +28,6 @@ import java.util.Map;
  */
 public interface ChangelogReader {
     /**
-     * Refresh the changelog information for all the registered restorer
-     */
-    void refreshChangelogInfo();
-
-    /**
      * Register a state store and it's partition for later restoration.
      * @param restorer the state restorer to register
      */

@@ -45,9 +45,6 @@ public class MockChangelogReader implements ChangelogReader {
     }
 
     @Override
-    public void refreshChangelogInfo() {}
-
-    @Override
     public void reset() {
         registered.clear();
     }

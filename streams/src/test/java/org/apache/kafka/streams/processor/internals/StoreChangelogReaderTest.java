@@ -94,7 +94,6 @@ public class StoreChangelogReaderTest {
         setupConsumer(messages, topicPartition);
         changelogReader.register(new StateRestorer(topicPartition, restoreListener, null, Long.MAX_VALUE, true,
                                                    "storeName"));
-        changelogReader.refreshChangelogInfo();
         changelogReader.restore();
         assertThat(callback.restored.size(), equalTo(messages));
     }
@@ -105,7 +104,6 @@ public class StoreChangelogReaderTest {
         setupConsumer(messages, topicPartition);
         changelogReader.register(new StateRestorer(topicPartition, restoreListener, 5L, Long.MAX_VALUE, true,
                                                    "storeName"));
-        changelogReader.refreshChangelogInfo();
 
         changelogReader.restore();
         assertThat(callback.restored.size(), equalTo(5));
@@ -128,8 +126,6 @@ public class StoreChangelogReaderTest {
         final StateRestorer restorer = new StateRestorer(topicPartition, restoreListener, null, 3, true,
                                                          "storeName");
         changelogReader.register(restorer);
-        changelogReader.refreshChangelogInfo();
-
         changelogReader.restore();
         assertThat(callback.restored.size(), equalTo(3));
         assertThat(restorer.restoredOffset(), equalTo(3L));
@@ -151,7 +147,6 @@ public class StoreChangelogReaderTest {
             .register(new StateRestorer(topicPartition, restoreListener, null, Long.MAX_VALUE, true, "storeName1"));
         changelogReader.register(new StateRestorer(one, restoreListener1, null, Long.MAX_VALUE, true, "storeName2"));
         changelogReader.register(new StateRestorer(two, restoreListener2, null, Long.MAX_VALUE, true, "storeName3"));
-        changelogReader.refreshChangelogInfo();
 
         changelogReader.restore();
 
@@ -176,7 +171,6 @@ public class StoreChangelogReaderTest {
             .register(new StateRestorer(topicPartition, restoreListener, null, Long.MAX_VALUE, true, "storeName1"));
         changelogReader.register(new StateRestorer(one, restoreListener1, null, Long.MAX_VALUE, true, "storeName2"));
         changelogReader.register(new StateRestorer(two, restoreListener2, null, Long.MAX_VALUE, true, "storeName3"));
-        changelogReader.refreshChangelogInfo();
 
         changelogReader.restore();
 
@@ -218,7 +212,6 @@ public class StoreChangelogReaderTest {
             new StateRestorer(topicPartition, restoreListener, null, Long.MAX_VALUE, true, "storeName");
         setupConsumer(0, topicPartition);
         changelogReader.register(restorer);
-        changelogReader.refreshChangelogInfo();
 
         changelogReader.restore();
         assertThat(callback.restored.size(), equalTo(0));
@@ -234,7 +227,6 @@ public class StoreChangelogReaderTest {
             new StateRestorer(topicPartition, restoreListener, endOffset, Long.MAX_VALUE, true, "storeName");
 
         changelogReader.register(restorer);
-        changelogReader.refreshChangelogInfo();
 
         changelogReader.restore();
         assertThat(callback.restored.size(), equalTo(0));
@@ -246,7 +238,6 @@ public class StoreChangelogReaderTest {
         setupConsumer(10, topicPartition);
         changelogReader.register(new StateRestorer(topicPartition, restoreListener, null, Long.MAX_VALUE, true,
                                                    "storeName"));
-        changelogReader.refreshChangelogInfo();
         changelogReader.restore();
         final Map<TopicPartition, Long> restoredOffsets = changelogReader.restoredOffsets();
         assertThat(restoredOffsets, equalTo(Collections.singletonMap(topicPartition, 10L)));
@@ -257,7 +248,6 @@ public class StoreChangelogReaderTest {
         setupConsumer(10, topicPartition);
         changelogReader.register(new StateRestorer(topicPartition, restoreListener, null, Long.MAX_VALUE, false,
                                                    "storeName"));
-        changelogReader.refreshChangelogInfo();
         changelogReader.restore();
         final Map<TopicPartition, Long> restoredOffsets = changelogReader.restoredOffsets();
         assertThat(restoredOffsets, equalTo(Collections.<TopicPartition, Long>emptyMap()));
@@ -273,7 +263,6 @@ public class StoreChangelogReaderTest {
         consumer.assign(Collections.singletonList(topicPartition));
         changelogReader.register(new StateRestorer(topicPartition, restoreListener, null, Long.MAX_VALUE, false,
                                                    "storeName"));
-        changelogReader.refreshChangelogInfo();
         changelogReader.restore();
 
         assertThat(callback.restored, CoreMatchers.equalTo(Utils.mkList(KeyValue.pair(bytes, bytes), KeyValue.pair(bytes, bytes))));
@@ -284,7 +273,6 @@ public class StoreChangelogReaderTest {
         final Collection<TopicPartition> expected = Collections.singleton(topicPartition);
         setupConsumer(0, topicPartition);
         changelogReader.register(new StateRestorer(topicPartition, restoreListener, null, Long.MAX_VALUE, true, "store"));
-        changelogReader.refreshChangelogInfo();
         final Collection<TopicPartition> restored = changelogReader.restore();
         assertThat(restored, equalTo(expected));
     }
@@ -297,7 +285,6 @@ public class StoreChangelogReaderTest {
         setupConsumer(1, topicPartition);
         consumer.updateEndOffsets(Collections.singletonMap(topicPartition, 10L));
         changelogReader.register(new StateRestorer(topicPartition, restoreListener, null, Long.MAX_VALUE, false, "storeName"));
-        changelogReader.refreshChangelogInfo();
 
         assertTrue(changelogReader.restore().isEmpty());
 
@@ -309,7 +296,6 @@ public class StoreChangelogReaderTest {
         consumer.updateEndOffsets(Collections.singletonMap(postInitialization, 3L));
 
         changelogReader.register(new StateRestorer(postInitialization, restoreListener2, null, Long.MAX_VALUE, false, "otherStore"));
-        changelogReader.refreshChangelogInfo();
 
         final Collection<TopicPartition> expected = Utils.mkSet(topicPartition, postInitialization);
         consumer.assign(expected);
