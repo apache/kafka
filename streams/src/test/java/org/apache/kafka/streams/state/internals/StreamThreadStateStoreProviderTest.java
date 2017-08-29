@@ -201,7 +201,7 @@ public class StreamThreadStateStoreProviderTest {
     }
 
     private void mockThread(final boolean initialized) {
-        EasyMock.expect(threadMock.isInitialized()).andReturn(initialized);
+        EasyMock.expect(threadMock.isRunningAndNotRebalancing()).andReturn(initialized);
         EasyMock.expect(threadMock.tasks()).andStubReturn(tasks);
         EasyMock.replay(threadMock);
     }
