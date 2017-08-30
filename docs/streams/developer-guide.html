@@ -729,7 +729,7 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
             </td>
         </tr>
         <tr>
-            <td><b>Foreach</b>: <code>KStream &rarr; void or KTable &rarr; void </code></td>
+            <td><b>Foreach</b>: <code>KStream &rarr; void </code></td>
             <td>
                 <p>
                 Terminal operation. Performs a stateless action on each record.
@@ -935,7 +935,7 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
             </td>
         </tr>
         <tr>
-            <td><b>Print</b>: <code>KStream &rarr; void or KTable &rarr; void</code></td>
+            <td><b>Print</b>: <code>KStream &rarr; void </code></td>
             <td>
                 <p>
                 Terminal operation. Prints the records to <code>System.out</code>. See Javadocs for serde and <code>toString()</code> caveats.
@@ -944,8 +944,8 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
                        KStream&lt;byte[], String&gt; stream = ...;
                        stream.print();
 
-                       // Several variants of `print` exist to e.g. override the
-                       // default serdes for record keys and record values.
+                       // Several variants of `print` exist to e.g. override the default serdes for record keys
+                       // and record values, set a prefix label for the output string, etc
                        stream.print(Serdes.ByteArray(), Serdes.String());
                 </pre>
             </td>
@@ -995,7 +995,7 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
             </td>
         </tr>
         <tr>
-            <td><b>WriteAsText</b>: <code>KStream &rarr; void or KTable &rarr; void</code></td>
+            <td><b>WriteAsText</b>: <code>KStream &rarr; void </code></td>
             <td>
                 <p>
                 Terminal operation. Write the records to a file. See Javadocs for serde and <code>toString()</code> caveats.
