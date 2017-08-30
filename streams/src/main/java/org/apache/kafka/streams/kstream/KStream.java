@@ -795,7 +795,7 @@ public interface KStream<K, V> {
      * computes zero or more output records.
      * Thus, an input record {@code <K,V>} can be transformed into output records {@code <K':V'>, <K'':V''>, ...}.
      * This is a stateful record-by-record operation (cf. {@link #flatMap(KeyValueMapper)}).
-     * Furthermore, via {@link Transformer#punctuate(long)} the processing progress can be observed and additional
+     * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress can be observed and additional
      * periodic actions can be performed.
      * <p>
      * In order to assign a state, the state must be created and registered beforehand:
@@ -815,9 +815,9 @@ public interface KStream<K, V> {
      * <p>
      * Within the {@link Transformer}, the state is obtained via the
      * {@link  ProcessorContext}.
-     * To trigger periodic actions via {@link Transformer#punctuate(long) punctuate()}, a schedule must be registered.
+     * To trigger periodic actions via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) punctuate()}, a schedule must be registered.
      * The {@link Transformer} must return a {@link KeyValue} type in {@link Transformer#transform(Object, Object)
-     * transform()} and {@link Transformer#punctuate(long) punctuate()}.
+     * transform()} and {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) punctuate()}.
      * <pre>{@code
      * new TransformerSupplier() {
      *     Transformer get() {
@@ -828,19 +828,15 @@ public interface KStream<K, V> {
      *             void init(ProcessorContext context) {
      *                 this.context = context;
      *                 this.state = context.getStateStore("myTransformState");
-     *                 context.schedule(1000); // call #punctuate() each 1000ms
+     *                 // punctuate each 1000ms; can access this.state
+     *                 // can emit as many new KeyValue pairs as required via this.context#forward()
+     *                 context.schedule(1000, PunctuationType.SYSTEM_TIME, new Punctuator(..));
      *             }
      *
      *             KeyValue transform(K key, V value) {
      *                 // can access this.state
      *                 // can emit as many new KeyValue pairs as required via this.context#forward()
      *                 return new KeyValue(key, value); // can emit a single value via return -- can also be null
-     *             }
-     *
-     *             KeyValue punctuate(long timestamp) {
-     *                 // can access this.state
-     *                 // can emit as many new KeyValue pairs as required via this.context#forward()
-     *                 return null; // don't return result -- can also be "new KeyValue()"
      *             }
      *
      *             void close() {
@@ -874,7 +870,7 @@ public interface KStream<K, V> {
      * record value and computes a new value for it.
      * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K:V'>}.
      * This is a stateful record-by-record operation (cf. {@link #mapValues(ValueMapper)}).
-     * Furthermore, via {@link ValueTransformer#punctuate(long)} the processing progress can be observed and additional
+     * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress can be observed and additional
      * periodic actions get be performed.
      * <p>
      * In order to assign a state, the state must be created and registered beforehand:
@@ -894,7 +890,7 @@ public interface KStream<K, V> {
      * <p>
      * Within the {@link ValueTransformer}, the state is obtained via the
      * {@link ProcessorContext}.
-     * To trigger periodic actions via {@link ValueTransformer#punctuate(long) punctuate()}, a schedule must be
+     * To trigger periodic actions via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) punctuate()}, a schedule must be
      * registered.
      * In contrast to {@link #transform(TransformerSupplier, String...) transform()}, no additional {@link KeyValue}
      * pairs should be emitted via {@link ProcessorContext#forward(Object, Object)
@@ -907,17 +903,12 @@ public interface KStream<K, V> {
      *
      *             void init(ProcessorContext context) {
      *                 this.state = context.getStateStore("myValueTransformState");
-     *                 context.schedule(1000); // call #punctuate() each 1000ms
+     *                 context.schedule(1000, PunctuationType.SYSTEM_TIME, new Punctuator(..)); // punctuate each 1000ms, can access this.state
      *             }
      *
      *             NewValueType transform(V value) {
      *                 // can access this.state
      *                 return new NewValueType(); // or null
-     *             }
-     *
-     *             NewValueType punctuate(long timestamp) {
-     *                 // can access this.state
-     *                 return null; // don't return result -- can also be "new NewValueType()" (current key will be used to build KeyValue pair)
      *             }
      *
      *             void close() {
@@ -947,7 +938,7 @@ public interface KStream<K, V> {
      * Process all records in this stream, one record at a time, by applying a {@link Processor} (provided by the given
      * {@link ProcessorSupplier}).
      * This is a stateful record-by-record operation (cf. {@link #foreach(ForeachAction)}).
-     * Furthermore, via {@link Processor#punctuate(long)} the processing progress can be observed and additional
+     * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress can be observed and additional
      * periodic actions can be performed.
      * Note that this is a terminal operation that returns void.
      * <p>
@@ -968,7 +959,7 @@ public interface KStream<K, V> {
      * <p>
      * Within the {@link Processor}, the state is obtained via the
      * {@link ProcessorContext}.
-     * To trigger periodic actions via {@link Processor#punctuate(long) punctuate()},
+     * To trigger periodic actions via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) punctuate()},
      * a schedule must be registered.
      * <pre>{@code
      * new ProcessorSupplier() {
@@ -978,14 +969,10 @@ public interface KStream<K, V> {
      *
      *             void init(ProcessorContext context) {
      *                 this.state = context.getStateStore("myProcessorState");
-     *                 context.schedule(1000); // call #punctuate() each 1000ms
+     *                 context.schedule(1000, PunctuationType.SYSTEM_TIME, new Punctuator(..)); // punctuate each 1000ms, can access this.state
      *             }
      *
      *             void process(K key, V value) {
-     *                 // can access this.state
-     *             }
-     *
-     *             void punctuate(long timestamp) {
      *                 // can access this.state
      *             }
      *
