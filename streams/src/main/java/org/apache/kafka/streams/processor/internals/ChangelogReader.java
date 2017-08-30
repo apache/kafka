@@ -28,18 +28,10 @@ import java.util.Map;
  */
 public interface ChangelogReader {
     /**
-     * Validate that the partition exists on the cluster.
-     * @param topicPartition    partition to validate.
-     * @param storeName         name of the store the partition is for.
-     * @throws org.apache.kafka.streams.errors.StreamsException if partition doesn't exist
-     */
-    void validatePartitionExists(final TopicPartition topicPartition, final String storeName);
-
-    /**
      * Register a state store and it's partition for later restoration.
-     * @param restorationInfo
+     * @param restorer the state restorer to register
      */
-    void register(final StateRestorer restorationInfo);
+    void register(final StateRestorer restorer);
 
     /**
      * Restore all registered state stores by reading from their changelogs.
