@@ -230,7 +230,11 @@ object TestUtils extends Logging {
     if (nodeId >= 0) props.put(KafkaConfig.BrokerIdProp, nodeId.toString)
     props.put(KafkaConfig.ListenersProp, listeners)
     if (logDirCount > 1) {
-      val logDirs = (1 to logDirCount).toList.map(i => TestUtils.tempDir().getAbsolutePath).mkString(",")
+      val logDirs = (1 to logDirCount).toList.map(i =>
+        // We would like to allow user to specify both relative path and absolute path as log directory for backward-compatibility reason
+        // We can verify this by using a mixture of relative path and absolute path as log directories in the test
+        if (i%2 == 0) TestUtils.tempDir().getAbsolutePath else TestUtils.tempRelativeDir("data")
+      ).mkString(",")
       props.put(KafkaConfig.LogDirsProp, logDirs)
     } else {
       props.put(KafkaConfig.LogDirProp, TestUtils.tempDir().getAbsolutePath)

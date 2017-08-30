@@ -19,6 +19,7 @@ package kafka.server.checkpoints
 import java.io._
 import java.util.regex.Pattern
 
+import kafka.log.AbsoluteLogDir
 import kafka.server.LogDirFailureChannel
 import kafka.server.epoch.EpochEntry
 import org.apache.kafka.common.TopicPartition
@@ -54,7 +55,7 @@ trait OffsetCheckpoint {
   */
 class OffsetCheckpointFile(val f: File, logDirFailureChannel: LogDirFailureChannel = null) {
   val checkpoint = new CheckpointFile[(TopicPartition, Long)](f, OffsetCheckpointFile.CurrentVersion,
-    OffsetCheckpointFile.Formatter, logDirFailureChannel, f.getParent)
+    OffsetCheckpointFile.Formatter, logDirFailureChannel, AbsoluteLogDir(f.getAbsoluteFile.getParent))
 
   def write(offsets: Map[TopicPartition, Long]): Unit = checkpoint.write(offsets.toSeq)
 
