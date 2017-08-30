@@ -123,8 +123,7 @@ public class ChangeLoggingWindowBytesStoreTest {
         store.put(bytesKey, value1);
         store.put(bytesKey, value1);
 
-        Bytes key = WindowStoreUtils.toBinaryKey(bytesKey.get(), 0, 1);
-        assertArrayEquals(value1, (byte[]) sent.get(key));
+        assertArrayEquals(value1, (byte[]) sent.get(WindowStoreUtils.toBinaryKey(bytesKey.get(), 0, 1)));
         assertArrayEquals(value1, (byte[]) sent.get(WindowStoreUtils.toBinaryKey(bytesKey.get(), 0, 2)));
 
         EasyMock.verify(inner);
