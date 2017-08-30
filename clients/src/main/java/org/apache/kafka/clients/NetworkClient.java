@@ -35,6 +35,7 @@ import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.requests.ResponseHeader;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
@@ -59,7 +60,7 @@ import java.util.Random;
  */
 public class NetworkClient implements KafkaClient {
 
-    private static final Logger log = LoggerFactory.getLogger(NetworkClient.class);
+    private final Logger log;
 
     /* the selector used to perform network i/o */
     private final Selectable selector;
@@ -202,6 +203,7 @@ public class NetworkClient implements KafkaClient {
         this.discoverBrokerVersions = discoverBrokerVersions;
         this.apiVersions = apiVersions;
         this.throttleTimeSensor = throttleTimeSensor;
+        log = new LogContext("[Consumer clientId=" + clientId + "] ").logger(NetworkClient.class);
     }
 
     /**
