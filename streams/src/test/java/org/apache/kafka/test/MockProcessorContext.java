@@ -58,15 +58,19 @@ public class MockProcessorContext extends AbstractProcessorContext implements Re
 
     private long timestamp = -1L;
 
-    public MockProcessorContext(final File stateDir, final StreamsConfig config) {
+    public MockProcessorContext(final File stateDir,
+                                final StreamsConfig config) {
         this(stateDir, null, null, new Metrics(), config, null, null);
     }
 
-    public MockProcessorContext(final StateSerdes<?, ?> serdes, final RecordCollector collector) {
+    public MockProcessorContext(final StateSerdes<?, ?> serdes,
+                                final RecordCollector collector) {
         this(null, serdes.keySerde(), serdes.valueSerde(), collector, null);
     }
 
-    public MockProcessorContext(final StateSerdes<?, ?> serdes, final RecordCollector collector, final Metrics metrics) {
+    public MockProcessorContext(final StateSerdes<?, ?> serdes,
+                                final RecordCollector collector,
+                                final Metrics metrics) {
         this(null, serdes.keySerde(), serdes.valueSerde(), metrics, new StreamsConfig(StreamsTestUtils.minimalStreamsConfig()), new RecordCollector.Supplier() {
             @Override
             public RecordCollector recordCollector() {
