@@ -203,7 +203,7 @@ public class NetworkClient implements KafkaClient {
         this.discoverBrokerVersions = discoverBrokerVersions;
         this.apiVersions = apiVersions;
         this.throttleTimeSensor = throttleTimeSensor;
-        log = new LogContext("[Consumer clientId=" + clientId + "] ").logger(NetworkClient.class);
+        log = new LogContext("[NetworkClient clientId=" + clientId + "] ").logger(NetworkClient.class);
     }
 
     /**
