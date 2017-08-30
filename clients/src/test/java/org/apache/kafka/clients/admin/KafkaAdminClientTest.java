@@ -372,6 +372,8 @@ public class KafkaAdminClientTest {
     public static class FailureInjectingTimeoutProcessorFactory extends KafkaAdminClient.TimeoutProcessorFactory {
 
         private int numTries = 0;
+
+        private int failuresInjected = 0;
         
         @Override
         public KafkaAdminClient.TimeoutProcessor create(long now) {
@@ -380,7 +382,15 @@ public class KafkaAdminClientTest {
 
         synchronized boolean shouldInjectFailure() {
             numTries++;
-            return numTries == 3;
+            if (numTries == 1) {
+                failuresInjected++;
+                return true;
+            }
+            return false;
+        }
+
+        public synchronized int failuresInjected() {
+            return failuresInjected;
         }
 
         public final class FailureInjectingTimeoutProcessor extends KafkaAdminClient.TimeoutProcessor {

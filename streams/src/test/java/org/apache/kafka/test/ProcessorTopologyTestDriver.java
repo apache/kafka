@@ -222,8 +222,6 @@ public class ProcessorTopologyTestDriver {
                                   consumer,
                                   new StoreChangelogReader(
                                       createRestoreConsumer(topology.storeToChangelogTopic()),
-                                      Time.SYSTEM,
-                                      5000,
                                       stateRestoreListener),
                                   config,
                                   streamsMetrics, stateDirectory,

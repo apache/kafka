@@ -49,6 +49,8 @@ trait Logging {
 
   def isDebugEnabled: Boolean = logger.isDebugEnabled
 
+  def isTraceEnabled: Boolean = logger.isTraceEnabled
+
   def debug(msg: => String): Unit = {
     if (logger.isDebugEnabled())
       logger.debug(msgWithLogIdent(msg))

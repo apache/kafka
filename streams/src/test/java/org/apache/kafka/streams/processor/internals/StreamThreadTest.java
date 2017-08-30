@@ -229,7 +229,7 @@ public class StreamThreadTest {
         thread.runOnce(-1);
         assertTrue(thread.tasks().isEmpty());
 
-        thread.close();
+        thread.shutdown();
         assertTrue(thread.state() == StreamThread.State.PENDING_SHUTDOWN);
     }
 
@@ -327,7 +327,7 @@ public class StreamThreadTest {
 
         assertTrue(thread.tasks().isEmpty());
 
-        thread.close();
+        thread.shutdown();
         assertEquals(thread.state(), StreamThread.State.PENDING_SHUTDOWN);
     }
 
@@ -346,7 +346,7 @@ public class StreamThreadTest {
                 return thread.state() == StreamThread.State.RUNNING;
             }
         }, 10 * 1000, "Thread never started.");
-        thread.close();
+        thread.shutdown();
         assertEquals(thread.state(), StreamThread.State.PENDING_SHUTDOWN);
         TestUtils.waitForCondition(new TestCondition() {
             @Override
@@ -354,7 +354,7 @@ public class StreamThreadTest {
                 return thread.state() == StreamThread.State.DEAD;
             }
         }, 10 * 1000, "Thread never shut down.");
-        thread.close();
+        thread.shutdown();
         assertEquals(thread.state(), StreamThread.State.DEAD);
     }
 
@@ -698,7 +698,7 @@ public class StreamThreadTest {
         thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
         thread.rebalanceListener.onPartitionsAssigned(Collections.singleton(new TopicPartition("someTopic", 0)));
 
-        thread.close();
+        thread.shutdown();
         thread.run();
 
         for (final Task task : thread.tasks().values()) {
@@ -731,7 +731,7 @@ public class StreamThreadTest {
                                                      consumer,
                                                      stateDirectory);
         thread.setState(StreamThread.State.RUNNING);
-        thread.close();
+        thread.shutdown();
         thread.run();
         EasyMock.verify(taskManager);
     }

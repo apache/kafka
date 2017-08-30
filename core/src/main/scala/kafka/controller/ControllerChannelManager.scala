@@ -238,7 +238,7 @@ class RequestSendThread(val controllerId: Int,
       }
       if (clientResponse != null) {
         val requestHeader = clientResponse.requestHeader
-        val api = ApiKeys.forId(requestHeader.apiKey)
+        val api = requestHeader.apiKey
         if (api != ApiKeys.LEADER_AND_ISR && api != ApiKeys.STOP_REPLICA && api != ApiKeys.UPDATE_METADATA_KEY)
           throw new KafkaException(s"Unexpected apiKey received: $apiKey")
 

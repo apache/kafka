@@ -91,7 +91,7 @@ public class RocksDBWindowStoreSupplier<K, V> extends AbstractStoreSupplier<K, V
         if (!logged) {
             return inner;
         }
-        return new ChangeLoggingWindowBytesStore(inner);
+        return new ChangeLoggingWindowBytesStore(inner, retainDuplicates);
     }
 
     private WindowStore<Bytes, byte[]> maybeWrapCaching(final WindowStore<Bytes, byte[]> inner) {

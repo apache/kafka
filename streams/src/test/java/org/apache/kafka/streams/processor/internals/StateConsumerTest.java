@@ -49,7 +49,7 @@ public class StateConsumerTest {
         partitionOffsets.put(topicOne, 20L);
         partitionOffsets.put(topicTwo, 30L);
         stateMaintainer = new StateMaintainerStub(partitionOffsets);
-        stateConsumer = new GlobalStreamThread.StateConsumer(consumer, stateMaintainer, time, 10L, FLUSH_INTERVAL);
+        stateConsumer = new GlobalStreamThread.StateConsumer("test", consumer, stateMaintainer, time, 10L, FLUSH_INTERVAL);
     }
 
     @Test
@@ -106,7 +106,7 @@ public class StateConsumerTest {
 
     @Test
     public void shouldNotFlushWhenFlushIntervalIsZero() throws Exception {
-        stateConsumer = new GlobalStreamThread.StateConsumer(consumer, stateMaintainer, time, 10L, -1);
+        stateConsumer = new GlobalStreamThread.StateConsumer("test", consumer, stateMaintainer, time, 10L, -1);
         stateConsumer.initialize();
         time.sleep(100);
         stateConsumer.pollAndUpdate();

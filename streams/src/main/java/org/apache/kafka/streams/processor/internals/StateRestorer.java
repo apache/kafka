@@ -29,11 +29,13 @@ public class StateRestorer {
     private final Long checkpoint;
     private final long offsetLimit;
     private final boolean persistent;
-    private final TopicPartition partition;
     private final String storeName;
+    private final TopicPartition partition;
     private final CompositeRestoreListener compositeRestoreListener;
+
     private long restoredOffset;
     private long startingOffset;
+    private long endingOffset;
 
     StateRestorer(final TopicPartition partition,
                   final CompositeRestoreListener compositeRestoreListener,
@@ -57,7 +59,7 @@ public class StateRestorer {
         return checkpoint == null ? NO_CHECKPOINT : checkpoint;
     }
 
-    void restoreStarted(long startingOffset, long endingOffset) {
+    void restoreStarted() {
         compositeRestoreListener.onRestoreStart(partition, storeName, startingOffset, endingOffset);
     }
 
@@ -87,6 +89,10 @@ public class StateRestorer {
 
     void setStartingOffset(final long startingOffset) {
         this.startingOffset = Math.min(offsetLimit, startingOffset);
+    }
+
+    void setEndingOffset(final long endingOffset) {
+        this.endingOffset = Math.min(offsetLimit, endingOffset);
     }
 
     long startingOffset() {

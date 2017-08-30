@@ -247,11 +247,11 @@ public class NetworkClient implements KafkaClient {
         long now = time.milliseconds();
         for (InFlightRequest request : inFlightRequests.clearAll(nodeId)) {
             if (request.isInternalRequest) {
-                if (request.header.apiKey() == ApiKeys.METADATA.id) {
+                if (request.header.apiKey() == ApiKeys.METADATA) {
                     metadataUpdater.handleDisconnection(request.destination);
                 }
             } else {
-                requestTypes.add(ApiKeys.forId(request.header.apiKey()));
+                requestTypes.add(request.header.apiKey());
                 abortedSends.add(new ClientResponse(request.header,
                         request.callback, request.destination, request.createdTimeMs, now,
                         true, null, null));
@@ -275,7 +275,7 @@ public class NetworkClient implements KafkaClient {
     public void close(String nodeId) {
         selector.close(nodeId);
         for (InFlightRequest request : inFlightRequests.clearAll(nodeId))
-            if (request.isInternalRequest && request.header.apiKey() == ApiKeys.METADATA.id)
+            if (request.isInternalRequest && request.header.apiKey() == ApiKeys.METADATA)
                 metadataUpdater.handleDisconnection(request.destination);
         connectionStates.remove(nodeId);
     }
@@ -556,25 +556,19 @@ public class NetworkClient implements KafkaClient {
     }
 
     public static AbstractResponse parseResponse(ByteBuffer responseBuffer, RequestHeader requestHeader) {
-        return createResponse(parseStructMaybeUpdateThrottleTimeMetrics(responseBuffer, requestHeader,
-                null, 0), requestHeader);
+        Struct responseStruct = parseStructMaybeUpdateThrottleTimeMetrics(responseBuffer, requestHeader, null, 0);
+        return AbstractResponse.parseResponse(requestHeader.apiKey(), responseStruct);
     }
 
     private static Struct parseStructMaybeUpdateThrottleTimeMetrics(ByteBuffer responseBuffer, RequestHeader requestHeader,
                                                                     Sensor throttleTimeSensor, long now) {
         ResponseHeader responseHeader = ResponseHeader.parse(responseBuffer);
-        ApiKeys apiKey = ApiKeys.forId(requestHeader.apiKey());
         // Always expect the response version id to be the same as the request version id
-        Struct responseBody = apiKey.parseResponse(requestHeader.apiVersion(), responseBuffer);
+        Struct responseBody = requestHeader.apiKey().parseResponse(requestHeader.apiVersion(), responseBuffer);
         correlate(requestHeader, responseHeader);
         if (throttleTimeSensor != null && responseBody.hasField(AbstractResponse.THROTTLE_TIME_KEY_NAME))
             throttleTimeSensor.record(responseBody.getInt(AbstractResponse.THROTTLE_TIME_KEY_NAME), now);
         return responseBody;
-    }
-
-    private static AbstractResponse createResponse(Struct responseStruct, RequestHeader requestHeader) {
-        ApiKeys apiKey = ApiKeys.forId(requestHeader.apiKey());
-        return AbstractResponse.getResponse(apiKey, responseStruct);
     }
 
     /**
@@ -602,7 +596,7 @@ public class NetworkClient implements KafkaClient {
         for (InFlightRequest request : this.inFlightRequests.clearAll(nodeId)) {
             log.trace("Cancelled request {} with correlation id {} due to node {} being disconnected", request.request,
                     request.header.correlationId(), nodeId);
-            if (request.isInternalRequest && request.header.apiKey() == ApiKeys.METADATA.id)
+            if (request.isInternalRequest && request.header.apiKey() == ApiKeys.METADATA)
                 metadataUpdater.handleDisconnection(request.destination);
             else
                 responses.add(request.disconnected(now));
@@ -666,9 +660,9 @@ public class NetworkClient implements KafkaClient {
                 throttleTimeSensor, now);
             if (log.isTraceEnabled()) {
                 log.trace("Completed receive from node {} for {} with correlation id {}, received {}", req.destination,
-                    ApiKeys.forId(req.header.apiKey()), req.header.correlationId(), responseStruct);
+                    req.header.apiKey(), req.header.correlationId(), responseStruct);
             }
-            AbstractResponse body = createResponse(responseStruct, req.header);
+            AbstractResponse body = AbstractResponse.parseResponse(req.header.apiKey(), responseStruct);
             if (req.isInternalRequest && body instanceof MetadataResponse)
                 metadataUpdater.handleCompletedMetadataResponse(req.header, now, (MetadataResponse) body);
             else if (req.isInternalRequest && body instanceof ApiVersionsResponse)
