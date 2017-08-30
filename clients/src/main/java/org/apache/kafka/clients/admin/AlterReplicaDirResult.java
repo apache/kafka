@@ -34,7 +34,15 @@ public class AlterReplicaDirResult {
     }
 
     /**
+     *
      * Return a map from replica to future which can be used to check the status of individual replica movement.
+     *
+     * Possible error code:
+     *
+     * LOG_DIR_NOT_FOUND (57)
+     * KAFKA_STORAGE_ERROR (56)
+     * REPLICA_NOT_AVAILABLE (9)
+     * UNKNOWN (-1)
      */
     public Map<TopicPartitionReplica, KafkaFuture<Void>> values() {
         return futures;

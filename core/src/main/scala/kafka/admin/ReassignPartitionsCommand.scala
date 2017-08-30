@@ -85,7 +85,7 @@ object ReassignPartitionsCommand extends Logging {
 
   def verifyAssignment(zkUtils: ZkUtils, adminClientOpt: Option[JAdminClient], jsonString: String): Unit = {
     println("Status of partition reassignment: ")
-    val (partitionsToBeReassigned, replicaAssignment) = parsePartitionReassignmentDataWithoutDedup(jsonString)
+    val (partitionsToBeReassigned, replicaAssignment) = parsePartitionReassignmentData(jsonString)
     val reassignedPartitionsStatus = checkIfPartitionReassignmentSucceeded(zkUtils, partitionsToBeReassigned.toMap)
     val replicaReassignmentStatus = checkIfReplicaReassignmentSucceeded(adminClientOpt, replicaAssignment)
 
@@ -232,7 +232,7 @@ object ReassignPartitionsCommand extends Logging {
   }
 
   // Parses without deduplicating keys so the data can be checked before allowing reassignment to proceed
-  def parsePartitionReassignmentDataWithoutDedup(jsonData: String): (Seq[(TopicAndPartition, Seq[Int])], Map[TopicPartitionReplica, String]) = {
+  def parsePartitionReassignmentData(jsonData: String): (Seq[(TopicAndPartition, Seq[Int])], Map[TopicPartitionReplica, String]) = {
     val partitionAssignment = mutable.ListBuffer.empty[(TopicAndPartition, Seq[Int])]
     val replicaAssignment = mutable.Map.empty[TopicPartitionReplica, String]
     for {
@@ -260,7 +260,7 @@ object ReassignPartitionsCommand extends Logging {
   }
 
   def parseAndValidate(zkUtils: ZkUtils, reassignmentJsonString: String): (Seq[(TopicAndPartition, Seq[Int])], Map[TopicPartitionReplica, String]) = {
-    val (partitionsToBeReassigned, replicaAssignment) = parsePartitionReassignmentDataWithoutDedup(reassignmentJsonString)
+    val (partitionsToBeReassigned, replicaAssignment) = parsePartitionReassignmentData(reassignmentJsonString)
 
     if (partitionsToBeReassigned.isEmpty)
       throw new AdminCommandFailedException("Partition reassignment data file is empty")
