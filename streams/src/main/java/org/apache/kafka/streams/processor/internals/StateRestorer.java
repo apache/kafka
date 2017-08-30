@@ -30,6 +30,7 @@ public class StateRestorer {
 
     private long restoredOffset;
     private long startingOffset;
+    private long endingOffset;
 
     StateRestorer(final TopicPartition partition,
                   final StateRestoreCallback stateRestoreCallback,
@@ -65,6 +66,10 @@ public class StateRestorer {
 
     void setStartingOffset(final long startingOffset) {
         this.startingOffset = Math.min(offsetLimit, startingOffset);
+    }
+
+    void setEndingOffset(final long endingOffset) {
+        this.endingOffset = Math.min(offsetLimit, endingOffset);
     }
 
     long startingOffset() {

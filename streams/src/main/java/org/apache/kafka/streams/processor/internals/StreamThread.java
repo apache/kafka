@@ -425,23 +425,23 @@ public class StreamThread extends Thread {
 
         consumer = clientSupplier.getConsumer(consumerConfigs);
         log.info("{} Creating restore consumer client", logPrefix);
+
         restoreConsumer = clientSupplier.getRestoreConsumer(config.getRestoreConsumerConfigs(threadClientId));
         // standby KTables
         standbyRecords = new HashMap<>();
 
 
         this.stateDirectory = stateDirectory;
-        pollTimeMs = config.getLong(StreamsConfig.POLL_MS_CONFIG);
-        commitTimeMs = config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG);
+        this.pollTimeMs = config.getLong(StreamsConfig.POLL_MS_CONFIG);
+        this.commitTimeMs = config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG);
 
         this.time = time;
-        timerStartedMs = time.milliseconds();
-        lastCommitMs = timerStartedMs;
-        final Integer requestTimeOut = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
-        rebalanceListener = new RebalanceListener(time);
-        active = new AssignedTasks<>(logPrefix, "stream task", Time.SYSTEM);
-        standby = new AssignedTasks<>(logPrefix, "standby task", Time.SYSTEM);
-        storeChangelogReader = new StoreChangelogReader(getName(), restoreConsumer, time, requestTimeOut);
+        this.timerStartedMs = time.milliseconds();
+        this.lastCommitMs = timerStartedMs;
+        this.rebalanceListener = new RebalanceListener(time);
+        this.active = new AssignedTasks<>(logPrefix, "stream task", Time.SYSTEM);
+        this.standby = new AssignedTasks<>(logPrefix, "standby task", Time.SYSTEM);
+        this.storeChangelogReader = new StoreChangelogReader(getName(), restoreConsumer);
     }
 
     /**
