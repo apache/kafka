@@ -944,8 +944,8 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
                        KStream&lt;byte[], String&gt; stream = ...;
                        stream.print();
 
-                       // Several variants of `print` exist to e.g. override the
-                       // default serdes for record keys and record values.
+                       // Several variants of `print` exist to e.g. override the default serdes for record keys
+                       // and record values, set a prefix label for the output string, etc
                        stream.print(Serdes.ByteArray(), Serdes.String());
                 </pre>
             </td>
