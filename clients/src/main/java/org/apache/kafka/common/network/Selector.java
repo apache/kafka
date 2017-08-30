@@ -400,7 +400,8 @@ public class Selector implements Selectable, AutoCloseable {
      * @param isImmediatelyConnected true if running over a set of keys for just-connected sockets
      * @param currentTimeNanos time at which set of keys was determined
      */
-    private void pollSelectionKeys(Set<SelectionKey> selectionKeys,
+    // package-private for testing
+    void pollSelectionKeys(Set<SelectionKey> selectionKeys,
                                    boolean isImmediatelyConnected,
                                    long currentTimeNanos) {
         Iterator<SelectionKey> iterator = determineHandlingOrder(selectionKeys).iterator();
@@ -658,6 +659,10 @@ public class Selector implements Selectable, AutoCloseable {
 
         channel.disconnect();
 
+        // Ensure that `connected` does not have closed channels. This could happen if `prepare` throws an exception
+        // in the `poll` invocation when `finishConnect` succeeds
+        connected.remove(channel.id());
+
         // Keep track of closed channels with pending receives so that all received records
         // may be processed. For example, when producer with acks=0 sends some records and
         // closes its connections, a single poll() in the broker may receive records and
@@ -797,7 +802,7 @@ public class Selector implements Selectable, AutoCloseable {
     }
 
     // only for testing
-    int numStagedReceives(KafkaChannel channel) {
+    public int numStagedReceives(KafkaChannel channel) {
         Deque<NetworkReceive> deque = stagedReceives.get(channel);
         return deque == null ? 0 : deque.size();
     }

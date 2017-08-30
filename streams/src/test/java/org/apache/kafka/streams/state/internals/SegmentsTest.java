@@ -167,6 +167,21 @@ public class SegmentsTest {
     }
 
     @Test
+    public void shouldGetSegmentsWithinTimeRangeOutOfOrder() throws Exception {
+        segments.getOrCreateSegment(4, context);
+        segments.getOrCreateSegment(2, context);
+        segments.getOrCreateSegment(0, context);
+        segments.getOrCreateSegment(1, context);
+        segments.getOrCreateSegment(3, context);
+
+        final List<Segment> segments = this.segments.segments(0, 2 * 60 * 1000);
+        assertEquals(3, segments.size());
+        assertEquals(0, segments.get(0).id);
+        assertEquals(1, segments.get(1).id);
+        assertEquals(2, segments.get(2).id);
+    }
+
+    @Test
     public void shouldRollSegments() throws Exception {
         segments.getOrCreateSegment(0, context);
         verifyCorrectSegments(0, 1);

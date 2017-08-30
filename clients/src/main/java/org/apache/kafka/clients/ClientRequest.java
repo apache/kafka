@@ -79,7 +79,7 @@ public final class ClientRequest {
     }
 
     public RequestHeader makeHeader(short version) {
-        return new RequestHeader(apiKey().id, version, clientId, correlationId);
+        return new RequestHeader(apiKey(), version, clientId, correlationId);
     }
 
     public AbstractRequest.Builder<?> requestBuilder() {

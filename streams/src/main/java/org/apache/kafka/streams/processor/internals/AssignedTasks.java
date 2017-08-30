@@ -116,6 +116,7 @@ class AssignedTasks {
             final Map.Entry<TaskId, Task> entry = it.next();
             try {
                 if (!entry.getValue().initialize()) {
+                    log.debug("{} transitioning {} {} to restoring", logPrefix, taskTypeName, entry.getKey());
                     restoring.put(entry.getKey(), entry.getValue());
                 } else {
                     transitionToRunning(entry.getValue());
@@ -123,7 +124,7 @@ class AssignedTasks {
                 it.remove();
             } catch (final LockException e) {
                 // made this trace as it will spam the logs in the poll loop.
-                log.trace("{} Could not create {} {} due to {}; will retry", logPrefix, taskTypeName, entry.getKey(), e.getMessage());
+                log.trace("{} Could not create {} {} due to {}; will retry in the next run loop", logPrefix, taskTypeName, entry.getKey(), e.getMessage());
             }
         }
     }
@@ -142,6 +143,16 @@ class AssignedTasks {
                 transitionToRunning(task);
                 resume.addAll(task.partitions());
                 it.remove();
+            } else {
+                if (log.isTraceEnabled()) {
+                    final HashSet<TopicPartition> outstandingPartitions = new HashSet<>(task.changelogPartitions());
+                    outstandingPartitions.removeAll(restoredPartitions);
+                    log.trace("{} partition restoration not complete for {} {} partitions: {}",
+                              logPrefix,
+                              taskTypeName,
+                              task.id(),
+                              task.changelogPartitions());
+                }
             }
         }
         if (allTasksRunning()) {
@@ -252,6 +263,7 @@ class AssignedTasks {
     }
 
     private void transitionToRunning(final Task task) {
+        log.debug("{} transitioning {} {} to running", logPrefix, taskTypeName, task.id());
         running.put(task.id(), task);
         for (TopicPartition topicPartition : task.partitions()) {
             runningByPartition.put(topicPartition, task);

@@ -37,8 +37,9 @@ import org.apache.kafka.common.metrics._
 import org.apache.kafka.common.metrics.stats.Rate
 import org.apache.kafka.common.network.{ChannelBuilders, KafkaChannel, ListenerName, Selectable, Send, Selector => KSelector}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
-import org.apache.kafka.common.protocol.SecurityProtocol
+import org.apache.kafka.common.protocol.{ApiKeys, SecurityProtocol}
 import org.apache.kafka.common.protocol.types.SchemaException
+import org.apache.kafka.common.requests.{RequestContext, RequestHeader}
 import org.apache.kafka.common.utils.{KafkaThread, Time}
 
 import scala.collection._
@@ -485,7 +486,7 @@ private[kafka] class Processor(val id: Int,
             // that are sitting in the server's socket buffer
             updateRequestMetrics(curr.request)
             trace("Socket server received empty response to send, registering for read: " + curr)
-            val channelId = curr.request.connectionId
+            val channelId = curr.request.context.connectionId
             if (selector.channel(channelId) != null || selector.closingChannel(channelId) != null)
                 selector.unmute(channelId)
           case RequestChannel.SendAction =>
@@ -495,7 +496,7 @@ private[kafka] class Processor(val id: Int,
           case RequestChannel.CloseConnectionAction =>
             updateRequestMetrics(curr.request)
             trace("Closing socket connection actively according to the response code.")
-            close(selector, curr.request.connectionId)
+            close(selector, curr.request.context.connectionId)
         }
       } finally {
         curr = requestChannel.receiveResponse(id)
@@ -505,7 +506,7 @@ private[kafka] class Processor(val id: Int,
 
   /* `protected` for test usage */
   protected[network] def sendResponse(response: RequestChannel.Response, responseSend: Send) {
-    val connectionId = response.request.connectionId
+    val connectionId = response.request.context.connectionId
     trace(s"Socket server received response to send to $connectionId, registering for write and sending data: $response")
     // `channel` can be None if the connection was closed remotely or if selector closed it for being idle for too long
     if (channel(connectionId).isEmpty) {
@@ -515,7 +516,7 @@ private[kafka] class Processor(val id: Int,
     // Invoke send for closingChannel as well so that the send is failed and the channel closed properly and
     // removed from the Selector after discarding any pending staged receives.
     // `openOrClosingChannel` can be None if the selector closed the connection because it was idle for too long
-    if (!openOrClosingChannel(connectionId).isEmpty) {
+    if (openOrClosingChannel(connectionId).isDefined) {
       selector.send(responseSend)
       inflightResponses += (connectionId -> response)
     }
@@ -538,11 +539,12 @@ private[kafka] class Processor(val id: Int,
         val openChannel = selector.channel(receive.source)
         // Only methods that are safe to call on a disconnected channel should be invoked on 'openOrClosingChannel'.
         val openOrClosingChannel = if (openChannel != null) openChannel else selector.closingChannel(receive.source)
-        val session = RequestChannel.Session(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, openOrClosingChannel.principal.getName), openOrClosingChannel.socketAddress)
-
-        val req = new RequestChannel.Request(processor = id, connectionId = receive.source, session = session,
-          startTimeNanos = time.nanoseconds, listenerName = listenerName, securityProtocol = securityProtocol,
-          memoryPool, receive.payload)
+        val principal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, openOrClosingChannel.principal.getName)
+        val header = RequestHeader.parse(receive.payload)
+        val context = new RequestContext(header, receive.source, openOrClosingChannel.socketAddress,
+          principal, listenerName, securityProtocol)
+        val req = new RequestChannel.Request(processor = id, context = context,
+          startTimeNanos = time.nanoseconds, memoryPool, receive.payload)
         requestChannel.sendRequest(req)
         selector.mute(receive.source)
       } catch {
@@ -565,7 +567,7 @@ private[kafka] class Processor(val id: Int,
   }
 
   private def updateRequestMetrics(request: RequestChannel.Request) {
-    val networkThreadTimeNanos = openOrClosingChannel(request.connectionId).fold(0L) (_.getAndResetNetworkThreadTimeNanos())
+    val networkThreadTimeNanos = openOrClosingChannel(request.context.connectionId).fold(0L)(_.getAndResetNetworkThreadTimeNanos())
     request.updateRequestMetrics(networkThreadTimeNanos)
   }
 
@@ -638,6 +640,10 @@ private[kafka] class Processor(val id: Int,
   /* For test usage */
   private[network] def channel(connectionId: String): Option[KafkaChannel] =
     Option(selector.channel(connectionId))
+
+  // Visible for testing
+  private[network] def numStagedReceives(connectionId: String): Int =
+    openOrClosingChannel(connectionId).map(c => selector.numStagedReceives(c)).getOrElse(0)
 
   /**
    * Wakeup the thread for selection.

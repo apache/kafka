@@ -46,7 +46,7 @@ class SimpleConsumerShell(KafkaPathResolverMixin, BackgroundThreadService):
 
     def start_cmd(self, node):
         cmd = self.path.script("kafka-run-class.sh", node)
-        cmd += " kafka.tools.SimpleConsumerShell"
+        cmd += " %s" % self.java_class_name()
         cmd += " --topic %s --broker-list %s --partition %s --no-wait-at-logend" % (self.topic, self.kafka.bootstrap_servers(), self.partition)
 
         cmd += " 2>> /mnt/get_simple_consumer_shell.log | tee -a /mnt/get_simple_consumer_shell.log &"
@@ -56,12 +56,15 @@ class SimpleConsumerShell(KafkaPathResolverMixin, BackgroundThreadService):
         return self.output
 
     def stop_node(self, node):
-        node.account.kill_process("SimpleConsumerShell", allow_fail=False)
+        node.account.kill_java_processes(self.java_class_name(), allow_fail=False)
 
         stopped = self.wait_node(node, timeout_sec=self.stop_timeout_sec)
         assert stopped, "Node %s: did not stop within the specified timeout of %s seconds" % \
                         (str(node.account), str(self.stop_timeout_sec))
 
     def clean_node(self, node):
-        node.account.kill_process("SimpleConsumerShell", clean_shutdown=False, allow_fail=False)
+        node.account.kill_java_processes(self.java_class_name(), clean_shutdown=False, allow_fail=False)
         node.account.ssh("rm -rf /mnt/simple_consumer_shell.log", allow_fail=False)
+
+    def java_class_name(self):
+        return "kafka.tools.SimpleConsumerShell"

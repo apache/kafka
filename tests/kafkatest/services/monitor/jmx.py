@@ -41,7 +41,8 @@ class JmxMixin(object):
         self.jmx_tool_err_log = os.path.join(root, "jmx_tool.err.log")
 
     def clean_node(self, node):
-        node.account.kill_process("jmx", clean_shutdown=False, allow_fail=True)
+        node.account.kill_java_processes(self.jmx_class_name(), clean_shutdown=False,
+                                         allow_fail=True)
         node.account.ssh("rm -f -- %s %s" % (self.jmx_tool_log, self.jmx_tool_err_log), allow_fail=False)
 
     def start_jmx_tool(self, idx, node):
@@ -67,7 +68,8 @@ class JmxMixin(object):
         use_jmxtool_version = get_version(node)
         if use_jmxtool_version <= V_0_11_0_0:
             use_jmxtool_version = DEV_BRANCH
-        cmd = "%s kafka.tools.JmxTool " % self.path.script("kafka-run-class.sh", use_jmxtool_version)
+        cmd = "%s %s " % (self.path.script("kafka-run-class.sh", use_jmxtool_version),
+                          self.jmx_class_name())
         cmd += "--reporting-interval 1000 --jmx-url service:jmx:rmi:///jndi/rmi://127.0.0.1:%d/jmxrmi" % self.jmx_port
         cmd += " --wait"
         for jmx_object_name in self.jmx_object_names:
@@ -131,3 +133,6 @@ class JmxMixin(object):
     def read_jmx_output_all_nodes(self):
         for node in self.nodes:
             self.read_jmx_output(self.idx(node), node)
+
+    def jmx_class_name(self):
+        return "kafka.tools.JmxTool"

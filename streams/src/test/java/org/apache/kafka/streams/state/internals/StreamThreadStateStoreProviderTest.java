@@ -21,7 +21,6 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
@@ -188,7 +187,7 @@ public class StreamThreadStateStoreProviderTest {
             Collections.singletonList(new TopicPartition(topicName, taskId.partition)),
             topology,
             clientSupplier.consumer,
-            new StoreChangelogReader(clientSupplier.restoreConsumer, Time.SYSTEM, 5000, new MockStateRestoreListener()),
+            new StoreChangelogReader(clientSupplier.restoreConsumer, new MockStateRestoreListener()),
             streamsConfig,
             new MockStreamsMetrics(new Metrics()),
             stateDirectory,
@@ -202,7 +201,7 @@ public class StreamThreadStateStoreProviderTest {
     }
 
     private void mockThread(final boolean initialized) {
-        EasyMock.expect(threadMock.isInitialized()).andReturn(initialized);
+        EasyMock.expect(threadMock.isRunningAndNotRebalancing()).andReturn(initialized);
         EasyMock.expect(threadMock.tasks()).andStubReturn(tasks);
         EasyMock.replay(threadMock);
     }
