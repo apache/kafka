@@ -147,27 +147,27 @@ public class WindowedStreamPartitionerTest {
     
     @Test
     public void testWindowedDeserializerWindowSize() {
-        Map<String, String> props = new HashMap<>();
+        final Map<String, String> props = new HashMap<>();
         // test key[value].deserializer.inner.class takes precedence over serializer.inner.class
-        WindowedDeserializer<StringSerializer> windowedDeserializer = new WindowedDeserializer<>();
+        final WindowedDeserializer<StringSerializer> windowedDeserializer = new WindowedDeserializer<>();
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "host:1");
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "appId");
         props.put("key.deserializer.inner.class", "org.apache.kafka.common.serialization.StringDeserializer");
         props.put("deserializer.inner.class", "org.apache.kafka.common.serialization.StringDeserializer");
         windowedDeserializer.configure(props, true);
-        Deserializer<?> inner = windowedDeserializer.innerDeserializer();
+        final Deserializer<?> inner = windowedDeserializer.innerDeserializer();
         assertNotNull("Inner deserializer should be not null", inner);
         assertTrue("Inner deserializer type should be StringDeserializer", inner instanceof StringDeserializer);
         props.put("deserializer.inner.class", "org.apache.kafka.common.serialization.ByteArrayDeserializer");
         //test for deserializer expected window end time
-        long randomLong = 5000000;
-        byte[] byteValues = stringSerializer.serialize(topicName, "dummy string");
-        WindowedDeserializer<StringSerializer> windowedDeserializer1 = 
+        final long randomLong = 5000000;
+        byte[] byteValues = stringSerializer.serialize(topicName, "dummy string"); //dummy string, serves no real purpose
+        final WindowedDeserializer<StringSerializer> windowedDeserializer1 = 
             new WindowedDeserializer<>(windowedDeserializer.innerDeserializer(), randomLong);
         windowedDeserializer1.configure(props, false);
         Windowed<?> windowed = windowedDeserializer1.deserialize(topicName, byteValues);
-        long actualSize = windowed.window().end() - windowed.window().start();
-        assertEquals(randomLong, actualSize);
+        final long actualSize = windowed.window().end() - windowed.window().start(); //find actual window time
+        assertEquals(randomLong, actualSize); //testing if window size matches up with expected one
         windowedDeserializer.close();
         windowedDeserializer1.close();
     }
