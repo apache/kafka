@@ -18,21 +18,29 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.SessionKeySerde;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
+import org.apache.kafka.streams.state.HasNextCondition;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
 import java.nio.ByteBuffer;
 import java.util.List;
 
 
-class SessionKeySchema implements SegmentedBytesStore.KeySchema {
+public class SessionKeySchema implements SegmentedBytesStore.SegmentedKeySchema {
 
     private static final int SUFFIX_SIZE = 2 * WindowStoreUtils.TIMESTAMP_SIZE;
     private static final byte[] MIN_SUFFIX = new byte[SUFFIX_SIZE];
 
+    private final SegmentedCacheFunction segmentedCacheFunction;
     private String topic;
+
+
+    public SessionKeySchema(final long segmentInterval) {
+        segmentedCacheFunction = new SegmentedCacheFunction(this, segmentInterval);
+    }
 
     @Override
     public void init(final String topic) {
@@ -90,6 +98,41 @@ class SessionKeySchema implements SegmentedBytesStore.KeySchema {
                 return false;
             }
         };
+    }
+
+    @Override
+    public Bytes toCacheKey(final Bytes storeKey) {
+        return segmentedCacheFunction.cacheKey(storeKey);
+    }
+
+    @Override
+    public Bytes toStoreKey(final Bytes cacheKey) {
+        return segmentedCacheFunction.key(cacheKey);
+    }
+
+    @Override
+    public Bytes extractRecordKey(final Bytes binaryKey) {
+        return Bytes.wrap(SessionKeySerde.extractKeyBytes(binaryKey.get()));
+    }
+
+    @Override
+    public Bytes toBinaryKey(final Windowed<Bytes> storeKey) {
+        return SessionKeySerde.bytesToBinary(storeKey);
+    }
+
+    @Override
+    public Window extractWindow(final Bytes binaryKey) {
+        return SessionKeySerde.extractWindow(binaryKey.get());
+    }
+
+    @Override
+    public int compareKeys(final Bytes cacheKey, final Bytes storeKey) {
+        return segmentedCacheFunction.compareSegmentedKeys(cacheKey, storeKey);
+    }
+
+    @Override
+    public Bytes toBinaryKey(final Bytes key, final long timestamp, final int sequenceNumber) {
+        throw new UnsupportedOperationException("toBinaryKey(key, timestamp, sequenceNumber isn't supported by SessionKeySchema");
     }
 
     @Override

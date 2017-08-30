@@ -67,7 +67,7 @@ public class ChangeLoggingWindowBytesStoreTest {
 
     @Before
     public void setUp() throws Exception {
-        store = new ChangeLoggingWindowBytesStore(inner, false);
+        store = new ChangeLoggingWindowBytesStore(inner, new WindowKeySchema(1, 1), false);
     }
 
     private void init() {
@@ -115,7 +115,7 @@ public class ChangeLoggingWindowBytesStoreTest {
 
     @Test
     public void shouldRetainDuplicatesWhenSet() {
-        store = new ChangeLoggingWindowBytesStore(inner, true);
+        store = new ChangeLoggingWindowBytesStore(inner, new WindowKeySchema(1, 1), true);
         inner.put(bytesKey, value1, 0);
         EasyMock.expectLastCall().times(2);
 

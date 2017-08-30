@@ -18,10 +18,10 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.kstream.internals.SessionKeySerde;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
+import org.apache.kafka.streams.state.KeySchema;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.StateSerdes;
@@ -33,22 +33,23 @@ import org.apache.kafka.streams.state.StateSerdes;
 class ChangeLoggingSessionBytesStore extends WrappedStateStore.AbstractStateStore implements SessionStore<Bytes, byte[]> {
 
     private final SessionStore<Bytes, byte[]> bytesStore;
+    private final KeySchema keySchema;
     private StoreChangeLogger<Bytes, byte[]> changeLogger;
-    private StateSerdes<Bytes, byte[]> innerStateSerde;
-    private String topic;
 
-    ChangeLoggingSessionBytesStore(final SessionStore<Bytes, byte[]> bytesStore) {
+    ChangeLoggingSessionBytesStore(final SessionStore<Bytes, byte[]> bytesStore, final KeySchema keySchema) {
         super(bytesStore);
         this.bytesStore = bytesStore;
+        this.keySchema = keySchema;
     }
 
     @Override
     public void init(final ProcessorContext context, final StateStore root) {
         bytesStore.init(context, root);
-        topic = ProcessorStateManager.storeChangelogTopic(
+        final String topic = ProcessorStateManager.storeChangelogTopic(
                 context.applicationId(),
                 bytesStore.name());
-        innerStateSerde = WindowStoreUtils.getInnerStateSerde(
+        keySchema.init(topic);
+        final StateSerdes<Bytes, byte[]> innerStateSerde = WindowStoreUtils.getInnerStateSerde(
                 topic);
         changeLogger = new StoreChangeLogger<>(
             name(),
@@ -70,13 +71,13 @@ class ChangeLoggingSessionBytesStore extends WrappedStateStore.AbstractStateStor
     @Override
     public void remove(final Windowed<Bytes> sessionKey) {
         bytesStore.remove(sessionKey);
-        changeLogger.logChange(SessionKeySerde.toBinary(sessionKey, innerStateSerde.keySerializer(), topic), null);
+        changeLogger.logChange(keySchema.toBinaryKey(sessionKey), null);
     }
 
     @Override
     public void put(final Windowed<Bytes> sessionKey, final byte[] aggregate) {
         bytesStore.put(sessionKey, aggregate);
-        changeLogger.logChange(SessionKeySerde.bytesToBinary(sessionKey), aggregate);
+        changeLogger.logChange(keySchema.toBinaryKey(sessionKey), aggregate);
 
     }
 

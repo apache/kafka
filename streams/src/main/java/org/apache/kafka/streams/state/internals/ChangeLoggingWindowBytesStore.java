@@ -21,6 +21,7 @@ import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
+import org.apache.kafka.streams.state.KeySchema;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.WindowStore;
@@ -33,16 +34,20 @@ import org.apache.kafka.streams.state.WindowStoreIterator;
 class ChangeLoggingWindowBytesStore extends WrappedStateStore.AbstractStateStore implements WindowStore<Bytes, byte[]> {
 
     private final WindowStore<Bytes, byte[]> bytesStore;
+    private final KeySchema keySchema;
     private final boolean retainDuplicates;
     private StoreChangeLogger<Bytes, byte[]> changeLogger;
     private ProcessorContext context;
     private StateSerdes<Bytes, byte[]> innerStateSerde;
     private int seqnum = 0;
 
+
     ChangeLoggingWindowBytesStore(final WindowStore<Bytes, byte[]> bytesStore,
+                                  final KeySchema keySchema,
                                   final boolean retainDuplicates) {
         super(bytesStore);
         this.bytesStore = bytesStore;
+        this.keySchema = keySchema;
         this.retainDuplicates = retainDuplicates;
     }
 
@@ -66,7 +71,7 @@ class ChangeLoggingWindowBytesStore extends WrappedStateStore.AbstractStateStore
     public void put(final Bytes key, final byte[] value, final long timestamp) {
         if (key != null) {
             bytesStore.put(key, value, timestamp);
-            changeLogger.logChange(WindowStoreUtils.toBinaryKey(key, timestamp, maybeUpdateSeqnumForDups(), innerStateSerde), value);
+            changeLogger.logChange(keySchema.toBinaryKey(key, timestamp, maybeUpdateSeqnumForDups()), value);
         }
     }
 

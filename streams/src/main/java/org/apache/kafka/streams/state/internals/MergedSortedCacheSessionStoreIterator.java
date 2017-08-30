@@ -20,7 +20,7 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.kstream.internals.SessionKeySerde;
+import org.apache.kafka.streams.state.KeySchema;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
 /**
@@ -29,13 +29,13 @@ import org.apache.kafka.streams.state.KeyValueIterator;
  */
 class MergedSortedCacheSessionStoreIterator extends AbstractMergedSortedCacheStoreIterator<Windowed<Bytes>, Windowed<Bytes>, byte[], byte[]> {
 
-    private final SegmentedCacheFunction cacheFunction;
+    private final KeySchema keySchema;
 
     MergedSortedCacheSessionStoreIterator(final PeekingKeyValueIterator<Bytes, LRUCacheEntry> cacheIterator,
                                           final KeyValueIterator<Windowed<Bytes>, byte[]> storeIterator,
-                                          final SegmentedCacheFunction cacheFunction) {
+                                          final KeySchema keySchema) {
         super(cacheIterator, storeIterator);
-        this.cacheFunction = cacheFunction;
+        this.keySchema = keySchema;
     }
 
     @Override
@@ -45,10 +45,10 @@ class MergedSortedCacheSessionStoreIterator extends AbstractMergedSortedCacheSto
 
     @Override
     Windowed<Bytes> deserializeCacheKey(final Bytes cacheKey) {
-        final byte[] binaryKey = cacheFunction.key(cacheKey).get();
-        final byte[] keyBytes = SessionKeySerde.extractKeyBytes(binaryKey);
-        final Window window = SessionKeySerde.extractWindow(binaryKey);
-        return new Windowed<>(Bytes.wrap(keyBytes), window);
+        final Bytes binaryKey = keySchema.toStoreKey(cacheKey);
+        final Bytes recordKey = keySchema.extractRecordKey(binaryKey);
+        final Window window = keySchema.extractWindow(binaryKey);
+        return new Windowed<>(recordKey, window);
     }
 
 
@@ -64,7 +64,7 @@ class MergedSortedCacheSessionStoreIterator extends AbstractMergedSortedCacheSto
 
     @Override
     public int compare(final Bytes cacheKey, final Windowed<Bytes> storeKey) {
-        Bytes storeKeyBytes = SessionKeySerde.bytesToBinary(storeKey);
-        return cacheFunction.compareSegmentedKeys(cacheKey, storeKeyBytes);
+        final Bytes storeKeyBytes = keySchema.toBinaryKey(storeKey);
+        return keySchema.compareKeys(cacheKey, storeKeyBytes);
     }
 }

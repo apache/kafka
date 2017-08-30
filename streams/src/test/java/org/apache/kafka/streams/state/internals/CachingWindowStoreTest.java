@@ -65,17 +65,17 @@ public class CachingWindowStoreTest {
 
     @Before
     public void setUp() throws Exception {
-        keySchema = new WindowKeySchema();
         final int retention = 30000;
         final int numSegments = 3;
+        keySchema = new WindowKeySchema(Segments.segmentInterval(retention, numSegments), WINDOW_SIZE);
         underlying = new RocksDBSegmentedBytesStore("test", retention, numSegments, keySchema);
         final RocksDBWindowStore<Bytes, byte[]> windowStore = new RocksDBWindowStore<>(underlying, Serdes.Bytes(), Serdes.ByteArray(), false, WINDOW_SIZE);
         cacheListener = new CachingKeyValueStoreTest.CacheFlushListenerStub<>();
         cachingStore = new CachingWindowStore<>(windowStore,
+                                                keySchema, Serdes.String(),
                                                 Serdes.String(),
-                                                Serdes.String(),
-                                                WINDOW_SIZE,
-                                                Segments.segmentInterval(retention, numSegments));
+                                                WINDOW_SIZE
+        );
         cachingStore.setFlushListener(cacheListener);
         cache = new ThreadCache("testCache", MAX_CACHE_SIZE_BYTES, new MockStreamsMetrics(new Metrics()));
         topic = "topic";

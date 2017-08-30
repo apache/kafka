@@ -37,7 +37,7 @@ public class SegmentedCacheFunctionTest {
             .put(THE_KEY.get()).array()
     );
 
-    private final SegmentedCacheFunction cacheFunction = new SegmentedCacheFunction(new WindowKeySchema(), SEGMENT_INTERVAL);
+    private final SegmentedCacheFunction cacheFunction = new SegmentedCacheFunction(new WindowKeySchema(SEGMENT_INTERVAL, 30), SEGMENT_INTERVAL);
 
     @Test
     public void key() throws Exception {

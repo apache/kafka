@@ -26,6 +26,8 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.RecordContext;
+import org.apache.kafka.streams.state.HasNextCondition;
+import org.apache.kafka.streams.state.KeySchema;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.WindowStore;
@@ -40,7 +42,7 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
     private final Serde<K> keySerde;
     private final Serde<V> valueSerde;
     private final long windowSize;
-    private final SegmentedBytesStore.KeySchema keySchema = new WindowKeySchema();
+    private final KeySchema keySchema;
 
 
     private String name;
@@ -49,19 +51,18 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
     private StateSerdes<K, V> serdes;
     private StateSerdes<Bytes, byte[]> bytesSerdes;
     private CacheFlushListener<Windowed<K>, V> flushListener;
-    private final SegmentedCacheFunction cacheFunction;
 
     CachingWindowStore(final WindowStore<Bytes, byte[]> underlying,
+                       final KeySchema keySchema,
                        final Serde<K> keySerde,
                        final Serde<V> valueSerde,
-                       final long windowSize,
-                       final long segmentInterval) {
+                       final long windowSize) {
         super(underlying);
         this.underlying = underlying;
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
         this.windowSize = windowSize;
-        this.cacheFunction = new SegmentedCacheFunction(keySchema, segmentInterval);
+        this.keySchema = keySchema;
     }
 
     @Override
@@ -89,7 +90,7 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
             @Override
             public void apply(final List<ThreadCache.DirtyEntry> entries) {
                 for (ThreadCache.DirtyEntry entry : entries) {
-                    final byte[] binaryWindowKey = cacheFunction.key(entry.key()).get();
+                    final byte[] binaryWindowKey = keySchema.toStoreKey(entry.key()).get();
                     final long timestamp = WindowStoreUtils.timestampFromBinaryKey(binaryWindowKey);
 
                     final Windowed<K> windowedKey = new Windowed<>(WindowStoreUtils.keyFromBinaryKey(binaryWindowKey, serdes),
@@ -149,7 +150,7 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
         final Bytes keyBytes = WindowStoreUtils.toBinaryKey(key, timestamp, 0, bytesSerdes);
         final LRUCacheEntry entry = new LRUCacheEntry(value, true, context.offset(),
                                                       timestamp, context.partition(), context.topic());
-        cache.put(name, cacheFunction.cacheKey(keyBytes), entry);
+        cache.put(name, keySchema.toCacheKey(keyBytes), entry);
     }
 
     @Override
@@ -160,8 +161,8 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
 
         final WindowStoreIterator<byte[]> underlyingIterator = underlying.fetch(key, timeFrom, timeTo);
 
-        final Bytes cacheKeyFrom = cacheFunction.cacheKey(keySchema.lowerRangeFixedSize(key, timeFrom));
-        final Bytes cacheKeyTo = cacheFunction.cacheKey(keySchema.upperRangeFixedSize(key, timeTo));
+        final Bytes cacheKeyFrom = keySchema.toCacheKey(keySchema.lowerRangeFixedSize(key, timeFrom));
+        final Bytes cacheKeyTo = keySchema.toCacheKey(keySchema.upperRangeFixedSize(key, timeTo));
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(name, cacheKeyFrom, cacheKeyTo);
 
         final HasNextCondition hasNextCondition = keySchema.hasNextCondition(key,
@@ -169,10 +170,10 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
                                                                              timeFrom,
                                                                              timeTo);
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> filteredCacheIterator = new FilteredCacheIterator(
-            cacheIterator, hasNextCondition, cacheFunction
+            cacheIterator, hasNextCondition, keySchema
         );
 
-        return new MergedSortedCacheWindowStoreIterator(filteredCacheIterator, underlyingIterator);
+        return new MergedSortedCacheWindowStoreIterator(filteredCacheIterator, underlyingIterator, keySchema);
     }
 
     @Override
@@ -183,22 +184,22 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
 
         final KeyValueIterator<Windowed<Bytes>, byte[]> underlyingIterator = underlying.fetch(from, to, timeFrom, timeTo);
 
-        final Bytes cacheKeyFrom = cacheFunction.cacheKey(keySchema.lowerRange(from, timeFrom));
-        final Bytes cacheKeyTo = cacheFunction.cacheKey(keySchema.upperRange(to, timeTo));
+        final Bytes cacheKeyFrom = keySchema.toCacheKey(keySchema.lowerRange(from, timeFrom));
+        final Bytes cacheKeyTo = keySchema.toCacheKey(keySchema.upperRange(to, timeTo));
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(name, cacheKeyFrom, cacheKeyTo);
 
         final HasNextCondition hasNextCondition = keySchema.hasNextCondition(from,
                                                                              to,
                                                                              timeFrom,
                                                                              timeTo);
-        final PeekingKeyValueIterator<Bytes, LRUCacheEntry> filteredCacheIterator = new FilteredCacheIterator(cacheIterator, hasNextCondition, cacheFunction);
+        final PeekingKeyValueIterator<Bytes, LRUCacheEntry> filteredCacheIterator = new FilteredCacheIterator(cacheIterator, hasNextCondition, keySchema);
 
         return new MergedSortedCacheWindowStoreKeyValueIterator(
             filteredCacheIterator,
             underlyingIterator,
             bytesSerdes,
             windowSize,
-            cacheFunction
+            keySchema
         );
     }
 

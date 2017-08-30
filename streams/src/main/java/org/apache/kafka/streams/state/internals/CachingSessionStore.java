@@ -27,6 +27,8 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.RecordContext;
+import org.apache.kafka.streams.state.HasNextCondition;
+import org.apache.kafka.streams.state.KeySchema;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.StateSerdes;
@@ -38,10 +40,9 @@ import java.util.Objects;
 class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore implements SessionStore<Bytes, byte[]>, CachedStateStore<Windowed<K>, AGG> {
 
     private final SessionStore<Bytes, byte[]> bytesStore;
-    private final SessionKeySchema keySchema;
+    private final KeySchema keySchema;
     private final Serde<K> keySerde;
     private final Serde<AGG> aggSerde;
-    private final SegmentedCacheFunction cacheFunction;
     private String cacheName;
     private ThreadCache cache;
     private StateSerdes<K, AGG> serdes;
@@ -52,13 +53,12 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore i
     CachingSessionStore(final SessionStore<Bytes, byte[]> bytesStore,
                         final Serde<K> keySerde,
                         final Serde<AGG> aggSerde,
-                        final long segmentInterval) {
+                        final KeySchema keySchema) {
         super(bytesStore);
         this.bytesStore = bytesStore;
         this.keySerde = keySerde;
         this.aggSerde = aggSerde;
-        this.keySchema = new SessionKeySchema();
-        this.cacheFunction = new SegmentedCacheFunction(keySchema, segmentInterval);
+        this.keySchema = keySchema;
     }
 
     public void init(final ProcessorContext context, final StateStore root) {
@@ -94,8 +94,8 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore i
                                                                   final long earliestSessionEndTime,
                                                                   final long latestSessionStartTime) {
         validateStoreOpen();
-        final Bytes cacheKeyFrom = cacheFunction.cacheKey(keySchema.lowerRangeFixedSize(key, earliestSessionEndTime));
-        final Bytes cacheKeyTo = cacheFunction.cacheKey(keySchema.upperRangeFixedSize(key, latestSessionStartTime));
+        final Bytes cacheKeyFrom = keySchema.toCacheKey(keySchema.lowerRangeFixedSize(key, earliestSessionEndTime));
+        final Bytes cacheKeyTo = keySchema.toCacheKey(keySchema.upperRangeFixedSize(key, latestSessionStartTime));
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(cacheName, cacheKeyFrom, cacheKeyTo);
 
         final KeyValueIterator<Windowed<Bytes>, byte[]> storeIterator = bytesStore.findSessions(key,
@@ -105,8 +105,8 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore i
                                                                              key,
                                                                              earliestSessionEndTime,
                                                                              latestSessionStartTime);
-        final PeekingKeyValueIterator<Bytes, LRUCacheEntry> filteredCacheIterator = new FilteredCacheIterator(cacheIterator, hasNextCondition, cacheFunction);
-        return new MergedSortedCacheSessionStoreIterator(filteredCacheIterator, storeIterator, cacheFunction);
+        final PeekingKeyValueIterator<Bytes, LRUCacheEntry> filteredCacheIterator = new FilteredCacheIterator(cacheIterator, hasNextCondition, keySchema);
+        return new MergedSortedCacheSessionStoreIterator(filteredCacheIterator, storeIterator, keySchema);
     }
 
     @Override
@@ -116,8 +116,8 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore i
                                                                   final long latestSessionStartTime) {
         validateStoreOpen();
 
-        final Bytes cacheKeyFrom = cacheFunction.cacheKey(keySchema.lowerRange(keyFrom, earliestSessionEndTime));
-        final Bytes cacheKeyTo = cacheFunction.cacheKey(keySchema.upperRange(keyTo, latestSessionStartTime));
+        final Bytes cacheKeyFrom = keySchema.toCacheKey(keySchema.lowerRange(keyFrom, earliestSessionEndTime));
+        final Bytes cacheKeyTo = keySchema.toCacheKey(keySchema.upperRange(keyTo, latestSessionStartTime));
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(cacheName, cacheKeyFrom, cacheKeyTo);
 
         final KeyValueIterator<Windowed<Bytes>, byte[]> storeIterator = bytesStore.findSessions(
@@ -127,8 +127,8 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore i
                                                                              keyTo,
                                                                              earliestSessionEndTime,
                                                                              latestSessionStartTime);
-        final PeekingKeyValueIterator<Bytes, LRUCacheEntry> filteredCacheIterator = new FilteredCacheIterator(cacheIterator, hasNextCondition, cacheFunction);
-        return new MergedSortedCacheSessionStoreIterator(filteredCacheIterator, storeIterator, cacheFunction);
+        final PeekingKeyValueIterator<Bytes, LRUCacheEntry> filteredCacheIterator = new FilteredCacheIterator(cacheIterator, hasNextCondition, keySchema);
+        return new MergedSortedCacheSessionStoreIterator(filteredCacheIterator, storeIterator, keySchema);
     }
 
     @Override
@@ -143,7 +143,7 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore i
         final Bytes binaryKey = SessionKeySerde.bytesToBinary(key);
         final LRUCacheEntry entry = new LRUCacheEntry(value, true, context.offset(),
                                                       key.window().end(), context.partition(), context.topic());
-        cache.put(cacheName, cacheFunction.cacheKey(binaryKey), entry);
+        cache.put(cacheName, keySchema.toCacheKey(binaryKey), entry);
     }
 
     @Override
@@ -162,7 +162,7 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore i
 
 
     private void putAndMaybeForward(final ThreadCache.DirtyEntry entry, final InternalProcessorContext context) {
-        final Bytes binaryKey = cacheFunction.key(entry.key());
+        final Bytes binaryKey = keySchema.toStoreKey(entry.key());
         final RecordContext current = context.recordContext();
         context.setRecordContext(entry.recordContext());
         try {

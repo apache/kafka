@@ -70,8 +70,7 @@ public class ChangeLoggingSessionBytesStoreTest {
 
     @Before
     public void setUp() throws Exception {
-        store = new ChangeLoggingSessionBytesStore(inner);
-
+        store = new ChangeLoggingSessionBytesStore(inner, new SessionKeySchema(1));
     }
 
     private void init() {

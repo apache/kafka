@@ -43,16 +43,18 @@ import static org.junit.Assert.assertTrue;
 
 public class RocksDBSessionStoreTest {
 
+    private final int numSegments = 3;
     private SessionStore<String, Long> sessionStore;
     private MockProcessorContext context;
+    private final long retention = 10000L;
 
     @Before
     public void before() {
-        final SessionKeySchema schema = new SessionKeySchema();
+        final SessionKeySchema schema = new SessionKeySchema(Segments.segmentInterval(retention, 3));
         schema.init("topic");
 
         final RocksDBSegmentedBytesStore bytesStore =
-                new RocksDBSegmentedBytesStore("session-store", 10000L, 3, schema);
+                new RocksDBSegmentedBytesStore("session-store", retention, numSegments, schema);
 
         sessionStore = new RocksDBSessionStore<>(bytesStore,
                                                  Serdes.String(),
@@ -154,7 +156,7 @@ public class RocksDBSessionStoreTest {
     @Test
     public void shouldFetchExactKeys() throws Exception {
         final RocksDBSegmentedBytesStore bytesStore =
-                new RocksDBSegmentedBytesStore("session-store", 0x7a00000000000000L, 2, new SessionKeySchema());
+                new RocksDBSegmentedBytesStore("session-store", 0x7a00000000000000L, 2, new SessionKeySchema(Segments.segmentInterval(0x7a00000000000000L, 2)));
 
         sessionStore = new RocksDBSessionStore<>(bytesStore,
                                                  Serdes.String(),

@@ -34,13 +34,7 @@ import static org.junit.Assert.assertTrue;
 
 public class MergedSortedCacheWrappedSessionStoreIteratorTest {
 
-    private static final SegmentedCacheFunction SINGLE_SEGMENT_CACHE_FUNCTION = new SegmentedCacheFunction(null, -1) {
-        @Override
-        public long segmentId(Bytes key) {
-            return 0;
-        }
-    };
-
+    private final SessionKeySchema keySchema = new SessionKeySchema(1);
     private final Bytes storeKey = Bytes.wrap("a".getBytes());
     private final Bytes cacheKey = Bytes.wrap("b".getBytes());
 
@@ -50,7 +44,7 @@ public class MergedSortedCacheWrappedSessionStoreIteratorTest {
     private final SessionWindow cacheWindow = new SessionWindow(10, 20);
     private final Iterator<KeyValue<Bytes, LRUCacheEntry>> cacheKvs = Collections.singleton(
         KeyValue.pair(
-            SINGLE_SEGMENT_CACHE_FUNCTION.cacheKey(
+                keySchema.toCacheKey(
                 SessionKeySerde.bytesToBinary(new Windowed<>(cacheKey, cacheWindow))
             ),
             new LRUCacheEntry(cacheKey.get())
@@ -114,7 +108,7 @@ public class MergedSortedCacheWrappedSessionStoreIteratorTest {
 
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> cacheIterator
                 = new DelegatingPeekingKeyValueIterator<>("cache", new KeyValueIteratorStub<>(cacheKvs));
-        return new MergedSortedCacheSessionStoreIterator(cacheIterator, storeIterator, SINGLE_SEGMENT_CACHE_FUNCTION);
+        return new MergedSortedCacheSessionStoreIterator(cacheIterator, storeIterator, keySchema);
     }
 
 }

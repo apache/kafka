@@ -18,18 +18,28 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.kstream.Window;
+import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.state.HasNextCondition;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.StateSerdes;
 
 import java.nio.ByteBuffer;
 import java.util.List;
 
-class WindowKeySchema implements RocksDBSegmentedBytesStore.KeySchema {
+public class WindowKeySchema implements SegmentedBytesStore.SegmentedKeySchema {
 
     private static final int SUFFIX_SIZE = WindowStoreUtils.TIMESTAMP_SIZE + WindowStoreUtils.SEQNUM_SIZE;
     private static final byte[] MIN_SUFFIX = new byte[SUFFIX_SIZE];
+    private final SegmentedCacheFunction segmentedCacheFunction;
+    private final long windowSize;
 
     private StateSerdes<Bytes, byte[]> serdes;
+
+    WindowKeySchema(final long segmentInterval, final long windowSize) {
+        segmentedCacheFunction = new SegmentedCacheFunction(this, segmentInterval);
+        this.windowSize = windowSize;
+    }
 
     @Override
     public void init(final String topic) {
@@ -86,6 +96,41 @@ class WindowKeySchema implements RocksDBSegmentedBytesStore.KeySchema {
                 return false;
             }
         };
+    }
+
+    @Override
+    public Bytes toCacheKey(final Bytes storeKey) {
+        return segmentedCacheFunction.cacheKey(storeKey);
+    }
+
+    @Override
+    public Bytes toStoreKey(final Bytes cacheKey) {
+        return segmentedCacheFunction.key(cacheKey);
+    }
+
+    @Override
+    public Bytes extractRecordKey(final Bytes binaryKey) {
+        return WindowStoreUtils.keyFromBinaryKey(binaryKey.get(), serdes);
+    }
+
+    @Override
+    public Bytes toBinaryKey(final Windowed<Bytes> storeKey) {
+        return WindowStoreUtils.toBinaryKey(storeKey.key().get(), storeKey.window().start(), 0);
+    }
+
+    @Override
+    public Window extractWindow(final Bytes binaryKey) {
+        return WindowStoreUtils.timeWindowForSize(WindowStoreUtils.timestampFromBinaryKey(binaryKey.get()), windowSize);
+    }
+
+    @Override
+    public int compareKeys(final Bytes cacheKey, final Bytes storeKey) {
+        return segmentedCacheFunction.compareSegmentedKeys(cacheKey, storeKey);
+    }
+
+    @Override
+    public Bytes toBinaryKey(final Bytes key, final long timestamp, final int sequenceNumber) {
+        return WindowStoreUtils.toBinaryKey(key.get(), timestamp, sequenceNumber);
     }
 
     @Override

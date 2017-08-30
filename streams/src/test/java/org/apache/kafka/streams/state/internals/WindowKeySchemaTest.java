@@ -25,7 +25,7 @@ import static org.hamcrest.core.IsEqual.equalTo;
 
 public class WindowKeySchemaTest {
 
-    private final WindowKeySchema windowKeySchema = new WindowKeySchema();
+    private final WindowKeySchema windowKeySchema = new WindowKeySchema(20000, 300L);
 
     @Test
     public void testUpperBoundWithLargeTimestamps() throws Exception {

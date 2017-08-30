@@ -25,6 +25,7 @@ import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.test.KeyValueIteratorStub;
+import org.junit.Before;
 import org.junit.Test;
 
 import java.util.Collections;
@@ -36,13 +37,8 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 public class MergedSortedCacheWrappedWindowStoreKeyValueIteratorTest {
-    private static final SegmentedCacheFunction SINGLE_SEGMENT_CACHE_FUNCTION = new SegmentedCacheFunction(null, -1) {
-        @Override
-        public long segmentId(Bytes key) {
-            return 0;
-        }
-    };
     private static final int WINDOW_SIZE = 10;
+    private final WindowKeySchema keySchema = new WindowKeySchema(1, WINDOW_SIZE);
 
     private final String storeKey = "a";
     private final String cacheKey = "b";
@@ -53,7 +49,7 @@ public class MergedSortedCacheWrappedWindowStoreKeyValueIteratorTest {
     private final TimeWindow cacheWindow = new TimeWindow(10, 20);
     private final Iterator<KeyValue<Bytes, LRUCacheEntry>> cacheKvs = Collections.singleton(
         KeyValue.pair(
-            SINGLE_SEGMENT_CACHE_FUNCTION.cacheKey(
+            keySchema.toCacheKey(
                 WindowStoreUtils.toBinaryKey(
                     cacheKey, cacheWindow.start(), 0,
                     new StateSerdes<>("dummy", Serdes.String(), Serdes.String())
@@ -62,6 +58,11 @@ public class MergedSortedCacheWrappedWindowStoreKeyValueIteratorTest {
             new LRUCacheEntry(cacheKey.getBytes())
         )).iterator();
     private Deserializer<String> deserializer = Serdes.String().deserializer();
+
+    @Before
+    public void before() {
+        keySchema.init("topic");
+    }
 
     @Test
     public void shouldHaveNextFromStore() throws Exception {
@@ -139,7 +140,7 @@ public class MergedSortedCacheWrappedWindowStoreKeyValueIteratorTest {
             storeIterator,
             new StateSerdes<>("name", Serdes.Bytes(), Serdes.ByteArray()),
             WINDOW_SIZE,
-            SINGLE_SEGMENT_CACHE_FUNCTION
+            keySchema
         );
     }
 }

@@ -18,10 +18,9 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.state.KeySchema;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.WindowStoreIterator;
-
-import static org.apache.kafka.streams.state.internals.SegmentedCacheFunction.bytesFromCacheKey;
 
 /**
  * Merges two iterators. Assumes each of them is sorted by key
@@ -30,9 +29,13 @@ import static org.apache.kafka.streams.state.internals.SegmentedCacheFunction.by
 class MergedSortedCacheWindowStoreIterator extends AbstractMergedSortedCacheStoreIterator<Long, Long, byte[], byte[]> implements WindowStoreIterator<byte[]> {
 
 
+    private final KeySchema keySchema;
+
     MergedSortedCacheWindowStoreIterator(final PeekingKeyValueIterator<Bytes, LRUCacheEntry> cacheIterator,
-                                         final KeyValueIterator<Long, byte[]> storeIterator) {
+                                         final KeyValueIterator<Long, byte[]> storeIterator,
+                                         final KeySchema keySchema) {
         super(cacheIterator, storeIterator);
+        this.keySchema = keySchema;
     }
 
     @Override
@@ -42,8 +45,8 @@ class MergedSortedCacheWindowStoreIterator extends AbstractMergedSortedCacheStor
 
     @Override
     Long deserializeCacheKey(final Bytes cacheKey) {
-        byte[] binaryKey = bytesFromCacheKey(cacheKey);
-        return WindowStoreUtils.timestampFromBinaryKey(binaryKey);
+        final Bytes storeKey = keySchema.toStoreKey(cacheKey);
+        return keySchema.extractWindow(storeKey).start();
     }
 
     @Override
@@ -58,9 +61,7 @@ class MergedSortedCacheWindowStoreIterator extends AbstractMergedSortedCacheStor
 
     @Override
     public int compare(final Bytes cacheKey, final Long storeKey) {
-        byte[] binaryKey = bytesFromCacheKey(cacheKey);
-
-        final Long cacheTimestamp = WindowStoreUtils.timestampFromBinaryKey(binaryKey);
+        final Long cacheTimestamp = deserializeCacheKey(cacheKey);
         return cacheTimestamp.compareTo(storeKey);
     }
 }

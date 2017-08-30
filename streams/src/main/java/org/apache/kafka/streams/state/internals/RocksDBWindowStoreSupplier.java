@@ -64,17 +64,18 @@ public class RocksDBWindowStoreSupplier<K, V> extends AbstractStoreSupplier<K, V
     }
 
     public WindowStore<K, V> get() {
+        final WindowKeySchema keySchema = new WindowKeySchema(Segments.segmentInterval(retentionPeriod, numSegments),
+                                                              windowSize);
         final RocksDBSegmentedBytesStore segmentedBytesStore = new RocksDBSegmentedBytesStore(
                 name,
                 retentionPeriod,
                 numSegments,
-                new WindowKeySchema()
-        );
+                keySchema);
         final RocksDBWindowStore<Bytes, byte[]> innerStore = RocksDBWindowStore.bytesStore(segmentedBytesStore,
                                                                                            retainDuplicates,
                                                                                            windowSize);
 
-        return new MeteredWindowStore<>(maybeWrapCaching(maybeWrapLogged(innerStore)),
+        return new MeteredWindowStore<>(maybeWrapCaching(maybeWrapLogged(innerStore, keySchema), keySchema),
                                         METRICS_SCOPE,
                                         time,
                                         keySerde,
@@ -87,17 +88,18 @@ public class RocksDBWindowStoreSupplier<K, V> extends AbstractStoreSupplier<K, V
         return retentionPeriod;
     }
 
-    private WindowStore<Bytes, byte[]> maybeWrapLogged(final WindowStore<Bytes, byte[]> inner) {
+    private WindowStore<Bytes, byte[]> maybeWrapLogged(final WindowStore<Bytes, byte[]> inner, final WindowKeySchema keySchema) {
         if (!logged) {
             return inner;
         }
-        return new ChangeLoggingWindowBytesStore(inner, retainDuplicates);
+
+        return new ChangeLoggingWindowBytesStore(inner, keySchema, retainDuplicates);
     }
 
-    private WindowStore<Bytes, byte[]> maybeWrapCaching(final WindowStore<Bytes, byte[]> inner) {
+    private WindowStore<Bytes, byte[]> maybeWrapCaching(final WindowStore<Bytes, byte[]> inner, final WindowKeySchema keySchema) {
         if (!enableCaching) {
             return inner;
         }
-        return new CachingWindowStore<>(inner, keySerde, valueSerde, windowSize, segmentInterval);
+        return new CachingWindowStore<>(inner, keySchema, keySerde, valueSerde, windowSize);
     }
 }
