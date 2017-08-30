@@ -20,7 +20,11 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.state.HasNextCondition;
+import org.apache.kafka.streams.state.KeySchema;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.easymock.EasyMock;
+import org.easymock.IAnswer;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -34,17 +38,6 @@ import static org.junit.Assert.assertTrue;
 
 public class FilteredCacheIteratorTest {
 
-    private static final CacheFunction IDENTITY_FUNCTION = new CacheFunction() {
-        @Override
-        public Bytes key(Bytes cacheKey) {
-            return cacheKey;
-        }
-
-        @Override
-        public Bytes cacheKey(Bytes key) {
-            return key;
-        }
-    };
 
     @SuppressWarnings("unchecked")
     private final InMemoryKeyValueStore<Bytes, LRUCacheEntry> store = new InMemoryKeyValueStore("name", null, null);
@@ -62,6 +55,22 @@ public class FilteredCacheIteratorTest {
 
     @Before
     public void before() {
+        final KeySchema keySchema = EasyMock.createNiceMock(KeySchema.class);
+        EasyMock.expect(keySchema.toStoreKey(EasyMock.anyObject(Bytes.class))).andAnswer(new IAnswer<Bytes>() {
+            @Override
+            public Bytes answer() throws Throwable {
+                return (Bytes) EasyMock.getCurrentArguments()[0];
+            }
+        }).anyTimes();
+        EasyMock.expect(keySchema.toCacheKey(EasyMock.anyObject(Bytes.class))).andAnswer(new IAnswer<Bytes>() {
+            @Override
+            public Bytes answer() throws Throwable {
+                return (Bytes) EasyMock.getCurrentArguments()[0];
+            }
+        }).anyTimes();
+
+        EasyMock.replay(keySchema);
+
         store.putAll(entries);
         final HasNextCondition allCondition = new HasNextCondition() {
             @Override
@@ -71,7 +80,7 @@ public class FilteredCacheIteratorTest {
         };
         allIterator = new FilteredCacheIterator(
             new DelegatingPeekingKeyValueIterator<>("",
-                                                    store.all()), allCondition, IDENTITY_FUNCTION);
+                                                    store.all()), allCondition, keySchema);
 
         final HasNextCondition firstEntryCondition = new HasNextCondition() {
             @Override
@@ -81,7 +90,7 @@ public class FilteredCacheIteratorTest {
         };
         firstEntryIterator = new FilteredCacheIterator(
                 new DelegatingPeekingKeyValueIterator<>("",
-                                                        store.all()), firstEntryCondition, IDENTITY_FUNCTION);
+                                                        store.all()), firstEntryCondition, keySchema);
 
     }
 

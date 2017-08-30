@@ -18,6 +18,8 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.state.HasNextCondition;
+import org.apache.kafka.streams.state.KeySchema;
 
 import java.util.NoSuchElementException;
 
@@ -28,7 +30,7 @@ class FilteredCacheIterator implements PeekingKeyValueIterator<Bytes, LRUCacheEn
 
     FilteredCacheIterator(final PeekingKeyValueIterator<Bytes, LRUCacheEntry> cacheIterator,
                           final HasNextCondition hasNextCondition,
-                          final CacheFunction cacheFunction) {
+                          final KeySchema keySchema) {
         this.cacheIterator = cacheIterator;
         this.hasNextCondition = hasNextCondition;
         this.wrappedIterator = new PeekingKeyValueIterator<Bytes, LRUCacheEntry>() {
@@ -44,7 +46,7 @@ class FilteredCacheIterator implements PeekingKeyValueIterator<Bytes, LRUCacheEn
 
             @Override
             public Bytes peekNextKey() {
-                return cacheFunction.key(cacheIterator.peekNextKey());
+                return keySchema.toStoreKey(cacheIterator.peekNextKey());
             }
 
             @Override
@@ -58,7 +60,7 @@ class FilteredCacheIterator implements PeekingKeyValueIterator<Bytes, LRUCacheEn
             }
 
             private KeyValue<Bytes, LRUCacheEntry> cachedPair(KeyValue<Bytes, LRUCacheEntry> next) {
-                return KeyValue.pair(cacheFunction.key(next.key), next.value);
+                return KeyValue.pair(keySchema.toStoreKey(next.key), next.value);
             }
 
             @Override

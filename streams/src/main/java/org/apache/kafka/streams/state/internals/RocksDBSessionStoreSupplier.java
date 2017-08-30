@@ -19,6 +19,7 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.state.KeySchema;
 import org.apache.kafka.streams.state.SessionStore;
 
 import java.util.Map;
@@ -49,15 +50,15 @@ public class RocksDBSessionStoreSupplier<K, V> extends AbstractStoreSupplier<K, 
     }
 
     public SessionStore<K, V> get() {
-        final SessionKeySchema keySchema = new SessionKeySchema();
         final long segmentInterval = Segments.segmentInterval(retentionPeriod, NUM_SEGMENTS);
+        final SessionKeySchema keySchema = new SessionKeySchema(segmentInterval);
         final RocksDBSegmentedBytesStore segmented = new RocksDBSegmentedBytesStore(name,
                                                                                     retentionPeriod,
                                                                                     NUM_SEGMENTS,
                                                                                     keySchema);
 
         final RocksDBSessionStore<Bytes, byte[]> bytesStore = RocksDBSessionStore.bytesStore(segmented);
-        return new MeteredSessionStore<>(maybeWrapCaching(maybeWrapLogged(bytesStore), segmentInterval),
+        return new MeteredSessionStore<>(maybeWrapCaching(maybeWrapLogged(bytesStore, keySchema), keySchema),
                                          METRIC_SCOPE,
                                          keySerde,
                                          valueSerde,
@@ -65,18 +66,18 @@ public class RocksDBSessionStoreSupplier<K, V> extends AbstractStoreSupplier<K, 
 
     }
 
-    private SessionStore<Bytes, byte[]> maybeWrapLogged(final SessionStore<Bytes, byte[]> inner) {
+    private SessionStore<Bytes, byte[]> maybeWrapLogged(final SessionStore<Bytes, byte[]> inner, final KeySchema keySchema) {
         if (!logged) {
             return inner;
         }
-        return new ChangeLoggingSessionBytesStore(inner);
+        return new ChangeLoggingSessionBytesStore(inner, keySchema);
     }
 
-    private SessionStore<Bytes, byte[]> maybeWrapCaching(final SessionStore<Bytes, byte[]> inner, final long segmentInterval) {
+    private SessionStore<Bytes, byte[]> maybeWrapCaching(final SessionStore<Bytes, byte[]> inner, final KeySchema keySchema) {
         if (!cached) {
             return inner;
         }
-        return new CachingSessionStore<>(inner, keySerde, valueSerde, segmentInterval);
+        return new CachingSessionStore<>(inner, keySerde, valueSerde, keySchema);
     }
 
     public long retentionPeriod() {

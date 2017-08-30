@@ -20,6 +20,7 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.state.KeySchema;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.StateSerdes;
 
@@ -28,19 +29,19 @@ class MergedSortedCacheWindowStoreKeyValueIterator
 
     private final StateSerdes<Bytes, byte[]> serdes;
     private final long windowSize;
-    private final SegmentedCacheFunction cacheFunction;
+    private final KeySchema keySchema;
 
     MergedSortedCacheWindowStoreKeyValueIterator(
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> filteredCacheIterator,
         final KeyValueIterator<Windowed<Bytes>, byte[]> underlyingIterator,
         final StateSerdes<Bytes, byte[]> serdes,
         final long windowSize,
-        final SegmentedCacheFunction cacheFunction
+        final KeySchema keySchema
     ) {
         super(filteredCacheIterator, underlyingIterator);
         this.serdes = serdes;
         this.windowSize = windowSize;
-        this.cacheFunction = cacheFunction;
+        this.keySchema = keySchema;
     }
 
     @Override
@@ -55,11 +56,10 @@ class MergedSortedCacheWindowStoreKeyValueIterator
 
     @Override
     Windowed<Bytes> deserializeCacheKey(final Bytes cacheKey) {
-        byte[] binaryKey = cacheFunction.key(cacheKey).get();
+        final Bytes binaryKey = keySchema.toStoreKey(cacheKey);
+        final Bytes key = keySchema.extractRecordKey(binaryKey);
 
-        final long timestamp = WindowStoreUtils.timestampFromBinaryKey(binaryKey);
-        final Bytes key = WindowStoreUtils.keyFromBinaryKey(binaryKey, serdes);
-        return new Windowed<>(key, WindowStoreUtils.timeWindowForSize(timestamp, windowSize));
+        return new Windowed<>(key, keySchema.extractWindow(binaryKey));
     }
 
     @Override
@@ -69,7 +69,7 @@ class MergedSortedCacheWindowStoreKeyValueIterator
 
     @Override
     int compare(final Bytes cacheKey, final Windowed<Bytes> storeKey) {
-        Bytes storeKeyBytes = WindowStoreUtils.toBinaryKey(storeKey.key().get(), storeKey.window().start(), 0);
-        return cacheFunction.compareSegmentedKeys(cacheKey, storeKeyBytes);
+        final Bytes storeKeyBytes = keySchema.toBinaryKey(storeKey);
+        return keySchema.compareKeys(cacheKey, storeKeyBytes);
     }
 }

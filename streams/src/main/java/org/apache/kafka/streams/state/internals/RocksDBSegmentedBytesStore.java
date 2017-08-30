@@ -29,14 +29,14 @@ class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
 
     private final String name;
     private final Segments segments;
-    private final KeySchema keySchema;
+    private final SegmentedKeySchema keySchema;
     private ProcessorContext context;
     private volatile boolean open;
 
     RocksDBSegmentedBytesStore(final String name,
                                final long retention,
                                final int numSegments,
-                               final KeySchema keySchema) {
+                               final SegmentedKeySchema keySchema) {
         this.name = name;
         this.keySchema = keySchema;
         this.segments = new Segments(name, retention, numSegments);

@@ -22,6 +22,7 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.SessionKeySerde;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
+import org.apache.kafka.streams.state.HasNextCondition;
 import org.apache.kafka.test.KeyValueIteratorStub;
 import org.junit.Before;
 import org.junit.Test;
@@ -35,7 +36,7 @@ import static org.hamcrest.core.IsEqual.equalTo;
 
 public class SessionKeySchemaTest {
 
-    private final SessionKeySchema sessionKeySchema = new SessionKeySchema();
+    private final SessionKeySchema sessionKeySchema = new SessionKeySchema(1);
     private DelegatingPeekingKeyValueIterator<Bytes, Integer> iterator;
 
     @Before

@@ -55,7 +55,7 @@ public class RocksDBSegmentedBytesStoreTest {
 
     @Before
     public void before() {
-        final SessionKeySchema schema = new SessionKeySchema();
+        final SessionKeySchema schema = new SessionKeySchema(Segments.segmentInterval(retention, numSegments));
         schema.init("topic");
         bytesStore = new RocksDBSegmentedBytesStore(storeName,
                                                     retention,

@@ -18,7 +18,6 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.state.internals.SegmentedBytesStore.KeySchema;
 
 import java.nio.ByteBuffer;
 
@@ -26,10 +25,10 @@ class SegmentedCacheFunction implements CacheFunction {
 
     private static final int SEGMENT_ID_BYTES = 8;
 
-    private final KeySchema keySchema;
+    private final SegmentedBytesStore.SegmentedKeySchema keySchema;
     private final long segmentInterval;
 
-    SegmentedCacheFunction(KeySchema keySchema, long segmentInterval) {
+    SegmentedCacheFunction(SegmentedBytesStore.SegmentedKeySchema keySchema, long segmentInterval) {
         this.keySchema = keySchema;
         this.segmentInterval = segmentInterval;
     }
