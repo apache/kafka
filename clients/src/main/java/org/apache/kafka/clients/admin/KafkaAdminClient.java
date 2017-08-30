@@ -281,6 +281,7 @@ public class KafkaAdminClient extends AdminClient {
         ChannelBuilder channelBuilder = null;
         Selector selector = null;
         ApiVersions apiVersions = new ApiVersions();
+        LogContext logContext = new LogContext("[KafkaAdminClient clientId=" + clientId + "] ");
 
         try {
             // Since we only request node information, it's safe to pass true for allowAutoTopicCreation (and it
@@ -312,9 +313,10 @@ public class KafkaAdminClient extends AdminClient {
                 (int) TimeUnit.HOURS.toMillis(1),
                 time,
                 true,
-                apiVersions);
+                apiVersions,
+                logContext);
             return new KafkaAdminClient(config, clientId, time, metadata, metrics, networkClient,
-                timeoutProcessorFactory);
+                timeoutProcessorFactory, logContext);
         } catch (Throwable exc) {
             closeQuietly(metrics, "Metrics");
             closeQuietly(networkClient, "NetworkClient");
@@ -327,10 +329,11 @@ public class KafkaAdminClient extends AdminClient {
     static KafkaAdminClient createInternal(AdminClientConfig config, KafkaClient client, Metadata metadata, Time time) {
         Metrics metrics = null;
         String clientId = generateClientId(config);
+        LogContext logContext = new LogContext("[KafkaAdminClient clientId=" + clientId + "] ");
 
         try {
             metrics = new Metrics(new MetricConfig(), new LinkedList<MetricsReporter>(), time);
-            return new KafkaAdminClient(config, clientId, time, metadata, metrics, client, null);
+            return new KafkaAdminClient(config, clientId, time, metadata, metrics, client, null, logContext);
         } catch (Throwable exc) {
             closeQuietly(metrics, "Metrics");
             throw new KafkaException("Failed create new KafkaAdminClient", exc);
@@ -338,10 +341,10 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     private KafkaAdminClient(AdminClientConfig config, String clientId, Time time, Metadata metadata,
-                     Metrics metrics, KafkaClient client, TimeoutProcessorFactory timeoutProcessorFactory) {
+                     Metrics metrics, KafkaClient client, TimeoutProcessorFactory timeoutProcessorFactory,
+                     LogContext logContext) {
         this.defaultTimeoutMs = config.getInt(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG);
         this.clientId = clientId;
-        LogContext logContext = new LogContext("[AdminClient clientId=" + clientId + "] ");
         this.log = logContext.logger(KafkaAdminClient.class);
         this.time = time;
         this.metadata = metadata;

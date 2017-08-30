@@ -45,6 +45,7 @@ import org.apache.kafka.common.requests.CreateTopicsRequest;
 import org.apache.kafka.common.requests.CreateTopicsResponse;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
@@ -148,7 +149,8 @@ public class StreamsKafkaClient {
                 streamsConfig.getInt(StreamsConfig.REQUEST_TIMEOUT_MS_CONFIG),
                 time,
                 true,
-                new ApiVersions());
+                new ApiVersions(),
+                new LogContext());
         return new StreamsKafkaClient(streamsConfig, kafkaClient, reporters);
     }
 

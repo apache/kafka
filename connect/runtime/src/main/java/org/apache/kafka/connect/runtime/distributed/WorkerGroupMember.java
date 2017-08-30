@@ -109,7 +109,8 @@ public class WorkerGroupMember {
                     config.getInt(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG),
                     time,
                     true,
-                    new ApiVersions());
+                    new ApiVersions(),
+                    logContext);
             this.client = new ConsumerNetworkClient(
                     logContext,
                     netClient,

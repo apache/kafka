@@ -466,7 +466,8 @@ object AdminClient {
       requestTimeoutMs,
       time,
       true,
-      new ApiVersions)
+      new ApiVersions,
+      new LogContext())
 
     val highLevelClient = new ConsumerNetworkClient(
       new LogContext(),

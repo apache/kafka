@@ -119,11 +119,12 @@ public class NetworkClient implements KafkaClient {
                          int requestTimeoutMs,
                          Time time,
                          boolean discoverBrokerVersions,
-                         ApiVersions apiVersions) {
+                         ApiVersions apiVersions,
+                         LogContext logContext) {
         this(null, metadata, selector, clientId, maxInFlightRequestsPerConnection,
              reconnectBackoffMs, reconnectBackoffMax,
              socketSendBuffer, socketReceiveBuffer, requestTimeoutMs, time,
-             discoverBrokerVersions, apiVersions, null);
+             discoverBrokerVersions, apiVersions, null, logContext);
     }
 
     public NetworkClient(Selectable selector,
@@ -138,12 +139,12 @@ public class NetworkClient implements KafkaClient {
             Time time,
             boolean discoverBrokerVersions,
             ApiVersions apiVersions,
-            Sensor throttleTimeSensor) {
-
+            Sensor throttleTimeSensor,
+            LogContext logContext) {
         this(null, metadata, selector, clientId, maxInFlightRequestsPerConnection,
              reconnectBackoffMs, reconnectBackoffMax,
              socketSendBuffer, socketReceiveBuffer, requestTimeoutMs, time,
-             discoverBrokerVersions, apiVersions, throttleTimeSensor);
+             discoverBrokerVersions, apiVersions, throttleTimeSensor, logContext);
     }
 
     public NetworkClient(Selectable selector,
@@ -161,7 +162,8 @@ public class NetworkClient implements KafkaClient {
         this(metadataUpdater, null, selector, clientId, maxInFlightRequestsPerConnection,
              reconnectBackoffMs, reconnectBackoffMax,
              socketSendBuffer, socketReceiveBuffer, requestTimeoutMs, time,
-             discoverBrokerVersions, apiVersions, null);
+             discoverBrokerVersions, apiVersions, null,
+                new LogContext("[NetworkClient clientId=" + clientId + "] "));
     }
 
     private NetworkClient(MetadataUpdater metadataUpdater,
@@ -177,7 +179,8 @@ public class NetworkClient implements KafkaClient {
                           Time time,
                           boolean discoverBrokerVersions,
                           ApiVersions apiVersions,
-                          Sensor throttleTimeSensor) {
+                          Sensor throttleTimeSensor,
+                          LogContext logContext) {
         /* It would be better if we could pass `DefaultMetadataUpdater` from the public constructor, but it's not
          * possible because `DefaultMetadataUpdater` is an inner class and it can only be instantiated after the
          * super constructor is invoked.
@@ -203,7 +206,7 @@ public class NetworkClient implements KafkaClient {
         this.discoverBrokerVersions = discoverBrokerVersions;
         this.apiVersions = apiVersions;
         this.throttleTimeSensor = throttleTimeSensor;
-        log = new LogContext("[NetworkClient clientId=" + clientId + "] ").logger(NetworkClient.class);
+        this.log = logContext.logger(NetworkClient.class);
     }
 
     /**

@@ -394,7 +394,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                     time,
                     true,
                     apiVersions,
-                    throttleTimeSensor);
+                    throttleTimeSensor,
+                    logContext);
             this.sender = new Sender(logContext,
                     client,
                     this.metadata,
