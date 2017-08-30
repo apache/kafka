@@ -28,6 +28,7 @@ import java.util.concurrent.locks.{Condition, ReentrantLock}
  */
 private[network] class PrioritizationAwareBlockingQueue[E](private val capacity: Int) {
   private var count: Int = 0
+  private var pendingPrioritizedPuts: Int = 0
   private val prioritizedElements: ArrayDeque[E] = new ArrayDeque[E]()
   private val regularElements: ArrayDeque[E] = new ArrayDeque[E]()
   private val lock: ReentrantLock = new ReentrantLock()
@@ -47,8 +48,15 @@ private[network] class PrioritizationAwareBlockingQueue[E](private val capacity:
     }
     lock.lockInterruptibly()
     try {
-      while (count == capacity) {
+      if (prioritized) {
+        pendingPrioritizedPuts += 1
+      }
+      while (count == capacity || (!prioritized && pendingPrioritizedPuts > 0)) {
         notFull.await()
+      }
+      if (prioritized) {
+        pendingPrioritizedPuts -= 1
+        notFull.signal()
       }
       enqueue(e, prioritized)
     } finally {
@@ -77,7 +85,7 @@ private[network] class PrioritizationAwareBlockingQueue[E](private val capacity:
         }
         nanos = notEmpty.awaitNanos(nanos)
       }
-      dequeue
+      dequeue()
     } finally {
       lock.unlock()
     }
@@ -98,7 +106,7 @@ private[network] class PrioritizationAwareBlockingQueue[E](private val capacity:
       regularElements.add(e)
     }
     count += 1
-    notEmpty.signal
+    notEmpty.signal()
   }
 
   /**
@@ -109,10 +117,10 @@ private[network] class PrioritizationAwareBlockingQueue[E](private val capacity:
    *
    * @return potentially prioritized element from the head of the queue
    */
-  private def dequeue: E = {
-    val e = if (prioritizedElements.isEmpty) regularElements.poll else prioritizedElements.poll
+  private def dequeue(): E = {
+    val e = if (prioritizedElements.isEmpty) regularElements.poll() else prioritizedElements.poll()
     count -= 1
-    notFull.signal
+    notFull.signal()
     e
   }
 
