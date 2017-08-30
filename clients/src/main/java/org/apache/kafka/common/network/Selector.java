@@ -53,6 +53,8 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 
+import javax.net.ssl.SSLException;
+
 /**
  * A nioSelector interface for doing non-blocking multi-connection network I/O.
  * <p>
@@ -483,15 +485,21 @@ public class Selector implements Selectable, AutoCloseable {
 
             } catch (Exception e) {
                 String desc = channel.socketDescription();
-                if (e instanceof IOException)
-                    log.debug("Connection with {} disconnected", desc, e);
-                else
-                    log.warn("Unexpected error from {}; closing connection", desc, e);
+                logException(e, desc);
                 close(channel, true);
             } finally {
                 maybeRecordTimePerConnection(channel, channelStartTimeNanos);
             }
         }
+    }
+
+    private void logException(Exception e, String desc) {
+        if (e instanceof SSLException)
+            log.error("SSL connection error from {}; closing connection", desc, e);
+        else if (e instanceof IOException)
+            log.debug("Connection with {} disconnected", desc, e);
+        else
+            log.warn("Unexpected error from {}; closing connection", desc, e);
     }
 
     private Collection<SelectionKey> determineHandlingOrder(Set<SelectionKey> selectionKeys) {
