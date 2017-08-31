@@ -27,6 +27,7 @@ import org.apache.kafka.streams.kstream.KGroupedStream;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Predicate;
+import org.apache.kafka.streams.kstream.Serialized;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 
@@ -119,7 +120,7 @@ public class SmokeTestClient extends SmokeTestUtil {
         // min
         KGroupedStream<String, Integer>
             groupedData =
-            data.groupByKey(stringSerde, intSerde);
+            data.groupByKey(Serialized.with(stringSerde, intSerde));
 
         groupedData.aggregate(
                 new Initializer<Integer>() {
