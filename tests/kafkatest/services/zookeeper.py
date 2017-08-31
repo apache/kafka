@@ -94,12 +94,7 @@ class ZookeeperService(KafkaPathResolverMixin, Service):
             return False
 
     def pids(self, node):
-        try:
-            cmd = "ps ax | grep -i zookeeper | grep java | grep -v grep | awk '{print $1}'"
-            pid_arr = [pid for pid in node.account.ssh_capture(cmd, allow_fail=True, callback=int)]
-            return pid_arr
-        except (RemoteCommandError, ValueError) as e:
-            return []
+        return node.account.java_pids(self.java_class_name())
 
     def alive(self, node):
         return len(self.pids(node)) > 0
@@ -107,7 +102,8 @@ class ZookeeperService(KafkaPathResolverMixin, Service):
     def stop_node(self, node):
         idx = self.idx(node)
         self.logger.info("Stopping %s node %d on %s" % (type(self).__name__, idx, node.account.hostname))
-        node.account.kill_process("zookeeper", allow_fail=False)
+        node.account.kill_java_processes(self.java_class_name(), allow_fail=False)
+        node.account.kill_java_processes(self.java_query_class_name(), allow_fail=False)
         wait_until(lambda: not self.alive(node), timeout_sec=5, err_msg="Timed out waiting for zookeeper to stop.")
 
     def clean_node(self, node):
@@ -115,7 +111,10 @@ class ZookeeperService(KafkaPathResolverMixin, Service):
         if self.alive(node):
             self.logger.warn("%s %s was still alive at cleanup time. Killing forcefully..." %
                              (self.__class__.__name__, node.account))
-        node.account.kill_process("zookeeper", clean_shutdown=False, allow_fail=True)
+        node.account.kill_java_processes(self.java_class_name(),
+                                         clean_shutdown=False, allow_fail=True)
+        node.account.kill_java_processes(self.java_query_class_name(),
+                                         clean_shutdown=False, allow_fail=False)
         node.account.ssh("rm -rf -- %s" % ZookeeperService.ROOT, allow_fail=False)
 
 
@@ -145,8 +144,8 @@ class ZookeeperService(KafkaPathResolverMixin, Service):
         chroot_path = ('' if chroot is None else chroot) + path
 
         kafka_run_class = self.path.script("kafka-run-class.sh", DEV_BRANCH)
-        cmd = "%s kafka.tools.ZooKeeperMainWrapper -server %s get %s" % \
-              (kafka_run_class, self.connect_setting(), chroot_path)
+        cmd = "%s %s -server %s get %s" % \
+              (kafka_run_class, self.java_query_class_name(), self.connect_setting(), chroot_path)
         self.logger.debug(cmd)
 
         node = self.nodes[0]
@@ -158,3 +157,11 @@ class ZookeeperService(KafkaPathResolverMixin, Service):
                 if match is not None:
                     result = match.groups()[0]
         return result
+
+    def java_class_name(self):
+        """ The class name of the Zookeeper quorum peers. """
+        return "org.apache.zookeeper.server.quorum.QuorumPeerMain"
+
+    def java_query_class_name(self):
+        """ The class name of the Zookeeper tool within Kafka. """
+        return "kafka.tools.ZooKeeperMainWrapper"

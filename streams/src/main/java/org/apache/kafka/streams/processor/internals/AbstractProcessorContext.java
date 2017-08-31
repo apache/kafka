@@ -25,6 +25,7 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
 import java.io.File;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 
@@ -156,7 +157,10 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
 
     @Override
     public Map<String, Object> appConfigs() {
-        return config.originals();
+        final Map<String, Object> combined = new HashMap<>();
+        combined.putAll(config.originals());
+        combined.putAll(config.values());
+        return combined;
     }
 
     @Override

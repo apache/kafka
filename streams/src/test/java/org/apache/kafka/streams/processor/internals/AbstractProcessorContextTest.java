@@ -23,10 +23,13 @@ import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.state.RocksDBConfigSetter;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.test.MockStateStoreSupplier;
 import org.junit.Before;
 import org.junit.Test;
+
+import java.util.Properties;
 
 import static org.apache.kafka.test.StreamsTestUtils.minimalStreamsConfig;
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -136,10 +139,29 @@ public class AbstractProcessorContextTest {
         assertThat(context.timestamp(), equalTo(recordContext.timestamp()));
     }
 
+    @SuppressWarnings("unchecked")
+    @Test
+    public void appConfigsShouldReturnParsedValues() {
+        assertThat((Class<RocksDBConfigSetter>) context.appConfigs().get(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG), equalTo(RocksDBConfigSetter.class));
+    }
+
+    @Test
+    public void appConfigsShouldReturnUnrecognizedValues() {
+        assertThat((String) context.appConfigs().get("user.supplied.config"), equalTo("user-suppplied-value"));
+    }
+
 
     private static class TestProcessorContext extends AbstractProcessorContext {
-        public TestProcessorContext(final MockStreamsMetrics metrics) {
-            super(new TaskId(0, 0), "appId", new StreamsConfig(minimalStreamsConfig()), metrics, new StateManagerStub(), new ThreadCache("name", 0, metrics));
+        static Properties config;
+        static {
+            config = minimalStreamsConfig();
+            // Value must be a string to test className -> class conversion
+            config.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, RocksDBConfigSetter.class.getName());
+            config.put("user.supplied.config", "user-suppplied-value");
+        }
+
+        TestProcessorContext(final MockStreamsMetrics metrics) {
+            super(new TaskId(0, 0), "appId", new StreamsConfig(config), metrics, new StateManagerStub(), new ThreadCache("name", 0, metrics));
         }
 
         @Override
