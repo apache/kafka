@@ -189,8 +189,9 @@ public class StreamThread extends Thread {
                 log.trace("{} pausing partitions: {}", logPrefix, partitions);
                 consumer.pause(partitions);
             } catch (final Throwable t) {
+                log.error("{} Error caught during partition assignment, " +
+                        "will abort the current process and re-throw at the end of rebalance: {}", logPrefix, t.getMessage());
                 rebalanceException = t;
-                throw t;
             } finally {
                 log.info("{} partition assignment took {} ms.\n" +
                                  "\tcurrent active tasks: {}\n" +
@@ -220,8 +221,9 @@ public class StreamThread extends Thread {
                 // suspend active tasks
                 suspendTasksAndState();
             } catch (final Throwable t) {
+                log.error("{} Error caught during partition revocation, " +
+                        "will abort the current process and re-throw at the end of rebalance: {}", logPrefix, t.getMessage());
                 rebalanceException = t;
-                throw t;
             } finally {
                 streamsMetadataState.onChange(Collections.<HostInfo, Set<TopicPartition>>emptyMap(), partitionAssignor.clusterMetadata());
                 standbyRecords.clear();
@@ -1074,23 +1076,19 @@ public class StreamThread extends Thread {
     protected StreamTask createStreamTask(final TaskId id, final Collection<TopicPartition> partitions) {
         streamsMetrics.taskCreatedSensor.record();
 
-        try {
-            return new StreamTask(
-                    id,
-                    applicationId,
-                    partitions,
-                    builder.build(id.topicGroupId),
-                    consumer,
-                    storeChangelogReader,
-                    config,
-                    streamsMetrics,
-                    stateDirectory,
-                    cache,
-                    time,
-                    createProducer(id));
-        } finally {
-            log.trace("{} Created active task {} with assigned partitions {}", logPrefix, id, partitions);
-        }
+        return new StreamTask(
+                id,
+                applicationId,
+                partitions,
+                builder.build(id.topicGroupId),
+                consumer,
+                storeChangelogReader,
+                config,
+                streamsMetrics,
+                stateDirectory,
+                cache,
+                time,
+                createProducer(id));
     }
 
     private Producer<byte[], byte[]> createProducer(final TaskId id) {
@@ -1154,11 +1152,7 @@ public class StreamThread extends Thread {
         final ProcessorTopology topology = builder.build(id.topicGroupId);
 
         if (!topology.stateStores().isEmpty()) {
-            try {
-                return new StandbyTask(id, applicationId, partitions, topology, consumer, storeChangelogReader, config, streamsMetrics, stateDirectory);
-            } finally {
-                log.trace("{} Created standby task {} with assigned partitions {}", logPrefix, id, partitions);
-            }
+            return new StandbyTask(id, applicationId, partitions, topology, consumer, storeChangelogReader, config, streamsMetrics, stateDirectory);
         } else {
             log.trace("{} Skipped standby task {} with assigned partitions {} since it does not have any state stores to materialize", logPrefix, id, partitions);
 
