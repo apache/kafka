@@ -24,7 +24,6 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collection;
