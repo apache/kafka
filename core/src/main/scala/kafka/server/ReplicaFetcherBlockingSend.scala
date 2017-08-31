@@ -24,7 +24,7 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network._
 import org.apache.kafka.common.requests.AbstractRequest
 import org.apache.kafka.common.security.JaasContext
-import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.clients.{ApiVersions, ClientResponse, ManualMetadataUpdater, NetworkClient}
 import org.apache.kafka.common.Node
 import org.apache.kafka.common.requests.AbstractRequest.Builder
@@ -49,6 +49,7 @@ class ReplicaFetcherBlockingSend(sourceBroker: BrokerEndPoint,
   private val socketTimeout: Int = brokerConfig.replicaSocketTimeoutMs
 
   private val networkClient = {
+    val logContext = new LogContext("[ReplicaFetcherBlockingSend clientId=" + clientId + "] ")
     val channelBuilder = ChannelBuilders.clientChannelBuilder(
       brokerConfig.interBrokerSecurityProtocol,
       JaasContext.Type.SERVER,
@@ -79,7 +80,8 @@ class ReplicaFetcherBlockingSend(sourceBroker: BrokerEndPoint,
       brokerConfig.requestTimeoutMs,
       time,
       false,
-      new ApiVersions
+      new ApiVersions,
+      logContext
     )
   }
 

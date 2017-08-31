@@ -281,7 +281,7 @@ public class KafkaAdminClient extends AdminClient {
         ChannelBuilder channelBuilder = null;
         Selector selector = null;
         ApiVersions apiVersions = new ApiVersions();
-        LogContext logContext = new LogContext("[KafkaAdminClient clientId=" + clientId + "] ");
+        LogContext logContext = createLogContext(clientId);
 
         try {
             // Since we only request node information, it's safe to pass true for allowAutoTopicCreation (and it
@@ -329,15 +329,19 @@ public class KafkaAdminClient extends AdminClient {
     static KafkaAdminClient createInternal(AdminClientConfig config, KafkaClient client, Metadata metadata, Time time) {
         Metrics metrics = null;
         String clientId = generateClientId(config);
-        LogContext logContext = new LogContext("[KafkaAdminClient clientId=" + clientId + "] ");
 
         try {
             metrics = new Metrics(new MetricConfig(), new LinkedList<MetricsReporter>(), time);
-            return new KafkaAdminClient(config, clientId, time, metadata, metrics, client, null, logContext);
+            return new KafkaAdminClient(config, clientId, time, metadata, metrics, client, null,
+                    createLogContext(clientId));
         } catch (Throwable exc) {
             closeQuietly(metrics, "Metrics");
             throw new KafkaException("Failed create new KafkaAdminClient", exc);
         }
+    }
+
+    private static LogContext createLogContext(String clientId) {
+        return new LogContext("[AdminClient clientId=" + clientId + "] ");
     }
 
     private KafkaAdminClient(AdminClientConfig config, String clientId, Time time, Metadata metadata,

@@ -33,7 +33,7 @@ import org.apache.kafka.common.protocol.{ApiKeys, SecurityProtocol}
 import org.apache.kafka.common.requests.UpdateMetadataRequest.EndPoint
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.JaasContext
-import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.common.{Node, TopicPartition}
 
 import scala.collection.JavaConverters._
@@ -108,6 +108,7 @@ class ControllerChannelManager(controllerContext: ControllerContext, config: Kaf
     val messageQueue = new LinkedBlockingQueue[QueueItem]
     debug("Controller %d trying to connect to broker %d".format(config.brokerId, broker.id))
     val brokerNode = broker.getNode(config.interBrokerListenerName)
+    val logContext = new LogContext("[ControllerChannelManager clientId=" + config.brokerId.toString + "] ")
     val networkClient = {
       val channelBuilder = ChannelBuilders.clientChannelBuilder(
         config.interBrokerSecurityProtocol,
@@ -139,7 +140,8 @@ class ControllerChannelManager(controllerContext: ControllerContext, config: Kaf
         config.requestTimeoutMs,
         time,
         false,
-        new ApiVersions
+        new ApiVersions,
+        logContext
       )
     }
     val threadName = threadNamePrefix match {
