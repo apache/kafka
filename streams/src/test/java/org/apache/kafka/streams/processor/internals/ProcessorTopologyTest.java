@@ -327,15 +327,24 @@ public class ProcessorTopologyTest {
     }
 
 
-    private void assertNextOutputRecord(String topic, String key, String value) {
+    private void assertNextOutputRecord(final String topic,
+                                        final String key,
+                                        final String value) {
         assertNextOutputRecord(topic, key, value, null, 0L);
     }
 
-    private void assertNextOutputRecord(String topic, String key, String value, Integer partition) {
+    private void assertNextOutputRecord(final String topic,
+                                        final String key,
+                                        final String value,
+                                        final Integer partition) {
         assertNextOutputRecord(topic, key, value, partition, 0L);
     }
 
-    private void assertNextOutputRecord(String topic, String key, String value, Integer partition, Long timestamp) {
+    private void assertNextOutputRecord(final String topic,
+                                        final String key,
+                                        final String value,
+                                        final Integer partition,
+                                        final Long timestamp) {
         ProducerRecord<String, String> record = driver.readOutput(topic, STRING_DESERIALIZER, STRING_DESERIALIZER);
         assertEquals(topic, record.topic());
         assertEquals(key, record.key());
