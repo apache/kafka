@@ -1,4 +1,4 @@
-/*
+/**
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.security.plain;
 
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -23,11 +24,11 @@ import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 
+import javax.security.auth.login.Configuration;
 import javax.security.sasl.SaslException;
 
 import static org.junit.Assert.assertEquals;
 
-import org.apache.kafka.common.security.JaasContext;
 import org.apache.kafka.common.security.authenticator.TestJaasConfig;
 
 public class PlainSaslServerTest {
@@ -45,9 +46,14 @@ public class PlainSaslServerTest {
         Map<String, Object> options = new HashMap<>();
         options.put("user_" + USER_A, PASSWORD_A);
         options.put("user_" + USER_B, PASSWORD_B);
-        jaasConfig.addEntry("jaasContext", PlainLoginModule.class.getName(), options);
-        JaasContext jaasContext = new JaasContext("jaasContext", JaasContext.Type.SERVER, jaasConfig);
-        saslServer = new PlainSaslServer(jaasContext);
+        jaasConfig.addEntry("KafkaServer", PlainLoginModule.class.getName(), options);
+        Configuration.setConfiguration(jaasConfig);
+        saslServer = new PlainSaslServer(null);
+    }
+
+    @After
+    public void tearDown() {
+        Configuration.setConfiguration(null);
     }
 
     @Test
