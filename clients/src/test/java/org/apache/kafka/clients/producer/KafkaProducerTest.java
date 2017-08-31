@@ -473,4 +473,15 @@ public class KafkaProducerTest {
         
     }
 
+    @Test
+    public void testPartitionsForWithNullTopic() {
+        Properties props = new Properties();
+        props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
+        try (KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(props, new ByteArraySerializer(), new ByteArraySerializer())) {
+            producer.partitionsFor(null);
+            fail("Expected NullPointerException to be raised");
+        } catch (NullPointerException e) {
+            // expected
+        }
+    }
 }
