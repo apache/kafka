@@ -90,7 +90,7 @@ public class Stores {
 
                                     @Override
                                     public StateStoreSupplier build() {
-                                        log.trace("Creating InMemory Store name={} capacity={} logged={}", name, capacity, logged);
+                                        log.trace("Defining InMemory Store name={} capacity={} logged={}", name, capacity, logged);
                                         if (capacity < Integer.MAX_VALUE) {
                                             return new InMemoryLRUCacheStoreSupplier<>(name, capacity, keySerde, valueSerde, logged, logConfig);
                                         }
@@ -154,7 +154,7 @@ public class Stores {
 
                                     @Override
                                     public StateStoreSupplier build() {
-                                        log.trace("Creating RocksDb Store name={} numSegments={} logged={}", name, numSegments, logged);
+                                        log.trace("Defining RocksDb Store name={} numSegments={} logged={}", name, numSegments, logged);
                                         if (sessionWindows) {
                                             return new RocksDBSessionStoreSupplier<>(name, retentionPeriod, keySerde, valueSerde, logged, logConfig, cachingEnabled);
                                         } else if (numSegments > 0) {
