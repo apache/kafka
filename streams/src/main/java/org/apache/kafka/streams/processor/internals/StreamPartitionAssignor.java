@@ -221,7 +221,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable,
 
         LogContext logContext = new LogContext(logPrefix);
 
-        log = logContext.logger(getClass());
+        this.log = logContext.logger(getClass());
 
         String userEndPoint = (String) configs.get(StreamsConfig.APPLICATION_SERVER_CONFIG);
         if (userEndPoint != null && !userEndPoint.isEmpty()) {
