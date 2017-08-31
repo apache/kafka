@@ -123,7 +123,6 @@ import static org.apache.kafka.streams.StreamsConfig.PROCESSING_GUARANTEE_CONFIG
 @InterfaceStability.Evolving
 public class KafkaStreams {
 
-    private final Logger log;
     private static final String JMX_PREFIX = "kafka.streams";
     private static final int DEFAULT_CLOSE_TIMEOUT = 0;
 
@@ -131,9 +130,10 @@ public class KafkaStreams {
     // in userData of the subscription request to allow assignor be aware
     // of the co-location of stream thread's consumers. It is for internal
     // usage only and should not be exposed to users at all.
-    private final UUID processId;
+    private final Logger log;
     private final String logPrefix;
-    private final StreamsMetadataState streamsMetadataState;
+    private final UUID processId;
+    private final Metrics metrics;
     private final StreamsConfig config;
     private final StreamThread[] threads;
     private final StateDirectory stateDirectory;
@@ -228,7 +228,7 @@ public class KafkaStreams {
                         // it is ok: just move on to the next iteration
                     }
                 } else {
-                    log.debug("{} Cannot transit to {} within {}ms", logPrefix, targetState, waitMs);
+                    log.debug("Cannot transit to {} within {}ms", targetState, waitMs);
                     return false;
                 }
                 elapsedMs = System.currentTimeMillis() - begin;
@@ -254,10 +254,10 @@ public class KafkaStreams {
                 // will be refused but we do not throw exception here, to allow idempotent close calls
                 return false;
             } else if (!state.isValidTransition(newState)) {
-                log.error("{} Unexpected state transition from {} to {}", logPrefix, oldState, newState);
+                log.error("Unexpected state transition from {} to {}", oldState, newState);
                 throw new IllegalStateException(logPrefix + " Unexpected state transition from " + oldState + " to " + newState);
             } else {
-                log.info("{} State transition from {} to {}", logPrefix, oldState, newState);
+                log.info("State transition from {} to {}", oldState, newState);
             }
             state = newState;
             stateLock.notifyAll();
@@ -386,7 +386,7 @@ public class KafkaStreams {
             }
 
             if (setState(State.ERROR)) {
-                log.warn("{} All stream threads have died. The instance will be in error state and should be closed.", logPrefix);
+                log.warn("All stream threads have died. The instance will be in error state and should be closed.");
             }
         }
 
@@ -433,7 +433,7 @@ public class KafkaStreams {
 
                 // special case when global thread is dead
                 if (newState == GlobalStreamThread.State.DEAD && state != State.ERROR && setState(State.ERROR)) {
-                    log.warn("{} Global thread has died. The instance will be in error state and should be closed.", logPrefix);
+                    log.warn("Global thread has died. The instance will be in error state and should be closed.");
                 }
             }
         }
@@ -522,7 +522,9 @@ public class KafkaStreams {
         if (clientId.length() <= 0)
             clientId = applicationId + "-" + processId;
 
-        LogContext logContext = new LogContext("[stream-client=" + clientId + "] ");
+        this.logPrefix = String.format("stream-client %s", clientId);
+
+        LogContext logContext = new LogContext(logPrefix);
 
         this.log = logContext.logger(getClass());
 
@@ -672,7 +674,7 @@ public class KafkaStreams {
      * @throws StreamsException if the Kafka brokers have version 0.10.0.x
      */
     public synchronized void start() throws IllegalStateException, StreamsException {
-        log.debug("{} Starting Streams client", logPrefix);
+        log.debug("Starting Streams client");
 
         // first set state to RUNNING before kicking off the threads,
         // making sure the state will always transit to RUNNING before REBALANCING
@@ -697,12 +699,12 @@ public class KafkaStreams {
                 }
             }, cleanupDelay, cleanupDelay, TimeUnit.MILLISECONDS);
 
-            log.info("{} Started Streams client", logPrefix);
+            log.info("Started Streams client");
         } else {
             // if transition failed but no exception is thrown; currently it is not possible
             // since we do not allow calling start multiple times whether or not it is already shutdown.
             // TODO: In the future if we lift this restriction this code path could then be triggered and be updated
-            log.error("{} Already stopped, cannot re-start", logPrefix);
+            log.error("Already stopped, cannot re-start");
         }
     }
 
@@ -726,12 +728,12 @@ public class KafkaStreams {
      * Note that this method must not be called in the {@code onChange} callback of {@link StateListener}.
      */
     public synchronized boolean close(final long timeout, final TimeUnit timeUnit) {
-        log.debug("{} Stopping Streams client with timeoutMillis = {} ms.", logPrefix, timeUnit.toMillis(timeout));
+        log.debug("Stopping Streams client with timeoutMillis = {} ms.", timeUnit.toMillis(timeout));
 
         if (!setState(State.PENDING_SHUTDOWN)) {
             // if transition failed, it means it was either in PENDING_SHUTDOWN
             // or NOT_RUNNING already; just check that all threads have been stopped
-            log.info("{} Already in the pending shutdown state, wait to complete shutdown", logPrefix);
+            log.info("Already in the pending shutdown state, wait to complete shutdown");
         } else {
             stateDirCleaner.shutdownNow();
 
@@ -780,10 +782,10 @@ public class KafkaStreams {
         }
 
         if (waitOnState(State.NOT_RUNNING, timeUnit.toMillis(timeout))) {
-            log.info("{} Streams client stopped completely", logPrefix);
+            log.info("Streams client stopped completely");
             return true;
         } else {
-            log.info("{} Streams client cannot stop completely within the timeout", logPrefix);
+            log.info("Streams client cannot stop completely within the timeout");
             return false;
         }
     }

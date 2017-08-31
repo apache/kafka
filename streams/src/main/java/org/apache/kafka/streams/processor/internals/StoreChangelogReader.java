@@ -23,11 +23,9 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -41,13 +39,8 @@ import java.util.Set;
 
 public class StoreChangelogReader implements ChangelogReader {
 
-    private final String logPrefix;
-    private final Consumer<byte[], byte[]> consumer;
     private final Logger log;
     private final Consumer<byte[], byte[]> consumer;
-    private final Time time;
-    private final long partitionValidationTimeoutMs;
-    private final Map<String, List<PartitionInfo>> partitionInfo = new HashMap<>();
     private final StateRestoreListener stateRestoreListener;
     private final Map<TopicPartition, Long> endOffsets = new HashMap<>();
     private final Map<String, List<PartitionInfo>> partitionInfo = new HashMap<>();
@@ -123,7 +116,7 @@ public class StoreChangelogReader implements ChangelogReader {
             endOffsets.putAll(consumer.endOffsets(initializable.keySet()));
         } catch (final TimeoutException e) {
             // if timeout exception gets thrown we just give up this time and retry in the next run loop
-            log.debug("{} Could not fetch end offset for {}; will fall back to partition by partition fetching", logPrefix, initializable);
+            log.debug("Could not fetch end offset for {}; will fall back to partition by partition fetching", initializable);
             return;
         }
 
@@ -147,7 +140,7 @@ public class StoreChangelogReader implements ChangelogReader {
                 }
                 needsInitializing.remove(topicPartition);
             } else {
-                log.info("{} End offset cannot be found form the returned metadata; removing this partition from the current run loop", logPrefix);
+                log.info("End offset cannot be found form the returned metadata; removing this partition from the current run loop");
                 iter.remove();
             }
         }
@@ -159,7 +152,7 @@ public class StoreChangelogReader implements ChangelogReader {
     }
 
     private void startRestoration(final Map<TopicPartition, StateRestorer> initialized) {
-        log.debug("{} Start restoring state stores from changelog topics {}", logPrefix, initialized.keySet());
+        log.debug("Start restoring state stores from changelog topics {}", initialized.keySet());
 
         final Set<TopicPartition> assignment = new HashSet<>(consumer.assignment());
         assignment.addAll(initialized.keySet());
@@ -210,7 +203,7 @@ public class StoreChangelogReader implements ChangelogReader {
         try {
             partitionInfo.putAll(consumer.listTopics());
         } catch (final TimeoutException e) {
-            log.debug("{} Could not fetch topic metadata within the timeout, will retry in the next run loop", logPrefix);
+            log.debug("Could not fetch topic metadata within the timeout, will retry in the next run loop");
         }
     }
 
