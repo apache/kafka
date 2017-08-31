@@ -293,7 +293,8 @@ public class SelectorTest {
         assertNull("Channel not expired", selector.channel(id));
         assertEquals(ChannelState.EXPIRED, channel.state());
         selector.close(id);
-        assertNull("Channel not closed", selector.closingChannel(id));
+        assertNull("Channel not removed from channels", selector.channel(id));
+        assertNull("Channel not removed from closingChannels", selector.closingChannel(id));
         assertTrue("Unexpected disconnect notification", selector.disconnected().isEmpty());
         assertEquals(ChannelState.EXPIRED, channel.state());
         selector.poll(0);

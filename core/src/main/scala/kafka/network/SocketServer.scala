@@ -234,16 +234,17 @@ private[kafka] abstract class AbstractServerThread(connectionQuotas: ConnectionQ
    * and no further disconnect notifications will be sent for this channel by the selector.
    */
   def close(selector: KSelector, connectionId: String): Unit = {
-    val channel = selector.channel(connectionId)
-    val openChannel = selector.channel(connectionId)
-    val openOrClosingChannel = if (openChannel != null) openChannel else selector.closingChannel(connectionId)
-    if (openOrClosingChannel != null) {
+    openOrClosingChannel(selector, connectionId).foreach { channel =>
       debug(s"Closing selector connection $connectionId")
-      val address = openOrClosingChannel.socketAddress
+      val address = channel.socketAddress
       if (address != null)
         connectionQuotas.dec(address)
       selector.close(connectionId)
     }
+  }
+
+  private[network] def openOrClosingChannel(selector: KSelector, connectionId: String): Option[KafkaChannel] = {
+    Option(selector.channel(connectionId)).orElse(Option(selector.closingChannel(connectionId)))
   }
 
   /**
@@ -418,8 +419,7 @@ private[kafka] class Processor(val id: Int,
   }
 
   private val newConnections = new ConcurrentLinkedQueue[SocketChannel]()
-  // Visible for testing
-  private[network] val inflightResponses = mutable.Map[String, RequestChannel.Response]()
+  private val inflightResponses = mutable.Map[String, RequestChannel.Response]()
   private[kafka] val metricTags = mutable.LinkedHashMap(
     "listener" -> listenerName.value,
     "networkProcessor" -> id.toString
@@ -436,7 +436,9 @@ private[kafka] class Processor(val id: Int,
     Map("networkProcessor" -> id.toString)
   )
 
-  private val selector = createSelector(
+  private val selector = createSelector(ChannelBuilders.serverChannelBuilder(listenerName, securityProtocol, config, credentialProvider.credentialCache))
+  // Visible to override for testing
+  protected[network] def createSelector(channelBuilder: ChannelBuilder): KSelector = new KSelector(
     maxRequestSize,
     connectionsMaxIdleMs,
     metrics,
@@ -445,17 +447,8 @@ private[kafka] class Processor(val id: Int,
     metricTags,
     false,
     true,
-    ChannelBuilders.serverChannelBuilder(listenerName, securityProtocol, config, credentialProvider.credentialCache),
+    channelBuilder,
     memoryPool)
-
-  // Visible to override for testing
-  protected[network] def createSelector(maxReceiveSize: Int, connectionMaxIdleMs: Long,
-               metrics: Metrics, time: Time, metricGrpPrefix: String, metricTags: java.util.Map[String, String],
-               metricsPerConnection: Boolean, recordTimePerConnection: Boolean,
-               channelBuilder: ChannelBuilder, memoryPool: MemoryPool): KSelector = {
-    new KSelector(maxReceiveSize, connectionMaxIdleMs, metrics, time, metricGrpPrefix, metricTags,
-        metricsPerConnection, recordTimePerConnection, channelBuilder, memoryPool)
-  }
 
   // Connection ids have the format `localAddr:localPort-remoteAddr:remotePort-index`. The index is a
   // non-negative incrementing value that ensures that even if remotePort is reused after a connection is
@@ -566,17 +559,20 @@ private[kafka] class Processor(val id: Int,
   private def processCompletedReceives() {
     selector.completedReceives.asScala.foreach { receive =>
       try {
-        val openChannel = selector.channel(receive.source)
-        // Only methods that are safe to call on a disconnected channel should be invoked on 'openOrClosingChannel'.
-        val openOrClosingChannel = if (openChannel != null) openChannel else selector.closingChannel(receive.source)
-        val principal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, openOrClosingChannel.principal.getName)
-        val header = RequestHeader.parse(receive.payload)
-        val context = new RequestContext(header, receive.source, openOrClosingChannel.socketAddress,
-          principal, listenerName, securityProtocol)
-        val req = new RequestChannel.Request(processor = id, context = context,
-          startTimeNanos = time.nanoseconds, memoryPool, receive.payload)
-        requestChannel.sendRequest(req)
-        selector.mute(receive.source)
+        openOrClosingChannel(receive.source) match {
+          case Some(channel) =>
+            val principal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, channel.principal.getName)
+            val header = RequestHeader.parse(receive.payload)
+            val context = new RequestContext(header, receive.source, channel.socketAddress,
+              principal, listenerName, securityProtocol)
+            val req = new RequestChannel.Request(processor = id, context = context,
+              startTimeNanos = time.nanoseconds, memoryPool, receive.payload)
+            requestChannel.sendRequest(req)
+            selector.mute(receive.source)
+          case None =>
+            // This should never happen since completed receives are processed immediately after `poll()`
+            throw new IllegalStateException("Channel removed from selector before processing completed receive")
+        }
       } catch {
         // note that even though we got an exception, we can assume that receive.source is valid. Issues with constructing a valid receive object were handled earlier
         case e: Throwable => processChannelException(receive.source, s"Exception while processing request from ${receive.source}", e)
@@ -670,10 +666,12 @@ private[kafka] class Processor(val id: Int,
     connId
   }
 
+  // Only for testing
+  private[network] def inflightResponseCount: Int = inflightResponses.size
+
   // Visible for testing
-  private[network] def openOrClosingChannel(connectionId: String): Option[KafkaChannel] = {
-    Option(selector.channel(connectionId)).orElse(Option(selector.closingChannel(connectionId)))
-  }
+  // Only methods that are safe to call on a disconnected channel should be invoked on 'openOrClosingChannel'.
+  private[network] def openOrClosingChannel(connectionId: String): Option[KafkaChannel] = openOrClosingChannel(selector, connectionId)
 
   /* For test usage */
   private[network] def channel(connectionId: String): Option[KafkaChannel] =

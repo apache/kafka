@@ -294,8 +294,7 @@ public class Selector implements Selectable, AutoCloseable {
         String connectionId = send.destination();
         KafkaChannel channel = openOrClosingChannelOrFail(connectionId);
         if (closingChannels.containsKey(connectionId)) {
-            channel.state(ChannelState.FAILED_SEND);
-            // ensure notification via `disconnected`
+            // ensure notification via `disconnected`, leave channel in the state in which closing was triggered
             this.failedSends.add(connectionId);
         } else {
             try {
@@ -649,6 +648,7 @@ public class Selector implements Selectable, AutoCloseable {
             close(channel, false);
         } else {
             KafkaChannel closingChannel = this.closingChannels.remove(id);
+            // Close any closing channel, leave the channel in the state in which closing was triggered
             if (closingChannel != null)
                 doClose(closingChannel, false);
         }
