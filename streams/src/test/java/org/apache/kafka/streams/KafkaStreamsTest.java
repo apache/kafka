@@ -534,41 +534,4 @@ public class KafkaStreamsTest {
         }
     }
 
-    @Test
-    public void testLogContext() {
-        final UnitTestAppender appender = new UnitTestAppender();
-        final Logger logger = Logger.getRootLogger();
-        logger.addAppender(appender);
-
-        try {
-            Logger.getLogger(KafkaStreams.class);
-            streams.start();
-        } finally {
-            logger.removeAppender(appender);
-            streams.close();
-        }
-
-        final LoggingEvent firstLogEntry = appender.log.get(0);
-        Assert.assertEquals("org.apache.kafka.streams.KafkaStreams", firstLogEntry.getLoggerName());
-        Assert.assertTrue(firstLogEntry.getMessage().toString().contains("[stream-client="));
-    }
-
-    class UnitTestAppender extends AppenderSkeleton {
-        private final List<LoggingEvent> log = new ArrayList<LoggingEvent>();
-
-        @Override
-        public boolean requiresLayout() {
-            return false;
-        }
-
-        @Override
-        protected void append(final LoggingEvent loggingEvent) {
-            log.add(loggingEvent);
-        }
-
-        @Override
-        public void close() {
-        }
-    }
-
 }
