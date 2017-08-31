@@ -273,11 +273,13 @@ public class Sender implements Runnable {
         for (ProducerBatch expiredBatch : expiredBatches) {
             failBatch(expiredBatch, -1, NO_TIMESTAMP, expiredBatch.timeoutException());
             if (transactionManager != null && expiredBatch.inRetry()) {
+                // transition to unknown state. mute partition.
                 needsTransactionStateReset = true;
             }
             this.sensors.recordErrors(expiredBatch.topicPartition.topic(), expiredBatch.recordCount);
         }
 
+        metadata.fetch().leaderFor(new TopicPartition("fo", 1)).idString();
         if (needsTransactionStateReset) {
             transactionManager.resetProducerId();
             return 0;
