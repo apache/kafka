@@ -581,7 +581,7 @@ public class StreamThread extends Thread implements ThreadDataProvider {
         this.standbyRecords = new HashMap<>();
         this.partitionGrouper = config.getConfiguredInstance(StreamsConfig.PARTITION_GROUPER_CLASS_CONFIG, PartitionGrouper.class);
 
-        LogContext logContext = new LogContext(logPrefix);
+        final LogContext logContext = new LogContext(logPrefix);
 
         log = logContext.logger(getClass());
 

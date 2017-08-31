@@ -524,7 +524,7 @@ public class KafkaStreams {
 
         this.logPrefix = String.format("stream-client [%s] ", clientId);
 
-        LogContext logContext = new LogContext(logPrefix);
+        final LogContext logContext = new LogContext(logPrefix);
 
         this.log = logContext.logger(getClass());
 

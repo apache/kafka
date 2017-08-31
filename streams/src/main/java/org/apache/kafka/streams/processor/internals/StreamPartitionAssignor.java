@@ -219,7 +219,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable,
 
         logPrefix = String.format("stream-thread [%s] ", threadDataProvider.name());
 
-        LogContext logContext = new LogContext(logPrefix);
+        final LogContext logContext = new LogContext(logPrefix);
 
         this.log = logContext.logger(getClass());
 
