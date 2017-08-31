@@ -268,7 +268,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
                       final String label) {
         Objects.requireNonNull(label, "label can't be null");
         final String name = builder.newName(PRINTING_NAME);
-        builder.internalTopologyBuilder.addProcessor(name, new KStreamPrint<>(new PrintForeachAction(null, defaultKeyValueMapper, label), keySerde, valSerde), this.name);
+        builder.internalTopologyBuilder.addProcessor(name, new KStreamPrint<>(new PrintForeachAction(null, defaultKeyValueMapper, label)), this.name);
     }
 
     @SuppressWarnings("deprecation")
@@ -309,7 +309,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         String name = builder.newName(PRINTING_NAME);
         try {
             PrintWriter printWriter = new PrintWriter(filePath, StandardCharsets.UTF_8.name());
-            builder.internalTopologyBuilder.addProcessor(name, new KStreamPrint<>(new PrintForeachAction(printWriter, defaultKeyValueMapper, label), keySerde, valSerde), this.name);
+            builder.internalTopologyBuilder.addProcessor(name, new KStreamPrint<>(new PrintForeachAction(printWriter, defaultKeyValueMapper, label)), this.name);
         } catch (final FileNotFoundException | UnsupportedEncodingException e) {
             throw new TopologyException(String.format("Unable to write stream to file at [%s] %s", filePath, e.getMessage()));
         }
