@@ -40,7 +40,7 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.protocol.{ApiKeys, SecurityProtocol}
 import org.apache.kafka.common.protocol.types.SchemaException
 import org.apache.kafka.common.requests.{RequestContext, RequestHeader}
-import org.apache.kafka.common.utils.{KafkaThread, Time}
+import org.apache.kafka.common.utils.{KafkaThread, LogContext, Time}
 
 import scala.collection._
 import JavaConverters._
@@ -441,7 +441,8 @@ private[kafka] class Processor(val id: Int,
     false,
     true,
     ChannelBuilders.serverChannelBuilder(listenerName, securityProtocol, config, credentialProvider.credentialCache),
-    memoryPool)
+    memoryPool,
+    new LogContext())
 
   // Connection ids have the format `localAddr:localPort-remoteAddr:remotePort-index`. The index is a
   // non-negative incrementing value that ensures that even if remotePort is reused after a connection is

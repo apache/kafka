@@ -382,7 +382,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
           "kafka-server-controlled-shutdown",
           Map.empty.asJava,
           false,
-          channelBuilder
+          channelBuilder,
+          logContext
         )
         new NetworkClient(
           selector,
