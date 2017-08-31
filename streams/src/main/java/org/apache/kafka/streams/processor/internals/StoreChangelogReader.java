@@ -53,7 +53,7 @@ public class StoreChangelogReader implements ChangelogReader {
                                 final StateRestoreListener stateRestoreListener) {
         this.consumer = consumer;
 
-        final LogContext logContext = new LogContext("stream-thread "+ threadId+ " ");
+        final LogContext logContext = new LogContext("stream-thread ["+ threadId+ "] ");
         this.log = logContext.logger(getClass());
         this.stateRestoreListener = stateRestoreListener;
     }

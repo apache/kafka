@@ -522,7 +522,7 @@ public class KafkaStreams {
         if (clientId.length() <= 0)
             clientId = applicationId + "-" + processId;
 
-        this.logPrefix = String.format("stream-client %s", clientId);
+        this.logPrefix = String.format("stream-client [%s] ", clientId);
 
         LogContext logContext = new LogContext(logPrefix);
 

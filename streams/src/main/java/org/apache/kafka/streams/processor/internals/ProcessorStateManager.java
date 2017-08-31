@@ -81,7 +81,7 @@ public class ProcessorStateManager implements StateManager {
                                  final boolean eosEnabled) throws IOException {
         this.taskId = taskId;
         this.changelogReader = changelogReader;
-        logPrefix = String.format("task [%s]", taskId);
+        logPrefix = String.format("task [%s] ", taskId);
 
         final LogContext logContext = new LogContext(logPrefix);
 
@@ -105,7 +105,7 @@ public class ProcessorStateManager implements StateManager {
         try {
             baseDir = stateDirectory.directoryForTask(taskId);
         } catch (final ProcessorStateException e) {
-            throw new LockException(String.format("%s Failed to get the directory for task %s. Exception %s",
+            throw new LockException(String.format("%sFailed to get the directory for task %s. Exception %s",
                 logPrefix, taskId, e));
         }
 
@@ -147,11 +147,11 @@ public class ProcessorStateManager implements StateManager {
         log.debug("Registering state store {} to its state manager", store.name());
 
         if (store.name().equals(CHECKPOINT_FILE_NAME)) {
-            throw new IllegalArgumentException(String.format("%s Illegal store name: %s", logPrefix, CHECKPOINT_FILE_NAME));
+            throw new IllegalArgumentException(String.format("%sIllegal store name: %s", logPrefix, CHECKPOINT_FILE_NAME));
         }
 
         if (stores.containsKey(store.name())) {
-            throw new IllegalArgumentException(String.format("%s Store %s has already been registered.", logPrefix, store.name()));
+            throw new IllegalArgumentException(String.format("%sStore %s has already been registered.", logPrefix, store.name()));
         }
 
         // check that the underlying change log topic exist or not
@@ -232,7 +232,7 @@ public class ProcessorStateManager implements StateManager {
             try {
                 restoreCallback.restoreAll(restoreRecords);
             } catch (final Exception e) {
-                throw new ProcessorStateException(String.format("%s exception caught while trying to restore state from %s", logPrefix, storePartition), e);
+                throw new ProcessorStateException(String.format("%sException caught while trying to restore state from %s", logPrefix, storePartition), e);
             }
         }
 
@@ -266,7 +266,7 @@ public class ProcessorStateManager implements StateManager {
                     log.trace("Flushing store={}", store.name());
                     store.flush();
                 } catch (final Exception e) {
-                    throw new ProcessorStateException(String.format("%s Failed to flush state store %s", logPrefix, store.name()), e);
+                    throw new ProcessorStateException(String.format("%sFailed to flush state store %s", logPrefix, store.name()), e);
                 }
             }
         }
@@ -290,7 +290,7 @@ public class ProcessorStateManager implements StateManager {
                     entry.getValue().close();
                 } catch (final Exception e) {
                     if (firstException == null) {
-                        firstException = new ProcessorStateException(String.format("%s Failed to close state store %s", logPrefix, entry.getKey()), e);
+                        firstException = new ProcessorStateException(String.format("%sFailed to close state store %s", logPrefix, entry.getKey()), e);
                     }
                     log.error("Failed to close state store {}: ", entry.getKey(), e);
                 }

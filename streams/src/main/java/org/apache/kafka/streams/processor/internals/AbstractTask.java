@@ -76,7 +76,7 @@ public abstract class AbstractTask implements Task {
         this.eosEnabled = StreamsConfig.EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
         this.stateDirectory = stateDirectory;
 
-        logPrefix = String.format("%s [%s]", isStandby ? "standby-task" : "task", id());
+        logPrefix = String.format("%s [%s] ", isStandby ? "standby-task" : "task", id());
 
         final LogContext logContext = new LogContext(logPrefix);
 
@@ -93,7 +93,7 @@ public abstract class AbstractTask implements Task {
                 changelogReader,
                 eosEnabled);
         } catch (final IOException e) {
-            throw new ProcessorStateException(String.format("%s Error while creating the state manager", logPrefix), e);
+            throw new ProcessorStateException(String.format("%sError while creating the state manager", logPrefix), e);
         }
     }
 
@@ -204,11 +204,11 @@ public abstract class AbstractTask implements Task {
 
         try {
             if (!stateDirectory.lock(id, 5)) {
-                throw new LockException(String.format("%s Failed to lock the state directory for task %s",
+                throw new LockException(String.format("%sFailed to lock the state directory for task %s",
                                                       logPrefix, id));
             }
         } catch (IOException e) {
-            throw new StreamsException(String.format("%s fatal error while trying to lock the state directory for task %s",
+            throw new StreamsException(String.format("%sFatal error while trying to lock the state directory for task %s",
                                                      logPrefix, id));
         }
         log.trace("Initializing state stores");
@@ -239,7 +239,7 @@ public abstract class AbstractTask implements Task {
                 stateDirectory.unlock(id);
             } catch (IOException e) {
                 if (exception == null) {
-                    exception = new ProcessorStateException(String.format("%s Failed to release state dir lock", logPrefix), e);
+                    exception = new ProcessorStateException(String.format("%sFailed to release state dir lock", logPrefix), e);
                 }
             }
         }

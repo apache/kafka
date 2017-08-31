@@ -52,7 +52,7 @@ public class RecordCollectorImpl implements RecordCollector {
     public RecordCollectorImpl(final Producer<byte[], byte[]> producer, final String streamTaskId) {
         this.producer = producer;
         offsets = new HashMap<>();
-        logPrefix = String.format("task [%s]", streamTaskId);
+        logPrefix = String.format("task [%s] ", streamTaskId);
         final LogContext logContext = new LogContext(logPrefix);
 
         this.log = logContext.logger(getClass());
@@ -115,10 +115,10 @@ public class RecordCollectorImpl implements RecordCollector {
                                                 "No more records will be sent and no more offsets will be recorded for this task.",
                                         key, value, timestamp, topic, exception);
                                 if (exception instanceof ProducerFencedException) {
-                                    sendException = new ProducerFencedException(String.format("%s Abort sending since producer got fenced with a previous record (key %s value %s timestamp %d) to topic %s, error message: %s",
+                                    sendException = new ProducerFencedException(String.format("%sAbort sending since producer got fenced with a previous record (key %s value %s timestamp %d) to topic %s, error message: %s",
                                             logPrefix, key, value, timestamp, topic, exception.getMessage()));
                                 } else {
-                                    sendException = new StreamsException(String.format("%s Abort sending since an error caught with a previous record (key %s value %s timestamp %d) to topic %s due to %s.",
+                                    sendException = new StreamsException(String.format("%sAbort sending since an error caught with a previous record (key %s value %s timestamp %d) to topic %s due to %s.",
                                             logPrefix, key, value, timestamp, topic, exception), exception);
                                 }
                             }
@@ -128,7 +128,7 @@ public class RecordCollectorImpl implements RecordCollector {
                 return;
             } catch (final TimeoutException e) {
                 if (attempt == MAX_SEND_ATTEMPTS) {
-                    throw new StreamsException(String.format("%s Failed to send record to topic %s due to timeout after %d attempts", logPrefix, topic, attempt));
+                    throw new StreamsException(String.format("%sFailed to send record to topic %s due to timeout after %d attempts", logPrefix, topic, attempt));
                 }
                 log.warn("Timeout exception caught when sending record to topic {}; retrying with {} attempt", topic, attempt);
                 Utils.sleep(SEND_RETRY_BACKOFF);
