@@ -130,16 +130,19 @@ public final class Coordinator {
                     List<Fault> toStart = new ArrayList<>();
                     lock.lock();
                     try {
+                        if (shutdown) {
+                            break;
+                        }
                         if (nextWakeMs > now) {
                             if (cond.await(nextWakeMs - now, TimeUnit.MILLISECONDS)) {
                                 log.trace("CoordinatorRunnable woke up early.");
                             }
+                            now = time.milliseconds();
+                            if (shutdown) {
+                                break;
+                            }
                         }
                         nextWakeMs = now + (60L * 60L * 1000L);
-                        if (shutdown) {
-                            log.info("CoordinatorRunnable shutting down.");
-                            return;
-                        }
                         Iterator<Fault> iter = pendingFaults.iterateByStart();
                         while (iter.hasNext()) {
                             Fault fault = iter.next();
