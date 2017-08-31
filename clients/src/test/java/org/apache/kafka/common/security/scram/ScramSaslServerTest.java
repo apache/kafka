@@ -24,6 +24,8 @@ import java.util.HashMap;
 
 import javax.security.sasl.SaslException;
 
+import static org.junit.Assert.assertTrue;
+
 import org.apache.kafka.common.security.authenticator.CredentialCache;
 
 public class ScramSaslServerTest {
@@ -50,14 +52,16 @@ public class ScramSaslServerTest {
     public void noAuthorizationIdSpecified() throws Exception {
         String nonce = formatter.secureRandomString();
         String firstMessage = String.format("n,,n=%s,r=%s", USER_A, nonce);
-        saslServer.evaluateResponse(firstMessage.getBytes(StandardCharsets.UTF_8));
+        byte[] nextChallenge = saslServer.evaluateResponse(firstMessage.getBytes(StandardCharsets.UTF_8));
+        assertTrue("Next challenge is empty", nextChallenge.length > 0);
     }
 
     @Test
     public void authorizatonIdEqualsAuthenticationId() throws Exception {
         String nonce = formatter.secureRandomString();
         String firstMessage = String.format("n,a=%s,n=%s,r=%s", USER_A, USER_A, nonce);
-        saslServer.evaluateResponse(firstMessage.getBytes(StandardCharsets.UTF_8));
+        byte[] nextChallenge = saslServer.evaluateResponse(firstMessage.getBytes(StandardCharsets.UTF_8));
+        assertTrue("Next challenge is empty", nextChallenge.length > 0);
     }
 
     @Test(expected = SaslException.class)

@@ -25,6 +25,8 @@ import java.util.Map;
 
 import javax.security.sasl.SaslException;
 
+import static org.junit.Assert.assertEquals;
+
 import org.apache.kafka.common.security.JaasContext;
 import org.apache.kafka.common.security.authenticator.TestJaasConfig;
 
@@ -50,12 +52,14 @@ public class PlainSaslServerTest {
 
     @Test
     public void noAuthorizationIdSpecified() throws Exception {
-        saslServer.evaluateResponse(saslMessage("", USER_A, PASSWORD_A));
+        byte[] nextChallenge = saslServer.evaluateResponse(saslMessage("", USER_A, PASSWORD_A));
+        assertEquals(0, nextChallenge.length);
     }
 
     @Test
     public void authorizatonIdEqualsAuthenticationId() throws Exception {
-        saslServer.evaluateResponse(saslMessage(USER_A, USER_A, PASSWORD_A));
+        byte[] nextChallenge = saslServer.evaluateResponse(saslMessage(USER_A, USER_A, PASSWORD_A));
+        assertEquals(0, nextChallenge.length);
     }
 
     @Test(expected = SaslException.class)
