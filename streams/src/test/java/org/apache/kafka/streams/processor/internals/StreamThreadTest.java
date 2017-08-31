@@ -1347,10 +1347,7 @@ public class StreamThreadTest {
 
         thread.rebalanceListener.onPartitionsRevoked(null);
         clientSupplier.producers.get(0).fenceProducer();
-        try {
-            thread.rebalanceListener.onPartitionsAssigned(task0Assignment);
-            fail("should have thrown " + ProducerFencedException.class.getSimpleName());
-        } catch (final ProducerFencedException e) { }
+        thread.rebalanceListener.onPartitionsAssigned(task0Assignment);
 
         assertTrue(thread.tasks().isEmpty());
     }
