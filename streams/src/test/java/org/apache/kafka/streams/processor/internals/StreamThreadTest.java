@@ -26,7 +26,6 @@ import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
@@ -70,7 +69,6 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 
 public class StreamThreadTest {
 
@@ -103,25 +101,11 @@ public class StreamThreadTest {
     private final TopicPartition t3p1 = new TopicPartition("topic3", 1);
     private final TopicPartition t3p2 = new TopicPartition("topic3", 2);
 
-    private final List<PartitionInfo> infos = Arrays.asList(
-        new PartitionInfo("topic1", 0, Node.noNode(), new Node[0], new Node[0]),
-        new PartitionInfo("topic1", 1, Node.noNode(), new Node[0], new Node[0]),
-        new PartitionInfo("topic1", 2, Node.noNode(), new Node[0], new Node[0]),
-        new PartitionInfo("topic2", 0, Node.noNode(), new Node[0], new Node[0]),
-        new PartitionInfo("topic2", 1, Node.noNode(), new Node[0], new Node[0]),
-        new PartitionInfo("topic2", 2, Node.noNode(), new Node[0], new Node[0]),
-        new PartitionInfo("topic3", 0, Node.noNode(), new Node[0], new Node[0]),
-        new PartitionInfo("topic3", 1, Node.noNode(), new Node[0], new Node[0]),
-        new PartitionInfo("topic3", 2, Node.noNode(), new Node[0], new Node[0])
-    );
-
-
     // task0 is unused
     private final TaskId task1 = new TaskId(0, 1);
     private final TaskId task2 = new TaskId(0, 2);
-    private final TaskId task3 = new TaskId(0, 3);
-    private final TaskId task4 = new TaskId(1, 1);
-    private final TaskId task5 = new TaskId(1, 2);
+    private final TaskId task3 = new TaskId(1, 1);
+    private final TaskId task4 = new TaskId(1, 2);
 
     private Properties configProps(final boolean enableEos) {
         return new Properties() {
@@ -279,10 +263,10 @@ public class StreamThreadTest {
         rebalanceListener.onPartitionsAssigned(assignedPartitions);
         thread.runOnce(-1);
 
+        assertTrue(thread.tasks().containsKey(task3));
         assertTrue(thread.tasks().containsKey(task4));
-        assertTrue(thread.tasks().containsKey(task5));
-        assertEquals(expectedGroup1, thread.tasks().get(task4).partitions());
-        assertEquals(expectedGroup2, thread.tasks().get(task5).partitions());
+        assertEquals(expectedGroup1, thread.tasks().get(task3).partitions());
+        assertEquals(expectedGroup2, thread.tasks().get(task4).partitions());
         assertEquals(2, thread.tasks().size());
 
         // revoke four partitions and assign three partitions of both subtopologies
@@ -298,9 +282,9 @@ public class StreamThreadTest {
         thread.runOnce(-1);
 
         assertTrue(thread.tasks().containsKey(task1));
-        assertTrue(thread.tasks().containsKey(task4));
+        assertTrue(thread.tasks().containsKey(task3));
         assertEquals(expectedGroup1, thread.tasks().get(task1).partitions());
-        assertEquals(expectedGroup2, thread.tasks().get(task4).partitions());
+        assertEquals(expectedGroup2, thread.tasks().get(task3).partitions());
         assertEquals(2, thread.tasks().size());
 
         // revoke all three partitons and reassign the same three partitions (from different subtopologies)
@@ -313,9 +297,9 @@ public class StreamThreadTest {
         thread.runOnce(-1);
 
         assertTrue(thread.tasks().containsKey(task1));
-        assertTrue(thread.tasks().containsKey(task4));
+        assertTrue(thread.tasks().containsKey(task3));
         assertEquals(expectedGroup1, thread.tasks().get(task1).partitions());
-        assertEquals(expectedGroup2, thread.tasks().get(task4).partitions());
+        assertEquals(expectedGroup2, thread.tasks().get(task3).partitions());
         assertEquals(2, thread.tasks().size());
 
         // revoke all partitions and assign nothing
@@ -903,11 +887,8 @@ public class StreamThreadTest {
 
         thread.rebalanceListener.onPartitionsRevoked(null);
         clientSupplier.producers.get(0).fenceProducer();
-        try {
-            thread.rebalanceListener.onPartitionsAssigned(task0Assignment);
-            thread.runOnce(-1);
-            fail("should have thrown " + ProducerFencedException.class.getSimpleName());
-        } catch (final ProducerFencedException e) { }
+        thread.rebalanceListener.onPartitionsAssigned(task0Assignment);
+        thread.runOnce(-1);
 
         assertTrue(thread.tasks().isEmpty());
     }
