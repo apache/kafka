@@ -50,24 +50,25 @@ public class ScramSaslServerTest {
 
     @Test
     public void noAuthorizationIdSpecified() throws Exception {
-        String nonce = formatter.secureRandomString();
-        String firstMessage = String.format("n,,n=%s,r=%s", USER_A, nonce);
-        byte[] nextChallenge = saslServer.evaluateResponse(firstMessage.getBytes(StandardCharsets.UTF_8));
+        byte[] nextChallenge = saslServer.evaluateResponse(clientFirstMessage(USER_A, null));
         assertTrue("Next challenge is empty", nextChallenge.length > 0);
     }
 
     @Test
     public void authorizatonIdEqualsAuthenticationId() throws Exception {
-        String nonce = formatter.secureRandomString();
-        String firstMessage = String.format("n,a=%s,n=%s,r=%s", USER_A, USER_A, nonce);
-        byte[] nextChallenge = saslServer.evaluateResponse(firstMessage.getBytes(StandardCharsets.UTF_8));
+        byte[] nextChallenge = saslServer.evaluateResponse(clientFirstMessage(USER_A, USER_A));
         assertTrue("Next challenge is empty", nextChallenge.length > 0);
     }
 
     @Test(expected = SaslException.class)
     public void authorizatonIdNotEqualsAuthenticationId() throws Exception {
+        saslServer.evaluateResponse(clientFirstMessage(USER_A, USER_B));
+    }
+
+    private byte[] clientFirstMessage(String userName, String authorizationId) {
         String nonce = formatter.secureRandomString();
-        String firstMessage = String.format("n,a=%s,n=%s,r=%s", USER_A, USER_B, nonce);
-        saslServer.evaluateResponse(firstMessage.getBytes(StandardCharsets.UTF_8));
+        String authorizationField = authorizationId != null ? "a=" + authorizationId : "";
+        String firstMessage = String.format("n,%s,n=%s,r=%s", authorizationField, userName, nonce);
+        return firstMessage.getBytes(StandardCharsets.UTF_8);
     }
 }
