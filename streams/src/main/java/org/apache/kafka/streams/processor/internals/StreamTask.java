@@ -25,6 +25,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
@@ -53,8 +54,6 @@ import static java.util.Collections.singleton;
  */
 public class StreamTask extends AbstractTask implements ProcessorNodePunctuator {
 
-    private static final Logger log = LoggerFactory.getLogger(StreamTask.class);
-
     private static final ConsumerRecord<Object, Object> DUMMY_RECORD = new ConsumerRecord<>(ProcessorContextImpl.NONEXIST_TOPIC, -1, -1L, null, null);
 
     private final PartitionGroup partitionGroup;
@@ -72,6 +71,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     private boolean transactionInFlight = false;
     private final Time time;
     private final TaskMetrics metrics;
+    private final Logger log;
 
     protected class TaskMetrics  {
         final StreamsMetricsImpl metrics;
@@ -121,6 +121,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         maxBufferedSize = config.getInt(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG);
         this.metrics = new TaskMetrics(metrics);
 
+        final LogContext logContext = new LogContext(logPrefix);
+
+        this.log = logContext.logger(getClass());
+
         // create queues for each assigned partition and associate them
         // to corresponding source nodes in the processor topology
         final Map<TopicPartition, RecordQueue> partitionQueues = new HashMap<>();
@@ -162,7 +166,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
      */
     @Override
     public void resume() {
-        log.debug("{} Resuming", logPrefix);
+        log.debug("Resuming");
         if (eosEnabled) {
             producer.beginTransaction();
             transactionInFlight = true;
@@ -190,12 +194,12 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             final ProcessorNode currNode = recordInfo.node();
             final TopicPartition partition = recordInfo.partition();
 
-            log.trace("{} Start processing one record [{}]", logPrefix, record);
+            log.trace("Start processing one record [{}]", record);
 
             updateProcessorContext(record, currNode);
             currNode.process(record.key(), record.value());
 
-            log.trace("{} Completed processing one record [{}]", logPrefix, record);
+            log.trace("Completed processing one record [{}]", record);
 
             // update the consumed offset map after processing is done
             consumedOffsets.put(partition, record.offset());
@@ -233,7 +237,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         updateProcessorContext(new StampedRecord(DUMMY_RECORD, timestamp), node);
 
         if (log.isTraceEnabled()) {
-            log.trace("{} Punctuating processor {} with timestamp {} and punctuation type {}", logPrefix, node.name(), timestamp, type);
+            log.trace("Punctuating processor {} with timestamp {} and punctuation type {}", node.name(), timestamp, type);
         }
 
         try {
@@ -264,7 +268,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
 
     // visible for testing
     void commit(final boolean startNewTransaction) {
-        log.debug("{} Committing", logPrefix);
+        log.debug("Committing");
         metrics.metrics.measureLatencyNs(
             time,
             new Runnable() {
@@ -289,14 +293,14 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
 
     @Override
     protected void flushState() {
-        log.trace("{} Flushing state and producer", logPrefix);
+        log.trace("Flushing state and producer");
         super.flushState();
         recordCollector.flush();
     }
 
     private void commitOffsets(final boolean startNewTransaction) {
         if (commitOffsetNeeded) {
-            log.trace("{} Committing offsets", logPrefix);
+            log.trace("Committing offsets");
             final Map<TopicPartition, OffsetAndMetadata> consumedOffsetsAndMetadata = new HashMap<>(consumedOffsets.size());
             for (final Map.Entry<TopicPartition, Long> entry : consumedOffsets.entrySet()) {
                 final TopicPartition partition = entry.getKey();
@@ -317,7 +321,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
                 try {
                     consumer.commitSync(consumedOffsetsAndMetadata);
                 } catch (final CommitFailedException e) {
-                    log.warn("{} Failed offset commits {} due to CommitFailedException", logPrefix, consumedOffsetsAndMetadata);
+                    log.warn("Failed offset commits {} due to CommitFailedException", consumedOffsetsAndMetadata);
                     throw e;
                 }
             }
@@ -330,7 +334,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
 
     void initTopology() {
         // initialize the task by initializing all its processor nodes in the topology
-        log.trace("{} Initializing processor nodes of the topology", logPrefix);
+        log.trace("Initializing processor nodes of the topology");
         for (final ProcessorNode node : topology.processors()) {
             processorContext.setCurrentNode(node);
             try {
@@ -352,7 +356,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
      */
     @Override
     public void suspend() {
-        log.debug("{} Suspending", logPrefix);
+        log.debug("Suspending");
         suspend(true);
     }
 
@@ -374,7 +378,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     }
 
     private void closeTopology() {
-        log.trace("{} Closing processor topology", logPrefix);
+        log.trace("Closing processor topology");
 
         partitionGroup.clear();
 
@@ -408,7 +412,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             if (firstException == null) {
                 firstException = e;
             }
-            log.error("{} Could not close state manager due to the following error:", logPrefix, e);
+            log.error("Could not close state manager due to the following error:", e);
         }
 
         try {
@@ -427,7 +431,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
                 try {
                     recordCollector.close();
                 } catch (final Throwable e) {
-                    log.error("{} Failed to close producer due to the following error:", logPrefix, e);
+                    log.error("Failed to close producer due to the following error:", e);
                 }
             }
         }
@@ -458,7 +462,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
      */
     @Override
     public void close(boolean clean) {
-        log.debug("{} Closing", logPrefix);
+        log.debug("Closing");
 
         RuntimeException firstException = null;
         try {
@@ -466,7 +470,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         } catch (final RuntimeException e) {
             clean = false;
             firstException = e;
-            log.error("{} Could not close task due to the following error:", logPrefix, e);
+            log.error("Could not close task due to the following error:", e);
         }
 
         closeSuspended(clean, firstException);
@@ -486,7 +490,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         final int newQueueSize = partitionGroup.addRawRecords(partition, records);
 
         if (log.isTraceEnabled()) {
-            log.trace("{} Added records into the buffered queue of partition {}, new queue size is {}", logPrefix, partition, newQueueSize);
+            log.trace("Added records into the buffered queue of partition {}, new queue size is {}", partition, newQueueSize);
         }
 
         // if after adding these records, its partition queue's buffered size has been
@@ -592,7 +596,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     }
 
     public boolean initialize() {
-        log.debug("{} Initializing", logPrefix);
+        log.debug("Initializing");
         initializeStateStores();
         initTopology();
         processorContext.initialized();

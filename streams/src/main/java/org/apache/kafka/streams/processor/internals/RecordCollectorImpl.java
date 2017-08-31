@@ -26,6 +26,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StreamPartitioner;
@@ -40,8 +41,8 @@ public class RecordCollectorImpl implements RecordCollector {
     private static final int MAX_SEND_ATTEMPTS = 3;
     private static final long SEND_RETRY_BACKOFF = 100L;
 
-    private static final Logger log = LoggerFactory.getLogger(RecordCollectorImpl.class);
-    
+
+    private final Logger log;
     private final Producer<byte[], byte[]> producer;
     private final Map<TopicPartition, Long> offsets;
     private final String logPrefix;
@@ -52,6 +53,9 @@ public class RecordCollectorImpl implements RecordCollector {
         this.producer = producer;
         offsets = new HashMap<>();
         logPrefix = String.format("task [%s]", streamTaskId);
+        final LogContext logContext = new LogContext(logPrefix);
+
+        this.log = logContext.logger(getClass());
     }
 
     @Override
@@ -107,9 +111,9 @@ public class RecordCollectorImpl implements RecordCollector {
                             offsets.put(tp, metadata.offset());
                         } else {
                             if (sendException == null) {
-                                log.error("{} Error sending record (key {} value {} timestamp {}) to topic {} due to {}; " +
+                                log.error("Error sending record (key {} value {} timestamp {}) to topic {} due to {}; " +
                                                 "No more records will be sent and no more offsets will be recorded for this task.",
-                                        logPrefix, key, value, timestamp, topic, exception);
+                                        key, value, timestamp, topic, exception);
                                 if (exception instanceof ProducerFencedException) {
                                     sendException = new ProducerFencedException(String.format("%s Abort sending since producer got fenced with a previous record (key %s value %s timestamp %d) to topic %s, error message: %s",
                                             logPrefix, key, value, timestamp, topic, exception.getMessage()));
@@ -126,7 +130,7 @@ public class RecordCollectorImpl implements RecordCollector {
                 if (attempt == MAX_SEND_ATTEMPTS) {
                     throw new StreamsException(String.format("%s Failed to send record to topic %s due to timeout after %d attempts", logPrefix, topic, attempt));
                 }
-                log.warn("{} Timeout exception caught when sending record to topic {}; retrying with {} attempt", logPrefix, topic, attempt);
+                log.warn("Timeout exception caught when sending record to topic {}; retrying with {} attempt", topic, attempt);
                 Utils.sleep(SEND_RETRY_BACKOFF);
             }
         }
@@ -140,14 +144,14 @@ public class RecordCollectorImpl implements RecordCollector {
 
     @Override
     public void flush() {
-        log.debug("{} Flushing producer", logPrefix);
+        log.debug("Flushing producer");
         producer.flush();
         checkForException();
     }
 
     @Override
     public void close() {
-        log.debug("{} Closing producer", logPrefix);
+        log.debug("Closing producer");
         producer.close();
         checkForException();
     }

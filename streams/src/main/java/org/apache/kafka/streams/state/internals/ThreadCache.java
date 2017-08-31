@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.processor.internals.RecordContext;
@@ -37,9 +38,7 @@ import java.util.NoSuchElementException;
  * @see org.apache.kafka.streams.state.Stores#create(String)
  */
 public class ThreadCache {
-    private static final Logger log = LoggerFactory.getLogger(ThreadCache.class);
-
-    private final String logPrefix;
+    private final Logger log;
     private final long maxCacheSizeBytes;
     private final StreamsMetrics metrics;
     private final Map<String, NamedCache> caches = new HashMap<>();
@@ -55,9 +54,10 @@ public class ThreadCache {
     }
 
     public ThreadCache(final String logPrefix, long maxCacheSizeBytes, final StreamsMetrics metrics) {
-        this.logPrefix = logPrefix;
         this.maxCacheSizeBytes = maxCacheSizeBytes;
         this.metrics = metrics;
+        final LogContext logContext = new LogContext(logPrefix);
+        this.log = logContext.logger(getClass());
     }
 
     public long puts() {
@@ -129,8 +129,7 @@ public class ThreadCache {
         cache.flush();
 
         if (log.isTraceEnabled()) {
-            log.trace("{} Cache stats on flush: #puts={}, #gets={}, #evicts={}, #flushes={}",
-                logPrefix, puts(), gets(), evicts(), flushes());
+            log.trace("Cache stats on flush: #puts={}, #gets={}, #evicts={}, #flushes={}", puts(), gets(), evicts(), flushes());
         }
     }
 
@@ -250,7 +249,7 @@ public class ThreadCache {
             numEvicted++;
         }
         if (log.isTraceEnabled()) {
-            log.trace("{} Evicted {} entries from cache {}", logPrefix, numEvicted, namespace);
+            log.trace("Evicted {} entries from cache {}", numEvicted, namespace);
         }
     }
 

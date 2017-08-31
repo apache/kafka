@@ -22,6 +22,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.AuthorizationException;
 import org.apache.kafka.common.errors.WakeupException;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
@@ -40,7 +41,6 @@ import java.util.Map;
 import java.util.Set;
 
 public abstract class AbstractTask implements Task {
-    private static final Logger log = LoggerFactory.getLogger(AbstractTask.class);
 
     final TaskId id;
     final String applicationId;
@@ -52,6 +52,7 @@ public abstract class AbstractTask implements Task {
     final boolean eosEnabled;
     boolean taskInitialized;
     private final StateDirectory stateDirectory;
+    private final Logger log;
 
     InternalProcessorContext processorContext;
 
@@ -76,6 +77,10 @@ public abstract class AbstractTask implements Task {
         this.stateDirectory = stateDirectory;
 
         logPrefix = String.format("%s [%s]", isStandby ? "standby-task" : "task", id());
+
+        final LogContext logContext = new LogContext(logPrefix);
+
+        this.log = logContext.logger(getClass());
 
         // create the processor state manager
         try {
@@ -173,7 +178,7 @@ public abstract class AbstractTask implements Task {
                 stateMgr.putOffsetLimit(partition, offset);
 
                 if (log.isTraceEnabled()) {
-                    log.trace("{} Updating store offset limits {} for changelog {}", logPrefix, offset, partition);
+                    log.trace("Updating store offset limits {} for changelog {}", offset, partition);
                 }
             } catch (final AuthorizationException e) {
                 throw new ProcessorStateException(String.format("task [%s] AuthorizationException when initializing offsets for %s", id, partition), e);
@@ -204,16 +209,15 @@ public abstract class AbstractTask implements Task {
             }
         } catch (IOException e) {
             throw new StreamsException(String.format("%s fatal error while trying to lock the state directory for task %s",
-                                                     logPrefix,
-                                                     id));
+                                                     logPrefix, id));
         }
-        log.trace("{} Initializing state stores", logPrefix);
+        log.trace("Initializing state stores");
 
         // set initial offset limits
         updateOffsetLimits();
 
         for (final StateStore store : topology.stateStores()) {
-            log.trace("{} Initializing store {}", logPrefix, store.name());
+            log.trace("Initializing store {}", store.name());
             store.init(processorContext, store);
         }
     }
@@ -225,7 +229,7 @@ public abstract class AbstractTask implements Task {
      */
     void closeStateManager(final boolean writeCheckpoint) throws ProcessorStateException {
         ProcessorStateException exception = null;
-        log.trace("{} Closing state manager", logPrefix);
+        log.trace("Closing state manager");
         try {
             stateMgr.close(writeCheckpoint ? recordCollectorOffsets() : null);
         } catch (final ProcessorStateException e) {

@@ -22,6 +22,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -39,10 +40,9 @@ import java.util.Map;
 import java.util.Set;
 
 public class StoreChangelogReader implements ChangelogReader {
-    private static final Logger log = LoggerFactory.getLogger(StoreChangelogReader.class);
 
+    private final Logger log;
     private final Consumer<byte[], byte[]> consumer;
-    private final String logPrefix;
     private final Time time;
     private final long partitionValidationTimeoutMs;
     private final Map<String, List<PartitionInfo>> partitionInfo = new HashMap<>();
@@ -58,7 +58,8 @@ public class StoreChangelogReader implements ChangelogReader {
         this.consumer = consumer;
         this.partitionValidationTimeoutMs = partitionValidationTimeoutMs;
 
-        this.logPrefix = String.format("stream-thread [%s]", threadId);
+        final LogContext logContext = new LogContext("stream-thread "+ threadId+ " ");
+        this.log = logContext.logger(getClass());
         this.stateRestoreListener = stateRestoreListener;
     }
 
@@ -75,7 +76,7 @@ public class StoreChangelogReader implements ChangelogReader {
             try {
                 partitionInfo.putAll(consumer.listTopics());
             } catch (final TimeoutException e) {
-                log.warn("{} Could not list topics so will fall back to partition by partition fetching", logPrefix);
+                log.warn("Could not list topics so will fall back to partition by partition fetching");
             }
         }
 
@@ -96,7 +97,7 @@ public class StoreChangelogReader implements ChangelogReader {
             throw new StreamsException(String.format("Store %s's change log (%s) does not contain partition %s",
                                                      storeName, topicPartition.topic(), topicPartition.partition()));
         }
-        log.debug("{} Took {}ms to validate that partition {} exists", logPrefix, time.milliseconds() - start, topicPartition);
+        log.debug("Took {}ms to validate that partition {} exists", time.milliseconds() - start, topicPartition);
     }
 
     @Override
@@ -157,7 +158,7 @@ public class StoreChangelogReader implements ChangelogReader {
             }
         }
 
-        log.debug("{} Starting restoring state stores from changelog topics {}", logPrefix, newTasksNeedingRestoration.keySet());
+        log.debug("Starting restoring state stores from changelog topics {}", newTasksNeedingRestoration.keySet());
 
         final Set<TopicPartition> assignment = new HashSet<>(consumer.assignment());
         assignment.addAll(newTasksNeedingRestoration.keySet());
@@ -189,8 +190,7 @@ public class StoreChangelogReader implements ChangelogReader {
     }
 
     private void logRestoreOffsets(final TopicPartition partition, final long startingOffset, final Long endOffset) {
-        log.debug("{} Restoring partition {} from offset {} to endOffset {}",
-                  logPrefix,
+        log.debug("Restoring partition {} from offset {} to endOffset {}",
                   partition,
                   startingOffset,
                   endOffset);
@@ -199,7 +199,7 @@ public class StoreChangelogReader implements ChangelogReader {
     private Collection<TopicPartition> completed() {
         final Set<TopicPartition> completed = new HashSet<>(stateRestorers.keySet());
         completed.removeAll(needsRestoring.keySet());
-        log.debug("{} completed partitions {}", logPrefix, completed);
+        log.debug("completed partitions {}", completed);
         return completed;
     }
 
@@ -239,8 +239,7 @@ public class StoreChangelogReader implements ChangelogReader {
                                       pos));
             }
 
-            log.debug("{} Completed restoring state from changelog {} with {} records ranging from offset {} to {}",
-                      logPrefix,
+            log.debug("Completed restoring state from changelog {} with {} records ranging from offset {} to {}",
                       topicPartition,
                       restorer.restoredNumRecords(),
                       restorer.startingOffset(),
