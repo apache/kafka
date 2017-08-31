@@ -673,9 +673,15 @@ public class KafkaStreams {
     public synchronized void start() throws IllegalStateException, StreamsException {
         log.debug("{} Starting Streams client", logPrefix);
 
+        final State oldState = state();
+        final State runningState = State.RUNNING;
+        // this is a mandatory check and not covered by regular state transition checks (cf. KAFKA-5818)
+        if (!(oldState == State.CREATED)) {
+            throw new IllegalStateException(logPrefix + " Unexpected state transition from " + oldState + " to " + runningState);
+        }
         // first set state to RUNNING before kicking off the threads,
         // making sure the state will always transit to RUNNING before REBALANCING
-        if (setState(State.RUNNING)) {
+        if (setState(runningState)) {
             checkBrokerVersionCompatibility();
 
             if (globalStreamThread != null) {
